@@ -224,7 +224,7 @@ function buildShiborChart(rates) {
 
 async function checkBackend() {
   try {
-    const res = await fetch('http://localhost:8002/health')
+    const res = await fetch('/health')
     backendConnected.value = res.ok
   } catch {
     backendConnected.value = false

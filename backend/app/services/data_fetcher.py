@@ -8,6 +8,7 @@ import os
 import re
 import time
 import logging
+import traceback
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -115,7 +116,8 @@ def fetch_china_indices() -> list[dict]:
             else:
                 logger.warning(f"[Sina] 解析失败: {line[:80]}")
     except Exception as e:
-        logger.error(f"[Sina] fetch_china_indices 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"[Sina] fetch_china_indices 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
     return rows
 
@@ -178,10 +180,12 @@ def fetch_shibor() -> list[dict]:
                 })
                 logger.info(f"[AkShare] LPR 1年: {lpr1y}%")
         except Exception as e:
-            logger.warning(f"[AkShare] LPR 获取失败: {e}")
+            logger.error(f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}")
+            traceback.print_exc()
 
     except Exception as e:
-        logger.error(f"[AkShare] fetch_shibor 失败: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"[AkShare] fetch_shibor 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
 
     return rows
 
@@ -201,6 +205,7 @@ def fetch_all_and_buffer():
             logger.info(f"[DataFetcher] 写入 {len(all_rows)} 条到 write_buffer "
                         f"(指数 {len(idx_rows)} 条, 利率 {len(shibor_rows)} 条)")
         except Exception as e:
-            logger.error(f"[DataFetcher] buffer_insert 失败: {e}", exc_info=True)
+            logger.error(f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}")
+            traceback.print_exc()
     else:
         logger.warning("[DataFetcher] 本次未拉到任何数据（所有接口均失败）")

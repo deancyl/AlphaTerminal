@@ -18,7 +18,7 @@ let resizeObserver = null
 
 async function fetchHistory() {
   try {
-    const res = await fetch(`http://localhost:8002${props.url}`)
+    const res = await fetch(props.url)
     if (!res.ok) return []
     const data = await res.json()
     return (data.history || []).map(r => ({

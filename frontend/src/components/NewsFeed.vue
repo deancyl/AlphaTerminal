@@ -55,7 +55,7 @@ function onItemClick(item) {
 
 async function fetchNews() {
   try {
-    const res = await fetch('http://localhost:8002/api/v1/news/flash')
+    const res = await fetch('/api/v1/news/flash')
     if (res.ok) {
       const data = await res.json()
       items.value = data.news || []
