@@ -50,7 +50,7 @@
 
       <!-- Dashboard 网格区域 -->
       <div class="flex-1 overflow-auto p-4">
-        <DashboardGrid :market-data="marketOverview" />
+        <DashboardGrid :market-data="marketOverview" :rates-data="ratesData" />
       </div>
     </main>
 
@@ -62,6 +62,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 
 const marketOverview = ref(null)
+const ratesData      = ref([])
 const currentTime = ref('')
 
 let clockTimer = null
@@ -73,10 +74,13 @@ function updateClock() {
 
 async function fetchMarketData() {
   try {
-    const res = await fetch('http://localhost:8002/api/v1/market/overview')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    marketOverview.value = await res.json()
-    console.log('[AlphaTerminal] 市场数据已加载')
+    const [ov, rt] = await Promise.all([
+      fetch('http://localhost:8002/api/v1/market/overview').then(r => r.ok ? r.json() : null),
+      fetch('http://localhost:8002/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
+    ])
+    marketOverview.value = ov
+    ratesData.value      = rt
+    console.log('[AlphaTerminal] 市场数据已加载，利率 ', rt.length, ' 条')
   } catch (e) {
     console.warn('[AlphaTerminal] 后端未启动或请求失败:', e.message)
   }

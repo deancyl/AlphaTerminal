@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.routers import market_mock
+from app.routers import market
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -30,9 +30,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://0.0.0.0:5173",
+        "http://localhost:60100",
+        "http://127.0.0.1:60100",
+        "http://0.0.0.0:60100",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -40,7 +40,7 @@ app.add_middleware(
 )
 
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
-app.include_router(market_mock.router, prefix="/api/v1", tags=["market"])
+app.include_router(market.router, prefix="/api/v1", tags=["market"])
 
 
 @app.get("/health")
