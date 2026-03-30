@@ -84,7 +84,15 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 4：系统状态 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 4：快讯资讯流 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="0" gs-y="10" gs-w="6" gs-h="6" gs-min-w="3" gs-min-h="3">
+      <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
+        <NewsFeed />
+      </div>
+    </div>
+
+    <!-- ━━━ Widget 5：系统状态 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          gs-x="6" gs-y="5" gs-w="6" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
@@ -126,6 +134,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import IndexLineChart from './IndexLineChart.vue'
+import NewsFeed from './NewsFeed.vue'
 
 const props = defineProps({
   marketData: { type: Object, default: null },

@@ -1,44 +1,18 @@
 <template>
   <div class="flex h-screen bg-terminal-bg overflow-hidden">
 
-    <!-- ━━━ 左侧边栏：AI 投研大脑 ━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <aside class="w-[300px] flex-shrink-0 flex flex-col bg-terminal-panel border-r border-gray-800">
-      <div class="p-4 border-b border-gray-800">
-        <h2 class="text-terminal-accent font-bold text-lg flex items-center gap-2">
-          🧠 AlphaTerminal Copilot
-        </h2>
-        <p class="text-terminal-dim text-xs mt-1">由 OpenClaw 驱动的智能投研助手</p>
-      </div>
-
-      <!-- 对话占位 -->
-      <div class="flex-1 p-4 overflow-y-auto">
-        <div class="bg-terminal-bg rounded-lg p-3 border border-gray-700">
-          <p class="text-terminal-dim text-sm">💬 AI 助手已就绪</p>
-          <p class="text-terminal-dim text-xs mt-1">Phase 2 阶段：对话框占位，后续接入 Copilot 逻辑</p>
-        </div>
-      </div>
-
-      <!-- 输入框占位 -->
-      <div class="p-4 border-t border-gray-800">
-        <textarea
-          class="w-full bg-terminal-bg border border-gray-700 rounded px-3 py-2 text-sm text-gray-100 resize-none focus:outline-none focus:border-terminal-accent"
-          rows="3"
-          placeholder="输入投研问题..."
-          disabled
-        ></textarea>
-        <button class="mt-2 w-full bg-terminal-accent/10 border border-terminal-accent/40 text-terminal-accent text-sm rounded py-1.5 hover:bg-terminal-accent/20 transition cursor-not-allowed" disabled>
-          发送 (Phase 3)
-        </button>
-      </div>
+    <!-- ━━━ 左侧边栏：AI Copilot ━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <aside class="w-[320px] flex-shrink-0 flex flex-col bg-terminal-panel border-r border-gray-800">
+      <CopilotSidebar />
     </aside>
 
-    <!-- ━━━ 右侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ 右侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
     <main class="flex-1 flex flex-col overflow-hidden">
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-terminal-panel/80">
         <div class="flex items-center gap-3">
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
-          <span class="text-terminal-dim text-xs">Phase 2 · Dashboard 骨架</span>
+          <span class="text-terminal-dim text-xs">Phase 4 · AI Copilot + 资讯流</span>
         </div>
         <div class="flex items-center gap-4 text-xs text-terminal-dim">
           <span id="clock" class="font-mono">{{ currentTime }}</span>
@@ -59,11 +33,12 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import DashboardGrid from './components/DashboardGrid.vue'
+import CopilotSidebar from './components/CopilotSidebar.vue'
+import DashboardGrid  from './components/DashboardGrid.vue'
 
 const marketOverview = ref(null)
 const ratesData      = ref([])
-const currentTime = ref('')
+const currentTime    = ref('')
 
 let clockTimer = null
 
@@ -80,9 +55,8 @@ async function fetchMarketData() {
     ])
     marketOverview.value = ov
     ratesData.value      = rt
-    console.log('[AlphaTerminal] 市场数据已加载，利率 ', rt.length, ' 条')
   } catch (e) {
-    console.warn('[AlphaTerminal] 后端未启动或请求失败:', e.message)
+    console.warn('[AlphaTerminal] 后端未启动:', e.message)
   }
 }
 
@@ -92,7 +66,5 @@ onMounted(() => {
   fetchMarketData()
 })
 
-onUnmounted(() => {
-  clearInterval(clockTimer)
-})
+onUnmounted(() => clearInterval(clockTimer))
 </script>
