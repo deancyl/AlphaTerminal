@@ -3,7 +3,11 @@
 
     <!-- ━━━ 左侧边栏：AI Copilot ━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <aside class="w-[320px] flex-shrink-0 flex flex-col bg-terminal-panel border-r border-gray-800">
-      <CopilotSidebar />
+      <CopilotSidebar
+        :market-overview="marketOverview"
+        :rates-data="ratesData"
+        :news-data="newsData"
+      />
     </aside>
 
     <!-- ━━━ 右侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -38,6 +42,7 @@ import DashboardGrid  from './components/DashboardGrid.vue'
 
 const marketOverview = ref(null)
 const ratesData      = ref([])
+const newsData       = ref([])
 const currentTime    = ref('')
 
 let clockTimer = null
@@ -49,12 +54,14 @@ function updateClock() {
 
 async function fetchMarketData() {
   try {
-    const [ov, rt] = await Promise.all([
+    const [ov, rt, nv] = await Promise.all([
       fetch('http://localhost:8002/api/v1/market/overview').then(r => r.ok ? r.json() : null),
       fetch('http://localhost:8002/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
+      fetch('http://localhost:8002/api/v1/news/flash').then(r => r.ok ? r.json().then(d => d.news || []) : []),
     ])
     marketOverview.value = ov
     ratesData.value      = rt
+    newsData.value       = nv
   } catch (e) {
     console.warn('[AlphaTerminal] 后端未启动:', e.message)
   }

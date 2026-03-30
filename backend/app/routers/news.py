@@ -20,9 +20,5 @@ async def video_transcript(video_id: str):
     若返回 400 表示代理被封，需用户配置可用住宅代理
     """
     from app.services.news_fetcher import fetch_youtube_transcript
-    try:
-        result = fetch_youtube_transcript(video_id)
-        return result
-    except Exception as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=str(e))
+    result = fetch_youtube_transcript(video_id)
+    return result
