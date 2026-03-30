@@ -55,9 +55,9 @@ function updateClock() {
 async function fetchMarketData() {
   try {
     const [ov, rt, nv] = await Promise.all([
-      fetch('http://localhost:8002/api/v1/market/overview').then(r => r.ok ? r.json() : null),
-      fetch('http://localhost:8002/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
-      fetch('http://localhost:8002/api/v1/news/flash').then(r => r.ok ? r.json().then(d => d.news || []) : []),
+      fetch('/api/v1/market/overview').then(r => r.ok ? r.json() : null),
+      fetch('/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
+      fetch('/api/v1/news/flash').then(r => r.ok ? r.json().then(d => d.news || []) : []),
     ])
     marketOverview.value = ov
     ratesData.value      = rt
