@@ -1,0 +1,6 @@
+#!/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal_Workspace/backend/.venv/bin/python3
+import sys
+from fastapi.cli import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())

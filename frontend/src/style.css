@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-terminal-bg text-gray-100 font-mono;
+  }
+}
+
+@layer components {
+  .terminal-panel {
+    @apply bg-terminal-panel rounded-lg border border-gray-800;
+  }
+}
