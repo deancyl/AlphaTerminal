@@ -1,20 +1,6 @@
 <template>
+  <!-- GridStack 容器 —— 锁定按钮在其外部 -->
   <div class="grid-stack" ref="gridRef">
-
-    <!-- 顶部工具栏：锁 + 刷新 -->
-    <div class="flex items-center justify-end gap-2 mb-2 shrink-0 px-1">
-      <button
-        class="flex items-center gap-1 px-2 py-1 text-[11px] rounded border transition"
-        :class="isLocked
-          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
-          : 'bg-green-500/10 border-green-500/30 text-green-400 hover:bg-green-500/20'"
-        @click="toggleLock"
-        :title="isLocked ? '解锁网格（允许拖拽）' : '锁定网格（禁止拖拽）'"
-      >
-        <span v-if="isLocked">🔒 锁定</span>
-        <span v-else>🔓 解锁</span>
-      </button>
-    </div>
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
@@ -179,10 +165,12 @@ const props = defineProps({
   ratesData:    { type: Array,  default: () => [] },
   globalData:   { type: Array,  default: () => [] },
   chinaAllData: { type: Array,  default: () => [] },
+  isLocked:     { type: Boolean, default: true },
 })
 
+const emit = defineEmits(['toggle-lock'])
+
 const gridRef          = ref(null)
-const isLocked         = ref(true)   // 默认锁定，禁止误拖拽
 const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
@@ -269,18 +257,23 @@ function formatPrice(v) {
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
-function toggleLock() {
-  isLocked.value = !isLocked.value
+// ── GridStack 锁定 ─────────────────────────────────────────────
+// ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
+watch(() => props.isLocked, (locked) => {
   if (grid) {
-    grid.staticGrid(isLocked.value)
+    grid.setStatic(locked)
   }
+}, { immediate: true })
+
+function toggleLock() {
+  emit('toggle-lock')
 }
 
 onMounted(async () => {
   await nextTick()
   if (typeof window !== 'undefined' && window.GridStack) {
     grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
-    grid.staticGrid(true)  // 默认锁定
+    grid.setStatic(props.isLocked)  // 跟随 props 初始状态
   }
 })
 

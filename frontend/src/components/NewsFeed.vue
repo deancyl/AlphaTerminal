@@ -5,27 +5,33 @@
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
-        <span v-if="lastRefreshTime" class="text-terminal-dim text-[10px]">
+        <!-- 刷新成功提示 -->
+        <span v-if="showRefreshed" class="text-green-400 text-[10px] animate-pulse">
+          ✅ 刚刚更新
+        </span>
+        <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
           {{ lastRefreshLabel }}
         </span>
         <span class="text-terminal-dim text-[10px]">{{ total }} 条</span>
-        <!-- 手动刷新按钮 -->
+        <!-- 手动刷新按钮 —— 放大触摸区域 -->
         <button
-          class="w-5 h-5 flex items-center justify-center rounded transition"
-          :class="loading
-            ? 'text-yellow-400 animate-spin'
-            : 'text-terminal-dim hover:text-terminal-accent'"
-          :disabled="loading"
+          class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
+          :class="isRefreshing
+            ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10 cursor-not-allowed'
+            : 'border-gray-600 text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
+          :disabled="isRefreshing"
           @click="manualRefresh"
-          title="手动刷新快讯"
+          title="刷新快讯"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
-               class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''">
+               class="w-4 h-4 transition-all"
+               :class="isRefreshing ? 'animate-spin' : ''">
             <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
           </svg>
         </button>
-        <span class="w-1.5 h-1.5 rounded-full"
-              :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
+        <!-- 状态指示灯 -->
+        <span class="w-1.5 h-1.5 rounded-full shrink-0"
+              :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
       </div>
     </div>
 
@@ -171,7 +177,9 @@ const props = defineProps({
 
 const items        = ref(props.initialItems)
 const total        = ref(0)
-const loading      = ref(false)
+const loading      = ref(false)      // 自动刷新状态
+const isRefreshing = ref(false)     // 手动刷新状态（按钮专用）
+const showRefreshed = ref(false)     // "刚刚更新" 成功提示
 const listEl       = ref(null)
 const refreshTimer  = ref(null)
 const lastRefreshTime = ref(null)
@@ -266,12 +274,14 @@ function closeModal() {
 
 // ── 数据拉取 ──────────────────────────────────────────────────────────
 async function fetchNews(quiet = false) {
-  if (!quiet) loading.value = true
+  if (!quiet) isRefreshing.value = true
   try {
-    // 强制刷新时加时间戳参数绕过浏览器缓存
-    const ts = Date.now()
-    const url = `/api/v1/news/flash?_t=${ts}`
-    const res = await fetch(url)
+    // 穿透式强制刷新：POST 到 force_refresh（同步拉取外网最新数据）
+    const useForce = !quiet
+    const url = useForce
+      ? '/api/v1/news/force_refresh'
+      : `/api/v1/news/flash?_t=${Date.now()}`
+    const res = await fetch(url, useForce ? { method: 'POST' } : {})
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     const incoming = data.news || []
@@ -292,20 +302,27 @@ async function fetchNews(quiet = false) {
     lastRefreshTime.value = Date.now()
     currentPage.value = 1
     if (listEl.value) listEl.value.scrollTop = 0
+
+    // 手动刷新成功：显示"刚刚更新"提示，3秒后自动消失
+    if (!quiet) {
+      showRefreshed.value = true
+      setTimeout(() => { showRefreshed.value = false }, 3000)
+    }
   } catch (e) {
     console.warn('[NewsFeed] fetch failed:', e.message)
   } finally {
-    if (!quiet) loading.value = false
+    if (!quiet) isRefreshing.value = false
   }
 }
 
 async function manualRefresh() {
+  if (isRefreshing.value) return
   await fetchNews(false)
 }
 
 function startAutoRefresh() {
-  fetchNews(false)
-  refreshTimer.value = setInterval(() => fetchNews(true), 20 * 60 * 1000)
+  fetchNews(true)   // 首次：静默读缓存，不弹 loading
+  refreshTimer.value = setInterval(() => fetchNews(true), 20 * 60 * 1000)  // 定时：也静默读缓存
 }
 
 onMounted(startAutoRefresh)

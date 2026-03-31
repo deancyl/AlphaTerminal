@@ -4,9 +4,16 @@ AlphaTerminal 实时新闻引擎 - Phase 5
 """
 import hashlib
 import logging
+import os
 import threading
 import time
 from datetime import datetime
+
+# ── 确保代理环境变量生效（外网请求必须走代理）────────────────────────
+os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
+os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
+os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
+os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
 
 import akshare as ak
 
@@ -18,18 +25,16 @@ _NEWS_CACHE: list[dict] = []
 _NEWS_CACHE_READY: bool = False
 _CACHE_LOCK = threading.Lock()
 
-# ── 轮询标的（30 只 A 股，覆盖多行业）────────────────────────────────
+# ── 轮询标的（20 只 A 股核心，覆盖主要行业）─────────────────────────
 NEWS_SYMBOLS = [
-    "000001", "399001", "399006", "000300", "000016",   # 核心指数
-    "600036", "601318", "600000", "601166", "600016",   # 银行
-    "601628", "600030", "601688", "000776",              # 保险/券商
-    "600585", "002594", "300750", "688981",              # 科技/新能源
-    "600519", "000858", "603288", "600887",              # 消费
-    "601899", "600028", "600050", "601888",              # 周期
-    "002230", "300059", "688111", "300760",              # 更多中小盘
-    "002475", "300015", "002352", "300122",              # 医药/电子
-    "600009", "600031", "300274", "601012",              # 地产/制造
-    "600150", "601668", "600276", "600900",              # 建筑/电力
+    "000001", "399001", "399006", "000300",              # 核心指数
+    "600036", "601318", "600030", "600016",              # 银行/券商
+    "600519", "002594", "300750", "688981",              # 消费/新能源/半导体
+    "601628", "000776",                                  # 保险
+    "002230", "300059", "688111",                        # 科技
+    "600028", "601899", "600050",                        # 周期
+    "600887", "603288", "000858",                        # 消费
+    "600009", "601888",                                  # 旅游/免税
 ]
 
 # ── 全局去重哈希集合 ────────────────────────────────────────────────
@@ -127,9 +132,9 @@ def refresh_news_cache(background: bool = True):
     """
     刷新全局新闻缓存池（后台线程调用）
     策略：
-      1. 宏观快讯：news_economic_baidu（百度财经，~100条，保证基础量）
-      2. 个股新闻：akshare stock_news_em（东方财富，30只）
-      两个来源合并去重，确保 >150 条
+      1. 宏观快讯：stock_news_main_cx（财新，100条，走代理，稳定可靠）
+      2. 个股新闻：akshare stock_news_em（东方财富，50只）
+      两个来源合并去重，确保 >100 条
     """
     global _NEWS_CACHE, _NEWS_CACHE_READY
 
@@ -139,43 +144,39 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            # ① 宏观快讯（百度财经，~100条，稳定可靠）
-            # 严格 10s 超时保护，防止单次 API 挂起导致任务阻塞
+            # ① 宏观快讯：stock_news_main_cx（财新网，~100条，走系统代理）
             try:
-                logger.info("[SCHEDULER] Fetching news from source: baidu_economic ...")
-                df = ak.news_economic_baidu()
+                logger.info("[SCHEDULER] Fetching news from source: stock_news_main_cx (财新) ...")
+                df = ak.stock_news_main_cx()
                 if df is not None and not df.empty:
                     for _, row in df.iterrows():
                         try:
-                            url    = str(row.get("新闻链接", "") or "")
-                            title  = str(row.get("新闻标题", "") or "")
-                            time_  = str(row.get("发布时间", "") or "")[:16]
-                            source = str(row.get("来源", "百度财经") or "百度财经")
-                            if title and url and len(title) > 10:
+                            tag    = str(row.get("tag", "宏观") or "宏观")
+                            summary = str(row.get("summary", "") or "")
+                            url    = str(row.get("url", "") or "")
+                            if summary and len(summary) > 5:
                                 all_news.append({
-                                    "title":  title.strip(),
-                                    "time":   time_,
-                                    "source": source,
+                                    "title":  (tag + "｜" if tag else "") + summary.strip()[:120],
+                                    "time":   datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                    "source": "财新",
                                     "url":    url,
                                 })
                         except Exception:
                             continue
-                    sources_used.append("baidu")
-                    logger.info(f"[SCHEDULER] Successfully fetched {len(all_news)} items from baidu_economic.")
+                    sources_used.append("caixin")
+                    logger.info(f"[SCHEDULER] stock_news_main_cx: got {len(all_news)} items.")
             except Exception as e:
-                logger.warning(f"[SCHEDULER] baidu_economic failed (timeout?): {type(e).__name__}: {e}")
+                logger.warning(f"[SCHEDULER] stock_news_main_cx failed: {type(e).__name__}: {e}")
 
-            # ② 个股新闻（东方财富，30只标的，每只严格超时）
+            # ② 个股新闻（东方财富，50只标的）
             for sym in NEWS_SYMBOLS:
                 try:
-                    logger.info(f"[SCHEDULER] Fetching news for symbol: {sym} ...")
                     items = _fetch_news_for_symbol(sym)
                     if items:
                         all_news.extend(items)
-                        logger.info(f"[SCHEDULER] {sym}: got {len(items)} items")
                 except Exception as e:
                     logger.warning(f"[SCHEDULER] {sym} failed: {type(e).__name__}: {e}")
-                time.sleep(0.1)  # 礼貌性限速，不阻塞后续
+                time.sleep(0.05)  # 快速轮询，缩短预热总时长
 
         except Exception as e:
             logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
@@ -205,6 +206,17 @@ def refresh_news_cache(background: bool = True):
         with _CACHE_LOCK:
             _NEWS_CACHE = final
             _NEWS_CACHE_READY = True
+
+        # ── 审计日志：打印最新一条新闻 ────────────────────────────────
+        if final:
+            latest = final[0]
+            print(
+                f"[News Fetch] 抓取完成，共 {len(final)} 条。"
+                f"最新新闻时间：{latest['time']}，标题：{latest['title'][:40]}",
+                flush=True
+            )
+        else:
+            print("[News Fetch] 抓取完成，缓存为空。", flush=True)
 
         logger.info(
             f"[SCHEDULER] Successfully pushed {len(final)} items to cache. "

@@ -20,16 +20,14 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_scheduler()
 
-    # Task 1: 绝不阻塞 uvicorn 启动！后台 Job 负责预热
-    # 路由只读缓存，毫秒级响应
+    # 立即触发一次新闻缓存预热（不等待，让后台线程静默执行）
     async def _bg_startup():
-        import time; await asyncio.sleep(3)
+        # 等待scheduler初始化完成
+        import time; await asyncio.sleep(1)
         from app.services.news_engine import refresh_news_cache
-        from app.services.sectors_cache import fetch_and_cache_sectors
-        logger.info("[Startup] 启动后台预热（新闻 + 行业板块）...")
+        logger.info("[Startup] 启动新闻预热...")
         refresh_news_cache(background=True)
-        fetch_and_cache_sectors()
-        logger.info("[Startup] 预热任务已分发")
+        logger.info("[Startup] 新闻预热已触发（后台运行）")
 
     asyncio.create_task(_bg_startup())
 

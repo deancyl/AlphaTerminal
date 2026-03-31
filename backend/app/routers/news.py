@@ -15,12 +15,12 @@ async def news_flash():
     """
     快讯瀑布流（只读缓存，后台刷新线程维护）
     响应时间 < 50ms
-    任务3：禁用 Mock！缓存未就绪时返回空列表，前端展示"正在加载..."
+    禁用 Mock！缓存未就绪时返回空列表
     """
     from app.services.news_engine import get_cached_news, is_cache_ready
 
     if not is_cache_ready():
-        logger.warning("[News] 缓存未就绪，返回空列表（禁止Mock降级）")
+        logger.warning("[News] 缓存未就绪，返回空列表")
         return {"news": [], "source": "cache_empty", "total": 0}
 
     news = get_cached_news(limit=150)
@@ -29,6 +29,36 @@ async def news_flash():
         return {"news": [], "source": "cache_empty", "total": 0}
 
     return {"news": news, "source": "cache", "total": len(news)}
+
+
+@router.post("/news/force_refresh")
+async def news_force_refresh():
+    """
+    穿透式强制刷新（Phase 3.6 UX 整改）：
+    同步执行真实网络抓取，等待完成后再返回最新数据。
+    前端手动刷新时调用此接口，确保拿到此刻的外网最新数据。
+    """
+    import asyncio
+    from app.services.news_engine import get_cached_news, is_cache_ready, refresh_news_cache
+
+    async def _do():
+        # 在线程池中执行同步的 refresh_news_cache(background=False)
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, refresh_news_cache, False)
+
+    try:
+        logger.info("[News] force_refresh: 开始同步抓取...")
+        await _do()
+        news = get_cached_news(limit=150)
+        logger.info(f"[News] force_refresh: 获取到 {len(news)} 条")
+        return {
+            "news":   news,
+            "source": "force_refresh",
+            "total":  len(news),
+        }
+    except Exception as e:
+        logger.error(f"[News] force_refresh 失败: {type(e).__name__}: {e}", exc_info=True)
+        return {"news": [], "source": "error", "total": 0, "error": str(e)}
 
 
 @router.get("/news/detail")

@@ -3,10 +3,17 @@
 策略：启动即填充 china_all + 后台 Sina HQ 增量刷新
 """
 import logging
+import os
 import threading
 from datetime import datetime
 
 import numpy as np
+
+# ── 确保代理环境变量生效 ───────────────────────────────────────
+os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
+os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
+os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
+os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
 
 logger = logging.getLogger(__name__)
 
@@ -199,24 +206,27 @@ def _do_news_fetch():
         all_news = []
         sources = []
 
-        # 主源：百度财经宏观快讯（稳定，~100条）
+        # 主源：财新网快讯（走代理，稳定，~100条）
         try:
-            df = ak.news_economic_baidu()
+            df = ak.stock_news_main_cx()
             if df is not None and not df.empty:
                 for _, row in df.iterrows():
                     try:
-                        url    = str(row.get("新闻链接", "") or "")
-                        title  = str(row.get("新闻标题", "") or "")
-                        time_  = str(row.get("发布时间", "") or "")[:16]
-                        source = str(row.get("来源", "百度财经") or "百度财经")
-                        if title and url and len(title) > 10:
-                            all_news.append({"title": title.strip(), "time": time_,
-                                             "source": source, "url": url})
+                        tag     = str(row.get("tag", "宏观") or "宏观")
+                        summary = str(row.get("summary", "") or "")
+                        url     = str(row.get("url", "") or "")
+                        if summary and len(summary) > 5:
+                            all_news.append({
+                                "title":  (tag + "｜" if tag else "") + summary.strip()[:120],
+                                "time":   datetime.now().strftime("%Y-%m-%d %H:%M"),
+                                "source": "财新",
+                                "url":    url,
+                            })
                     except Exception:
                         continue
-                sources.append("baidu")
+                sources.append("caixin")
         except Exception as e:
-            logger.warning(f"[News] 百度宏观失败: {e}")
+            logger.warning(f"[News] 财新快讯失败: {e}")
 
         # 从源：Sina 个股新闻（东方财富 stock_news_em）
         try:

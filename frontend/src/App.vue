@@ -13,18 +13,31 @@
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
           <span class="text-terminal-dim text-xs">Phase 7 · 全球市场 · K线</span>
         </div>
-        <div class="flex items-center gap-4 text-xs text-terminal-dim">
+        <div class="flex items-center gap-3 text-xs text-terminal-dim">
           <span id="clock" class="font-mono">{{ currentTime }}</span>
           <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
             ● LIVE
           </span>
-          <!-- Task 2: Copilot 唤醒按钮 -->
+          <!-- 🔒 锁定/解锁按钮 -->
+          <button
+            class="flex items-center gap-1 px-2.5 py-1 rounded border text-xs transition"
+            :class="isLocked
+              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+              : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'"
+            @click="toggleLock"
+            :title="isLocked ? '点击解锁网格（允许拖拽）' : '点击锁定网格（禁止拖拽）'"
+          >
+            <span v-if="isLocked">🔒</span>
+            <span v-else>🔓</span>
+            {{ isLocked ? '已锁定' : '可拖拽' }}
+          </button>
+          <!-- Copilot 唤醒按钮 -->
           <button
             class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs"
             @click="toggleCopilot"
           >
-            <span v-if="isCopilotOpen">🤖 AI</span>
-            <span v-else">☰ 展开</span>
+            <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
+            <span v-else>🤖 展开 AI 助理</span>
           </button>
         </div>
       </header>
@@ -38,6 +51,8 @@
           :china-all-data="chinaAllData"
           :sectors-data="sectorsData"
           :derivatives-data="derivativesData"
+          :is-locked="isLocked"
+          @toggle-lock="toggleLock"
         />
       </div>
     </main>
@@ -68,7 +83,12 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import DashboardGrid  from './components/DashboardGrid.vue'
 
-const isCopilotOpen = ref(true)  // Task 2: 默认展开
+const isCopilotOpen = ref(false) // 默认收起 AI 助理
+const isLocked = ref(true)     // 网格默认锁定
+
+function toggleLock() {
+  isLocked.value = !isLocked.value
+}
 
 function toggleCopilot() {
   isCopilotOpen.value = !isCopilotOpen.value
