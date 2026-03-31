@@ -268,7 +268,7 @@ const props = defineProps({
 
 const gridRef          = ref(null)
 const selectedIndex    = ref('000001')
-const selectedPeriod   = ref('realtime')
+const selectedPeriod   = ref('daily')
 const commodityTab     = ref('sectors')
 const activeIndicators = ref([])
 
