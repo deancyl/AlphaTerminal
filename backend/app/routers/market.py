@@ -2,12 +2,14 @@
 市场数据接口 - Phase 7
 所有数据从 SQLite market_data_realtime 读取
 """
+import logging
 import time
 from datetime import datetime
 from fastapi import APIRouter
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── 风向标指数（Task 2: 精简 overview，只保留核心风向标）─────────────────
@@ -203,28 +205,15 @@ async def market_global():
     }
 
 
-# ── Phase 6: 行业板块（修复，Sina/东财板块API均被封，改用 china_all 指数替代）──
+# ── Task 1: 行业板块（只读缓存，后台Job填充，路由绝不阻塞）──────────────
 @router.get("/market/sectors")
 async def market_sectors():
     """
-    使用 china_all（10只A股核心指数）作为板块替代数据
-    Sina 板块接口和 Eastmoney 行业接口均被限流
+    真实行业板块数据 — Task 1: 毫秒级响应
+    所有 akshare 调用全部移到后台 Job，API 只读 _SECTORS_CACHE
     """
-    rows = get_latest_prices(CHINA_ALL_SYMBOLS)
-    sectors = []
-    for r in rows:
-        pct = float(r.get("change_pct") or 0)
-        sectors.append({
-            "name":         r.get("name", ""),
-            "symbol":       r.get("symbol", ""),
-            "change_pct":   round(pct, 2),
-            "price":        r.get("price") or 0,
-            "volume":        r.get("volume") or 0,
-            "top_stock":    None,   # 板块API封禁，无法抓领涨股
-            "status":       r.get("status", "交易中"),
-        })
-    # 按涨跌幅排序
-    sectors.sort(key=lambda x: x["change_pct"], reverse=True)
+    from app.services.sectors_cache import get_sectors
+    sectors = get_sectors()
     return {
         "timestamp": datetime.now().isoformat(),
         "sectors": sectors,
