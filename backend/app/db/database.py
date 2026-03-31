@@ -141,10 +141,17 @@ def buffer_insert(rows: list[dict]):
 def buffer_insert_daily(rows: list[dict]):
     """
     将日K线数据批量写入 market_data_daily（UPSERT 语义）
-    防御性修复: 如果 high < low 则自动交换
     """
     if not rows:
         return
+    # ── 防御性探针：若>50%的数据 close==high，说明数据源被污染，丢弃整批 ──
+    if len(rows) >= 10:
+        bad = sum(1 for r in rows if float(r.get("close") or 0) >= float(r.get("high") or 0) - 0.01 > 0
+        bad_pct = bad / len(rows)
+        if bad_pct > 0.5:
+            import logging as _log
+            _log.error(f"[DB BLOCK] close==high污染率{bad_pct:.0%} > 50%，数据被拒绝写入")
+            return
     conn = _get_conn()
     for r in rows:
         o = r.get("open") or 0

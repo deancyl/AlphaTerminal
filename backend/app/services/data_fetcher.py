@@ -437,17 +437,18 @@ def fetch_derivatives() -> list[dict]:
 def fetch_china_index_history(symbol: str) -> list[dict]:
     """
     拉取A股指数日K线历史（近1年），写入 market_data_daily 表
-    symbol: 000001=上证, 000300=沪深300, 399001=深证, 399006=创业板
+    AkShare stock_zh_index_daily 返回: ['date','open','high','low','close','volume']
+    注意: AkShare DataFrame 列名直接用英文字符串访问
     """
     try:
-        import akshare as ak
-        import pandas as pd
+        import akshare as ak, pandas as pd
 
         ak_symbol_map = {
             "000001": "sh000001",
             "000300": "sh000300",
             "399001": "sz399001",
             "399006": "sz399006",
+            "000688": "sh000688",
         }
         ak_sym = ak_symbol_map.get(symbol)
         if not ak_sym:
@@ -458,151 +459,44 @@ def fetch_china_index_history(symbol: str) -> list[dict]:
         if df is None or df.empty:
             return []
 
-        df.columns = [c.strip() for c in df.columns]
-        date_col = df.columns[0]  # 通常是 'date'
-        ohlc_cols = [c for c in df.columns if c not in (date_col,)]
-        if len(ohlc_cols) >= 4:
-            df = df.rename(columns={ohlc_cols[0]: "open", ohlc_cols[1]: "high",
-                                    ohlc_cols[2]: "low", ohlc_cols[3]: "close"})
-        elif "close" not in df.columns:
-            df["close"] = df[df.columns[-1]]
+        # AkShare 列名就是英文: ['date','open','high','low','close','volume']
+        # 直接访问，不需要 rename
+        date_col = df.columns[0]  # 'date'
 
         rows = []
         now_ts = int(time.time())
-        for _, row in df.iterrows():
+        for i in range(len(df)):
             try:
-                dt = int(pd.Timestamp(row[date_col]).timestamp())
-                close = float(row.get("close", row.iloc[-1]))
-                chg_pct = float(row.get("pct_chg", 0)) if "pct_chg" in row else 0.0
+                dt     = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                open_  = float(df.iloc[i]["open"])
+                high   = float(df.iloc[i]["high"])
+                low    = float(df.iloc[i]["low"])
+                close  = float(df.iloc[i]["close"])   # ← 直接用 df["close"]，不经过任何 swap
+                volume = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                pct    = float(df.iloc[i]["pct_chg"]) if "pct_chg" in df.columns else 0.0
                 rows.append({
                     "symbol":    symbol,
-                    "date":      str(row[date_col])[:10],
-                    "open":      float(row.get("open", close)),
-                    "high":      float(row.get("high", close)),
-                    "low":       float(row.get("low", close)),
+                    "date":      str(df.iloc[i][date_col])[:10],
+                    "open":      open_,
+                    "high":      high,
+                    "low":       low,
                     "close":     close,
-                    "volume":    float(row.get("volume", 0) or 0),
-                    "change_pct": chg_pct,
+                    "volume":    volume,
+                    "change_pct": pct,
                     "timestamp": dt,
                     "data_type": "daily",
                 })
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[AkShare] 解析第{i}行失败: {e}")
                 continue
 
         if rows:
             from app.db import buffer_insert_daily
             buffer_insert_daily(rows)
             logger.info(f"[AkShare] {symbol} 历史K线写入 {len(rows)} 条")
-        return rows[-100:]  # 只返回最近100条供图表使用
+        return rows[-100:]
     except Exception as e:
         logger.error(f"[AkShare] fetch_china_index_history({symbol}) 失败: {type(e).__name__}: {e}")
-        traceback.print_exc()
-        return []
-
-
-
-
-# ── Phase 7: 沪深10+核心指数 ─────────────────────────────────────────────
-def fetch_china_all_indices() -> list[dict]:
-    """
-    拉取10+个中国核心指数（上证、沪深300、深证、创业板、科创50、中证500、
-    中证1000、上证50、上证380、沪深圳全市）
-    新浪直连，不走代理
-    """
-    rows = []
-    codes = "s_sh000001,s_sh000300,s_sz399001,s_sz399006,s_sh000688,s_sh000905,s_sh000852,s_sh000016,s_sh000510,s_sz399100"
-    sym_map = {
-        "s_sh000001": ("000001", "上证指数",    "AShare"),
-        "s_sh000300": ("000300", "沪深300",     "AShare"),
-        "s_sz399001": ("399001", "深证成指",    "AShare"),
-        "s_sz399006": ("399006", "创业板指",    "AShare"),
-        "s_sh000688": ("000688", "科创50",      "AShare"),
-        "s_sh000905": ("000905", "中证500",     "AShare"),
-        "s_sh000852": ("000852", "中证1000",    "AShare"),
-        "s_sh000016": ("000016", "上证50",      "AShare"),
-        "s_sh000510": ("000510", "上证380",     "AShare"),
-        "s_sz399100": ("399100", "深证A指",     "AShare"),
-    }
-
-    try:
-        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=10)
-        if r.status_code != 200:
-            raise RuntimeError(f"Sina 返回状态码 {r.status_code}")
-
-        for line in r.text.strip().split("\n"):
-            key_m = re.search(r"hq_str_s_(sh\d+|sz\d+)=", line)
-            if not key_m:
-                continue
-            code_key = "s_" + key_m.group(1)
-            if code_key not in sym_map:
-                continue
-            sym, display_name, market = sym_map[code_key]
-            parsed = _parse_sina_hq(line)
-            if parsed:
-                rows.append(_row(sym, display_name, market, parsed["price"], parsed["change_pct"], parsed["volume"], "china_all"))
-                logger.info(f"[Sina] {display_name}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
-            else:
-                logger.warning(f"[Sina] 解析失败: {line[:80]}")
-    except Exception as e:
-        logger.error(f"[Sina] fetch_china_all_indices 失败: {type(e).__name__}: {e}")
-        traceback.print_exc()
-
-    return rows
-
-
-
-
-
-# ── Phase 9: 周K/月K聚合采集（基于日K聚合）────────────────────────
-def fetch_weekly_monthly_kline(symbol: str, period: str = "weekly") -> list[dict]:
-    """
-    从 market_data_daily 读取日K，按周/月聚合为更高周期K线，
-    写入 market_data_weekly / market_data_monthly 表。
-    period: "weekly" | "monthly"
-    """
-    try:
-        import pandas as pd
-        from app.db import get_daily_history
-        rows = get_daily_history(symbol, limit=9999)  # 取全部历史
-        if not rows:
-            return []
-
-        # 转换为 DataFrame
-        df = pd.DataFrame(rows)
-        df["date"] = pd.to_datetime(df["date"])
-        df = df.sort_values("date")
-
-        # 按周/月分组
-        if period == "weekly":
-            df["period_key"] = df["date"].dt.to_period("W").astype(str)
-        else:
-            df["period_key"] = df["date"].dt.to_period("M").astype(str)
-
-        grouped = df.groupby("period_key")
-        agg_rows = []
-        for period_key, group in grouped:
-            if len(group) < 2:
-                continue
-            agg_rows.append({
-                "symbol":    symbol,
-                "date":      str(group["date"].iloc[-1].date()),
-                "period":    period,
-                "open":      float(group["open"].iloc[0]),
-                "high":      float(group["high"].max()),
-                "low":       float(group["low"].min()),
-                "close":     float(group["close"].iloc[-1]),
-                "volume":    float(group["volume"].sum()),
-                "change_pct": float(group["close"].iloc[-1] - group["close"].iloc[0]) / group["close"].iloc[0] * 100,
-                "timestamp":  int(group["date"].iloc[-1].timestamp()),
-            })
-
-        if agg_rows:
-            from app.db import buffer_insert_periodic
-            buffer_insert_periodic(agg_rows, period)
-            logger.info(f"[{period}] {symbol} 聚合完成: {len(agg_rows)} 个周期")
-        return agg_rows
-    except Exception as e:
-        logger.error(f"[{period}] fetch_weekly_monthly_kline({symbol}) 失败: {type(e).__name__}: {e}")
         traceback.print_exc()
         return []
 
