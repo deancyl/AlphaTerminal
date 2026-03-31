@@ -1,4 +1,5 @@
 <template>
+  <!-- GridStack 容器 —— 锁定按钮在其外部 -->
   <div class="grid-stack" ref="gridRef">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━━━━ -->
@@ -164,7 +165,10 @@ const props = defineProps({
   ratesData:    { type: Array,  default: () => [] },
   globalData:   { type: Array,  default: () => [] },
   chinaAllData: { type: Array,  default: () => [] },
+  isLocked:     { type: Boolean, default: true },
 })
+
+const emit = defineEmits(['toggle-lock'])
 
 const gridRef          = ref(null)
 const selectedIndex    = ref(currentSymbol.value)
@@ -253,10 +257,23 @@ function formatPrice(v) {
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
+// ── GridStack 锁定 ─────────────────────────────────────────────
+// ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
+watch(() => props.isLocked, (locked) => {
+  if (grid) {
+    grid.setStatic(locked)
+  }
+}, { immediate: true })
+
+function toggleLock() {
+  emit('toggle-lock')
+}
+
 onMounted(async () => {
   await nextTick()
   if (typeof window !== 'undefined' && window.GridStack) {
     grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
+    grid.setStatic(props.isLocked)  // 跟随 props 初始状态
   }
 })
 
