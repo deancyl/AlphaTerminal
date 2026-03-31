@@ -3,9 +3,37 @@
 
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
     <div class="bg-terminal-bg rounded border border-gray-700 p-3">
+      <!-- 标题栏：情绪 + 资讯面 -->
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 A股市场情绪</span>
-        <span class="text-[10px] font-mono text-terminal-dim">{{ data.timestamp || '加载中...' }}</span>
+        <div class="flex items-center gap-2">
+          <!-- Phase 4: 资讯情绪徽标 -->
+          <span
+            v-if="newsSentiment.total_count > 0"
+            class="text-[10px] px-1.5 py-0.5 rounded border"
+            :class="newsSentiment.bullish - newsSentiment.bearish > 0
+              ? 'border-red-500/40 bg-red-500/10 text-red-400'
+              : newsSentiment.bullish - newsSentiment.bearish < 0
+                ? 'border-green-500/40 bg-green-500/10 text-green-400'
+                : 'border-gray-600 bg-gray-600/10 text-gray-400'"
+          >
+            📰 资讯面: {{ newsSentiment.label }} ({{ newsSentiment.bullish_count }}:{{ newsSentiment.bearish_count }})
+          </span>
+          <span class="text-[10px] font-mono text-terminal-dim">{{ data.timestamp || '加载中...' }}</span>
+        </div>
+      </div>
+
+      <!-- Phase 4: 大字汇总行 -->
+      <div class="flex items-center justify-between mb-2 px-1 py-1.5 rounded bg-terminal-panel/60 border border-gray-700/60">
+        <span class="text-red-400 font-bold text-sm">
+          🚀 上涨: <span class="font-mono text-base">{{ data.advance || 0 }}</span> 家
+        </span>
+        <span class="text-yellow-400 font-bold text-sm">
+          ➖ 平盘: <span class="font-mono text-base">{{ data.unchanged || 0 }}</span> 家
+        </span>
+        <span class="text-green-400 font-bold text-sm">
+          🟩 下跌: <span class="font-mono text-base">{{ data.decline || 0 }}</span> 家
+        </span>
       </div>
 
       <!-- ECharts 柱状图 -->
@@ -65,6 +93,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { on as busOn } from '../composables/useEventBus.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -84,6 +113,13 @@ const data = ref({
   advance: 0, decline: 0, unchanged: 0,
   limit_up: 0, limit_down: 0,
   up_ratio: 0.0, timestamp: '',
+})
+
+// Phase 4: 资讯情绪（来自 /market/sentiment/histogram 返回的 news_sentiment 字段）
+const newsSentiment = ref({
+  score: 0.0, label: '中性',
+  bullish_count: 0, bearish_count: 0,
+  total_count: 0, keywords: [], timestamp: '',
 })
 
 const windItems = computed(() => props.marketData?.wind || {})
@@ -168,6 +204,18 @@ async function fetchHistogram() {
     const res = await fetch('/api/v1/market/sentiment/histogram')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const d = await res.json()
+    // Phase 4: 提取 news_sentiment 字段
+    if (d.news_sentiment) {
+      newsSentiment.value = {
+        score:         d.news_sentiment.score         ?? 0.0,
+        label:          d.news_sentiment.label          ?? '中性',
+        bullish_count:  d.news_sentiment.bullish_count ?? 0,
+        bearish_count:  d.news_sentiment.bearish_count ?? 0,
+        total_count:    d.news_sentiment.total_count   ?? 0,
+        keywords:       d.news_sentiment.keywords      ?? [],
+        timestamp:      d.news_sentiment.timestamp     ?? '',
+      }
+    }
     data.value = d
     if (chartInst) {
       chartInst.setOption(buildHistogramOption(d.buckets), true)
@@ -188,6 +236,12 @@ onMounted(async () => {
   const ro = new ResizeObserver(() => chartInst?.resize())
   if (chartEl.value) ro.observe(chartEl.value)
   refreshTimer = setInterval(fetchHistogram, 3 * 60 * 1000)
+
+  // Phase 4: 监听 NewsFeed 刷新事件，联动拉取最新情绪数据
+  busOn('news-refreshed', (payload) => {
+    console.log('[SentimentGauge] news-refreshed event, re-fetching...', payload)
+    fetchHistogram()
+  })
 })
 
 onUnmounted(() => {
