@@ -2,10 +2,13 @@
 AlphaTerminal Backend - FastAPI Application Entry Point
 """
 import asyncio
+import logging
 import signal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -17,14 +20,18 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_scheduler()
 
-    # 后台预热新闻缓存（不阻塞 uvicorn 启动）
-    async def _prefetch_news():
-        await asyncio.sleep(1)   # 等待 scheduler 完全就绪
-        from app.services.sentiment_engine import trigger_news_fetch
-        trigger_news_fetch()
-        await asyncio.sleep(0)
+    # Task 1: 绝不阻塞 uvicorn 启动！后台 Job 负责预热
+    # 路由只读缓存，毫秒级响应
+    async def _bg_startup():
+        import time; await asyncio.sleep(3)
+        from app.services.news_engine import refresh_news_cache
+        from app.services.sectors_cache import fetch_and_cache_sectors
+        logger.info("[Startup] 启动后台预热（新闻 + 行业板块）...")
+        refresh_news_cache(background=True)
+        fetch_and_cache_sectors()
+        logger.info("[Startup] 预热任务已分发")
 
-    asyncio.create_task(_prefetch_news())
+    asyncio.create_task(_bg_startup())
 
     yield
     # 关闭时
