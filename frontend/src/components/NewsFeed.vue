@@ -6,8 +6,8 @@
       <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
         <!-- 刷新成功提示 -->
-        <span v-if="showRefreshed" class="text-green-400 text-[10px] animate-pulse">
-          ✅ 刚刚更新
+        <span v-if="showRefreshed && refreshMsg" class="text-green-400 text-[10px] animate-pulse">
+          {{ refreshMsg }}
         </span>
         <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
           {{ lastRefreshLabel }}
@@ -180,6 +180,7 @@ const total        = ref(0)
 const loading      = ref(false)      // 自动刷新状态
 const isRefreshing = ref(false)     // 手动刷新状态（按钮专用）
 const showRefreshed = ref(false)     // "刚刚更新" 成功提示
+const refreshMsg   = ref('')         // 动态 Toast 文案（来源 + 条数）
 const listEl       = ref(null)
 const refreshTimer  = ref(null)
 const lastRefreshTime = ref(null)
@@ -296,20 +297,31 @@ async function fetchNews(quiet = false) {
     })
 
     if (newItems.length) {
-      items.value = [...newItems, ...items.value].slice(0, 200)
+      // 合并后强制全局倒序（时间最新在前），防止旧日期新闻被误置顶
+      const merged = [...newItems, ...items.value]
+      items.value = merged
+        .sort((a, b) => (b.time || '').localeCompare(a.time || ''))
+        .slice(0, 200)
     }
     total.value = incoming.length
     lastRefreshTime.value = Date.now()
     currentPage.value = 1
     if (listEl.value) listEl.value.scrollTop = 0
 
-    // 手动刷新成功：显示"刚刚更新"提示，3秒后自动消失
+    // 手动刷新成功：动态 Toast 提示
     if (!quiet) {
+      if (newItems.length > 0) {
+        const sources = [...new Set(newItems.map(it => it.source))].join('、')
+        refreshMsg.value = `✅ 获取到 ${newItems.length} 条新资讯（来源: ${sources}）`
+      } else {
+        refreshMsg.value = `✅ 当前已是最新数据`
+      }
       showRefreshed.value = true
-      setTimeout(() => { showRefreshed.value = false }, 3000)
+      setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 4000)
     }
   } catch (e) {
     console.warn('[NewsFeed] fetch failed:', e.message)
+    if (!quiet) refreshMsg.value = `⚠️ 抓取失败: ${e.message}`
   } finally {
     if (!quiet) isRefreshing.value = false
   }
@@ -323,7 +335,7 @@ async function manualRefresh() {
 
 function startAutoRefresh() {
   fetchNews(true)   // 首次：静默读缓存，不弹 loading
-  refreshTimer.value = setInterval(() => fetchNews(true), 20 * 60 * 1000)  // 定时：也静默读缓存
+  refreshTimer.value = setInterval(() => fetchNews(true), 5 * 60 * 1000)   // 定时：5分钟静默读缓存
 }
 
 onMounted(startAutoRefresh)

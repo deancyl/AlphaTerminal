@@ -88,7 +88,7 @@ def start_scheduler():
     scheduler.add_job(
         trigger_news_fetch,
         "interval",
-        seconds=20 * 60,
+        seconds=5 * 60,
         id="news_refresh",
         name="NewsRefresh",
         replace_existing=True,
