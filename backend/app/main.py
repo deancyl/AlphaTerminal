@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment
+from app.routers import market, copilot, news, sentiment, debug
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -20,18 +20,9 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_scheduler()
 
-    # Task 1: 绝不阻塞 uvicorn 启动！后台 Job 负责预热
-    # 路由只读缓存，毫秒级响应
-    async def _bg_startup():
-        import time; await asyncio.sleep(3)
-        from app.services.news_engine import refresh_news_cache
-        from app.services.sectors_cache import fetch_and_cache_sectors
-        logger.info("[Startup] 启动后台预热（新闻 + 行业板块）...")
-        refresh_news_cache(background=True)
-        fetch_and_cache_sectors()
-        logger.info("[Startup] 预热任务已分发")
-
-    asyncio.create_task(_bg_startup())
+    # 启动时不触发新闻预热（scheduler 的 NewsRefresh 任务每 20 分钟自动运行，
+    # 由它统一管理 _NEWS_CACHE，避免两个线程同时写缓存造成竞态）
+    # sentiment_engine._do_news_fetch（scheduler 触发）现已修复为 stock_news_em（真实时间戳）
 
     yield
     # 关闭时
@@ -51,6 +42,10 @@ app.add_middleware(
         "http://localhost:60100",
         "http://127.0.0.1:60100",
         "http://0.0.0.0:60100",
+        "http://192.168.2.186:60100",
+        "http://192.168.1.50:60100",
+        "http://172.17.0.1:60100",
+        "http://172.20.0.1:60100",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -61,6 +56,7 @@ app.add_middleware(
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(copilot.router, prefix="/api/v1", tags=["copilot"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
+app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # ← 必须在 sentiment 之前（/{symbol} 拦截一切）
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
 
 
