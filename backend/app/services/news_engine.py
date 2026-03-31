@@ -74,7 +74,7 @@ def _fetch_news_for_symbol(symbol: str) -> list[dict]:
         return []
 
 
-def fetch_latest_news(limit: int = 20) -> list[dict]:
+def fetch_latest_news(limit: int = 150) -> list[dict]:
     """
     聚合多个标的新闻，去重，返回最新 N 条
     去重机制：MD5(news_url) 哈希集合，内存常驻

@@ -43,10 +43,23 @@
 - **降级策略**：API 全部失败时返回内置静态 5 条 Mock 数据
 - **注册路由**：`/api/v1/news/flash` → `app/routers/news.py`
 
-#### Task 3：前端信息流挂载
-- **NewsFeed.vue**：已完整实现（含 MD5 去重 + 5 分钟自动刷新 + 标签样式）
+#### Task 3：前端信息流挂载 + 详情 Modal
+- **NewsFeed.vue**：重写完成（分页 + 异步正文抓取 + 详情 Modal）
+  - 分页：50 条/页，支持 ‹ › 按钮（最多显示 5 个页码按钮）
+  - 高度锁定：`min-height: 380px` 容器，`overflow-y-auto`，固定显示约 7 条
+  - Modal：点击新闻标题弹出详情，`backdrop-blur` 遮罩，先显示"正文努力提取中..."，异步 GET `/api/v1/news/detail` 后展示纯文本正文
+  - 原文链接：Modal 底部显示可点击外链
+- **DashboardGrid**：NewsFeed 网格扩大至 `gs-w="8"`（占 2/3 宽度）
 - **挂载位置**：DashboardGrid Widget 5（原板块与商品 Tab 区）
 - **清理**：移除未使用的 `commodityTab`、`sectorsData`、`derivativesData` 等变量
+
+#### Task 4（Phase 4）：新闻详情正文抓取
+- **路由**：`GET /api/v1/news/detail?url=xxx`
+- **白名单域名**：`eastmoney.com`, `sina.com.cn`, `qq.com`, `ifeng.com`, `cls.cn`, `xinhuanet.com` 等
+- **技术栈**：`requests` + `BeautifulSoup4`（html.parser）
+- **清洗规则**：移除 `<script>`, `<style>`, `<img>`, `<svg>`, `<iframe>`, `<nav>`, `<header>`, `<footer>`, `<aside>`，仅提取 `<p>` 段落文字（>20字符）
+- **容错降级**：解析失败返回"原文解析失败，请点击链接查看网页"
+- **SSRF 防护**：仅白名单域名可通过
 
 ### 关键代码变更
 

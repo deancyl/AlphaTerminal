@@ -1,37 +1,83 @@
 <template>
   <div class="flex flex-col h-full">
+
+    <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
-        <span class="text-terminal-dim text-[10px]">{{ items.length }} 条</span>
+        <span class="text-terminal-dim text-[10px]">{{ total }} 条</span>
         <span class="w-1.5 h-1.5 rounded-full"
               :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
       </div>
     </div>
-    <div class="flex-1 overflow-y-auto space-y-1.5 min-h-0" ref="listEl">
-      <div
-        v-for="item in items"
-        :key="item.id || item.title"
-        class="bg-terminal-bg rounded border border-gray-700 p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
-        @click="openModal(item)"
-      >
-        <div class="flex items-start gap-2">
-          <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
-                :class="tagClass(item.tag)">
-            {{ item.tag }}
-          </span>
-          <div class="flex-1 min-w-0">
-            <p class="text-xs text-gray-200 leading-snug line-clamp-2">{{ item.title }}</p>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-terminal-dim text-[9px]">{{ item.time }}</span>
-              <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
+
+    <!-- ── 新闻列表（固定高度，显示 7 条） ───────────────────────── -->
+    <div
+      ref="listEl"
+      class="flex-1 overflow-y-auto"
+      style="height: 0; min-height: 380px;"
+    >
+      <div class="space-y-1.5">
+        <div
+          v-for="item in pagedItems"
+          :key="item.id || item.title"
+          class="bg-terminal-bg rounded border border-gray-700 p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
+          @click="openModal(item)"
+        >
+          <div class="flex items-start gap-2">
+            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+                  :class="tagClass(item.tag)">
+              {{ item.tag }}
+            </span>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs text-gray-200 leading-snug line-clamp-2">{{ item.title }}</p>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="text-terminal-dim text-[9px]">{{ item.time }}</span>
+                <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
+              </div>
             </div>
           </div>
         </div>
+        <div v-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
+          暂无快讯数据
+        </div>
       </div>
-      <div v-if="!items.length" class="text-center mt-8 text-terminal-dim text-xs">
-        暂无快讯数据
-      </div>
+    </div>
+
+    <!-- ── 分页控制器 ─────────────────────────────────────────── -->
+    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-2 shrink-0">
+      <button
+        class="px-2 py-0.5 text-[10px] rounded border transition"
+        :class="currentPage === 1
+          ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+        :disabled="currentPage === 1"
+        @click="prevPage">
+        ‹
+      </button>
+
+      <button
+        v-for="p in visiblePages"
+        :key="p"
+        class="px-2 py-0.5 text-[10px] rounded border transition"
+        :class="p === currentPage
+          ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+        @click="goToPage(p)">
+        {{ p }}
+      </button>
+
+      <button
+        class="px-2 py-0.5 text-[10px] rounded border transition"
+        :class="currentPage === totalPages
+          ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
+          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+        :disabled="currentPage === totalPages"
+        @click="nextPage">
+        ›
+      </button>
+
+      <span class="text-terminal-dim text-[9px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
     </div>
 
     <!-- ── 详情 Modal ─────────────────────────────────────────── -->
@@ -47,7 +93,7 @@
           <!-- Header -->
           <div class="flex items-start justify-between p-4 border-b border-gray-700 shrink-0">
             <div class="flex-1 pr-4">
-              <div class="flex items-center gap-2 mb-2">
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <span class="text-[11px] px-2 py-0.5 rounded" :class="tagClass(modalItem.tag)">
                   {{ modalItem.tag }}
                 </span>
@@ -65,18 +111,28 @@
           </div>
           <!-- Body -->
           <div class="flex-1 overflow-y-auto p-4">
-            <p v-if="modalItem.content" class="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
-              {{ modalItem.content }}
+            <!-- 加载态 -->
+            <p v-if="modalLoading" class="text-xs text-terminal-dim italic leading-relaxed">
+              正文努力提取中...
             </p>
+            <!-- 正文内容 -->
+            <p v-else-if="modalContent" class="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
+              {{ modalContent }}
+            </p>
+            <!-- 降级 -->
             <p v-else class="text-xs text-gray-500 leading-relaxed italic">
               （暂无正文内容，请点击来源链接查看原文）
             </p>
+          </div>
+          <!-- Footer -->
+          <div class="p-3 border-t border-gray-700 shrink-0 flex justify-end">
             <a v-if="modalItem.url && modalItem.url !== '#'"
                :href="modalItem.url" target="_blank" rel="noopener"
-               class="mt-3 inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition">
+               class="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition">
               🔗 查看原文
               <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
               </svg>
             </a>
           </div>
@@ -87,19 +143,60 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
 })
 
-const emit  = defineEmits(['item-click'])
-const items   = ref(props.initialItems)
-const loading = ref(false)
-const listEl  = ref(null)
-const modalItem = ref(null)
-let refreshTimer = null
+const items       = ref(props.initialItems)
+const total       = ref(0)
+const loading     = ref(false)
+const listEl      = ref(null)
+const refreshTimer = ref(null)
 
+// ── 分页状态 ─────────────────────────────────────────────────────────
+const PAGE_SIZE  = 50
+const currentPage = ref(1)
+
+const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+
+// 当前页数据
+const pagedItems = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return items.value.slice(start, start + PAGE_SIZE)
+})
+
+// 显示的页码按钮（最多 5 个）
+const visiblePages = computed(() => {
+  const tp = totalPages.value
+  const cp = currentPage.value
+  if (tp <= 5) return Array.from({ length: tp }, (_, i) => i + 1)
+  const pages = []
+  if (cp <= 3) {
+    pages.push(1, 2, 3, 4, 5)
+  } else if (cp >= tp - 2) {
+    pages.push(tp - 4, tp - 3, tp - 2, tp - 1, tp)
+  } else {
+    pages.push(cp - 2, cp - 1, cp, cp + 1, cp + 2)
+  }
+  return pages
+})
+
+function goToPage(p) {
+  if (p < 1 || p > totalPages.value || p === currentPage.value) return
+  currentPage.value = p
+  if (listEl.value) listEl.value.scrollTop = 0
+}
+function prevPage() { goToPage(currentPage.value - 1) }
+function nextPage() { goToPage(currentPage.value + 1) }
+
+// ── Modal 状态 ────────────────────────────────────────────────────────
+const modalItem    = ref(null)
+const modalContent = ref('')
+const modalLoading = ref(false)
+
+// ── 标签颜色映射 ──────────────────────────────────────────────────────
 function tagClass(tag) {
   if (!tag) return 'bg-gray-600/30 text-gray-400'
   if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-red-500/20 text-red-400'
@@ -112,25 +209,43 @@ function tagClass(tag) {
   return 'bg-gray-600/30 text-gray-400'
 }
 
-function onItemClick(item) { emit('item-click', item) }
+// ── Modal 异步加载正文 ────────────────────────────────────────────────
+async function openModal(item) {
+  modalItem.value    = item
+  modalContent.value = ''
+  modalLoading.value = true
 
-function openModal(item) { modalItem.value = item }
-function closeModal() { modalItem.value = null }
+  try {
+    const res = await fetch(`/api/v1/news/detail?url=${encodeURIComponent(item.url)}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    modalContent.value = data.content || ''
+  } catch (e) {
+    console.warn('[NewsFeed] detail fetch failed:', e.message)
+    modalContent.value = ''
+  } finally {
+    modalLoading.value = false
+  }
+}
 
+function closeModal() {
+  modalItem.value    = null
+  modalContent.value = ''
+  modalLoading.value = false
+}
+
+// ── 数据拉取 ──────────────────────────────────────────────────────────
 async function fetchNews(quiet = false) {
   if (!quiet) loading.value = true
   try {
     const res = await fetch('/api/v1/news/flash')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data    = await res.json()
+    const data = await res.json()
     const incoming = data.news || []
 
-    if (!incoming.length) {
-      if (!quiet) loading.value = false
-      return
-    }
+    if (!incoming.length) return
 
-    // ── 去重：基于 id 或 title 排重 ──────────────────────────────
+    // 去重
     const existingIds = new Set(items.value.map(it => it.id || it.title))
     const newItems = incoming.filter(it => {
       const id = it.id || it.title
@@ -138,9 +253,11 @@ async function fetchNews(quiet = false) {
     })
 
     if (newItems.length) {
-      items.value = [...newItems, ...items.value].slice(0, 100)
-      if (listEl.value) listEl.value.scrollTop = 0
+      items.value = [...newItems, ...items.value].slice(0, 200)
     }
+    total.value = incoming.length   // 使用 API 返回的 total 计数
+    currentPage.value = 1
+    if (listEl.value) listEl.value.scrollTop = 0
   } catch (e) {
     console.warn('[NewsFeed] fetch failed:', e.message)
   } finally {
@@ -148,15 +265,14 @@ async function fetchNews(quiet = false) {
   }
 }
 
-// 每 5 分钟自动刷新一次
 function startAutoRefresh() {
   fetchNews(false)
-  refreshTimer = setInterval(() => fetchNews(true), 5 * 60 * 1000)
+  refreshTimer.value = setInterval(() => fetchNews(true), 5 * 60 * 1000)
 }
 
 onMounted(startAutoRefresh)
 onUnmounted(() => {
-  if (refreshTimer) clearInterval(refreshTimer)
+  if (refreshTimer.value) clearInterval(refreshTimer.value)
 })
 </script>
 
