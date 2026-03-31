@@ -251,15 +251,31 @@ function _buildLineChart(hist, activeIndicators) {
   }
 }
 
+// ── 均线计算 ─────────────────────────────────────────────────────
+function calculateMA(dayCount, closes) {
+  const ma = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < dayCount - 1) { ma.push('-'); continue }
+    const slice = closes.slice(i - dayCount + 1, i + 1)
+    ma.push(+(slice.reduce((a, b) => a + b, 0) / dayCount).toFixed(3))
+  }
+  return ma
+}
+
 // ── K线烛台 Option (candlestick) ─────────────────────────────────
 function _buildCandleChart(hist, activeIndicators) {
   const times   = hist.map(h => h.date ? h.date.slice(5) : '')
+  // OHLC: [open, close, low, high]  注意这里顺序与 ECharts 烛台协议一致
   const ohlc    = hist.map(h => [h.open, h.close, h.low, h.high])
   const volumes = hist.map(h => h.volume || 0)
   const changes = hist.map(h => h.change_pct || 0)
   const closes  = hist.map(h => h.close)
   const highs   = hist.map(h => h.high)
   const lows    = hist.map(h => h.low)
+
+  // A股配色: 涨(收>=开)=红 #ef232a, 跌(收<开)=绿 #14b143
+  const UP_COLOR   = '#ef232a'
+  const DOWN_COLOR = '#14b143'
 
   // Y轴锚定
   const priceMin = +(Math.min(...closes) * 0.998).toFixed(2)
@@ -277,13 +293,46 @@ function _buildCandleChart(hist, activeIndicators) {
   ]
   if (hasSub) grid.push({ top: `${subTop}%`, height: `${subH}%`, right: 8, left: 50, bottom: 2 })
 
+  // 均线序列
+  const ma5  = calculateMA(5,  closes)
+  const ma10 = calculateMA(10, closes)
+  const ma20 = calculateMA(20, closes)
+
   const series = [
+    // ── K线烛台: A股红涨绿跌 ───────────────────────────────────────
     { name: 'K线', type: 'candlestick', data: ohlc, xAxisIndex: 0, yAxisIndex: 0,
-      itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' } },
+      itemStyle: {
+        color:      UP_COLOR,       // 涨（收>=开）
+        color0:     DOWN_COLOR,     // 跌（收<开）
+        borderColor:      UP_COLOR,
+        borderColor0:     DOWN_COLOR,
+      } },
+    // ── 成交量: 颜色跟随K线阴阳 ───────────────────────────────────
     { name: '成交量', type: 'bar',
-      data: ohlc.map((o, i) => ({ value: volumes[i], itemStyle: { color: o[1] >= o[0] ? '#ef444444' : '#22c55e44' } })),
+      data: ohlc.map((o, i) => ({
+        value: volumes[i],
+        itemStyle: { color: o[1] >= o[0] ? UP_COLOR + '88' : DOWN_COLOR + '88' },
+      })),
       xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 6 },
+    // ── MA5 ────────────────────────────────────────────────────
+    { name: 'MA5',  type: 'line', data: ma5,  xAxisIndex: 0, yAxisIndex: 0,
+      smooth: true, symbol: 'none', lineStyle: { color: '#ffffff', width: 1.2 },
+      tooltip: { show: true } },
+    // ── MA10 ──────────────────────────────────────────────────
+    { name: 'MA10', type: 'line', data: ma10, xAxisIndex: 0, yAxisIndex: 0,
+      smooth: true, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 },
+      tooltip: { show: true } },
+    // ── MA20 ──────────────────────────────────────────────────
+    { name: 'MA20', type: 'line', data: ma20, xAxisIndex: 0, yAxisIndex: 0,
+      smooth: true, symbol: 'none', lineStyle: { color: '#c084fc', width: 1.2 },
+      tooltip: { show: true } },
   ]
+
+  // 重新构造成交量序列（OHLC索引问题修复）
+  series[1].data = ohlc.map((o, i) => ({
+    value: volumes[i],
+    itemStyle: { color: o[1] >= o[0] ? UP_COLOR + '88' : DOWN_COLOR + '88' },
+  }))
 
   const xAxis = [
     { type: 'category', data: times, gridIndex: 0, boundaryGap: true,
@@ -351,13 +400,13 @@ function _buildCandleChart(hist, activeIndicators) {
         const idx = kp.dataIndex
         const [o, c, l, h] = ohlc[idx]
         const chg = changes[idx]; const sign = chg >= 0 ? '+' : ''
-        const col = c >= o ? '#22c55e' : '#ef4444'
+        const col = c >= o ? UP_COLOR : DOWN_COLOR
         return `<span style="color:#6b7280;font-size:10px">${kp.axisValue}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">开</span> <span style="color:#e5e7eb;font-size:11px">${o.toFixed(2)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">高</span> <span style="color:#e5e7eb;font-size:11px">${h.toFixed(2)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">低</span> <span style="color:#e5e7eb;font-size:11px">${l.toFixed(2)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> `
-          + `<span style="color:${chg >= 0 ? '#f87171' : '#4ade80'};font-size:10px">${sign}${chg.toFixed(2)}%</span>`
+          + `<span style="color:${chg >= 0 ? UP_COLOR : DOWN_COLOR};font-size:10px">${sign}${chg.toFixed(2)}%</span>`
       },
     },
     dataZoom: [
