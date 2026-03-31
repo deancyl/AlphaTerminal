@@ -552,6 +552,62 @@ def fetch_china_all_indices() -> list[dict]:
 
 
 
+
+# ── Phase 9: 周K/月K聚合采集（基于日K聚合）────────────────────────
+def fetch_weekly_monthly_kline(symbol: str, period: str = "weekly") -> list[dict]:
+    """
+    从 market_data_daily 读取日K，按周/月聚合为更高周期K线，
+    写入 market_data_weekly / market_data_monthly 表。
+    period: "weekly" | "monthly"
+    """
+    try:
+        import pandas as pd
+        from app.db import get_daily_history
+        rows = get_daily_history(symbol, limit=9999)  # 取全部历史
+        if not rows:
+            return []
+
+        # 转换为 DataFrame
+        df = pd.DataFrame(rows)
+        df["date"] = pd.to_datetime(df["date"])
+        df = df.sort_values("date")
+
+        # 按周/月分组
+        if period == "weekly":
+            df["period_key"] = df["date"].dt.to_period("W").astype(str)
+        else:
+            df["period_key"] = df["date"].dt.to_period("M").astype(str)
+
+        grouped = df.groupby("period_key")
+        agg_rows = []
+        for period_key, group in grouped:
+            if len(group) < 2:
+                continue
+            agg_rows.append({
+                "symbol":    symbol,
+                "date":      str(group["date"].iloc[-1].date()),
+                "period":    period,
+                "open":      float(group["open"].iloc[0]),
+                "high":      float(group["high"].max()),
+                "low":       float(group["low"].min()),
+                "close":     float(group["close"].iloc[-1]),
+                "volume":    float(group["volume"].sum()),
+                "change_pct": float(group["close"].iloc[-1] - group["close"].iloc[0]) / group["close"].iloc[0] * 100,
+                "timestamp":  int(group["date"].iloc[-1].timestamp()),
+            })
+
+        if agg_rows:
+            from app.db import buffer_insert_periodic
+            buffer_insert_periodic(agg_rows, period)
+            logger.info(f"[{period}] {symbol} 聚合完成: {len(agg_rows)} 个周期")
+        return agg_rows
+    except Exception as e:
+        logger.error(f"[{period}] fetch_weekly_monthly_kline({symbol}) 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
+
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
     all_rows = []

@@ -105,22 +105,57 @@ async def market_indices():
     }
 
 
-# ── Task 1: 历史K线（支持 period 参数）──────────────────────────────────
+# ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
 @router.get("/market/history/{symbol}")
-async def market_history(symbol: str, limit: int = 100, period: str = "daily"):
+async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     """
-    获取某标的历史行情
-    period=realtime: 从 market_data_realtime 读取（快速采样）
-    period=daily:    从 market_data_daily 读取（AkShare 日K线，近1年）
+    获取某标的历史行情，支持多周期切换
+
+    period=minutely : 当日分时（从 realtime 表，走势线图）
+    period=daily    : 日K（从 daily 表，烛台图）
+    period=weekly   : 周K（从 periodic 表，烛台图）
+    period=monthly  : 月K（从 periodic 表，烛台图）
     """
-    from app.db import get_daily_history
-    if period == "daily":
-        history = get_daily_history(symbol, limit=limit)
+    from app.db import get_daily_history, get_periodic_history
+
+    chart_type = "candlestick"  # 默认烛台
+    history    = []
+
+    if period == "minutely":
+        # 分时：取 realtime 表最新 N 条作为"分钟"采样
+        from app.db import get_price_history
+        raw = get_price_history(symbol, limit=min(limit, 300))
+        # 分时数据结构: [{time, price, volume, change_pct}]
+        history = [
+            {
+                "time":       str(r["timestamp"]),
+                "date":      r.get("date", ""),
+                "price":     r["price"],
+                "volume":    r.get("volume") or 0,
+                "change_pct": r.get("change_pct") or 0,
+            }
+            for r in raw
+        ]
+        chart_type = "line"
+
+    elif period == "daily":
+        history    = get_daily_history(symbol, limit=limit)
+        chart_type = "candlestick"
+
+    elif period in ("weekly", "monthly"):
+        history    = get_periodic_history(symbol, period=period, limit=limit)
+        chart_type = "candlestick"
+
     else:
-        history = get_price_history(symbol, limit=limit)
+        # realtime（兼容旧调用）
+        from app.db import get_price_history
+        history    = get_price_history(symbol, limit=limit)
+        chart_type = "candlestick"
+
     return {
         "symbol":    symbol,
         "period":    period,
+        "chart_type": chart_type,
         "timestamp": datetime.now().isoformat(),
         "history":   history,
     }
