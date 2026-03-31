@@ -3,10 +3,17 @@
 策略：启动即填充 china_all + 后台 Sina HQ 增量刷新
 """
 import logging
+import os
 import threading
 from datetime import datetime
 
 import numpy as np
+
+# ── 确保代理环境变量生效 ───────────────────────────────────────
+os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
+os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
+os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
+os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
 
 logger = logging.getLogger(__name__)
 
@@ -179,8 +186,16 @@ def trigger_spot_fetch():
     logger.info("[SpotCache] 后台 Sina HQ 刷新已触发")
 
 
-# ── 新闻多源轮询（news_economic_baidu 主源）─────────────────────
+# ── 新闻多源轮询（stock_news_em 主源，真实发布时间）──────────────
 _NEWS_LAST_SUCCESS = None
+
+# 宏观新闻标的（akshare stock_news_em，返回真实 发布时间 字段）
+_MACRO_NEWS_SYMBOLS = [
+    "000001", "399001", "399006", "000300",   # 主要指数
+    "600036", "601318", "600000",              # 金融
+    "600519", "000858", "600028",              # 消费/能源
+    "002230", "300750", "688981",              # 科技
+]
 
 
 def trigger_news_fetch():
@@ -192,45 +207,50 @@ def trigger_news_fetch():
 def _do_news_fetch():
     global _NEWS_LAST_SUCCESS
     try:
-        from app.services.sina_hq_fetcher import FOCUS_STOCKS
         import akshare as ak
         import time as time_module
 
         all_news = []
         sources = []
 
-        # 主源：百度财经宏观快讯（稳定，~100条）
-        try:
-            df = ak.news_economic_baidu()
-            if df is not None and not df.empty:
-                for _, row in df.iterrows():
-                    try:
-                        url    = str(row.get("新闻链接", "") or "")
-                        title  = str(row.get("新闻标题", "") or "")
-                        time_  = str(row.get("发布时间", "") or "")[:16]
-                        source = str(row.get("来源", "百度财经") or "百度财经")
-                        if title and url and len(title) > 10:
-                            all_news.append({"title": title.strip(), "time": time_,
-                                             "source": source, "url": url})
-                    except Exception:
-                        continue
-                sources.append("baidu")
-        except Exception as e:
-            logger.warning(f"[News] 百度宏观失败: {e}")
+        # 主源：akshare stock_news_em（东方财富，每只股票返回真实 发布时间）
+        for sym in _MACRO_NEWS_SYMBOLS:
+            try:
+                df = ak.stock_news_em(symbol=sym)
+                if df is not None and not df.empty:
+                    for _, row in df.iterrows():
+                        try:
+                            title  = str(row.get("新闻标题", "") or "")
+                            time_  = str(row.get("发布时间", "") or "")[:16]
+                            source = str(row.get("文章来源", "东财") or "东财")
+                            url    = str(row.get("新闻链接", "") or "")
+                            if title and len(title) > 5:
+                                all_news.append({
+                                    "title":  title.strip(),
+                                    "time":   time_,
+                                    "source": source,
+                                    "url":    url,
+                                })
+                        except Exception:
+                            continue
+                    sources.append(f"em:{sym}")
+            except Exception as e:
+                logger.warning(f"[News] stock_news_em({sym}) failed: {e}")
+            time_module.sleep(0.05)
 
-        # 从源：Sina 个股新闻（东方财富 stock_news_em）
+        # 补充：从源 Sina 个股新闻（东方财富 stock_news_em）
         try:
             from app.services.sina_hq_fetcher import get_stock_pool
             pool = get_stock_pool()
-            for sym in pool[:15]:  # 最多15只，防止抓取超时
+            for sym in pool[:15]:  # 最多15只
                 try:
                     df2 = ak.stock_news_em(symbol=sym)
                     if df2 is not None and not df2.empty:
                         for _, row in df2.iterrows():
                             try:
-                                url    = str(row.get("新闻链接", "") or "")
-                                title  = str(row.get("新闻标题", "") or "")
-                                time_  = str(row.get("发布时间", "") or "")[:16]
+                                url     = str(row.get("新闻链接", "") or "")
+                                title   = str(row.get("新闻标题", "") or "")
+                                time_   = str(row.get("发布时间", "") or "")[:16]
                                 source2 = str(row.get("文章来源", "东方财富") or "东方财富")
                                 if title and url and len(title) > 5:
                                     all_news.append({"title": title.strip(), "time": time_,
@@ -264,7 +284,8 @@ def _do_news_fetch():
 
         from app.services.news_engine import _NEWS_CACHE, _NEWS_CACHE_READY, _CACHE_LOCK
         with _CACHE_LOCK:
-            _NEWS_CACHE      = final
+            _NEWS_CACHE.clear()
+            _NEWS_CACHE.extend(final)
             _NEWS_CACHE_READY = True
 
         _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
