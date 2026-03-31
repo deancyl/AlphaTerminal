@@ -5,41 +5,45 @@
       <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
     </div>
 
-    <div class="flex-1 overflow-auto space-y-1">
-      <div
-        v-for="(sec, i) in sectors"
-        :key="sec.name"
-        class="bg-terminal-bg rounded border border-gray-700 p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
-        @click="handleClick(sec)"
-      >
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <span class="text-[10px] text-terminal-dim w-3">{{ i + 1 }}</span>
-            <span class="text-xs text-gray-200 font-medium">{{ sec.name }}</span>
-          </div>
+    <!-- Phase 4: 热力色块矩阵（flex-wrap pill cards） -->
+    <div class="flex-1 overflow-auto">
+      <div class="flex flex-wrap gap-1.5">
+        <div
+          v-for="sec in sectors"
+          :key="sec.name"
+          class="flex flex-col items-center justify-center px-2.5 py-1.5 rounded-lg border cursor-pointer transition-all hover:opacity-80 min-w-[72px]"
+          :class="(sec.change_pct || 0) >= 0
+            ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
+            : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"
+          @click="handleClick(sec)"
+        >
+          <!-- 行业名称 -->
           <span
-            class="text-[11px] font-mono font-bold"
+            class="text-[10px] font-medium leading-tight text-center"
+            :class="(sec.change_pct || 0) >= 0 ? 'text-red-300' : 'text-green-300'"
+          >
+            {{ sec.name }}
+          </span>
+          <!-- 涨跌幅 -->
+          <span
+            class="text-[11px] font-mono font-bold mt-0.5"
             :class="(sec.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
           >
             {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
           </span>
-        </div>
-
-        <!-- 领涨股 -->
-        <div v-if="sec.top_stock" class="flex items-center gap-2 mt-1 pl-5">
-          <span class="text-[9px] text-terminal-dim">领涨</span>
-          <span class="text-[10px] text-gray-300">{{ sec.top_stock.name }}</span>
+          <!-- 领涨股（如果有） -->
           <span
-            class="text-[10px] font-mono"
-            :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+            v-if="sec.top_stock"
+            class="text-[8px] mt-0.5"
+            :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-red-500/60' : 'text-green-500/60'"
           >
-            {{ (sec.top_stock.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.top_stock.change_pct || 0).toFixed(2) }}%
+            {{ sec.top_stock.name }}
           </span>
         </div>
       </div>
 
-      <div v-if="!sectors.length" class="flex-1 flex items-center justify-center">
-        <span class="text-terminal-dim text-xs">暂无数据</span>
+      <div v-if="!sectors.length" class="flex-1 flex items-center justify-center mt-4">
+        <span class="text-terminal-dim text-xs">暂无板块数据</span>
       </div>
     </div>
   </div>
