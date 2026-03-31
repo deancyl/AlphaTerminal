@@ -174,78 +174,11 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 5：板块与商品（Tab 切换）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 5：实时信息流（NewsFeed 引擎驱动）━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
-      <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2 shrink-0">
-          <span class="text-terminal-accent font-bold text-sm">🔥 板块与商品</span>
-          <div class="flex gap-1 text-[10px]">
-            <button
-              class="px-1.5 py-0.5 rounded border transition"
-              :class="commodityTab === 'sectors'
-                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-              @click="commodityTab = 'sectors'">
-              板块
-            </button>
-            <button
-              class="px-1.5 py-0.5 rounded border transition"
-              :class="commodityTab === 'derivatives'
-                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-              @click="commodityTab = 'derivatives'">
-              商品
-            </button>
-          </div>
-        </div>
-
-        <!-- 行业板块视图 -->
-        <div v-if="commodityTab === 'sectors'" class="flex-1 overflow-auto">
-          <div v-if="sectorsItems.length" class="space-y-1">
-            <div v-for="(sec, i) in sectorsItems" :key="sec.name"
-                 class="flex items-center justify-between bg-terminal-bg rounded px-2 py-1.5 border border-gray-700">
-              <div class="flex items-center gap-1.5">
-                <span class="text-terminal-dim text-[10px] w-3">{{ i + 1 }}</span>
-                <span class="text-gray-200 text-[11px]">{{ sec.name }}</span>
-              </div>
-              <span class="font-mono text-[11px]"
-                    :class="(sec.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-                {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
-              </span>
-            </div>
-          </div>
-          <div v-else class="flex-1 flex items-center justify-center text-terminal-dim text-xs">
-            暂无板块数据
-          </div>
-        </div>
-
-        <!-- 大宗商品视图 -->
-        <div v-if="commodityTab === 'derivatives'" class="flex-1 overflow-auto">
-          <table v-if="derivativesItems.length" class="w-full text-xs">
-            <thead>
-              <tr class="text-terminal-dim border-b border-gray-700">
-                <th class="text-left py-1">品种</th>
-                <th class="text-right py-1">最新价</th>
-                <th class="text-right py-1">涨跌</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in derivativesItems" :key="item.symbol"
-                  class="border-b border-gray-800 hover:bg-white/5">
-                <td class="py-1 text-gray-300 text-[11px]">{{ item.name }}</td>
-                <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
-                <td class="py-1 text-right font-mono text-[11px]"
-                    :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-                  {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="flex-1 flex items-center justify-center text-terminal-dim text-xs">
-            暂无商品数据
-          </div>
-        </div>
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <NewsFeed />
       </div>
     </div>
 
@@ -258,18 +191,15 @@ import IndexLineChart from './IndexLineChart.vue'
 import NewsFeed from './NewsFeed.vue'
 
 const props = defineProps({
-  marketData:       { type: Object, default: null },
-  ratesData:        { type: Array,  default: () => [] },
-  globalData:       { type: Array,  default: () => [] },
-  chinaAllData:     { type: Array,  default: () => [] },
-  sectorsData:      { type: Array,  default: () => [] },
-  derivativesData:   { type: Array,  default: () => [] },
+  marketData:   { type: Object, default: null },
+  ratesData:    { type: Array,  default: () => [] },
+  globalData:   { type: Array,  default: () => [] },
+  chinaAllData: { type: Array,  default: () => [] },
 })
 
 const gridRef          = ref(null)
 const selectedIndex    = ref('000001')
 const selectedPeriod   = ref('daily')
-const commodityTab     = ref('sectors')
 const activeIndicators = ref([])
 
 let grid = null
@@ -319,16 +249,6 @@ const windItems = computed(() => {
 
 const globalItems = computed(() => props.globalData || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
-
-const sectorsItems = computed(() => {
-  if (!props.sectorsData || !props.sectorsData.length) return []
-  if (typeof props.sectorsData === 'string') {
-    try { return JSON.parse(props.sectorsData) } catch { return [] }
-  }
-  return props.sectorsData
-})
-
-const derivativesItems = computed(() => props.derivativesData || [])
 
 function formatPrice(v) {
   if (v == null || isNaN(v)) return '--'

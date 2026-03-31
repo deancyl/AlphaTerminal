@@ -229,6 +229,7 @@ def get_daily_history(symbol: str, limit: int = 300) -> list[dict]:
     ]
 
 def get_periodic_history(symbol: str, period: str, limit: int = 200) -> list[dict]:
+    clean = _normalize_symbol(symbol)
     conn = _get_conn()
     rows = conn.execute("""
         SELECT symbol, date, period, open, high, low, close, volume, change_pct, timestamp
@@ -236,7 +237,7 @@ def get_periodic_history(symbol: str, period: str, limit: int = 200) -> list[dic
         WHERE symbol = ? AND period = ?
         ORDER BY timestamp DESC
         LIMIT ?;
-    """, (symbol, period, limit)).fetchall()
+    """, (clean, period, limit)).fetchall()
     rows = list(reversed(rows))
     return [
         {"symbol": r[0], "date": r[1], "period": r[2],

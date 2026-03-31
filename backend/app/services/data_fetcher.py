@@ -478,8 +478,8 @@ def fetch_china_all_indices() -> list[dict]:
     return rows
 
 
-# ── Phase 7: A股指数历史K线 ────────────────────────────────────────────
-def fetch_china_index_history(symbol: str) -> list[dict]:
+# ── Phase 7: A股指数历史K线（周线/月线聚合写入 periodic 表）────────────
+def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[dict]:
     """
     拉取A股指数日K线历史（近1年），写入 market_data_daily 表
     AkShare stock_zh_index_daily 返回: ['date','open','high','low','close','volume']
@@ -536,9 +536,59 @@ def fetch_china_index_history(symbol: str) -> list[dict]:
                 continue
 
         if rows:
-            from app.db import buffer_insert_daily
+            from app.db import buffer_insert_daily, buffer_insert_periodic
             buffer_insert_daily(rows)
             logger.info(f"[AkShare] {symbol} 历史K线写入 {len(rows)} 条")
+
+            # ── 周线聚合（从日线计算，不依赖外部 API）────────────────
+            if fill_periodic:
+                import pandas as pd
+                df_d = pd.DataFrame(rows)
+                df_d["date"] = pd.to_datetime(df_d["date"])
+
+                # Weekly
+                df_d["year_wk"] = df_d["date"].dt.isocalendar().year.astype(str) + "_" + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
+                periodic_rows = []
+                for yw, grp in df_d.groupby("year_wk", sort=True):
+                    open_   = float(grp.iloc[0]["open"])
+                    close_  = float(grp.iloc[-1]["close"])
+                    high_   = float(grp["high"].max())
+                    low_    = float(grp["low"].min())
+                    pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
+                    dt_str  = str(grp.iloc[0]["date"])[:10]
+                    periodic_rows.append({
+                        "symbol": symbol, "date": dt_str,
+                        "period": "weekly",
+                        "open": open_, "high": high_, "low": low_,
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(pct, 4),
+                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                    })
+
+                # Monthly
+                df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+                for ym, grp in df_d.groupby("ym", sort=True):
+                    open_   = float(grp.iloc[0]["open"])
+                    close_  = float(grp.iloc[-1]["close"])
+                    high_   = float(grp["high"].max())
+                    low_    = float(grp["low"].min())
+                    pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
+                    dt_str  = str(grp.iloc[0]["date"])[:10]
+                    periodic_rows.append({
+                        "symbol": symbol, "date": dt_str,
+                        "period": "monthly",
+                        "open": open_, "high": high_, "low": low_,
+                        "close": close_,
+                        "volume": float(grp["volume"].sum()),
+                        "change_pct": round(pct, 4),
+                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                    })
+
+                if periodic_rows:
+                    buffer_insert_periodic(periodic_rows, "weekly")
+                    logger.info(f"[AkShare] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+
         return rows[-100:]
     except Exception as e:
         logger.error(f"[AkShare] fetch_china_index_history({symbol}) 失败: {type(e).__name__}: {e}")
