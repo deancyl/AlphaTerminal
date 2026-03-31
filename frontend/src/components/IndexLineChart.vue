@@ -180,7 +180,13 @@ function buildKLineOption(hist, activeIndicators) {
   const kSeries = {
     name: 'K线', type: 'candlestick',
     // ECharts candlestick: [open, close, lowest, highest]
-    data: hist.map(h => [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]),
+    // A股: color(涨=红), color0(跌=绿)
+    data: hist.map(h => {
+      if (Number(h.close) < Number(h.open)) {
+        console.warn(`[KLine DIAG] DOWN! O=${Number(h.open)} C=${Number(h.close)} L=${Number(h.low)} H=${Number(h.high)}`)
+      }
+      return [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]
+    }),
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: {
       color:     UP,   color0:     DOWN,
@@ -463,7 +469,7 @@ function buildOption(raw, activeIndicators, chartType) {
 async function fetchAndRender() {
   chartError.value = ''; isLoading.value = true
   try {
-    const res = await fetch(props.url)
+    const res = await fetch(props.url + `&_t=${Date.now()}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data    = await res.json()
     const chartType = data.chart_type || 'candlestick'
