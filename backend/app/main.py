@@ -20,8 +20,8 @@ async def lifespan(app: FastAPI):
     # 后台预热新闻缓存（不阻塞 uvicorn 启动）
     async def _prefetch_news():
         await asyncio.sleep(1)   # 等待 scheduler 完全就绪
-        from app.services.news_engine import refresh_news_cache
-        refresh_news_cache(background=True)
+        from app.services.sentiment_engine import trigger_news_fetch
+        trigger_news_fetch()
         await asyncio.sleep(0)
 
     asyncio.create_task(_prefetch_news())

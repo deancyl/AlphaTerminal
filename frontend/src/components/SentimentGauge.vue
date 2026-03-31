@@ -1,60 +1,32 @@
 <template>
   <div class="flex flex-col gap-2">
 
-    <!-- ── A股温度计 ────────────────────────────────────────────── -->
+    <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
     <div class="bg-terminal-bg rounded border border-gray-700 p-3">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 A股市场情绪</span>
-        <span class="text-[10px] font-mono text-terminal-dim">{{ data.timestamp || '--' }}</span>
+        <span class="text-[10px] font-mono text-terminal-dim">{{ data.timestamp || '加载中...' }}</span>
       </div>
 
-      <!-- 温度计进度条 -->
-      <div class="relative h-5 rounded-full overflow-hidden flex mb-1.5"
-           style="background: #1a1a2e;">
-        <!-- 上涨（红） -->
-        <div class="relative flex items-center justify-center transition-all duration-500"
-             :style="{ width: `${upPct}%`, minWidth: upPct > 0 ? '2px' : '0' }">
-          <span v-if="upPct > 12"
-                class="text-[9px] font-mono font-bold text-white whitespace-nowrap drop-shadow">
-            {{ data.advance || 0 }}
-          </span>
-          <div class="absolute right-0 top-0 bottom-0 w-px bg-black/30"></div>
-        </div>
-        <!-- 下跌（绿） -->
-        <div class="flex-1 flex items-center justify-center"
-             :style="{ minWidth: downPct > 0 ? '2px' : '0' }">
-          <span v-if="downPct > 12 && data.decline"
-                class="text-[9px] font-mono font-bold text-white whitespace-nowrap drop-shadow">
-            {{ data.decline || 0 }}
-          </span>
-        </div>
+      <!-- ECharts 柱状图 -->
+      <div ref="chartEl" class="w-full" :style="{ height: chartHeight + 'px' }"></div>
+
+      <!-- 涨跌标签行 -->
+      <div class="flex justify-between mt-1 text-[9px] text-terminal-dim">
+        <span>涨 {{ data.advance || 0 }} ({{ upPct }}%)</span>
+        <span>平 {{ data.unchanged || 0 }}</span>
+        <span>跌 {{ data.decline || 0 }} ({{ 100 - upPct }}%)</span>
       </div>
 
-      <!-- 标签行 -->
-      <div class="flex justify-between text-[9px] text-terminal-dim px-0.5">
-        <span class="flex items-center gap-1">
-          <span class="inline-block w-2 h-2 rounded-full bg-red-500/80"></span>
-          涨 {{ data.advance || 0 }}
-        </span>
-        <span class="flex items-center gap-1">
-          <span class="inline-block w-2 h-2 rounded-full bg-[#1a1a2e] border border-gray-700"></span>
-          平 {{ data.unchanged || 0 }}
-        </span>
-        <span class="flex items-center gap-1">
-          <span class="inline-block w-2 h-2 rounded-full bg-green-500/80"></span>
-          跌 {{ data.decline || 0 }}
-        </span>
-      </div>
-
-      <!-- 涨停/跌停统计 -->
-      <div class="flex justify-between mt-2 text-[9px]">
+      <!-- 底部统计 -->
+      <div class="flex justify-between mt-2 text-[9px] border-t border-gray-700 pt-2">
         <span class="text-red-400">🔴 涨停 {{ data.limit_up || 0 }}</span>
         <span class="text-green-400">🟢 跌停 {{ data.limit_down || 0 }}</span>
-        <span class="text-terminal-dim">合计 {{ data.total || 0 }} 只</span>
+        <span class="text-terminal-dim">全市场 {{ data.total || 0 }} 只</span>
       </div>
     </div>
 
-    <!-- ── 简版行情列表 ─────────────────────────────────────────── -->
+    <!-- ── 简版行情列表（从 props.marketData.wind）──────────────── -->
     <div class="overflow-auto flex-1">
       <table class="w-full text-xs">
         <thead>
@@ -68,7 +40,7 @@
         <tbody>
           <tr v-for="(item, key) in windItems" :key="key"
               class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
-              @click="$emit('symbol-click', key, item.name, '#fbbf24')">
+              @click="$emit('symbol-click', { symbol: key, name: item.name })">
             <td class="py-1.5 text-gray-300">{{ item.name }}</td>
             <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index) }}</td>
             <td class="py-1.5 text-right font-mono"
@@ -92,50 +64,134 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps({
-  windItems: { type: Object, default: () => ({}) }
+  marketData: { type: Object, default: null },
+})
+defineEmits(['symbol-click'])
+
+const chartEl    = ref(null)
+const chartHeight = 120
+let   chartInst  = null
+let   refreshTimer = null
+
+const UP   = '#ef232a'
+const DOWN = '#14b143'
+
+const data = ref({
+  buckets: [], total: 0,
+  advance: 0, decline: 0, unchanged: 0,
+  limit_up: 0, limit_down: 0,
+  up_ratio: 0.0, timestamp: '',
 })
 
-const emit = defineEmits(['symbol-click'])
+const windItems = computed(() => props.marketData?.wind || {})
 
-const data    = ref({})
-const loading  = ref(true)
-let timer     = null
-
-const upPct   = computed(() => {
-  const t = props.windItems?.total || (data.value.total || 0)
-  if (!t) return 50
-  return Math.round((data.value.advance || 0) / t * 100)
+const upPct = computed(() => {
+  const t = data.value.total || 1
+  return ((data.value.advance / t) * 100).toFixed(1)
 })
-const downPct = computed(() => 100 - upPct.value)
 
 function formatPrice(v) {
   if (v == null || isNaN(v)) return '--'
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
 }
 
-async function fetchSentiment() {
-  try {
-    const res = await fetch('/api/v1/market/sentiment')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const d = await res.json()
-    data.value = d
-  } catch (e) {
-    console.warn('[SentimentGauge]', e.message)
-  } finally {
-    loading.value = false
+// ── ECharts 直方图 ────────────────────────────────────────────────
+function buildHistogramOption(buckets) {
+  if (!buckets || !buckets.length) return {}
+  const labels  = buckets.map(b => b.label)
+  const counts  = buckets.map(b => b.count)
+  const colors  = buckets.map(b => {
+    // 0% 桶：中灰
+    if (b.label === "平盘(0%)") return '#4b5563'
+    // 涨跌颜色跟随
+    const isNeg = b.label.includes("跌") || (b.label.startsWith("<") && !b.label.startsWith(">"))
+    return isNeg ? DOWN : UP
+  })
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: 'rgba(26,30,46,0.96)',
+      borderColor: '#4b5563',
+      textStyle: { color: '#9ca3af', fontSize: 11 },
+      formatter: (params) => {
+        const p = params[0]
+        return `<span style="color:#6b7280;font-size:10px">${p.name}</span><br/>`
+          + `<span style="color:${p.color};font-size:12px;font-weight:bold">${p.value} 家</span>`
+      },
+    },
+    grid: { top: 4, right: 4, bottom: 20, left: 4, containLabel: true },
+    xAxis: {
+      type: 'category',
+      data: labels,
+      axisLabel: {
+        color: '#6b7280', fontSize: 8,
+        interval: 0,
+        rotate: 30,
+        formatter: v => v.replace('%', '').replace('~', '~'),
+      },
+      axisLine: { lineStyle: { color: '#2d3748' } },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: { color: '#6b7280', fontSize: 8,
+        formatter: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+      splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
+      axisLine: { show: false },
+    },
+    series: [{
+      name: '家数',
+      type: 'bar',
+      data: counts.map((c, i) => ({ value: c, itemStyle: { color: colors[i], borderRadius: i === 5 ? [2,2,0,0] : (i < 5 ? [2,2,0,0] : [0,0,2,2]) } })),
+      barMaxWidth: 28,
+      label: { show: counts.map(c => c > 0), position: 'top', fontSize: 8, color: '#9ca3af',
+        formatter: p => p.value > 0 ? p.value : '' },
+    }],
   }
 }
 
-onMounted(() => {
-  fetchSentiment()
-  // 每 3 分钟刷新一次
-  timer = setInterval(fetchSentiment, 3 * 60 * 1000)
+function initChart() {
+  if (!chartEl.value || !window.echarts) return
+  chartInst = window.echarts.init(chartEl.value, null, { renderer: 'canvas' })
+  chartInst.setOption(buildHistogramOption(data.value.buckets))
+}
+
+async function fetchHistogram() {
+  try {
+    const res = await fetch('/api/v1/market/sentiment/histogram')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const d = await res.json()
+    data.value = d
+    if (chartInst) {
+      chartInst.setOption(buildHistogramOption(d.buckets), true)
+    }
+  } catch (e) {
+    console.warn('[SentimentGauge] fetch failed:', e.message)
+  }
+}
+
+watch(data, () => {
+  if (chartInst) chartInst.setOption(buildHistogramOption(data.value.buckets), true)
+})
+
+onMounted(async () => {
+  await fetchHistogram()
+  await new Promise(r => setTimeout(r, 0))
+  initChart()
+  const ro = new ResizeObserver(() => chartInst?.resize())
+  if (chartEl.value) ro.observe(chartEl.value)
+  refreshTimer = setInterval(fetchHistogram, 3 * 60 * 1000)
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  clearInterval(refreshTimer)
+  chartInst?.dispose()
 })
 </script>

@@ -203,18 +203,28 @@ async def market_global():
     }
 
 
-# ── Phase 6: 行业板块（Task 3: 修复，已改用 Sina 直连）─────────────────
+# ── Phase 6: 行业板块（修复，Sina/东财板块API均被封，改用 china_all 指数替代）──
 @router.get("/market/sectors")
 async def market_sectors():
-    """新浪行业板块 Top 5（按涨跌幅）"""
-    rows = get_latest_prices(["board_top5"])
+    """
+    使用 china_all（10只A股核心指数）作为板块替代数据
+    Sina 板块接口和 Eastmoney 行业接口均被限流
+    """
+    rows = get_latest_prices(CHINA_ALL_SYMBOLS)
     sectors = []
-    if rows and rows[0].get("price"):
-        import json
-        try:
-            sectors = json.loads(rows[0]["price"])
-        except Exception:
-            pass
+    for r in rows:
+        pct = float(r.get("change_pct") or 0)
+        sectors.append({
+            "name":         r.get("name", ""),
+            "symbol":       r.get("symbol", ""),
+            "change_pct":   round(pct, 2),
+            "price":        r.get("price") or 0,
+            "volume":        r.get("volume") or 0,
+            "top_stock":    None,   # 板块API封禁，无法抓领涨股
+            "status":       r.get("status", "交易中"),
+        })
+    # 按涨跌幅排序
+    sectors.sort(key=lambda x: x["change_pct"], reverse=True)
     return {
         "timestamp": datetime.now().isoformat(),
         "sectors": sectors,

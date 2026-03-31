@@ -52,90 +52,19 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 2：市场风向标（精简：上证·沪深300·恒生·纳斯达克）━━━━━━━━━ -->
+    <!-- ━━━ Widget 2：市场风向标 → 涨跌直方图 + 情绪温度计 ━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
-      <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2 shrink-0">
-          <span class="text-terminal-accent font-bold text-sm">🎯 市场风向标</span>
-          <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
-        </div>
-        <div class="flex-1 overflow-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="text-terminal-dim border-b border-gray-700">
-                <th class="text-left py-1">指数</th>
-                <th class="text-right py-1">最新价</th>
-                <th class="text-right py-1">涨跌幅</th>
-                <th class="text-right py-1">状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, key) in windItems" :key="key"
-                  class="border-b border-gray-800 hover:bg-white/5">
-                <td class="py-1.5 text-gray-300">{{ item.name }}</td>
-                <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index) }}</td>
-                <td class="py-1.5 text-right font-mono"
-                    :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-                  {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
-                </td>
-                <td class="py-1.5 text-right">
-                  <span class="px-1 py-0.5 rounded text-[9px]"
-                        :class="item.status === '交易中' ? 'bg-green-500/20 text-green-400' : 'bg-gray-600/30 text-gray-400'">
-                    {{ item.status }}
-                  </span>
-                </td>
-              </tr>
-              <tr v-if="!windItems.length">
-                <td colspan="4" class="py-4 text-center text-terminal-dim text-xs">暂无数据</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <SentimentGauge :market-data="marketData" @symbol-click="handleWindClick" />
       </div>
     </div>
 
-    <!-- ━━━ Widget 3：全球市场（扩容至5个指数）━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 3：行业与资金风口 ─────────────────────────────────── -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
-      <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2 shrink-0">
-          <span class="text-terminal-accent font-bold text-sm">🌐 全球市场</span>
-          <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
-        </div>
-        <div class="flex-1 overflow-auto">
-          <table class="w-full text-xs">
-            <thead>
-              <tr class="text-terminal-dim border-b border-gray-700">
-                <th class="text-left py-1">指数</th>
-                <th class="text-right py-1">最新价</th>
-                <th class="text-right py-1">涨跌幅</th>
-                <th class="text-right py-1">状态</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in globalItems" :key="item.symbol"
-                  class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
-                  @click="handleGlobalClick(item)">
-                <td class="py-1 text-gray-300 text-[11px]">{{ item.name }}</td>
-                <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
-                <td class="py-1 text-right font-mono text-[11px]"
-                    :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-                  {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
-                </td>
-                <td class="py-1 text-right">
-                  <span class="px-1 py-0.5 rounded text-[9px]"
-                        :class="item.status === '交易中' ? 'bg-green-500/20 text-green-400' : 'bg-gray-600/30 text-gray-400'">
-                    {{ item.status }}
-                  </span>
-                </td>
-              </tr>
-              <tr v-if="!globalItems.length">
-                <td colspan="4" class="py-4 text-center text-terminal-dim text-xs">暂无数据</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+         gs-x="0" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <HotSectors @sector-click="handleSectorClick" />
       </div>
     </div>
 
@@ -184,6 +113,14 @@
       </div>
     </div>
 
+    <!-- ━━━ Widget 6：全市场个股透视看板（底部全宽）━━━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="0" gs-y="12" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <StockScreener />
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -192,6 +129,8 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import IndexLineChart from './IndexLineChart.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
+import HotSectors from './HotSectors.vue'
+import StockScreener from './StockScreener.vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
 
 const { currentSymbol, currentSymbolName, currentColor, setSymbol } = useMarketStore()
@@ -230,6 +169,20 @@ function handleChinaClick(item) {
   // 国内指数 symbol 如 '000001', '399001'
   setSymbol(item.symbol, item.name, '#f87171')
   selectedIndex.value = item.symbol
+}
+
+// ── 情绪温度计/风向标点击 → 切换 K 线 ───────────────────────
+function handleWindClick(item) {
+  const sym = item.symbol || item.key
+  setSymbol(sym, item.name, '#f87171')
+  selectedIndex.value = sym
+}
+
+// ── 行业板块点击 → 切换 K 线 ─────────────────────────────────
+function handleSectorClick(sec) {
+  // 板块没有单一 symbol，显示提示（可选：跳到该板块龙头股）
+  setSymbol('000001', sec.name, '#fbbf24')
+  selectedIndex.value = '000001'
 }
 
 let grid = null

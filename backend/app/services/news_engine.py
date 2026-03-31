@@ -137,16 +137,26 @@ def refresh_news_cache(background: bool = True):
         global _NEWS_CACHE, _NEWS_CACHE_READY
         all_news: list[dict] = []
 
-        # ① 个股新闻（30 标的，限速）
-        for sym in NEWS_SYMBOLS:
-            items = _fetch_news_for_symbol(sym)
-            all_news.extend(items)
-            time.sleep(0.1)
+        try:
+            # ① 个股新闻（30 标的，限速）
+            for sym in NEWS_SYMBOLS:
+                try:
+                    items = _fetch_news_for_symbol(sym)
+                    all_news.extend(items)
+                except Exception as e:
+                    logger.warning(f"[NewsEngine] 个股 {sym} 失败: {e}")
+                time.sleep(0.1)
 
-        # ② 7×24 快讯兜底
-        items_7x24 = _fetch_7x24_news()
-        all_news.extend(items_7x24)
-        time.sleep(0.3)
+            # ② 7×24 快讯兜底
+            try:
+                items_7x24 = _fetch_7x24_news()
+                all_news.extend(items_7x24)
+            except Exception as e:
+                logger.warning(f"[NewsEngine] 7x24 失败: {e}")
+
+        except Exception as e:
+            logger.error(f"[NewsEngine] 整体拉取失败: {e}", exc_info=True)
+            return
 
         # 合并去重（MD5 URL）
         unique_news: list[dict] = []
@@ -168,9 +178,12 @@ def refresh_news_cache(background: bool = True):
             _NEWS_CACHE = final
             _NEWS_CACHE_READY = True
 
-        logger.info(f"[NewsEngine] 缓存刷新完成: 共 {len(final)} 条 "
-                    f"（个股 {sum(1 for i in final if i.get('source') != '百度财经')} + "
-                    f"7x24 {sum(1 for i in final if i.get('source') == '百度财经')}）")
+        logger.info(f"[NewsEngine] 缓存刷新完成: 共 {len(final)} 条")
+
+        logger.info(
+            f"[HEARTBEAT] News pool refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, "
+            f"total={len(final)} items"
+        )
 
     if background:
         t = threading.Thread(target=_do_fetch, daemon=True, name="news-cache-refresh")
