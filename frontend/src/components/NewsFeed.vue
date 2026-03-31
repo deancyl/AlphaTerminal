@@ -170,6 +170,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { emit as busEmit } from '../composables/useEventBus.js'
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
@@ -318,6 +319,9 @@ async function fetchNews(quiet = false) {
       }
       showRefreshed.value = true
       setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 4000)
+
+      // Phase 4: 触发全局事件，通知情绪面板联动刷新
+      if (!quiet) busEmit('news-refreshed', { count: newItems.length, sources: [...new Set(newItems.map(it => it.source))] })
     }
   } catch (e) {
     console.warn('[NewsFeed] fetch failed:', e.message)

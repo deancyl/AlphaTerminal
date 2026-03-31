@@ -17,6 +17,89 @@ os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
 
 logger = logging.getLogger(__name__)
 
+# ── 新闻情感缓存（Phase 4：快讯 → 情绪联动）─────────────────────────
+_NEWS_SENTIMENT = {
+    "score": 0.0,       # -1.0 (极度利空) ~ +1.0 (极度利好)
+    "label": "中性",
+    "bullish_count": 0,
+    "bearish_count": 0,
+    "total_count": 0,
+    "keywords": [],
+    "timestamp": "",
+}
+_NEWS_SENTIMENT_LOCK = threading.Lock()
+
+# 利好/利空关键词字典
+_BULLISH_KEYWORDS = [
+    "暴涨", "大涨", "涨停", "牛市", "利好", "重磅", "突破",
+    "创新高", "超预期", "业绩", "增长", "分红", "回购",
+    "增持", "买入", "强烈推荐", "政策支持", "逆势上涨",
+    "宁德时代", "强势", "护盘", "资金流入",
+]
+_BEARISH_KEYWORDS = [
+    "暴跌", "大跌", "跌停", "熊市", "利空", "黑天鹅", "危机",
+    "亏损", "债务", "违约", "减持", "卖出", "风险",
+    "调查", "制裁", "破裂", "业绩下滑", "裁员", "破产",
+    "腥风血雨", "恐慌", "踩踏", "资金出逃",
+]
+
+
+def _analyze_news_sentiment(news_items: list[dict]):
+    """
+    Phase 4：分析最新快讯的情感倾向，更新全局 _NEWS_SENTIMENT
+    返回 (score, label, bullish_count, bearish_count)
+    """
+    global _NEWS_SENTIMENT
+    bullish = 0
+    bearish = 0
+    hit_keywords = []
+
+    for item in news_items[:50]:   # 只分析最新50条
+        text = (item.get("title", "") + item.get("source", "")).lower()
+        b_hit = [k for k in _BULLISH_KEYWORDS if k in text]
+        e_hit = [k for k in _BEARISH_KEYWORDS if k in text]
+        if b_hit:
+            bullish += 1
+            hit_keywords.extend(b_hit)
+        if e_hit:
+            bearish += 1
+            hit_keywords.extend(e_hit)
+
+    total = len(news_items[:50])
+    score = round((bullish - bearish) / max(total, 1), 3)  # -1 ~ +1
+    label = (
+        "极度利好" if score > 0.6 else
+        "偏利好"   if score > 0.2 else
+        "中性偏多" if score > 0.05 else
+        "中性"    if score > -0.05 else
+        "中性偏空" if score > -0.2 else
+        "偏利空"   if score > -0.6 else
+        "极度利空"
+    )
+
+    with _NEWS_SENTIMENT_LOCK:
+        _NEWS_SENTIMENT = {
+            "score": score,
+            "label": label,
+            "bullish_count": bullish,
+            "bearish_count": bearish,
+            "total_count": total,
+            "keywords": list(set(hit_keywords))[:10],
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    logger.info(
+        f"[NewsSentiment] score={score} label={label} "
+        f"bullish={bullish} bearish={bearish} keywords={hit_keywords[:5]}"
+    )
+    return score, label, bullish, bearish
+
+
+def get_news_sentiment() -> dict:
+    """供 router 调用的只读接口"""
+    with _NEWS_SENTIMENT_LOCK:
+        return dict(_NEWS_SENTIMENT)
+
+
 # ── 全局缓存 ────────────────────────────────────────────────────
 class SpotCache:
     _stocks = []
@@ -290,6 +373,9 @@ def _do_news_fetch():
 
         _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         logger.info(f"[HEARTBEAT] News refreshed: {len(final)} items, sources={sources}")
+
+        # Phase 4: 抓取完成后，异步分析情感倾向并联动情绪面板
+        _analyze_news_sentiment(final)
     except Exception as e:
         logger.error(f"[News] 多源刷新失败: {type(e).__name__}: {e}", exc_info=True)
 
