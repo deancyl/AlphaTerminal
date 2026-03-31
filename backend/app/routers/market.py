@@ -129,20 +129,9 @@ async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     history    = []
 
     if period == "minutely":
-        # 分时：取 realtime 表最新 N 条作为"分钟"采样
-        from app.db import get_price_history
-        raw = get_price_history(clean_sym, limit=min(limit, 300))
-        # 分时数据结构: [{time, price, volume, change_pct}]
-        history = [
-            {
-                "time":       str(r["timestamp"]),
-                "date":      r.get("date", ""),
-                "price":     r["price"],
-                "volume":    r.get("volume") or 0,
-                "change_pct": r.get("change_pct") or 0,
-            }
-            for r in raw
-        ]
+        # 分时：调用 Eastmoney 5 分钟 K 线 API（真实分钟级数据）
+        from app.services.data_fetcher import fetch_index_minute_history
+        history    = fetch_index_minute_history(clean_sym, limit=min(limit, 300))
         chart_type = "line"
 
     elif period == "daily":

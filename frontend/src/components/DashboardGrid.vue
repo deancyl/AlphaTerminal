@@ -174,9 +174,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 5：实时信息流（NewsFeed 引擎驱动）━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 5：实时信息流（NewsFeed 引擎驱动）━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
+         gs-x="4" gs-y="6" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
       </div>

@@ -596,6 +596,64 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
         return []
 
 
+# ── 分时数据：Eastmoney push2his 5分钟K线（直连，不走代理）─────────────
+def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
+    """
+    获取 A 股指数 5 分钟 K 线（最近 N 根）
+    格式: time, open, close, high, low, volume, amount
+    Eastmoney secid: 0=深圳, 1=上海
+    """
+    # 判断交易所
+    if symbol.startswith("000") or symbol.startswith("399"):
+        secid = f"0.{symbol}"   # 深圳
+    else:
+        secid = f"1.{symbol}"   # 上海
+
+    import subprocess
+    try:
+        raw = subprocess.check_output(
+            ["curl", "-s", "--noproxy", "*", "--max-time", "10",
+             f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
+             f"?secid={secid}"
+             f"&fields1=f1,f2,f3,f4,f5,f6"
+             f"&fields2=f51,f52,f53,f54,f55,f56,f57"
+             f"&klt=5&fqt=1&beg=20200101&end=20991231",
+             "-H", "Referer: https://quote.eastmoney.com/",
+             "-H", "User-Agent: Mozilla/5.0"],
+            stderr=subprocess.DEVNULL,
+        )
+        import json
+        obj = json.loads(raw.decode("utf-8", errors="replace"))
+        klines = obj.get("data", {}).get("klines", [])
+        rows = []
+        for kl in klines[-limit:]:  # 最新 N 根
+            parts = kl.split(",")
+            if len(parts) < 6:
+                continue
+            try:
+                rows.append({
+                    "time":       parts[0],                   # "2026-03-30 09:35"
+                    "open":       float(parts[1]),
+                    "close":      float(parts[2]),
+                    "high":       float(parts[3]),
+                    "low":        float(parts[4]),
+                    "volume":     float(parts[5]),
+                    "price":      float(parts[2]),            # close as current price
+                    "change_pct": 0.0,
+                    "timestamp":   int(
+                        __import__("time").mktime(
+                            __import__("time").strptime(parts[0], "%Y-%m-%d %H:%M")
+                        )
+                    ),
+                })
+            except (ValueError, IndexError, OSError):
+                continue
+        logger.info(f"[Eastmoney] {symbol} 5分钟K线: {len(rows)} 条")
+        return rows
+    except Exception as e:
+        logger.warning(f"[Eastmoney] fetch_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
+        return []
+
 
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
