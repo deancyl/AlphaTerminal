@@ -147,3 +147,59 @@
 - 后端：Python 3.11 / FastAPI / APScheduler / SQLite / AkShare / BeautifulSoup4
 - 前端：Vue 3 / Vite 4 / TailwindCSS / ECharts 5 / GridStack / useMarketStore
 - 代理：`http://192.168.1.50:7897`
+
+---
+
+# Alpha 0.1.0 — Phase 3 架构重建版
+
+## 发布信息
+- **Tag**: v0.1.0-beta（待发布）
+- **发布日期**: 2026-03-31
+- **主题**: 专业投研平台 - 高密度数据墙
+
+---
+
+## Phase 3 核心更新
+
+### 1. Stocks 数据源：从 Sina HQ 批量接口重建 ✅
+- **问题根因**：Sina `stock_zh_a_spot` 和 Eastmoney 均被 IP 封锁，返回 HTML 错误
+- **解决方案**：新建 `sina_hq_fetcher.py`，使用腾讯行情 `qt.gtimg.cn` 批量接口
+  - 50 只重点股票（蓝筹/龙头/消费/银行/科技全覆盖）
+  - 单次批量 ≤45 个代码，延迟 0.12s，总耗时 <5s
+  - 实测：46 只真实股票 ✅（贵州茅台 1450 元 / +2.11%）
+- **接口**：`GET /api/v1/market/stocks` → <1ms 响应
+
+### 2. 新闻多源轮询引擎 ✅
+- **主源**：`akshare stock_news_em`（东方财富，30 只股票）
+- **从源**：`akshare news_economic_baidu`（宏观快讯兜底）
+- **心跳日志**：`[HEARTBEAT] News refreshed at ...` 写入 backend_error.log
+- **调试接口**：`GET /api/v1/debug/scheduler` → `{"news_last_success": "...", "spot_cache_ready": true}`
+
+### 3. 涨跌分布直方图（11 桶）✅
+- **数据源**：Sina HQ 46 只股票实时行情
+- **桶分布**（2026-03-31 收盘）：
+  - 跌 33 只 / 涨 13 只
+  - 主要集中在 `-2%~0%`（56.52%）和 `0%~2%`（26.09%）
+- **响应**：`GET /api/v1/market/sentiment/histogram` → <1ms
+
+### 4. 行业板块（Sectors）修复 ✅
+- **问题**：Sina 板块 API 和 Eastmoney 行业 API 均被封锁
+- **解决方案**：改用 `china_all` 10 只核心指数作为替代数据源
+- **数据**：`GET /api/v1/market/sectors` → 10 条，按涨跌幅排序
+
+### 5. 前端组件 ✅
+- **SentimentGauge.vue**：ECharts 11 桶横向柱状图，红绿双色系
+- **HotSectors.vue**：行业风口（10 大 A 股指数 + 领涨信息）
+- **StockScreener.vue**：全市场个股透视，分页（20 条/页）+ 可排序列（涨跌幅/换手率/价格）
+- **DashboardGrid.vue**：新增 Widget 网格，风向标 → 情绪温度计
+
+### 已知限制
+- Sina/Eastmoney 全市场个股 API 持续被封锁，暂用 46 只重点股票代替 5000+ 全量
+- 新闻多源：Sina 被封锁时宏观快讯降级至 Mock 数据
+
+---
+
+## 技术架构
+- 后端：Python 3.11 / FastAPI / APScheduler / SQLite / AkShare / BeautifulSoup4
+- 前端：Vue 3 / Vite 4 / TailwindCSS / ECharts 5 / GridStack
+- 数据源：Sina HQ (qt.gtimg.cn), AkShare, 东方财富
