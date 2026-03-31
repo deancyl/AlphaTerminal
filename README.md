@@ -12,10 +12,34 @@
 [![SQLite](https://img.shields.io/badge/SQLite-WAL-orange.svg)](https://sqlite.org/)
 [![AkShare](https://img.shields.io/badge/AkShare-1.18+-red.svg)](https://akshare.akfamily.xyz/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/badge/Release-Beta%200.2.1-orange.svg)]()
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
 </div>
+
+---
+
+
+---
+
+## 🆕 Beta 0.2.1 更新日志（2026-03-31）
+
+### 🐛 问题修复
+- ✅ **首屏阻塞**：GET /news/flash 响应从 ~10s 降至 **<5ms**（lifespan 预热优化）
+- ✅ **数据源切换**：宏媒体从 `news_economic_baidu`（SSL失败）切换为 `stock_news_main_cx`（财新，走代理）
+- ✅ **审计日志**：`[News Fetch]` 标签打印最新条目时间和标题
+
+### ⚡ 交互优化
+- ✅ **Navbar 锁定按钮**：🔒/🔓 从网格内部移至顶部状态栏，与 LIVE 标签同级
+- ✅ **Copilot 默认收起**：`isCopilotOpen` 默认 `false`，按钮文案「🤖 展开 AI 助理 / ⏭ 收起 AI 助理」
+- ✅ **快讯手动刷新**：按钮 32px 触摸区域，`animate-spin` + `✅ 刚刚更新` 提示
+
+### 🔌 新增接口
+- `POST /api/v1/news/force_refresh`：穿透式强制刷新，触发外网真实抓取
+
+### ⚠️ 已知问题（见 KNOWN_ISSUES_TODO.md）
+- 新闻时间戳均为 fetch 时间，非原始发布时间（数据源字段限制）
 
 ---
 
