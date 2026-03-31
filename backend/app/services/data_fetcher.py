@@ -433,6 +433,51 @@ def fetch_derivatives() -> list[dict]:
     return rows
 
 
+# ── Phase 7: 国内全部指数（10+）──────────────────────────────────────────
+def fetch_china_all_indices() -> list[dict]:
+    """
+    通过新浪实时行情获取国内10+核心指数
+    对应 CHINA_ALL_SYMBOLS
+    """
+    rows = []
+    # Sina HQ 代码: s_sh=上证, s_sz=深证
+    codes = (
+        "s_sh000001,s_sh000300,s_sh000688,s_sh000905,s_sh000852,s_sh000016,"  # 上证系
+        "s_sz399001,s_sz399006,s_sz000510,s_sz399100"                          # 深证系
+    )
+    sym_map = {
+        "s_sh000001": ("000001", "上证指数",  "AShare"),
+        "s_sh000300": ("000300", "沪深300",  "AShare"),
+        "s_sh000688": ("000688", "科创50",   "AShare"),
+        "s_sh000905": ("000905", "中证500",  "AShare"),
+        "s_sh000852": ("000852", "中证1000", "AShare"),
+        "s_sh000016": ("000016", "上证50",   "AShare"),
+        "s_sz399001": ("399001", "深证成指", "AShare"),
+        "s_sz399006": ("399006", "创业板指", "AShare"),
+        "s_sz000510": ("000510", "上证380",  "AShare"),
+        "s_sz399100": ("399100", "深证A指",  "AShare"),
+    }
+    try:
+        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=10)
+        if r.status_code != 200:
+            raise RuntimeError(f"Sina 返回 {r.status_code}")
+        for line in r.text.strip().split("\n"):
+            key_m = re.search(r"hq_str_s_(sh\d+|sz\d+)=", line)
+            if not key_m:
+                continue
+            code_key = "s_" + key_m.group(1)
+            if code_key not in sym_map:
+                continue
+            sym, disp, mkt = sym_map[code_key]
+            parsed = _parse_sina_hq(line)
+            if parsed:
+                rows.append(_row(sym, disp, mkt, parsed["price"], parsed["change_pct"], parsed["volume"]))
+                logger.info(f"[Sina] {disp}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
+    except Exception as e:
+        logger.error(f"[Sina] fetch_china_all_indices 失败: {type(e).__name__}: {e}")
+    return rows
+
+
 # ── Phase 7: A股指数历史K线 ────────────────────────────────────────────
 def fetch_china_index_history(symbol: str) -> list[dict]:
     """

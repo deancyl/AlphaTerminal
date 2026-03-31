@@ -106,6 +106,10 @@ async def market_indices():
 
 
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
+def _clean_symbol(raw: str) -> str:
+    """Strip sh/sz/SH/SZ/前缀，容忍前端各种格式传入"""
+    return raw.lower().replace("sh", "").replace("sz", "").strip()
+
 @router.get("/market/history/{symbol}")
 async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     """
@@ -116,6 +120,9 @@ async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     period=weekly   : 周K（从 periodic 表，烛台图）
     period=monthly  : 月K（从 periodic 表，烛台图）
     """
+    # Symbol normalization: tolerate sh/sz prefixes from any frontend call
+    clean_sym = _clean_symbol(symbol)
+
     from app.db import get_daily_history, get_periodic_history
 
     chart_type = "candlestick"  # 默认烛台
@@ -124,7 +131,7 @@ async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     if period == "minutely":
         # 分时：取 realtime 表最新 N 条作为"分钟"采样
         from app.db import get_price_history
-        raw = get_price_history(symbol, limit=min(limit, 300))
+        raw = get_price_history(clean_sym, limit=min(limit, 300))
         # 分时数据结构: [{time, price, volume, change_pct}]
         history = [
             {
@@ -139,21 +146,21 @@ async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
         chart_type = "line"
 
     elif period == "daily":
-        history    = get_daily_history(symbol, limit=limit)
+        history    = get_daily_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
     elif period in ("weekly", "monthly"):
-        history    = get_periodic_history(symbol, period=period, limit=limit)
+        history    = get_periodic_history(clean_sym, period=period, limit=limit)
         chart_type = "candlestick"
 
     else:
         # realtime（兼容旧调用）
         from app.db import get_price_history
-        history    = get_price_history(symbol, limit=limit)
+        history    = get_price_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
     return {
-        "symbol":    symbol,
+        "symbol":    clean_sym,
         "period":    period,
         "chart_type": chart_type,
         "timestamp": datetime.now().isoformat(),

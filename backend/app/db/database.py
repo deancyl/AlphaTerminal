@@ -205,7 +205,13 @@ def get_price_history(symbol: str, limit: int = 100) -> list[dict]:
         for r in rows
     ]
 
+def _normalize_symbol(raw: str) -> str:
+    """Strip sh/sz/SH/SZ prefixes so 'sz399001' → '399001', 'sh000001' → '000001'"""
+    return raw.lower().replace("sh", "").replace("sz", "").strip()
+
 def get_daily_history(symbol: str, limit: int = 300) -> list[dict]:
+    # Symbol normalization: tolerate sh/sz prefixes from frontend
+    clean = _normalize_symbol(symbol)
     conn = _get_conn()
     rows = conn.execute("""
         SELECT symbol, date, open, high, low, close, volume, change_pct, timestamp
@@ -213,7 +219,7 @@ def get_daily_history(symbol: str, limit: int = 300) -> list[dict]:
         WHERE symbol = ?
         ORDER BY timestamp DESC
         LIMIT ?;
-    """, (symbol, limit)).fetchall()
+    """, (clean, limit)).fetchall()
     rows = list(reversed(rows))
     return [
         {"symbol": r[0], "date": r[1],

@@ -9,23 +9,41 @@ logger = logging.getLogger(__name__)
 
 scheduler = BackgroundScheduler()
 
+# 历史K线需要回填的指数列表
+HISTORY_SYMBOLS = ["000001", "000300", "399001", "399006", "000688"]
+
 
 def flush_write_buffer():
     """将 write_buffer 批量刷入 market_data_realtime"""
     try:
-        count = flush_buffer_to_realtime()
-        if count > 0:
-            logger.info(f"[Scheduler] 已将 {count} 条行情从 write_buffer 刷入 market_data_realtime")
-        else:
-            logger.debug("[Scheduler] write_buffer 为空，无数据需刷入")
+        flush_buffer_to_realtime()
+        logger.debug("[Scheduler] write_buffer 已刷入 market_data_realtime")
     except Exception as e:
         logger.error(f"[Scheduler] flush 失败: {e}", exc_info=True)
+
+
+def backfill_daily_history():
+    """每日一次：回填A股指数日K线历史（写入 market_data_daily）"""
+    from app.services.data_fetcher import fetch_china_index_history
+    for sym in HISTORY_SYMBOLS:
+        try:
+            rows = fetch_china_index_history(sym)
+            logger.info(f"[Scheduler] {sym} 日K回填完成: {len(rows)} 条")
+        except Exception as e:
+            logger.error(f"[Scheduler] {sym} 日K回填失败: {e}", exc_info=True)
 
 
 def start_scheduler():
     """启动 APScheduler"""
     from app.db import init_tables
     init_tables()  # 保证表已创建
+
+    # 启动时先回填一次历史K线（确保K线图有数据）
+    import threading
+    def initial_backfill():
+        import time; time.sleep(2)   # 等待 uvicorn 完全就绪
+        backfill_daily_history()
+    threading.Thread(target=initial_backfill, daemon=True).start()
 
     # 每 3 分钟拉取一次实时数据（akshare 有频率限制）
     from app.services.data_fetcher import fetch_all_and_buffer
