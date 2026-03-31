@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+ENV/
+env/
+.env
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+.yarn/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+*.local
+*.log
+
+# Database (contains live market data)
+backend/cache/*.db
+backend/cache/*.db-shm
+backend/cache/*.db-wal
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Secrets / tokens
+*token*
+*secret*
+*credential*
+.env.local
+.env.*.local
+
+# OS pyc cache
+**/__pycache__/
+*.pyc

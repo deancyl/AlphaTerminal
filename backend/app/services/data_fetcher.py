@@ -190,20 +190,393 @@ def fetch_shibor() -> list[dict]:
     return rows
 
 
+# ── Phase 6: 全球市场指数 ───────────────────────────────────────────────
+def fetch_global_indices() -> list[dict]:
+    """
+    获取全球核心指数：恒生(HSI)、道琼斯(DJI)、纳斯达克(IXIC)、标普500(SPX)
+    策略1：腾讯财经 qt.gtimg.cn（直连，不走代理）
+    策略2：Sina 国际行情（退补）
+    """
+    rows = []
+
+    # 策略A：腾讯财经（主要数据源，直连）
+    try:
+        import subprocess
+        codes = "hkHSI,usIXIC,usDJI,usSPX"
+        raw = subprocess.check_output(
+            ["curl", "-s", "--max-time", "8",
+             f"https://qt.gtimg.cn/q={codes}",
+             "-H", "Referer: https://gu.qq.com",
+             "-H", "User-Agent: Mozilla/5.0"],
+            stderr=subprocess.DEVNULL
+        )
+        text = raw.decode("GBK", errors="replace")
+        logger.info(f"[Tencent] 全球指数响应: {text[:150]}")
+
+        sym_map = {
+            "hkHSI":  ("HSI",  "恒生指数",   "HK"),
+            "usIXIC": ("IXIC", "纳斯达克",   "US"),
+            "usDJI":  ("DJI",  "道琼斯",     "US"),
+            "usSPX":  ("SPX",  "标普500",    "US"),
+        }
+        for line in text.strip().split("\n"):
+            m = re.search(r'v_(\w+)="([^"]+)"', line)
+            if not m:
+                continue
+            code_key = m.group(1)
+            if code_key not in sym_map:
+                continue
+            sym, disp, mkt = sym_map[code_key]
+            parts = m.group(2).split("~")
+            if len(parts) < 6:
+                continue
+            try:
+                price   = float(parts[3]) if parts[3] else None
+                chg_pct = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+                if price:
+                    rows.append(_row(sym, disp, mkt, price, chg_pct, None, "global"))
+                    logger.info(f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%)")
+            except (ValueError, IndexError) as e:
+                logger.warning(f"[Tencent] 解析 {disp} 失败: {e}")
+        if rows:
+            logger.info(f"[Tencent] 全球指数拉取成功 {len(rows)} 只")
+            return rows
+    except Exception as e:
+        logger.warning(f"[Tencent] 全球指数失败，退补Sina: {type(e).__name__}: {e}")
+        traceback.print_exc()
+
+    # 策略B（退补）：Sina 国际行情
+    try:
+        codes_map = {
+            "int_hf_HSI":  ("HSI",  "恒生指数",  "HK"),
+            "int_hf_DJI":  ("DJI",  "道琼斯",    "US"),
+            "int_hf_IXIC": ("IXIC", "纳斯达克",   "US"),
+            "int_hf_SPX":  ("SPX",  "标普500",   "US"),
+            "int_hf_N225": ("N225", "日经225",   "JP"),
+        }
+        codes = ",".join(codes_map.keys())
+        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8)
+        if r.status_code == 200:
+            for line in r.text.strip().split("\n"):
+                m = re.search(r'hq_str_int_hf_(\w+)="([^"]+)"', line)
+                if not m:
+                    continue
+                key = m.group(1)
+                if key not in codes_map:
+                    continue
+                sym, disp, mkt = codes_map[key]
+                parts = m.group(2).split(",")
+                if len(parts) >= 4 and parts[3]:
+                    try:
+                        price = float(parts[3])
+                        prev  = float(parts[2]) if parts[2] else price
+                        chg   = (price - prev) / prev * 100 if prev else 0
+                        rows.append(_row(sym, disp, mkt, price, chg, None, "global"))
+                        logger.info(f"[Sina] {disp}: {price} ({chg:+.2f}%)")
+                    except (ValueError, IndexError):
+                        pass
+    except Exception as e:
+        logger.warning(f"[Sina] 全局指数退补失败: {type(e).__name__}: {e}")
+
+    return rows
+
+
+# ── Phase 6: 行业板块 Top 5 ─────────────────────────────────────────────
+def fetch_industry_sectors() -> list[dict]:
+    """
+    获取当天涨幅 Top5 行业板块
+    通过新浪 vip.stock.finance.sina.com.cn（直连，不走代理，无 encoding 问题）
+    格式: hangye_XX,行业名,股票数,点位,涨跌额,涨跌幅%
+    """
+    try:
+        import requests, re, json
+        r = requests.get(
+            "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php",
+            params={"param": "class=hy", "type": "1"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                "Referer": "https://finance.sina.com.cn",
+                "Accept-Encoding": "gzip, deflate",
+            },
+            timeout=10,
+        )
+        r.encoding = "gbk"
+        text = r.text
+
+        # 解析 var S_Finance_bankuai_class=hy = {"hangye_XX":"..."}
+        board_list = []
+        for m in re.finditer(r'hangye_(\w+)":"([^"]+)"', text):
+            code = m.group(1)
+            fields = m.group(2).split(",")
+            if len(fields) < 6:
+                continue
+            try:
+                bname = fields[1].strip()
+                chg_pct = float(fields[5])
+                board_list.append({"name": bname, "change_pct": round(chg_pct, 2)})
+            except (ValueError, IndexError):
+                continue
+
+        # 按涨幅降序取 Top5
+        board_list.sort(key=lambda x: x["change_pct"], reverse=True)
+        top5 = board_list[:5]
+        board_json = json.dumps(top5, ensure_ascii=False)
+        logger.info(f"[Sina] 行业板块Top5: {top5}")
+        return [{
+            "symbol":    "board_top5",
+            "name":      "行业板块Top5",
+            "market":    "BOARD",
+            "price":     board_json,
+            "change_pct": None,
+            "volume":    None,
+            "timestamp": int(time.time()),
+            "data_type": "board_top5",
+        }]
+    except Exception as e:
+        logger.error(f"[Sina] fetch_industry_sectors 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+    return []
+
+
+# ── Phase 6: 期货与大宗商品 ─────────────────────────────────────────────
+def fetch_derivatives() -> list[dict]:
+    """
+    获取大宗商品：黄金（SGE基准价）、原油（国内能源价格）
+    退补：尝试 Sina 期货接口 nf_ 格式
+    """
+    rows = []
+
+    # ① 上海金基准价（SGE）
+    try:
+        import akshare as ak
+        df_gold = ak.spot_golden_benchmark_sge()
+        if not df_gold.empty:
+            latest = df_gold.iloc[-1]
+            price  = float(latest["晚盘价"]) if "晚盘价" in latest and latest["晚盘价"] else None
+            if price:
+                rows.append({
+                    "symbol":    "GC",
+                    "name":     "SGE黄金",
+                    "market":   "COMEX",
+                    "price":    price,
+                    "change_pct": None,
+                    "volume":   None,
+                    "timestamp": int(time.time()),
+                    "data_type": "derivative",
+                })
+                logger.info(f"[SGE] 黄金基准价: {price}")
+    except Exception as e:
+        logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}")
+
+    # ② 国内能源指数（综合）
+    try:
+        df_energy = ak.macro_china_energy_index()
+        if not df_energy.empty:
+            latest = df_energy.iloc[-1]
+            val = latest.get("最新值")
+            chg = latest.get("涨跌幅", 0)
+            if val:
+                rows.append({
+                    "symbol":    "EC",
+                    "name":     "能源指数",
+                    "market":   "CHINA",
+                    "price":    float(val),
+                    "change_pct": float(chg) if chg else None,
+                    "volume":   None,
+                    "timestamp": int(time.time()),
+                    "data_type": "derivative",
+                })
+                logger.info(f"[能源指数] 最新值: {val} 涨跌幅: {chg}")
+    except Exception as e:
+        logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}")
+
+    # ③ Sina 期货（IF期指 / 黄金 / 原油）退补
+    try:
+        codes_map = {
+            "nf_IFL":  ("IF",  "IF当月主力",  "FUTURE"),
+            "nf_GCFL": ("GC2", "Sina黄金",    "COMEX"),
+            "nf_CLFL": ("CL2", "Sina原油",    "NYMEX"),
+        }
+        codes = ",".join(codes_map.keys())
+        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=8)
+        if r.status_code == 200:
+            for line in r.text.strip().split("\n"):
+                m_key = re.search(r'hq_str_nf_(\w+)="([^"]+)"', line)
+                if not m_key:
+                    continue
+                code_key = m_key.group(1)
+                if code_key not in codes_map:
+                    continue
+                sym, disp, mkt = codes_map[code_key]
+                fields = m_key.group(2).split(",")
+                if len(fields) >= 11 and fields[3]:
+                    try:
+                        price = float(fields[3])
+                        chg   = float(fields[10]) if fields[10] else 0
+                        vol   = float(fields[9])  if fields[9]  else None
+                        rows.append({
+                            "symbol":    sym,
+                            "name":     disp,
+                            "market":   mkt,
+                            "price":    price,
+                            "change_pct": chg,
+                            "volume":   vol,
+                            "timestamp": int(time.time()),
+                            "data_type": "derivative",
+                        })
+                        logger.info(f"[Sina期货] {disp}: {price} ({chg:+.2f}%)")
+                    except (ValueError, IndexError):
+                        pass
+    except Exception as e:
+        logger.warning(f"[Sina期货] 退补失败: {type(e).__name__}: {e}")
+
+    return rows
+
+
+# ── Phase 7: A股指数历史K线 ────────────────────────────────────────────
+def fetch_china_index_history(symbol: str) -> list[dict]:
+    """
+    拉取A股指数日K线历史（近1年），写入 market_data_daily 表
+    symbol: 000001=上证, 000300=沪深300, 399001=深证, 399006=创业板
+    """
+    try:
+        import akshare as ak
+        import pandas as pd
+
+        ak_symbol_map = {
+            "000001": "sh000001",
+            "000300": "sh000300",
+            "399001": "sz399001",
+            "399006": "sz399006",
+        }
+        ak_sym = ak_symbol_map.get(symbol)
+        if not ak_sym:
+            logger.warning(f"[AkShare] 无映射: {symbol}")
+            return []
+
+        df = ak.stock_zh_index_daily(symbol=ak_sym)
+        if df is None or df.empty:
+            return []
+
+        df.columns = [c.strip() for c in df.columns]
+        date_col = df.columns[0]  # 通常是 'date'
+        ohlc_cols = [c for c in df.columns if c not in (date_col,)]
+        if len(ohlc_cols) >= 4:
+            df = df.rename(columns={ohlc_cols[0]: "open", ohlc_cols[1]: "high",
+                                    ohlc_cols[2]: "low", ohlc_cols[3]: "close"})
+        elif "close" not in df.columns:
+            df["close"] = df[df.columns[-1]]
+
+        rows = []
+        now_ts = int(time.time())
+        for _, row in df.iterrows():
+            try:
+                dt = int(pd.Timestamp(row[date_col]).timestamp())
+                close = float(row.get("close", row.iloc[-1]))
+                chg_pct = float(row.get("pct_chg", 0)) if "pct_chg" in row else 0.0
+                rows.append({
+                    "symbol":    symbol,
+                    "date":      str(row[date_col])[:10],
+                    "open":      float(row.get("open", close)),
+                    "high":      float(row.get("high", close)),
+                    "low":       float(row.get("low", close)),
+                    "close":     close,
+                    "volume":    float(row.get("volume", 0) or 0),
+                    "change_pct": chg_pct,
+                    "timestamp": dt,
+                    "data_type": "daily",
+                })
+            except Exception:
+                continue
+
+        if rows:
+            from app.db import buffer_insert_daily
+            buffer_insert_daily(rows)
+            logger.info(f"[AkShare] {symbol} 历史K线写入 {len(rows)} 条")
+        return rows[-100:]  # 只返回最近100条供图表使用
+    except Exception as e:
+        logger.error(f"[AkShare] fetch_china_index_history({symbol}) 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
+
+
+# ── Phase 7: 沪深10+核心指数 ─────────────────────────────────────────────
+def fetch_china_all_indices() -> list[dict]:
+    """
+    拉取10+个中国核心指数（上证、沪深300、深证、创业板、科创50、中证500、
+    中证1000、上证50、上证380、沪深圳全市）
+    新浪直连，不走代理
+    """
+    rows = []
+    codes = "s_sh000001,s_sh000300,s_sz399001,s_sz399006,s_sh000688,s_sh000905,s_sh000852,s_sh000016,s_sh000510,s_sz399100"
+    sym_map = {
+        "s_sh000001": ("000001", "上证指数",    "AShare"),
+        "s_sh000300": ("000300", "沪深300",     "AShare"),
+        "s_sz399001": ("399001", "深证成指",    "AShare"),
+        "s_sz399006": ("399006", "创业板指",    "AShare"),
+        "s_sh000688": ("000688", "科创50",      "AShare"),
+        "s_sh000905": ("000905", "中证500",     "AShare"),
+        "s_sh000852": ("000852", "中证1000",    "AShare"),
+        "s_sh000016": ("000016", "上证50",      "AShare"),
+        "s_sh000510": ("000510", "上证380",     "AShare"),
+        "s_sz399100": ("399100", "深证A指",     "AShare"),
+    }
+
+    try:
+        r = httpx.get(f"https://hq.sinajs.cn/list={codes}", headers=SINA_HEADERS, timeout=10)
+        if r.status_code != 200:
+            raise RuntimeError(f"Sina 返回状态码 {r.status_code}")
+
+        for line in r.text.strip().split("\n"):
+            key_m = re.search(r"hq_str_s_(sh\d+|sz\d+)=", line)
+            if not key_m:
+                continue
+            code_key = "s_" + key_m.group(1)
+            if code_key not in sym_map:
+                continue
+            sym, display_name, market = sym_map[code_key]
+            parsed = _parse_sina_hq(line)
+            if parsed:
+                rows.append(_row(sym, display_name, market, parsed["price"], parsed["change_pct"], parsed["volume"], "china_all"))
+                logger.info(f"[Sina] {display_name}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
+            else:
+                logger.warning(f"[Sina] 解析失败: {line[:80]}")
+    except Exception as e:
+        logger.error(f"[Sina] fetch_china_all_indices 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+
+    return rows
+
+
+
+
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
     all_rows = []
-    idx_rows = fetch_china_indices()
-    shibor_rows = fetch_shibor()
+    idx_rows      = fetch_china_indices()
+    china_all_rows = fetch_china_all_indices()   # Phase 7: 国内10+指数
+    shibor_rows   = fetch_shibor()
+    global_rows   = fetch_global_indices()
+    board_rows    = fetch_industry_sectors()
+    deriv_rows    = fetch_derivatives()
+
     all_rows.extend(idx_rows)
+    all_rows.extend(china_all_rows)
     all_rows.extend(shibor_rows)
+    all_rows.extend(global_rows)
+    all_rows.extend(board_rows)
+    all_rows.extend(deriv_rows)
 
     if all_rows:
         from app.db import buffer_insert
         try:
             buffer_insert(all_rows)
-            logger.info(f"[DataFetcher] 写入 {len(all_rows)} 条到 write_buffer "
-                        f"(指数 {len(idx_rows)} 条, 利率 {len(shibor_rows)} 条)")
+            logger.info(f"[DataFetcher] 写入 {len(all_rows)} 条 "
+                        f"(A股 {len(idx_rows)}, 国内 {len(china_all_rows)}, "
+                        f"利率 {len(shibor_rows)}, 全球 {len(global_rows)}, "
+                        f"板块 {len(board_rows)}, 商品 {len(deriv_rows)})")
         except Exception as e:
             logger.error(f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}")
             traceback.print_exc()

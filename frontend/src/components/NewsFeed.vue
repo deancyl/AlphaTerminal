@@ -2,12 +2,16 @@
   <div class="flex flex-col h-full">
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📰 快讯瀑布流</span>
-      <span class="text-terminal-dim text-[10px]">{{ items.length }} 条</span>
+      <div class="flex items-center gap-2">
+        <span class="text-terminal-dim text-[10px]">{{ items.length }} 条</span>
+        <span class="w-1.5 h-1.5 rounded-full"
+              :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
+      </div>
     </div>
-    <div class="flex-1 overflow-y-auto space-y-1.5 min-h-0">
+    <div class="flex-1 overflow-y-auto space-y-1.5 min-h-0" ref="listEl">
       <div
         v-for="item in items"
-        :key="item.id"
+        :key="item.id || item.title"
         class="bg-terminal-bg rounded border border-gray-700 p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
         @click="onItemClick(item)"
       >
@@ -25,45 +29,89 @@
           </div>
         </div>
       </div>
+      <div v-if="!items.length" class="text-center mt-8 text-terminal-dim text-xs">
+        暂无快讯数据
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['item-click'])
-const items = ref(props.initialItems)
+const emit  = defineEmits(['item-click'])
+const items   = ref(props.initialItems)
+const loading = ref(false)
+const listEl  = ref(null)
+let refreshTimer = null
 
 function tagClass(tag) {
-  if (tag?.includes('🔴')) return 'bg-red-500/20 text-red-400'
-  if (tag?.includes('📈')) return 'bg-orange-500/20 text-orange-400'
-  if (tag?.includes('📉')) return 'bg-green-500/20 text-green-400'
-  if (tag?.includes('🌏')) return 'bg-blue-500/20 text-blue-400'
-  if (tag?.includes('💎')) return 'bg-yellow-500/20 text-yellow-400'
-  if (tag?.includes('🖥') || tag?.includes('AI')) return 'bg-purple-500/20 text-purple-400'
+  if (!tag) return 'bg-gray-600/30 text-gray-400'
+  if (tag.includes('🔴') || tag.includes('下跌')) return 'bg-red-500/20 text-red-400'
+  if (tag.includes('📈') || tag.includes('上涨')) return 'bg-orange-500/20 text-orange-400'
+  if (tag.includes('📉')) return 'bg-green-500/20 text-green-400'
+  if (tag.includes('🌏') || tag.includes('宏观')) return 'bg-blue-500/20 text-blue-400'
+  if (tag.includes('💎') || tag.includes('黄金')) return 'bg-yellow-500/20 text-yellow-400'
+  if (tag.includes('🖥') || tag.includes('AI') || tag.includes('特朗普')) return 'bg-purple-500/20 text-purple-400'
   return 'bg-gray-600/30 text-gray-400'
 }
 
-function onItemClick(item) {
-  emit('item-click', item)
-}
+function onItemClick(item) { emit('item-click', item) }
 
-async function fetchNews() {
+async function fetchNews(quiet = false) {
+  if (!quiet) loading.value = true
   try {
     const res = await fetch('/api/v1/news/flash')
-    if (res.ok) {
-      const data = await res.json()
-      items.value = data.news || []
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data    = await res.json()
+    const incoming = data.news || []
+
+    if (!incoming.length) {
+      if (!quiet) loading.value = false
+      return
     }
-  } catch {}
+
+    // ── 去重：基于 id 或 title 排重 ──────────────────────────────
+    const existingIds = new Set(items.value.map(it => it.id || it.title))
+    const existingTitles = new Set(items.value.map(it => it.title))
+    const newItems = incoming.filter(it => {
+      const id    = it.id || it.title
+      return !existingIds.has(id) && !existingTitles.has(it.title)
+    })
+
+    if (newItems.length) {
+      // 新数据追加到顶部
+      items.value = [...newItems, ...items.value]
+      // 最多保留 100 条，防止内存膨胀
+      if (items.value.length > 100) {
+        items.value = items.value.slice(0, 100)
+      }
+      // 滚动到顶部看新消息
+      if (listEl.value) listEl.value.scrollTop = 0
+    }
+  } catch (e) {
+    console.warn('[NewsFeed] fetch failed:', e.message)
+  } finally {
+    if (!quiet) loading.value = false
+  }
 }
 
-onMounted(fetchNews)
+// 每 5 分钟自动刷新一次
+function startAutoRefresh() {
+  // 立即拉一次
+  fetchNews(false)
+  // 之后每 5 分钟
+  refreshTimer = setInterval(() => fetchNews(true), 5 * 60 * 1000)
+}
+
+onMounted(startAutoRefresh)
+onUnmounted(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+})
 </script>
 
 <style scoped>

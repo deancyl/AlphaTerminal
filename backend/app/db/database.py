@@ -2,7 +2,10 @@
 SQLite 数据库管理 - Phase 3
 WAL 模式 + 批量写入缓冲
 """
+import logging
 import sqlite3
+
+logger = logging.getLogger(__name__)
 import threading
 import time
 from typing import Optional
@@ -80,6 +83,25 @@ def init_tables():
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_realtime_symbol_ts ON market_data_realtime(symbol, timestamp);")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_buffer_symbol ON write_buffer(symbol);")
+
+    # Phase 7: 历史K线日线表
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS market_data_daily (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol       TEXT    NOT NULL,
+            date         TEXT    NOT NULL,
+            open         REAL,
+            high         REAL,
+            low          REAL,
+            close        REAL,
+            volume       REAL,
+            change_pct   REAL,
+            timestamp    INTEGER NOT NULL,
+            data_type    TEXT    DEFAULT 'daily',
+            UNIQUE(symbol, date)
+        );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_symbol_date ON market_data_daily(symbol, date);")
     conn.commit()
 
 
@@ -102,6 +124,42 @@ def buffer_insert(rows: list[dict]):
          for r in rows]
     )
     conn.commit()
+
+
+
+def buffer_insert_daily(rows: list[dict]):
+    """
+    将日K线数据批量写入 market_data_daily（UPSERT 语义）
+    防御性修复: 如果 high < low 则自动交换
+    """
+    if not rows:
+        return
+    conn = _get_conn()
+    for r in rows:
+        o = r.get("open") or 0
+        c = r.get("close") or 0
+        h = r.get("high") or 0
+        l = r.get("low") or 0
+        # 防御性: 确保 high >= low
+        if h < l:
+            h, l = l, h
+        # 确保 high >= open,close 且 low <= open,close
+        h = max(h, o, c)
+        l = min(l, o, c)
+        conn.execute("""
+            INSERT INTO market_data_daily
+                (symbol, date, open, high, low, close, volume, change_pct, timestamp, data_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, date) DO UPDATE SET
+                open=excluded.open, high=excluded.high, low=excluded.low,
+                close=excluded.close, volume=excluded.volume,
+                change_pct=excluded.change_pct, timestamp=excluded.timestamp;
+        """, (r["symbol"], r.get("date"), o, h, l, c,
+              r.get("volume", 0), r.get("change_pct", 0),
+              r["timestamp"], r.get("data_type", "daily")))
+    conn.commit()
+    logger.info(f"[DB] 日K线写入 {len(rows)} 条")
+
 
 
 def flush_buffer_to_realtime() -> int:
@@ -171,5 +229,31 @@ def get_price_history(symbol: str, limit: int = 100) -> list[dict]:
     return [
         {"symbol": r[0], "name": r[1], "price": r[2],
          "change_pct": r[3], "timestamp": r[4]}
+        for r in rows
+    ]
+
+
+def get_daily_history(symbol: str, limit: int = 300) -> list[dict]:
+    """
+    Phase 7: 查询某标的历史日K线（从 market_data_daily）
+    用于 ECharts K 线图表
+    注意: DB存的是完整历史，API按 timestamp DESC 取最近 limit 条，
+          返回前再 reverse() 成 ASC（图表要求 x轴从旧到新）。
+    """
+    conn = _get_conn()
+    rows = conn.execute("""
+        SELECT symbol, date, open, high, low, close, volume, change_pct, timestamp
+        FROM market_data_daily
+        WHERE symbol = ?
+        ORDER BY timestamp DESC
+        LIMIT ?;
+    """, (symbol, limit)).fetchall()
+    # reverse → ASC（最旧在前，最新在后，图表正确）
+    rows = list(reversed(rows))
+    return [
+        {"symbol": r[0], "date": r[1],
+         "open": r[2], "high": r[3], "low": r[4],
+         "close": r[5], "volume": r[6],
+         "change_pct": r[7], "timestamp": r[8]}
         for r in rows
     ]
