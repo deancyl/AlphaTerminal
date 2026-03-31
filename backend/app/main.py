@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment
+from app.routers import market, copilot, news, sentiment, debug
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -61,6 +61,7 @@ app.add_middleware(
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(copilot.router, prefix="/api/v1", tags=["copilot"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
+app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # ← 必须在 sentiment 之前（/{symbol} 拦截一切）
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
 
 

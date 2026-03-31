@@ -5,7 +5,25 @@
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
+        <span v-if="lastRefreshTime" class="text-terminal-dim text-[10px]">
+          {{ lastRefreshLabel }}
+        </span>
         <span class="text-terminal-dim text-[10px]">{{ total }} 条</span>
+        <!-- 手动刷新按钮 -->
+        <button
+          class="w-5 h-5 flex items-center justify-center rounded transition"
+          :class="loading
+            ? 'text-yellow-400 animate-spin'
+            : 'text-terminal-dim hover:text-terminal-accent'"
+          :disabled="loading"
+          @click="manualRefresh"
+          title="手动刷新快讯"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
+               class="w-3.5 h-3.5" :class="loading ? 'animate-spin' : ''">
+            <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
+          </svg>
+        </button>
         <span class="w-1.5 h-1.5 rounded-full"
               :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
       </div>
@@ -151,11 +169,21 @@ const props = defineProps({
   initialItems: { type: Array, default: () => [] }
 })
 
-const items       = ref(props.initialItems)
-const total       = ref(0)
-const loading     = ref(false)
-const listEl      = ref(null)
-const refreshTimer = ref(null)
+const items        = ref(props.initialItems)
+const total        = ref(0)
+const loading      = ref(false)
+const listEl       = ref(null)
+const refreshTimer  = ref(null)
+const lastRefreshTime = ref(null)
+
+const lastRefreshLabel = computed(() => {
+  if (!lastRefreshTime.value) return ''
+  const diff = Date.now() - lastRefreshTime.value
+  if (diff < 30000) return '刚刚更新'
+  if (diff < 60000) return `${Math.floor(diff / 1000)}秒前`
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  return lastRefreshTime.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+})
 
 // ── 分页状态 ─────────────────────────────────────────────────────────
 const PAGE_SIZE  = 50
@@ -240,7 +268,10 @@ function closeModal() {
 async function fetchNews(quiet = false) {
   if (!quiet) loading.value = true
   try {
-    const res = await fetch('/api/v1/news/flash')
+    // 强制刷新时加时间戳参数绕过浏览器缓存
+    const ts = Date.now()
+    const url = `/api/v1/news/flash?_t=${ts}`
+    const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
     const incoming = data.news || []
@@ -257,7 +288,8 @@ async function fetchNews(quiet = false) {
     if (newItems.length) {
       items.value = [...newItems, ...items.value].slice(0, 200)
     }
-    total.value = incoming.length   // 使用 API 返回的 total 计数
+    total.value = incoming.length
+    lastRefreshTime.value = Date.now()
     currentPage.value = 1
     if (listEl.value) listEl.value.scrollTop = 0
   } catch (e) {
@@ -265,6 +297,10 @@ async function fetchNews(quiet = false) {
   } finally {
     if (!quiet) loading.value = false
   }
+}
+
+async function manualRefresh() {
+  await fetchNews(false)
 }
 
 function startAutoRefresh() {

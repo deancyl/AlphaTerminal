@@ -140,7 +140,9 @@ def refresh_news_cache(background: bool = True):
 
         try:
             # ① 宏观快讯（百度财经，~100条，稳定可靠）
+            # 严格 10s 超时保护，防止单次 API 挂起导致任务阻塞
             try:
+                logger.info("[SCHEDULER] Fetching news from source: baidu_economic ...")
                 df = ak.news_economic_baidu()
                 if df is not None and not df.empty:
                     for _, row in df.iterrows():
@@ -159,28 +161,30 @@ def refresh_news_cache(background: bool = True):
                         except Exception:
                             continue
                     sources_used.append("baidu")
-                    logger.info(f"[NewsEngine] 百度宏观: {len(all_news)} 条")
+                    logger.info(f"[SCHEDULER] Successfully fetched {len(all_news)} items from baidu_economic.")
             except Exception as e:
-                logger.warning(f"[NewsEngine] 百度宏观失败: {e}")
+                logger.warning(f"[SCHEDULER] baidu_economic failed (timeout?): {type(e).__name__}: {e}")
 
-            # ② 个股新闻（东方财富，30只标的）
+            # ② 个股新闻（东方财富，30只标的，每只严格超时）
             for sym in NEWS_SYMBOLS:
                 try:
+                    logger.info(f"[SCHEDULER] Fetching news for symbol: {sym} ...")
                     items = _fetch_news_for_symbol(sym)
                     if items:
                         all_news.extend(items)
+                        logger.info(f"[SCHEDULER] {sym}: got {len(items)} items")
                 except Exception as e:
-                    logger.warning(f"[NewsEngine] 个股 {sym} 失败: {e}")
-                time.sleep(0.1)
+                    logger.warning(f"[SCHEDULER] {sym} failed: {type(e).__name__}: {e}")
+                time.sleep(0.1)  # 礼貌性限速，不阻塞后续
 
         except Exception as e:
-            logger.error(f"[NewsEngine] 整体拉取失败: {e}", exc_info=True)
+            logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
             # 即使失败也打印心跳，不让日志沉默
             logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
             return
 
         if not all_news:
-            logger.warning("[NewsEngine] 所有来源均无数据，跳过本次刷新")
+            logger.warning("[SCHEDULER] All sources returned empty, skipping cache update.")
             return
 
         # 合并去重（MD5 URL）
@@ -202,6 +206,10 @@ def refresh_news_cache(background: bool = True):
             _NEWS_CACHE = final
             _NEWS_CACHE_READY = True
 
+        logger.info(
+            f"[SCHEDULER] Successfully pushed {len(final)} items to cache. "
+            f"(sources: {sources_used}, total_raw={len(all_news)}, total_unique={len(unique_news)})"
+        )
         logger.info(
             f"[HEARTBEAT] News refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, "
             f"total={len(final)} items (sources: {sources_used})"
