@@ -102,6 +102,17 @@ def init_tables():
         );
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_symbol_date ON market_data_daily(symbol, date);")
+    # Phase 9: periodic 表
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS market_data_periodic (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL, date TEXT NOT NULL, period TEXT NOT NULL,
+            open REAL, high REAL, low REAL, close REAL,
+            volume REAL, change_pct REAL, timestamp INTEGER NOT NULL,
+            UNIQUE(symbol, date, period)
+        );
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_date ON market_data_periodic(symbol, date, period);")
     conn.commit()
 
 
@@ -159,6 +170,44 @@ def buffer_insert_daily(rows: list[dict]):
               r["timestamp"], r.get("data_type", "daily")))
     conn.commit()
     logger.info(f"[DB] 日K线写入 {len(rows)} 条")
+
+
+def buffer_insert_periodic(rows: list[dict], period: str):
+    """写入周K或月K数据"""
+    if not rows: return
+    conn = _get_conn()
+    for r in rows:
+        conn.execute("""
+            INSERT INTO market_data_periodic
+                (symbol, date, period, open, high, low, close, volume, change_pct, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, date, period) DO UPDATE SET
+                open=excluded.open, high=excluded.high, low=excluded.low,
+                close=excluded.close, volume=excluded.volume,
+                change_pct=excluded.change_pct, timestamp=excluded.timestamp;
+        """, (r["symbol"], r["date"], period,
+              r["open"], r["high"], r["low"], r["close"],
+              r["volume"], r["change_pct"], r["timestamp"]))
+    conn.commit()
+    logger.info(f"[DB] {period}写入 {len(rows)} 条")
+
+
+def get_periodic_history(symbol: str, period: str, limit: int = 200) -> list[dict]:
+    """查询周K/月K历史"""
+    conn = _get_conn()
+    rows = conn.execute("""
+        SELECT symbol, date, period, open, high, low, close, volume, change_pct, timestamp
+        FROM market_data_periodic
+        WHERE symbol = ? AND period = ?
+        ORDER BY timestamp DESC LIMIT ?;
+    """, (symbol, period, limit)).fetchall()
+    rows = list(reversed(rows))
+    return [
+        {"symbol": r[0], "date": r[1], "period": r[2],
+         "open": r[3], "high": r[4], "low": r[5], "close": r[6],
+         "volume": r[7], "change_pct": r[8], "timestamp": r[9]}
+        for r in rows
+    ]
 
 
 
