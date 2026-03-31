@@ -1,12 +1,13 @@
 """
-市场情绪路由 v3 - Phase 3
-涨跌分布直方图 + 全市场个股透视（基于 Sina HQ 50只重点股）
+市场情绪路由 v4 - Phase 4
+涨跌分布直方图 + 全市场个股透视（基于 Sina HQ）+ 快讯情感联动
 """
 import logging
 from fastapi import APIRouter, Query
 from app.services.sentiment_engine import (
     get_histogram, query_stocks, is_spot_ready,
     get_last_news_time, trigger_spot_fetch, trigger_news_fetch,
+    get_news_sentiment,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,8 +33,33 @@ async def market_sentiment():
 
 @router.get("/market/sentiment/histogram")
 async def sentiment_histogram():
-    """涨跌分布直方图（11桶，基于 Sina HQ 50只重点股）"""
-    return get_histogram()
+    """
+    涨跌分布直方图（11桶，基于 Sina HQ 50只重点股）
+    Phase 4: 附带最新快讯情感分析结果
+    """
+    h = get_histogram()
+    ns = get_news_sentiment()
+    return {
+        **h,
+        "news_sentiment": {
+            "score":  ns.get("score", 0.0),
+            "label":  ns.get("label", "中性"),
+            "bullish_count": ns.get("bullish_count", 0),
+            "bearish_count": ns.get("bearish_count", 0),
+            "total_count":  ns.get("total_count", 0),
+            "keywords":     ns.get("keywords", []),
+            "timestamp":    ns.get("timestamp", ""),
+        }
+    }
+
+
+@router.get("/market/sentiment/news")
+async def news_sentiment():
+    """
+    Phase 4: 快讯情感分析结果
+    当 force_refresh 抓取新资讯时，同步更新此数据
+    """
+    return get_news_sentiment()
 
 
 @router.get("/market/stocks")
