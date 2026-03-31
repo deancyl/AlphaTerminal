@@ -1,10 +1,9 @@
 """
-资讯流接口 - Phase 4
+资讯流接口 - Phase 5
+API 只读全局缓存，后台线程负责刷新（<50ms 响应）
 """
 import logging
-import re
 from fastapi import APIRouter, Query
-from app.services.news_engine import fetch_latest_news, get_mock_news
 
 logger = logging.getLogger(__name__)
 
@@ -13,24 +12,29 @@ router = APIRouter()
 
 @router.get("/news/flash")
 async def news_flash():
-    """快讯瀑布流（真实数据 + MD5 URL 去重）"""
-    try:
-        news = fetch_latest_news(limit=150)
-        if not news:
-            logger.warning("[News] 真实数据为空，降级至 Mock")
-            return {"news": get_mock_news(), "source": "mock", "total": len(get_mock_news())}
-        logger.info(f"[News] 返回 {len(news)} 条新闻")
-        return {"news": news, "source": "engine", "total": len(news)}
-    except Exception as e:
-        logger.error(f"[News] news_flash 失败: {type(e).__name__}: {e}", exc_info=True)
-        return {"news": get_mock_news(), "source": "mock", "total": len(get_mock_news())}
+    """
+    快讯瀑布流（只读缓存，后台刷新线程维护）
+    响应时间 < 50ms
+    """
+    from app.services.news_engine import get_cached_news, is_cache_ready, get_mock_news
+
+    if not is_cache_ready():
+        logger.warning("[News] 缓存未就绪，降级至 Mock")
+        news = get_mock_news()
+        return {"news": news, "source": "mock", "total": len(news)}
+
+    news = get_cached_news(limit=150)
+    if not news:
+        logger.warning("[News] 缓存为空，降级至 Mock")
+        return {"news": get_mock_news(), "source": "mock", "total": 0}
+
+    return {"news": news, "source": "cache", "total": len(news)}
 
 
 @router.get("/news/detail")
 async def news_detail(url: str = Query(..., description="新闻原文 URL")):
     """
     抓取新闻原文正文（纯文本，剥离图片/脚本/样式）
-    仅支持白名单域名，防 SSRF
     """
     try:
         import requests
@@ -60,25 +64,23 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
         paragraphs = []
         for p in soup.find_all("p"):
             text = p.get_text(separator=" ", strip=True)
-            if len(text) > 20:  # 过滤过短噪声
+            if len(text) > 20:
                 paragraphs.append(text)
 
         content = "\n\n".join(paragraphs)
 
         if len(content) < 100:
-            # 降级：取 <article> 或 class~=content 的 div
-            article = soup.find("article") or soup.find("div", class_=re.compile("content|article", re.I))
+            article = soup.find("article") or soup.find(
+                "div", class_=lambda c: c and ("content" in c or "article" in c) if c else False
+            )
             if article:
                 content = article.get_text(separator="\n", strip=True)
 
         if len(content) < 50:
-            return {
-                "content": "原文解析失败（页面结构不支持自动提取），请点击链接查看网页。",
-                "url": url,
-            }
+            return {"content": "原文解析失败（页面结构不支持自动提取），请点击链接查看网页。", "url": url}
 
         logger.info(f"[News] 成功抓取 {url}，提取 {len(content)} 字符")
-        return {"content": content[:8000], "url": url}   # 上限 8000 字
+        return {"content": content[:8000], "url": url}
 
     except Exception as e:
         logger.error(f"[News] news_detail 失败: {type(e).__name__}: {e}", exc_info=True)
@@ -87,10 +89,6 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
 
 @router.get("/news/transcript/{video_id}")
 async def video_transcript(video_id: str):
-    """
-    YouTube 字幕（走代理）
-    若返回 400 表示代理被封，需用户配置可用住宅代理
-    """
+    """YouTube 字幕（走代理）"""
     from app.services.news_fetcher import fetch_youtube_transcript
-    result = fetch_youtube_transcript(video_id)
-    return result
+    return fetch_youtube_transcript(video_id)

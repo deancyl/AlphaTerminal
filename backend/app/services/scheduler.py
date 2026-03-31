@@ -34,11 +34,11 @@ def backfill_daily_history():
 
 
 def prefetch_news():
-    """启动时预热：拉取 150 条新闻填充去重缓存池"""
-    from app.services.news_engine import fetch_latest_news
+    """启动时预热：后台刷新新闻缓存池"""
+    from app.services.news_engine import refresh_news_cache
     try:
-        news = fetch_latest_news(limit=150)
-        logger.info(f"[Scheduler] 新闻预热完成: {len(news)} 条")
+        refresh_news_cache(background=True)
+        logger.info("[Scheduler] 新闻缓存预热任务已触发（后台运行）")
     except Exception as e:
         logger.error(f"[Scheduler] 新闻预热失败: {e}", exc_info=True)
 
@@ -68,17 +68,17 @@ def start_scheduler():
     )
     logger.info("[Scheduler] 数据拉取任务已注册（每3分钟）")
 
-    # 每 20 分钟刷新一次新闻池
-    from app.services.news_engine import fetch_latest_news
+    # 每 20 分钟刷新一次新闻池（后台线程，不阻塞 API）
+    from app.services.news_engine import refresh_news_cache
     scheduler.add_job(
-        lambda: fetch_latest_news(limit=150),
+        lambda: refresh_news_cache(background=True),
         "interval",
         seconds=20 * 60,
         id="news_refresh",
         name="NewsRefresh",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 新闻刷新任务已注册（每20分钟）")
+    logger.info("[Scheduler] 新闻刷新任务已注册（每20分钟，后台）")
 
     # 每 10 秒将缓冲写入主表
     scheduler.add_job(
