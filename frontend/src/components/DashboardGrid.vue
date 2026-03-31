@@ -75,21 +75,45 @@
     <div class="grid-stack-item"
          gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-3">
-        <div class="text-xs text-terminal-dim mb-1">🌐 市场风向标</div>
-        <table class="w-full text-xs">
-          <tbody>
-            <tr v-for="(item, key) in windItems" :key="key"
-                class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
-                @click="handleWindClick({ symbol: key, name: item.name })">
-              <td class="py-1 text-gray-300">{{ item.name }}</td>
-              <td class="py-1 text-right font-mono">{{ formatPrice(item.index) }}</td>
-              <td class="py-1 text-right font-mono"
-                  :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-                {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Phase 5: 8个风向标（4指数 + 4宏观）终端风格 -->
+        <div class="text-[10px] text-terminal-dim mb-1.5 flex items-center justify-between">
+          <span>🌐 市场风向标</span>
+          <span class="text-[9px] opacity-60">8标的</span>
+        </div>
+        <!-- 表头 -->
+        <div class="grid grid-cols-3 gap-0 text-[9px] text-terminal-dim border-b border-gray-800 pb-1 mb-1">
+          <span>标的</span>
+          <span class="text-right">最新价</span>
+          <span class="text-right">涨跌幅</span>
+        </div>
+        <!-- 数据行 -->
+        <div class="overflow-y-auto" style="max-height: 160px;">
+          <div
+            v-for="item in windItems" :key="item.symbol"
+            class="grid grid-cols-3 gap-0 items-center border-b border-gray-800/50 hover:bg-white/5 cursor-pointer transition-colors text-[11px] font-mono py-px"
+            @click="handleWindClick(item)"
+          >
+            <!-- 标的名称（分类标签） -->
+            <div class="flex items-center gap-1">
+              <span
+                class="text-[8px] px-0.5 rounded border"
+                :class="item.category === 'macro' ? 'border-amber-500/40 text-amber-400' : 'border-cyan-500/40 text-cyan-400'"
+              >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
+              <span class="text-gray-200 truncate" :title="item.name">{{ item.name }}</span>
+            </div>
+            <!-- 最新价 -->
+            <div class="text-right text-gray-100 truncate pl-1">
+              {{ item.category === 'macro' ? formatMacroPrice(item) : formatPrice(item.price) }}
+            </div>
+            <!-- 涨跌幅 -->
+            <div
+              class="text-right font-mono pl-1"
+              :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+            >
+              {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -162,6 +186,7 @@ const { currentSymbol, currentSymbolName, currentColor, setSymbol } = useMarketS
 
 const props = defineProps({
   marketData:   { type: Object, default: null },
+  macroData:    { type: Array,  default: () => [] },  // Phase 5: USD/CNH · GOLD · WTI · VIX
   ratesData:    { type: Array,  default: () => [] },
   globalData:   { type: Array,  default: () => [] },
   chinaAllData: { type: Array,  default: () => [] },
@@ -248,13 +273,46 @@ function toggleIndicator(k) {
 const timestamp = computed(() => props.marketData?.timestamp || '')
 const tsDisplay  = computed(() => timestamp.value.slice(11, 19) || '')
 
-const windItems = computed(() => props.marketData?.wind || {})
+// Phase 5: 合并4大指数 + 4大宏观 = 8个风向标
+const windItems = computed(() => {
+  const indices = props.marketData?.wind || {}
+  const macros  = props.macroData  || []
+
+  // 指数行（保留原有结构）
+  const indexRows = Object.entries(indices).map(([sym, item]) => ({
+    symbol:     sym,
+    name:       item.name,
+    price:      item.index,
+    change_pct: item.change_pct,
+    status:     item.status,
+    category:   'index',   // 指数
+  }))
+
+  // 宏观行（USD/CNH · 黄金 · WTI · VIX）
+  const macroRows = macros.map(m => ({
+    symbol:     m.name,      // 展示用名称作 key
+    name:       m.name,
+    price:      m.price,
+    change_pct: m.change_pct,
+    unit:       m.unit || '',
+    status:     m.timestamp || '',
+    category:   'macro',    // 宏观大宗
+  }))
+
+  return [...indexRows, ...macroRows]
+})
 const globalItems = computed(() => props.globalData || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
 
 function formatPrice(v) {
   if (v == null || isNaN(v)) return '--'
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
+}
+
+// Phase 5: 格式化宏观价格（带单位）
+function formatMacroPrice(item) {
+  const p = formatPrice(item.price)
+  return item.unit ? `${p} ${item.unit}` : p
 }
 
 // ── GridStack 锁定 ─────────────────────────────────────────────

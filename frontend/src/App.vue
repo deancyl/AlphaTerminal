@@ -1,8 +1,15 @@
 <template>
   <div class="flex h-screen bg-terminal-bg overflow-hidden">
 
+    <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
+    <Sidebar
+      :is-open="isSidebarOpen"
+      :active-id="currentView"
+      @navigate="handleSidebarNavigate"
+      @close="isSidebarOpen = false"
+    />
+
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 动态宽度：Copilot 收起时占 100%，展开时自适应缩减 -->
     <main
       class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
       :style="{ width: isCopilotOpen ? 'calc(100% - 340px)' : '100%' }"
@@ -10,6 +17,14 @@
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-terminal-panel/80 shrink-0">
         <div class="flex items-center gap-3">
+          <!-- ☰ 侧边栏展开按钮 -->
+          <button
+            class="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-terminal-accent transition-colors text-lg"
+            @click="isSidebarOpen = !isSidebarOpen"
+            title="切换侧边栏"
+          >
+            ☰
+          </button>
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
           <span class="text-terminal-dim text-xs">Phase 7 · 全球市场 · K线</span>
         </div>
@@ -42,10 +57,13 @@
         </div>
       </header>
 
-      <!-- Dashboard 网格区域 -->
+      <!-- 主视图区域（Phase 5 视图切换） -->
       <div class="flex-1 overflow-auto p-4">
+        <!-- 股票行情（默认） -->
         <DashboardGrid
+          v-if="currentView === 'stock'"
           :market-data="marketOverview"
+          :macro-data="macroData"
           :rates-data="ratesData"
           :global-data="globalData"
           :china-all-data="chinaAllData"
@@ -54,11 +72,14 @@
           :is-locked="isLocked"
           @toggle-lock="toggleLock"
         />
+        <!-- 债券行情 -->
+        <BondDashboard v-else-if="currentView === 'bond'" />
+        <!-- 期货行情 -->
+        <FuturesDashboard v-else-if="currentView === 'futures'" />
       </div>
     </main>
 
-    <!-- ━━━ Task 2: 右侧 Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- v-show：收起时 DOM 保留（状态不变），仅视觉隐藏 + 宽度为 0 -->
+    <!-- ━━━ 右侧 Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <aside
       v-show="isCopilotOpen"
       class="flex-shrink-0 flex flex-col bg-terminal-panel border-l border-gray-800 transition-all duration-300 ease-in-out overflow-hidden"
@@ -80,8 +101,19 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import Sidebar       from './components/Sidebar.vue'
+import DashboardGrid from './components/DashboardGrid.vue'
+import BondDashboard  from './components/BondDashboard.vue'
+import FuturesDashboard from './components/FuturesDashboard.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
-import DashboardGrid  from './components/DashboardGrid.vue'
+
+// Phase 5: 侧边栏与视图切换状态
+const isSidebarOpen = ref(false)   // 侧边栏默认收起
+const currentView   = ref('stock') // 默认视图：stock / bond / futures
+
+function handleSidebarNavigate(viewId) {
+  currentView.value = viewId
+}
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const isLocked = ref(true)     // 网格默认锁定
@@ -95,6 +127,7 @@ function toggleCopilot() {
 }
 
 const marketOverview  = ref(null)
+const macroData      = ref([])   // Phase 5: USD/CNH · 黄金 · WTI · VIX
 const ratesData       = ref([])
 const newsData        = ref([])
 const globalData      = ref([])
@@ -112,8 +145,9 @@ function updateClock() {
 
 async function fetchMarketData() {
   try {
-    const [ov, rt, nv, gl, ca, sc, dr] = await Promise.all([
+    const [ov, mc, rt, nv, gl, ca, sc, dr] = await Promise.all([
       fetch('/api/v1/market/overview').then(r => r.ok ? r.json() : null),
+      fetch('/api/v1/market/macro').then(r => r.ok ? r.json().then(d => d.macro || []) : []),
       fetch('/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
       fetch('/api/v1/news/flash').then(r => r.ok ? r.json().then(d => d.news || []) : []),
       fetch('/api/v1/market/global').then(r => r.ok ? r.json().then(d => d.global || []) : []),
@@ -122,6 +156,7 @@ async function fetchMarketData() {
       fetch('/api/v1/market/derivatives').then(r => r.ok ? r.json().then(d => d.derivatives || []) : []),
     ])
     marketOverview.value  = ov
+    macroData.value       = mc
     ratesData.value       = rt
     newsData.value        = nv
     globalData.value      = gl
