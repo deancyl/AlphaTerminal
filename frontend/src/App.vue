@@ -2,9 +2,13 @@
   <div class="flex h-screen bg-terminal-bg overflow-hidden">
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <main class="flex-1 flex flex-col overflow-hidden">
+    <!-- 动态宽度：Copilot 收起时占 100%，展开时自适应缩减 -->
+    <main
+      class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+      :style="{ width: isCopilotOpen ? 'calc(100% - 340px)' : '100%' }"
+    >
       <!-- 顶部状态栏 -->
-      <header class="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-terminal-panel/80">
+      <header class="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-terminal-panel/80 shrink-0">
         <div class="flex items-center gap-3">
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
           <span class="text-terminal-dim text-xs">Phase 7 · 全球市场 · K线</span>
@@ -14,6 +18,14 @@
           <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
             ● LIVE
           </span>
+          <!-- Task 2: Copilot 唤醒按钮 -->
+          <button
+            class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs"
+            @click="toggleCopilot"
+          >
+            <span v-if="isCopilotOpen">🤖 AI</span>
+            <span v-else">☰ 展开</span>
+          </button>
         </div>
       </header>
 
@@ -30,8 +42,13 @@
       </div>
     </main>
 
-    <!-- ━━━ 右侧边栏：AI Copilot（Task 5: 吸附右侧）━━━━━━━━━━ -->
-    <aside class="w-[340px] flex-shrink-0 flex flex-col bg-terminal-panel border-l border-gray-800">
+    <!-- ━━━ Task 2: 右侧 Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- v-show：收起时 DOM 保留（状态不变），仅视觉隐藏 + 宽度为 0 -->
+    <aside
+      v-show="isCopilotOpen"
+      class="flex-shrink-0 flex flex-col bg-terminal-panel border-l border-gray-800 transition-all duration-300 ease-in-out overflow-hidden"
+      style="width: 340px; max-width: 340px;"
+    >
       <CopilotSidebar
         :market-overview="marketOverview"
         :global-data="globalData"
@@ -50,6 +67,12 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import DashboardGrid  from './components/DashboardGrid.vue'
+
+const isCopilotOpen = ref(true)  // Task 2: 默认展开
+
+function toggleCopilot() {
+  isCopilotOpen.value = !isCopilotOpen.value
+}
 
 const marketOverview  = ref(null)
 const ratesData       = ref([])
@@ -90,11 +113,21 @@ async function fetchMarketData() {
   }
 }
 
+// 每 30 秒静默刷新（不影响用户操作）
+let refreshTimer = null
+function startRefresh() {
+  refreshTimer = setInterval(fetchMarketData, 30_000)
+}
+
 onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
   fetchMarketData()
+  startRefresh()
 })
 
-onUnmounted(() => clearInterval(clockTimer))
+onUnmounted(() => {
+  clearInterval(clockTimer)
+  clearInterval(refreshTimer)
+})
 </script>

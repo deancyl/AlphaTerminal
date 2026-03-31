@@ -95,6 +95,32 @@ def start_scheduler():
     )
     logger.info("[Scheduler] 新闻刷新任务已注册（每20分钟，多源）")
 
+    # Task 1: 每 5 分钟刷新行业板块缓存（后台 akshare，绝不在 API 线程调用）
+    def _sectors_job():
+        from app.services.sectors_cache import fetch_and_cache_sectors
+        try:
+            fetch_and_cache_sectors()
+            logger.info("[Scheduler] 行业板块缓存已更新")
+        except Exception as e:
+            logger.error(f"[Scheduler] 行业板块刷新失败: {e}", exc_info=True)
+
+    scheduler.add_job(
+        _sectors_job,
+        "interval",
+        seconds=300,
+        id="sectors_refresh",
+        name="SectorsRefresh",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 行业板块刷新任务已注册（每5分钟，后台akshae）")
+
+    # 启动时立即触发一次板块缓存（不阻塞主线程）
+    def _startup_sectors():
+        import time; time.sleep(3)
+        _sectors_job()
+        logger.info("[Scheduler] 启动时行业板块缓存已触发")
+    threading.Thread(target=_startup_sectors, daemon=True).start()
+
     # 每 10 秒将缓冲写入主表
     scheduler.add_job(
         flush_write_buffer,
