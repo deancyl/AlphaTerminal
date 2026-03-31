@@ -40,29 +40,17 @@ const DOWN = '#14b143'   // 跌（收 < 开）
 // 数据清洗：保留全部原始字段，修复 high<low 问题
 // ─────────────────────────────────────────────────────────────────
 function _sanitize(raw) {
+  // 金融数据神圣不可侵犯：前端只做类型转换，不修改任何数值
   if (!Array.isArray(raw) || !raw.length) return []
-  return raw.map(r => {
-    let o = Number(r.open)  || 0
-    let c = Number(r.close) || 0
-    let h = Number(r.high) || 0
-    let l = Number(r.low)  || 0
-    // 防御性修正 high/low 颠倒
-    if (h < l) { const t = h; h = l; l = t }
-    // 过滤全零行
-    if (o <= 0 || c <= 0 || h <= 0 || l <= 0) return null
-    // 确保 high 包含 open/close，low 包含 open/close
-    h = Math.max(h, o, c)
-    l = Math.min(l, o, c)
-    return {
-      date:   r.date   || String(r.timestamp || ''),
-      open:   o,
-      close:  c,
-      high:   h,
-      low:    l,
-      volume: Number(r.volume) || 0,
-      change_pct: Number(r.change_pct) || 0,
-    }
-  }).filter(Boolean)
+  return raw.map(r => ({
+    date:       r.date   || String(r.timestamp || ''),
+    open:       Number(r.open)  || 0,
+    close:      Number(r.close) || 0,
+    high:       Number(r.high)  || 0,
+    low:        Number(r.low)   || 0,
+    volume:     Number(r.volume) || 0,
+    change_pct: Number(r.change_pct) || 0,
+  }))
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -476,6 +464,7 @@ async function fetchAndRender() {
     const hist    = _sanitize(data.history || [])
     console.info(`[KLine] ${props.url} chartType=${chartType} hist=${hist.length} first={O:${hist[0]?.open} C:${hist[0]?.close}}`)
     if (!chartInstance) chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    chartInstance.clear()
     chartInstance.setOption(buildOption(hist, props.indicators || [], chartType), { notMerge: true })
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
