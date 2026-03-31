@@ -179,11 +179,32 @@ function buildKLineOption(hist, activeIndicators) {
   // ── series[0]: K线烛台 ────────────────────────────────────────
   const kSeries = {
     name: 'K线', type: 'candlestick',
-    data: hist.map(h => [h.open, h.close, h.low, h.high]),
+    // ECharts candlestick: [open, close, lowest, highest]
+    data: hist.map(h => [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]),
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: {
       color:     UP,   color0:     DOWN,
       borderColor:     UP,   borderColor0:     DOWN,
+    },
+    // Task 2: Y轴最新价虚线标尺
+    markLine: {
+      silent: true,
+      symbol: 'none',
+      lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' },
+      data: [
+        {
+          yAxis: hist[hist.length - 1]?.close,
+          label: {
+            position: 'insideEndTop',
+            formatter: () => hist[hist.length - 1]?.close?.toFixed(2),
+            backgroundColor: '#fbbf24',
+            color: '#000',
+            fontSize: 10,
+            padding: [2, 4],
+            borderRadius: 2,
+          },
+        },
+      ],
     },
   }
 
@@ -306,8 +327,14 @@ function buildKLineOption(hist, activeIndicators) {
     backgroundColor: 'transparent',
     grid, xAxis, yAxis, series,
     tooltip: {
-      trigger: 'axis', type: 'cross', axisPointer: { lineStyle: { color: '#374151' } },
-      backgroundColor: '#1a1e2e', borderColor: '#374151', textStyle: { color: '#9ca3af', fontSize: 11 },
+      trigger: 'axis', type: 'cross',
+      axisPointer: {
+        type: 'cross',
+        lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' },
+        crossStyle: { color: '#9ca3af', width: 1 },
+      },
+      backgroundColor: 'rgba(26,30,46,0.96)', borderColor: '#4b5563',
+      textStyle: { color: '#9ca3af', fontSize: 11 },
       formatter(params) {
         const kp = params.find(p => p.seriesName === 'K线')
         if (!kp) return ''
