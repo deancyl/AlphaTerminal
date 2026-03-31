@@ -125,42 +125,67 @@ def _fetch_7x24_news() -> list[dict]:
 
 def refresh_news_cache(background: bool = True):
     """
-    刷新全局新闻缓存池（后台线程调用，或启动时一次性填充）
+    刷新全局新闻缓存池（后台线程调用）
     策略：
-      1. 30 只个股新闻（东方财富 eastmoney）
-      2. 7×24 快讯兜底（AkShare 宏观资讯，一次 100+ 条）
-    两个来源合并去重，确保 >150 条
+      1. 宏观快讯：news_economic_baidu（百度财经，~100条，保证基础量）
+      2. 个股新闻：akshare stock_news_em（东方财富，30只）
+      两个来源合并去重，确保 >150 条
     """
     global _NEWS_CACHE, _NEWS_CACHE_READY
 
     def _do_fetch():
         global _NEWS_CACHE, _NEWS_CACHE_READY
         all_news: list[dict] = []
+        sources_used = []
 
         try:
-            # ① 个股新闻（30 标的，限速）
+            # ① 宏观快讯（百度财经，~100条，稳定可靠）
+            try:
+                df = ak.news_economic_baidu()
+                if df is not None and not df.empty:
+                    for _, row in df.iterrows():
+                        try:
+                            url    = str(row.get("新闻链接", "") or "")
+                            title  = str(row.get("新闻标题", "") or "")
+                            time_  = str(row.get("发布时间", "") or "")[:16]
+                            source = str(row.get("来源", "百度财经") or "百度财经")
+                            if title and url and len(title) > 10:
+                                all_news.append({
+                                    "title":  title.strip(),
+                                    "time":   time_,
+                                    "source": source,
+                                    "url":    url,
+                                })
+                        except Exception:
+                            continue
+                    sources_used.append("baidu")
+                    logger.info(f"[NewsEngine] 百度宏观: {len(all_news)} 条")
+            except Exception as e:
+                logger.warning(f"[NewsEngine] 百度宏观失败: {e}")
+
+            # ② 个股新闻（东方财富，30只标的）
             for sym in NEWS_SYMBOLS:
                 try:
                     items = _fetch_news_for_symbol(sym)
-                    all_news.extend(items)
+                    if items:
+                        all_news.extend(items)
                 except Exception as e:
                     logger.warning(f"[NewsEngine] 个股 {sym} 失败: {e}")
                 time.sleep(0.1)
 
-            # ② 7×24 快讯兜底
-            try:
-                items_7x24 = _fetch_7x24_news()
-                all_news.extend(items_7x24)
-            except Exception as e:
-                logger.warning(f"[NewsEngine] 7x24 失败: {e}")
-
         except Exception as e:
             logger.error(f"[NewsEngine] 整体拉取失败: {e}", exc_info=True)
+            # 即使失败也打印心跳，不让日志沉默
+            logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
+            return
+
+        if not all_news:
+            logger.warning("[NewsEngine] 所有来源均无数据，跳过本次刷新")
             return
 
         # 合并去重（MD5 URL）
-        unique_news: list[dict] = []
-        seen: set[str] = set()
+        seen = set()
+        unique_news = []
         for item in all_news:
             h = _url_md5(item["url"])
             if h not in seen:
@@ -173,16 +198,13 @@ def refresh_news_cache(background: bool = True):
         unique_news.sort(key=lambda x: x.get("time", ""), reverse=True)
         final = unique_news[:200]
 
-        # 更新全局缓存
         with _CACHE_LOCK:
             _NEWS_CACHE = final
             _NEWS_CACHE_READY = True
 
-        logger.info(f"[NewsEngine] 缓存刷新完成: 共 {len(final)} 条")
-
         logger.info(
-            f"[HEARTBEAT] News pool refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, "
-            f"total={len(final)} items"
+            f"[HEARTBEAT] News refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}, "
+            f"total={len(final)} items (sources: {sources_used})"
         )
 
     if background:

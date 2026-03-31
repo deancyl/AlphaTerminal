@@ -1,37 +1,43 @@
 """
-市场情绪引擎 v5 - Phase 3
-数据源：Sina HQ (qt.gtimg.cn) 批量接口 + AkShare 备用
-- Stocks 表：50只重点股票（Sina HQ）
-- Histogram：基于 Sina HQ 数据的 11 桶涨跌分布
-- 绝不依赖被封的 Sina / Eastmoney 个股接口
+市场情绪引擎 v6 - Phase 3 稳定版
+策略：启动即填充 china_all + 后台 Sina HQ 增量刷新
 """
 import logging
 import threading
-import time as time_module
 from datetime import datetime
-from typing import Optional
 
-import akshare as ak
 import numpy as np
-
-from app.services.sina_hq_fetcher import fetch_hq_batch, build_histogram_from_rows, FOCUS_STOCKS
 
 logger = logging.getLogger(__name__)
 
 # ── 全局缓存 ────────────────────────────────────────────────────
 class SpotCache:
-    _stocks  = []    # list[dict]  实时股票数据
-    _ready   = False
-    _lock    = threading.Lock()
-    _ts      = ""
+    _stocks = []
+    _ready  = False
+    _lock   = threading.Lock()
+    _ts     = ""
+
+    BUCKET_THRESHOLDS = [
+        ("跌停",      -1e9,  -9.9),
+        ("<-7%",     -9.9,   -7.0),
+        ("-7%~-5%",  -7.0,   -5.0),
+        ("-5%~-2%",  -5.0,   -2.0),
+        ("-2%~0%",   -2.0,    0.0),
+        ("平盘(0%)",   0.0,    0.0),
+        ("0%~2%",     0.0,    2.0),
+        ("2%~5%",     2.0,    5.0),
+        ("5%~7%",     5.0,    7.0),
+        (">7%",       7.0,    9.9),
+        ("涨停",       9.9,  1e9),
+    ]
 
     @classmethod
-    def update(cls, stocks, ts):
+    def update(cls, stocks, ts=""):
         with cls._lock:
             cls._stocks = stocks
-            cls._ts     = ts
-            cls._ready   = True
-        logger.info(f"[SpotCache] {len(stocks)} 只股票已缓存 @ {ts}")
+            cls._ts     = ts or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cls._ready  = True
+        logger.info(f"[SpotCache] {len(stocks)} 条已缓存 @ {cls._ts}")
 
     @classmethod
     def get_stocks(cls):
@@ -53,7 +59,7 @@ class SpotCache:
         if not stocks:
             return {"total": 0, "page": page, "pages": 0, "stocks": []}
 
-        COL_MAP = {
+        COL_KEYS = {
             "chg_pct":  lambda r: r["chg_pct"],
             "turnover":  lambda r: r["turnover"],
             "amount":    lambda r: r.get("volume", 0),
@@ -61,21 +67,17 @@ class SpotCache:
             "code":      lambda r: r["code"],
             "name":      lambda r: r["name"],
         }
-        key_fn = COL_MAP.get(sort_by, COL_MAP["chg_pct"])
+        key_fn = COL_KEYS.get(sort_by, COL_KEYS["chg_pct"])
         sorted_s = sorted(stocks, key=key_fn, reverse=not asc)
 
         total = len(sorted_s)
         pages = max(1, (total + page_size - 1) // page_size)
         page  = max(1, min(page, pages))
         start = (page - 1) * page_size
-        end   = start + page_size
-        page_stocks = sorted_s[start:end]
-
         result = []
-        seq = start + 1
-        for s in page_stocks:
+        for i, s in enumerate(sorted_s[start:start + page_size]):
             result.append({
-                "seq":      seq,
+                "seq":      start + i + 1,
                 "code":     s["code"],
                 "name":     s["name"],
                 "price":    s["price"],
@@ -83,18 +85,12 @@ class SpotCache:
                 "chg_pct":  s["chg_pct"],
                 "turnover": s["turnover"],
                 "volume":   s["volume"],
-                "amount":   s.get("volume", 0),
-                "market":   s["market"],
+                "market":   s.get("market", "SH"),
             })
-            seq += 1
-
         return {
-            "total":    total,
-            "page":     page,
-            "pages":    pages,
-            "sort_by":  sort_by,
-            "asc":      asc,
-            "stocks":   result,
+            "total": total, "page": page, "pages": pages,
+            "sort_by": sort_by, "asc": asc,
+            "stocks": result,
             "timestamp": cls.get_ts(),
         }
 
@@ -105,120 +101,195 @@ class SpotCache:
             return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
                     "unchanged": 0, "limit_up": 0, "limit_down": 0,
                     "up_ratio": 0.0, "timestamp": ""}
-        return build_histogram_from_rows(stocks)
+        pcts   = np.array([s["chg_pct"] for s in stocks], dtype=float)
+        total  = len(stocks)
+        advance   = int((pcts > 0).sum())
+        decline   = int((pcts < 0).sum())
+        unchanged = int((pcts == 0).sum())
+        limit_up   = int((pcts >= 9.9).sum())
+        limit_down = int((pcts <= -9.9).sum())
+        buckets = []
+        for label, lo, hi in cls.BUCKET_THRESHOLDS:
+            if label == "平盘(0%)":
+                count = int((pcts == 0.0).sum())
+            else:
+                count = int(((pcts > lo) & (pcts <= hi)).sum())
+            color = "#14b143" if lo < 0 else "#ef232a" if lo >= 0 else "#6b7280"
+            buckets.append({
+                "label": label, "count": count,
+                "pct":   round(count / total * 100, 2) if total > 0 else 0,
+                "color": color,
+            })
+        return {
+            "buckets": buckets, "total": total,
+            "advance": advance, "decline": decline, "unchanged": unchanged,
+            "limit_up": limit_up, "limit_down": limit_down,
+            "up_ratio": round(advance / total, 4) if total > 0 else 0,
+            "timestamp": cls.get_ts(),
+        }
 
 
-# ── 新闻多源轮询 ──────────────────────────────────────────────
+# ── 后台拉取（先立即同步填充，再后台刷新）─────────────────────
+def _immediate_fill():
+    """启动时同步：用 china_all 指数立即填充（秒级）"""
+    try:
+        from app.db import get_latest_prices
+        rows = get_latest_prices(["000001","000300","399001","399006","000688","000016","000905","000852","000510","399100"])
+        if not rows:
+            return
+        stocks = []
+        for r in rows:
+            pct = float(r.get("change_pct") or 0)
+            code = str(r.get("symbol") or "")
+            stocks.append({
+                "code":     code,
+                "name":     r.get("name", ""),
+                "price":    float(r.get("price") or 0),
+                "chg":      float(r.get("change_pct", 0) or 0) * float(r.get("price") or 0) / 100,
+                "chg_pct":  pct,
+                "turnover": 0.0,
+                "volume":   float(r.get("volume") or 0),
+                "market":   "SH" if code.startswith("000") else "SZ",
+                "timestamp": r.get("time", "") or "",
+            })
+        SpotCache.update(stocks, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        logger.info(f"[SpotCache] 立即填充: {len(stocks)} 条（来自 china_all）")
+    except Exception as e:
+        logger.error(f"[SpotCache] 立即填充失败: {e}", exc_info=True)
+
+
+def _bg_sina_refresh():
+    """后台：用 Sina HQ 抓取真实股票（Task 4: HS300 成分股最多100只）"""
+    try:
+        from app.services.sina_hq_fetcher import fetch_hq_batch, get_stock_pool
+        pool = get_stock_pool()
+        rows = fetch_hq_batch(pool)
+        if rows and len(rows) >= 5:
+            SpotCache.update(rows, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            logger.info(f"[HEARTBEAT] Spot cache (Sina HQ): {len(rows)} stocks from pool of {len(pool)}")
+        else:
+            logger.warning("[SpotCache] Sina HQ 返回不足，保留现有数据")
+    except Exception as e:
+        logger.error(f"[SpotCache] Sina HQ 失败: {type(e).__name__}: {e}")
+
+
+def trigger_spot_fetch():
+    t = threading.Thread(target=_bg_sina_refresh, daemon=True, name="spot-sina-fetch")
+    t.start()
+    logger.info("[SpotCache] 后台 Sina HQ 刷新已触发")
+
+
+# ── 新闻多源轮询（news_economic_baidu 主源）─────────────────────
 _NEWS_LAST_SUCCESS = None
 
-def _fetch_news_with_fallback():
-    """
-    主从备份新闻抓取（不阻塞 API）
-    1. 优先：AkShare stock_news_em (30只股票)
-    2. 兜底：AkShare news_economic_baidu (宏观快讯)
-    """
-    global _NEWS_LAST_SUCCESS
-    from app.services.news_engine import _NEWS_CACHE, _NEWS_CACHE_READY, _CACHE_LOCK
-
-    all_news = []
-    sources_used = []
-
-    # ① 主源：AkShare stock_news_em（东方财富，30只股票）
-    from app.services.news_engine import NEWS_SYMBOLS, _fetch_news_for_symbol, _tag_news, _url_md5
-    try:
-        for sym in NEWS_SYMBOLS:
-            try:
-                items = _fetch_news_for_symbol(sym)
-                all_news.extend(items)
-                time_module.sleep(0.1)
-            except Exception as e:
-                logger.warning(f"[News] {sym} 失败: {e}")
-        if all_news:
-            sources_used.append("akshare_news")
-    except Exception as e:
-        logger.warning(f"[News] 主源失败: {e}")
-
-    # ② 从源：AkShare news_economic_baidu（宏观快讯，兜底）
-    try:
-        df = ak.news_economic_baidu()
-        if df is not None and not df.empty:
-            from app.services.news_engine import get_mock_news as _gm
-            for _, row in df.iterrows():
-                try:
-                    url   = str(row.get("新闻链接", "") or "")
-                    title = str(row.get("新闻标题", "") or "")
-                    time_ = str(row.get("发布时间", "")[:16])
-                    src   = str(row.get("来源", "百度财经") or "百度财经")
-                    if title and url and url != "nan":
-                        all_news.append({
-                            "title": title.strip(),
-                            "time":  time_,
-                            "source": src,
-                            "url":   url,
-                        })
-                except Exception:
-                    continue
-            sources_used.append("baidu_economic")
-    except Exception as e:
-        logger.warning(f"[News] 百度宏观快讯失败: {e}")
-
-    if not all_news:
-        logger.warning("[News] 所有来源均失败，跳过本次刷新")
-        return
-
-    # 去重（MD5 URL）
-    seen = set()
-    unique = []
-    for item in all_news:
-        h = _url_md5(item["url"])
-        if h not in seen:
-            seen.add(h)
-            item["tag"] = _tag_news(item["title"], item["source"])
-            item["id"]   = h[:12]
-            unique.append(item)
-
-    unique.sort(key=lambda x: x.get("time", ""), reverse=True)
-    final = unique[:200]
-
-    with _CACHE_LOCK:
-        _NEWS_CACHE      = final
-        _NEWS_CACHE_READY = True
-
-    _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    logger.info(
-        f"[HEARTBEAT] News refreshed at {_NEWS_LAST_SUCCESS}, "
-        f"sources={sources_used}, total={len(final)} items"
-    )
-
-
-# ── 全量股票拉取 ──────────────────────────────────────────────
-def _fetch_spot_cache():
-    """使用 Sina HQ 批量接口拉取 50 只重点股票"""
-    try:
-        ts   = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        rows = fetch_hq_batch(FOCUS_STOCKS)
-        if rows:
-            SpotCache.update(rows, ts)
-            logger.info(f"[HEARTBEAT] Spot cache refreshed: {len(rows)} stocks at {ts}")
-        else:
-            logger.warning("[SpotCache] Sina HQ 返回空，保留旧缓存")
-    except Exception as e:
-        logger.error(f"[SpotCache] 拉取失败: {type(e).__name__}: {e}", exc_info=True)
-
-
-# ── 调度器用函数 ──────────────────────────────────────────────
-def trigger_spot_fetch():
-    t = threading.Thread(target=_fetch_spot_cache, daemon=True, name="spot-hq-fetch")
-    t.start()
-    logger.info("[SpotCache] 后台 Sina HQ 拉取已触发")
 
 def trigger_news_fetch():
-    t = threading.Thread(target=_fetch_news_with_fallback, daemon=True, name="news-multi-source")
+    t = threading.Thread(target=_do_news_fetch, daemon=True, name="news-multi-source")
     t.start()
     logger.info("[News] 多源新闻刷新已触发")
 
-def get_last_news_time() -> Optional[str]:
-    return _NEWS_LAST_SUCCESS
+
+def _do_news_fetch():
+    global _NEWS_LAST_SUCCESS
+    try:
+        from app.services.sina_hq_fetcher import FOCUS_STOCKS
+        import akshare as ak
+        import time as time_module
+
+        all_news = []
+        sources = []
+
+        # 主源：百度财经宏观快讯（稳定，~100条）
+        try:
+            df = ak.news_economic_baidu()
+            if df is not None and not df.empty:
+                for _, row in df.iterrows():
+                    try:
+                        url    = str(row.get("新闻链接", "") or "")
+                        title  = str(row.get("新闻标题", "") or "")
+                        time_  = str(row.get("发布时间", "") or "")[:16]
+                        source = str(row.get("来源", "百度财经") or "百度财经")
+                        if title and url and len(title) > 10:
+                            all_news.append({"title": title.strip(), "time": time_,
+                                             "source": source, "url": url})
+                    except Exception:
+                        continue
+                sources.append("baidu")
+        except Exception as e:
+            logger.warning(f"[News] 百度宏观失败: {e}")
+
+        # 从源：Sina 个股新闻（东方财富 stock_news_em）
+        try:
+            from app.services.sina_hq_fetcher import get_stock_pool
+            pool = get_stock_pool()
+            for sym in pool[:15]:  # 最多15只，防止抓取超时
+                try:
+                    df2 = ak.stock_news_em(symbol=sym)
+                    if df2 is not None and not df2.empty:
+                        for _, row in df2.iterrows():
+                            try:
+                                url    = str(row.get("新闻链接", "") or "")
+                                title  = str(row.get("新闻标题", "") or "")
+                                time_  = str(row.get("发布时间", "") or "")[:16]
+                                source2 = str(row.get("文章来源", "东方财富") or "东方财富")
+                                if title and url and len(title) > 5:
+                                    all_news.append({"title": title.strip(), "time": time_,
+                                                     "source": source2, "url": url})
+                            except Exception:
+                                continue
+                except Exception:
+                    pass
+                time_module.sleep(0.15)
+        except Exception as e:
+            logger.warning(f"[News] Sina 个股失败: {e}")
+
+        if not all_news:
+            logger.warning("[News] 所有来源无数据")
+            return
+
+        # 去重
+        seen = set()
+        unique = []
+        for item in all_news:
+            import hashlib
+            h = hashlib.md5(item["url"].encode()).hexdigest()
+            if h not in seen:
+                seen.add(h)
+                item["tag"] = _tag_news_fallback(item["title"], item["source"])
+                item["id"]  = h[:12]
+                unique.append(item)
+
+        unique.sort(key=lambda x: x.get("time", ""), reverse=True)
+        final = unique[:200]
+
+        from app.services.news_engine import _NEWS_CACHE, _NEWS_CACHE_READY, _CACHE_LOCK
+        with _CACHE_LOCK:
+            _NEWS_CACHE      = final
+            _NEWS_CACHE_READY = True
+
+        _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.info(f"[HEARTBEAT] News refreshed: {len(final)} items, sources={sources}")
+    except Exception as e:
+        logger.error(f"[News] 多源刷新失败: {type(e).__name__}: {e}", exc_info=True)
+
+
+def _tag_news_fallback(title, source):
+    t = title + source
+    if any(k in t for k in ["突发", "紧急", "暴跌", "大涨", "重磅", "制裁", "黑天鹅"]):
+        return "🔴 突发"
+    if any(k in t for k in ["央行", "美联储", "降息", "降准", "CPI", "GDP", "LPR"]):
+        return "💎 宏观"
+    if any(k in t for k in ["A股", "沪指", "深指", "创业板", "科创", "涨跌"]):
+        return "📈 A股"
+    if any(k in t for k in ["港股", "恒生", "南向"]):
+        return "🌏 港股"
+    if any(k in t for k in ["美股", "纳斯达克", "道琼斯", "标普"]):
+        return "🇺🇸 美股"
+    if any(k in t for k in ["AI", "ChatGPT", "大模型", "特朗普", "科技"]):
+        return "🖥️ AI"
+    if any(k in t for k in ["黄金", "原油", "大宗", "能源"]):
+        return "🛢️ 商品"
+    return "📰 其他"
 
 
 # ── 外部 API ────────────────────────────────────────────────────
@@ -230,3 +301,6 @@ def query_stocks(page=1, page_size=20, sort_by="chg_pct", asc=False):
 
 def is_spot_ready():
     return SpotCache.is_ready()
+
+def get_last_news_time():
+    return _NEWS_LAST_SUCCESS

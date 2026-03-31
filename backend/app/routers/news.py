@@ -15,18 +15,18 @@ async def news_flash():
     """
     快讯瀑布流（只读缓存，后台刷新线程维护）
     响应时间 < 50ms
+    任务3：禁用 Mock！缓存未就绪时返回空列表，前端展示"正在加载..."
     """
-    from app.services.news_engine import get_cached_news, is_cache_ready, get_mock_news
+    from app.services.news_engine import get_cached_news, is_cache_ready
 
     if not is_cache_ready():
-        logger.warning("[News] 缓存未就绪，降级至 Mock")
-        news = get_mock_news()
-        return {"news": news, "source": "mock", "total": len(news)}
+        logger.warning("[News] 缓存未就绪，返回空列表（禁止Mock降级）")
+        return {"news": [], "source": "cache_empty", "total": 0}
 
     news = get_cached_news(limit=150)
     if not news:
-        logger.warning("[News] 缓存为空，降级至 Mock")
-        return {"news": get_mock_news(), "source": "mock", "total": 0}
+        logger.warning("[News] 缓存为空")
+        return {"news": [], "source": "cache_empty", "total": 0}
 
     return {"news": news, "source": "cache", "total": len(news)}
 

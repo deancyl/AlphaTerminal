@@ -2,6 +2,7 @@
   <div class="grid-stack" ref="gridRef">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━━━━ -->
+    <!-- K线主图：左侧 8列，高度6单位 -->
     <div class="grid-stack-item"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
@@ -52,25 +53,56 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 2：市场风向标 → 涨跌直方图 + 情绪温度计 ━━━ -->
+    <!-- ━━━ Widget 2：市场情绪直方图（K线正下方，左侧8列）━━━━━━━━━━━━━ -->
+    <!-- 移到K线下方，占据完整8列宽度，让11个柱状图舒展显示 -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
+         gs-x="0" gs-y="6" gs-w="8" gs-h="5" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <SentimentGauge :market-data="marketData" @symbol-click="handleWindClick" />
       </div>
     </div>
 
-    <!-- ━━━ Widget 3：行业与资金风口 ─────────────────────────────────── -->
+    <!-- ━━━ Widget 3：快讯新闻（情绪图下方，左侧8列）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
+         gs-x="0" gs-y="11" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <NewsFeed />
+      </div>
+    </div>
+
+    <!-- ━━━ Widget 4：风向标（右上，右侧4列）━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <div class="text-xs text-terminal-dim mb-1">🌐 市场风向标</div>
+        <table class="w-full text-xs">
+          <tbody>
+            <tr v-for="(item, key) in windItems" :key="key"
+                class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+                @click="handleWindClick({ symbol: key, name: item.name })">
+              <td class="py-1 text-gray-300">{{ item.name }}</td>
+              <td class="py-1 text-right font-mono">{{ formatPrice(item.index) }}</td>
+              <td class="py-1 text-right font-mono"
+                  :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+                {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ━━━ Widget 5：行业与资金风口（右侧4列，中间）━━━━━━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <HotSectors @sector-click="handleSectorClick" />
       </div>
     </div>
 
-    <!-- ━━━ Widget 4：国内市场10+指数（新卡片）━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 6：国内市场指数（右侧4列，下方）━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="4" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="12" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
@@ -105,17 +137,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 5：实时信息流（占满全部宽度）━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列）━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="6" gs-w="12" gs-h="6" gs-min-w="6" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <NewsFeed />
-      </div>
-    </div>
-
-    <!-- ━━━ Widget 6：全市场个股透视看板（底部全宽）━━━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
-         gs-x="0" gs-y="12" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+         gs-x="0" gs-y="17" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener />
       </div>
@@ -147,14 +171,13 @@ const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
 
-// ── Task 1: 全局状态同步 ─────────────────────────────────────────
+// ── 全局状态同步 ─────────────────────────────────────────────────
 watch(currentSymbol, (sym) => {
   selectedIndex.value = sym
 })
 
-// ── Task 2: 列表点击联动 ─────────────────────────────────────────
+// ── 列表点击联动 ─────────────────────────────────────────────────
 function handleGlobalClick(item) {
-  // 映射：globalData.symbol (如 'NDX') → 内部 symbol
   const symbolMap = {
     'NDX': 'ndx', 'SPX': 'spx', 'DJI': 'dji', 'HSI': 'hsi', 'N225': 'nikkei',
     'ndx': 'ndx', 'spx': 'spx', 'dji': 'dji', 'hsi': 'hsi', 'nikkei': 'nikkei',
@@ -166,21 +189,17 @@ function handleGlobalClick(item) {
 }
 
 function handleChinaClick(item) {
-  // 国内指数 symbol 如 '000001', '399001'
   setSymbol(item.symbol, item.name, '#f87171')
   selectedIndex.value = item.symbol
 }
 
-// ── 情绪温度计/风向标点击 → 切换 K 线 ───────────────────────
 function handleWindClick(item) {
   const sym = item.symbol || item.key
   setSymbol(sym, item.name, '#f87171')
   selectedIndex.value = sym
 }
 
-// ── 行业板块点击 → 切换 K 线 ─────────────────────────────────
 function handleSectorClick(sec) {
-  // 板块没有单一 symbol，显示提示（可选：跳到该板块龙头股）
   setSymbol('000001', sec.name, '#fbbf24')
   selectedIndex.value = '000001'
 }
@@ -194,16 +213,12 @@ const indexOptions = [
   { symbol: '399001', name: '深证',   color: '#fbbf24' },
   { symbol: '399006', name: '创业板',  color: '#a78bfa' },
 ]
-const currentIndexOption = computed(() => {
-  // 优先用全局 store 的颜色和名称
-  return {
-    symbol: currentSymbol.value,
-    name:   currentSymbolName.value,
-    color:  currentColor.value,
-  }
-})
+const currentIndexOption = computed(() => ({
+  symbol: currentSymbol.value,
+  name:   currentSymbolName.value,
+  color:  currentColor.value,
+}))
 
-// ── Period 选项（Task 1: K线时间维度）────────────────────────────
 const periods = [
   { key: 'realtime', label: '分时' },
   { key: 'daily',    label: '日K' },
@@ -211,7 +226,6 @@ const periods = [
   { key: 'monthly',  label: '月K' },
 ]
 
-// ── Indicator 选项（Task 1: MACD/BOLL 预留）────────────────────
 const indicators = [
   { key: 'MACD',  label: 'MACD' },
   { key: 'BOLL', label: 'BOLL' },
@@ -230,11 +244,7 @@ function toggleIndicator(k) {
 const timestamp = computed(() => props.marketData?.timestamp || '')
 const tsDisplay  = computed(() => timestamp.value.slice(11, 19) || '')
 
-const windItems = computed(() => {
-  const w = props.marketData?.wind || {}
-  return Object.values(w)
-})
-
+const windItems = computed(() => props.marketData?.wind || {})
 const globalItems = computed(() => props.globalData || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
 

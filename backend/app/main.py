@@ -2,10 +2,13 @@
 AlphaTerminal Backend - FastAPI Application Entry Point
 """
 import asyncio
+import logging
 import signal
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+
+logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -17,14 +20,27 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_scheduler()
 
-    # 后台预热新闻缓存（不阻塞 uvicorn 启动）
-    async def _prefetch_news():
-        await asyncio.sleep(1)   # 等待 scheduler 完全就绪
+    # Task 3: 同步预热新闻缓存（阻塞 uvicorn 启动直到缓存就绪）
+    # 确保前端刷新不再看到 Mock 数据
+    async def _prefetch_news_sync():
+        await asyncio.sleep(2)   # 等待 scheduler 启动
+        from app.services.news_engine import refresh_news_cache
+        logger.info("[Startup] 开始同步预热新闻缓存...")
+        try:
+            # 同步刷新（background=False，直接阻塞当前线程）
+            refresh_news_cache(background=False)
+            logger.info("[Startup] 新闻缓存预热完成！")
+        except Exception as e:
+            logger.error(f"[Startup] 新闻预热失败: {e}", exc_info=True)
+
+    # 先执行一次同步预热，再继续
+    await _prefetch_news_sync()
+
+    # 再触发一次后台增量刷新（定时任务会继续每20分钟刷新）
+    async def _bg_news():
         from app.services.sentiment_engine import trigger_news_fetch
         trigger_news_fetch()
-        await asyncio.sleep(0)
-
-    asyncio.create_task(_prefetch_news())
+    asyncio.create_task(_bg_news())
 
     yield
     # 关闭时
