@@ -107,7 +107,7 @@ async def market_indices():
 
 # ── Task 1: 历史K线（支持 period 参数）──────────────────────────────────
 @router.get("/market/history/{symbol}")
-async def market_history(symbol: str, limit: int = 100, period: str = " realtime"):
+async def market_history(symbol: str, limit: int = 100, period: str = "daily"):
     """
     获取某标的历史行情
     period=realtime: 从 market_data_realtime 读取（快速采样）
