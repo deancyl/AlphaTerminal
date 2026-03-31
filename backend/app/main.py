@@ -20,16 +20,9 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_scheduler()
 
-    # 立即触发一次新闻缓存预热（不等待，让后台线程静默执行）
-    async def _bg_startup():
-        # 等待scheduler初始化完成
-        import time; await asyncio.sleep(1)
-        from app.services.news_engine import refresh_news_cache
-        logger.info("[Startup] 启动新闻预热...")
-        refresh_news_cache(background=True)
-        logger.info("[Startup] 新闻预热已触发（后台运行）")
-
-    asyncio.create_task(_bg_startup())
+    # 启动时不触发新闻预热（scheduler 的 NewsRefresh 任务每 20 分钟自动运行，
+    # 由它统一管理 _NEWS_CACHE，避免两个线程同时写缓存造成竞态）
+    # sentiment_engine._do_news_fetch（scheduler 触发）现已修复为 stock_news_em（真实时间戳）
 
     yield
     # 关闭时
@@ -49,6 +42,10 @@ app.add_middleware(
         "http://localhost:60100",
         "http://127.0.0.1:60100",
         "http://0.0.0.0:60100",
+        "http://192.168.2.186:60100",
+        "http://192.168.1.50:60100",
+        "http://172.17.0.1:60100",
+        "http://172.20.0.1:60100",
     ],
     allow_credentials=True,
     allow_methods=["*"],

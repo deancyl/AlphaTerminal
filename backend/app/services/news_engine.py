@@ -133,10 +133,18 @@ def refresh_news_cache(background: bool = True):
     刷新全局新闻缓存池（后台线程调用）
     策略：
       1. 宏观快讯：stock_news_main_cx（财新，100条，走代理，稳定可靠）
-      2. 个股新闻：akshare stock_news_em（东方财富，50只）
-      两个来源合并去重，确保 >100 条
+      2. 个股新闻：akshare stock_news_em（东方财富，20只）
+      所有来源均包含真实发布时间（发布时间 字段），无时间戳造假
     """
     global _NEWS_CACHE, _NEWS_CACHE_READY
+
+    # ── 宏观快讯专用标的（从 stock_news_em 拉，真实时间戳）──────────────
+    _MACRO_SYMBOLS = [
+        "000001", "399001", "399006", "000300",   # 主要指数
+        "600036", "601318", "600000",              # 金融
+        "600519", "000858", "600028",              # 消费/能源
+        "002230", "300750", "688981",              # 科技
+    ]
 
     def _do_fetch():
         global _NEWS_CACHE, _NEWS_CACHE_READY
@@ -144,31 +152,34 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            # ① 宏观快讯：stock_news_main_cx（财新网，~100条，走系统代理）
-            try:
-                logger.info("[SCHEDULER] Fetching news from source: stock_news_main_cx (财新) ...")
-                df = ak.stock_news_main_cx()
-                if df is not None and not df.empty:
-                    for _, row in df.iterrows():
-                        try:
-                            tag    = str(row.get("tag", "宏观") or "宏观")
-                            summary = str(row.get("summary", "") or "")
-                            url    = str(row.get("url", "") or "")
-                            if summary and len(summary) > 5:
-                                all_news.append({
-                                    "title":  (tag + "｜" if tag else "") + summary.strip()[:120],
-                                    "time":   datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                    "source": "财新",
-                                    "url":    url,
-                                })
-                        except Exception:
-                            continue
-                    sources_used.append("caixin")
-                    logger.info(f"[SCHEDULER] stock_news_main_cx: got {len(all_news)} items.")
-            except Exception as e:
-                logger.warning(f"[SCHEDULER] stock_news_main_cx failed: {type(e).__name__}: {e}")
+            # ① 宏观快讯：ak.stock_news_em（东方财富，真实发布时间）
+            for sym in _MACRO_SYMBOLS:
+                try:
+                    df = ak.stock_news_em(symbol=sym)
+                    if df is not None and not df.empty:
+                        for _, row in df.iterrows():
+                            try:
+                                title  = str(row.get("新闻标题", "") or "")
+                                time_  = str(row.get("发布时间", "") or "")[:16]
+                                source = str(row.get("文章来源", "东财") or "东财")
+                                url    = str(row.get("新闻链接", "") or "")
+                                if title and len(title) > 5:
+                                    all_news.append({
+                                        "title":  title.strip(),
+                                        "time":   time_,
+                                        "source": source,
+                                        "url":    url,
+                                    })
+                            except Exception:
+                                continue
+                        sources_used.append(f"em:{sym}")
+                except Exception as e:
+                    logger.warning(f"[SCHEDULER] stock_news_em({sym}) failed: {type(e).__name__}: {e}")
+                time.sleep(0.05)
 
-            # ② 个股新闻（东方财富，50只标的）
+            logger.info(f"[SCHEDULER] stock_news_em 宏观: fetched {len(all_news)} raw items.")
+
+            # ② 个股新闻（东方财富，20只标的）
             for sym in NEWS_SYMBOLS:
                 try:
                     items = _fetch_news_for_symbol(sym)
@@ -176,7 +187,7 @@ def refresh_news_cache(background: bool = True):
                         all_news.extend(items)
                 except Exception as e:
                     logger.warning(f"[SCHEDULER] {sym} failed: {type(e).__name__}: {e}")
-                time.sleep(0.05)  # 快速轮询，缩短预热总时长
+                time.sleep(0.05)  # 快速轮询
 
         except Exception as e:
             logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
@@ -204,7 +215,8 @@ def refresh_news_cache(background: bool = True):
         final = unique_news[:200]
 
         with _CACHE_LOCK:
-            _NEWS_CACHE = final
+            _NEWS_CACHE.clear()
+            _NEWS_CACHE.extend(final)
             _NEWS_CACHE_READY = True
 
         # ── 审计日志：打印最新一条新闻 ────────────────────────────────

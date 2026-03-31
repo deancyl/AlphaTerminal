@@ -316,6 +316,7 @@ async function fetchNews(quiet = false) {
 }
 
 async function manualRefresh() {
+  console.log('[NewsFeed] 点击刷新，发起 POST /api/v1/news/force_refresh ...')
   if (isRefreshing.value) return
   await fetchNews(false)
 }
