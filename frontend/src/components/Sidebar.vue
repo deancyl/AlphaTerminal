@@ -26,10 +26,10 @@
       <button
         v-for="item in navItems"
         :key="item.id"
-        class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors"
+        class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2"
         :class="activeId === item.id
           ? 'bg-terminal-accent/10 text-terminal-accent border-r-2 border-terminal-accent'
-          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border-r-2 border-transparent'"
+          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border-r-transparent'"
         @click="handleClick(item)"
       >
         <span class="text-base">{{ item.icon }}</span>
