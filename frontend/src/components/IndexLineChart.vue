@@ -1,16 +1,44 @@
 <template>
-  <div class="w-full h-full min-h-[120px] relative">
-    <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-terminal-bg/90 rounded">
-      <div class="text-2xl mb-2">📊</div>
-      <div class="text-terminal-dim text-xs text-center px-4">{{ chartError }}</div>
-      <button class="mt-2 px-3 py-1 text-[10px] rounded border border-gray-600 text-terminal-dim hover:border-terminal-accent/40 transition" @click="retryChart">重试</button>
+  <div class="w-full h-full min-h-[120px] relative flex flex-col">
+
+    <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
+    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700/50 bg-terminal-bg/60">
+      <span class="text-[10px] font-mono text-terminal-dim whitespace-nowrap">{{ currentName }}</span>
+      <span class="text-[11px] font-mono font-medium"
+            :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+        {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
+      </span>
+      <span class="text-[10px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+        {{ hoverBar.change_pct >= 0 ? '+' : '' }}{{ hoverBar.change_pct?.toFixed(2) ?? '--' }}%
+      </span>
+      <span class="text-[10px] font-mono text-gray-500">|</span>
+      <span class="text-[10px] font-mono text-gray-400">
+        {{ hoverBar.time || '--' }}
+      </span>
+      <template v-if="hoverBar.open != null">
+        <span class="text-[10px] font-mono text-gray-500">|</span>
+        <span class="text-[10px] font-mono text-gray-400">开<span class="text-gray-200 ml-1">{{ hoverBar.open?.toFixed(2) }}</span></span>
+        <span class="text-[10px] font-mono text-gray-400">高<span class="text-red-300 ml-1">{{ hoverBar.high?.toFixed(2) }}</span></span>
+        <span class="text-[10px] font-mono text-gray-400">低<span class="text-green-300 ml-1">{{ hoverBar.low?.toFixed(2) }}</span></span>
+        <span class="text-[10px] font-mono text-gray-400">收<span class="text-gray-200 ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
+        <span class="text-[10px] font-mono text-gray-400">量<span class="text-gray-200 ml-1">{{ ((hoverBar.volume || 0) / 1e8).toFixed(2) }}亿</span></span>
+      </template>
     </div>
-    <div v-if="isLoading" class="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
-      <div class="flex gap-1 items-end opacity-40">
-        <div v-for="i in 24" :key="i" class="w-1 bg-terminal-accent rounded-t animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
+
+    <!-- ── Chart Area ─────────────────────────────────────────── -->
+    <div class="flex-1 relative min-h-0">
+      <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-terminal-bg/90 rounded">
+        <div class="text-2xl mb-2">📊</div>
+        <div class="text-terminal-dim text-xs text-center px-4">{{ chartError }}</div>
+        <button class="mt-2 px-3 py-1 text-[10px] rounded border border-gray-600 text-terminal-dim hover:border-terminal-accent/40 transition" @click="retryChart">重试</button>
       </div>
+      <div v-if="isLoading" class="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
+        <div class="flex gap-1 items-end opacity-40">
+          <div v-for="i in 24" :key="i" class="w-1 bg-terminal-accent rounded-t animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
+        </div>
+      </div>
+      <div ref="chartRef" class="w-full h-full"></div>
     </div>
-    <div ref="chartRef" class="w-full h-full"></div>
   </div>
 </template>
 
@@ -28,27 +56,32 @@ const props = defineProps({
 const chartRef     = ref(null)
 const chartError   = ref('')
 const isLoading    = ref(false)
+const chartType    = ref('candlestick')
+const currentName  = ref(props.name || '上证指数')
+
 let   chartInstance = null
 let   resizeObserver = null
+const hoverBar      = ref({})   // Task 3: 动态 OHLCV 数据
 
 // ─────────────────────────────────────────────────────────────────
 // A股配色常量
-const UP   = '#ef232a'   // 涨（收 >= 开）
-const DOWN = '#14b143'   // 跌（收 < 开）
+const UP   = '#ef232a'
+const DOWN = '#14b143'
 
 // ─────────────────────────────────────────────────────────────────
-// 数据清洗：保留全部原始字段，修复 high<low 问题
+// 数据清洗
 // ─────────────────────────────────────────────────────────────────
 function _sanitize(raw) {
-  // 金融数据神圣不可侵犯：前端只做类型转换，不修改任何数值
   if (!Array.isArray(raw) || !raw.length) return []
   return raw.map(r => ({
     date:       r.date   || String(r.timestamp || ''),
+    time:       r.time   || '',
     open:       Number(r.open)  || 0,
     close:      Number(r.close) || 0,
     high:       Number(r.high)  || 0,
     low:        Number(r.low)   || 0,
     volume:     Number(r.volume) || 0,
+    price:      Number(r.price != null ? r.price : r.close) || 0,
     change_pct: Number(r.change_pct) || 0,
   }))
 }
@@ -56,8 +89,6 @@ function _sanitize(raw) {
 // ─────────────────────────────────────────────────────────────────
 // 指标计算
 // ─────────────────────────────────────────────────────────────────
-
-// MA 简单移动平均
 function calcMA(data, n) {
   return data.map((_, i) => {
     if (i < n - 1) return null
@@ -66,7 +97,6 @@ function calcMA(data, n) {
   })
 }
 
-// EMA 指数移动平均
 function calcEMA(data, n) {
   const k = 2 / (n + 1)
   const result = []
@@ -78,23 +108,18 @@ function calcEMA(data, n) {
   return result
 }
 
-// BOLL (20, 2) — 叠加在主图 gridIndex: 0
 function calcBOLL(closes) {
-  const period = 20
-  const mid = [], upper = [], lower = []
+  const period = 20, mid = [], upper = [], lower = []
   for (let i = 0; i < closes.length; i++) {
     if (i < period - 1) { mid.push('-'); upper.push('-'); lower.push('-'); continue }
     const slice = closes.slice(i - period + 1, i + 1)
     const mean  = slice.reduce((a, b) => a + b, 0) / period
     const std   = Math.sqrt(slice.reduce((a, b) => a + (b - mean) ** 2, 0) / period)
-    mid.push(+mean.toFixed(3))
-    upper.push(+(mean + 2 * std).toFixed(3))
-    lower.push(+(mean - 2 * std).toFixed(3))
+    mid.push(+mean.toFixed(3)); upper.push(+(mean + 2 * std).toFixed(3)); lower.push(+(mean - 2 * std).toFixed(3))
   }
   return { mid, upper, lower }
 }
 
-// MACD (12, 26, 9) — 副图 gridIndex: 2
 function calcMACD(closes) {
   const ema12 = calcEMA(closes, 12)
   const ema26 = calcEMA(closes, 26)
@@ -104,7 +129,6 @@ function calcMACD(closes) {
   return { dif, dea, macd }
 }
 
-// KDJ (9, 3, 3) — 副图 gridIndex: 2
 function calcKDJ(closes, highs, lows, n = 9) {
   const k = [], d = [], j = []
   for (let i = 0; i < closes.length; i++) {
@@ -112,16 +136,15 @@ function calcKDJ(closes, highs, lows, n = 9) {
     const rh = Math.max(...highs.slice(i - n + 1, i + 1))
     const rl = Math.min(...lows.slice(i - n + 1, i + 1))
     const rsv = rh === rl ? 50 : (closes[i] - rl) / (rh - rl) * 100
-    const pk  = k[i - 1] !== '-' ? k[i - 1] : 50
-    const pd  = d[i - 1] !== '-' ? d[i - 1] : 50
-    const nk  = +(2/3 * pk + 1/3 * rsv).toFixed(2)
-    const nd  = +(2/3 * pd + 1/3 * nk).toFixed(2)
+    const pk = k[i - 1] !== '-' ? k[i - 1] : 50
+    const pd = d[i - 1] !== '-' ? d[i - 1] : 50
+    const nk = +(2/3 * pk + 1/3 * rsv).toFixed(2)
+    const nd = +(2/3 * pd + 1/3 * nk).toFixed(2)
     k.push(nk); d.push(nd); j.push(+(3 * nk - 2 * nd).toFixed(2))
   }
   return { k, d, j }
 }
 
-// W&R (10) — 副图 gridIndex: 2
 function calcWR(closes, highs, lows, n = 10) {
   return closes.map((_, i) => {
     if (i < n - 1) return null
@@ -133,76 +156,49 @@ function calcWR(closes, highs, lows, n = 10) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 构建 K 线图（主图叠加 BOLL/MA + 固定成交量 + 互斥指标副图）
+// K线图（Task 2: 60%主图 / 20%成交量 比例）
 // ─────────────────────────────────────────────────────────────────
-function buildKLineOption(hist, activeIndicators) {
+function buildKLineOption(hist) {
   const times   = hist.map(h => h.date ? h.date.slice(5) : '')
   const closes  = hist.map(h => h.close)
   const highs   = hist.map(h => h.high)
   const lows    = hist.map(h => h.low)
   const volumes = hist.map(h => h.volume)
-  const changes = hist.map(h => h.change_pct)
 
-  // Y轴锚定真实价格区间
   const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
   const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
 
-  // 当前激活的副图指标（互斥，取第一个）
-  const subInd = ['MACD', 'KDJ', 'WR'].find(i => (activeIndicators || []).includes(i)) || null
-  const showBOLL = (activeIndicators || []).includes('BOLL')
+  const subInd = ['MACD', 'KDJ', 'WR'].find(i => (props.indicators || []).includes(i)) || null
+  const showBOLL = (props.indicators || []).includes('BOLL')
 
-  // 布局参数
-  const volH  = 12                         // 成交量占%
-  const subH  = subInd ? 18 : 0            // 指标副图占%（无副图则隐藏）
-  const kH    = 100 - volH - subH - 2      // K线主图（留2%间隙）
-  const volTop = kH + 1
-  const subTop = subInd ? volTop + volH + 1 : volTop + volH
+  // Task 2: 主图 60% + 成交量 20% + 副图 20%（精确像素比例）
+  const mainH  = 60   // %
+  const volH   = 20   // %
+  const subH   = subInd ? 17 : 0  // %
+  const mainTop = 2   // %
+  const volTop = mainTop + mainH + 1  // = 63%
+  const subTop  = subInd ? volTop + volH + 1 : 0
 
   const grid = [
-    { top: 5,   height: `${kH}%`,   right: 8, left: 50, bottom: 0 },
-    { top: `${volTop}%`,  height: `${volH}%`,  right: 8, left: 50, bottom: 0 },
+    { top: `${mainTop}%`,  height: `${mainH}%`,  right: 8, left: 55, bottom: 0 },
+    { top: `${volTop}%`,   height: `${volH}%`,  right: 8, left: 55, bottom: 0 },
   ]
-  if (subInd) grid.push({ top: `${subTop}%`, height: `${subH}%`, right: 8, left: 50, bottom: 0 })
+  if (subInd) grid.push({ top: `${subTop}%`, height: `${subH}%`, right: 8, left: 55, bottom: 0 })
 
-  // ── series[0]: K线烛台 ────────────────────────────────────────
+  // ── series[0]: K线烛台
   const kSeries = {
     name: 'K线', type: 'candlestick',
-    // ECharts candlestick: [open, close, lowest, highest]
-    // A股: color(涨=红), color0(跌=绿)
-    data: hist.map(h => {
-      if (Number(h.close) < Number(h.open)) {
-        console.warn(`[KLine DIAG] DOWN! O=${Number(h.open)} C=${Number(h.close)} L=${Number(h.low)} H=${Number(h.high)}`)
-      }
-      return [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]
-    }),
+    data: hist.map(h => [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]),
     xAxisIndex: 0, yAxisIndex: 0,
-    itemStyle: {
-      color:     UP,   color0:     DOWN,
-      borderColor:     UP,   borderColor0:     DOWN,
-    },
-    // Task 2: Y轴最新价虚线标尺
+    itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN },
     markLine: {
-      silent: true,
-      symbol: 'none',
+      silent: true, symbol: 'none',
       lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' },
-      data: [
-        {
-          yAxis: hist[hist.length - 1]?.close,
-          label: {
-            position: 'insideEndTop',
-            formatter: () => hist[hist.length - 1]?.close?.toFixed(2),
-            backgroundColor: '#fbbf24',
-            color: '#000',
-            fontSize: 10,
-            padding: [2, 4],
-            borderRadius: 2,
-          },
-        },
-      ],
+      data: [{ yAxis: hist[hist.length - 1]?.close }],
     },
   }
 
-  // ── series[1..3]: MA 均线（叠加主图） ──────────────────────────
+  // ── MA 均线
   const maSeries = [
     { name: 'MA5',  data: calcMA(closes, 5),  color: '#ffffff', width: 1 },
     { name: 'MA10', data: calcMA(closes, 10), color: '#fbbf24', width: 1 },
@@ -210,15 +206,14 @@ function buildKLineOption(hist, activeIndicators) {
   ].map(cfg => ({
     ...cfg, type: 'line', xAxisIndex: 0, yAxisIndex: 0,
     smooth: true, symbol: 'none',
-    lineStyle: { color: cfg.color, width: cfg.width },
-    tooltip: { show: true },
+    lineStyle: { color: cfg.color, width: cfg.width }, tooltip: { show: true },
   }))
 
-  // ── series[4]: BOLL（叠加主图，与MA同 yAxisIndex:0） ──────────
+  // ── BOLL
   const bollSeries = showBOLL ? (() => {
     const { mid, upper, lower } = calcBOLL(closes)
     return [
-      { name: 'BOLL-M', data: mid,   color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
+      { name: 'BOLL-M', data: mid,   color: '#a78bfa', width: 1.2, type: 'line', smooth: true, symbol: 'none',
         xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: '#a78bfa', width: 1.2 } },
       { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
         xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
@@ -227,15 +222,15 @@ function buildKLineOption(hist, activeIndicators) {
     ]
   })() : []
 
-  // ── series[5]: 成交量（固定 gridIndex:1，颜色跟随K线阴阳） ──────
+  // ── 成交量（固定 20% 高度）
   const volSeries = {
     name: '成交量', type: 'bar',
-    data: hist.map((h, i) => ({
+    data: hist.map(h => ({
       value: h.volume,
       itemStyle: {
         color: h.close >= h.open
-          ? UP + Math.min(80, Math.round(0.7 * 100)).toString(16).padStart(2,'0')
-          : DOWN + Math.min(80, Math.round(0.7 * 100)).toString(16).padStart(2,'0'),
+          ? UP + '33'
+          : DOWN + '33',
       },
     })),
     xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 6,
@@ -243,7 +238,7 @@ function buildKLineOption(hist, activeIndicators) {
 
   const series = [kSeries, ...maSeries, ...bollSeries, volSeries]
 
-  // ── 副图指标（gridIndex:2，xAxisIndex:2） ───────────────────────
+  // ── 副图指标
   if (subInd) {
     const xIdx = 2, yIdx = 2
     if (subInd === 'MACD') {
@@ -277,21 +272,17 @@ function buildKLineOption(hist, activeIndicators) {
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
           lineStyle: { color: '#fb923c', width: 1.2 },
-          markLine: {
-            silent: true, symbol: 'none',
-            lineStyle: { color: '#4b5563', type: 'dashed', width: 1 },
+          markLine: { silent: true, symbol: 'none', lineStyle: { color: '#4b5563', type: 'dashed', width: 1 },
             data: [{ yAxis: -20 }, { yAxis: -80 }],
-            label: { show: true, formatter: '{c}', fontSize: 8, color: '#6b7280' },
-          } },
+            label: { show: true, formatter: '{c}', fontSize: 8, color: '#6b7280' } } },
       )
     }
   }
 
-  // ── X轴（各区域共享时间轴） ───────────────────────────────────
+  // ── X轴
   const xAxisBase = {
     type: 'category', data: times, boundaryGap: true,
-    axisLine: { lineStyle: { color: '#2d3748' } },
-    splitLine: { show: false },
+    axisLine: { lineStyle: { color: '#2d3748' } }, splitLine: { show: false },
   }
   const xAxis = [
     { ...xAxisBase, gridIndex: 0,
@@ -300,7 +291,7 @@ function buildKLineOption(hist, activeIndicators) {
   ]
   if (subInd) xAxis.push({ ...xAxisBase, gridIndex: 2, axisLabel: { show: false } })
 
-  // ── Y轴 ────────────────────────────────────────────────────────
+  // ── Y轴（主图动态 min/max）
   const yAxis = [
     { type: 'value', scale: true, gridIndex: 0, position: 'left',
       min: yMin, max: yMax,
@@ -318,23 +309,17 @@ function buildKLineOption(hist, activeIndicators) {
   })
 
   return {
-    backgroundColor: 'transparent',
-    grid, xAxis, yAxis, series,
+    backgroundColor: 'transparent', grid, xAxis, yAxis, series,
     tooltip: {
       trigger: 'axis', type: 'cross',
-      axisPointer: {
-        type: 'cross',
-        lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' },
-        crossStyle: { color: '#9ca3af', width: 1 },
-      },
+      axisPointer: { type: 'cross', lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' }, crossStyle: { color: '#9ca3af', width: 1 } },
       backgroundColor: 'rgba(26,30,46,0.96)', borderColor: '#4b5563',
       textStyle: { color: '#9ca3af', fontSize: 11 },
       formatter(params) {
         const kp = params.find(p => p.seriesName === 'K线')
         if (!kp) return ''
-        const idx  = kp.dataIndex
-        const h   = hist[idx]
-        const o   = h.open, c = h.close, l = h.low, hi = h.high
+        const idx = kp.dataIndex, h = hist[idx]
+        const o = h.open, c = h.close, l = h.low, hi = h.high
         const chg = h.change_pct; const sign = chg >= 0 ? '+' : ''
         const col = c >= o ? UP : DOWN
         const vol = (h.volume / 1e8).toFixed(2)
@@ -342,12 +327,10 @@ function buildKLineOption(hist, activeIndicators) {
           + `<span style="color:#9ca3af;font-size:10px">开</span> <span style="color:#e5e7eb;font-size:11px">${o.toFixed(2)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">高</span> <span style="color:#e5e7eb;font-size:11px">${hi.toFixed(2)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">低</span> <span style="color:#e5e7eb;font-size:11px">${l.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> `
-          + `<span style="color:${chg >= 0 ? UP : DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span><br/>`
+          + `<span style="color:#9ca3af;font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> <span style="color:${chg>=0?UP:DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">量</span> <span style="color:#9ca3af;font-size:11px">${vol}亿</span>`
       },
     },
-    // DataZoom: 同时控制所有分图 x 轴
     dataZoom: [
       { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 90, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
@@ -360,38 +343,65 @@ function buildKLineOption(hist, activeIndicators) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// 分时图
+// 分时图（Task 1: 动态Y轴min/max + areaStyle）
 // ─────────────────────────────────────────────────────────────────
-function buildLineOption(hist, activeIndicators) {
-  const times  = hist.map(h => h.time ? h.time.slice(11, 16) : (h.date || ''))
-  const prices  = hist.map(h => h.price)
-  const changes = hist.map(h => h.change_pct || 0)
+function buildLineOption(hist) {
+  const times   = hist.map(h => h.time ? h.time.slice(11, 16) : (h.date || ''))
+  const prices  = hist.map(h => Number(h.price != null ? h.price : h.close))
+  const volumes = hist.map(h => Number(h.volume))
+  const changes = hist.map(h => Number(h.change_pct || 0))
+  const highs   = hist.map(h => Number(h.high || h.price || h.close))
+  const lows   = hist.map(h => Number(h.low || h.price || h.close))
+
+  // Task 1: 动态 Y 轴 min/max（1% 边距，绝不从 0 开始）
+  const rawMin  = Math.min(...prices, ...lows)
+  const rawMax  = Math.max(...prices, ...highs)
+  const pad     = (rawMax - rawMin) * 0.01
+  const yMin    = +(rawMin - pad).toFixed(2)
+  const yMax    = +(rawMax + pad).toFixed(2)
 
   // 均价线
   const avg = []
   let sum = 0
   for (let i = 0; i < prices.length; i++) { sum += prices[i]; avg.push(+(sum / (i + 1)).toFixed(3)) }
 
-  const upCount = prices.filter((p, i) => i > 0 && p > prices[i - 1]).length
+  const upCount  = prices.filter((p, i) => i > 0 && p > prices[i - 1]).length
   const lineColor = upCount >= prices.length / 2 ? UP : DOWN
 
-  const kH   = 75; const volH = 25
-  const volTop = kH
+  const mainH  = 75  // %
+  const volH  = 22  // %
+  const mainTop = 2  // %
+  const volTop  = mainTop + mainH + 1  // = 78%
 
+  // Task 2: 分时图也用相同的比例
   const series = [
     { name: '价格', type: 'line', data: prices, smooth: 0.3, symbol: 'none',
       lineStyle: { color: lineColor, width: 1.5 },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-        colorStops: [{ offset: 0, color: lineColor + '30' }, { offset: 1, color: lineColor + '00' }] } } },
+      areaStyle: {
+        color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: lineColor + '28' },
+            { offset: 1, color: lineColor + '00' },
+          ],
+        },
+      } },
     { name: '均价', type: 'line', data: avg, smooth: 0.3, symbol: 'none',
       lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' } },
   ]
 
+  // 分时成交量（底部柱状）
+  const volSeries = {
+    name: '成交量', type: 'bar',
+    data: volumes.map(v => ({ value: v, itemStyle: { color: lineColor + '33' } })),
+    xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 4,
+  }
+  series.push(volSeries)
+
   return {
     backgroundColor: 'transparent',
     grid: [
-      { top: 5, height: `${kH}%`,  right: 8, left: 50, bottom: 0 },
-      { top: `${volTop}%`, height: `${volH}%`, right: 8, left: 50, bottom: 0 },
+      { top: `${mainTop}%`, height: `${mainH}%`,  right: 8, left: 55, bottom: 0 },
+      { top: `${volTop}%`,  height: `${volH}%`,   right: 8, left: 55, bottom: 0 },
     ],
     xAxis: [
       { type: 'category', data: times, boundaryGap: false, gridIndex: 0,
@@ -404,6 +414,7 @@ function buildLineOption(hist, activeIndicators) {
     ],
     yAxis: [
       { type: 'value', scale: true, gridIndex: 0, position: 'left',
+        min: yMin, max: yMax,   // Task 1: 动态范围，不从 0 开始
         axisLine: { show: false },
         axisLabel: { color: '#6b7280', fontSize: 9, formatter: v => v.toFixed(2) },
         splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } } },
@@ -412,18 +423,20 @@ function buildLineOption(hist, activeIndicators) {
     ],
     series,
     tooltip: {
-      trigger: 'axis', type: 'cross', axisPointer: { lineStyle: { color: '#374151' } },
+      trigger: 'axis', type: 'cross',
+      axisPointer: { lineStyle: { color: '#374151' } },
       backgroundColor: '#1a1e2e', borderColor: '#374151', textStyle: { color: '#9ca3af', fontSize: 11 },
       formatter: (params) => {
         const p = params[0]
         if (!p) return ''
         const idx = p.dataIndex
         const chg = changes[idx]; const sign = chg >= 0 ? '+' : ''
-        const a   = avg[idx]
+        const a = avg[idx]
+        const vol = (volumes[idx] / 1e8).toFixed(2)
         return `<span style="color:#6b7280;font-size:10px">${p.axisValue}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">价</span> <span style="color:${lineColor};font-size:11px">${(prices[idx] || 0).toFixed(3)}</span><br/>`
           + `<span style="color:#9ca3af;font-size:10px">均</span> <span style="color:#fbbf24;font-size:11px">${a.toFixed(3)}</span><br/>`
-          + `<span style="color:${chg >= 0 ? UP : DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span>`
+          + `<span style="color:${chg >= 0 ? UP : DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span> <span style="color:#6b7280;font-size:10px">量 ${vol}亿</span>`
       },
     },
     dataZoom: [
@@ -440,15 +453,71 @@ function buildLineOption(hist, activeIndicators) {
 // ─────────────────────────────────────────────────────────────────
 // 统一入口
 // ─────────────────────────────────────────────────────────────────
-function buildOption(raw, activeIndicators, chartType) {
+function buildOption(raw, type) {
   const hist = _sanitize(raw)
   if (!hist || !hist.length) {
     chartError.value = '暂无历史数据'
     return { backgroundColor: 'transparent', title: { text: '暂无历史数据', left: 'center', top: 'center', textStyle: { color: '#6b7280', fontSize: 12 } } }
   }
   chartError.value = ''
-  if (chartType === 'line') return buildLineOption(hist, activeIndicators)
-  return buildKLineOption(hist, activeIndicators)
+  if (type === 'line') return buildLineOption(hist)
+  return buildKLineOption(hist)
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Hover Bar 事件绑定（Task 3）
+// ─────────────────────────────────────────────────────────────────
+function bindHoverEvents() {
+  if (!chartInstance) return
+
+  // mousemove → 实时更新顶部 OHLCV 栏
+  chartInstance.on('mousemove', function (params) {
+    if (!params.dataIndex && params.dataIndex !== 0) return
+    const idx = params.dataIndex
+    const raw = chartInstance.getOption()
+    const seriesData = raw.series
+
+    if (chartType.value === 'line') {
+      // 分时：series[0]=价格, series[1]=均价, series[2]=成交量
+      const priceData = seriesData[0]?.data?.[idx]
+      const volData   = seriesData[2]?.data?.[idx]
+      const times     = raw.xAxis?.[0]?.data || []
+      const histRaw = _sanitize(raw._rawHist || [])
+      const h = histRaw[idx] || {}
+      hoverBar.value = {
+        price: priceData != null ? Number(priceData) : null,
+        time:  times[idx] || '',
+        open:  h.open || null,
+        high:  h.high || null,
+        low:   h.low || null,
+        close: h.close || null,
+        volume: h.volume || null,
+        change_pct: h.change_pct || null,
+      }
+    } else {
+      // K线：series[0]=K线烛台 [open, close, low, high]
+      const candleData = seriesData[0]?.data?.[idx]
+      const volData    = seriesData[3]?.data?.[idx]
+      const times      = raw.xAxis?.[0]?.data || []
+      const histRaw = _sanitize(raw._rawHist || [])
+      const h = histRaw[idx] || {}
+      hoverBar.value = {
+        price: candleData ? Number(candleData[1]) : null,
+        time:  times[idx] || '',
+        open:  candleData ? Number(candleData[0]) : null,
+        high:  candleData ? Number(candleData[3]) : null,
+        low:   candleData ? Number(candleData[2]) : null,
+        close: candleData ? Number(candleData[1]) : null,
+        volume: volData?.value || h.volume || null,
+        change_pct: h.change_pct || null,
+      }
+    }
+  })
+
+  // 鼠标离开图表 → 清空 hover bar
+  chartInstance.getZr().on('mouseleave', () => {
+    hoverBar.value = {}
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -459,13 +528,24 @@ async function fetchAndRender() {
   try {
     const res = await fetch(props.url + `&_t=${Date.now()}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data    = await res.json()
-    const chartType = data.chart_type || 'candlestick'
-    const hist    = _sanitize(data.history || [])
-    console.info(`[KLine] ${props.url} chartType=${chartType} hist=${hist.length} first={O:${hist[0]?.open} C:${hist[0]?.close}}`)
-    if (!chartInstance) chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    const data = await res.json()
+    const type = data.chart_type || 'candlestick'
+    chartType.value = type
+    const hist = _sanitize(data.history || [])
+
+    // 将 raw hist 塞给 option，方便 hover 时访问
+    const opt = buildOption(data.history || [], type)
+    opt._rawHist = data.history || []
+
+    currentName.value = props.name || '上证指数'
+
+    if (!chartInstance) {
+      chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+      bindHoverEvents()
+    }
+
     chartInstance.clear()
-    chartInstance.setOption(buildOption(hist, props.indicators || [], chartType), { notMerge: true })
+    chartInstance.setOption(opt, { notMerge: true })
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
     console.error('[KLine]', e)
@@ -484,6 +564,7 @@ onMounted(async () => {
     chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
     resizeObserver = new ResizeObserver(() => chartInstance?.resize())
     resizeObserver.observe(chartRef.value)
+    bindHoverEvents()
     fetchAndRender()
   }
 })
