@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.routers import market, copilot, news
+from app.routers import market, copilot, news, sentiment
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -54,6 +54,7 @@ app.add_middleware(
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(copilot.router, prefix="/api/v1", tags=["copilot"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
+app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
 
 
 @app.get("/health")

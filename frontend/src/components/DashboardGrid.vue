@@ -115,7 +115,8 @@
             </thead>
             <tbody>
               <tr v-for="item in globalItems" :key="item.symbol"
-                  class="border-b border-gray-800 hover:bg-white/5">
+                  class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+                  @click="handleGlobalClick(item)">
                 <td class="py-1 text-gray-300 text-[11px]">{{ item.name }}</td>
                 <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
                 <td class="py-1 text-right font-mono text-[11px]"
@@ -157,7 +158,8 @@
             </thead>
             <tbody>
               <tr v-for="item in chinaAllItems" :key="item.symbol"
-                  class="border-b border-gray-800 hover:bg-white/5">
+                  class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+                  @click="handleChinaClick(item)">
                 <td class="py-1 text-gray-300 text-[11px]">{{ item.name }}</td>
                 <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
                 <td class="py-1 text-right font-mono text-[11px]"
@@ -186,9 +188,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import IndexLineChart from './IndexLineChart.vue'
 import NewsFeed from './NewsFeed.vue'
+import SentimentGauge from './SentimentGauge.vue'
+import { useMarketStore } from '../composables/useMarketStore.js'
+
+const { currentSymbol, currentSymbolName, currentColor, setSymbol } = useMarketStore()
 
 const props = defineProps({
   marketData:   { type: Object, default: null },
@@ -198,9 +204,33 @@ const props = defineProps({
 })
 
 const gridRef          = ref(null)
-const selectedIndex    = ref('000001')
+const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
+
+// ── Task 1: 全局状态同步 ─────────────────────────────────────────
+watch(currentSymbol, (sym) => {
+  selectedIndex.value = sym
+})
+
+// ── Task 2: 列表点击联动 ─────────────────────────────────────────
+function handleGlobalClick(item) {
+  // 映射：globalData.symbol (如 'NDX') → 内部 symbol
+  const symbolMap = {
+    'NDX': 'ndx', 'SPX': 'spx', 'DJI': 'dji', 'HSI': 'hsi', 'N225': 'nikkei',
+    'ndx': 'ndx', 'spx': 'spx', 'dji': 'dji', 'hsi': 'hsi', 'nikkei': 'nikkei',
+  }
+  const sym = symbolMap[item.symbol?.toLowerCase()] || item.symbol
+  const opt = { symbol: sym, name: item.name, color: '#60a5fa' }
+  setSymbol(opt.symbol, opt.name, opt.color)
+  selectedIndex.value = opt.symbol
+}
+
+function handleChinaClick(item) {
+  // 国内指数 symbol 如 '000001', '399001'
+  setSymbol(item.symbol, item.name, '#f87171')
+  selectedIndex.value = item.symbol
+}
 
 let grid = null
 
@@ -211,9 +241,14 @@ const indexOptions = [
   { symbol: '399001', name: '深证',   color: '#fbbf24' },
   { symbol: '399006', name: '创业板',  color: '#a78bfa' },
 ]
-const currentIndexOption = computed(() =>
-  indexOptions.find(i => i.symbol === selectedIndex.value) || indexOptions[0]
-)
+const currentIndexOption = computed(() => {
+  // 优先用全局 store 的颜色和名称
+  return {
+    symbol: currentSymbol.value,
+    name:   currentSymbolName.value,
+    color:  currentColor.value,
+  }
+})
 
 // ── Period 选项（Task 1: K线时间维度）────────────────────────────
 const periods = [

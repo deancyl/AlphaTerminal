@@ -98,3 +98,52 @@
 #### Modal 详情弹窗
 - Footer 区域：直接显示原文 URL（可点击复制）+ "浏览器打开" 按钮
 - 异步正文：先显示"正文努力提取中..."，GET `/api/v1/news/detail` 后展示纯文本
+
+---
+
+# Alpha 0.0.2 — Phase 2 交互升级版
+
+## 发布信息
+- **Tag**: v0.0.2-alpha
+- **发布日期**: 2026-03-31
+- **主题**: 打破信息孤岛 — 全局联动 + 专业图表 + 市场情绪
+
+---
+
+## Phase 2 核心更新
+
+### 1. 全局状态管理 & Drill-down 联动 ✅
+- **useMarketStore.js**：Vue 3 Composable 模块级单例
+  - `currentSymbol` / `currentSymbolName` / `currentColor` 跨组件共享
+  - DashboardGrid 监听 `currentSymbol`，`IndexLineChart` 响应式重渲染
+- **全球市场列表**：每行加 `@click` → `handleGlobalClick()` → 映射 symbol（NDX→ndx 等）→ store.setSymbol()
+- **国内指数列表**：每行加 `@click` → `handleChinaClick()` → store.setSymbol()
+- 点击任一指数 → 主图 K 线**瞬间切换**，无需刷新页面
+
+### 2. 图表专业度升级 ✅
+- **Hover Bar**：顶部动态 OHLCV 栏（时间/开/高/低/收/量），随 `mousemove` 实时刷新
+- **Grid 比例**：主图 60% + 成交量 20% + 副图 17%（精确像素分配）
+- **分时图 Y 轴**：动态 `min/max`（1% padding），从不从 0 开始
+- **分时面积图**：渐变 `areaStyle`，均价虚线
+
+### 3. A股市场情绪温度计 ✅
+- **sentiment_engine.py**：后台线程拉取新浪全市场（5495 只）
+- **真实数据**（2026-03-31 收盘）：
+  - 涨 1011 家 / 跌 4377 家 / 平 107 家
+  - 涨停 66 只 / 跌停 12 只
+  - 上涨比例 18.4%
+- **路由**：`GET /api/v1/market/sentiment`
+- **Scheduler**：每 3 分钟后台刷新，不阻塞主线程
+- **前端组件**：红绿双拼进度条（待集成 Widget）
+
+### 4. 基础架构 ✅
+- 新闻引擎：<1ms 缓存读取，后台 20 分钟刷新，150 条池
+- 分时数据：Eastmoney push2his 5 分钟 K 线（48 根/日）
+- 周/月聚合：SQLite ROW_NUMBER()，first-open / last-close，OHLC 正确
+
+---
+
+## 技术栈
+- 后端：Python 3.11 / FastAPI / APScheduler / SQLite / AkShare / BeautifulSoup4
+- 前端：Vue 3 / Vite 4 / TailwindCSS / ECharts 5 / GridStack / useMarketStore
+- 代理：`http://192.168.1.50:7897`

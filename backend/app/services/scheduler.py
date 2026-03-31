@@ -48,12 +48,14 @@ def start_scheduler():
     from app.db import init_tables
     init_tables()  # 保证表已创建
 
-    # 启动时先回填一次历史K线（确保K线图有数据）
+    # 启动时先回填一次历史K线 + 新闻预热 + 情绪初始抓取
     import threading
     def initial_backfill():
         import time; time.sleep(2)   # 等待 uvicorn 完全就绪
         backfill_daily_history()
         prefetch_news()             # 预热 150 条新闻
+        from app.services.sentiment_engine import _fetch_sentiment
+        _fetch_sentiment(background=True)   # 立即后台拉取全市场情绪
     threading.Thread(target=initial_backfill, daemon=True).start()
 
     # 每 3 分钟拉取一次实时数据（akshare 有频率限制）
@@ -67,6 +69,18 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] 数据拉取任务已注册（每3分钟）")
+
+    # 每 3 分钟刷新市场情绪
+    from app.services.sentiment_engine import _fetch_sentiment
+    scheduler.add_job(
+        lambda: _fetch_sentiment(background=True),
+        "interval",
+        seconds=180,
+        id="sentiment_fetch",
+        name="SentimentFetch",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 市场情绪任务已注册（每3分钟）")
 
     # 每 20 分钟刷新一次新闻池（后台线程，不阻塞 API）
     from app.services.news_engine import refresh_news_cache
