@@ -3,31 +3,12 @@
 """
 import logging
 import re
-from typing import Optional
 from fastapi import APIRouter, Query
 from app.services.news_engine import fetch_latest_news, get_mock_news
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ── 反爬白名单（仅允许以下域名）──────────────────────────────────────────
-SAFE_NEWS_DOMAINS = [
-    "eastmoney.com", "sina.com.cn", "finance.sina.com.cn",
-    "qq.com", "ifeng.com", "cls.cn", "xinhuanet.com",
-    "stock.eastmoney.com", "finance.eastmoney.com",
-    "cj.sina.com.cn", "tech.sina.com.cn",
-]
-
-
-def _is_safe_url(url: str) -> bool:
-    """仅允许白名单域名，阻止 SSRF"""
-    try:
-        from urllib.parse import urlparse
-        domain = urlparse(url).netloc.lower()
-        return any(d in domain for d in SAFE_NEWS_DOMAINS)
-    except Exception:
-        return False
 
 
 @router.get("/news/flash")
@@ -51,10 +32,6 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
     抓取新闻原文正文（纯文本，剥离图片/脚本/样式）
     仅支持白名单域名，防 SSRF
     """
-    if not _is_safe_url(url):
-        logger.warning(f"[News] 非法域名被拦截: {url}")
-        return {"content": "原文解析失败（域名不在白名单内），请点击链接查看网页。", "url": url}
-
     try:
         import requests
         from bs4 import BeautifulSoup

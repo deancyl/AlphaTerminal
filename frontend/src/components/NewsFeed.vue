@@ -125,16 +125,18 @@
             </p>
           </div>
           <!-- Footer -->
-          <div class="p-3 border-t border-gray-700 shrink-0 flex justify-end">
-            <a v-if="modalItem.url && modalItem.url !== '#'"
+          <div class="p-3 border-t border-gray-700 shrink-0 flex justify-between items-center">
+            <a v-if="modalItem.url"
                :href="modalItem.url" target="_blank" rel="noopener"
-               class="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 transition">
-              🔗 查看原文
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-              </svg>
+               class="text-xs text-blue-400 hover:text-blue-300 underline hover:no-underline transition">
+              🔗 {{ modalItem.url }}
             </a>
+            <span v-else class="text-xs text-gray-500 italic">（无原文链接）</span>
+            <button
+              class="ml-4 px-3 py-1 text-[11px] rounded bg-blue-600 hover:bg-blue-500 text-white transition shrink-0"
+              @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
+              浏览器打开
+            </button>
           </div>
         </div>
       </div>
@@ -267,7 +269,7 @@ async function fetchNews(quiet = false) {
 
 function startAutoRefresh() {
   fetchNews(false)
-  refreshTimer.value = setInterval(() => fetchNews(true), 5 * 60 * 1000)
+  refreshTimer.value = setInterval(() => fetchNews(true), 20 * 60 * 1000)
 }
 
 onMounted(startAutoRefresh)

@@ -75,3 +75,26 @@
 
 - origin 使用 Token 认证
 - 代理：`http://192.168.1.50:7897`
+
+## 2026-03-31 下午（信息流收官）
+
+### 信息流重构（Phase 4 精准修复）
+
+#### UI 满宽
+- DashboardGrid：NewsFeed 移至 `gs-x="0" gs-w="12"`（占满全部 12 列，消除左侧空白）
+- 新闻列表高度：`min-height: 380px`，固定显示约 7 条，`overflow-y-auto` 自由滚动
+
+#### 白名单解除
+- 后端 `news.py`：`SAFE_NEWS_DOMAINS`、`_is_safe_url()` 已彻底移除
+- 所有 `http://` / `https://` URL 均可请求，防 SSRF 改为业务层兜底（超时 10s）
+- 实测：eastmoney 真实 URL 正文抓取成功（2358 字符）
+
+#### 150 条新闻池
+- `NEWS_SYMBOLS` 从 5 个指数扩展至 **30 只核心 A 股**（银行/保险/券商/科技/消费/周期）
+- 后端预热：scheduler 启动时调用 `fetch_latest_news(limit=150)` 填充去重缓存池
+- 刷新频率：前后端均改为 **20 分钟**一次
+- 实测返回：**150 条真实新闻** ✅
+
+#### Modal 详情弹窗
+- Footer 区域：直接显示原文 URL（可点击复制）+ "浏览器打开" 按钮
+- 异步正文：先显示"正文努力提取中..."，GET `/api/v1/news/detail` 后展示纯文本

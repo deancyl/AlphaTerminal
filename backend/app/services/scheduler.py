@@ -33,6 +33,16 @@ def backfill_daily_history():
             logger.error(f"[Scheduler] {sym} 日K回填失败: {e}", exc_info=True)
 
 
+def prefetch_news():
+    """启动时预热：拉取 150 条新闻填充去重缓存池"""
+    from app.services.news_engine import fetch_latest_news
+    try:
+        news = fetch_latest_news(limit=150)
+        logger.info(f"[Scheduler] 新闻预热完成: {len(news)} 条")
+    except Exception as e:
+        logger.error(f"[Scheduler] 新闻预热失败: {e}", exc_info=True)
+
+
 def start_scheduler():
     """启动 APScheduler"""
     from app.db import init_tables
@@ -43,6 +53,7 @@ def start_scheduler():
     def initial_backfill():
         import time; time.sleep(2)   # 等待 uvicorn 完全就绪
         backfill_daily_history()
+        prefetch_news()             # 预热 150 条新闻
     threading.Thread(target=initial_backfill, daemon=True).start()
 
     # 每 3 分钟拉取一次实时数据（akshare 有频率限制）
@@ -56,6 +67,18 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] 数据拉取任务已注册（每3分钟）")
+
+    # 每 20 分钟刷新一次新闻池
+    from app.services.news_engine import fetch_latest_news
+    scheduler.add_job(
+        lambda: fetch_latest_news(limit=150),
+        "interval",
+        seconds=20 * 60,
+        id="news_refresh",
+        name="NewsRefresh",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 新闻刷新任务已注册（每20分钟）")
 
     # 每 10 秒将缓冲写入主表
     scheduler.add_job(
