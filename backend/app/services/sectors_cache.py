@@ -59,61 +59,83 @@ def is_ready() -> bool:
 
 def fetch_and_cache_sectors():
     """
-    Task 1: 后台 Job — 主动抓取真实行业板块并更新缓存
+    后台 Job — 主动抓取真实行业+概念板块并更新缓存
     主用 akshare stock_board_industry_name_em()
     备选 akshare stock_board_concept_name_em()
     绝不在 API 路由线程中调用！
     """
     import akshare as ak
 
+    # 专业关键词加权列表
+    WEIGHT_KEYWORDS = ["算力", "人工智能", "AI", "中特估", "半导体设备", "高股息", "芯片", "机器人", "量子", "氢能"]
+    WEIGHT_BOOST = 5.0  # 关键词命中的排序权重加成
+
     rows = []
+
+    # ── 行业板块 ────────────────────────────────────────────────
     try:
         df = ak.stock_board_industry_name_em()
         if df is not None and not df.empty:
             for _, r in df.iterrows():
                 try:
+                    name = str(r.get("板块名称", "") or "")
                     rows.append({
-                        "name":       str(r.get("板块名称", "") or ""),
+                        "name":       name,
                         "symbol":     str(r.get("板块代码", "") or ""),
                         "change_pct": round(float(r.get("涨跌幅", 0) or 0), 2),
                         "price":      float(r.get("总市值", 0) or 0),
                         "volume":     float(r.get("成交额", 0) or 0),
                         "top_stock":  {"name": str(r.get("领涨股票", "") or ""), "code": ""},
                         "status":     "交易中",
+                        "_src":       "industry",
                     })
                 except (ValueError, TypeError):
                     continue
-            rows.sort(key=lambda x: x["change_pct"], reverse=True)
-            update_sectors(rows[:15])
-            logger.info(f"[SectorsCache] akshare 行业板块: {len(rows)} 个")
-            return
+            logger.info(f"[SectorsCache] 行业板块抓取: {len(rows)} 个")
     except Exception as e:
         logger.warning(f"[SectorsCache] industry 接口失败: {e}")
 
-    # 备选：概念板块
+    # ── 概念板块（融合）────────────────────────────────────────
     try:
         df2 = ak.stock_board_concept_name_em()
         if df2 is not None and not df2.empty:
-            rows = []
+            seen_names = {r["name"] for r in rows}
             for _, r in df2.iterrows():
                 try:
+                    name = str(r.get("板块名称", "") or "")
+                    # 去重：已存在于行业板的同名板块跳过
+                    if name in seen_names:
+                        continue
                     rows.append({
-                        "name":       str(r.get("板块名称", "") or ""),
+                        "name":       name,
                         "symbol":     str(r.get("板块代码", "") or ""),
                         "change_pct": round(float(r.get("涨跌幅", 0) or 0), 2),
                         "price":      float(r.get("总市值", 0) or 0),
                         "volume":     float(r.get("成交额", 0) or 0),
                         "top_stock":  {"name": str(r.get("领涨股票", "") or ""), "code": ""},
                         "status":     "交易中",
+                        "_src":       "concept",
                     })
                 except (ValueError, TypeError):
                     continue
-            rows.sort(key=lambda x: x["change_pct"], reverse=True)
-            update_sectors(rows[:15])
-            logger.info(f"[SectorsCache] akshare 概念板块: {len(rows)} 个")
-            return
+            logger.info(f"[SectorsCache] 概念板块抓取: {len(rows)} 个（去重后）")
     except Exception as e2:
-        logger.warning(f"[SectorsCache] concept 接口也失败: {e2}")
+        logger.warning(f"[SectorsCache] concept 接口失败: {e2}")
+
+    # ── 关键词加权排序 ─────────────────────────────────────────
+    def sort_key(x):
+        boost = 0.0
+        for kw in WEIGHT_KEYWORDS:
+            if kw.lower() in x["name"].lower():
+                boost += WEIGHT_BOOST
+                logger.info(f"[SectorsCache] 关键词命中: {x['name']} (+{WEIGHT_BOOST} 加权)")
+        return x["change_pct"] + boost
+
+    if rows:
+        rows.sort(key=sort_key, reverse=True)
+        update_sectors(rows[:20])  # 扩展到 Top 20（行业+概念融合）
+        logger.info(f"[SectorsCache] 综合排序完成，Top 20: {[r['name'] for r in rows[:10]]}")
+        return
 
     # 全挂：使用静态兜底
     update_sectors(_FALLBACK_SECTORS)

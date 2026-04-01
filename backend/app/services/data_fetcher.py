@@ -534,6 +534,8 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
         # AkShare 列名就是英文: ['date','open','high','low','close','volume']
         # 直接访问，不需要 rename
         date_col = df.columns[0]  # 'date'
+        # 动态匹配涨跌幅列名（akshare 版本差异：可能是 pct_chg / pct_change / 涨跌幅）
+        _pct_col = next((c for c in df.columns if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
 
         rows = []
         now_ts = int(time.time())
@@ -545,7 +547,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 low    = float(df.iloc[i]["low"])
                 close  = float(df.iloc[i]["close"])   # ← 直接用 df["close"]，不经过任何 swap
                 volume = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
-                pct    = float(df.iloc[i]["pct_chg"]) if "pct_chg" in df.columns else 0.0
+                pct    = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
                 rows.append({
                     "symbol":    symbol,
                     "date":      str(df.iloc[i][date_col])[:10],
@@ -629,12 +631,17 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
     获取 A 股指数 5 分钟 K 线（最近 N 根）
     格式: time, open, close, high, low, volume, amount
     Eastmoney secid: 0=深圳, 1=上海
+    注意: 000001 是上证指数（上海），平安银行是 000001（深圳），两者不同！
     """
-    # 判断交易所
-    if symbol.startswith("000") or symbol.startswith("399"):
-        secid = f"0.{symbol}"   # 深圳
-    else:
-        secid = f"1.{symbol}"   # 上海
+    # 精确映射表：彻底解决 000001 上证指数 vs 平安银行 的张冠李戴
+    _INDEX_SECID_MAP = {
+        "000001": "1.000001",  # 上证指数（上海）
+        "000300": "1.000300",  # 沪深300（上海）
+        "399001": "0.399001",  # 深证成指（深圳）
+        "399006": "0.399006",  # 创业板指（深圳）
+        "000688": "1.000688",  # 科创50（上海）
+    }
+    secid = _INDEX_SECID_MAP.get(symbol, f"1.{symbol}")
 
     import subprocess
     try:

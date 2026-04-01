@@ -556,6 +556,11 @@ async function fetchAndRender() {
 
 function retryChart() { chartError.value = ''; fetchAndRender() }
 
+// props.symbol 变化时立即重置名称（不等数据加载）
+watch(() => props.symbol, (sym) => {
+  currentName.value = props.name || '上证指数'
+})
+
 watch(() => [props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
 
 onMounted(async () => {

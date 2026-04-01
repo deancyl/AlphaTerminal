@@ -28,9 +28,9 @@ def backfill_daily_history():
     for sym in HISTORY_SYMBOLS:
         try:
             rows = fetch_china_index_history(sym)
-            logger.info(f"[Scheduler] {sym} 日K回填完成: {len(rows)} 条")
+            logger.info(f"[Scheduler] Backfill: Symbol {sym} success, items={len(rows)}")
         except Exception as e:
-            logger.error(f"[Scheduler] {sym} 日K回填失败: {e}", exc_info=True)
+            logger.error(f"[Scheduler] Backfill: Symbol {sym} failed: {e}", exc_info=True)
 
 
 def prefetch_news():
