@@ -10,8 +10,14 @@ _lock = threading.RLock()
 
 def _get_conn():
     conn = sqlite3.connect(_db_path, timeout=30)
-    conn.row_factory = sqlite3.Row  
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn.row_factory = sqlite3.Row
+    # 优先 WAL，目录无写权限时自动降级为 DELETE 模式
+    try:
+        cur = conn.execute("PRAGMA journal_mode=WAL")
+        if cur.fetchone()[0] != "wal":
+            conn.execute("PRAGMA journal_mode=DELETE")
+    except sqlite3.OperationalError:
+        conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
