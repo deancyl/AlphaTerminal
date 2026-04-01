@@ -133,6 +133,9 @@ def start_scheduler():
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")
 
+    # 启动时立即预热新闻缓存（非阻塞后台运行，20分钟后再由 NewsRefresh 任务接管）
+    prefetch_news()
+
 
 def stop_scheduler():
     """停止 APScheduler"""
