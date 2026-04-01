@@ -10,7 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-Beta%200.2.3-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases/tag/Beta-0.2.3)
+[![Release](https://img.shields.io/badge/Release-Beta%200.3.1-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases/tag/Beta-0.3.1)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
@@ -131,6 +131,31 @@ GET /market/sentiment/news     → 独立情感端点
 ```
 
 ---
+
+## 🆕 Beta 0.3.1 里程碑（2026-04-01）
+
+> Phase 5-8 精准增量合入，修复 SSHFS 死锁 + ECharts 溢出 + 国内指数归零
+
+| 指标 | 修复前 | Beta 0.3.1 |
+|------|--------|-------------|
+| SSHFS 死锁 | SQLite 在 FUSE 网络盘上卡死 | **DB 迁移至 `/home/deancyl0607/alpha_ultimate.db`** |
+| Wind 指数 | 仅 4 条（缺深证/创业板）| **Wind 6 指数：000001/000300/399001/399006/HSI/IXIC** |
+| ECharts 溢出 | BondDashboard/FuturesDashboard 图表溢出 | **`overflow-hidden relative` + `min-h-0` 约束** |
+| `_parse_sina_index` | `len < 10` 拒绝 6 字段 Sina 数据 | **`len < 6` 修正，parts[3] 直接作为 chg_pct** |
+| data_sources 注册表 | 无统一数据源配置 | **`app/config/data_sources.py` 完整注册表** |
+| bond/futures 路由 | Phase 7 路由骨架 | **完整 Mock + 真实接口降级** |
+| RLock 死锁 | 嵌套 `Lock.acquire()` 死锁 | **`threading.RLock()` 可重入锁** |
+
+### Phase 5-8 Cherry-pick 时间线
+
+```
+f87ea20  Phase 5: RLock 死锁修复 + 风向标 8 标的
+3f46a2d  Phase 6: BondDashboard + FuturesDashboard + Sidebar active
+773402f  Phase 7: bond/futures 路由 + 宏观数据 ECharts 骨架
+fe688ed  Phase 7P0: VHSI 真实数据 + 热力图塌陷修复
+16dda82   Phase 8: ECharts 溢出 + _parse_sina_index + data_sources.py
+0125dca  精准增量合入 commit
+```
 
 ## 🚀 快速启动
 

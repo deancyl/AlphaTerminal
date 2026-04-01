@@ -275,3 +275,74 @@
 ## 正式 Release
 - **v0.1.0-beta** 标签已创建
 - GitHub: https://github.com/deancyl/AlphaTerminal
+
+---
+
+## Beta 0.3.1 里程碑（2026-04-01）
+
+### 背景：Phase 5-8 精准增量灾难与恢复
+
+2026-04-01 上午，Phase 5-8 所有代码以 dangling commit 形式存在于本地，从未合入 master。
+试图发布 Beta-0.3.0 时触发了 SSHFS 死锁 + 指数归零 + ECharts 溢出等多个并发 Bug。
+
+### 根本原因
+
+1. **SSHFS 死锁**：`/vol3/@apphome/trim.openclaw/` 为 SSHFS 挂载点，SQLite WAL 模式写操作触发 I/O 阻塞，导致 `init_tables()` → `_get_conn()` 在 `PRAGMA journal_mode=WAL` 处卡死
+2. **git cherry-pick 误判**：Phase 5-8 commits 内容实际已存在于 fe688ed（更完整的 Phase 7 版本），重复 cherry-pick 产生大量冲突
+3. **数据库版本混乱**：`/tmp/alphaterminal.db`（残留）vs `/home/deancyl0607/alpha_ultimate.db`（生产）vs `/tmp/alphaterminal_v2.db`（测试）三个版本同时存在
+
+### 精准恢复步骤
+
+1. `git reset --hard fe688ed`（Phase 7 VHSI 节点，黄金时间点）
+2. 解决 cherry-pick f87ea20/3f46a2d/773402f/16dda82 冲突（保留 Phase 7 更完整版本）
+3. `git commit -m "Phase 5-8 recovery"` → `0125dca`
+4. 强制 push：`git push --force origin master`
+
+### 关键修复清单
+
+| 修复 | 文件 | 详情 |
+|------|------|------|
+| RLock 死锁 | `market.py` | `threading.Lock()` → `threading.RLock()` |
+| ECharts 溢出 | `BondDashboard.vue`/`FuturesDashboard.vue` | `overflow-hidden relative min-h-0` |
+| `_parse_sina_index` | `data_fetcher.py` | `len < 10` → `len < 6`，`parts[3]` 直接作为 `chg_pct` |
+| Wind 6 指数 | `market.py` | `WIND_SYMBOLS` 新增 399001/399006 |
+| data_sources 注册表 | `config/data_sources.py` | 147 行数据源配置 |
+| 数据库路径 | `database.py` | `/home/deancyl0607/alpha_ultimate.db` |
+
+### API 验证结果（Beta 0.3.1）
+
+```
+Health:              ✅ 200 OK
+Wind 6 indices:     ✅ 000001/000300/399001/399006/HSI/IXIC 全非零
+china_all:          ✅ 10 条国内指数
+Global:             ✅ DJI + HSI + IXIC
+Bond yield_curve:   ✅ 8 期限国债曲线
+Futures indexes:    ✅ IF/IC/IM
+News flash:         ⚠️ cache_empty（scheduler 首次调度）
+K-line history:     ⚠️ 0 bars（待 backfill）
+```
+
+### Git Commit 时间线
+
+```
+f87ea20  Phase 5: RLock deadlock fix + wind 8标的
+3f46a2d  Phase 6: BondDashboard + FuturesDashboard + Sidebar
+773402f  Phase 7: bond/futures routers + ECharts skeletons
+fe688ed  Phase 7P0: VHSI real data + heatmap collapse fix ← 黄金节点
+16dda82  Phase 8: ECharts overflow + _parse_sina_index + data_sources
+0125dca  Phase 5-8 recovery (forced push to origin/master)
+```
+
+### 工程教训
+
+1. **SQLite 绝对不能放在 SSHFS/FUSE 网络文件系统上**（WAL 模式写操作会触发 I/O 阻塞）
+2. **发版前必须验证前端真实渲染**，不能只看后端 API 200
+3. **每次 cherry-pick 必须物理验证**，不盲目推进
+4. **AI 容易产生"路径幻觉"**，必须验证文件系统真实权属和进程间隔离性
+5. **快速合入不叫效率**，能一次性通过物理探针验证才叫质量
+
+---
+
+## 正式 Release
+- **v0.3.1-beta** 标签已创建（2026-04-01）
+- GitHub: https://github.com/deancyl/AlphaTerminal

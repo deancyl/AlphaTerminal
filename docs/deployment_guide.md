@@ -304,6 +304,41 @@ curl "http://localhost:8002/api/v1/market/history/000001?period=daily" \
 
 ---
 
+### Q8：前端启动报错 `Exit 127: node: not found`，但 `npm install` 明明成功了
+
+**原因**：Node.js 安装在非标准路径（如 `/var/apps/nodejs_v22/target/bin/`），Shell 的 `PATH` 环境变量未包含该路径。
+
+**诊断**：
+```bash
+which node     # 如果返回空，说明 PATH 未包含
+echo $PATH
+```
+
+**解决方案（方案一：永久修改 PATH）**：
+```bash
+# 在 ~/.bashrc 或 ~/.profile 中添加：
+echo 'export PATH="/var/apps/nodejs_v22/target/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+which node   # 应返回 /var/apps/nodejs_v22/target/bin/node
+```
+
+**解决方案（方案二：使用绝对路径启动 Vite）**：
+```bash
+cd frontend
+/var/apps/nodejs_v22/target/bin/node \
+  ./node_modules/vite/bin/vite.js \
+  --host 0.0.0.0 --port 60100
+```
+
+**验证**：
+```bash
+node --version   # 应显示 v22.18.0
+npm --version    # 应显示 10.9.3
+curl http://localhost:60100/   # 应返回 HTML
+```
+
+---
+
 ## ⚙️ 运维命令速查
 
 ```bash
