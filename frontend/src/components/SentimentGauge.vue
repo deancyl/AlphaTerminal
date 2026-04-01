@@ -155,8 +155,9 @@ function formatPrice(v) {
 // ── ECharts 折线图：上涨家数全天走势 ─────────────────────────────
 function buildIntradayOption(series) {
   if (!series || !series.length) return {}
-  const times  = series.map(d => d.time)
-  const values = series.map(d => d.advance)
+  const times   = series.map(d => d.time)
+  const advance = series.map(d => d.advance)
+  const decline = series.map(d => d.decline)
 
   return {
     backgroundColor: 'transparent',
@@ -168,10 +169,17 @@ function buildIntradayOption(series) {
       formatter: (params) => {
         const p = params[0]
         return `<span style="color:#6b7280;font-size:9px">${p.name}</span><br/>`
-          + `<span style="color:#ef232a;font-size:11px;font-weight:bold">${p.value} 家</span>`
+          + params.map(s => `<span style="color:${s.color};font-size:10px">${s.seriesName}: <b>${s.value}</b>家</span>`).join('<br/>')
       },
     },
-    grid: { top: 4, right: 8, bottom: 16, left: 40, containLabel: false },
+    legend: {
+      data: ['上涨', '下跌'],
+      top: 0, right: 4,
+      textStyle: { color: '#9ca3af', fontSize: 8 },
+      icon: 'roundRect',
+      itemWidth: 12, itemHeight: 6,
+    },
+    grid: { top: 20, right: 8, bottom: 16, left: 40, containLabel: false },
     xAxis: {
       type: 'category',
       data: times,
@@ -189,24 +197,42 @@ function buildIntradayOption(series) {
       splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
       axisLine: { show: false },
     },
-    series: [{
-      name: '上涨家数',
-      type: 'line',
-      data: values,
-      smooth: true,
-      lineStyle: { color: '#ef232a', width: 1.5 },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(239,35,42,0.25)' },
-            { offset: 1, color: 'rgba(239,35,42,0.02)' },
-          ],
+    series: [
+      {
+        name: '上涨',
+        type: 'line',
+        data: advance,
+        smooth: true,
+        lineStyle: { color: '#ef232a', width: 1.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(239,35,42,0.20)' },
+              { offset: 1, color: 'rgba(239,35,42,0.01)' },
+            ],
+          },
         },
+        symbol: 'none',
       },
-      symbol: 'none',
-      sampling: 'lttb',
-    }],
+      {
+        name: '下跌',
+        type: 'line',
+        data: decline,
+        smooth: true,
+        lineStyle: { color: '#14b143', width: 1.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(20,177,67,0.20)' },
+              { offset: 1, color: 'rgba(20,177,67,0.01)' },
+            ],
+          },
+        },
+        symbol: 'none',
+      },
+    ],
   }
 }
 

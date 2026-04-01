@@ -33,7 +33,8 @@ SINA_HEADERS = {
 
 
 def _row(symbol: str, name: str, market: str,
-         price, change_pct, volume, data_type: str = "index") -> dict:
+         price, change_pct, volume, data_type: str = "index",
+         amount=None, turnover=None) -> dict:
     return {
         "symbol":     symbol,
         "name":       name,
@@ -41,6 +42,8 @@ def _row(symbol: str, name: str, market: str,
         "price":      float(price) if price not in (None, "", "NA", "NaN") else None,
         "change_pct": float(change_pct) if change_pct not in (None, "", "NA", "NaN") else None,
         "volume":     float(volume) if volume not in (None, "", "NA", "NaN") else None,
+        "amount":     float(amount) if amount not in (None, "", "NA", "NaN") else None,
+        "turnover":   float(turnover) if turnover not in (None, "", "NA", "NaN") else None,
         "timestamp":  int(time.time()),
         "data_type":  data_type,
     }
@@ -49,13 +52,17 @@ def _row(symbol: str, name: str, market: str,
 def _parse_sina_hq(raw: str) -> dict | None:
     """
     解析 Sina HQ 格式: var hq_str_s_sh000001="上证指数,3923.2869,9.5631,0.24,5955894,83982243";
-    字段: 名称, 当前价, 涨跌额, 涨跌幅%, 成交量(手), 成交额(元)
+    完整34字段个股:
+      [0]名称 [1]当前价 [2]昨收 [3]开盘 [4]最高 [5]最低
+      [6]买一价 [7]卖一价
+      [8]成交量(股) [9]成交额(元) [10]换手率(%)
+      [11-33]盘口
     """
     m = re.search(r'"([^"]+)"', raw)
     if not m:
         return None
     parts = m.group(1).split(",")
-    if len(parts) < 6:
+    if len(parts) < 11:
         return None
     try:
         return {
@@ -63,8 +70,9 @@ def _parse_sina_hq(raw: str) -> dict | None:
             "price":      float(parts[1]),
             "change":     float(parts[2]),
             "change_pct": float(parts[3]),
-            "volume":     float(parts[4]) * 100,  # 手→股
-            "turnover":   float(parts[5]),
+            "volume":     float(parts[8]) if len(parts) > 8 else 0,   # 成交量(股)
+            "amount":     float(parts[9]) if len(parts) > 9 else 0,   # 成交额(元)
+            "turnover":   float(parts[10]) if len(parts) > 10 else 0, # 换手率(%)
         }
     except (ValueError, IndexError):
         return None
@@ -498,7 +506,9 @@ def fetch_china_all_indices() -> list[dict]:
             sym, disp, mkt = sym_map[code_key]
             parsed = _parse_sina_hq(line)
             if parsed:
-                rows.append(_row(sym, disp, mkt, parsed["price"], parsed["change_pct"], parsed["volume"]))
+                rows.append(_row(sym, disp, mkt,
+                                  parsed["price"], parsed["change_pct"], parsed["volume"],
+                                  amount=parsed.get("amount"), turnover=parsed.get("turnover")))
                 logger.info(f"[Sina] {disp}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
     except Exception as e:
         logger.error(f"[Sina] fetch_china_all_indices 失败: {type(e).__name__}: {e}")

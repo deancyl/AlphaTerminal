@@ -126,7 +126,9 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
                     volume   = float(parts[6]) if parts[6] else 0.0
                     chg_pct  = float(parts[32]) if parts[32] else 0.0
                     chg_val  = round(price - y_close, 2) if y_close else 0.0
-                    turnover = float(parts[38]) if (len(parts) > 38 and parts[38]) else 0.0
+                    # 腾讯字段：[37]=成交额(万元) [38]=换手率(%)
+                    amount   = float(parts[37]) * 10000 if (len(parts) > 37 and parts[37]) else 0.0  # 万元→元
+                    turnover = float(parts[38]) if (len(parts) > 38 and parts[38]) else 0.0   # 换手率(%)
 
                     if not name or price <= 0 or not code:
                         continue
@@ -149,6 +151,7 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
                         "chg":      chg_val,
                         "chg_pct":  round(chg_pct, 2),
                         "turnover": round(turnover, 2),
+                        "amount":   round(amount, 0),   # 成交额(元)
                         "market":   market,
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     })

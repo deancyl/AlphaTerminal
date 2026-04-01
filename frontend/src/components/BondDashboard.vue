@@ -8,53 +8,69 @@
         <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
       </div>
 
-      <!-- 矩阵表头 -->
-      <div class="grid" :style="{ gridTemplateColumns: '80px repeat(3, 1fr)', gap: '2px' }">
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">国债 CNYB</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">国开 CDB</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">口行 EXIM</div>
+      <!-- Tab 切换：国债 / 国开 / 口行（解决手机端垂直空间挤压） -->
+      <div class="flex border-b border-gray-700 mb-1.5">
+        <button
+          v-for="src in SOURCES"
+          :key="src.key"
+          class="flex-1 py-1 text-[9px] font-medium text-center border-b-2 transition-colors"
+          :class="activeSource === src.key
+            ? 'border-bullish text-bullish'
+            : 'border-transparent text-terminal-dim hover:text-gray-300'"
+          @click="activeSource = src.key"
+        >
+          {{ src.label }}
+        </button>
       </div>
 
-      <!-- 矩阵数据行 -->
+      <!-- 矩阵表头（单列当前来源） -->
+      <div class="grid" :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }">
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">
+          {{ SOURCES.find(s => s.key === activeSource)?.label }}
+        </div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">基点变化</div>
+      </div>
+
+      <!-- 矩阵数据行（7期限 × 当前来源） -->
       <div
         v-for="tenor in TENORS"
-        :key="tenor.key"
+        :key="`${activeSource}-${tenor.key}`"
         class="grid hover:bg-white/5 transition-colors rounded"
-        :style="{ gridTemplateColumns: '80px repeat(3, 1fr)', gap: '2px' }"
+        :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }"
       >
         <!-- 期限标签 -->
         <div class="py-1.5 px-1 flex items-center">
           <span class="text-[10px] text-terminal-dim">{{ tenor.label }}</span>
         </div>
 
-        <!-- 国债 -->
+        <!-- 当前来源收益率 -->
         <div
-          v-for="source in SOURCES"
-          :key="`${tenor.key}-${source.key}`"
           class="py-1.5 px-2 border-l border-gray-800/50 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded transition-all"
-          :title="`${tenor.label} ${source.label}`"
+          :title="`${activeSource} ${tenor.label}`"
         >
-          <div class="flex flex-col">
-            <span
-              class="text-[11px] font-mono font-semibold"
-              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
-            >
-              {{ formatYield(getCell(tenor.key, source.key)?.yield) }}
-            </span>
-          </div>
+          <span
+            class="text-[11px] font-mono font-semibold"
+            :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
+          >
+            {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
+          </span>
+        </div>
+
+        <!-- 基点变化 -->
+        <div class="py-1.5 px-2 border-l border-gray-800/50 flex items-center justify-between">
           <div class="flex flex-col items-end">
             <span
               class="text-[9px] font-mono"
-              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
             >
-              {{ formatBps(getCell(tenor.key, source.key)?.change_bps) }}
+              {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
             </span>
             <!-- 迷你变化条 -->
             <div
-              class="h-0.5 w-8 rounded-full mt-0.5"
-              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'bg-red-400/40' : 'bg-green-400/40'"
-              :style="{ width: Math.min(32, Math.abs(getCell(tenor.key, source.key)?.change_bps || 0) * 3) + 'px' }"
+              class="h-0.5 rounded-full mt-0.5"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'bg-red-400/40' : 'bg-green-400/40'"
+              :style="{ width: Math.min(40, Math.abs(getCell(tenor.key, activeSource)?.change_bps || 0) * 4) + 'px' }"
             ></div>
           </div>
         </div>
@@ -150,6 +166,9 @@ const yieldCurve    = ref({})
 const yieldUpdateTime = ref('')
 const bondList = ref([])
 
+// 手机端 Tab 切换（国债/国开/口行）
+const activeSource = ref('gov')   // 默认显示国债
+
 const hasData = computed(() => Object.keys(yieldMatrix.value).length > 0)
 
 function getCell(tenor, source) {
@@ -158,7 +177,8 @@ function getCell(tenor, source) {
 
 function formatYield(v) {
   if (v == null || isNaN(v)) return '--'
-  return (v / 100).toFixed(3) + '%'
+  // akshare bond_china_yield 返回值已是百分比形式（如 1.8244 = 1.8244%），无需 /100
+  return Number(v).toFixed(4) + '%'
 }
 
 function formatBps(bps) {

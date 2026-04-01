@@ -237,8 +237,9 @@ def _immediate_fill():
                 "price":    float(r.get("price") or 0),
                 "chg":      float(r.get("change_pct", 0) or 0) * float(r.get("price") or 0) / 100,
                 "chg_pct":  pct,
-                "turnover": 0.0,
+                "turnover": float(r.get("turnover") or 0),
                 "volume":   float(r.get("volume") or 0),
+                "amount":   float(r.get("amount") or 0),
                 "market":   "SH" if code.startswith("000") else "SZ",
                 "timestamp": r.get("time", "") or "",
             })

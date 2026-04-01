@@ -17,21 +17,21 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# ── 日内上涨家数历史（每15秒追加一点，最多480个点=2小时轮询）────────
+# ── 日内多空历史（每15秒追加一点，最多480个点=2小时轮询）────────
 _INTRADAY_MAX_POINTS = 480
-_INTRADAY_HISTORY = []    # [{time: 'HH:MM', advance: N}]
+_INTRADAY_HISTORY = []    # [{time: 'HH:MM', advance: N, decline: N}]
 _INTRADAY_LAST_TS = 0    # 上次追加时间
 
 
-def _append_intraday(advance: int):
-    """每15秒被 scheduler 调用一次，追加一个数据点"""
+def _append_intraday(advance: int, decline: int):
+    """每15秒被 scheduler 调用一次，追加一个多空数据点"""
     global _INTRADAY_HISTORY, _INTRADAY_LAST_TS
     now = time.time()
     if now - _INTRADAY_LAST_TS < 14:   # 防抖：至少间隔14秒
         return
     _INTRADAY_LAST_TS = now
     t = datetime.now().strftime("%H:%M")
-    _INTRADAY_HISTORY.append({"time": t, "advance": advance})
+    _INTRADAY_HISTORY.append({"time": t, "advance": advance, "decline": decline})
     if len(_INTRADAY_HISTORY) > _INTRADAY_MAX_POINTS:
         _INTRADAY_HISTORY.pop(0)
 
@@ -58,13 +58,14 @@ async def sentiment_intraday():
     """
     A股全天上涨家数折线图数据
     每15秒追加一个点，最多保留2小时历史（480个点）
-    返回: {intraday: [{time: 'HH:MM', advance: N}], timestamp: str}
+    返回: {intraday: [{time: 'HH:MM', advance: N, decline: N}], timestamp: str}
     """
     h = get_histogram()
-    _append_intraday(h.get("advance", 0))
+    _append_intraday(h.get("advance", 0), h.get("decline", 0))
     return {
         "intraday": list(_INTRADAY_HISTORY),
-        "current": h.get("advance", 0),
+        "advance": h.get("advance", 0),
+        "decline": h.get("decline", 0),
         "timestamp": datetime.now().isoformat(),
     }
 
