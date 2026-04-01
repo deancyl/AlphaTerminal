@@ -1,14 +1,16 @@
 """
 市场数据接口 - Phase 7 + Phase 5
 所有数据从 SQLite market_data_realtime 读取
-宏观大宗商品（USD/CNH·黄金·WTI·VIX）由 akshare 实时抓取，5 分钟缓存
+宏观大宗商品（USD/CNH·黄金·WTI·VIX）由腾讯/Sina 实时接口抓取，10 分钟缓存
 """
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime
 from fastapi import APIRouter
+import httpx
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
 
@@ -16,42 +18,222 @@ from app.utils.market_status import is_market_open
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── Phase 5: 宏观大宗商品缓存（5 分钟 TTL）─────────────────────────────
+# ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
 os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
 os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
 os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
 os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
 
 _MACRO_CACHE       = {}   # {symbol: {price, change_pct, name, unit, timestamp}}
-_MACRO_CACHE_TTL  = 300  # 5 分钟
-_MACRO_CACHE_LOCK  = threading.RLock()  # RLock 可重入，解决嵌套调用死锁
+_MACRO_CACHE_TTL  = 600  # 10 分钟（Phase 7 延长 TTL）
+_MACRO_CACHE_LOCK  = threading.RLock()  # RLock 可重入
 _LAST_FETCH_TIME   = 0   # 0 = immediately refresh on first call
+_REFRESH_SEMAPHORE = threading.Semaphore(1)  # 防止并发刷新
+
+SINA_HEADERS = {
+    "Referer": "https://finance.sina.com.cn",
+    "User-Agent": "Mozilla/5.0 (compatible; AlphaTerminal/1.0)",
+}
+
+
+def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
+    """从 Sina HQ 和腾讯 qt 拉取多个标的，返回 {symbol: [fields...]}"""
+    results = {}
+
+    # 1) Sina HQ（外汇、黄金、原油）
+    sina_syms = [s for s in symbols if s not in ("CNHUSD",)]
+    if sina_syms:
+        codes = ",".join(sina_syms)
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(
+                    f"https://hq.sinajs.cn/list={codes}",
+                    headers=SINA_HEADERS,
+                )
+                resp.raise_for_status()
+                raw = resp.text
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line or "=" not in line:
+                    continue
+                try:
+                    m = re.match(r'var hq_str_(\w+)="(.*?)"', line)
+                    if m:
+                        sym = m.group(1)
+                        fields = [f.strip() for f in m.group(2).split(",")]
+                        results[sym] = fields
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"[Macro] Sina fetch failed: {e}")
+
+    # 2) 腾讯 qt（CNH/USD 汇率备选，过代理）
+    cnh_syms = [s for s in symbols if s in ("CNHUSD",)]
+    if cnh_syms:
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                resp = client.get(
+                    f"https://qt.gtimg.cn/q={','.join(cnh_syms)}",
+                    headers={"Referer": "https://gu.qq.com", "User-Agent": "Mozilla/5.0"},
+                )
+                resp.raise_for_status()
+                raw = resp.text
+            for line in raw.splitlines():
+                line = line.strip()
+                if "none_match" in line or "=" not in line:
+                    continue
+                try:
+                    sym = line.split("=")[0].replace("v_", "").strip('" \n')
+                    fields = line.split("=")[1].strip('";\n "').split(",")
+                    results[sym] = [f.strip() for f in fields]
+                except Exception:
+                    continue
+        except Exception as e:
+            logger.warning(f"[Macro] Tencent qt fetch failed: {e}")
+
+    return results
+
+
+def _parse_cnyusd(data: dict) -> tuple[float, float, str]:
+    """
+    解析 CNYUSD，返回 (USDCNY, 涨跌幅%, 时间戳)
+    Sina 格式: [时间, 中行汇买价, 钞买价, 汇卖价, ?, 汇买价2, 钞卖价2, 汇卖价2, 折算价, 货币名, 日期]
+    中行汇买价 0.1452 ≈ 0.1452 USD per CNY → USDCNY = 1/0.1452 ≈ 6.887
+    注意：Sina 数据可能有延迟，建议以央行中间价为准做参考
+    """
+    f = data.get("CNYUSD", [])
+    if len(f) < 10:
+        raise ValueError("CNYUSD data too short")
+    price_usdpcny = float(f[1])   # USD per CNY (中行汇买价)
+    prev          = float(f[2])   # 前一价格
+    t             = f[0]
+    pct           = ((price_usdpcny - prev) / prev * 100) if prev else 0.0
+    usdcny        = round(1.0 / price_usdpcny, 4) if price_usdpcny else 7.25
+    return usdcny, round(pct, 4), t
+
+
+def _parse_hf_gold(data: dict) -> tuple[float, float, str]:
+    """
+    解析 hf_GC（上海金交易所 SGE 黄金现货，RMB/盎司）
+    字段: [当前价, 涨跌%, 昨收, 开, 高, 低, 时间, 昨结算, ...]
+    """
+    f = data.get("hf_GC", [])
+    if len(f) < 8:
+        raise ValueError("hf_GC data too short")
+    try:
+        price = float(f[0])   # RMB/oz（SGE 现货金的报价单位）
+        prev  = float(f[7])   # 昨结算 RMB/oz
+        pct   = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
+        tick  = f[6] if len(f) > 6 else ""
+    except Exception as e:
+        raise ValueError(f"hf_GC parse error: {e}")
+    return round(price, 2), round(pct, 2), tick
+
+
+def _get_cnyusd_approx() -> float:
+    """CNY/USD ≈ 7.25（固定估算，用于内部换算）"""
+    return 7.25
+
+
+def _parse_hf_cl(data: dict) -> tuple[float, float, str]:
+    """
+    解析 hf_CL（WTI 原油期货，USD/桶）
+    字段: [当前价, 涨跌%, 昨收, 开, 高, 低, 时间, 昨结算, ...]
+    """
+    f = data.get("hf_CL", [])
+    if len(f) < 8:
+        raise ValueError("hf_CL data too short")
+    try:
+        price = float(f[0])   # USD/桶（WTI 期货报价）
+        prev  = float(f[7])   # 昨结算
+        pct   = float(f[1]) if f[1] else (((price - prev) / prev * 100) if prev else 0.0)
+        tick  = f[6] if len(f) > 6 else ""
+    except Exception as e:
+        raise ValueError(f"hf_CL parse error: {e}")
+    return round(price, 2), round(pct, 2), tick
 
 
 def _fetch_macro_data():
-    """Phase 5 降级方案：静态 Mock 数据，akshare 超时兜底"""
+    """
+    Phase 7: 真实数据抓取（腾讯/Sina HQ）
+    - USD/CNH: CNYUSD → 换算
+    - COMEX黄金: Sina hf_GC → RMB/g → USD/oz
+    - WTI原油: Sina hf_CL → USD/桶
+    - VIX: 暂无可靠免费接口 → 保持上次值或静态兜底
+    """
     global _MACRO_CACHE, _LAST_FETCH_TIME
-    now = datetime.now().strftime("%H:%M")
-    results = {
-        "USD/CNH": {"name": "美元/离岸人民币", "price": 7.2531, "unit": "", "change_pct": +0.12, "timestamp": now},
-        "GOLD":    {"name": "COMEX黄金",      "price": 3318.40, "unit": "$/oz",  "change_pct": +0.67, "timestamp": now},
-        "WTI":     {"name": "WTI原油",        "price": 68.92,  "unit": "$/桶", "change_pct": -1.28, "timestamp": now},
-        "VIX":     {"name": "VIX恐慌指数",     "price": 19.34,  "unit": "",       "change_pct": +5.42, "timestamp": now},
-    }
-    with _MACRO_CACHE_LOCK:
-        _MACRO_CACHE = results
-        _LAST_FETCH_TIME = time.time()
-    logger.info(f"[Macro] Mock data loaded: USD=7.2531 GOLD=3318.40 WTI=68.92 VIX=19.34")
+    now_str = datetime.now().strftime("%H:%M")
+
+    try:
+        # 一次性拉取所有需要的数据
+        raw = _fetch_from_sina(["CNYUSD", "hf_GC", "hf_CL"])
+
+        usdcnh_price = 7.2531
+        usdcnh_pct   = 0.0
+        gold_price   = 3318.40
+        gold_pct     = 0.0
+        wti_price    = 68.92
+        wti_pct      = 0.0
+        fetched = False
+
+        if "CNYUSD" in raw and raw["CNYUSD"]:
+            try:
+                usdcny_price, usdcny_pct, _ = _parse_cnyusd(raw)
+                fetched = True
+            except Exception as e:
+                logger.warning(f"[Macro] CNYUSD parse error: {e}")
+
+        if "hf_GC" in raw and raw["hf_GC"]:
+            try:
+                gold_price, gold_pct, _ = _parse_hf_gold(raw)
+                fetched = True
+            except Exception as e:
+                logger.warning(f"[Macro] GOLD parse error: {e}")
+
+        if "hf_CL" in raw and raw["hf_CL"]:
+            try:
+                wti_price, wti_pct, _ = _parse_hf_cl(raw)
+                fetched = True
+            except Exception as e:
+                logger.warning(f"[Macro] WTI parse error: {e}")
+
+        results = {
+            "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",        "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
+            "GOLD":    {"name": "SGE黄金(人民币)",  "price": round(gold_price, 2),   "unit": "¥/oz",    "change_pct": round(gold_pct, 2),  "timestamp": now_str},
+            "WTI":     {"name": "WTI原油(美元)",     "price": round(wti_price, 2),    "unit": "$/桶",    "change_pct": round(wti_pct, 2),   "timestamp": now_str},
+            "VIX":     {"name": "VIX恐慌指数",       "price": 19.34,                  "unit": "",         "change_pct": +5.42,              "timestamp": now_str},  # 暂无可靠源，静态兜底
+        }
+
+        with _MACRO_CACHE_LOCK:
+            _MACRO_CACHE = results
+            _LAST_FETCH_TIME = time.time()
+        logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥/oz WTI={wti_price} VIX=19.34(m)")
+
+    except Exception as e:
+        logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")
+        # 保持旧缓存不变，不抛异常
 
 
 def _get_macro_data() -> dict:
-    """返回宏观缓存（TTL 5 分钟，过期则触发后台刷新）"""
+    """
+    返回宏观缓存（TTL 10 分钟）。
+    缓存空或过期时：立即返回旧缓存，同时后台触发一次异步刷新（绝不阻塞 API）。
+    """
     global _MACRO_CACHE, _LAST_FETCH_TIME
+    stale = not _MACRO_CACHE or (time.time() - _LAST_FETCH_TIME) > _MACRO_CACHE_TTL
+
+    if stale and _REFRESH_SEMAPHORE.acquire(blocking=False):
+        # 立即返回旧缓存（避免阻塞），后台刷新
+        def bg():
+            try:
+                _fetch_macro_data()
+            finally:
+                _REFRESH_SEMAPHORE.release()
+        t = threading.Thread(target=bg, daemon=True, name="macro-refresh")
+        t.start()
+
     with _MACRO_CACHE_LOCK:
-        if not _MACRO_CACHE or (time.time() - _LAST_FETCH_TIME) > _MACRO_CACHE_TTL:
-            # 缓存空或过期：同步执行一次填充（毫秒级，不阻塞 API）
-            _fetch_macro_data()
-        return dict(_MACRO_CACHE)
+        return dict(_MACRO_CACHE) if _MACRO_CACHE else {}
 
 
 @router.get("/market/macro")
