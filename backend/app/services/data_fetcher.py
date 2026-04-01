@@ -613,7 +613,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                     })
 
                 if periodic_rows:
-                    buffer_insert_periodic(periodic_rows, "weekly")
+                    buffer_insert_periodic(periodic_rows)
                     logger.info(f"[AkShare] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
 
         return rows[-100:]

@@ -249,7 +249,7 @@ const currentIndexOption = computed(() => ({
 }))
 
 const periods = [
-  { key: 'realtime', label: '分时' },
+  { key: 'minutely', label: '分时' },
   { key: 'daily',    label: '日K' },
   { key: 'weekly',   label: '周K' },
   { key: 'monthly',  label: '月K' },

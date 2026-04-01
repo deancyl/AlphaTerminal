@@ -6,7 +6,8 @@
     </div>
 
     <!-- Phase 4: 热力色块矩阵（flex-wrap pill cards） -->
-    <div class="flex-1 overflow-auto">
+    <!-- max-h 约束：确保 Top 15 在 GridStack 固定格内可滚动 -->
+    <div class="flex-1" style="max-height: 300px; overflow-y: auto;">
       <div class="flex flex-wrap gap-1.5">
         <div
           v-for="sec in sectors"
