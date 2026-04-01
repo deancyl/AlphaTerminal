@@ -458,6 +458,61 @@ def get_stock_pool():
 
 ---
 
+### Q9：后端启动报错 `sqlite3.OperationalError: attempt to write a readonly database`
+
+**原因**：数据库文件或所在目录对当前进程 UID 没有写权限。常见于：
+- DB 文件在 SSHFS/FUSE 挂载点上（挂载层强制只读）
+- DB 文件权限为 `rw-------`（仅 owner 可写）
+- 进程以非文件 owner 的 UID 运行
+
+**诊断**：
+```bash
+# 检查文件权限和 owner
+ls -la /home/deancyl0607/alpha_ultimate.db
+# 检查目录权限
+ls -ld /home/deancyl0607/
+# 检查当前用户 UID
+id
+```
+
+**解决方案（按优先级）**：
+
+**方案 A：修改文件权限（推荐，最简单）**：
+```bash
+chmod 666 /home/deancyl0607/alpha_ultimate.db
+```
+
+**方案 B：使用 /tmp 本地临时数据库（开发环境）**：
+AlphaTerminal 会自动降级为 `/tmp/alpha_ultimate_active.db`（WAL 正常）
+
+**方案 C：修改目录权限**：
+```bash
+chmod 777 /home/deancyl0607/
+chmod 666 /home/deancyl0607/alpha_ultimate.db
+```
+
+**方案 D：若遇 SSHFS 强制只读（挂载层限制）**：
+```bash
+# 将 DB 复制到本地 /tmp，从那里启动
+cp /home/deancyl0607/alpha_ultimate.db /tmp/alpha_ultimate_active.db
+# AlphaTerminal 会自动使用 /tmp 路径（已内置降级逻辑）
+```
+
+**验证修复**：
+```bash
+python3 -c "
+import sqlite3
+db = '/home/deancyl0607/alpha_ultimate.db'
+conn = sqlite3.connect(db, timeout=5)
+conn.execute('PRAGMA journal_mode=WAL')
+cnt = conn.execute('SELECT COUNT(*) FROM market_data_realtime').fetchone()[0]
+print('OK, realtime rows:', cnt)
+conn.close()
+"
+```
+
+---
+
 ## 📞 获取帮助
 
 - **GitHub Issues**: https://github.com/deancyl/AlphaTerminal/issues

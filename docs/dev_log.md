@@ -346,3 +346,32 @@ fe688ed  Phase 7P0: VHSI real data + heatmap collapse fix ← 黄金节点
 ## 正式 Release
 - **v0.3.1-beta** 标签已创建（2026-04-01）
 - GitHub: https://github.com/deancyl/AlphaTerminal
+
+---
+
+## Beta-0.3.1 里程碑（2026-04-01 22:45）
+
+### 终极修复清单
+
+| Bug | 根因 | 修复 | 验证 |
+|-----|------|------|------|
+| 分时显示 11.xx | `secid=0.000001` 指向平安银行 | `_INDEX_SECID_MAP` 精确映射 `000001→1.000001` | ✅ 3948.55 |
+| 月K/周K全空 | `buffer_insert_periodic(,"weekly")` 硬编码覆盖 | 移除第二个参数，动态列名匹配 | ✅ 300 bars |
+| 风向标垂直留白 | 单列 full-width 垂直堆叠 | `grid grid-cols-2` 两列卡片网格 | ✅ |
+| 行业板块稀缺 | 仅 8 个行业 | 行业+概念融合 Top 20 + 关键词加权 | ✅ |
+| Header 名称残留 | `currentName` 仅从 props 初始化 | `watch props.symbol` 响应式重置 | ✅ |
+| SSHFS 死锁 | WAL 模式在 FUSE 挂载层卡死 | DB 迁移至 `/tmp/alpha_ultimate_active.db` | ✅ WAL 正常 |
+| DB 权限壁垒 | trim.openclaw UID 无写 home 目录权限 | chmod 666 + DELETE 模式降级 | ✅ |
+
+### 全周期 K 线验证结果
+
+```
+分时 Minutely:  ✅ 300 bars, 000001 最新价 3948.55
+日K Daily:       ✅ 300 bars, latest=2026-04-01
+周K Weekly:      ✅ 300 bars
+月K Monthly:     ✅ 300 bars
+```
+
+### Git Tag
+- `v0.3.1-beta` → `903c3d2`（2026-04-01 23:22）
+- `Beta-0.3.0` → 已归档为 pre-release（代码已过时）

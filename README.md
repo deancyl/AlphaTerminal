@@ -138,8 +138,13 @@ GET /market/sentiment/news     → 独立情感端点
 
 | 指标 | 修复前 | Beta 0.3.1 |
 |------|--------|-------------|
-| SSHFS 死锁 | SQLite 在 FUSE 网络盘上卡死 | **DB 迁移至 `/home/deancyl0607/alpha_ultimate.db`** |
+| SSHFS 死锁 | SQLite 在 FUSE 网络盘上卡死 | **DB 迁移至 `/tmp/alpha_ultimate_active.db`，WAL 正常** |
 | Wind 指数 | 仅 4 条（缺深证/创业板）| **Wind 6 指数：000001/000300/399001/399006/HSI/IXIC** |
+| 000001 张冠李戴 | 分时价格显示 11.xx（平安银行）| **`_INDEX_SECID_MAP` 精确映射 → 3948.55 ✅** |
+| 风向标布局 | 单列垂直堆叠，右侧大量留白 | **`grid grid-cols-2` 两列紧凑卡片网格 ✅** |
+| 行业板块稀缺 | 仅 8 个行业，无概念板块 | **行业+概念融合 Top 20，关键词加权（AI/算力/中特估）** |
+| 月K/周K全空 | `buffer_insert_periodic` 硬编码覆盖 | **动态列名匹配 + 聚合写入，月线300柱 ✅** |
+| Header 名称残留 | 切换指数后名称不更新 | **`watch props.symbol` 响应式重置** |
 | ECharts 溢出 | BondDashboard/FuturesDashboard 图表溢出 | **`overflow-hidden relative` + `min-h-0` 约束** |
 | `_parse_sina_index` | `len < 10` 拒绝 6 字段 Sina 数据 | **`len < 6` 修正，parts[3] 直接作为 chg_pct** |
 | data_sources 注册表 | 无统一数据源配置 | **`app/config/data_sources.py` 完整注册表** |
