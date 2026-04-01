@@ -132,6 +132,53 @@ async def bond_active():
     }
 
 
+@router.get("/bond/history")
+async def bond_history(tenor: str = "10年", period: str = "1Y"):
+    """
+    国债历史分位数（用于收益率曲线图表的历史背景）
+    - tenor: 期限（1年/3年/5年/10年/30年）
+    - period: 回溯窗口（1M/3M/6M/1Y/3Y）
+    返回: {tenor, current, percentile, history: [{date, yield}], source}
+    """
+    try:
+        import akshare as ak, warnings, numpy as np
+        warnings.filterwarnings("ignore")
+        df = ak.bond_china_yield()   # time-series DataFrame: date + multiple tenor columns
+        if df is None or df.empty:
+            raise ValueError("empty df")
+        tenor_col = next((c for c in df.columns if tenor in c), None)
+        if not tenor_col:
+            raise ValueError(f"tenor column not found: {tenor}")
+        # 计算当前收益率在历史分布中的分位数
+        series = df[tenor_col].dropna().astype(float)
+        current_yield = series.iloc[-1] if len(series) else None
+        if current_yield is not None:
+            percentile = float(np.sum(series < current_yield) / len(series) * 100)
+        else:
+            percentile = None
+        # 限制 history 为最近 N 条
+        history = [
+            {"date": str(r[0]), "yield": float(r[1])}
+            for r in df[[df.columns[0], tenor_col]].dropna().tail(60).values
+        ]
+        return {
+            "tenor": tenor,
+            "current": round(current_yield, 6) if current_yield else None,
+            "percentile": round(percentile, 1) if percentile is not None else None,
+            "history": history,
+            "source": "akshare",
+        }
+    except Exception as e:
+        logger.warning(f"[Bond] history endpoint error: {e}")
+        return {
+            "tenor": tenor,
+            "current": _BOND_CACHE.get("yield_curve", {}).get(tenor, 0),
+            "percentile": None,
+            "history": [],
+            "source": "error",
+        }
+
+
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
 def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""

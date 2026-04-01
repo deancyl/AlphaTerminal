@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="flex items-center justify-between mb-2 shrink-0">
+    <div class="flex items-center justify-between mb-1 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">🔍 全市场个股</span>
       <div class="flex items-center gap-2">
         <span class="text-terminal-dim text-[10px]">{{ total.toLocaleString() }} 只</span>
@@ -16,23 +16,23 @@
       <table class="w-full text-xs whitespace-nowrap">
         <thead class="sticky top-0 z-10 bg-terminal-panel">
           <tr class="text-terminal-dim border-b border-gray-700">
-            <th class="text-left py-1 px-1 cursor-pointer hover:text-gray-200 w-8"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-8"
                 @click="toggleSort('seq')">#</th>
-            <th class="text-left py-1 px-1 cursor-pointer hover:text-gray-200 min-w-[80px]"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 min-w-[60px]"
                 @click="toggleSort('name')">名称</th>
-            <th class="text-left py-1 px-1 cursor-pointer hover:text-gray-200 w-20"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
                 @click="toggleSort('code')">代码</th>
-            <th class="text-right py-1 px-1 cursor-pointer hover:text-gray-200 w-20"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
                 @click="toggleSort('price')">最新价</th>
-            <th class="text-right py-1 px-1 cursor-pointer hover:text-gray-200 w-20"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
                 @click="toggleSort('chg_pct')">
               <span :class="sortClass('chg_pct')">涨跌幅 ↕</span>
             </th>
-            <th class="text-right py-1 px-1 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-14"
                 @click="toggleSort('chg')">涨跌</th>
-            <th class="text-right py-1 px-1 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-12"
                 @click="toggleSort('turnover')">换手率</th>
-            <th class="text-right py-1 px-1 cursor-pointer hover:text-gray-200 w-20"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
                 @click="toggleSort('amount')">成交额</th>
           </tr>
         </thead>
@@ -40,22 +40,22 @@
           <tr v-for="stock in stocks" :key="stock.code"
               class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
               @click="handleClick(stock)">
-            <td class="py-1 px-1 text-terminal-dim text-[10px]">{{ stock.seq }}</td>
-            <td class="py-1 px-1 text-gray-200 font-medium">{{ stock.name }}</td>
-            <td class="py-1 px-1 text-terminal-dim text-[10px]">{{ stock.code }}</td>
-            <td class="py-1 px-1 text-right font-mono text-[11px]">{{ stock.price }}</td>
-            <td class="py-1 px-1 text-right font-mono text-[11px]"
+            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
+            <td class="py-0.5 px-0.5 text-gray-200 text-[10px]">{{ stock.name }}</td>
+            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.code }}</td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ stock.price }}</td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
                 :class="stock.chg_pct >= 0 ? 'text-red-400' : 'text-green-400'">
               {{ stock.chg_pct >= 0 ? '+' : '' }}{{ stock.chg_pct }}%
             </td>
-            <td class="py-1 px-1 text-right font-mono text-[10px]"
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
                 :class="stock.chg >= 0 ? 'text-red-400' : 'text-green-400'">
               {{ stock.chg >= 0 ? '+' : '' }}{{ stock.chg }}
             </td>
-            <td class="py-1 px-1 text-right font-mono text-[10px] text-terminal-dim">
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px] text-terminal-dim">
               {{ stock.turnover }}%
             </td>
-            <td class="py-1 px-1 text-right font-mono text-[10px] text-terminal-dim">
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px] text-terminal-dim">
               {{ formatAmt(stock.amount) }}
             </td>
           </tr>

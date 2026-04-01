@@ -1,8 +1,11 @@
 """
 市场情绪路由 v4 - Phase 4
 涨跌分布直方图 + 全市场个股透视（基于 Sina HQ）+ 快讯情感联动
+日内上涨家数走势（15秒轮询）
 """
 import logging
+import time
+from datetime import datetime
 from fastapi import APIRouter, Query
 from app.services.sentiment_engine import (
     get_histogram, query_stocks, is_spot_ready,
@@ -14,11 +17,30 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ── 日内上涨家数历史（每15秒追加一点，最多480个点=2小时轮询）────────
+_INTRADAY_MAX_POINTS = 480
+_INTRADAY_HISTORY = []    # [{time: 'HH:MM', advance: N}]
+_INTRADAY_LAST_TS = 0    # 上次追加时间
+
+
+def _append_intraday(advance: int):
+    """每15秒被 scheduler 调用一次，追加一个数据点"""
+    global _INTRADAY_HISTORY, _INTRADAY_LAST_TS
+    now = time.time()
+    if now - _INTRADAY_LAST_TS < 14:   # 防抖：至少间隔14秒
+        return
+    _INTRADAY_LAST_TS = now
+    t = datetime.now().strftime("%H:%M")
+    _INTRADAY_HISTORY.append({"time": t, "advance": advance})
+    if len(_INTRADAY_HISTORY) > _INTRADAY_MAX_POINTS:
+        _INTRADAY_HISTORY.pop(0)
+
 
 @router.get("/market/sentiment")
 async def market_sentiment():
     """A股市场情绪摘要（简化版）"""
     h = get_histogram()
+    _append_intraday(h.get("advance", 0))   # 每次查询顺便追加数据点
     return {
         "advance":    h.get("advance", 0),
         "decline":    h.get("decline", 0),
@@ -28,6 +50,22 @@ async def market_sentiment():
         "total":      h.get("total", 0),
         "up_ratio":   h.get("up_ratio", 0.0),
         "timestamp":  h.get("timestamp", ""),
+    }
+
+
+@router.get("/market/sentiment/intraday")
+async def sentiment_intraday():
+    """
+    A股全天上涨家数折线图数据
+    每15秒追加一个点，最多保留2小时历史（480个点）
+    返回: {intraday: [{time: 'HH:MM', advance: N}], timestamp: str}
+    """
+    h = get_histogram()
+    _append_intraday(h.get("advance", 0))
+    return {
+        "intraday": list(_INTRADAY_HISTORY),
+        "current": h.get("advance", 0),
+        "timestamp": datetime.now().isoformat(),
     }
 
 

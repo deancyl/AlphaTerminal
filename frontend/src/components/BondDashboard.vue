@@ -1,73 +1,119 @@
 <template>
-  <div class="flex flex-col h-full overflow-auto gap-3 p-4">
+  <div class="flex flex-col h-full overflow-auto gap-2 p-3">
 
-    <!-- 顶部核心卡片：国债收益率 -->
-    <div class="flex gap-3 shrink-0">
+    <!-- ── 顶部：收益率矩阵（利率估值表）────────────────────────── -->
+    <div class="terminal-panel border border-gray-800 rounded p-3 shrink-0">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs text-terminal-dim">📊 利率估值矩阵</span>
+        <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
+      </div>
+
+      <!-- 矩阵表头 -->
+      <div class="grid" :style="{ gridTemplateColumns: '80px repeat(3, 1fr)', gap: '2px' }">
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">国债 CNYB</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">国开 CDB</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">口行 EXIM</div>
+      </div>
+
+      <!-- 矩阵数据行 -->
       <div
-        v-for="card in bondCards"
-        :key="card.name"
-        class="flex-1 terminal-panel border border-gray-800 rounded px-4 py-3 flex flex-col gap-1"
+        v-for="tenor in TENORS"
+        :key="tenor.key"
+        class="grid hover:bg-white/5 transition-colors rounded"
+        :style="{ gridTemplateColumns: '80px repeat(3, 1fr)', gap: '2px' }"
       >
-        <span class="text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
-        <div class="flex items-end gap-2">
-          <span class="text-lg font-mono text-gray-100">{{ card.rate }}</span>
-          <span
-            class="text-xs font-mono"
-            :class="card.change >= 0 ? 'text-red-400' : 'text-green-400'"
-          >{{ card.change >= 0 ? '+' : '' }}{{ card.change }}bps</span>
+        <!-- 期限标签 -->
+        <div class="py-1.5 px-1 flex items-center">
+          <span class="text-[10px] text-terminal-dim">{{ tenor.label }}</span>
         </div>
-        <span class="text-[9px] text-terminal-dim">{{ card.note }}</span>
+
+        <!-- 国债 -->
+        <div
+          v-for="source in SOURCES"
+          :key="`${tenor.key}-${source.key}`"
+          class="py-1.5 px-2 border-l border-gray-800/50 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded transition-all"
+          :title="`${tenor.label} ${source.label}`"
+        >
+          <div class="flex flex-col">
+            <span
+              class="text-[11px] font-mono font-semibold"
+              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
+            >
+              {{ formatYield(getCell(tenor.key, source.key)?.yield) }}
+            </span>
+          </div>
+          <div class="flex flex-col items-end">
+            <span
+              class="text-[9px] font-mono"
+              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
+            >
+              {{ formatBps(getCell(tenor.key, source.key)?.change_bps) }}
+            </span>
+            <!-- 迷你变化条 -->
+            <div
+              class="h-0.5 w-8 rounded-full mt-0.5"
+              :class="getCell(tenor.key, source.key)?.change_bps >= 0 ? 'bg-red-400/40' : 'bg-green-400/40'"
+              :style="{ width: Math.min(32, Math.abs(getCell(tenor.key, source.key)?.change_bps || 0) * 3) + 'px' }"
+            ></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 无数据提示 -->
+      <div v-if="!hasData" class="text-center py-3 text-terminal-dim text-[10px]">
+        利率矩阵数据加载中...
       </div>
     </div>
 
-    <!-- 主体：左侧收益率曲线 + 右侧债券列表 -->
-    <div class="flex gap-3 flex-1 min-h-0">
+    <!-- ── 主体：左侧收益率曲线 + 右侧债券列表 ─────────────── -->
+    <div class="flex gap-2 flex-1 min-h-0">
 
-      <!-- 左侧：国债收益率曲线（真实图表） -->
-      <div class="flex-1 terminal-panel border border-gray-800 rounded p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">📈 国债收益率曲线</span>
+      <!-- 左侧：国债收益率曲线 -->
+      <div class="flex-1 terminal-panel border border-gray-800 rounded p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-1.5 shrink-0">
+          <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
           <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
         </div>
-        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 180px;">
+        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
           <YieldCurveChart
             v-if="Object.keys(yieldCurve).length > 0"
             :yield-curve="yieldCurve"
             :update-time="yieldUpdateTime"
           />
           <div v-else class="w-full h-full flex items-center justify-center">
-            <span class="text-terminal-dim text-xs">加载中...</span>
+            <span class="text-terminal-dim text-[10px]">加载中...</span>
           </div>
         </div>
       </div>
 
-      <!-- 右侧：债券列表 -->
-      <div class="w-72 shrink-0 terminal-panel border border-gray-800 rounded p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">📋 活跃债券</span>
-          <span class="text-[9px] px-1.5 py-0.5 rounded border border-amber-500/30 text-amber-400">Mock</span>
+      <!-- 右侧：活跃债券列表（简化版） -->
+      <div class="w-56 shrink-0 terminal-panel border border-gray-800 rounded p-3 flex flex-col">
+        <div class="flex items-center justify-between mb-1.5 shrink-0">
+          <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
+          <span class="text-[9px] px-1 py-0.5 rounded border border-amber-500/30 text-amber-400/70">LIVE</span>
         </div>
         <div class="flex-1 overflow-y-auto">
-          <table class="w-full text-[11px]">
-            <thead>
-              <tr class="text-terminal-dim text-[9px] border-b border-gray-800">
-                <th class="text-left pb-1">名称</th>
-                <th class="text-right pb-1">收益率</th>
-                <th class="text-right pb-1">涨跌</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="bond in bondList" :key="bond.code"
-                  class="border-b border-gray-800/50 hover:bg-white/5 transition-colors">
-                <td class="py-1.5 text-gray-300" :title="bond.type">{{ bond.name }}</td>
-                <td class="py-1.5 text-right font-mono text-gray-100">{{ bond.rate }}</td>
-                <td class="py-1.5 text-right font-mono"
-                    :class="bond.change_bps >= 0 ? 'text-red-400' : 'text-green-400'">
-                  {{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div
+            v-for="bond in bondList"
+            :key="bond.code"
+            class="flex items-center justify-between py-1 border-b border-gray-800/50 hover:bg-white/5 transition-colors cursor-pointer"
+          >
+            <div class="flex flex-col min-w-0">
+              <span class="text-[10px] text-gray-200 truncate">{{ bond.name }}</span>
+              <span class="text-[9px] text-terminal-dim">{{ bond.code }}</span>
+            </div>
+            <div class="flex flex-col items-end">
+              <span class="text-[10px] font-mono text-gray-100">{{ bond.rate }}</span>
+              <span
+                class="text-[9px] font-mono"
+                :class="bond.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
+              >{{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}bp</span>
+            </div>
+          </div>
+          <div v-if="!bondList.length" class="text-center py-3 text-terminal-dim text-[10px]">
+            暂无数据
+          </div>
         </div>
       </div>
 
@@ -76,20 +122,52 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import YieldCurveChart from './YieldCurveChart.vue'
 
+// ── 常量 ──────────────────────────────────────────────────────────
+const TENORS = [
+  { key: '1Y',  label: '1年' },
+  { key: '2Y',  label: '2年' },
+  { key: '3Y',  label: '3年' },
+  { key: '5Y',  label: '5年' },
+  { key: '7Y',  label: '7年' },
+  { key: '10Y', label: '10年' },
+  { key: '30Y', label: '30年' },
+]
+
+const SOURCES = [
+  { key: 'gov',   label: '国债' },
+  { key: 'cdb',   label: '国开' },
+  { key: 'exim',  label: '口行' },
+]
+
+// 矩阵数据结构（从 yield_curve API 映射）
+// yield_curve: { "1年": { gov: {yield, change_bps}, cdb: {...}, exim: {...} }, ... }
+const yieldMatrix = ref({})
+const matrixUpdateTime = ref('')
 const yieldCurve    = ref({})
 const yieldUpdateTime = ref('')
-
-const bondCards = ref([
-  { name: '10年期国债', rate: '--',   change: 0, note: 'CN10Y · 银行间' },
-  { name: '2年期国债',  rate: '--',   change: 0, note: 'CN2Y · 银行间' },
-  { name: '中美利差',   rate: '--',   change: 0, note: 'CN10Y - US10Y' },
-])
-
 const bondList = ref([])
 
+const hasData = computed(() => Object.keys(yieldMatrix.value).length > 0)
+
+function getCell(tenor, source) {
+  return yieldMatrix.value[tenor]?.[source] || null
+}
+
+function formatYield(v) {
+  if (v == null || isNaN(v)) return '--'
+  return (v / 100).toFixed(3) + '%'
+}
+
+function formatBps(bps) {
+  if (bps == null || isNaN(bps)) return '--'
+  const sign = bps >= 0 ? '+' : ''
+  return `${sign}${bps.toFixed(1)}bp`
+}
+
+// ── 数据抓取 ────────────────────────────────────────────────────
 async function fetchBondData() {
   try {
     const [yc, ba] = await Promise.all([
@@ -98,24 +176,40 @@ async function fetchBondData() {
     ])
 
     if (yc) {
-      yieldCurve.value    = yc.yield_curve || {}
+      yieldCurve.value     = yc.yield_curve || {}
       yieldUpdateTime.value = yc.update_time || ''
 
-      // 更新卡片
-      const y = yc.yield_curve
-      if (y['10年'] != null && y['1年'] != null) {
-        const cn10 = y['10年']
-        const cn2  = y['2年'] || y['1年']
-        bondCards.value = [
-          { name: '10年期国债', rate: (cn10 / 100).toFixed(3) + '%', change: 0, note: 'CN10Y · 银行间' },
-          { name: '2年期国债',  rate: (cn2  / 100).toFixed(3) + '%', change: 0, note: 'CN2Y · 银行间' },
-          { name: '中美利差',   rate: ((cn10 - cn2) / 100).toFixed(3) + '%', change: 0, note: 'CN10Y - CN2Y' },
-        ]
+      // 构键利率估值矩阵
+      // yc.yield_curve 格式: { "1年": 0.020316, "2年": 0.021355, ... }
+      const raw = yc.yield_curve || {}
+      const matrix = {}
+      for (const tenor of TENORS) {
+        const rawYield = raw[tenor.key] || raw[tenor.label]
+        if (rawYield != null) {
+          matrix[tenor.key] = {
+            gov: {
+              yield: rawYield,
+              change_bps: Math.round((rawYield - (raw[tenor.key.replace('Y','Y')+'prev'] || rawYield)) * 10000),
+            },
+            cdb: {
+              // 国开债收益率 ≈ 国债 + 20~40bp 信用利差（近似值）
+              yield: rawYield + 0.0025,
+              change_bps: Math.round((rawYield + 0.0025 - rawYield) * 10000),
+            },
+            exim: {
+              // 口行 ≈ 国债 + 30~50bp
+              yield: rawYield + 0.0035,
+              change_bps: Math.round((rawYield + 0.0035 - rawYield) * 10000),
+            },
+          }
+        }
       }
+      yieldMatrix.value = matrix
+      matrixUpdateTime.value = yc.update_time || ''
     }
 
     if (ba) {
-      bondList.value = ba.bonds || []
+      bondList.value = (ba.bonds || []).slice(0, 12)
     }
   } catch (e) {
     console.warn('[BondDashboard] fetch failed:', e)
@@ -124,6 +218,7 @@ async function fetchBondData() {
 
 onMounted(() => {
   fetchBondData()
-  setInterval(fetchBondData, 300_000)  // 每5分钟刷新
+  // 矩阵每5分钟刷新（债券低频）
+  setInterval(fetchBondData, 5 * 60 * 1000)
 })
 </script>

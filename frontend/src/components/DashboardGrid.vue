@@ -74,34 +74,34 @@
     <!-- ━━━ Widget 4：风向标（右上，右侧4列）━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格 -->
-        <div class="text-[10px] text-terminal-dim mb-1.5 flex items-center justify-between">
+      <div class="grid-stack-item-content terminal-panel p-2">
+        <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
+        <div class="text-[10px] text-terminal-dim mb-1 flex items-center justify-between">
           <span>🌐 市场风向标</span>
           <span class="text-[9px] opacity-60">{{ windItems.length }}标的</span>
         </div>
-        <!-- 两列卡片网格：消除垂直留白，充分利用右侧宽度 -->
-        <div class="grid grid-cols-2 gap-2 p-1">
+        <!-- 两列卡片网格：消除垂直留白，充分利用右侧宽度（密度升级） -->
+        <div class="grid grid-cols-2 gap-1 p-0.5">
           <div
             v-for="item in windItems" :key="item.symbol"
-            class="bg-gray-800/50 rounded-lg p-2 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50 transition-colors"
+            class="bg-gray-800/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50 transition-colors"
             @click="handleWindClick(item)"
           >
             <!-- 标的名称（分类标签） -->
-            <div class="flex items-center gap-1 mb-1">
+            <div class="flex items-center gap-0.5 mb-0.5">
               <span
-                class="text-[8px] px-0.5 rounded border"
+                class="text-[7px] px-0.5 rounded border"
                 :class="item.category === 'macro' ? 'border-amber-500/40 text-amber-400' : 'border-cyan-500/40 text-cyan-400'"
               >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
-              <span class="text-[10px] text-gray-200 truncate max-w-[80px]" :title="item.name">{{ item.name }}</span>
+              <span class="text-[9px] text-gray-200 truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>
             <!-- 最新价 -->
-            <div class="text-[11px] font-mono text-gray-100 text-center">
+            <div class="text-[10px] font-mono text-gray-100 text-center">
               {{ item.category === 'macro' ? formatMacroPrice(item) : formatPrice(item.price) }}
             </div>
             <!-- 涨跌幅 -->
             <div
-              class="text-[11px] font-mono font-bold"
+              class="text-[10px] font-mono font-bold"
               :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
             >
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
@@ -114,7 +114,7 @@
     <!-- ━━━ Widget 5：行业与资金风口（右侧4列，中间）━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-3">
+      <div class="grid-stack-item-content terminal-panel p-2">
         <HotSectors @sector-click="handleSectorClick" />
       </div>
     </div>

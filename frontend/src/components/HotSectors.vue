@@ -5,37 +5,39 @@
       <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
     </div>
 
-    <!-- Phase 4: 热力色块矩阵（flex-wrap pill cards） -->
-    <!-- max-h 约束：确保 Top 20 在 GridStack 固定格内可滚动 -->
-    <div class="flex-1" style="max-height: 350px; overflow-y: auto;">
-      <div class="flex flex-wrap gap-1.5">
+    <!-- 矩阵卡片流：一屏 Top 20，5列×4行紧凑网格 -->
+    <!-- 替代 flex-wrap 瀑布流，充分利用 GridStack 固定格宽度 -->
+    <div class="flex-1" style="max-height: 360px; overflow-y: auto;">
+      <!-- 5列矩阵网格 -->
+      <div class="grid gap-1" style="grid-template-columns: repeat(5, 1fr);">
         <div
-          v-for="sec in sectors"
+          v-for="sec in topSectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-2.5 py-1.5 rounded-lg border cursor-pointer transition-all hover:opacity-80 min-w-[72px]"
+          class="flex flex-col items-center justify-center px-1 py-1 rounded border cursor-pointer transition-all hover:opacity-80"
           :class="(sec.change_pct || 0) >= 0
             ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
             : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"
           @click="handleClick(sec)"
         >
-          <!-- 行业名称 -->
+          <!-- 板块名称（超长截断） -->
           <span
-            class="text-[10px] font-medium leading-tight text-center"
+            class="text-[9px] font-medium leading-tight text-center w-full truncate"
             :class="(sec.change_pct || 0) >= 0 ? 'text-red-300' : 'text-green-300'"
+            :title="sec.name"
           >
             {{ sec.name }}
           </span>
-          <!-- 涨跌幅 -->
+          <!-- 涨跌幅（金融红绿） -->
           <span
-            class="text-[11px] font-mono font-bold mt-0.5"
+            class="text-[10px] font-mono font-bold leading-none mt-0.5"
             :class="(sec.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
           >
             {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
           </span>
-          <!-- 领涨股（如果有） -->
+          <!-- 领涨股 -->
           <span
-            v-if="sec.top_stock"
-            class="text-[8px] mt-0.5"
+            v-if="sec.top_stock?.name"
+            class="text-[8px] leading-tight mt-0.5 truncate w-full text-center"
             :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-red-500/60' : 'text-green-500/60'"
           >
             {{ sec.top_stock.name }}
@@ -43,7 +45,30 @@
         </div>
       </div>
 
-      <div v-if="!sectors.length" class="flex-1 flex items-center justify-center mt-4">
+      <!-- 剩余板块（如果有超过20个） -->
+      <div v-if="sectors.length > 20" class="mt-1">
+        <div class="grid gap-1" style="grid-template-columns: repeat(5, 1fr);">
+          <div
+            v-for="sec in sectors.slice(20)"
+            :key="sec.name"
+            class="flex flex-col items-center justify-center px-1 py-1 rounded border cursor-pointer transition-all hover:opacity-80"
+            :class="(sec.change_pct || 0) >= 0
+              ? 'bg-red-500/5 border-red-500/20'
+              : 'bg-green-500/5 border-green-500/20'"
+            @click="handleClick(sec)"
+          >
+            <span class="text-[9px] text-gray-400 truncate w-full text-center">{{ sec.name }}</span>
+            <span
+              class="text-[10px] font-mono font-bold"
+              :class="(sec.change_pct || 0) >= 0 ? 'text-red-400/80' : 'text-green-400/80'"
+            >
+              {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!sectors.length" class="flex-1 flex items-center justify-center mt-3">
         <span class="text-terminal-dim text-xs">暂无板块数据</span>
       </div>
     </div>
@@ -51,13 +76,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
 
 const emit = defineEmits(['sector-click'])
 
 const { setSymbol } = useMarketStore()
 const sectors = ref([])
+const topSectors = computed(() => sectors.value.slice(0, 20))
 const tsDisplay = ref('')
 let refreshTimer = null
 

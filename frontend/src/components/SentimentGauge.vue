@@ -1,6 +1,16 @@
 <template>
   <div class="flex flex-col gap-2">
 
+    <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
+    <div class="bg-terminal-bg rounded border border-gray-700 p-2">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-[10px] text-terminal-dim">📈 A股全天走势（上涨家数）</span>
+        <span class="text-[9px] text-terminal-dim">{{ intradayUpdateTime }}</span>
+      </div>
+      <!-- ECharts 折线图：上涨家数全天走势 -->
+      <div ref="intradayEl" class="w-full" :style="{ height: intradayHeight + 'px' }"></div>
+    </div>
+
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
     <div class="bg-terminal-bg rounded border border-gray-700 p-3">
       <!-- 标题栏：情绪 + 资讯面 -->
@@ -100,10 +110,18 @@ const props = defineProps({
 })
 defineEmits(['symbol-click'])
 
-const chartEl    = ref(null)
-const chartHeight = 120
-let   chartInst  = null
-let   refreshTimer = null
+const chartEl        = ref(null)
+const chartHeight     = 100  // 缩小给折线图留空间
+const intradayEl      = ref(null)
+const intradayHeight  = 90
+let   chartInst       = null
+let   intradayInst    = null
+let   refreshTimer    = null
+let   intradayTimer   = null
+
+// 上涨家数全天走势数据（每15秒轮询追加一个点，最多240个点=1小时）
+const intradayData = ref([])   // [{time: '09:31', advance: 1234}, ...]
+const intradayUpdateTime = ref('')
 
 const UP   = '#ef232a'
 const DOWN = '#14b143'
@@ -132,6 +150,87 @@ const upPct = computed(() => {
 function formatPrice(v) {
   if (v == null || isNaN(v)) return '--'
   return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
+}
+
+// ── ECharts 折线图：上涨家数全天走势 ─────────────────────────────
+function buildIntradayOption(series) {
+  if (!series || !series.length) return {}
+  const times  = series.map(d => d.time)
+  const values = series.map(d => d.advance)
+
+  return {
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(26,30,46,0.96)',
+      borderColor: '#4b5563',
+      textStyle: { color: '#9ca3af', fontSize: 10 },
+      formatter: (params) => {
+        const p = params[0]
+        return `<span style="color:#6b7280;font-size:9px">${p.name}</span><br/>`
+          + `<span style="color:#ef232a;font-size:11px;font-weight:bold">${p.value} 家</span>`
+      },
+    },
+    grid: { top: 4, right: 8, bottom: 16, left: 40, containLabel: false },
+    xAxis: {
+      type: 'category',
+      data: times,
+      axisLabel: { color: '#4b5563', fontSize: 8, rotate: 0 },
+      axisLine: { lineStyle: { color: '#2d3748' } },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      scale: true,
+      axisLabel: {
+        color: '#4b5563', fontSize: 8,
+        formatter: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v,
+      },
+      splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
+      axisLine: { show: false },
+    },
+    series: [{
+      name: '上涨家数',
+      type: 'line',
+      data: values,
+      smooth: true,
+      lineStyle: { color: '#ef232a', width: 1.5 },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(239,35,42,0.25)' },
+            { offset: 1, color: 'rgba(239,35,42,0.02)' },
+          ],
+        },
+      },
+      symbol: 'none',
+      sampling: 'lttb',
+    }],
+  }
+}
+
+function initIntradayChart() {
+  if (!intradayEl.value || !window.echarts) return
+  intradayInst = window.echarts.init(intradayEl.value, null, { renderer: 'canvas' })
+  intradayInst.setOption(buildIntradayOption(intradayData.value))
+}
+
+async function fetchIntraday() {
+  try {
+    const res = await fetch('/api/v1/market/sentiment/intraday')
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const d = await res.json()
+    if (d.intraday && d.intraday.length > 0) {
+      intradayData.value = d.intraday
+      intradayUpdateTime.value = d.timestamp || ''
+      if (intradayInst) {
+        intradayInst.setOption(buildIntradayOption(intradayData.value), true)
+      }
+    }
+  } catch (e) {
+    console.warn('[SentimentGauge] intraday fetch failed:', e.message)
+  }
 }
 
 // ── ECharts 直方图 ────────────────────────────────────────────────
@@ -233,8 +332,18 @@ onMounted(async () => {
   await fetchHistogram()
   await new Promise(r => setTimeout(r, 0))
   initChart()
-  const ro = new ResizeObserver(() => chartInst?.resize())
+  initIntradayChart()
+
+  // 折线图：每15秒轮询上涨家数走势
+  await fetchIntraday()
+  intradayTimer = setInterval(fetchIntraday, 15_000)
+
+  const ro = new ResizeObserver(() => {
+    chartInst?.resize()
+    intradayInst?.resize()
+  })
   if (chartEl.value) ro.observe(chartEl.value)
+  if (intradayEl.value) ro.observe(intradayEl.value)
   refreshTimer = setInterval(fetchHistogram, 3 * 60 * 1000)
 
   // Phase 4: 监听 NewsFeed 刷新事件，联动拉取最新情绪数据
@@ -246,6 +355,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   clearInterval(refreshTimer)
+  clearInterval(intradayTimer)
   chartInst?.dispose()
+  intradayInst?.dispose()
 })
 </script>
