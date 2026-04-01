@@ -67,13 +67,13 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
         except Exception as e:
             logger.warning(f"[Macro] Sina fetch failed: {e}")
 
-    # 2) 腾讯 qt（CNH/USD 汇率备选，过代理）
-    cnh_syms = [s for s in symbols if s in ("CNHUSD",)]
-    if cnh_syms:
+    # 2) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指，不过代理）
+    qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI")]
+    if qt_syms:
         try:
             with httpx.Client(timeout=5.0) as client:
                 resp = client.get(
-                    f"https://qt.gtimg.cn/q={','.join(cnh_syms)}",
+                    f"https://qt.gtimg.cn/q={','.join(qt_syms)}",
                     headers={"Referer": "https://gu.qq.com", "User-Agent": "Mozilla/5.0"},
                 )
                 resp.raise_for_status()
@@ -84,7 +84,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                     continue
                 try:
                     sym = line.split("=")[0].replace("v_", "").strip('" \n')
-                    fields = line.split("=")[1].strip('";\n "').split(",")
+                    # 腾讯 qt 格式: v_hkVHSI="100~港股~VHSI~27.850~29.220~..."
+                    # 分隔符是 ~ 不是 ,
+                    raw_val = line.split("=", 1)[1].strip('";\r\n ')
+                    fields = raw_val.split("~")
                     results[sym] = [f.strip() for f in fields]
                 except Exception:
                     continue
@@ -135,6 +138,26 @@ def _get_cnyusd_approx() -> float:
     return 7.25
 
 
+def _parse_hkvhsi(data: dict) -> tuple[float, float, str]:
+    """
+    解析 hkVHSI（恒指波幅指数，腾讯 qt 格式，~分隔）
+    f[3]=当前价, f[4]=昨收, f[30]=时间, f[31]=涨跌额, f[32]=涨跌幅%
+    """
+    f = data.get("hkVHSI", [])
+    if len(f) < 33:
+        raise ValueError("hkVHSI data too short")
+    try:
+        price = float(f[3])   # 当前 VHSI
+        prev  = float(f[4])   # 昨收
+        # f[32] = 涨跌幅%，f[31] = 涨跌额
+        pct   = float(f[32]) if f[32] else (((price - prev) / prev * 100) if prev else 0.0)
+        # f[30] = "2026/03/31 16:00:00"，提取时间部分
+        tick  = f[30][-8:-3] if f[30] and len(f[30]) > 4 else ""  # "HH:MM"
+    except Exception as e:
+        raise ValueError(f"hkVHSI parse error: {e}")
+    return round(price, 2), round(pct, 2), tick
+
+
 def _parse_hf_cl(data: dict) -> tuple[float, float, str]:
     """
     解析 hf_CL（WTI 原油期货，USD/桶）
@@ -156,17 +179,23 @@ def _parse_hf_cl(data: dict) -> tuple[float, float, str]:
 def _fetch_macro_data():
     """
     Phase 7: 真实数据抓取（腾讯/Sina HQ）
-    - USD/CNH: CNYUSD → 换算
-    - COMEX黄金: Sina hf_GC → RMB/g → USD/oz
+    - USD/CNY: CNYUSD → 换算（Sina）
+    - SGE黄金: Sina hf_GC → RMB/oz（上海金现货）
     - WTI原油: Sina hf_CL → USD/桶
-    - VIX: 暂无可靠免费接口 → 保持上次值或静态兜底
+    - VHSI: 恒指波幅指数（腾讯 qt hkVHSI）
     """
     global _MACRO_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
 
+    # 初始化默认值（静态兜底）
+    usdcny_price = 6.8871; usdcny_pct = 0.0
+    gold_price = 4720.0; gold_pct = 0.0
+    wti_price = 101.0; wti_pct = 0.0
+    vhsi_price = 20.0; vhsi_pct = 0.0
+
     try:
         # 一次性拉取所有需要的数据
-        raw = _fetch_from_sina(["CNYUSD", "hf_GC", "hf_CL"])
+        raw = _fetch_from_sina(["CNYUSD", "hf_GC", "hf_CL", "hkVHSI"])
 
         usdcnh_price = 7.2531
         usdcnh_pct   = 0.0
@@ -197,17 +226,24 @@ def _fetch_macro_data():
             except Exception as e:
                 logger.warning(f"[Macro] WTI parse error: {e}")
 
+        if "hkVHSI" in raw and raw["hkVHSI"]:
+            try:
+                vhsi_price, vhsi_pct, _ = _parse_hkvhsi(raw)
+                logger.info(f"[Macro] VHSI fetched: {vhsi_price} ({vhsi_pct}%)")
+            except Exception as e:
+                logger.warning(f"[Macro] VHSI parse error: {e}")
+
         results = {
-            "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",        "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
-            "GOLD":    {"name": "SGE黄金(人民币)",  "price": round(gold_price, 2),   "unit": "¥/oz",    "change_pct": round(gold_pct, 2),  "timestamp": now_str},
-            "WTI":     {"name": "WTI原油(美元)",     "price": round(wti_price, 2),    "unit": "$/桶",    "change_pct": round(wti_pct, 2),   "timestamp": now_str},
-            "VIX":     {"name": "VIX恐慌指数",       "price": 19.34,                  "unit": "",         "change_pct": +5.42,              "timestamp": now_str},  # 暂无可靠源，静态兜底
+            "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",    "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
+            "GOLD":    {"name": "SGE黄金(人民币)",  "price": round(gold_price, 2),   "unit": "¥/oz","change_pct": round(gold_pct, 2),  "timestamp": now_str},
+            "WTI":     {"name": "WTI原油(美元)",    "price": round(wti_price, 2),    "unit": "$/桶","change_pct": round(wti_pct, 2),   "timestamp": now_str},
+            "VHSI":    {"name": "恒指波幅(VHSI)",   "price": round(vhsi_price, 2),    "unit": "",     "change_pct": round(vhsi_pct, 2),  "timestamp": now_str},
         }
 
         with _MACRO_CACHE_LOCK:
             _MACRO_CACHE = results
             _LAST_FETCH_TIME = time.time()
-        logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥/oz WTI={wti_price} VIX=19.34(m)")
+        logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
 
     except Exception as e:
         logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")

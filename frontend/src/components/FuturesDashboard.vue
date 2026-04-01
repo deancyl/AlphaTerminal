@@ -43,22 +43,28 @@
         <div class="grid grid-cols-6 gap-2">
           <div
             v-for="item in commodityBlocks"
+            v-if="item && item.symbol"
             :key="item.symbol"
             class="rounded border flex flex-col items-center justify-center py-2 px-1 cursor-default transition-all hover:brightness-125"
+            style="min-height: 52px;"
             :style="{
-              borderColor: item.change_pct >= 0
+              borderColor: (item.change_pct || 0) >= 0
                 ? 'rgba(239,68,68,0.35)'
                 : 'rgba(34,197,94,0.35)',
-              background: item.change_pct >= 0
+              background: (item.change_pct || 0) >= 0
                 ? 'rgba(239,68,68,0.08)'
                 : 'rgba(34,197,94,0.08)',
             }"
           >
-            <span class="text-[10px] text-gray-300 truncate w-full text-center">{{ item.name }}</span>
+            <span class="text-[10px] text-gray-300 truncate w-full text-center">{{ item.name || item.symbol }}</span>
             <span
               class="text-xs font-mono mt-0.5"
-              :class="item.change_pct >= 0 ? 'text-red-400' : 'text-green-400'"
-            >{{ item.change_pct >= 0 ? '+' : '' }}{{ item.change_pct?.toFixed(2) }}%</span>
+              :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+            >{{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct ?? 0).toFixed(2) }}%</span>
+          </div>
+          <div v-if="!commodityBlocks || commodityBlocks.length === 0"
+               class="col-span-6 text-center text-terminal-dim text-xs py-4">
+            暂无数据
           </div>
         </div>
       </div>
