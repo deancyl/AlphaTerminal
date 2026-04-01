@@ -70,6 +70,33 @@ def _parse_sina_hq(raw: str) -> dict | None:
         return None
 
 
+def _parse_sina_index(raw: str) -> dict | None:
+    """
+    解析 Sina 指数格式（s_sh000001/s_sz399006 等）
+    字段: [name, current, prev_close, open, high, low, ?, ?, amount, amount2, ..., date, time, ?]
+    change_pct = (current - prev_close) / prev_close * 100
+    """
+    m = re.search(r'"([^"]+)"', raw)
+    if not m:
+        return None
+    parts = m.group(1).split(",")
+    if len(parts) < 6:   # Sina指数=6字段, 腾讯qt=78字段, 都满足
+        return None
+    try:
+        current    = float(parts[1])    # 当前价
+        prev_close = float(parts[2])    # 昨收
+        chg_pct    = float(parts[3]) if parts[3] else 0.0   # Sina指数直接提供涨跌幅%
+        return {
+            "name":       parts[0],
+            "price":      current,
+            "change":     round(current - prev_close, 3),
+            "change_pct": round(chg_pct, 2),
+            "volume":     0,
+        }
+    except (ValueError, IndexError):
+        return None
+
+
 # ── A 股指数 ─────────────────────────────────────────────────────────────
 def fetch_china_indices() -> list[dict]:
     """
@@ -103,7 +130,7 @@ def fetch_china_indices() -> list[dict]:
             if code_key not in sym_map:
                 continue
             sym, display_name, market = sym_map[code_key]
-            parsed = _parse_sina_hq(line)
+            parsed = _parse_sina_index(line)  # 用指数专用解析器（字段顺序不同）
             if parsed:
                 rows.append(_row(
                     symbol=sym, name=display_name, market=market,

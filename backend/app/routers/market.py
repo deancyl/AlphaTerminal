@@ -284,7 +284,7 @@ async def market_macro():
     }
 
 # ── 风向标指数（Task 2: 精简 overview，只保留核心风向标）─────────────────
-WIND_SYMBOLS = ["000001", "000300", "HSI", "IXIC"]  # 上证 · 沪深300 · 恒生 · 纳斯达克
+WIND_SYMBOLS = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]  # 上证 · 沪深300 · 深证 · 创业板 · 恒生 · 纳斯达克
 INDEX_SYMBOLS = ["000001", "000300", "399001", "399006"]  # A股四大指数
 CHINA_ALL_SYMBOLS = [   # Task 2: 国内10+核心指数
     "000001", "000300", "399001", "399006",  # 基础四大
@@ -311,6 +311,8 @@ async def market_overview():
     wind_labels = {
         "000001": ("上证指数",  "AShare", status_cn),
         "000300": ("沪深300",  "AShare", status_cn),
+        "399001": ("深证成指",  "AShare", status_cn),
+        "399006": ("创业板指",  "AShare", status_cn),
         "HSI":    ("恒生指数",  "HK",     status_hk),
         "IXIC":   ("纳斯达克",  "US",     status_us),
     }

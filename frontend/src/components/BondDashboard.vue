@@ -29,7 +29,7 @@
           <span class="text-xs text-terminal-dim">📈 国债收益率曲线</span>
           <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
         </div>
-        <div class="flex-1 min-h-0" style="min-height: 180px;">
+        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 180px;">
           <YieldCurveChart
             v-if="Object.keys(yieldCurve).length > 0"
             :yield-curve="yieldCurve"

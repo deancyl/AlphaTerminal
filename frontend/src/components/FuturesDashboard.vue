@@ -72,7 +72,7 @@
       <!-- 下方：主力合约走势图（真实图表） -->
       <div class="flex-1 terminal-panel border border-gray-800 rounded p-4 flex flex-col">
         <div class="text-xs text-terminal-dim mb-2">📈 期货指数走势（IF · IC · IM）</div>
-        <div class="flex-1 min-h-0" style="min-height: 160px;">
+        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
           <FuturesMainChart
             v-if="futuresCards.length > 0"
             :futures-data="futuresCards"
