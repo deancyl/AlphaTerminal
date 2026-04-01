@@ -5,7 +5,7 @@ import logging
 import os
 
 logger = logging.getLogger(__name__)
-_db_path = "/home/deancyl0607/alpha_ultimate.db"
+_db_path = "/tmp/alpha_ultimate_active.db"
 _lock = threading.RLock()
 
 def _get_conn():
