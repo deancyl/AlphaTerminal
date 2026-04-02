@@ -403,10 +403,15 @@ async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
     chart_type = "candlestick"  # 默认烛台
     history    = []
 
+    # 分时数据只支持 A 股指数（沪深），其他市场（HSI/DJI 等）无 Eastmoney 5 分钟 K 线
+    _INTRADAY_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
+
     if period == "minutely":
-        # 分时：调用 Eastmoney 5 分钟 K 线 API（真实分钟级数据）
         from app.services.data_fetcher import fetch_index_minute_history
-        history    = fetch_index_minute_history(clean_sym, limit=min(limit, 300))
+        if clean_sym.upper() in _INTRADAY_SUPPORTED or clean_sym in _INTRADAY_SUPPORTED:
+            history    = fetch_index_minute_history(clean_sym, limit=min(limit, 300))
+        else:
+            history    = []  # 非 A 股指数不支持分时 K 线
         chart_type = "line"
 
     elif period == "daily":

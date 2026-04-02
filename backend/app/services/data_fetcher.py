@@ -644,6 +644,8 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
     注意: 000001 是上证指数（上海），平安银行是 000001（深圳），两者不同！
     """
     # 精确映射表：彻底解决 000001 上证指数 vs 平安银行 的张冠李戴
+    # 注意：A 股指数代码（如 000001）不需要大写，但 HSI/DJI 等需要
+    #       所以 lookup 时转大写保证兼容
     _INDEX_SECID_MAP = {
         "000001": "1.000001",  # 上证指数（上海）
         "000300": "1.000300",  # 沪深300（上海）
@@ -651,7 +653,7 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
         "399006": "0.399006",  # 创业板指（深圳）
         "000688": "1.000688",  # 科创50（上海）
     }
-    secid = _INDEX_SECID_MAP.get(symbol, f"1.{symbol}")
+    secid = _INDEX_SECID_MAP.get(symbol.upper(), _INDEX_SECID_MAP.get(symbol, f"1.{symbol}"))
 
     import subprocess
     try:
