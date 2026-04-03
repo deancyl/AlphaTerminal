@@ -85,6 +85,24 @@
         :data="hoverData"
         class="absolute top-2 right-2 z-20 pointer-events-none"
       />
+
+      <!-- MA 实时数值浮显（左上角） -->
+      <div class="absolute top-2 left-14 z-20 pointer-events-none flex flex-col gap-0.5">
+        <div v-for="ma in maDisplays" :key="ma.label"
+          class="flex items-center gap-1.5 text-[10px] font-mono"
+        >
+          <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: ma.color }"></span>
+          <span :style="{ color: ma.color }">MA{{ ma.period }}</span>
+          <span class="text-gray-200">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
+        </div>
+      </div>
+
+      <!-- 下钻返回按钮 -->
+      <button
+        v-if="drillDownDate"
+        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+        @click="exitDrillDown"
+      >← 返回日线</button>
     </div>
 
     <!-- 副图区（固定高度） -->
@@ -160,10 +178,37 @@ const subChartTab    = ref('VOL')       // VOL | MACD | KDJ | RSI | BOLL
 const indicatorParams = ref({ MACD: { fast: 12, slow: 26, signal: 9 }, KDJ: { n: 9 }, RSI: { period: 14 }, BOLL: { period: 20, stdDev: 2 } })
 const currentQuote    = ref({})         // 实时快照
 const hoverData       = ref({})         // 十字光标数据
-const intervalStats   = ref(null)       // 区间统计结果
-const histData        = ref([])         // 全部历史数据
-const visibleHist     = ref([])         // 当前可视范围数据
-const limit = 300                       // 每次请求的 K 线根数
+
+// MA 最新值（左上角浮显）
+const maDisplays = computed(() => {
+  const hist = visibleHist.value
+  if (!hist.length) return []
+  const closes = hist.map(h => h.close)
+  const ma5  = calcMA(closes, 5)
+  const ma10 = calcMA(closes, 10)
+  const ma20 = calcMA(closes, 20)
+  const last = hist.length - 1
+  return [
+    { period: 5,  color: '#ffffff', value: ma5[last]  ?? null },
+    { period: 10, color: '#fbbf24', value: ma10[last] ?? null },
+    { period: 20, color: '#c084fc', value: ma20[last] ?? null },
+  ].filter(m => m.value != null)
+})
+const intervalStats   = ref(null)
+const histData        = ref([])
+const visibleHist     = ref([])
+const limit = 300
+const drillDownDate = ref(null)  // YYYYMMDD, null means normal mode
+
+function exitDrillDown() {
+  drillDownDate.value = null
+  period.value = 'daily'
+  loadOffset.value = 0
+  histData.value = []
+  visibleHist.value = []
+  fetchHistory()
+  startQuotePolling(30_000)
+}                       // 每次请求的 K 线根数
 const chartRef        = ref(null)
 const chartContainerRef = ref(null)
 const isLoading       = ref(false)
@@ -186,7 +231,43 @@ const drawingLocked   = ref(false)
 const ctxMenu = ref({ visible: false, x: 0, y: 0, date: '', idx: -1 })
 
 // 下钻状态（查看历史分时）
-const drillDownDate = ref(null)   // YYYYMMDD 格式
+
+// 实时行情轮询
+let quotePollingTimer = null
+
+async function fetchLatestQuote() {
+  const sym = currentSymbol.value
+  if (!sym || drillDownDate.value) return  // 下钻模式不轮询
+  try {
+    const res = await fetch(`/api/v1/market/quote/${sym}`)
+    if (!res.ok) return
+    const data = await res.json()
+    if (data.error) return
+    // 仅更新快照，不重置历史数据
+    currentQuote.value = {
+      price:        data.price,
+      change:       data.change,
+      change_pct:   data.change_pct,
+      volume:       data.volume,
+      amount:       data.amount,
+      amplitude:    data.amplitude,
+      turnover_rate: data.turnover_rate,
+    }
+  } catch (_) {}
+}
+
+function startQuotePolling(intervalMs = 30_000) {
+  stopQuotePolling()
+  fetchLatestQuote()
+  quotePollingTimer = setInterval(fetchLatestQuote, intervalMs)
+}
+
+function stopQuotePolling() {
+  if (quotePollingTimer) {
+    clearInterval(quotePollingTimer)
+    quotePollingTimer = null
+  }
+}
 
 // ── 标的信息 ──────────────────────────────────────────────────
 const symbolName = computed(() => currentSymbolName.value || currentSymbol.value.replace(/^(sh|sz|us|hk|jp)/i, ''))
@@ -540,13 +621,48 @@ function setupResizeObserver() {
 }
 
 // ── 导出 PNG ───────────────────────────────────────────────────
-function exportPNG() {
+async function exportPNG() {
   if (!chartInstance) return
-  const url = chartInstance.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#0f172a' })
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${symbolName.value}_${period.value}.png`
-  a.click()
+  try {
+    // 1. ECharts 图表层
+    const chartUrl = chartInstance.getDataURL({
+      type: 'png', pixelRatio: 2, backgroundColor: '#0f172a'
+    })
+
+    // 2. 创建合成画布
+    const width  = chartRef.value.clientWidth  * 2
+    const height = chartRef.value.clientHeight * 2
+    const canvas = document.createElement('canvas')
+    canvas.width  = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+
+    // 3. 加载并绘制 ECharts 层
+    const chartImg = new Image()
+    await new Promise((resolve, reject) => {
+      chartImg.onload = resolve
+      chartImg.onerror = reject
+      chartImg.src = chartUrl
+    })
+    ctx.drawImage(chartImg, 0, 0, width, height)
+
+    // 4. 若画线层可见且有内容，叠加 DrawingCanvas
+    if (drawingVisible.value && drawingCanvasRef.value?.$el) {
+      const drawCanvas = drawingCanvasRef.value.$el.querySelector('canvas')
+      if (drawCanvas) {
+        ctx.drawImage(drawCanvas, 0, 0, width, height)
+      }
+    }
+
+    // 5. 导出合成图
+    const finalUrl = canvas.toDataURL('image/png')
+    const a = document.createElement('a')
+    a.href = finalUrl
+    a.download = `${symbolName.value}_${period.value}_${Date.now()}.png`
+    a.click()
+  } catch (e) {
+    console.error('PNG导出失败:', e)
+  }
 }
 
 // ── 区间统计（右键框选）────────────────────────────────────────
@@ -622,6 +738,7 @@ function closeCtxMenu() {
 function onDrillDown() {
   ctxMenu.value.visible = false
   if (ctxMenu.value.idx < 0 || !ctxMenu.value.date) return
+  stopQuotePolling()
   const dateStr = ctxMenu.value.date  // YYYY-MM-DD
   const yyyymmdd = dateStr.replace(/-/g, '')
   drillDownDate.value = yyyymmdd
@@ -636,15 +753,20 @@ function onDrillDown() {
 onMounted(() => {
   setupResizeObserver()
   fetchHistory()
+  startQuotePolling(30_000)
 })
 
 onUnmounted(() => {
   resizeObserver?.disconnect()
   chartInstance?.dispose()
+  stopQuotePolling()
 })
 
 // ── 监听响应 ───────────────────────────────────────────────────
-watch(currentSymbol, () => { fetchHistory() })
-watch([period, yAxisType, subChartTab, indicatorParams], () => renderChart() )
+watch(currentSymbol, () => {
+  fetchHistory()
+  startQuotePolling(30_000)  // 切换标的后重启轮询
+})
+watch([period, yAxisType, subChartTab, indicatorParams], () => renderChart())
 watch(histData, () => nextTick(renderChart))
 </script>

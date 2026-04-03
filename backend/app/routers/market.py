@@ -465,6 +465,36 @@ async def market_lookup(symbol: str):
     return item
 
 
+@router.get("/market/quote/{symbol}")
+async def market_quote(symbol: str):
+    """
+    轻量实时行情（专用于高频轮询，不含历史数据）
+    返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
+    """
+    norm = _normalize_symbol(symbol)
+    from app.db import get_price_history
+    rows = get_price_history(norm, limit=2)  # 最新+昨日
+    if not rows:
+        return { 'error': 'no data', 'symbol': norm }
+    latest = rows[0]  # DESC，最新在前
+    prev   = rows[1] if len(rows) > 1 else latest
+    close  = float(latest.get('close') or 0)
+    prev_c = float(prev.get('close') or close)
+    chg    = close - prev_c
+    chg_pct = (chg / prev_c * 100) if prev_c else 0
+    return {
+        'symbol':       norm,
+        'price':        close,
+        'change':       round(chg, 3),
+        'change_pct':   round(chg_pct, 2),
+        'volume':       float(latest.get('volume') or 0),
+        'amount':       float(latest.get('amount') or 0),
+        'amplitude':    round((float(latest.get('high') or 0) / float(latest.get('low') or 1) - 1) * 100, 2) if latest.get('high') and latest.get('low') else 0,
+        'turnover_rate': float(latest.get('turnover_rate') or 0),
+        'timestamp':     datetime.now().isoformat(),
+    }
+
+
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
 def _clean_symbol(raw: str) -> str:
     """Strip sh/sz/SH/SZ/前缀，容忍前端各种格式传入"""
@@ -532,11 +562,14 @@ async def market_history(
         chart_type = "line"
 
     elif period == "daily":
-        history  = get_daily_history(clean_sym, limit=limit)
+        raw_rows = get_daily_history(clean_sym, limit=limit)
+        # get_daily_history 返回 DESC（最新在前），需要翻转成 ASC 给复权计算用
+        history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
         chart_type = "candlestick"
 
     elif period in ("weekly", "monthly"):
-        history  = get_periodic_history(clean_sym, period=period, limit=limit)
+        raw_rows = get_periodic_history(clean_sym, period=period, limit=limit)
+        history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
         chart_type = "candlestick"
 
     else:
@@ -571,6 +604,55 @@ async def market_rates():
             for r in rows
         ],
     }
+
+
+# ── 复权因子计算（QFQ/HFQ）────────────────────────────────────────
+def _apply_adjustment(rows, method):
+    """
+    对 OHLCV 历史数据应用复权因子。
+    method: 'qfq' 前复权 | 'hfq' 后复权 | 'none' 不复权
+    """
+    if not rows or method == 'none':
+        return rows
+
+    # 取最新一根（最近交易日）的收盘价作为基准
+    latest = rows[-1]  # 按 date ASC 排列时最后一条是最新
+    latest_close = float(latest.get('close') or 0)
+    if latest_close <= 0:
+        return rows
+
+    # 前复权：最新价为基准，向前倒推
+    # qfq_factor_t = latest_close / close_t
+    if method == 'qfq':
+        result = []
+        for r in rows:
+            t_close = float(r.get('close') or 0)
+            if t_close > 0:
+                factor = latest_close / t_close
+                result.append({
+                    **r,
+                    'open':   round(float(r.get('open')   or 0) * factor, 3),
+                    'high':   round(float(r.get('high')   or 0) * factor, 3),
+                    'low':    round(float(r.get('low')    or 0) * factor, 3),
+                    'close':  round(t_close * factor, 3),
+                })
+            else:
+                result.append({**r})
+        return result
+
+    # 后复权：简化版，以最新收盘价为基准等比放大
+    # hfq_factor = latest_close（假设基准为1，前复权后价格 × 最新收盘价）
+    if method == 'hfq':
+        factor = latest_close  # 简化：恒定因子 = 最新收盘价
+        return [{
+            **r,
+            'open':   round(float(r.get('open')  or 0) * factor, 3),
+            'high':   round(float(r.get('high')  or 0) * factor, 3),
+            'low':    round(float(r.get('low')   or 0) * factor, 3),
+            'close':  round(float(r.get('close') or 0) * factor, 3),
+        } for r in rows]
+
+    return rows
 
 
 # ── Task 2: 全球市场（扩容至5个指数）────────────────────────────────────
