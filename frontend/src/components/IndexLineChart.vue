@@ -471,6 +471,11 @@ function buildOption(raw, type) {
 function bindHoverEvents() {
   if (!chartInstance) return
 
+  // 先解绑，避免重复注册累积
+  chartInstance.off('mousemove')
+  chartInstance.getZr().off('mouseleave')
+  chartInstance.getZr().off('mouseenter')
+
   // mousemove → 实时更新顶部 OHLCV 栏
   chartInstance.on('mousemove', function (params) {
     if (!params.dataIndex && params.dataIndex !== 0) return
@@ -515,10 +520,15 @@ function bindHoverEvents() {
     }
   })
 
-  // 鼠标离开图表 → 回填最后一根（不清空，保证默认有数据）
+  // 鼠标离开图表 → 取消进入事件、启动5秒定时器（超时后回填最新数据）
   chartInstance.getZr().on('mouseleave', () => {
-    const sanitized = _sanitize(lastHistRaw)
-    fillHoverBarLatest(sanitized)
+    _cancelLeaveTimer()
+    _startLeaveTimer()
+  })
+
+  // 鼠标进入图表 → 取消5秒定时器（停止回填，用户正在浏览）
+  chartInstance.getZr().on('mouseenter', () => {
+    _cancelLeaveTimer()
   })
 }
 
@@ -544,6 +554,24 @@ function fillHoverBarLatest(hist) {
 let lastHistRaw = []
 
 // ─────────────────────────────────────────────────────────────────
+// 5秒定时器：鼠标离开图表5秒后自动回填最新数据
+// ─────────────────────────────────────────────────────────────────
+let _leaveTimer = null
+
+function _startLeaveTimer() {
+  clearTimeout(_leaveTimer)
+  _leaveTimer = setTimeout(() => {
+    const sanitized = _sanitize(lastHistRaw)
+    fillHoverBarLatest(sanitized)
+  }, 5000)
+}
+
+function _cancelLeaveTimer() {
+  clearTimeout(_leaveTimer)
+  _leaveTimer = null
+}
+
+// ─────────────────────────────────────────────────────────────────
 // 渲染循环
 // ─────────────────────────────────────────────────────────────────
 async function fetchAndRender() {
@@ -564,8 +592,10 @@ async function fetchAndRender() {
 
     if (!chartInstance) {
       chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-      bindHoverEvents()
     }
+
+    // 每次渲染后重新绑定事件（clear() 会清除所有事件监听）
+    bindHoverEvents()
 
     chartInstance.clear()
     chartInstance.setOption(opt, { notMerge: true })
