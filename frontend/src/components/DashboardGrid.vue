@@ -96,7 +96,7 @@
           <IndexLineChart
             :key="`${selectedIndex}-${selectedPeriod}`"
             :symbol="selectedIndex"
-            :name="currentIndexOption.name"
+            :name="currentIndexName"
             :color="currentIndexOption.color"
             :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
             :indicators="activeIndicators"
@@ -230,7 +230,8 @@ import StockScreener from './StockScreener.vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
 import { useUiStore } from '../composables/useUiStore.js'
 
-const { currentSymbol, currentSymbolName, currentColor, setSymbol } = useMarketStore()
+const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol } = useMarketStore()
+const currentIndexName = ref('上证指数')
 
 const props = defineProps({
   marketData:     { type: Object, default: null },
@@ -267,24 +268,27 @@ watch(currentSymbol, (sym) => {
 // ── 列表点击联动 ─────────────────────────────────────────────────
 function handleGlobalClick(item) {
   const symbolMap = {
-    'NDX': 'ndx', 'SPX': 'spx', 'DJI': 'dji', 'HSI': 'hsi', 'N225': 'nikkei',
-    'ndx': 'ndx', 'spx': 'spx', 'dji': 'dji', 'hsi': 'hsi', 'nikkei': 'nikkei',
+    'NDX': 'usNDX', 'SPX': 'usSPX', 'DJI': 'usDJI', 'HSI': 'hkHSI', 'N225': 'jpN225',
+    'ndx': 'usNDX', 'spx': 'usSPX', 'dji': 'usDJI', 'hsi': 'hkHSI', 'nikkei': 'jpN225',
   }
-  const sym = symbolMap[item.symbol?.toLowerCase()] || item.symbol
-  const opt = { symbol: sym, name: item.name, color: '#60a5fa' }
-  setSymbol(opt.symbol, opt.name, opt.color)
-  selectedIndex.value = opt.symbol
+  const norm = normalizeSymbol(symbolMap[item.symbol?.toLowerCase()] || item.symbol)
+  setSymbol(norm, item.name, '#60a5fa')
+  selectedIndex.value = norm
+  currentIndexName.value = item.name || norm
 }
 
 function handleChinaClick(item) {
   setSymbol(item.symbol, item.name, '#f87171')
   selectedIndex.value = item.symbol
+  currentIndexName.value = item.name || item.symbol
 }
 
 function handleWindClick(item) {
   const sym = item.symbol || item.key
-  setSymbol(sym, item.name, '#f87171')
-  selectedIndex.value = sym
+  const norm = normalizeSymbol(sym)
+  setSymbol(norm, item.name, '#f87171')
+  selectedIndex.value = norm
+  currentIndexName.value = item.name || norm
 }
 
 function handleSectorClick(sec) {
@@ -321,7 +325,10 @@ const indicators = [
   { key: 'KDJ',  label: 'KDJ' },
 ]
 
-function switchIndex(idx) { selectedIndex.value = idx.symbol }
+function switchIndex(idx) {
+  selectedIndex.value = idx.symbol
+  currentIndexName.value = idx.name || idx.symbol
+}
 function switchPeriod(p)   { selectedPeriod.value = p }
 function toggleIndicator(k) {
   const idx = activeIndicators.value.indexOf(k)

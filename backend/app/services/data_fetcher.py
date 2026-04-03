@@ -824,6 +824,126 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
         return []
 
 
+def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000) -> list[dict]:
+    """
+    按需穿透拉取美股/港股/日经指数历史K线（yfinance），写入 market_data_daily 表。
+    支持: IXIC, NDX, SPX, DJI, HSI, N225 等主要全球指数。
+
+    yfinance ticker 映射:
+      IXIC → ^IXIC（纳斯达克综合）
+      NDX  → ^NDX（纳斯达克100）
+      SPX  → ^GSPC（标普500）
+      DJI  → ^DJI（道琼斯）
+      HSI  → ^HSI（恒生）
+      N225 → ^N225（日经225）
+    """
+    import yfinance as yf
+
+    # symbol 可能是 'usIXIC'（前端标准化格式）或 'IXIC'（原始）
+    _SYMBOL_MAP = {
+        'ixic': '^IXIC', 'usixic': '^IXIC',
+        'ndx':  '^NDX',  'usndx':  '^NDX',
+        'spx':  '^GSPC', 'usspx':  '^GSPC',
+        'dji':  '^DJI',  'usdji':  '^DJI',
+        'hsi':  '^HSI',  'hk hsi': '^HSI',
+        'n225': '^N225', 'jpn225': '^N225',
+    }
+
+    raw_key = symbol.lower().replace(' ', '')
+    ticker_str = _SYMBOL_MAP.get(raw_key, symbol)
+    clean_sym = symbol.lower()
+
+    try:
+        logger.info(f"[yfinance] 开始拉取 {ticker_str} ({symbol})")
+        ticker = yf.Ticker(ticker_str)
+        # interval: 1d=日K，1wk=周K（聚合日K得到）
+        df_daily = ticker.history(period="max", auto_adjust=True, back_adjust=False)
+        if df_daily is None or df_daily.empty:
+            logger.warning(f"[yfinance] {ticker_str} 无数据返回")
+            return []
+
+        rows = []
+        for i in range(len(df_daily)):
+            try:
+                dt_idx = df_daily.index[i]
+                open_  = float(df_daily.iloc[i]["Open"])
+                high   = float(df_daily.iloc[i]["High"])
+                low    = float(df_daily.iloc[i]["Low"])
+                close  = float(df_daily.iloc[i]["Close"])
+                vol    = float(df_daily.iloc[i]["Volume"]) if not pd.isna(df_daily.iloc[i]["Volume"]) else 0.0
+                dt_str = dt_idx.strftime('%Y-%m-%d')
+                dt_ts  = int(dt_idx.timestamp())
+                prev_close = float(df_daily.iloc[i-1]["Close"]) if i > 0 else close
+                pct = (close - prev_close) / prev_close * 100 if prev_close else 0.0
+                rows.append({
+                    "symbol":     clean_sym,
+                    "date":       dt_str,
+                    "open":       open_,
+                    "high":       high,
+                    "low":        low,
+                    "close":      close,
+                    "volume":     vol,
+                    "change_pct": round(pct, 4),
+                    "timestamp":  dt_ts,
+                    "data_type":  "daily",
+                })
+            except Exception as e:
+                logger.warning(f"[yfinance] 解析第{i}行失败: {e}")
+                continue
+
+        if rows:
+            # 取最近 limit 条（yfinance 返回 period=max，量很大）
+            rows = rows[-limit:]
+            from app.db import buffer_insert_daily, buffer_insert_periodic
+            buffer_insert_daily(rows)
+            logger.info(f"[yfinance] {symbol} 日K写入 {len(rows)} 条")
+
+            # ── 周线聚合 ────────────────────────────────────────
+            import pandas as pd
+            df_d = pd.DataFrame(rows)
+            df_d["date"] = pd.to_datetime(df_d["date"])
+            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
+                                + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+            periodic_rows = []
+            for yw, grp in df_d.groupby("year_wk", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "weekly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            # 月线聚合
+            df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+            for ym, grp in df_d.groupby("ym", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "monthly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            if periodic_rows:
+                buffer_insert_periodic(periodic_rows)
+                logger.info(f"[yfinance] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+
+        return rows[-100:] if rows else []
+    except Exception as e:
+        logger.error(f"[yfinance] fetch_us_stock_history({symbol}) 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
     all_rows = []

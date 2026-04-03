@@ -160,7 +160,12 @@ function calcWR(closes, highs, lows, n = 10) {
 // K线图（Task 2: 60%主图 / 20%成交量 比例）
 // ─────────────────────────────────────────────────────────────────
 function buildKLineOption(hist) {
-  const times   = hist.map(h => h.date ? h.date.slice(5) : '')
+  // 日K: YYYY-MM-DD / 分钟K: YYYY-MM-DD HH:mm（全局统一完整日期格式）
+  const times   = hist.map(h => {
+    if (h.time && h.time.length >= 16) return h.time.slice(0, 16)   // YYYY-MM-DD HH:mm
+    if (h.date) return h.date.slice(0, 10)                           // YYYY-MM-DD
+    return ''
+  })
   const closes  = hist.map(h => h.close)
   const highs   = hist.map(h => h.high)
   const lows    = hist.map(h => h.low)
@@ -347,7 +352,11 @@ function buildKLineOption(hist) {
 // 分时图（Task 1: 动态Y轴min/max + areaStyle）
 // ─────────────────────────────────────────────────────────────────
 function buildLineOption(hist) {
-  const times   = hist.map(h => h.time ? h.time.slice(11, 16) : (h.date || ''))
+  const times   = hist.map(h => {
+    if (h.time && h.time.length >= 16) return h.time.slice(0, 16)   // YYYY-MM-DD HH:mm
+    if (h.date) return h.date.slice(0, 10)                           // YYYY-MM-DD
+    return ''
+  })
   const prices  = hist.map(h => Number(h.price != null ? h.price : h.close))
   const volumes = hist.map(h => Number(h.volume))
   const changes = hist.map(h => Number(h.change_pct || 0))

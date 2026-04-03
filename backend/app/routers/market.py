@@ -534,8 +534,38 @@ async def market_history(
     _MIN_KLINE_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
     _FREQUENCY_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
+    # ── 非 A 股指数/个股（美股/HK/JP/宏观）：走 yfinance 穿透路径 ──────────
+    _NON_ASHARE = (
+        clean_sym.startswith("us") or clean_sym.startswith("hk")
+        or clean_sym.startswith("jp") or clean_sym.startswith("macro")
+    )
+    _IS_GLOBAL_IDX = clean_sym in {
+        "usixic", "usndx", "usspx", "usdji",
+        "hk hsi", "hkhsi", "jpn225", "jpn225",
+    }
+
+    if _NON_ASHARE and period in ("daily", "weekly", "monthly"):
+        raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
+        total    = get_daily_count(clean_sym)
+
+        if not raw_rows and offset == 0:
+            logger.info(f"[Market History] 本地无 {clean_sym}，触发 yfinance 穿透…")
+            fetching = True
+            try:
+                from app.services.data_fetcher import fetch_us_stock_history
+                rows = fetch_us_stock_history(clean_sym, period=period, limit=5000)
+                if rows:
+                    raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
+                    total    = get_daily_count(clean_sym)
+            except Exception as e:
+                logger.error(f"[Market History] yfinance 穿透失败: {e}")
+
+        history  = list(reversed(raw_rows))
+        has_more = (offset + len(raw_rows)) < total
+        chart_type = "candlestick"
+
     # ── 分钟K线（Eastmoney N分钟接口，仅支持部分 A 股指数）───────────────
-    if period in _FREQUENCY_MAP:
+    elif period in _FREQUENCY_MAP:
         freq = _FREQUENCY_MAP[period]
         if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
             from app.services.data_fetcher import fetch_index_minute_history
@@ -555,41 +585,38 @@ async def market_history(
             history = []
         chart_type = "line"
 
-    # ── 日K线（支持个股 + 指数，自动按需穿透）───────────────────────────
+    # ── A 股日K线（支持个股 + 指数，自动按需穿透）───────────────────────────
     elif period == "daily":
         raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
         total    = get_daily_count(clean_sym)
 
-        # 本地无数据 → 触发 AkShare 按需穿透（仅首次，limit=max 一次性拉足）
         if not raw_rows and offset == 0:
-            logger.info(f"[Market History] 本地无 {clean_sym} 日K，触发穿透拉取…")
+            logger.info(f"[Market History] 本地无 {clean_sym} 日K，触发 AkShare 穿透…")
             fetching = True
             try:
                 from app.services.data_fetcher import fetch_stock_history
                 rows = fetch_stock_history(clean_sym)
                 if rows:
-                    # 穿透完成后再查（此时 SQLite 已有数据）
                     raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
                     total    = get_daily_count(clean_sym)
             except Exception as e:
-                logger.error(f"[Market History] 穿透失败: {e}")
+                logger.error(f"[Market History] AkShare 穿透失败: {e}")
 
         history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
         has_more = (offset + len(raw_rows)) < total
         chart_type = "candlestick"
 
-    # ── 周/月K线（支持个股 + 指数，自动按需穿透）────────────────────────
+    # ── A 股周/月K线（支持个股 + 指数，自动按需穿透）────────────────────────
     elif period in ("weekly", "monthly"):
         raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
         total    = get_periodic_count(clean_sym, period)
 
-        # 本地无数据 → 触发穿透（先把日K拉足，再由 fetch_stock_history 内聚合并写入 periodic 表）
         if not raw_rows and offset == 0:
             logger.info(f"[Market History] 本地无 {clean_sym} {period}K，触发穿透…")
             fetching = True
             try:
                 from app.services.data_fetcher import fetch_stock_history
-                fetch_stock_history(clean_sym)   # 日K写入后自动生成 periodic
+                fetch_stock_history(clean_sym)
                 raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
                 total    = get_periodic_count(clean_sym, period)
             except Exception as e:
