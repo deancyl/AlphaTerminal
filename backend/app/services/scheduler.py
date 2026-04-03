@@ -52,11 +52,12 @@ def start_scheduler():
     import threading
     def initial_backfill():
         import time; time.sleep(2)
+        # 先回填历史K线（日K写入 buffer，flush_write_buffer 每10秒会刷到DB）
+        backfill_daily_history()
         # 直接触发 Sina HQ 拉取（后台线程）
-        # 注意：新闻由 lifespan 触发的 refresh_news_cache 统一管理，不在此处重复触发
         from app.services.sentiment_engine import trigger_spot_fetch
         trigger_spot_fetch()
-        logger.info("[Scheduler] 启动完成，Sina HQ 个股已触发")
+        logger.info("[Scheduler] 启动完成，历史K线回填 + Sina HQ 个股已触发")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
     # 每 3 分钟拉取一次实时数据（akshare 有频率限制）
