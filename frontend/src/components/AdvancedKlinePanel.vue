@@ -23,14 +23,47 @@
 
     <!-- 主图区（flex-1，绑定 ResizeObserver） -->
     <div class="flex-1 min-h-0 relative" ref="chartContainerRef">
+      <!-- 画线工具栏（左侧） -->
+      <div class="absolute left-0 top-0 bottom-0 z-20 flex items-center">
+        <DrawingToolbar
+          :activeTool="drawingTool"
+          :activeColor="drawingColor"
+          :magnetMode="magnetMode"
+          :visible="drawingVisible"
+          :locked="drawingLocked"
+          @tool-change="t => drawingTool = t"
+          @color-change="c => drawingColor = c"
+          @magnet-toggle="magnetMode = !magnetMode"
+          @visibility-toggle="drawingVisible = !drawingVisible"
+          @lock-toggle="drawingLocked = !drawingLocked"
+          @clear="drawingCanvasRef?.clearAll()"
+        />
+      </div>
+
       <!-- ECharts 主图表 -->
       <div ref="chartRef" class="w-full h-full"></div>
+
+      <!-- 画线 Canvas 覆盖层 -->
+      <DrawingCanvas
+        v-if="drawingVisible"
+        ref="drawingCanvasRef"
+        :chartInstance="chartInstance"
+        :activeTool="drawingTool"
+        :activeColor="drawingColor"
+        :magnetMode="magnetMode"
+        :symbol="currentSymbol"
+        class="z-10"
+        @drawn="onShapeDrawn"
+        @deleted="onShapeDeleted"
+        @cleared="onShapesCleared"
+        @range-select="onRangeSelect"
+      />
 
       <!-- 十字光标信息浮层（右上角） -->
       <CrosshairInfo
         v-if="hoverData && Object.keys(hoverData).length"
         :data="hoverData"
-        class="absolute top-2 right-2 z-10 pointer-events-none"
+        class="absolute top-2 right-2 z-20 pointer-events-none"
       />
     </div>
 
@@ -77,6 +110,8 @@ import CommandCenter  from './CommandCenter.vue'
 import SubChart       from './SubChart.vue'
 import CrosshairInfo  from './CrosshairInfo.vue'
 import IntervalStats  from './IntervalStats.vue'
+import DrawingToolbar from './DrawingToolbar.vue'
+import DrawingCanvas  from './DrawingCanvas.vue'
 
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { normalizeSymbol, buildXAxisLabels } from '../utils/symbols.js'
@@ -116,6 +151,14 @@ const loadOffset      = ref(0)         // 懒加载偏移量
 
 let chartInstance = null
 let resizeObserver = null
+const drawingCanvasRef = ref(null)
+
+// 画线状态
+const drawingTool     = ref('')
+const drawingColor    = ref('#fbbf24')
+const magnetMode     = ref(true)
+const drawingVisible  = ref(true)
+const drawingLocked   = ref(false)
 
 // ── 标的信息 ──────────────────────────────────────────────────
 const symbolName = computed(() => currentSymbolName.value || currentSymbol.value.replace(/^(sh|sz|us|hk|jp)/i, ''))
@@ -434,6 +477,43 @@ function exportPNG() {
   a.download = `${symbolName.value}_${period.value}.png`
   a.click()
 }
+
+// ── 区间统计（右键框选）────────────────────────────────────────
+const rangeStart = ref(null)
+
+function onRangeSelect({ idx }) {
+  if (!rangeStart.value) {
+    rangeStart.value = { idx }
+  } else {
+    const start = Math.min(rangeStart.value.idx, idx)
+    const end   = Math.max(rangeStart.value.idx, idx)
+    const slice = histData.value.slice(start, end + 1)
+    if (slice.length > 1) {
+      const first = slice[0], last = slice[slice.length - 1]
+      const changePct = +((last.close - first.close) / (first.close || 1) * 100).toFixed(2)
+      const highs = slice.map(h => h.high)
+      const lows  = slice.map(h => h.low)
+      intervalStats.value = {
+        startDate: first.date,
+        endDate:   last.date,
+        tradeDays: slice.length,
+        changePct,
+        maxAmplitude: +((Math.max(...highs) / Math.min(...lows) * 100) - 100).toFixed(2),
+        highest:   Math.max(...highs),
+        lowest:    Math.min(...lows),
+        totalVolume: slice.reduce((a, h) => a + (h.volume || 0), 0),
+        totalAmount: slice.reduce((a, h) => a + (h.amount || 0), 0),
+        totalTurnoverRate: slice.reduce((a, h) => a + (h.turnover_rate || 0), 0),
+      }
+    }
+    rangeStart.value = null
+  }
+}
+
+// ── 画线事件（IndexedDB 自动持久化，此处可扩展日志）─────────────
+function onShapeDrawn() {}
+function onShapeDeleted() {}
+function onShapesCleared() {}
 
 // ── 生命周期 ───────────────────────────────────────────────────
 onMounted(() => {
