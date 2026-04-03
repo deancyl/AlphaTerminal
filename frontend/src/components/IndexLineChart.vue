@@ -488,12 +488,12 @@ function bindHoverEvents() {
       hoverBar.value = {
         price: priceData != null ? Number(priceData) : null,
         time:  times[idx] || '',
-        open:  h.open || null,
-        high:  h.high || null,
-        low:   h.low || null,
-        close: h.close || null,
-        volume: h.volume || null,
-        change_pct: h.change_pct || null,
+        open:  h.open ?? null,
+        high:  h.high ?? null,
+        low:   h.low ?? null,
+        close: h.close ?? null,
+        volume: h.volume ?? null,
+        change_pct: h.change_pct != null ? Number(h.change_pct) : null,
       }
     } else {
       // K线：series[0]=K线烛台 [open, close, low, high]
@@ -509,17 +509,39 @@ function bindHoverEvents() {
         high:  candleData ? Number(candleData[3]) : null,
         low:   candleData ? Number(candleData[2]) : null,
         close: candleData ? Number(candleData[1]) : null,
-        volume: volData?.value || h.volume || null,
-        change_pct: h.change_pct || null,
+        volume: volData?.value ?? h.volume ?? null,
+        change_pct: h.change_pct != null ? Number(h.change_pct) : null,
       }
     }
   })
 
-  // 鼠标离开图表 → 清空 hover bar
+  // 鼠标离开图表 → 回填最后一根（不清空，保证默认有数据）
   chartInstance.getZr().on('mouseleave', () => {
-    hoverBar.value = {}
+    const sanitized = _sanitize(lastHistRaw)
+    fillHoverBarLatest(sanitized)
   })
 }
+
+// ─────────────────────────────────────────────────────────────────
+// 回填 hoverBar 为最新一根（初始化 / 切换周期后）
+// ─────────────────────────────────────────────────────────────────
+function fillHoverBarLatest(hist) {
+  if (!hist || !hist.length) { hoverBar.value = {}; return }
+  const h = hist[hist.length - 1]
+  hoverBar.value = {
+    price:      h.price  ?? h.close ?? null,
+    time:       h.time   ?? h.date  ?? '',
+    open:       h.open   ?? null,
+    high:       h.high   ?? null,
+    low:        h.low    ?? null,
+    close:      h.close  ?? null,
+    volume:     h.volume ?? null,
+    change_pct: h.change_pct != null ? Number(h.change_pct) : null,
+  }
+}
+
+// 暂存最近一次渲染用的 raw hist（用于 mouseleave 回填）
+let lastHistRaw = []
 
 // ─────────────────────────────────────────────────────────────────
 // 渲染循环
@@ -547,6 +569,10 @@ async function fetchAndRender() {
 
     chartInstance.clear()
     chartInstance.setOption(opt, { notMerge: true })
+
+    // 回填最新一根数据到 hover bar（保证刷新后默认显示）
+    lastHistRaw = data.history || []
+    fillHoverBarLatest(_sanitize(lastHistRaw))
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
     console.error('[KLine]', e)
