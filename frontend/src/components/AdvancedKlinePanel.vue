@@ -14,6 +14,8 @@
       :overlayName="overlayName"
       :visibleHist="visibleHist"
       :fullHist="histData"
+      :maDisplays="maDisplays"
+      :hoverData="hoverData"
       @period-change="onPeriodChange"
       @adjustment-change="adj => adjustment = adj"
       @yaxis-change="y => yAxisType = y"
@@ -78,24 +80,6 @@
         @cleared="onShapesCleared"
         @range-select="onRangeSelect"
       />
-
-      <!-- 十字光标信息浮层（右上角） -->
-      <CrosshairInfo
-        v-if="hoverData && Object.keys(hoverData).length"
-        :data="hoverData"
-        class="absolute top-2 right-2 z-20 pointer-events-none"
-      />
-
-      <!-- MA 实时数值浮显（左上角） -->
-      <div class="absolute top-2 left-14 z-20 pointer-events-none flex flex-col gap-0.5">
-        <div v-for="ma in maDisplays" :key="ma.label"
-          class="flex items-center gap-1.5 text-[10px] font-mono"
-        >
-          <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: ma.color }"></span>
-          <span :style="{ color: ma.color }">MA{{ ma.period }}</span>
-          <span class="text-gray-200">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
-        </div>
-      </div>
 
       <!-- 下钻返回按钮 -->
       <button
@@ -403,10 +387,12 @@ async function fetchOverlayHistory(sym) {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    overlayData.value = (data.history || []).map(r => ({
+    // 规范化为 DATE ASC（与 histData DESC 互补，用于按日期匹配）
+    const raw = (data.history || []).map(r => ({
       date:  r.date || r.time || '',
       close: Number(r.close) || 0,
-    }))
+    })).reverse()  // 转成 ASC，最旧在前最新在后
+    overlayData.value = raw
   } catch (e) {
     overlayData.value = []
   }
@@ -769,4 +755,5 @@ watch(currentSymbol, () => {
 })
 watch([period, yAxisType, subChartTab, indicatorParams], () => renderChart())
 watch(histData, () => nextTick(renderChart))
+watch(overlayData, () => nextTick(renderChart))
 </script>

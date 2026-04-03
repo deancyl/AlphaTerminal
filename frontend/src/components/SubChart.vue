@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col bg-terminal-panel border-t border-gray-700/50">
     <!-- Tab 栏 -->
-    <div class="flex items-center gap-0.5 px-2 py-1 border-b border-gray-700/30 shrink-0">
+    <div class="relative flex items-center gap-0.5 px-2 py-1 border-b border-gray-700/30 shrink-0">
       <button
         v-for="tab in tabs" :key="tab"
         class="px-2 py-0.5 text-[10px] rounded transition"
@@ -19,7 +19,7 @@
       >⚙️ 设置</button>
 
       <!-- 参数设置浮窗 -->
-      <div v-if="showParams" class="absolute mt-20 ml-2 p-3 rounded border border-gray-600 bg-terminal-panel shadow-xl z-20 w-52">
+      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded border border-gray-600 bg-terminal-panel shadow-xl z-20 w-52">
         <div class="text-[10px] text-gray-400 mb-2 uppercase tracking-wider">指标参数</div>
         <!-- MACD -->
         <template v-if="activeTab === 'MACD'">
@@ -113,7 +113,12 @@ const emit = defineEmits(['tab-change', 'params-change'])
 const tabs = ['VOL', 'MACD', 'KDJ', 'RSI', 'BOLL']
 const showParams = ref(false)
 const chartRef = ref(null)
-const params = ref({ ...{ MACD: { fast: 12, slow: 26, signal: 9 }, KDJ: { n: 9 }, RSI: { period: 14 }, BOLL: { period: 20, stdDev: 2 } }, ...props.indicatorParams })
+const params = computed(() => ({
+  MACD:  { fast: 12, slow: 26, signal: 9, ...(props.indicatorParams?.MACD || {}) },
+  KDJ:   { n: 9,    ...(props.indicatorParams?.KDJ  || {}) },
+  RSI:   { period: 14, ...(props.indicatorParams?.RSI || {}) },
+  BOLL:  { period: 20, stdDev: 2, ...(props.indicatorParams?.BOLL || {}) },
+}))
 
 let chartInstance = null
 
