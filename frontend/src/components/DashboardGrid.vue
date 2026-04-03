@@ -233,12 +233,14 @@ import { useUiStore } from '../composables/useUiStore.js'
 const { currentSymbol, currentSymbolName, currentColor, setSymbol } = useMarketStore()
 
 const props = defineProps({
-  marketData:   { type: Object, default: null },
-  macroData:    { type: Array,  default: () => [] },  // Phase 5: USD/CNH · GOLD · WTI · VIX
-  ratesData:    { type: Array,  default: () => [] },
-  globalData:   { type: Array,  default: () => [] },
-  chinaAllData: { type: Array,  default: () => [] },
-  isLocked:     { type: Boolean, default: true },
+  marketData:     { type: Object, default: null },
+  macroData:      { type: Array,  default: () => [] },
+  ratesData:      { type: Array,  default: () => [] },
+  globalData:     { type: Array,  default: () => [] },
+  chinaAllData:   { type: Array,  default: () => [] },
+  sectorsData:    { type: Array,  default: () => [] },
+  derivativesData:{ type: Array,  default: () => [] },
+  isLocked:       { type: Boolean, default: true },
 })
 
 const emit = defineEmits(['toggle-lock'])

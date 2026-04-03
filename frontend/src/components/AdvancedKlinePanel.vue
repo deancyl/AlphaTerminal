@@ -123,6 +123,7 @@ import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {
   GridComponent, TooltipComponent, LegendComponent,
   DataZoomComponent, MarkLineComponent, MarkAreaComponent,
+  YAxisComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import { useMarketStore } from '../composables/useMarketStore.js'
