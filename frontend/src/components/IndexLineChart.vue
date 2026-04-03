@@ -627,11 +627,15 @@ async function fetchAndRender() {
 function retryChart() { chartError.value = ''; fetchAndRender() }
 
 // props.symbol 变化时立即重置名称（不等数据加载）
-watch(() => props.symbol, (sym) => {
+watch(() => props.symbol, async (sym) => {
+  // symbol 变化时：先清空旧名称显示（立即响应），等数据回来再显示新名称
+  currentName.value = props.name || '上证指数'
+  await fetchAndRender()
+  // fetchAndRender 之后用正确的 props.name 更新一次
   currentName.value = props.name || '上证指数'
 })
 
-watch(() => [props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
+watch(() => [props.symbol, props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
 
 onMounted(async () => {
   await new Promise(r => setTimeout(r, 0))

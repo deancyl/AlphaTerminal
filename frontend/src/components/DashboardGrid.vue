@@ -273,12 +273,29 @@ const _MACRO_NAME_MAP = {
 }
 
 function handleWindClick(item) {
-  // 优先用 item.symbol，否则尝试 name→symbol 映射
+  // windItems 里的 macro 行 symbol=m.name（全名），需解析出实际品种
+  // 例如："SGE黄金(人民币)"→"GOLD"，"WTI原油(美元)"→"WTI"
   let sym = item.symbol || item.key || ''
-  // 宏观品种用名称映射（如"黄金"→"GOLD"）
-  if (!sym || !/^[A-Za-z]{2,6}$/.test(sym)) {
-    sym = _MACRO_NAME_MAP[sym] || sym
+
+  // 名称特征匹配（宏观大宗没有 symbol 字段，只有全名）
+  if (!/^[A-Za-z]{2,6}$/.test(sym)) {
+    const lower = sym.toLowerCase()
+    if (lower.includes('黄金') || lower.includes('xau') || lower.includes('gld')) {
+      sym = 'gold'
+    } else if (lower.includes('wti') || lower.includes('原油')) {
+      sym = 'wti'
+    } else if (lower.includes('vix') || lower.includes('波幅') || lower.includes('vhsi')) {
+      sym = 'vix'
+    } else if (lower.includes('人民币') || lower.includes('cny') || lower.includes('cny')) {
+      sym = 'cnh'
+    } else if (lower.includes('美元') && !lower.includes('原油')) {
+      sym = 'dxy'
+    } else {
+      // 兜底：去掉数字和特殊字符后 normalize
+      sym = normalizeSymbol(sym.replace(/[^\w]/g, ''))
+    }
   }
+
   const norm = normalizeSymbol(sym)
   setSymbol(norm, item.name || sym, '#f87171')
   // 用 queueMicrotask 确保在 watch(currentSymbol) 之后执行（不被覆盖）
