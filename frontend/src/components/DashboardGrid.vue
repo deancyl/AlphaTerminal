@@ -34,7 +34,7 @@
         {{ ind.label }}
       </button>
       <button class="ml-auto shrink-0 px-3 py-1 text-xs rounded border border-gray-600 text-gray-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
-              @click="isKlineFullscreen = false" title="退出全屏（ESC）">✕ 退出全屏</button>
+              @click="exitFullscreen" title="退出全屏（ESC）">✕ 退出全屏</button>
     </div>
     <!-- 全屏图表 -->
     <div class="flex-1 min-h-0">
@@ -56,7 +56,7 @@
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-            @click="isKlineFullscreen = true"
+            @click="enterFullscreen"
             title="全屏"
           >⛶ 全屏</button>
         </div>
@@ -100,7 +100,7 @@
             :color="currentIndexOption.color"
             :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
             :indicators="activeIndicators"
-            @fullscreen-change="isKlineFullscreen = true"
+            @fullscreen-change="enterFullscreen"
           />
         </div>
       </div>
@@ -254,6 +254,14 @@ function onKeyDown(e) {
   if (e.key === 'Escape' && isKlineFullscreen.value) {
     isKlineFullscreen.value = false
   }
+}
+
+function enterFullscreen() {
+  isKlineFullscreen.value = true
+}
+
+function exitFullscreen() {
+  isKlineFullscreen.value = false
 }
 
 // ── 全局状态同步 ─────────────────────────────────────────────────
