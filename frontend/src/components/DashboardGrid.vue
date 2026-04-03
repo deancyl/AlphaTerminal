@@ -50,13 +50,18 @@
     <div class="grid-stack-item"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <!-- 标题行 -->
-        <div class="flex items-center justify-between mb-1 shrink-0">
+        <!-- 标题行（整行可点击进入全屏，移动端大触控区域） -->
+        <div class="flex items-center justify-between mb-1 shrink-0"
+             style="touch-action: manipulation; cursor: pointer; min-height: 28px;"
+             @click.stop="enterFullscreen"
+             title="点击进入全屏"
+        >
           <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-            @click="enterFullscreen"
+            style="touch-action: manipulation; -webkit-tap-highlight-color: transparent;"
+            @click.stop="enterFullscreen"
             title="全屏"
           >⛶ 全屏</button>
         </div>
@@ -257,11 +262,11 @@ function onKeyDown(e) {
 }
 
 function enterFullscreen() {
-  isKlineFullscreen.value = true
+  ui.klineFullscreen = true
 }
 
 function exitFullscreen() {
-  isKlineFullscreen.value = false
+  ui.klineFullscreen = false
 }
 
 // ── 全局状态同步 ─────────────────────────────────────────────────
