@@ -58,24 +58,26 @@
     <div class="grid-stack-item"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <div class="flex items-center justify-between mb-2 shrink-0">
+        <!-- 标题行 -->
+        <div class="flex items-center justify-between mb-1 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
-          <div class="flex items-center gap-1">
-            <!-- 全屏按钮（位于指数按钮上方右侧） -->
-            <button
-              class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-              @click="isKlineFullscreen = true"
-              title="全屏"
-            >⛶ 全屏</button>
-            <button v-for="idx in indexOptions" :key="idx.symbol"
-                    class="px-2 py-0.5 text-[10px] rounded border transition"
-                    :class="selectedIndex === idx.symbol
-                      ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                      : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-                    @click="switchIndex(idx)">
-              {{ idx.name }}
-            </button>
-          </div>
+          <!-- 全屏按钮：独立一行，位于右上角 -->
+          <button
+            class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
+            @click="isKlineFullscreen = true"
+            title="全屏"
+          >⛶ 全屏</button>
+        </div>
+        <!-- 指数切换行 -->
+        <div class="flex items-center gap-1 mb-1 shrink-0">
+          <button v-for="idx in indexOptions" :key="idx.symbol"
+                  class="px-2 py-0.5 text-[10px] rounded border transition"
+                  :class="selectedIndex === idx.symbol
+                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+                    : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                  @click="switchIndex(idx)">
+            {{ idx.name }}
+          </button>
         </div>
         <!-- Period selector -->
         <div class="flex items-center gap-1 mb-2 shrink-0">
