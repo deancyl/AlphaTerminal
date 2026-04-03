@@ -824,124 +824,215 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
         return []
 
 
-def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000) -> list[dict]:
+def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
     """
-    按需穿透拉取美股/港股/日经指数历史K线（yfinance），写入 market_data_daily 表。
-    支持: IXIC, NDX, SPX, DJI, HSI, N225 等主要全球指数。
-
-    yfinance ticker 映射:
-      IXIC → ^IXIC（纳斯达克综合）
-      NDX  → ^NDX（纳斯达克100）
-      SPX  → ^GSPC（标普500）
-      DJI  → ^DJI（道琼斯）
-      HSI  → ^HSI（恒生）
-      N225 → ^N225（日经225）
+    通过 Alpha Vantage API 拉取美股指数日K线历史。
+    API: TIME_SERIES_DAILY（25次/分钟，compact=最近100天，full=20年+）
+    需要 ALPHA_VANTAGE_API_KEY 环境变量，若无则返回空列表。
     """
-    import yfinance as yf
+    import os, json, time, urllib.request
 
-    # symbol 可能是 'usIXIC'（前端标准化格式）或 'IXIC'（原始）
-    _SYMBOL_MAP = {
-        'ixic': '^IXIC', 'usixic': '^IXIC',
-        'ndx':  '^NDX',  'usndx':  '^NDX',
-        'spx':  '^GSPC', 'usspx':  '^GSPC',
-        'dji':  '^DJI',  'usdji':  '^DJI',
-        'hsi':  '^HSI',  'hk hsi': '^HSI',
-        'n225': '^N225', 'jpn225': '^N225',
+    api_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "").strip()
+    if not api_key or api_key == "YOUR_KEY_HERE":
+        logger.warning("[Alpha Vantage] 未配置 API_KEY，跳过")
+        return []
+
+    # Alpha Vantage → 实际 Symbol 映射
+    av_symbols = {
+        "ixic":  "NASDAQ", "usixic":  "NASDAQ",
+        "ndx":   "NASDAQ", "usndx":   "NASDAQ",
+        "spx":   "S&P500", "usspx":   "S&P500",
+        "dji":   "DJI",    "usdji":   "DJI",
+        # 港股/日经暂不支持（Alpha Vantage 无此品类）
     }
+    av_sym = av_symbols.get(symbol.lower(), "")
+    if not av_sym:
+        return []
 
-    raw_key = symbol.lower().replace(' ', '')
-    ticker_str = _SYMBOL_MAP.get(raw_key, symbol)
-    clean_sym = symbol.lower()
+    url = (
+        f"https://www.alphavantage.co/query"
+        f"?function=TIME_SERIES_DAILY"
+        f"&symbol={av_sym}"
+        f"&outputsize=full"
+        f"&apikey={api_key}"
+    )
 
-    try:
-        logger.info(f"[yfinance] 开始拉取 {ticker_str} ({symbol})")
-        ticker = yf.Ticker(ticker_str)
-        # interval: 1d=日K，1wk=周K（聚合日K得到）
-        df_daily = ticker.history(period="max", auto_adjust=True, back_adjust=False)
-        if df_daily is None or df_daily.empty:
-            logger.warning(f"[yfinance] {ticker_str} 无数据返回")
-            return []
+    for attempt in range(3):
+        try:
+            logger.info(f"[AlphaVantage] 拉取 {av_sym} (attempt {attempt+1})")
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                raw = resp.read().decode("utf-8")
+            data = json.loads(raw)
 
-        rows = []
-        for i in range(len(df_daily)):
-            try:
-                dt_idx = df_daily.index[i]
-                open_  = float(df_daily.iloc[i]["Open"])
-                high   = float(df_daily.iloc[i]["High"])
-                low    = float(df_daily.iloc[i]["Low"])
-                close  = float(df_daily.iloc[i]["Close"])
-                vol    = float(df_daily.iloc[i]["Volume"]) if not pd.isna(df_daily.iloc[i]["Volume"]) else 0.0
-                dt_str = dt_idx.strftime('%Y-%m-%d')
-                dt_ts  = int(dt_idx.timestamp())
-                prev_close = float(df_daily.iloc[i-1]["Close"]) if i > 0 else close
-                pct = (close - prev_close) / prev_close * 100 if prev_close else 0.0
-                rows.append({
-                    "symbol":     clean_sym,
-                    "date":       dt_str,
-                    "open":       open_,
-                    "high":       high,
-                    "low":        low,
-                    "close":      close,
-                    "volume":     vol,
-                    "change_pct": round(pct, 4),
-                    "timestamp":  dt_ts,
-                    "data_type":  "daily",
-                })
-            except Exception as e:
-                logger.warning(f"[yfinance] 解析第{i}行失败: {e}")
+            if "Note" in data or "Information" in data:
+                logger.warning(f"[AlphaVantage] 频率受限: {data.get('Note', data.get('Information', ''))[:80]}")
+                time.sleep(12)   # 等待 1 分钟窗口
                 continue
 
-        if rows:
-            # 取最近 limit 条（yfinance 返回 period=max，量很大）
-            rows = rows[-limit:]
-            from app.db import buffer_insert_daily, buffer_insert_periodic
-            buffer_insert_daily(rows)
-            logger.info(f"[yfinance] {symbol} 日K写入 {len(rows)} 条")
+            ts = data.get("Time Series (Daily)", {})
+            if not ts:
+                logger.warning(f"[AlphaVantage] {av_sym} 无时间序列数据")
+                return []
 
-            # ── 周线聚合 ────────────────────────────────────────
-            import pandas as pd
-            df_d = pd.DataFrame(rows)
-            df_d["date"] = pd.to_datetime(df_d["date"])
-            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
-                                + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
-            periodic_rows = []
-            for yw, grp in df_d.groupby("year_wk", sort=True):
-                open_  = float(grp.iloc[0]["open"])
-                close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "weekly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+            rows = []
+            prev_close = None
+            for date_str in sorted(ts.keys(), reverse=True)[:limit]:
+                day = ts[date_str]
+                try:
+                    open_  = float(day["1. open"])
+                    high   = float(day["2. high"])
+                    low    = float(day["3. low"])
+                    close  = float(day["4. close"])
+                    vol    = float(day["5. volume"])
+                    pct    = (close - prev_close) / prev_close * 100 if prev_close else 0.0
+                    rows.append({
+                        "symbol":     symbol.lower(),
+                        "date":       date_str,
+                        "open":       open_,
+                        "high":       high,
+                        "low":        low,
+                        "close":      close,
+                        "volume":     vol,
+                        "change_pct": round(pct, 4),
+                        "timestamp":  int(time.mktime(time.strptime(date_str, "%Y-%m-%d"))),
+                        "data_type":  "daily",
+                    })
+                    prev_close = close
+                except Exception as e:
+                    logger.warning(f"[AlphaVantage] 解析 {date_str} 失败: {e}")
+                    continue
 
-            # 月线聚合
-            df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
-            for ym, grp in df_d.groupby("ym", sort=True):
-                open_  = float(grp.iloc[0]["open"])
-                close_ = float(grp.iloc[-1]["close"])
-                periodic_rows.append({
-                    "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10],
-                    "period": "monthly",
-                    "open": open_, "high": float(grp["high"].max()),
-                    "low":  float(grp["low"].min()), "close": close_,
-                    "volume": float(grp["volume"].sum()),
-                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
-                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-                })
+            logger.info(f"[AlphaVantage] {av_sym} 获取 {len(rows)} 条日K")
+            return rows
 
-            if periodic_rows:
-                buffer_insert_periodic(periodic_rows)
-                logger.info(f"[yfinance] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+        except Exception as e:
+            logger.warning(f"[AlphaVantage] attempt {attempt+1} 失败: {e}")
+            time.sleep(3)
 
-        return rows[-100:] if rows else []
-    except Exception as e:
-        logger.error(f"[yfinance] fetch_us_stock_history({symbol}) 失败: {type(e).__name__}: {e}")
-        traceback.print_exc()
+    return []
+
+
+def _fetch_tencent_today(symbol: str) -> list[dict]:
+    """
+    兜底：腾讯行情接口获取全球指数今日实时数据（作为今日K线写入）。
+    symbol: 'usIXIC', 'usNDX', 'usSPX', 'usDJI', 'hkHSI', 'jpN225'
+    返回格式同 market_data_daily 单条记录。
+    """
+    import subprocess, re, time
+
+    tencent_codes = {
+        "usixic": "usIXIC", "ixic": "usIXIC",
+        "usndx":  "usNDX",  "ndx":  "usNDX",
+        "usspx":  "usSPX",  "spx":  "usSPX",
+        "usdji":  "usDJI",  "dji":  "usDJI",
+        "hk hsi": "hkHSI",  "hkhsi": "hkHSI",
+        "jpn225": "jpN225", "n225": "jpN225",
+    }
+    tc = tencent_codes.get(symbol.lower().replace(" ", ""))
+    if not tc:
         return []
+
+    try:
+        raw = subprocess.check_output(
+            ["curl", "-s", "--max-time", "8",
+             f"https://qt.gtimg.cn/q={tc}",
+             "-H", "Referer: https://gu.qq.com",
+             "-H", "User-Agent: Mozilla/5.0"],
+            stderr=subprocess.DEVNULL
+        )
+        text = raw.decode("GBK", errors="replace")
+        m = re.search(rf'v_{tc}="([^"]+)"', text)
+        if not m:
+            return []
+        parts = m.group(1).split("~")
+        if len(parts) < 35:
+            return []
+        today = time.strftime("%Y-%m-%d")
+        price   = float(parts[3]) if parts[3] else 0
+        yclose  = float(parts[4]) if parts[4] else price
+        open_    = float(parts[5]) if parts[5] else price
+        high    = float(parts[33]) if parts[33] else price
+        low     = float(parts[34]) if parts[34] else price
+        vol     = float(parts[6]) if parts[6] else 0
+        pct     = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+        return [{
+            "symbol":     symbol.lower(),
+            "date":       today,
+            "open":       open_,
+            "high":       high,
+            "low":        low,
+            "close":      price,
+            "volume":     vol,
+            "change_pct": pct,
+            "timestamp":  int(time.time()),
+            "data_type":  "daily",
+        }]
+    except Exception as e:
+        logger.warning(f"[Tencent] 今日K线 {tc} 失败: {e}")
+        return []
+
+
+def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000) -> list[dict]:
+    """
+    按需穿透拉取美股/港股/日经指数历史K线，写入 market_data_daily 表。
+
+    数据源优先级：
+      1. Alpha Vantage（需 ALPHA_VANTAGE_API_KEY 环境变量）
+      2. 腾讯今日实时数据兜底（仅今日K线，写入后前端可见今日价格）
+
+    支持 symbol: usIXIC, usNDX, usSPX, usDJI, hkHSI, jpN225
+    """
+    clean_sym = symbol.lower()
+    rows = []
+
+    # 策略1：Alpha Vantage（全量历史）
+    rows = _fetch_alpha_vantage_daily(clean_sym, limit=limit)
+    if rows:
+        from app.db import buffer_insert_daily, buffer_insert_periodic
+        buffer_insert_daily(rows)
+        logger.info(f"[US Stock] {symbol} AlphaVantage {len(rows)} 条写入 DB")
+
+        # 周线+月线聚合
+        import pandas as pd
+        df_d = pd.DataFrame(rows)
+        df_d["date"] = pd.to_datetime(df_d["date"])
+        periodic_rows = []
+        df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
+                            + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+        for yw, grp in df_d.groupby("year_wk", sort=True):
+            open_  = float(grp.iloc[0]["open"]); close_ = float(grp.iloc[-1]["close"])
+            periodic_rows.append({
+                "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10], "period": "weekly",
+                "open": open_, "high": float(grp["high"].max()), "low": float(grp["low"].min()),
+                "close": close_, "volume": float(grp["volume"].sum()),
+                "change_pct": round((close_-open_)/open_*100 if open_ else 0, 4),
+                "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+            })
+        df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+        for ym, grp in df_d.groupby("ym", sort=True):
+            open_  = float(grp.iloc[0]["open"]); close_ = float(grp.iloc[-1]["close"])
+            periodic_rows.append({
+                "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10], "period": "monthly",
+                "open": open_, "high": float(grp["high"].max()), "low": float(grp["low"].min()),
+                "close": close_, "volume": float(grp["volume"].sum()),
+                "change_pct": round((close_-open_)/open_*100 if open_ else 0, 4),
+                "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+            })
+        if periodic_rows:
+            buffer_insert_periodic(periodic_rows)
+            logger.info(f"[US Stock] {symbol} 周线+月线 {len(periodic_rows)//2} 组写入")
+        return rows[-100:] if rows else []
+
+    # 策略2：腾讯今日实时K线兜底
+    logger.warning(f"[US Stock] {symbol} AlphaVantage 无数据，尝试腾讯今日K线兜底")
+    today_rows = _fetch_tencent_today(clean_sym)
+    if today_rows:
+        from app.db import buffer_insert_daily
+        buffer_insert_daily(today_rows)
+        logger.info(f"[US Stock] {symbol} 今日K线写入: {today_rows[0]['date']} close={today_rows[0]['close']}")
+    return today_rows
+
 
 
 def fetch_all_and_buffer():
