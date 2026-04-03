@@ -1,6 +1,6 @@
 <template>
   <!-- ━━━ 全屏模式：K线全屏（受Sidebar/TopBar/Copilot边界约束）━━━━━━━━━ -->
-  <div v-if="isKlineFullscreen" class="flex flex-col terminal-panel" style="width:100%;z-index:50;">
+  <div v-if="isKlineFullscreen" class="flex flex-col terminal-panel" style="width:100%;z-index:50;display:flex;flex-direction:column;">
     <!-- 全屏顶部栏：指数+周期+指标+退出 -->
     <div class="flex items-center gap-2 px-4 py-2 border-b border-gray-700/50 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
@@ -51,7 +51,7 @@
   </div>
 
   <!-- ━━━ 正常网格模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <div v-else class="grid-stack" ref="gridRef">
+  <div v-show="!isKlineFullscreen" class="grid-stack" ref="gridRef">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
