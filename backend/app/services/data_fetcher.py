@@ -724,6 +724,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
     """
     try:
         import akshare as ak, pandas as pd
+        from datetime import datetime
 
         if end_date is None:
             end_date = datetime.now().strftime("%Y%m%d")
@@ -922,12 +923,17 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
     import subprocess, re, time
 
     tencent_codes = {
-        "usixic": "usIXIC", "ixic": "usIXIC",
-        "usndx":  "usNDX",  "ndx":  "usNDX",
-        "usspx":  "usSPX",  "spx":  "usSPX",
-        "usdji":  "usDJI",  "dji":  "usDJI",
-        "hk hsi": "hkHSI",  "hkhsi": "hkHSI",
-        "jpn225": "jpN225", "n225": "jpN225",
+        # 全球指数（key = clean_sym，即 lowercase 规范化后的 symbol）
+        "usixic": "usIXIC", "ixic":  "usIXIC",
+        "usndx":  "usNDX",  "ndx":   "usNDX",
+        "usspx":  "usSPX",  "spx":   "usSPX",
+        "usdji":  "usDJI",  "dji":   "usDJI",
+        "hkhsi":  "hkHSI",  "hk hsi": "hkHSI", "hsi": "hkHSI",
+        "jpn225": "jpN225", "n225":  "jpN225",
+        # 宏观大宗（黄金/原油）
+        "gold": "hf_XAU", "gld": "hf_XAU", "xau": "hf_XAU", "gc": "hf_XAU",
+        "wti":   "hf_CL",  "wtic": "hf_CL",  "cl":  "hf_CL",
+        # VIX 恐慌指数（无可靠腾讯代码，用 ^VIX Yahoo Finance）
     }
     tc = tencent_codes.get(symbol.lower().replace(" ", ""))
     if not tc:
@@ -945,17 +951,34 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
         m = re.search(rf'v_{tc}="([^"]+)"', text)
         if not m:
             return []
-        parts = m.group(1).split("~")
-        if len(parts) < 35:
+        raw_val = m.group(1)
+        # 黄金/原油等大宗商品格式：comma-separated（4675.99,-1.73,...）
+        # 标准指数格式：tilde-separated（200~名字~.IXIC~21879.18~...）
+        # 判断标准：含 ~ → 标准指数；不含 ~ → comma-separated 大宗商品
+        is_standard = "~" in raw_val
+        parts = raw_val.split("~") if is_standard else raw_val.split(",")
+        if len(parts) < 5:
             return []
         today = time.strftime("%Y-%m-%d")
-        price   = float(parts[3]) if parts[3] else 0
-        yclose  = float(parts[4]) if parts[4] else price
-        open_    = float(parts[5]) if parts[5] else price
-        high    = float(parts[33]) if parts[33] else price
-        low     = float(parts[34]) if parts[34] else price
-        vol     = float(parts[6]) if parts[6] else 0
-        pct     = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+        if is_standard:
+            # 标准格式（35+ 字段，index-based）
+            price   = float(parts[3]) if parts[3] else 0
+            yclose  = float(parts[4]) if parts[4] else price
+            open_   = float(parts[5]) if parts[5] else price
+            high    = float(parts[33]) if len(parts) > 33 and parts[33] else price
+            low     = float(parts[34]) if len(parts) > 34 and parts[34] else price
+            vol     = float(parts[6]) if parts[6] else 0
+            pct     = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+        else:
+            # 大宗商品 comma-separated（hf_XAU, hf_CL 等）
+            # parts[0]=price, parts[1]=change_pct, parts[2]=open, parts[3]=high, parts[4]=low
+            price   = float(parts[0]) if parts[0] else 0
+            pct     = float(parts[1]) if len(parts) > 1 and parts[1] else 0.0
+            open_   = float(parts[2]) if len(parts) > 2 and parts[2] else price
+            high    = float(parts[3]) if len(parts) > 3 and parts[3] else price
+            low     = float(parts[4]) if len(parts) > 4 and parts[4] else price
+            yclose  = price  # 昨收无法从单点数据推断
+            vol     = 0.0
         return [{
             "symbol":     symbol.lower(),
             "date":       today,

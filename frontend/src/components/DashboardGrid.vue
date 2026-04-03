@@ -260,40 +260,57 @@ function onKeyDown(e) {
   }
 }
 
-// ── 全局状态同步 ─────────────────────────────────────────────────
-watch(currentSymbol, (sym) => {
-  selectedIndex.value = sym
-})
-
 // ── 列表点击联动 ─────────────────────────────────────────────────
-function handleGlobalClick(item) {
-  const symbolMap = {
-    'NDX': 'usNDX', 'SPX': 'usSPX', 'DJI': 'usDJI', 'HSI': 'hkHSI', 'N225': 'jpN225',
-    'ndx': 'usNDX', 'spx': 'usSPX', 'dji': 'usDJI', 'hsi': 'hkHSI', 'nikkei': 'jpN225',
+// 宏观品种名称 → symbol 映射（windItems 的宏观行没有 symbol 字段）
+const _MACRO_NAME_MAP = {
+  '黄金': 'GOLD', '黄金(美元)': 'GOLD', 'XAU': 'GOLD', 'GLD': 'GOLD',
+  'WTI原油': 'WTI', 'WTI': 'WTI', 'NYMEX_WTI': 'WTI',
+  'VIX': 'VIX', '恐慌指数': 'VIX', '波动率指数': 'VIX',
+  'USD/CNH': 'CNHUSD', 'CNHUSD': 'CNHUSD', '离岸人民币': 'CNHUSD',
+  'DXY': 'DXY', '美元指数': 'DXY',
+  '恒指波幅': 'VHSI', 'VHKS': 'VHSI',
+  '日经225': 'N225', '日经': 'N225',
+}
+
+function handleWindClick(item) {
+  // 优先用 item.symbol，否则尝试 name→symbol 映射
+  let sym = item.symbol || item.key || ''
+  // 宏观品种用名称映射（如"黄金"→"GOLD"）
+  if (!sym || !/^[A-Za-z]{2,6}$/.test(sym)) {
+    sym = _MACRO_NAME_MAP[sym] || sym
   }
-  const norm = normalizeSymbol(symbolMap[item.symbol?.toLowerCase()] || item.symbol)
-  setSymbol(norm, item.name, '#60a5fa')
-  selectedIndex.value = norm
-  currentIndexName.value = item.name || norm
+  const norm = normalizeSymbol(sym)
+  setSymbol(norm, item.name || sym, '#f87171')
+  // 用 queueMicrotask 确保在 watch(currentSymbol) 之后执行（不被覆盖）
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = item.name || norm
+  })
+}
+
+function handleGlobalClick(item) {
+  // globalItems 可能有 usIXIC / usNDX / hkHSI 等前缀
+  const norm = normalizeSymbol(item.symbol || item.name || item.key || '')
+  setSymbol(norm, item.name || norm, '#60a5fa')
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = item.name || norm
+  })
 }
 
 function handleChinaClick(item) {
   setSymbol(item.symbol, item.name, '#f87171')
-  selectedIndex.value = item.symbol
-  currentIndexName.value = item.name || item.symbol
-}
-
-function handleWindClick(item) {
-  const sym = item.symbol || item.key
-  const norm = normalizeSymbol(sym)
-  setSymbol(norm, item.name, '#f87171')
-  selectedIndex.value = norm
-  currentIndexName.value = item.name || norm
+  queueMicrotask(() => {
+    selectedIndex.value = item.symbol
+    currentIndexName.value = item.name || item.symbol
+  })
 }
 
 function handleSectorClick(sec) {
   setSymbol('000001', sec.name, '#fbbf24')
-  selectedIndex.value = '000001'
+  queueMicrotask(() => {
+    selectedIndex.value = '000001'
+  })
 }
 
 let grid = null

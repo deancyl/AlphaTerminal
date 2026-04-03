@@ -497,8 +497,18 @@ async def market_quote(symbol: str):
 
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
 def _clean_symbol(raw: str) -> str:
-    """Strip sh/sz/SH/SZ/前缀，容忍前端各种格式传入"""
-    return raw.lower().replace("sh", "").replace("sz", "").strip()
+    """
+    规范化 symbol：
+    - A 股 sh/sz 前缀：去掉（DB 存的是纯数字如 '000001'）
+    - 美股 us/hk jp/宏观前缀：保留（DB 存 'usIXIC' 等）
+    - macro 前缀：去掉
+    """
+    s = raw.lower().strip()
+    if s.startswith("macro"):
+        s = s[len("macro"):].lstrip('_')
+    # 去掉 A 股前缀（DB 用纯数字存 A 股）
+    s = s.replace("sh", "").replace("sz", "")
+    return s
 
 @router.get("/market/history/{symbol}")
 async def market_history(
@@ -534,15 +544,19 @@ async def market_history(
     _MIN_KLINE_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
     _FREQUENCY_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
-    # ── 非 A 股指数/个股（美股/HK/JP/宏观）：走 yfinance 穿透路径 ──────────
+    # ── 非 A 股指数/宏观（美股/HK/JP/大宗）：走 yfinance 穿透路径 ───────────
     _NON_ASHARE = (
         clean_sym.startswith("us") or clean_sym.startswith("hk")
         or clean_sym.startswith("jp") or clean_sym.startswith("macro")
+        or clean_sym in {
+            "gold", "gld", "xau", "gc",
+            "wti", "wtic", "cl",
+            "vix", "cnhusd", "cnh", "dxy", "usdx",
+            "ixic", "ndx", "spx", "dji",
+            "hsi", "hk hsi",
+            "n225",
+        }
     )
-    _IS_GLOBAL_IDX = clean_sym in {
-        "usixic", "usndx", "usspx", "usdji",
-        "hk hsi", "hkhsi", "jpn225", "jpn225",
-    }
 
     if _NON_ASHARE and period in ("daily", "weekly", "monthly"):
         raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)

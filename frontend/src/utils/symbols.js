@@ -49,8 +49,9 @@ export function normalizeSymbol(raw) {
     return 'jpN225'
   }
 
-  // 宏观
-  if (['GOLD', 'WTIC', 'WTI', 'VIX', 'CNHUSD', 'CNH', 'DXY'].includes(upper)) {
+  // 宏观大宗（黄金/原油/外汇/恐慌指数）
+  if (['GOLD', 'GLD', 'XAU', 'GC', 'WTIC', 'WTI', 'CL',
+       'VIX', 'CNHUSD', 'CNH', 'DXY', 'USDX'].includes(upper)) {
     return upper
   }
 
