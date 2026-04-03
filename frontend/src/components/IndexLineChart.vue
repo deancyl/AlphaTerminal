@@ -3,7 +3,8 @@
 
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
     <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700/50 bg-terminal-bg/60">
-      <span class="text-[10px] font-mono text-terminal-dim whitespace-nowrap">{{ currentName }}</span>
+      <span v-if="isLoading" class="text-[10px] font-mono text-terminal-dim animate-pulse">加载中…</span>
+      <span v-else class="text-[10px] font-mono text-terminal-dim whitespace-nowrap">{{ currentName }}</span>
       <span class="text-[11px] font-mono font-medium"
             :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
         {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}

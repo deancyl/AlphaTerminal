@@ -236,11 +236,12 @@ const indexOptions = [
   { symbol: '399001', name: '深证',   color: '#fbbf24' },
   { symbol: '399006', name: '创业板',  color: '#a78bfa' },
 ]
-const currentIndexOption = computed(() => ({
-  symbol: currentSymbol.value,
-  name:   currentSymbolName.value,
-  color:  currentColor.value,
-}))
+// 注意：必须从本地 selectedIndex 查找，不能用 currentSymbol（全局面经 store）
+// 否则切换 K 线组件指数时 name 不跟随 selectedIndex 更新
+const currentIndexOption = computed(() => {
+  const opt = indexOptions.find(o => o.symbol === selectedIndex.value) || indexOptions[0]
+  return opt
+})
 
 const periods = [
   { key: 'minutely', label: '分时' },
