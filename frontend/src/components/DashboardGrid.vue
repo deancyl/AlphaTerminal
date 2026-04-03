@@ -1,8 +1,59 @@
 <template>
-  <!-- GridStack 容器 —— 锁定按钮在其外部 -->
-  <div class="grid-stack" ref="gridRef">
+  <!-- ━━━ 全屏模式：K线全屏（受Sidebar/TopBar/Copilot边界约束）━━━━━━━━━ -->
+  <div v-if="isKlineFullscreen" class="flex flex-col terminal-panel" style="width:100%;z-index:50;">
+    <!-- 全屏顶部栏：指数+周期+指标+退出 -->
+    <div class="flex items-center gap-2 px-4 py-2 border-b border-gray-700/50 shrink-0">
+      <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
+      <div class="flex gap-1 ml-2">
+        <button v-for="idx in indexOptions" :key="idx.symbol"
+                class="px-2 py-0.5 text-[10px] rounded border transition"
+                :class="selectedIndex === idx.symbol
+                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+                  : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                @click="switchIndex(idx)">
+          {{ idx.name }}
+        </button>
+      </div>
+      <div class="flex gap-1">
+        <button v-for="p in periods" :key="p.key"
+                class="px-2 py-0.5 text-[10px] rounded border transition"
+                :class="selectedPeriod === p.key
+                  ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                  : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                @click="switchPeriod(p.key)">
+          {{ p.label }}
+        </button>
+      </div>
+      <span class="ml-2 text-terminal-dim text-[9px]">指标:</span>
+      <button v-for="ind in indicators" :key="ind.key"
+              class="px-1.5 py-0.5 text-[9px] rounded border transition"
+              :class="activeIndicators.includes(ind.key)
+                ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
+                : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+              @click="toggleIndicator(ind.key)">
+        {{ ind.label }}
+      </button>
+      <button class="ml-auto shrink-0 px-3 py-1 text-xs rounded border border-gray-600 text-gray-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
+              @click="isKlineFullscreen = false" title="退出全屏（ESC）">✕ 退出全屏</button>
+    </div>
+    <!-- 全屏图表 -->
+    <div class="flex-1 min-h-0 p-1">
+      <IndexLineChart
+        :key="`fullscreen-${selectedIndex}-${selectedPeriod}`"
+        :symbol="selectedIndex"
+        :name="currentIndexOption.name"
+        :color="currentIndexOption.color"
+        :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
+        :indicators="activeIndicators"
+        @fullscreen-change="isKlineFullscreen = false"
+      />
+    </div>
+  </div>
 
-    <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━━━━ -->
+  <!-- ━━━ 正常网格模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <div v-else class="grid-stack" ref="gridRef">
+
+    <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
     <div class="grid-stack-item"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
@@ -194,6 +245,15 @@ const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
 
+// ━━━ 全屏模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const isKlineFullscreen = ref(false)
+
+function onKeyDown(e) {
+  if (e.key === 'Escape' && isKlineFullscreen.value) {
+    isKlineFullscreen.value = false
+  }
+}
+
 // ── 全局状态同步 ─────────────────────────────────────────────────
 watch(currentSymbol, (sym) => {
   selectedIndex.value = sym
@@ -323,6 +383,7 @@ function toggleLock() {
 }
 
 onMounted(async () => {
+  window.addEventListener('keydown', onKeyDown)
   await nextTick()
   if (typeof window !== 'undefined' && window.GridStack) {
     grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
@@ -331,6 +392,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
   grid?.destroy(false)
 })
 </script>

@@ -24,6 +24,12 @@
         <span class="text-[10px] font-mono text-gray-400">收<span class="text-gray-200 ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
         <span class="text-[10px] font-mono text-gray-400">量<span class="text-gray-200 ml-1">{{ ((hoverBar.volume || 0) / 1e8).toFixed(2) }}亿</span></span>
       </template>
+      <!-- 全屏按钮（唤出全屏重大功能） -->
+      <button
+        class="ml-auto shrink-0 px-1.5 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/40 hover:text-terminal-accent transition-colors"
+        title="全屏（Ctrl+Shift+F）"
+        @click="emit('fullscreen-change')"
+      >⛶ 全屏</button>
     </div>
 
     <!-- ── Chart Area ─────────────────────────────────────────── -->
@@ -53,6 +59,8 @@ const props = defineProps({
   url:        { type: String, default: '/api/v1/market/history/000001' },
   indicators: { type: Array,  default: () => [] },
 })
+
+const emit = defineEmits(['fullscreen-change'])
 
 const chartRef     = ref(null)
 const chartError   = ref('')
