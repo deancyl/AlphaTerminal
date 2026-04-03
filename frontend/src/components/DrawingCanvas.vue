@@ -77,7 +77,9 @@ function snapToKLine(x, y) {
     const candlestickData = seriesData?.[0]?.data
     if (!candlestickData || !candlestickData[idx]) return { x, y }
 
-    const [open, close, low, high] = candlestickData[idx]
+    if (idx < 0 || idx >= candlestickData.length) return { x, y }
+    const [open, close, low, high] = candlestickData[idx] || []
+    if (high == null || low == null) return { x, y }
     const SNAP_THRESHOLD = 15  // 像素
 
     // 吸附到最近的 OHLC 价格

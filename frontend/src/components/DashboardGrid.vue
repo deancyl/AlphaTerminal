@@ -258,6 +258,7 @@ function onKeyDown(e) {
 
 function enterFullscreen() {
   isKlineFullscreen.value = true
+  console.log('[DashboardGrid] enterFullscreen called, isKlineFullscreen =', isKlineFullscreen.value)
 }
 
 function exitFullscreen() {

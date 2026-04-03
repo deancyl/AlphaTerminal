@@ -38,7 +38,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV=/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal_Workspace/backend/.venv
+VIRTUAL_ENV=/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/.venv
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

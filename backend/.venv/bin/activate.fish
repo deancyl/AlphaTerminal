@@ -33,7 +33,7 @@ end
 # Unset irrelevant variables.
 deactivate nondestructive
 
-set -gx VIRTUAL_ENV /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal_Workspace/backend/.venv
+set -gx VIRTUAL_ENV /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/.venv
 
 set -gx _OLD_VIRTUAL_PATH $PATH
 set -gx PATH "$VIRTUAL_ENV/"bin $PATH

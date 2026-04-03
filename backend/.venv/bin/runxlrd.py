@@ -1,4 +1,4 @@
-#!/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal_Workspace/backend/.venv/bin/python3
+#!/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/.venv/bin/python3
 # Copyright (c) 2005-2012 Stephen John Machin, Lingfo Pty Ltd
 # This script is part of the xlrd package, which is released under a
 # BSD-style licence.
