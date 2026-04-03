@@ -56,6 +56,7 @@ const resizing = ref(null)          // { id, pointIdx, startX, startY }
 const mouseX = ref(0)
 const mouseY = ref(0)
 const snappedPoint = ref(null)      // 磁吸后的 { x, y, price, idx }
+const cursorStyle  = ref('default')
 
 // ── 磁吸 ────────────────────────────────────────────────────
 function snapToKLine(x, y) {

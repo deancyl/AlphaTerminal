@@ -161,7 +161,7 @@ import AStockStatus    from './AStockStatus.vue'
 import NewsFeed       from './NewsFeed.vue'
 import AdvancedKlinePanel from './AdvancedKlinePanel.vue'
 
-const { currentSymbol } = useMarketStore()
+const { currentSymbol, currentSymbolName } = useMarketStore()
 const { ui } = useUiStore()
 
 const gridRef       = ref(null)
