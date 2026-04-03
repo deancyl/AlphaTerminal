@@ -1,117 +1,172 @@
 <template>
-  <!-- 紧凑型盘口+控制条：单行高密度 -->
-  <div class="flex items-center gap-x-2 gap-y-0 px-2 py-0.5 border-b border-gray-700/50 bg-terminal-panel/90 shrink-0 overflow-x-auto text-[9px]">
+  <!-- 双层布局：上面盘口行 + 下面控制行 -->
+  <div class="flex flex-col shrink-0 border-b border-gray-700/50 bg-terminal-panel/90">
 
-    <!-- 标的+快照（固定左侧） -->
-    <div class="flex items-center gap-1.5 shrink-0">
-      <span class="font-bold text-gray-100 whitespace-nowrap">{{ name }}</span>
-      <span class="text-gray-500 font-mono">{{ code }}</span>
-    </div>
+    <!-- 盘口行：标的+价格+MA+OHLCV（紧凑单行） -->
+    <div class="flex items-center gap-x-2 px-2 py-0.5 overflow-x-auto text-[9px]">
+      <!-- 标的+代码（固定） -->
+      <div class="flex items-center gap-1 shrink-0">
+        <span class="font-bold text-gray-100 whitespace-nowrap">{{ name }}</span>
+        <span class="text-gray-500 font-mono">{{ code }}</span>
+      </div>
 
-    <span class="text-gray-700 shrink-0">|</span>
-
-    <!-- 最新价 -->
-    <span class="font-mono font-medium text-gray-100 shrink-0">{{ quote.price != null ? quote.price.toFixed(2) : '--' }}</span>
-
-    <!-- 涨跌额/涨跌幅 -->
-    <span class="shrink-0" :class="(quote.change ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'">
-      {{ (quote.change ?? 0) >= 0 ? '+' : '' }}{{ quote.change != null ? quote.change.toFixed(2) : '--' }}
-    </span>
-    <span class="shrink-0 px-1 py-0 rounded"
-      :class="(quote.change_pct ?? 0) >= 0 ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400'">
-      {{ (quote.change_pct ?? 0) >= 0 ? '+' : '' }}{{ quote.change_pct != null ? quote.change_pct.toFixed(2) : '--' }}%
-    </span>
-
-    <!-- MA 数值（当前可视最新值） -->
-    <template v-for="ma in maDisplays" :key="ma.period">
-      <span class="shrink-0 font-mono text-[9px]" :style="{ color: ma.color }">
-        MA{{ ma.period }}<span class="text-gray-200 ml-0.5">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
-      </span>
-    </template>
-
-    <!-- 十字光标悬浮数据（当hover时显示在右侧） -->
-    <template v-if="hoverData && Object.keys(hoverData).length">
-      <span class="text-gray-700 shrink-0 ml-1">|</span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">{{ hoverData.date || hoverData.time }}</span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">开<span class="text-gray-200">{{ hoverData.open?.toFixed(2) }}</span></span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">高<span class="text-red-300">{{ hoverData.high?.toFixed(2) }}</span></span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">低<span class="text-green-300">{{ hoverData.low?.toFixed(2) }}</span></span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">收<span class="text-gray-200">{{ hoverData.close?.toFixed(2) }}</span></span>
-      <span class="shrink-0 text-gray-400 font-mono text-[9px]">量<span class="text-gray-200">{{ hoverData.volume != null ? (hoverData.volume / 1e8).toFixed(2)+'亿' : '' }}</span></span>
-    </template>
-
-    <!-- 成交量/额/振幅/换手率（一行缩写） -->
-    <template v-if="!hoverData || !Object.keys(hoverData).length">
       <span class="text-gray-700 shrink-0">|</span>
-      <span class="text-gray-400 shrink-0 text-[9px]">量<span class="text-gray-200 font-mono">{{ fmtVol(quote.volume) }}</span></span>
-      <span class="text-gray-400 shrink-0 text-[9px]">额<span class="text-gray-200 font-mono">{{ fmtAmt(quote.amount) }}</span></span>
-      <span class="text-gray-400 shrink-0 text-[9px]">振<span class="text-gray-200 font-mono">{{ quote.amplitude != null ? quote.amplitude.toFixed(2)+'%' : '--' }}</span></span>
-      <span class="text-gray-400 shrink-0 text-[9px]">换<span class="text-gray-200 font-mono">{{ quote.turnover_rate != null ? quote.turnover_rate.toFixed(2)+'%' : '--' }}</span></span>
-    </template>
 
-    <span class="text-gray-700 shrink-0">|</span>
+      <!-- 最新价 -->
+      <span class="font-mono font-medium text-gray-100 shrink-0">{{ quote.price != null ? quote.price.toFixed(2) : '--' }}</span>
 
-    <!-- 周期切换（紧凑 pill） -->
-    <div class="flex items-center gap-0.5 shrink-0">
-      <button
-        v-for="p in periods" :key="p.key"
-        class="px-1 py-0 rounded border transition-colors leading-none"
-        :class="period === p.key
-          ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-          : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'"
-        @click="emit('period-change', p.key)"
-      >{{ p.label }}</button>
+      <!-- 涨跌额/涨跌幅 -->
+      <span class="shrink-0" :class="(quote.change ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+        {{ (quote.change ?? 0) >= 0 ? '+' : '' }}{{ quote.change != null ? quote.change.toFixed(2) : '--' }}
+      </span>
+      <span class="shrink-0 px-1 py-0 rounded text-[9px]"
+        :class="(quote.change_pct ?? 0) >= 0 ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400'">
+        {{ (quote.change_pct ?? 0) >= 0 ? '+' : '' }}{{ quote.change_pct != null ? quote.change_pct.toFixed(2) : '--' }}%
+      </span>
+
+      <!-- MA 数值 -->
+      <template v-for="ma in maDisplays" :key="ma.period">
+        <span class="shrink-0 font-mono text-[9px]" :style="{ color: ma.color }">
+          MA{{ ma.period }}<span class="text-gray-200 ml-0.5">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
+        </span>
+      </template>
+
+      <!-- 十字光标 OHLCV 数据（hover时显示在同一行，不遮挡图表） -->
+      <template v-if="hoverData && Object.keys(hoverData).length">
+        <span class="text-gray-700 shrink-0">|</span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">{{ hoverData.date || hoverData.time }}</span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">开<span class="text-gray-200 ml-0.5">{{ hoverData.open?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">高<span class="text-red-300 ml-0.5">{{ hoverData.high?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">低<span class="text-green-300 ml-0.5">{{ hoverData.low?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">收<span class="text-gray-200 ml-0.5">{{ hoverData.close?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-gray-400 font-mono text-[9px]">量<span class="text-gray-200 ml-0.5">{{ hoverData.volume != null ? (hoverData.volume / 1e8).toFixed(2)+'亿' : '' }}</span></span>
+      </template>
+
+      <!-- 基础行情（无hover时） -->
+      <template v-if="!hoverData || !Object.keys(hoverData).length">
+        <span class="text-gray-700 shrink-0">|</span>
+        <span class="text-gray-400 shrink-0 text-[9px]">量<span class="text-gray-200 font-mono ml-0.5">{{ fmtVol(quote.volume) }}</span></span>
+        <span class="text-gray-400 shrink-0 text-[9px]">额<span class="text-gray-200 font-mono ml-0.5">{{ fmtAmt(quote.amount) }}</span></span>
+        <span class="text-gray-400 shrink-0 text-[9px]">振<span class="text-gray-200 font-mono ml-0.5">{{ quote.amplitude != null ? quote.amplitude.toFixed(2)+'%' : '--' }}</span></span>
+        <span class="text-gray-400 shrink-0 text-[9px]">换<span class="text-gray-200 font-mono ml-0.5">{{ quote.turnover_rate != null ? quote.turnover_rate.toFixed(2)+'%' : '--' }}</span></span>
+      </template>
     </div>
 
-    <!-- 复权（紧凑） -->
-    <button
-      class="px-1 py-0 rounded border transition-colors leading-none shrink-0"
-      :class="adjustment === 'qfq'
-        ? 'bg-amber-500/20 border-amber-500/50 text-amber-400'
-        : 'border-gray-700 text-gray-500 hover:border-gray-500'"
-      @click="emit('adjustment-change', adjustment === 'qfq' ? 'none' : 'qfq')"
-      title="前复权"
-    >复权</button>
+    <!-- 控制行：周期切换 | 图标按钮（右对齐） -->
+    <div class="flex items-center gap-1 px-2 py-0.5 border-t border-gray-700/20">
 
-    <!-- Y轴 -->
-    <button
-      class="px-1 py-0 rounded border transition-colors leading-none shrink-0"
-      :class="yAxisType === 'log'
-        ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
-        : 'border-gray-700 text-gray-500 hover:border-gray-500'"
-      @click="emit('yaxis-change', yAxisType === 'linear' ? 'log' : 'linear')"
-      title="Y轴: {{ yAxisType === 'log' ? '对数' : '线性' }}"
-    >{{ yAxisType === 'log' ? 'LOG' : 'LIN' }}</button>
+      <!-- 周期切换（紧凑 icon + tooltip） -->
+      <div class="flex items-center gap-0.5 shrink-0">
+        <button
+          v-for="p in periods" :key="p.key"
+          class="w-5 h-5 flex items-center justify-center rounded text-[9px] font-mono transition-colors"
+          :class="period === p.key
+            ? 'bg-blue-500/20 text-blue-400'
+            : 'text-gray-600 hover:text-gray-300'"
+          :title="p.label"
+          @click="emit('period-change', p.key)"
+        >{{ p.label }}</button>
+      </div>
 
-    <!-- 叠加 -->
-    <button
-      class="px-1 py-0 rounded border transition-colors leading-none shrink-0"
-      :class="overlaySymbol
-        ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
-        : 'border-gray-700 text-gray-500 hover:border-gray-500'"
-      @click="selectOverlay"
-      title="叠加标的"
-    >+{{ overlaySymbol ? overlaySymbolName || overlaySymbol : '叠加' }}</button>
+      <span class="text-gray-700 mx-1 shrink-0">|</span>
 
-    <!-- 导出 -->
-    <div class="relative shrink-0" v-click-outside="() => showExport = false">
-      <button
-        class="flex items-center gap-1 px-1 py-0 rounded border border-gray-700 text-gray-500 hover:border-gray-500 transition-colors leading-none"
-        @click="showExport = !showExport"
-        title="导出"
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M5 1v6M2.5 4.5 5 7l2.5-2.5M1 9h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-      <div v-if="showExport"
-        class="absolute right-0 mt-1 w-36 rounded border border-gray-600 bg-terminal-panel shadow-xl z-50 py-1">
-        <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px]"
-          @click="doExport('visible'); showExport=false">📄 导出可视范围</button>
-        <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px]"
-          @click="doExport('all'); showExport=false">📄 导出全部数据</button>
-        <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px]"
-          @click="emit('export-png'); showExport=false">🖼️ 导出 PNG</button>
+      <!-- 右侧图标按钮组 -->
+      <div class="flex items-center gap-1 ml-auto shrink-0">
+
+        <!-- 复权 -->
+        <div class="relative group">
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded transition-colors"
+            :class="adjustment === 'qfq'
+              ? 'text-amber-400'
+              : 'text-gray-600 hover:text-gray-300'"
+            title="复权"
+            @click="emit('adjustment-change', adjustment === 'qfq' ? 'none' : 'qfq')"
+          >
+            <!-- Wave icon -->
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M1 6c1-2 2-3 3-3s2 1 3 3 2 3 3 3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
+            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-gray-200">{{ adjustment === 'qfq' ? '前复权 ✓' : '前复权' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Y轴类型 -->
+        <div class="relative group">
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded transition-colors"
+            :class="yAxisType === 'log'
+              ? 'text-purple-400'
+              : 'text-gray-600 hover:text-gray-300'"
+            title="Y轴坐标系"
+            @click="emit('yaxis-change', yAxisType === 'linear' ? 'log' : 'linear')"
+          >
+            <!-- Axis icon -->
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M2 10V2M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
+            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-gray-200">{{ yAxisType === 'log' ? '对数坐标' : '线性坐标' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 叠加 -->
+        <div class="relative group">
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded transition-colors"
+            :class="overlaySymbol
+              ? 'text-cyan-400'
+              : 'text-gray-600 hover:text-gray-300'"
+            title="叠加标的"
+            @click="selectOverlay"
+          >
+            <!-- Plus/overlay icon -->
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
+            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-gray-200">{{ overlaySymbol ? overlaySymbol : '叠加标的' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 导出 -->
+        <div class="relative" v-click-outside="() => showExport = false">
+          <button
+            class="w-5 h-5 flex items-center justify-center rounded text-gray-600 hover:text-gray-300 transition-colors"
+            title="导出"
+            @click="showExport = !showExport"
+          >
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M6 2v6M3.5 5.5 6 8l2.5-2.5M2 10h8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <div v-if="showExport"
+            class="absolute right-0 mt-1 w-36 rounded border border-gray-600 bg-terminal-panel shadow-xl z-50 py-1">
+            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+              @click="doExport('visible'); showExport=false">
+              <span class="text-[10px]">📊</span>导出可视范围
+            </button>
+            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+              @click="doExport('all'); showExport=false">
+              <span class="text-[10px]">📋</span>导出全部数据
+            </button>
+            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+              @click="emit('export-png'); showExport=false">
+              <span class="text-[10px]">🖼</span>导出 PNG
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -154,8 +209,6 @@ const periods = [
   { key: 'daily',    label: 'D' },
   { key: 'weekly',   label: 'W' },
   { key: 'monthly',  label: 'M' },
-  { key: 'quarterly',label: 'Q' },
-  { key: 'yearly',   label: 'Y' },
 ]
 
 const code = computed(() => props.symbol.replace(/^(sh|sz|us|hk|jp)/i, '').toUpperCase())
@@ -188,7 +241,7 @@ function doExport(mode) {
   utilExportCSV(hist, props.indicators, `${props.name || props.symbol}_${props.period}.csv`)
 }
 
-// Click outside directive (simple implementation)
+// Click outside directive
 const vClickOutside = {
   mounted(el, binding) {
     el._clickOutsideHandler = (e) => { if (!el.contains(e.target)) binding.value(e) }

@@ -1,15 +1,22 @@
 <template>
   <div class="flex flex-col bg-terminal-panel border-t border-gray-700/50">
     <!-- Tab 栏 -->
-    <div class="relative flex items-center gap-0.5 px-2 py-1 border-b border-gray-700/30 shrink-0">
+    <div class="relative flex items-center gap-0 px-2 py-0.5 border-b border-gray-700/30 shrink-0">
       <button
         v-for="tab in tabs" :key="tab"
-        class="px-2 py-0.5 text-[10px] rounded transition"
+        class="relative px-2 py-0.5 text-[10px] font-medium tracking-wide transition-colors"
         :class="activeTab === tab
-          ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40'
-          : 'text-gray-500 hover:text-gray-300 border border-transparent'"
+          ? 'text-blue-400'
+          : 'text-gray-600 hover:text-gray-300'"
         @click="emit('tab-change', tab)"
-      >{{ tab }}</button>
+      >
+        {{ tab }}
+        <!-- 选中指示条 -->
+        <span
+          v-if="activeTab === tab"
+          class="absolute bottom-0 left-1 right-1 h-0.5 rounded-full bg-blue-400/80"
+        ></span>
+      </button>
 
       <!-- 参数设置按钮 -->
       <button
@@ -134,14 +141,14 @@ function buildOption() {
     type: 'value', position: 'right',
     axisLine: { lineStyle: { color: '#374151' } },
     splitLine: { show: false },
-    axisLabel: { textStyle: { color: '#6b7280', fontSize: 9 } },
+    axisLabel: { color: '#6b7280', fontSize: 9 },
   }
 
   if (tab === 'VOL') {
     return {
       grid: { top: 8, right: 55, left: 55, bottom: 4, containLabel: false },
       xAxis: { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
-      yAxis: { ...yAxisCfg, axisLabel: { formatter: v => (v / 1e8).toFixed(0) + '亿', textStyle: { color: '#6b7280', fontSize: 9 } } },
+      yAxis: { ...yAxisCfg, axisLabel: { formatter: v => (v / 1e8).toFixed(0) + '亿', color: '#6b7280', fontSize: 9 } },
       series: [{
         name: 'VOL', type: 'bar',
         data: hist.map(h => ({ value: h.volume, itemStyle: { color: h.close >= h.open ? UP + '44' : DOWN + '44' } })),

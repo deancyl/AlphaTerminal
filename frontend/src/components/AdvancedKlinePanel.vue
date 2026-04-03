@@ -304,12 +304,18 @@ async function fetchHistory(append = false) {
     const data = await res.json()
     const items = (data.history || []).map(sanitizeItem)
 
+    // API 可能返回 DESC（新股在左）或 ASC（老新在左），统一规范为 ASC 存储
+    const isDesc = items.length >= 2 &&
+      new Date(items[0].date).getTime() > new Date(items[items.length - 1].date).getTime()
+    const sortedItems = isDesc ? [...items].reverse() : items
+
     if (append) {
-      histData.value = [...items.reverse(), ...histData.value]
-      loadOffset.value += items.length
+      // 已有数据是 ASC，新数据也是 ASC，直接拼接
+      histData.value = [...sortedItems, ...histData.value]
+      loadOffset.value += sortedItems.length
     } else {
-      histData.value = items
-      loadOffset.value = items.length
+      histData.value = sortedItems
+      loadOffset.value = sortedItems.length
     }
 
     visibleHist.value = histData.value
@@ -555,8 +561,12 @@ function buildOption() {
 
 // ── 渲染图表 ───────────────────────────────────────────────────
 function renderChart() {
+  // 检查 DOM 是否有有效尺寸（防止全屏切换时容器未渲染就初始化）
+  const container = chartRef.value
+  if (!container || container.clientWidth === 0 || container.clientHeight === 0) return
+
   if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    chartInstance = echarts.init(container, null, { renderer: 'canvas' })
 
     // 十字光标 tooltip
     chartInstance.getZr().on('mousemove', (params) => {

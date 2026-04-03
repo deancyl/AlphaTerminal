@@ -586,7 +586,9 @@ async function fetchAndRender() {
 
     // 将 raw hist 塞给 option，方便 hover 时访问
     // 确保数据按时间正序（左边=最旧，右边=最新）
-    const sortedHist = [...hist].reverse()
+    // API 返回 ASC（从旧到新），直接使用；如 API 返回 DESC 则需要 reverse()
+    const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
+    const sortedHist = isDesc ? [...hist].reverse() : hist
     const opt = buildOption(sortedHist, type)
     opt._rawHist = data.history || []
 
