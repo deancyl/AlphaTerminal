@@ -380,6 +380,91 @@ async def market_indices():
     }
 
 
+# ── Phase 10: 符号注册表（供前端搜索索引）───────────────────────────────
+# 规范化 Symbol 前缀规则：sh=上证 sz=深证 us=美股 hk=港股 JP=日股
+_MARKET_PREFIX = {
+    '000001': 'sh', '000300': 'sh', '000688': 'sh',  # 上证体系
+    '399001': 'sz', '399006': 'sz',                   # 深证体系
+}
+_SYMBOL_REGISTRY = [
+    # A股指数
+    { 'symbol': 'sh000001', 'code': '000001', 'name': '上证指数',   'pinyin': 'SCZS',  'market': 'AShare', 'type': 'index' },
+    { 'symbol': 'sh000300', 'code': '000300', 'name': '沪深300',   'pinyin': 'HS300',  'market': 'AShare', 'type': 'index' },
+    { 'symbol': 'sz399001', 'code': '399001', 'name': '深证成指',   'pinyin': 'SZCZS',  'market': 'AShare', 'type': 'index' },
+    { 'symbol': 'sz399006', 'code': '399006', 'name': '创业板指',   'pinyin': 'CYBZZ',  'market': 'AShare', 'type': 'index' },
+    { 'symbol': 'sh000688', 'code': '000688', 'name': '科创50',     'pinyin': 'KC50',   'market': 'AShare', 'type': 'index' },
+    # 全球指数
+    { 'symbol': 'usNDX',    'code': 'NDX',    'name': '纳斯达克100', 'pinyin': 'NDX',   'market': 'US',     'type': 'index' },
+    { 'symbol': 'usSPX',    'code': 'SPX',    'name': '标普500',     'pinyin': 'SPX',   'market': 'US',     'type': 'index' },
+    { 'symbol': 'usDJI',    'code': 'DJI',    'name': '道琼斯',      'pinyin': 'DJS',   'market': 'US',     'type': 'index' },
+    { 'symbol': 'hkHSI',    'code': 'HSI',    'name': '恒生指数',    'pinyin': 'HSZS',  'market': 'HK',     'type': 'index' },
+    { 'symbol': 'jpN225',   'code': 'N225',   'name': '日经225',     'pinyin': 'RJB',   'market': 'JP',     'type': 'index' },
+    # A股个股（示例，实际可扩展到全市场）
+    { 'symbol': 'sh600519', 'code': '600519', 'name': '贵州茅台',    'pinyin': 'GZMJ',  'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sh601318', 'code': '601318', 'name': '中国平安',    'pinyin': 'ZGPA',  'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sz000858', 'code': '000858', 'name': '五粮液',      'pinyin': 'WLY',   'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sh600036', 'code': '600036', 'name': '招商银行',    'pinyin': 'ZSYH',  'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sz002594', 'code': '002594', 'name': '比亚迪',      'pinyin': 'BYD',   'market': 'AShare', 'type': 'stock' },
+    # 宏观
+    { 'symbol': 'GOLD',     'code': 'GOLD',   'name': '黄金(USD)',   'pinyin': 'JH',    'market': 'Macro',   'type': 'commodity' },
+    { 'symbol': 'WTI',      'code': 'WTI',    'name': 'WTI原油',     'pinyin': 'YSCY',  'market': 'Macro',   'type': 'commodity' },
+    { 'symbol': 'CNHUSD',   'code': 'CNHUSD', 'name': '美元/人民币',  'pinyin': 'MYRMB', 'market': 'Macro',   'type': 'forex' },
+    { 'symbol': 'VIX',      'code': 'VIX',    'name': 'VIX恐慌指数',  'pinyin': 'VIX',  'market': 'Macro',   'type': 'index' },
+]
+
+# 快速 lookup 表
+_SYMBOL_LOOKUP = { item['symbol']: item for item in _SYMBOL_REGISTRY }
+
+
+def _normalize_symbol(raw: str) -> str:
+    """
+    将各种前端传入格式统一为带市场前缀的规范 symbol。
+    例如: '000001' → 'sh000001', 'sh000001' → 'sh000001', 'NDX' → 'usNDX'
+    """
+    s = raw.strip().lower()
+    # 已知美股
+    if s.upper() in ('NDX', 'SPX', 'DJI'):
+        return 'us' + s.upper()
+    # 已知日经
+    if s.upper() in ('N225', 'NI225', 'NIKKEI'):
+        return 'jpN225'
+    # 已知港股
+    if s.upper() in ('HSI',):
+        return 'hkHSI'
+    # 已知宏观（无前缀）
+    if s.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD'):
+        return s.upper()
+    # 去掉 sh/sz/hk 前缀后判断
+    clean = s.replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
+    # 判断是否 A 股（纯数字）
+    if clean.isdigit():
+        if clean.startswith(('0', '3', '6')):
+            # 根据规则判断交易所
+            if clean.startswith('6') or (len(clean) == 6 and clean[0:2] in ('00', '30')):
+                return 'sh' + clean
+            return 'sz' + clean
+    return s
+
+
+@router.get("/market/symbols")
+async def market_symbols():
+    """返回全量符号注册表，供前端搜索索引构建"""
+    return {
+        'symbols': _SYMBOL_REGISTRY,
+        'timestamp': datetime.now().isoformat(),
+    }
+
+
+@router.get("/market/lookup/{symbol}")
+async def market_lookup(symbol: str):
+    """单个 symbol 的元信息查询"""
+    norm = _normalize_symbol(symbol)
+    item = _SYMBOL_LOOKUP.get(norm)
+    if not item:
+        return { 'error': 'symbol not found', 'raw': symbol, 'normalized': norm }
+    return item
+
+
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
 def _clean_symbol(raw: str) -> str:
     """Strip sh/sz/SH/SZ/前缀，容忍前端各种格式传入"""

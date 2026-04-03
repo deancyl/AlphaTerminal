@@ -37,16 +37,8 @@
               @click="isKlineFullscreen = false" title="退出全屏（ESC）">✕ 退出全屏</button>
     </div>
     <!-- 全屏图表 -->
-    <div class="flex-1 min-h-0 p-1">
-      <IndexLineChart
-        :key="`fullscreen-${selectedIndex}-${selectedPeriod}`"
-        :symbol="selectedIndex"
-        :name="currentIndexOption.name"
-        :color="currentIndexOption.color"
-        :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
-        :indicators="activeIndicators"
-        @fullscreen-change="isKlineFullscreen = false"
-      />
+    <div class="flex-1 min-h-0">
+      <AdvancedKlinePanel />
     </div>
   </div>
 
@@ -229,7 +221,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import IndexLineChart from './IndexLineChart.vue'
+import IndexLineChart    from './IndexLineChart.vue'
+import AdvancedKlinePanel from './AdvancedKlinePanel.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
 import HotSectors from './HotSectors.vue'
