@@ -471,54 +471,87 @@ def _clean_symbol(raw: str) -> str:
     return raw.lower().replace("sh", "").replace("sz", "").strip()
 
 @router.get("/market/history/{symbol}")
-async def market_history(symbol: str, limit: int = 300, period: str = "daily"):
+async def market_history(
+    symbol: str,
+    limit: int = 300,
+    period: str = "daily",
+    offset: int = 0,
+    trade_date: str = None,
+):
     """
-    获取某标的历史行情，支持多周期切换
+    获取某标的历史行情，支持多周期切换 + 懒加载分页
 
-    period=minutely : 当日分时（从 realtime 表，走势线图）
-    period=daily    : 日K（从 daily 表，烛台图）
-    period=weekly   : 周K（从 periodic 表，烛台图）
-    period=monthly  : 月K（从 periodic 表，烛台图）
+    period=minutely  : 当日分时（从 realtime 表，走势线图）
+    period=1min      : 1分钟K线（Eastmoney N分钟K线接口，A股指数）
+    period=5min      : 5分钟K线（同上）
+    period=15min     : 15分钟K线（同上）
+    period=30min     : 30分钟K线（同上）
+    period=60min     : 60分钟K线（日内）
+    period=daily     : 日K（从 daily 表，烛台图）
+    period=weekly    : 周K（从 periodic 表，烛台图）
+    period=monthly   : 月K（从 periodic 表，烛台图）
+    offset           : 分页偏移量（用于懒加载，向左拖拽触及边界时追加请求）
+    trade_date       : 指定交易日（YYYYMMDD，用于历史分时下钻）
     """
-    # Symbol normalization: tolerate sh/sz prefixes from any frontend call
     clean_sym = _clean_symbol(symbol)
-
     from app.db import get_daily_history, get_periodic_history
 
-    chart_type = "candlestick"  # 默认烛台
+    chart_type = "candlestick"
     history    = []
+    has_more   = False
 
-    # 分时数据只支持 A 股指数（沪深），其他市场（HSI/DJI 等）无 Eastmoney 5 分钟 K 线
-    _INTRADAY_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
+    _MIN_KLINE_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
+    _FREQUENCY_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
-    if period == "minutely":
+    # 分钟K线（Eastmoney N分钟接口，仅支持部分A股指数）
+    if period in _FREQUENCY_MAP:
         from app.services.data_fetcher import fetch_index_minute_history
-        if clean_sym.upper() in _INTRADAY_SUPPORTED or clean_sym in _INTRADAY_SUPPORTED:
-            history    = fetch_index_minute_history(clean_sym, limit=min(limit, 300))
+        freq = _FREQUENCY_MAP[period]
+        if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
+            all_data = fetch_index_minute_history(
+                clean_sym,
+                limit=limit,
+                frequency=freq,
+                offset=offset,
+                trade_date=trade_date,
+            )
+            history  = all_data
+            # has_more 根据实际返回判断（前端已知晓总数，暂用固定值）
+            has_more  = len(all_data) >= min(limit, 300)
         else:
-            history    = []  # 非 A 股指数不支持分时 K 线
+            history  = []
+        chart_type = "candlestick"
+
+    elif period == "minutely":
+        from app.services.data_fetcher import fetch_index_minute_history
+        if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
+            history  = fetch_index_minute_history(clean_sym, limit=min(limit, 300), frequency=5, offset=offset)
+            has_more = len(history) >= min(limit, 300)
+        else:
+            history  = []
         chart_type = "line"
 
     elif period == "daily":
-        history    = get_daily_history(clean_sym, limit=limit)
+        history  = get_daily_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
     elif period in ("weekly", "monthly"):
-        history    = get_periodic_history(clean_sym, period=period, limit=limit)
+        history  = get_periodic_history(clean_sym, period=period, limit=limit)
         chart_type = "candlestick"
 
     else:
-        # realtime（兼容旧调用）
         from app.db import get_price_history
         history    = get_price_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
     return {
-        "symbol":    clean_sym,
-        "period":    period,
+        "symbol":     clean_sym,
+        "period":     period,
         "chart_type": chart_type,
-        "timestamp": datetime.now().isoformat(),
-        "history":   history,
+        "has_more":   has_more,
+        "offset":     offset,
+        "timestamp":  datetime.now().isoformat(),
+        "history":    history,
     }
 
 

@@ -93,7 +93,7 @@
         :class="overlaySymbol
           ? 'bg-cyan-500/20 border-cyan-500/50 text-cyan-400'
           : 'border-gray-700 text-gray-400 hover:border-gray-500'"
-        @click="toggleOverlay"
+        @click="selectOverlay"
         title="叠加其他标的"
       >{{ overlaySymbol ? '➕ ' + overlaySymbolName : '叠加' }}</button>
 
@@ -197,9 +197,16 @@ function toggleOverlay() {
   if (props.overlaySymbol) {
     emit('overlay-change', '')
   } else {
-    // TODO: 弹出搜索框选择叠加标的（可复用 CommandCenter 逻辑）
-    emit('overlay-change', 'sh000300') // 默认叠加沪深300
+    selectOverlay()
   }
+}
+
+function selectOverlay() {
+  const input = prompt('输入叠加标的的 Symbol（如 sh000300 沪深300, usNDX 纳指）：', 'sh000300')
+  if (!input) return
+  const sym = input.trim()
+  if (!sym) return
+  emit('overlay-change', { symbol: sym, name: '' })
 }
 
 // ── 导出 ──────────────────────────────────────────────────────

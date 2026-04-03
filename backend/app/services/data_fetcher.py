@@ -636,24 +636,35 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
 
 
 # ── 分时数据：Eastmoney push2his 5分钟K线（直连，不走代理）─────────────
-def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
+def fetch_index_minute_history(
+    symbol: str,
+    limit: int = 50,
+    frequency: int = 5,
+    offset: int = 0,
+    trade_date: str = None,
+) -> list[dict]:
     """
-    获取 A 股指数 5 分钟 K 线（最近 N 根）
-    格式: time, open, close, high, low, volume, amount
-    Eastmoney secid: 0=深圳, 1=上海
-    注意: 000001 是上证指数（上海），平安银行是 000001（深圳），两者不同！
+    获取 A 股指数 N 分钟 K 线（最近 N 根，支持分页）
+    frequency: 1=1分钟, 5=5分钟(默认), 15=15分钟, 30=30分钟, 60=60分钟
+    offset:    分页偏移量（每页 limit 根）
+    trade_date: 指定交易日（YYYYMMDD），用于历史分时下钻
     """
-    # 精确映射表：彻底解决 000001 上证指数 vs 平安银行 的张冠李戴
-    # 注意：A 股指数代码（如 000001）不需要大写，但 HSI/DJI 等需要
-    #       所以 lookup 时转大写保证兼容
     _INDEX_SECID_MAP = {
-        "000001": "1.000001",  # 上证指数（上海）
-        "000300": "1.000300",  # 沪深300（上海）
-        "399001": "0.399001",  # 深证成指（深圳）
-        "399006": "0.399006",  # 创业板指（深圳）
-        "000688": "1.000688",  # 科创50（上海）
+        "000001": "1.000001",
+        "000300": "1.000300",
+        "399001": "0.399001",
+        "399006": "0.399006",
+        "000688": "1.000688",
     }
     secid = _INDEX_SECID_MAP.get(symbol.upper(), _INDEX_SECID_MAP.get(symbol, f"1.{symbol}"))
+
+    # 处理指定交易日（用于历史分时下钻）
+    if trade_date:
+        beg = str(trade_date)
+        end = str(trade_date)
+    else:
+        # 默认拉两年数据用于分页回溯
+        beg, end = "20200101", "20991231"
 
     import subprocess
     try:
@@ -663,7 +674,7 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
              f"?secid={secid}"
              f"&fields1=f1,f2,f3,f4,f5,f6"
              f"&fields2=f51,f52,f53,f54,f55,f56,f57"
-             f"&klt=5&fqt=1&beg=20200101&end=20991231",
+             f"&klt={frequency}&fqt=1&beg={beg}&end={end}",
              "-H", "Referer: https://quote.eastmoney.com/",
              "-H", "User-Agent: Mozilla/5.0"],
             stderr=subprocess.DEVNULL,
@@ -672,19 +683,19 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
         obj = json.loads(raw.decode("utf-8", errors="replace"))
         klines = obj.get("data", {}).get("klines", [])
         rows = []
-        for kl in klines[-limit:]:  # 最新 N 根
+        for kl in klines:
             parts = kl.split(",")
             if len(parts) < 6:
                 continue
             try:
                 rows.append({
-                    "time":       parts[0],                   # "2026-03-30 09:35"
+                    "time":       parts[0],
                     "open":       float(parts[1]),
                     "close":      float(parts[2]),
                     "high":       float(parts[3]),
                     "low":        float(parts[4]),
                     "volume":     float(parts[5]),
-                    "price":      float(parts[2]),            # close as current price
+                    "price":      float(parts[2]),
                     "change_pct": 0.0,
                     "timestamp":   int(
                         __import__("time").mktime(
@@ -694,7 +705,11 @@ def fetch_index_minute_history(symbol: str, limit: int = 50) -> list[dict]:
                 })
             except (ValueError, IndexError, OSError):
                 continue
-        logger.info(f"[Eastmoney] {symbol} 5分钟K线: {len(rows)} 条")
+
+        # 分页：offset → 从头取 offset~offset+limit
+        total = len(rows)
+        rows = rows[offset:offset + limit]
+        logger.info(f"[Eastmoney] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows
     except Exception as e:
         logger.warning(f"[Eastmoney] fetch_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")

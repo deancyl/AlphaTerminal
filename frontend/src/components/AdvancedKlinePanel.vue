@@ -41,7 +41,27 @@
       </div>
 
       <!-- ECharts 主图表 -->
-      <div ref="chartRef" class="w-full h-full"></div>
+      <div ref="chartRef" class="w-full h-full" @contextmenu.prevent="onChartContextMenu"></div>
+
+      <!-- 右键上下文菜单 -->
+      <div
+        v-if="ctxMenu.visible"
+        class="absolute z-50 bg-terminal-panel border border-gray-600 rounded-lg shadow-2xl py-1 min-w-44"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      >
+        <button
+          class="w-full px-3 py-1.5 text-[11px] text-left text-gray-300 hover:bg-gray-700/60 flex items-center gap-2"
+          @click="onDrillDown"
+        >
+          <span>📊</span>
+          <span>查看历史分时</span>
+          <span class="text-gray-600 ml-auto text-[9px]">{{ ctxMenu.date || '' }}</span>
+        </button>
+        <button
+          class="w-full px-3 py-1.5 text-[11px] text-left text-gray-300 hover:bg-gray-700/60 flex items-center gap-2"
+          @click="ctxMenu.visible = false"
+        >取消</button>
+      </div>
 
       <!-- 画线 Canvas 覆盖层 -->
       <DrawingCanvas
@@ -135,6 +155,7 @@ const adjustment     = ref('none')     // none | qfq | hfq
 const yAxisType      = ref('linear')   // linear | log
 const overlaySymbol   = ref('')
 const overlayName     = ref('')
+const overlayData     = ref([])    // 叠加标的的历史数据（{date, close}[]）
 const subChartTab    = ref('VOL')       // VOL | MACD | KDJ | RSI | BOLL
 const indicatorParams = ref({ MACD: { fast: 12, slow: 26, signal: 9 }, KDJ: { n: 9 }, RSI: { period: 14 }, BOLL: { period: 20, stdDev: 2 } })
 const currentQuote    = ref({})         // 实时快照
@@ -142,6 +163,7 @@ const hoverData       = ref({})         // 十字光标数据
 const intervalStats   = ref(null)       // 区间统计结果
 const histData        = ref([])         // 全部历史数据
 const visibleHist     = ref([])         // 当前可视范围数据
+const limit = 300                       // 每次请求的 K 线根数
 const chartRef        = ref(null)
 const chartContainerRef = ref(null)
 const isLoading       = ref(false)
@@ -159,6 +181,12 @@ const drawingColor    = ref('#fbbf24')
 const magnetMode     = ref(true)
 const drawingVisible  = ref(true)
 const drawingLocked   = ref(false)
+
+// 右键菜单状态
+const ctxMenu = ref({ visible: false, x: 0, y: 0, date: '', idx: -1 })
+
+// 下钻状态（查看历史分时）
+const drillDownDate = ref(null)   // YYYYMMDD 格式
 
 // ── 标的信息 ──────────────────────────────────────────────────
 const symbolName = computed(() => currentSymbolName.value || currentSymbol.value.replace(/^(sh|sz|us|hk|jp)/i, ''))
@@ -196,10 +224,15 @@ async function fetchHistory(append = false) {
   try {
     const params = new URLSearchParams({
       period: period.value,
-      limit: 300,
+      limit: String(limit),
       offset: append ? String(loadOffset.value) : '0',
       adjustment: adjustment.value,
     })
+    // 下钻模式：指定具体交易日
+    if (drillDownDate.value) {
+      params.set('trade_date', drillDownDate.value)
+      params.set('period', '1min')  // 下钻后固定为1分钟K线
+    }
     const url = `/api/v1/market/history/${sym}?${params}`
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -207,7 +240,7 @@ async function fetchHistory(append = false) {
     const items = (data.history || []).map(sanitizeItem)
 
     if (append) {
-      histData.value = [...items.reverse(), ...histData.value]  // 向前追加（更早的数据在前面）
+      histData.value = [...items.reverse(), ...histData.value]
       loadOffset.value += items.length
     } else {
       histData.value = items
@@ -217,7 +250,7 @@ async function fetchHistory(append = false) {
     visibleHist.value = histData.value
     hasMore.value = data.has_more ?? items.length >= 300
 
-    // 更新快照（最新一根）
+    // 更新快照
     if (items.length > 0) {
       const last = items[items.length - 1]
       currentQuote.value = {
@@ -272,15 +305,30 @@ function onPeriodChange(p) {
   fetchHistory()
 }
 
-function onOverlayChange(sym) {
+function onOverlayChange(payload) {
+  const sym = typeof payload === 'string' ? payload : (payload?.symbol ?? '')
+  const name = typeof payload === 'string' ? '' : (payload?.name ?? sym)
   overlaySymbol.value = sym
-  overlayName.value = ''
-  // TODO: 获取 overlay 名称
+  overlayName.value = name
   if (sym) fetchOverlayHistory(sym)
+  else overlayData.value = []
 }
 
 async function fetchOverlayHistory(sym) {
-  // TODO: 实现叠加标的的历史数据获取
+  if (!sym) { overlayData.value = []; return }
+  try {
+    const params = new URLSearchParams({ period: 'daily', limit: '3000', offset: '0' })
+    const url = `/api/v1/market/history/${sym}?${params}`
+    const res = await fetch(url)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    overlayData.value = (data.history || []).map(r => ({
+      date:  r.date || r.time || '',
+      close: Number(r.close) || 0,
+    }))
+  } catch (e) {
+    overlayData.value = []
+  }
 }
 
 // ── ECharts 配置 ──────────────────────────────────────────────
@@ -397,7 +445,28 @@ function buildOption() {
     )
   }
 
-  const series = [kSeries, ...maSeries, ...bollSeries, volSeries, ...subSeries]
+  // ── 叠加标的线（相对强弱对比）────────────────────────────────
+  const overlaySeries = (() => {
+    if (!overlayData.value.length || !hist.length) return []
+    const ovMap = {}
+    for (const d of overlayData.value) {
+      ovMap[d.date] = d.close
+    }
+    // 按主图时间对齐（若主图某日无叠加数据则跳过）
+    const data = hist.map((h, i) => [i, ovMap[h.date] ?? null])
+    if (data.every(d => d[1] == null)) return []
+    return [{
+      name: overlayName.value || overlaySymbol.value,
+      type: 'line',
+      data,
+      xAxisIndex: 0, yAxisIndex: 0,
+      smooth: false, symbol: 'none',
+      lineStyle: { color: '#06b6d4', width: 1.5, type: 'solid', opacity: 0.8 },
+      connectNulls: true,
+    }]
+  })()
+
+  const series = [kSeries, ...maSeries, ...bollSeries, ...overlaySeries, volSeries, ...subSeries]
 
   // ── DataZoom（缩放+平移）────────────────────────────────────
   const dataZoom = [
@@ -447,10 +516,12 @@ function renderChart() {
     chartInstance.on('datazoom', (params) => {
       const zr = chartInstance.getOption().dataZoom?.[0]
       if (zr) {
-        const start = Math.round((zr.start || 0) / 100 * visibleHist.value.length)
-        const end   = Math.round((zr.end || 100) / 100 * visibleHist.value.length)
+        const total = histData.value.length
+        const start = Math.round((zr.start || 0) / 100 * total)
+        const end   = Math.round((zr.end || 100) / 100 * total)
+        visibleHist.value = histData.value.slice(start, end)
         // 懒加载：当 start < 5% 时加载更早数据
-        if (start < visibleHist.value.length * 0.05 && hasMore.value && !isLoading.value) {
+        if (start < total * 0.05 && hasMore.value && !isLoading.value) {
           fetchHistory(true)
         }
       }
@@ -514,6 +585,52 @@ function onRangeSelect({ idx }) {
 function onShapeDrawn() {}
 function onShapeDeleted() {}
 function onShapesCleared() {}
+
+// ── 右键上下文菜单 ─────────────────────────────────────────────
+function onChartContextMenu(e) {
+  if (drawingTool.value) return  // 画线模式不弹菜单
+  const rect = chartContainerRef.value.getBoundingClientRect()
+  const x = e.clientX - rect.left
+  const y = e.clientY - rect.top
+
+  // 从 ECharts 获取当前光标下的数据索引
+  let targetIdx = -1, targetDate = ''
+  if (chartInstance) {
+    try {
+      const pt = chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
+      if (pt) {
+        targetIdx = Math.round(pt[0])
+        if (targetIdx >= 0 && targetIdx < histData.value.length) {
+          targetDate = histData.value[targetIdx].date || ''
+        }
+      }
+    } catch (_) {}
+  }
+
+  ctxMenu.value = { visible: true, x, y, date: targetDate, idx: targetIdx }
+  // 延迟关闭（点击他处）
+  setTimeout(() => {
+    window.addEventListener('click', closeCtxMenu, { once: true })
+  }, 0)
+}
+
+function closeCtxMenu() {
+  ctxMenu.value.visible = false
+}
+
+// ── 历史分时下钻 ───────────────────────────────────────────────
+function onDrillDown() {
+  ctxMenu.value.visible = false
+  if (ctxMenu.value.idx < 0 || !ctxMenu.value.date) return
+  const dateStr = ctxMenu.value.date  // YYYY-MM-DD
+  const yyyymmdd = dateStr.replace(/-/g, '')
+  drillDownDate.value = yyyymmdd
+  period.value = '1min'  // 切换到1分钟周期
+  loadOffset.value = 0
+  histData.value = []
+  visibleHist.value = []
+  fetchHistory()
+}
 
 // ── 生命周期 ───────────────────────────────────────────────────
 onMounted(() => {
