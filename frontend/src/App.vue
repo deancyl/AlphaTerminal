@@ -54,14 +54,6 @@
             <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
             <span v-else>🤖 展开 AI 助理</span>
           </button>
-          <!-- 全屏按钮 -->
-          <button
-            class="px-2 py-1 rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors text-xs"
-            @click="ui.klineFullscreen = !ui.klineFullscreen"
-            title="K线全屏"
-          >
-            {{ ui.klineFullscreen ? '✕ 退出全屏' : '⛶ 全屏' }}
-          </button>
         </div>
       </header>
 

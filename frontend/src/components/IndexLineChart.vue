@@ -585,7 +585,9 @@ async function fetchAndRender() {
     const hist = _sanitize(data.history || [])
 
     // 将 raw hist 塞给 option，方便 hover 时访问
-    const opt = buildOption(data.history || [], type)
+    // 确保数据按时间正序（左边=最旧，右边=最新）
+    const sortedHist = [...hist].reverse()
+    const opt = buildOption(sortedHist, type)
     opt._rawHist = data.history || []
 
     currentName.value = props.name || '上证指数'

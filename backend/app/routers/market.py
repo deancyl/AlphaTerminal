@@ -507,6 +507,7 @@ async def market_history(
     period: str = "daily",
     offset: int = 0,
     trade_date: str = None,
+    adjustment: str = "none",
 ):
     """
     获取某标的历史行情，支持多周期切换 + 懒加载分页
