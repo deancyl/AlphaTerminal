@@ -716,6 +716,114 @@ def fetch_index_minute_history(
         return []
 
 
+def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str = None) -> list[dict]:
+    """
+    按需穿透拉取A股个股日K线历史（全部上市至今数据），写入 market_data_daily 表。
+    支持前复权/后复权/不复权。
+    akshare stock_zh_a_daily: symbol 如 "sh600519"（沪深）或 "sz000001"（深圳）
+    """
+    try:
+        import akshare as ak, pandas as pd
+
+        if end_date is None:
+            end_date = datetime.now().strftime("%Y%m%d")
+
+        # symbol 可能是 "600519"（前端传入）或 "sh600519"（标准格式）
+        # AkShare 个股接口需要带 sh/sz 前缀
+        ak_sym = symbol
+        if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
+            # 推算交易所：6开头=上海，0/3开头=深圳
+            numeric = symbol.strip().lower()
+            prefix = "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            ak_sym = f"{prefix}{numeric.lstrip('0')}"
+
+        logger.info(f"[AkShare Stock] 开始拉取 {ak_sym} ({start_date}~{end_date})")
+        df = ak.stock_zh_a_daily(symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq")
+        if df is None or df.empty:
+            logger.warning(f"[AkShare Stock] {ak_sym} 无数据返回")
+            return []
+
+        date_col = df.columns[0]
+        _pct_col = next((c for c in df.columns
+                        if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
+        rows = []
+        for i in range(len(df)):
+            try:
+                dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                open_ = float(df.iloc[i]["open"])
+                high  = float(df.iloc[i]["high"])
+                low   = float(df.iloc[i]["low"])
+                close = float(df.iloc[i]["close"])
+                vol   = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                pct   = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
+                rows.append({
+                    "symbol":     symbol,
+                    "date":       str(df.iloc[i][date_col])[:10],
+                    "open":       open_,
+                    "high":       high,
+                    "low":        low,
+                    "close":      close,
+                    "volume":     vol,
+                    "change_pct": pct,
+                    "timestamp":  dt,
+                    "data_type":  "daily",
+                })
+            except Exception as e:
+                logger.warning(f"[AkShare Stock] 解析第{i}行失败: {e}")
+                continue
+
+        if rows:
+            from app.db import buffer_insert_daily, buffer_insert_periodic
+            buffer_insert_daily(rows)
+            logger.info(f"[AkShare Stock] {symbol} 日K写入 {len(rows)} 条")
+
+            # ── 周线 + 月线聚合（从日线计算）────────────────────
+            df_d = pd.DataFrame(rows)
+            df_d["date"] = pd.to_datetime(df_d["date"])
+            periodic_rows = []
+
+            # Weekly
+            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
+                               + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+            for yw, grp in df_d.groupby("year_wk", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "weekly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            # Monthly
+            df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+            for ym, grp in df_d.groupby("ym", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "monthly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            if periodic_rows:
+                buffer_insert_periodic(periodic_rows)
+                logger.info(f"[AkShare Stock] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+
+        return rows
+    except Exception as e:
+        logger.error(f"[AkShare Stock] fetch_stock_history({symbol}) 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
 def fetch_all_and_buffer():
     """聚合拉取 + 写入 write_buffer（供 APScheduler 调用）"""
     all_rows = []

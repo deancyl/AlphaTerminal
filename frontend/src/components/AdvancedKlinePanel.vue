@@ -45,6 +45,16 @@
       <!-- ECharts 主图表 -->
       <div ref="chartRef" class="w-full h-full" @contextmenu.prevent="onChartContextMenu"></div>
 
+      <!-- 加载/穿透中遮罩 -->
+      <div v-if="isLoading || isFetching"
+        class="absolute inset-0 z-30 flex flex-col items-center justify-center"
+        style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);">
+        <div class="text-blue-400 text-xs mb-2 font-mono">
+          {{ isFetching ? '📡 首次访问，正在穿透拉取全量历史…' : '⏳ 加载中…' }}
+        </div>
+        <div v-if="isFetching" class="text-gray-500 text-[9px] font-mono">数据来源：AkShare → SQLite</div>
+      </div>
+
       <!-- 右键上下文菜单 -->
       <div
         v-if="ctxMenu.visible"
@@ -125,6 +135,7 @@ import {
   DataZoomComponent, MarkLineComponent, MarkAreaComponent,
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+
 import { useMarketStore } from '../composables/useMarketStore.js'
 
 import QuoteHeader    from './QuoteHeader.vue'
@@ -181,7 +192,15 @@ const maDisplays = computed(() => {
 const intervalStats   = ref(null)
 const histData        = ref([])
 const visibleHist     = ref([])
-const limit = 300
+// 各周期单次拉取上限（Issue 2：历史深度扩容）
+const PERIOD_LIMITS = {
+  daily:   5000,   // ~20 年
+  weekly:  500,    // ~10 年
+  monthly: 300,    // ~25 年
+  minutely: 300,
+  '1min': 300, '5min': 300, '15min': 300, '30min': 300, '60min': 300,
+}
+const limit = computed(() => PERIOD_LIMITS[period.value] ?? 300)
 const drillDownDate = ref(null)  // YYYYMMDD, null means normal mode
 
 function exitDrillDown() {
@@ -196,6 +215,7 @@ function exitDrillDown() {
 const chartRef        = ref(null)
 const chartContainerRef = ref(null)
 const isLoading       = ref(false)
+const isFetching      = ref(false)     // 穿透拉取中（首次无缓存）
 const chartError      = ref('')
 const hasMore         = ref(false)
 const loadOffset      = ref(0)         // 懒加载偏移量
@@ -302,6 +322,10 @@ async function fetchHistory(append = false) {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
+
+    // 穿透拉取标志：首次请求无缓存时后端正在 AkShare 穿透
+    isFetching.value = data.fetching ?? false
+
     const items = (data.history || []).map(sanitizeItem)
 
     // API 可能返回 DESC（新股在左）或 ASC（老新在左），统一规范为 ASC 存储

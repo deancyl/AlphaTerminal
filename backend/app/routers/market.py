@@ -510,67 +510,93 @@ async def market_history(
     adjustment: str = "none",
 ):
     """
-    获取某标的历史行情，支持多周期切换 + 懒加载分页
+    获取某标的历史行情，支持多周期切换 + 懒加载分页。
 
-    period=minutely  : 当日分时（从 realtime 表，走势线图）
-    period=1min      : 1分钟K线（Eastmoney N分钟K线接口，A股指数）
-    period=5min      : 5分钟K线（同上）
-    period=15min     : 15分钟K线（同上）
-    period=30min     : 30分钟K线（同上）
-    period=60min     : 60分钟K线（日内）
-    period=daily     : 日K（从 daily 表，烛台图）
-    period=weekly    : 周K（从 periodic 表，烛台图）
-    period=monthly   : 月K（从 periodic 表，烛台图）
-    offset           : 分页偏移量（用于懒加载，向左拖拽触及边界时追加请求）
-    trade_date       : 指定交易日（YYYYMMDD，用于历史分时下钻）
+    若本地数据库无该标的数据，立即触发 AkShare 穿透拉取
+    （全量历史写入 SQLite），再返回给前端。
+
+    周期与数据深度：
+      daily   : 日K线，默认拉取上限 5000 条（约 20 年），可分页
+      weekly : 周K线，默认上限 500 条（约 10 年），可分页
+      monthly: 月K线，默认上限 300 条（约 25 年），可分页
+      分钟系  : 分时/1/5/15/30/60 分钟，仅支持白名单 A 股指数
+
+    offset : 分页偏移量（每次向后翻页 offset += limit）
     """
     clean_sym = _clean_symbol(symbol)
-    from app.db import get_daily_history, get_periodic_history
+    from app.db import get_daily_history, get_periodic_history, get_daily_count, get_periodic_count
 
     chart_type = "candlestick"
-    history    = []
-    has_more   = False
+    history     = []
+    has_more    = False
+    fetching    = False   # 正在穿透拉取中
 
     _MIN_KLINE_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
     _FREQUENCY_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
-    # 分钟K线（Eastmoney N分钟接口，仅支持部分A股指数）
+    # ── 分钟K线（Eastmoney N分钟接口，仅支持部分 A 股指数）───────────────
     if period in _FREQUENCY_MAP:
-        from app.services.data_fetcher import fetch_index_minute_history
         freq = _FREQUENCY_MAP[period]
         if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
-            all_data = fetch_index_minute_history(
-                clean_sym,
-                limit=limit,
-                frequency=freq,
-                offset=offset,
-                trade_date=trade_date,
-            )
+            from app.services.data_fetcher import fetch_index_minute_history
+            all_data = fetch_index_minute_history(clean_sym, limit=limit, frequency=freq, offset=offset, trade_date=trade_date)
             history  = all_data
-            # has_more 根据实际返回判断（前端已知晓总数，暂用固定值）
-            has_more  = len(all_data) >= min(limit, 300)
+            has_more = len(all_data) >= min(limit, 300)
         else:
-            history  = []
+            history = []
         chart_type = "candlestick"
 
     elif period == "minutely":
-        from app.services.data_fetcher import fetch_index_minute_history
         if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
+            from app.services.data_fetcher import fetch_index_minute_history
             history  = fetch_index_minute_history(clean_sym, limit=min(limit, 300), frequency=5, offset=offset)
             has_more = len(history) >= min(limit, 300)
         else:
-            history  = []
+            history = []
         chart_type = "line"
 
+    # ── 日K线（支持个股 + 指数，自动按需穿透）───────────────────────────
     elif period == "daily":
-        raw_rows = get_daily_history(clean_sym, limit=limit)
-        # get_daily_history 返回 DESC（最新在前），需要翻转成 ASC 给复权计算用
+        raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
+        total    = get_daily_count(clean_sym)
+
+        # 本地无数据 → 触发 AkShare 按需穿透（仅首次，limit=max 一次性拉足）
+        if not raw_rows and offset == 0:
+            logger.info(f"[Market History] 本地无 {clean_sym} 日K，触发穿透拉取…")
+            fetching = True
+            try:
+                from app.services.data_fetcher import fetch_stock_history
+                rows = fetch_stock_history(clean_sym)
+                if rows:
+                    # 穿透完成后再查（此时 SQLite 已有数据）
+                    raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
+                    total    = get_daily_count(clean_sym)
+            except Exception as e:
+                logger.error(f"[Market History] 穿透失败: {e}")
+
         history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
+        has_more = (offset + len(raw_rows)) < total
         chart_type = "candlestick"
 
+    # ── 周/月K线（支持个股 + 指数，自动按需穿透）────────────────────────
     elif period in ("weekly", "monthly"):
-        raw_rows = get_periodic_history(clean_sym, period=period, limit=limit)
+        raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
+        total    = get_periodic_count(clean_sym, period)
+
+        # 本地无数据 → 触发穿透（先把日K拉足，再由 fetch_stock_history 内聚合并写入 periodic 表）
+        if not raw_rows and offset == 0:
+            logger.info(f"[Market History] 本地无 {clean_sym} {period}K，触发穿透…")
+            fetching = True
+            try:
+                from app.services.data_fetcher import fetch_stock_history
+                fetch_stock_history(clean_sym)   # 日K写入后自动生成 periodic
+                raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
+                total    = get_periodic_count(clean_sym, period)
+            except Exception as e:
+                logger.error(f"[Market History] 穿透失败: {e}")
+
         history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
+        has_more = (offset + len(raw_rows)) < total
         chart_type = "candlestick"
 
     else:
@@ -584,6 +610,7 @@ async def market_history(
         "chart_type": chart_type,
         "has_more":   has_more,
         "offset":     offset,
+        "fetching":   fetching,    # 前端据此显示"穿透拉取中"状态
         "timestamp":  datetime.now().isoformat(),
         "history":    history,
     }

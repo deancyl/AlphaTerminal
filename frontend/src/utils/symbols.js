@@ -92,10 +92,12 @@ export function extractCode(symbol) {
 export function formatDate(dateStr, period = 'daily') {
   if (!dateStr) return ''
   const s = String(dateStr)
-  if (period === 'minutely' || s.length === 19) {
-    return s.slice(11, 16) // HH:MM
+  // 分钟/分时周期：精确到分钟
+  if (period === 'minutely' || period.startsWith('min') || s.length === 19) {
+    return s.slice(0, 16)  // YYYY-MM-DD HH:mm
   }
-  if (s.length >= 10) return s.slice(5, 10) // MM-DD
+  // 日/周/月/年：精确到日期
+  if (s.length >= 10) return s.slice(0, 10) // YYYY-MM-DD
   return s
 }
 
@@ -134,13 +136,16 @@ export function getSymbolMeta(symbol) {
 }
 
 /**
- * 生成 ECharts X轴标签（日期截断）
+ * 生成 ECharts X轴标签（完整日期格式，周期自适应）
+ * 日/周/月/年 → YYYY-MM-DD
+ * 分时/分钟级 → YYYY-MM-DD HH:mm
  */
 export function buildXAxisLabels(hist, period) {
   return hist.map(h => {
     const d = h.date || h.time || ''
-    if (period === 'minutely' && d.length >= 16) return d.slice(11, 16)
-    if (d.length >= 10) return d.slice(5, 10)
+    const isMinute = period === 'minutely' || period.startsWith('min')
+    if (isMinute && d.length >= 16) return d.slice(0, 16)   // YYYY-MM-DD HH:mm
+    if (d.length >= 10) return d.slice(0, 10)                  // YYYY-MM-DD
     return d
   })
 }

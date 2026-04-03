@@ -113,12 +113,59 @@ def get_latest_prices(symbols=None, data_type='realtime'):
         conn.close()
         return [dict(r) for r in rows]
 
-def get_daily_history(symbol, limit=300):
+def get_daily_history(symbol, limit=300, offset=0):
     with _lock:
         conn = _get_conn()
-        rows = conn.execute("SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ?", (symbol, limit)).fetchall()
+        if offset > 0:
+            rows = conn.execute(
+                "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ? OFFSET ?",
+                (symbol, limit, offset)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ?",
+                (symbol, limit)
+            ).fetchall()
         conn.close()
         return [dict(r) for r in rows]
+
+def get_daily_count(symbol):
+    """返回某标的日K总数（用于 has_more 判断）"""
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM market_data_daily WHERE symbol=?",
+            (symbol,)
+        ).fetchone()
+        conn.close()
+        return row["cnt"] if row else 0
+
+def get_periodic_history(symbol, period, limit=200, offset=0):
+    with _lock:
+        conn = _get_conn()
+        if offset > 0:
+            rows = conn.execute("""
+                SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
+                ORDER BY date DESC LIMIT ? OFFSET ?
+            """, (symbol, period, limit, offset)).fetchall()
+        else:
+            rows = conn.execute("""
+                SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
+                ORDER BY date DESC LIMIT ?
+            """, (symbol, period, limit)).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+
+def get_periodic_count(symbol, period):
+    """返回某标的某周期K线总数"""
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM market_data_periodic WHERE symbol=? AND period=?",
+            (symbol, period)
+        ).fetchone()
+        conn.close()
+        return row["cnt"] if row else 0
 
 get_price_history = get_daily_history
 
