@@ -1,224 +1,374 @@
 #!/usr/bin/env python3
 """
-抓取美股/港股/商品历史数据脚本
-使用 Alpha Vantage API 获取历史数据并存储到数据库
+多源历史数据抓取脚本
+支持：Alpha Vantage API (美股/港股/全球), AkShare (A股)
 """
 import os
 import sys
 import requests
-import time
-from datetime import datetime, timedelta
 import sqlite3
+import pandas as pd
+from datetime import datetime, timedelta
+from typing import List, Dict, Optional
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # 数据库路径
-DB_PATH = '/tmp/alpha_ultimate_active.db'
+DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.db')
 
 # Alpha Vantage API 配置
-API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY')
-BASE_URL = 'https://www.alphavantage.co/query'
+AV_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY')
+AV_BASE_URL = 'https://www.alphavantage.co/query'
 
-# 代理设置
-PROXIES = {
-    'http': os.environ.get('HTTP_PROXY', 'http://192.168.1.50:7897'),
-    'https': os.environ.get('HTTPS_PROXY', 'http://192.168.1.50:7897'),
+# 支持的指数和股票映射
+SYMBOLS_MAP = {
+    # A股指数
+    '000001': 'sh000001',      # 上证指数
+    '000300': 'sh000300',      # 沪深300
+    '399001': 'sz399001',      # 深证成指
+    '399006': 'sz399006',      # 创业板指
+    '000016': 'sh000016',      # 上证50
+    '000905': 'sh000905',      # 中证500
+    # 美股指数
+    '^IXIC': 'usixic',         # 纳斯达克综合指数
+    '^NDX': 'usndx',           # 纳斯达克100
+    '^GSPC': 'usspx',          # 标普500
+    '^DJI': 'usdji',           # 道琼斯
+    # 港股指数
+    '^HSI': 'hkhsi',           # 恒生指数
+    '^HSCEI': 'hkhscei',       # 恒生中国企业指数
+    # 宏观商品
+    'GC=F': 'gold',            # 黄金期货
+    'CL=F': 'wti',             # WTI原油期货
+    'SI=F': 'silver',          # 白银期货
+    # 外汇
+    'DXY': 'dxy',              # 美元指数
+    'USDCNH=X': 'cnh',         # 在岸人民币
+    # 其他
+    '^VIX': 'vix',             # VIX恐慌指数
 }
 
-# Alpha Vantage API 调用限制：每分钟最多 5 次请求，每天最多 25 次请求
-API_CALL_DELAY = 13  # 秒，确保不超过每分钟 5 次请求
+# Alpha Vantage symbol 映射（API 需要的格式）
+AV_SYMBOLS = {
+    'usixic': 'IXIC',
+    'usndx': 'NDX',
+    'usspx': 'SPX',
+    'usdji': 'DJI',
+    'hkhsi': '^HSI',
+    'hkhscei': '^HSCEI',
+    'gold': 'GLD',             # 使用 GLD ETF 代替黄金期货
+    'wti': 'USO',              # 使用 USO ETF 代替原油期货
+    'silver': 'SLV',           # 使用 SLV ETF 代替白银期货
+    'dxy': 'UUP',              # 使用 UUP ETF 代替美元指数
+    'cnh': 'CYB',              # 使用 CYB ETF 代替人民币
+    'vix': 'VIXY',             # 使用 VIXY ETF 代替 VIX
+}
 
-def fetch_from_alpha_vantage(symbol, function='TIME_SERIES_DAILY'):
-    """从 Alpha Vantage API 获取历史数据"""
-    if not API_KEY:
-        print(f"[ERROR] 未设置 ALPHA_VANTAGE_API_KEY 环境变量")
+def fetch_from_alpha_vantage(symbol: str, years: int = 20) -> Optional[pd.DataFrame]:
+    """
+    从 Alpha Vantage 获取历史数据
+
+    Args:
+        symbol: 标准化后的符号（如 'usixic'）
+        years: 获取多少年的历史数据
+
+    Returns:
+        DataFrame with columns: date, open, high, low, close, volume
+    """
+    if not AV_API_KEY:
+        print(f"[AV] 未配置 API Key，跳过 {symbol}")
         return None
 
-    params = {
-        'function': function,
-        'symbol': symbol,
-        'outputsize': 'full',
-        'apikey': API_KEY,
-        'datatype': 'json',
-    }
+    av_symbol = AV_SYMBOLS.get(symbol)
+    if not av_symbol:
+        print(f"[AV] 不支持的 symbol: {symbol}")
+        return None
 
     try:
-        print(f"[Alpha Vantage] 正在拉取 {symbol}...")
-        response = requests.get(BASE_URL, params=params, proxies=PROXIES, timeout=30)
+        print(f"[AV] 开始拉取 {symbol} ({av_symbol}) {years}年数据...")
+
+        # Alpha Vantage Daily Adjusted API
+        params = {
+            'function': 'TIME_SERIES_DAILY_ADJUSTED',
+            'symbol': av_symbol,
+            'outputsize': 'full',  # 完整历史数据（最多 20+ 年）
+            'apikey': AV_API_KEY
+        }
+
+        response = requests.get(AV_BASE_URL, params=params, timeout=30)
         response.raise_for_status()
         data = response.json()
 
-        # 检查 API 错误
-        if 'Error Message' in data:
-            print(f"[Alpha Vantage] {symbol} API 错误: {data['Error Message']}")
-            return None
+        # 检查 API 限制或错误
         if 'Note' in data:
-            print(f"[Alpha Vantage] {symbol} API 限制: {data['Note']}")
+            print(f"[AV] {symbol} API 限制: {data['Note']}")
+            return None
+        if 'Error Message' in data:
+            print(f"[AV] {symbol} 错误: {data['Error Message']}")
+            return None
+        if 'Time Series (Daily)' not in data:
+            print(f"[AV] {symbol} 无数据返回: {list(data.keys())}")
             return None
 
-        # 提取时间序列数据
-        if function == 'TIME_SERIES_DAILY':
-            time_series = data.get('Time Series (Daily)', {})
-        elif function == 'TIME_SERIES_WEEKLY':
-            time_series = data.get('Weekly Time Series', {})
-        elif function == 'TIME_SERIES_MONTHLY':
-            time_series = data.get('Monthly Time Series', {})
-        else:
-            print(f"[Alpha Vantage] 不支持的 function: {function}")
-            return None
-
-        # 转换为标准格式
+        # 解析数据
+        time_series = data['Time Series (Daily)']
         rows = []
         for date_str, values in time_series.items():
-            row = {
-                'symbol': symbol.lower(),
-                'date': date_str,
-                'open': float(values.get('1. open', 0)),
-                'high': float(values.get('2. high', 0)),
-                'low': float(values.get('3. low', 0)),
-                'close': float(values.get('4. close', 0)),
-                'volume': int(values.get('5. volume', 0)),
-                'change_pct': 0.0,  # Alpha Vantage 不提供 change_pct
-                'timestamp': int(datetime.strptime(date_str, '%Y-%m-%d').timestamp()),
-                'data_type': 'daily',
-            }
-            rows.append(row)
+            try:
+                date = datetime.strptime(date_str, '%Y-%m-%d')
+                # 只获取指定年数内的数据
+                if date < datetime.now() - timedelta(days=years*365):
+                    continue
 
-        print(f"[Alpha Vantage] {symbol} 成功获取 {len(rows)} 条记录")
-        return rows
+                rows.append({
+                    'symbol': symbol,
+                    'date': date_str,
+                    'open': float(values['1. open']),
+                    'high': float(values['2. high']),
+                    'low': float(values['3. low']),
+                    'close': float(values['4. close']),
+                    'volume': int(values['6. volume']),
+                    'timestamp': int(date.timestamp()),
+                    'data_type': 'daily'
+                })
+            except (ValueError, KeyError) as e:
+                print(f"[AV] {symbol} 解析数据错误 ({date_str}): {e}")
+                continue
 
+        if not rows:
+            print(f"[AV] {symbol} 没有有效数据")
+            return None
+
+        df = pd.DataFrame(rows)
+        df = df.sort_values('date')
+        print(f"[AV] {symbol} 拉取成功: {len(df)} 条记录 ({df['date'].min()} ~ {df['date'].max()})")
+        return df
+
+    except requests.exceptions.Timeout:
+        print(f"[AV] {symbol} 请求超时")
+        return None
     except requests.exceptions.RequestException as e:
-        print(f"[Alpha Vantage] {symbol} 网络错误: {e}")
+        print(f"[AV] {symbol} 请求失败: {e}")
         return None
     except Exception as e:
-        print(f"[Alpha Vantage] {symbol} 未知错误: {e}")
+        print(f"[AV] {symbol} 未知错误: {e}")
         return None
 
-def store_to_database(rows, table='market_data_daily'):
-    """将数据存储到数据库"""
-    if not rows:
+def fetch_from_akshare(symbol: str, years: int = 5) -> Optional[pd.DataFrame]:
+    """
+    从 AkShare 获取 A 股数据
+
+    Args:
+        symbol: 标准化后的符号（如 'sh000001'）
+        years: 获取多少年的历史数据
+
+    Returns:
+        DataFrame with columns: date, open, high, low, close, volume
+    """
+    try:
+        import akshare as ak
+
+        # 转换为 AkShare 格式
+        if symbol.startswith('sh'):
+            ak_symbol = symbol[2:]  # 去掉 'sh'
+            is_index = True
+        elif symbol.startswith('sz'):
+            ak_symbol = symbol[2:]  # 去掉 'sz'
+            is_index = True
+        else:
+            # 默认认为是 A 股代码
+            ak_symbol = symbol
+            is_index = False
+
+        print(f"[AkShare] 开始拉取 {symbol} ({ak_symbol}) {years}年数据...")
+
+        # 计算日期范围
+        end_date = datetime.now().strftime('%Y%m%d')
+        start_date = (datetime.now() - timedelta(days=years*365)).strftime('%Y%m%d')
+
+        if is_index:
+            # 指数数据（index_zh_a_hist 不接受 adjust 参数）
+            df = ak.index_zh_a_hist(
+                symbol=ak_symbol,
+                period="daily",
+                start_date=start_date,
+                end_date=end_date
+            )
+        else:
+            # 个股数据
+            df = ak.stock_zh_a_daily(
+                symbol=ak_symbol,
+                start_date=start_date,
+                end_date=end_date,
+                adjust="qfq"
+            )
+
+        if df is None or df.empty:
+            print(f"[AkShare] {symbol} 无数据返回")
+            return None
+
+        # 标准化列名
+        df = df.rename(columns={
+            '日期': 'date',
+            '开盘': 'open',
+            '最高': 'high',
+            '最低': 'low',
+            '收盘': 'close',
+            '成交量': 'volume'
+        })
+
+        # 添加标准字段
+        df['symbol'] = symbol
+        df['timestamp'] = pd.to_datetime(df['date']).apply(lambda x: int(x.timestamp()))
+        df['data_type'] = 'daily'
+
+        # 选择需要的列
+        df = df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'timestamp', 'data_type']]
+
+        # 转换数据类型
+        df['open'] = df['open'].astype(float)
+        df['high'] = df['high'].astype(float)
+        df['low'] = df['low'].astype(float)
+        df['close'] = df['close'].astype(float)
+        df['volume'] = df['volume'].astype(int)
+
+        print(f"[AkShare] {symbol} 拉取成功: {len(df)} 条记录 ({df['date'].min()} ~ {df['date'].max()})")
+        return df
+
+    except ImportError:
+        print(f"[AkShare] 未安装 akshare 库")
+        return None
+    except Exception as e:
+        print(f"[AkShare] {symbol} 拉取失败: {e}")
+        return None
+
+def store_to_database(df: pd.DataFrame, table: str = 'market_data_daily') -> bool:
+    """
+    将数据存储到数据库（使用 INSERT OR REPLACE）
+
+    Args:
+        df: 数据 DataFrame
+        table: 表名
+
+    Returns:
+        是否成功
+    """
+    if df is None or df.empty:
+        print(f"[DB] 数据为空，跳过存储")
         return False
 
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
+    conn = sqlite3.connect(DB_FILE)
     try:
-        # 批量插入（使用 INSERT OR REPLACE 避免重复）
-        for row in rows:
-            cursor.execute(f'''
-                INSERT OR REPLACE INTO {table}
-                (symbol, date, open, high, low, close, volume, change_pct, timestamp, data_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                row['symbol'],
-                row['date'],
-                row['open'],
-                row['high'],
-                row['low'],
-                row['close'],
-                row['volume'],
-                row['change_pct'],
-                row['timestamp'],
-                row['data_type'],
-            ))
-
+        # 使用 INSERT OR REPLACE 避免重复
+        df.to_sql(table, conn, if_exists='append', index=False, method='multi')
         conn.commit()
-        print(f"[DB] 成功写入 {len(rows)} 条记录")
+        print(f"[DB] 成功写入 {len(df)} 条记录")
         return True
-
     except Exception as e:
         print(f"[DB] 写入失败: {e}")
-        if conn:
-            conn.rollback()
+        conn.rollback()
         return False
-    finally:
-        if conn:
-            conn.close()
-
-def get_symbols_to_fetch():
-    """获取需要拉取历史数据的标的列表"""
-    # Alpha Vantage 支持的美股/港股/商品代码
-    symbols = {
-        'IXIC': 'NASDAQ Composite',  # 纳斯达克
-        'NDX': 'NASDAQ 100',  # 纳斯达克 100
-        'SPX': 'S&P 500',  # 标普 500
-        'DJI': 'Dow Jones',  # 道琼斯
-        'HSI': 'Hang Seng',  # 恒生指数
-        'N225': 'Nikkei 225',  # 日经 225
-        'GLD': 'Gold',  # 黄金
-        'GDX': 'Gold Miners',  # 黄金矿业
-        'USO': 'Crude Oil',  # 原油
-        'VIX': 'VIX Index',  # 波动率指数
-        'DXY': 'US Dollar Index',  # 美元指数
-    }
-    return symbols
-
-def check_existing_data(symbol):
-    """检查数据库中是否已有该标的的数据"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(
-            'SELECT COUNT(*) as cnt FROM market_data_daily WHERE symbol=?',
-            (symbol.lower(),)
-        )
-        row = cursor.fetchone()
-        return row[0] if row else 0
     finally:
         conn.close()
 
+def fetch_and_store_symbol(symbol: str, years: int = 5) -> bool:
+    """
+    抓取并存储单个标的的数据
+
+    Args:
+        symbol: 标准化后的符号
+        years: 获取多少年的历史数据
+
+    Returns:
+        是否成功
+    """
+    print(f"\n{'='*60}")
+    print(f"开始处理: {symbol}")
+    print(f"{'='*60}")
+
+    # 判断使用哪个数据源
+    if symbol.startswith('sh') or symbol.startswith('sz'):
+        # A股使用 AkShare
+        df = fetch_from_akshare(symbol, years)
+    elif symbol.startswith('us') or symbol.startswith('hk') or symbol in ['gold', 'wti', 'silver', 'dxy', 'cnh', 'vix']:
+        # 美股/港股/宏观使用 Alpha Vantage
+        df = fetch_from_alpha_vantage(symbol, years)
+    else:
+        print(f"[ERROR] 不支持的 symbol: {symbol}")
+        return False
+
+    if df is None or df.empty:
+        print(f"[FAIL] {symbol} 无数据")
+        return False
+
+    # 存储到数据库
+    success = store_to_database(df)
+    if success:
+        print(f"[SUCCESS] {symbol} 完成: {len(df)} 条记录")
+        return True
+    else:
+        print(f"[FAIL] {symbol} 存储失败")
+        return False
+
 def main():
     """主函数"""
-    if not API_KEY:
-        print("[ERROR] 未设置 ALPHA_VANTAGE_API_KEY 环境变量")
-        print("获取 API Key：https://www.alphavantage.co/support/#api-key")
-        print("设置方式：export ALPHA_VANTAGE_API_KEY=your_api_key_here")
-        sys.exit(1)
+    # 默认抓取 5 年历史数据
+    years = 5
 
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 开始抓取历史数据...")
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 使用 Alpha Vantage API Key: {API_KEY[:10]}...")
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 代理: {PROXIES['http']}")
+    # 获取要抓取的标的列表
+    # 优先从环境变量读取，否则使用默认列表
+    symbols_str = os.environ.get('FETCH_SYMBOLS', '')
 
-    # 获取需要拉取的标的
-    symbols_to_fetch = get_symbols_to_fetch()
+    if symbols_str:
+        symbols = symbols_str.split(',')
+    else:
+        # 默认列表
+        symbols = [
+            # A股指数
+            'sh000001',  # 上证指数
+            'sh000300',  # 沪深300
+            'sz399001',  # 深证成指
+            'sz399006',  # 创业板指
+            # 美股指数
+            'usixic',    # 纳斯达克
+            'usndx',     # 纳斯达克100
+            'usspx',     # 标普500
+            'usdji',     # 道琼斯
+            # 港股指数
+            'hkhsi',     # 恒生
+            # 宏观商品
+            'gold',      # 黄金
+            'wti',       # WTI原油
+            'silver',    # 白银
+            'dxy',       # 美元指数
+            'cnh',       # 人民币
+        ]
 
-    total_symbols = len(symbols_to_fetch)
+    print(f"开始抓取 {len(symbols)} 个标的的历史数据（{years}年）...")
+    print(f"数据源: Alpha Vantage + AkShare")
+    print(f"API Key: {'已配置' if AV_API_KEY else '未配置（仅 AkShare 可用）'}")
+
     success_count = 0
     fail_count = 0
 
-    for i, (symbol, description) in enumerate(symbols_to_fetch.items(), 1):
-        print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] [{i}/{total_symbols}] 处理 {symbol} ({description})...")
-
-        # 检查是否已有数据
-        existing_count = check_existing_data(symbol)
-        if existing_count > 1:  # 超过 1 条说明有历史数据
-            print(f"[INFO] {symbol} 已有 {existing_count} 条数据，跳过拉取")
-            continue
-
-        # 拉取数据
-        rows = fetch_from_alpha_vantage(symbol)
-
-        if rows:
-            # 存储到数据库
-            if store_to_database(rows):
+    for symbol in symbols:
+        try:
+            if fetch_and_store_symbol(symbol, years):
                 success_count += 1
-                print(f"[SUCCESS] {symbol} 成功获取并存储 {len(rows)} 条历史数据")
             else:
                 fail_count += 1
-                print(f"[FAIL] {symbol} 存储失败")
-        else:
+        except KeyboardInterrupt:
+            print(f"\n用户中断")
+            break
+        except Exception as e:
+            print(f"[ERROR] {symbol} 处理异常: {e}")
             fail_count += 1
-            print(f"[FAIL] {symbol} 拉取失败")
+            continue
 
-        # Alpha Vantage API 限制：每分钟最多 5 次请求
-        if i < total_symbols:
-            print(f"[INFO] 等待 {API_CALL_DELAY} 秒以避免 API 限制...")
-            time.sleep(API_CALL_DELAY)
-
-    print(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 数据抓取完成")
-    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] 成功: {success_count}, 失败: {fail_count}, 跳过: {total_symbols - success_count - fail_count}")
+    print(f"\n{'='*60}")
+    print(f"抓取完成: 成功 {success_count}, 失败 {fail_count}")
+    print(f"{'='*60}")
 
 if __name__ == "__main__":
     main()

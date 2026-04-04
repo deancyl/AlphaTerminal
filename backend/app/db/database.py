@@ -5,7 +5,13 @@ import logging
 import os
 
 logger = logging.getLogger(__name__)
-_db_path = "/tmp/alpha_ultimate_active.db"
+# 使用工作区根目录的 database.db（包含示例数据）
+# __file__ is /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app/db/database.py
+# dirname(__file__) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app/db
+# dirname(dirname(__file__)) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app
+# dirname(dirname(dirname(__file__))) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend
+# dirname(dirname(dirname(dirname(__file__)))) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal
+_db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'database.db')
 _lock = threading.RLock()
 
 def _get_conn():
