@@ -509,7 +509,7 @@ def fetch_china_all_indices() -> list[dict]:
             if code_key not in sym_map:
                 continue
             sym, disp, mkt = sym_map[code_key]
-            parsed = _parse_sina_hq(line)
+            parsed = _parse_sina_index(line)   # ← 指数用指数专用解析器，不是 _parse_sina_hq（那是给个股用的）
             if parsed:
                 rows.append(_row(sym, disp, mkt,
                                   parsed["price"], parsed["change_pct"], parsed["volume"],
@@ -735,13 +735,13 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
             end_date = datetime.now().strftime("%Y%m%d")
 
         # symbol 可能是 "600519"（前端传入）或 "sh600519"（标准格式）
-        # AkShare 个股接口需要带 sh/sz 前缀
+        # AkShare 个股接口需要带 sh/sz 前缀，6位代码保留完整前导零
         ak_sym = symbol
         if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
-            # 推算交易所：6开头=上海，0/3开头=深圳
-            numeric = symbol.strip().lower()
+            # 推算交易所：6/9开头=上海（科创板），0/1/2/3开头=深圳；直接补足6位
+            numeric = symbol.strip().zfill(6)   # "1"→"000001"，"600519"→"600519"
             prefix = "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
-            ak_sym = f"{prefix}{numeric.lstrip('0')}"
+            ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Stock] 开始拉取 {ak_sym} ({start_date}~{end_date})")
         df = ak.stock_zh_a_daily(symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq")

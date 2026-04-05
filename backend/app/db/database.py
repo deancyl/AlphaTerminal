@@ -111,19 +111,31 @@ def flush_buffer_to_realtime():
     with _lock:
         conn = _get_conn()
         rows = conn.execute("SELECT * FROM write_buffer").fetchall()
+        # 先批量处理，只记录成功的行键；失败的保留在 buffer 中下次重试
+        processed_keys = []   # [(symbol, name), ...]
+        error_count = 0
         for r in rows:
             try:
                 d = json.loads(r["data"])
                 conn.execute("""
-                    INSERT OR REPLACE INTO market_data_realtime 
+                    INSERT OR REPLACE INTO market_data_realtime
                     (symbol, name, price, change_pct, volume, market, data_type, timestamp)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (r["symbol"], r["name"], d.get("price",0), d.get("change_pct",0), 
+                """, (r["symbol"], r["name"], d.get("price",0), d.get("change_pct",0),
                       d.get("volume",0), d.get("market",""), d.get("data_type",""), d.get("timestamp",0)))
+                processed_keys.append((r["symbol"], r["name"]))
             except Exception:
+                error_count += 1
                 continue
-        conn.execute("DELETE FROM write_buffer")
-        conn.commit(); conn.close()
+        # 只删除成功写入的记录；失败的留在 buffer，下次重试
+        if processed_keys:
+            placeholders = ",".join(["(?,?)"] * len(processed_keys))
+            flat = [item for pair in processed_keys for item in pair]
+            conn.execute(f"DELETE FROM write_buffer WHERE (symbol, name) IN (VALUES {placeholders})", flat)
+        conn.commit()
+        conn.close()
+        if error_count:
+            logger.warning(f"[DB] flush: {len(processed_keys)} ok, {error_count} failed（保留buffer）")
 
 def get_latest_prices(symbols=None, data_type='realtime'):
     with _lock:
