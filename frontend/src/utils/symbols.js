@@ -4,10 +4,12 @@
  */
 
 // A股：第一位判断交易所
+// 规则：6xx/9xx/00xx(上证) → sh；0xx(深证)/1xx/2xx/3xx → sz
 function _aSharePrefix(code) {
   const s = String(code).replace(/\D/g, '')
   if (s.length !== 6) return 'sz'
-  if (s.startsWith('6') || s.startsWith('9')) return 'sh'
+  // 600/601/603/688 等 → 上交所；000xxx (上证) 也归上交所
+  if (s.startsWith('6') || s.startsWith('9') || s.startsWith('000')) return 'sh'
   return 'sz'
 }
 
@@ -34,14 +36,14 @@ export function normalizeSymbol(raw) {
   // 已知前缀的直接返回
   if (_lookup[s.toLowerCase()]) return s.toLowerCase()
 
-  // 美股
+  // 美股（存储时不带前缀，DB 统一用纯小写如 'ixic'）
   if (['NDX', 'SPX', 'DJI', 'IXIC', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META'].includes(upper)) {
-    return 'us' + upper
+    return upper.toLowerCase()   // 'ixic', 'spx', 'dji' 等，不带 us 前缀
   }
 
-  // 港股
+  // 港股（存储时不带前缀）
   if (['HSI', 'HKHSI', 'HK2000'].includes(upper)) {
-    return 'hkHSI'
+    return 'hsi'   // 统一用 'hsi'
   }
 
   // 日经

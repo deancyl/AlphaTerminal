@@ -263,14 +263,19 @@ def fetch_global_indices() -> list[dict]:
                 continue
             sym, disp, mkt = sym_map[code_key]
             parts = m.group(2).split("~")
-            if len(parts) < 6:
+            if len(parts) < 33:
                 continue
             try:
+                # 腾讯指数格式：f[3]=当前价, f[32]=涨跌幅%, f[6]=成交量
+                # HSI: f[6]是成交量（万股），需要*100转成股
+                # US indices: f[6]是成交量（股），直接使用
                 price   = float(parts[3]) if parts[3] else None
                 chg_pct = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+                raw_vol = float(parts[6]) if parts[6] else 0.0
+                volume  = int(raw_vol * 100) if "HSI" in code_key.upper() else int(raw_vol)
                 if price:
-                    rows.append(_row(sym, disp, mkt, price, chg_pct, None, "global"))
-                    logger.info(f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%)")
+                    rows.append(_row(sym, disp, mkt, price, chg_pct, volume, "global"))
+                    logger.info(f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%) vol={volume}")
             except (ValueError, IndexError) as e:
                 logger.warning(f"[Tencent] 解析 {disp} 失败: {e}")
         if rows:
@@ -556,7 +561,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 high   = float(df.iloc[i]["high"])
                 low    = float(df.iloc[i]["low"])
                 close  = float(df.iloc[i]["close"])   # ← 直接用 df["close"]，不经过任何 swap
-                volume = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                volume = int(df.iloc[i]["volume"]) if "volume" in df.columns else 0
                 pct    = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
                 rows.append({
                     "symbol":    symbol,
@@ -844,11 +849,24 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
         "ndx":   "NASDAQ", "usndx":   "NASDAQ",
         "spx":   "S&P500", "usspx":   "S&P500",
         "dji":   "DJI",    "usdji":   "DJI",
+        "hsi":   "HSI",    "hkhsi":   "HSI",
         # 港股/日经暂不支持（Alpha Vantage 无此品类）
     }
     av_sym = av_symbols.get(symbol.lower(), "")
     if not av_sym:
         return []
+
+    # 指数标准化因子 - 移除所有数值标准化，仅保留字段映射转换
+    # 彻底删除 normalization_factors 和相关标准化代码
+    
+    # 获取数据源名称并标准化符号
+    symbol_name = {
+        "ixic": "纳斯达克", "usixic": "纳斯达克",
+        "ndx": "纳指100", "usndx": "纳指100",
+        "spx": "标普500", "usspx": "标普500",
+        "dji": "道指", "usdji": "道指",
+        "hkhsi": "恒生指数", "hsi": "恒生指数"
+    }.get(symbol.lower(), symbol.upper())
 
     url = (
         f"https://www.alphavantage.co/query"
@@ -886,18 +904,21 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
                     low    = float(day["3. low"])
                     close  = float(day["4. close"])
                     vol    = float(day["5. volume"])
+                    
                     pct    = (close - prev_close) / prev_close * 100 if prev_close else 0.0
                     rows.append({
                         "symbol":     symbol.lower(),
+                        "name":       symbol_name,
                         "date":       date_str,
-                        "open":       open_,
-                        "high":       high,
-                        "low":        low,
-                        "close":      close,
-                        "volume":     vol,
+                        "open":       round(open_, 4),
+                        "high":       round(high, 4),
+                        "low":        round(low, 4),
+                        "close":      round(close, 4),
+                        "volume":     int(vol),
                         "change_pct": round(pct, 4),
                         "timestamp":  int(time.mktime(time.strptime(date_str, "%Y-%m-%d"))),
                         "data_type":  "daily",
+                        "normalized": False,  # 明确标记未标准化
                     })
                     prev_close = close
                 except Exception as e:
@@ -967,8 +988,15 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
             open_   = float(parts[5]) if parts[5] else price
             high    = float(parts[33]) if len(parts) > 33 and parts[33] else price
             low     = float(parts[34]) if len(parts) > 34 and parts[34] else price
-            vol     = float(parts[6]) if parts[6] else 0
-            pct     = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
+            # 成交量处理：统一存储为"股"单位
+            # HSI: parts[6] 是成交量（万股），需要 * 100 转成股
+            # US indices: parts[6] 直接是成交量（股），不需要转换
+            raw_vol = float(parts[6]) if parts[6] else 0.0
+            if "HSI" in tc.upper():
+                vol = int(raw_vol * 100)   # 万股 -> 股
+            else:
+                vol = int(raw_vol)         # 直接是股
+            pct = float(parts[32]) if len(parts) > 32 and parts[32] else 0.0
         else:
             # 大宗商品 comma-separated（hf_XAU, hf_CL 等）
             # parts[0]=price, parts[1]=change_pct, parts[2]=open, parts[3]=high, parts[4]=low
@@ -999,62 +1027,137 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
 def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000) -> list[dict]:
     """
     按需穿透拉取美股/港股/日经指数历史K线，写入 market_data_daily 表。
-
     数据源优先级：
-      1. Alpha Vantage（需 ALPHA_VANTAGE_API_KEY 环境变量）
-      2. 腾讯今日实时数据兜底（仅今日K线，写入后前端可见今日价格）
+      1. AkShare (港股/美股专用接口) -> 最精准，对标 Wind
+      2. Alpha Vantage (美股备选)
+      3. 腾讯今日实时数据兜底
 
-    支持 symbol: usIXIC, usNDX, usSPX, usDJI, hkHSI, jpN225
+    注意：为防止 AkShare 网络请求阻塞，此函数在后台线程运行，
+    不会阻塞 API 响应。
     """
     clean_sym = symbol.lower()
-    rows = []
+    all_rows = []
 
-    # 策略1：Alpha Vantage（全量历史）
-    rows = _fetch_alpha_vantage_daily(clean_sym, limit=limit)
-    if rows:
-        from app.db import buffer_insert_daily, buffer_insert_periodic
-        buffer_insert_daily(rows)
-        logger.info(f"[US Stock] {symbol} AlphaVantage {len(rows)} 条写入 DB")
+    def _fetch_with_timeout(target, args=(), timeout=20):
+        """在后台线程执行目标函数，超时则中止"""
+        import queue, threading, socket
+        result_queue = queue.Queue()
+        def worker():
+            try:
+                result_queue.put(target(*args))
+            except Exception as e:
+                result_queue.put(e)
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        t.join(timeout=timeout)
+        if t.is_alive():
+            logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过")
+            return None
+        val = result_queue.get_nowait()
+        if isinstance(val, Exception):
+            raise val
+        return val
 
-        # 周线+月线聚合
-        import pandas as pd
-        df_d = pd.DataFrame(rows)
-        df_d["date"] = pd.to_datetime(df_d["date"])
-        periodic_rows = []
-        df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
-                            + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
-        for yw, grp in df_d.groupby("year_wk", sort=True):
-            open_  = float(grp.iloc[0]["open"]); close_ = float(grp.iloc[-1]["close"])
-            periodic_rows.append({
-                "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10], "period": "weekly",
-                "open": open_, "high": float(grp["high"].max()), "low": float(grp["low"].min()),
-                "close": close_, "volume": float(grp["volume"].sum()),
-                "change_pct": round((close_-open_)/open_*100 if open_ else 0, 4),
-                "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-            })
-        df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
-        for ym, grp in df_d.groupby("ym", sort=True):
-            open_  = float(grp.iloc[0]["open"]); close_ = float(grp.iloc[-1]["close"])
-            periodic_rows.append({
-                "symbol": clean_sym, "date": str(grp.iloc[0]["date"])[:10], "period": "monthly",
-                "open": open_, "high": float(grp["high"].max()), "low": float(grp["low"].min()),
-                "close": close_, "volume": float(grp["volume"].sum()),
-                "change_pct": round((close_-open_)/open_*100 if open_ else 0, 4),
-                "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
-            })
-        if periodic_rows:
-            buffer_insert_periodic(periodic_rows)
-            logger.info(f"[US Stock] {symbol} 周线+月线 {len(periodic_rows)//2} 组写入")
-        return rows[-100:] if rows else []
+    # 策略 1: AkShare 港股指数 (对标恒生指数 HSI)
+    if clean_sym in ("hsi", "hkhsi"):
+        try:
+            import akshare as ak, pandas as pd
+            logger.info(f"[AkShare HK] 开始拉取恒生指数历史...")
+            df = _fetch_with_timeout(ak.stock_hk_index_daily_sina, args=("HSI",), timeout=25)
+            if df is not None and not df.empty:
+                all_rows = []
+                for _, r in df.iterrows():
+                    dt_str = str(r["date"])
+                    all_rows.append({
+                        "symbol": clean_sym,
+                        "date": dt_str,
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "volume": int(r["volume"]),   # DB schema: INTEGER
+                        "change_pct": 0.0,
+                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                        "data_type": "daily"
+                    })
+                all_rows.sort(key=lambda x: x["date"])
+                for i in range(1, len(all_rows)):
+                    prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
+                    all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
+                
+                try:
+                    from app.db import buffer_insert_daily
+                    buffer_insert_daily(all_rows)
+                    logger.info(f"[AkShare HK] 恒生指数入库成功: {len(all_rows)} 条")
+                except Exception as db_err:
+                    logger.warning(f"[AkShare HK] DB写入失败（不影响返回）: {db_err}")
+                
+                return all_rows
+            else:
+                logger.warning("[AkShare HK] 无数据返回或超时")
+        except Exception as e:
+            logger.warning(f"[AkShare HK] 恒生指数历史拉取失败: {e}")
 
-    # 策略2：腾讯今日实时K线兜底
-    logger.warning(f"[US Stock] {symbol} AlphaVantage 无数据，尝试腾讯今日K线兜底")
+    # 策略 2: AkShare 美股指数 (IXIC, SPX, DJI)
+    # 注意: clean_sym 可能是 "usixic" 或 "ixic"，需要去掉 "us" 前缀后再查表
+    ak_us_map = {"ixic": ".IXIC", "spx": ".INX", "dji": ".DJI"}
+    lookup_sym = clean_sym.replace("us", "", 1) if clean_sym.startswith("us") else clean_sym
+    if lookup_sym in ak_us_map:
+        try:
+            import akshare as ak, pandas as pd
+            ak_code = ak_us_map[lookup_sym]
+            logger.info(f"[AkShare US] 开始拉取美股指数 {ak_code}...")
+            df = _fetch_with_timeout(ak.index_us_stock_sina, args=(ak_code,), timeout=25)
+            if df is not None and not df.empty:
+                all_rows = []
+                for _, r in df.iterrows():
+                    dt_str = str(r["date"])
+                    all_rows.append({
+                        "symbol": clean_sym,   # 存成 usixic / spx / dji
+                        "date": dt_str,
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "volume": int(r["volume"]),  # DB schema: INTEGER
+                        "change_pct": 0.0,
+                        "timestamp": int(pd.Timestamp(dt_str).timestamp()),
+                        "data_type": "daily"
+                    })
+                all_rows.sort(key=lambda x: x["date"])
+                for i in range(1, len(all_rows)):
+                    prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
+                    all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
+                
+                # 直接写入 DB，不抛异常（即使 DB 锁失败也不阻断返回）
+                try:
+                    from app.db import buffer_insert_daily
+                    buffer_insert_daily(all_rows)
+                    logger.info(f"[AkShare US] {clean_sym} 入库成功: {len(all_rows)} 条")
+                except Exception as db_err:
+                    logger.warning(f"[AkShare US] DB写入失败（不影响返回）: {db_err}")
+                
+                # 无论如何都返回数据（即使 DB 写入失败，用户仍能看到图表）
+                return all_rows
+            else:
+                logger.warning("[AkShare US] 无数据返回或超时")
+        except Exception as e:
+            logger.warning(f"[AkShare US] {clean_sym} 历史拉取失败: {e}")
+
+    # 策略 3: Alpha Vantage（作为美股备选）
+    av_rows = _fetch_alpha_vantage_daily(clean_sym, limit=limit)
+    if av_rows:
+        from app.db import buffer_insert_daily
+        buffer_insert_daily(av_rows)
+        return av_rows
+
+    # 策略 4: 腾讯今日实时K线兜底（同步执行，因为是本地HTTP很快）
     today_rows = _fetch_tencent_today(clean_sym)
     if today_rows:
         from app.db import buffer_insert_daily
         buffer_insert_daily(today_rows)
-        logger.info(f"[US Stock] {symbol} 今日K线写入: {today_rows[0]['date']} close={today_rows[0]['close']}")
     return today_rows
+
 
 
 

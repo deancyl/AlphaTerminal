@@ -67,8 +67,8 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
         except Exception as e:
             logger.warning(f"[Macro] Sina fetch failed: {e}")
 
-    # 2) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指，不过代理）
-    qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI")]
+    # 3) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指 + 恒生指数HSI，不过代理）
+    qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI", "hkHSI")]
     if qt_syms:
         try:
             with httpx.Client(timeout=5.0) as client:
@@ -84,8 +84,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                     continue
                 try:
                     sym = line.split("=")[0].replace("v_", "").strip('" \n')
-                    # 腾讯 qt 格式: v_hkVHSI="100~港股~VHSI~27.850~29.220~..."
-                    # 分隔符是 ~ 不是 ,
+                    # 腾讯 qt 格式: v_hkHSI="51~恒生指数~HSI~25357.23~..."
                     raw_val = line.split("=", 1)[1].strip('";\r\n ')
                     fields = raw_val.split("~")
                     results[sym] = [f.strip() for f in fields]
@@ -138,23 +137,22 @@ def _get_cnyusd_approx() -> float:
     return 7.25
 
 
-def _parse_hkvhsi(data: dict) -> tuple[float, float, str]:
+def _parse_hkhsi(data: dict) -> tuple[float, float, str]:
     """
-    解析 hkVHSI（恒指波幅指数，腾讯 qt 格式，~分隔）
-    f[3]=当前价, f[4]=昨收, f[30]=时间, f[31]=涨跌额, f[32]=涨跌幅%
+    解析 hkHSI（恒生指数，腾讯 qt 格式，~分隔）
+    f[3]=当前价, f[4]=昨收, f[31]=涨跌额, f[32]=涨跌幅%
     """
-    f = data.get("hkVHSI", [])
+    f = data.get("hkHSI", [])
     if len(f) < 33:
-        raise ValueError("hkVHSI data too short")
+        raise ValueError("hkHSI data too short")
     try:
-        price = float(f[3])   # 当前 VHSI
+        price = float(f[3])   # 当前 HSI
         prev  = float(f[4])   # 昨收
-        # f[32] = 涨跌幅%，f[31] = 涨跌额
         pct   = float(f[32]) if f[32] else (((price - prev) / prev * 100) if prev else 0.0)
-        # f[30] = "2026/03/31 16:00:00"，提取时间部分
-        tick  = f[30][-8:-3] if f[30] and len(f[30]) > 4 else ""  # "HH:MM"
+        # f[30] = "2026/04/02 18:31:21"
+        tick  = f[30][-8:-3] if f[30] and len(f[30]) > 4 else ""
     except Exception as e:
-        raise ValueError(f"hkVHSI parse error: {e}")
+        raise ValueError(f"hkHSI parse error: {e}")
     return round(price, 2), round(pct, 2), tick
 
 
@@ -173,6 +171,33 @@ def _parse_hf_cl(data: dict) -> tuple[float, float, str]:
         tick  = f[6] if len(f) > 6 else ""
     except Exception as e:
         raise ValueError(f"hf_CL parse error: {e}")
+    return round(price, 2), round(pct, 2), tick
+
+
+def _parse_hkvhsi(data: dict) -> tuple[float, float, str]:
+    """
+    解析 hkVHSI（恒指波幅指数，腾讯 qt 格式）
+    _fetch_from_sina 返回 list：f[3]=当前 VHSI 值, f[4]=昨收, f[32]=涨跌幅%
+    若解析失败（格式不符），返回 (20.0, 0.0, "") 而不崩溃
+    """
+    f = data.get("hkVHSI", [])
+    if len(f) < 5:
+        raise ValueError("hkVHSI data too short")
+    try:
+        price = float(f[3])   # VHSI 当前值
+        prev  = float(f[4]) if f[4] else price
+        # f[32] 是涨跌幅%，若为空则用 (price-prev)/prev 推算
+        pct = 0.0
+        if len(f) > 32 and f[32]:
+            try:
+                pct = float(f[32])
+            except (ValueError, TypeError):
+                pct = (price - prev) / prev * 100 if prev else 0.0
+        else:
+            pct = (price - prev) / prev * 100 if prev else 0.0
+        tick = f[30][-8:-3] if len(f) > 30 and f[30] and len(f[30]) > 4 else ""
+    except (ValueError, IndexError, TypeError) as e:
+        raise ValueError(f"hkVHSI parse error: {e}")
     return round(price, 2), round(pct, 2), tick
 
 
@@ -499,16 +524,20 @@ async def market_quote(symbol: str):
 def _clean_symbol(raw: str) -> str:
     """
     规范化 symbol：
-    - A 股 sh/sz 前缀：去掉（DB 存的是纯数字如 '000001'）
-    - 美股 us/hk jp/宏观前缀：保留（DB 存 'usIXIC' 等）
+    - A 股 sh/sz 前缀：去掉（DB 存纯数字如 '000001'）
+    - 美股/港股/日经前缀：统一去掉（DB 存 'ixic'/'hsi' 等，不带 us/hk/jp 前缀）
     - macro 前缀：去掉
+    - 返回纯数字/字母（用于 DB 查询），全部小写
     """
-    s = raw.lower().strip()
-    if s.startswith("macro"):
+    s = raw.strip()
+    # macro 前缀
+    if s.lower().startswith("macro"):
         s = s[len("macro"):].lstrip('_')
+    # 去掉 us/hk/jp 前缀（所有非 A 股指数存库时不带前缀）
+    s = re.sub(r"^(us|hk|jp)", "", s, flags=re.IGNORECASE)
     # 去掉 A 股前缀（DB 用纯数字存 A 股）
-    s = s.replace("sh", "").replace("sz", "")
-    return s
+    s = s.replace("sh", "").replace("sz", "").replace("SH", "").replace("SZ", "")
+    return s.lower()
 
 @router.get("/market/history/{symbol}")
 async def market_history(
@@ -544,7 +573,7 @@ async def market_history(
     _MIN_KLINE_SUPPORTED = {"000001", "000300", "399001", "399006", "000688"}
     _FREQUENCY_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
-    # ── 非 A 股指数/宏观（美股/HK/JP/大宗）：走 yfinance 穿透路径 ───────────
+    # ── 非 A 股指数/宏观（美股/HK/JP/大宗）：走 AkShare 穿透路径 ───────────
     _NON_ASHARE = (
         clean_sym.startswith("us") or clean_sym.startswith("hk")
         or clean_sym.startswith("jp") or clean_sym.startswith("macro")
@@ -562,42 +591,57 @@ async def market_history(
         raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
         total    = get_daily_count(clean_sym)
 
-        if not raw_rows and offset == 0:
-            logger.info(f"[Market History] 本地无 {clean_sym}，触发 yfinance 穿透…")
+        # 如果本地数据少于50条（第一页），触发 AkShare 补全
+        if (not raw_rows or (len(raw_rows) < 50 and offset == 0)) and offset == 0:
+            import threading
+            def _bg_fetch():
+                try:
+                    from app.services.data_fetcher import fetch_us_stock_history
+                    fetch_us_stock_history(clean_sym, period=period, limit=5000)
+                    logger.info(f"[Market History] 后台补全 {clean_sym} 完成")
+                except Exception as e:
+                    logger.error(f"[Market History] 后台补全失败: {e}")
             fetching = True
+            threading.Thread(target=_bg_fetch, daemon=True).start()
+
+            # 同时在当前线程同步拉取（不等后台），直接返回给前端
             try:
                 from app.services.data_fetcher import fetch_us_stock_history
-                rows = fetch_us_stock_history(clean_sym, period=period, limit=5000)
-                if rows:
-                    raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
-                    total    = get_daily_count(clean_sym)
+                sync_rows = fetch_us_stock_history(clean_sym, period=period, limit=5000)
+                if sync_rows:
+                    raw_rows = sync_rows
+                    total = len(sync_rows)
+                    fetching = False   # 同步已拿到数据，无需后台
+                    logger.info(f"[Market History] 同步返回 {clean_sym}: {len(sync_rows)} 条")
             except Exception as e:
-                logger.error(f"[Market History] yfinance 穿透失败: {e}")
+                logger.warning(f"[Market History] 同步拉取失败，回退DB: {e}")
 
-        history  = list(reversed(raw_rows))
-        has_more = (offset + len(raw_rows)) < total
+        history  = list(reversed(raw_rows)) if raw_rows else []
+        has_more = (offset + len(raw_rows)) < total if raw_rows else False
         chart_type = "candlestick"
 
     # ── 分钟K线（Eastmoney N分钟接口，仅支持部分 A 股指数）───────────────
     elif period in _FREQUENCY_MAP:
         freq = _FREQUENCY_MAP[period]
-        if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
+        if clean_sym in _MIN_KLINE_SUPPORTED:
             from app.services.data_fetcher import fetch_index_minute_history
             all_data = fetch_index_minute_history(clean_sym, limit=limit, frequency=freq, offset=offset, trade_date=trade_date)
             history  = all_data
             has_more = len(all_data) >= min(limit, 300)
+            chart_type = "line"   # 分钟K也用线图（与传统"分时"一致）
         else:
             history = []
-        chart_type = "candlestick"
+            chart_type = "candlestick"
 
     elif period == "minutely":
-        if clean_sym.upper() in _MIN_KLINE_SUPPORTED or clean_sym in _MIN_KLINE_SUPPORTED:
+        if clean_sym in _MIN_KLINE_SUPPORTED:
             from app.services.data_fetcher import fetch_index_minute_history
             history  = fetch_index_minute_history(clean_sym, limit=min(limit, 300), frequency=5, offset=offset)
             has_more = len(history) >= min(limit, 300)
+            chart_type = "line"
         else:
             history = []
-        chart_type = "line"
+            chart_type = "line"
 
     # ── A 股日K线（支持个股 + 指数，自动按需穿透）───────────────────────────
     elif period == "daily":

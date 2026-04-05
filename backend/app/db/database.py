@@ -69,14 +69,32 @@ def buffer_insert(data_list):
         conn.commit(); conn.close()
 
 def buffer_insert_daily(data_list):
+    """
+    写入 market_data_daily（注意：实际表无 change_pct 列，change_pct 仅为展示计算）
+    实际列: id, symbol, date, open, high, low, close, volume, timestamp, data_type
+    """
     if not data_list: return
     with _lock:
         conn = _get_conn()
+        ok = fail = 0
         for i in data_list:
-            conn.execute("INSERT OR REPLACE INTO market_data_daily VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (i.get('symbol',''), i.get('date',''), i.get('open',0), i.get('high',0), i.get('low',0), 
-                 i.get('close',0), i.get('volume',0), i.get('change_pct',0), i.get('timestamp',0), 'daily'))
-        conn.commit(); conn.close()
+            try:
+                conn.execute(
+                    "INSERT OR REPLACE INTO market_data_daily "
+                    "(symbol, date, open, high, low, close, volume, timestamp, data_type) "
+                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    (str(i.get('symbol','')), str(i.get('date','')),
+                     float(i.get('open',0)), float(i.get('high',0)), float(i.get('low',0)),
+                     float(i.get('close',0)), int(i.get('volume',0)),
+                     int(i.get('timestamp',0)), str(i.get('data_type','daily'))))
+                ok += 1
+            except (sqlite3.IntegrityError, sqlite3.OperationalError, ValueError, TypeError) as e:
+                fail += 1
+                continue
+        conn.commit()
+        conn.close()
+        if fail:
+            logger.warning(f"[DB] buffer_insert_daily: {ok} ok, {fail} failed")
 
 def buffer_insert_periodic(data_list, period=None):
     if not data_list: return
@@ -146,7 +164,19 @@ def get_daily_count(symbol):
         conn.close()
         return row["cnt"] if row else 0
 
+def get_periodic_count(symbol, period):
+    """返回某标的某周期K线总数"""
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT COUNT(*) as cnt FROM market_data_periodic WHERE symbol=? AND period=?",
+            (symbol, period)
+        ).fetchone()
+        conn.close()
+        return row["cnt"] if row else 0
+
 def get_periodic_history(symbol, period, limit=200, offset=0):
+    """获取周期K线（周线/月线），支持分页"""
     with _lock:
         conn = _get_conn()
         if offset > 0:
@@ -162,25 +192,4 @@ def get_periodic_history(symbol, period, limit=200, offset=0):
         conn.close()
         return [dict(r) for r in rows]
 
-def get_periodic_count(symbol, period):
-    """返回某标的某周期K线总数"""
-    with _lock:
-        conn = _get_conn()
-        row = conn.execute(
-            "SELECT COUNT(*) as cnt FROM market_data_periodic WHERE symbol=? AND period=?",
-            (symbol, period)
-        ).fetchone()
-        conn.close()
-        return row["cnt"] if row else 0
-
 get_price_history = get_daily_history
-
-def get_periodic_history(symbol, period, limit=200):
-    with _lock:
-        conn = _get_conn()
-        rows = conn.execute("""
-            SELECT * FROM market_data_periodic WHERE symbol=? AND period=? 
-            ORDER BY date DESC LIMIT ?
-        """, (symbol, period, limit)).fetchall()
-        conn.close()
-        return [dict(r) for r in rows]

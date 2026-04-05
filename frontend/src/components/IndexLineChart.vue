@@ -2,27 +2,33 @@
   <div class="w-full h-full min-h-[120px] relative flex flex-col">
 
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
-    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700/50 bg-terminal-bg/60">
-      <span v-if="isLoading" class="text-[10px] font-mono text-terminal-dim animate-pulse">加载中…</span>
-      <span v-else class="text-[10px] font-mono text-terminal-dim whitespace-nowrap">{{ currentName }}</span>
-      <span class="text-[11px] font-mono font-medium"
-            :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
-        {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
-      </span>
-      <span class="text-[10px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
-        {{ hoverBar.change_pct >= 0 ? '+' : '' }}{{ hoverBar.change_pct?.toFixed(2) ?? '--' }}%
-      </span>
-      <span class="text-[10px] font-mono text-gray-500">|</span>
-      <span class="text-[10px] font-mono text-gray-400">
-        {{ hoverBar.time || '--' }}
-      </span>
+    <div class="shrink-0 flex flex-col border-b border-gray-700/50 bg-terminal-bg/60">
+      <div class="px-2 py-1 flex items-center justify-between">
+        <span class="text-[11px] font-bold text-gray-200 tracking-wider">{{ currentName }}</span>
+        <span v-if="isLoading" class="text-[10px] font-mono text-terminal-dim animate-pulse">加载中…</span>
+      </div>
+      <div class="flex items-center gap-3 px-2 py-1">
+        <span class="text-[13px] font-mono font-medium"
+              :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+          {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
+        </span>
+        <span class="text-[11px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+          {{ hoverBar.change_pct >= 0 ? '+' : '' }}{{ hoverBar.change_pct?.toFixed(2) ?? '--' }}%
+        </span>
+        <span class="text-[10px] font-mono text-gray-400 ml-auto">
+          {{ hoverBar.time || '--' }}
+        </span>
+      </div>
       <template v-if="hoverBar.open != null">
-        <span class="text-[10px] font-mono text-gray-500">|</span>
-        <span class="text-[10px] font-mono text-gray-400">开<span class="text-gray-200 ml-1">{{ hoverBar.open?.toFixed(2) }}</span></span>
-        <span class="text-[10px] font-mono text-gray-400">高<span class="text-red-300 ml-1">{{ hoverBar.high?.toFixed(2) }}</span></span>
-        <span class="text-[10px] font-mono text-gray-400">低<span class="text-green-300 ml-1">{{ hoverBar.low?.toFixed(2) }}</span></span>
-        <span class="text-[10px] font-mono text-gray-400">收<span class="text-gray-200 ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
-        <span class="text-[10px] font-mono text-gray-400">量<span class="text-gray-200 ml-1">{{ ((hoverBar.volume || 0) / 1e8).toFixed(2) }}亿</span></span>
+        <div class="flex items-center gap-2 px-2 pb-1">
+          <span class="text-[10px] font-mono text-gray-500">开<span class="text-gray-200 ml-1">{{ hoverBar.open?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-gray-500">高<span class="text-red-300 ml-1">{{ hoverBar.high?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-gray-500">低<span class="text-green-300 ml-1">{{ hoverBar.low?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-gray-500">收<span class="text-gray-200 ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-gray-500 ml-auto">
+            量<span class="text-gray-200 ml-1">{{ hoverBar.volume != null ? (hoverBar.volume >= 1e8 ? (hoverBar.volume / 1e8).toFixed(2) + '亿' : (hoverBar.volume / 1e4).toFixed(2) + '万') : '--' }}</span>
+          </span>
+        </div>
       </template>
     </div>
 
@@ -58,7 +64,7 @@ const chartRef     = ref(null)
 const chartError   = ref('')
 const isLoading    = ref(false)
 const chartType    = ref('candlestick')
-const currentName  = ref(props.name || '上证指数')
+const currentName  = ref('指标图表')
 
 let   chartInstance = null
 let   resizeObserver = null
@@ -338,7 +344,7 @@ function buildKLineOption(hist) {
       },
     },
     dataZoom: [
-      { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 90, end: 100, zoomOnMouseWheel: true },
+      { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
         borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)',
         handleStyle: { color: '#60a5fa', borderColor: '#60a5fa' },
@@ -450,7 +456,7 @@ function buildLineOption(hist) {
       },
     },
     dataZoom: [
-      { type: 'inside', xAxisIndex: [0, 1], start: 90, end: 100, zoomOnMouseWheel: true },
+      { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
         borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)',
         handleStyle: { color: '#60a5fa', borderColor: '#60a5fa' },
@@ -601,7 +607,7 @@ async function fetchAndRender() {
     const opt = buildOption(sortedHist, type)
     opt._rawHist = data.history || []
 
-    currentName.value = props.name || '上证指数'
+    currentName.value = props.name || '指标图表'
 
     if (!chartInstance) {
       chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
@@ -628,11 +634,15 @@ function retryChart() { chartError.value = ''; fetchAndRender() }
 
 // props.symbol 变化时立即重置名称（不等数据加载）
 watch(() => props.symbol, async (sym) => {
+  console.log('[KLine] watch: props.symbol changed', { sym, props: { name: props.name, symbol: props.symbol } })
   // symbol 变化时：先清空旧名称显示（立即响应），等数据回来再显示新名称
-  currentName.value = props.name || '上证指数'
+  currentName.value = props.name || '指标图表'
+  console.log('[KLine] watch: currentName set to', currentName.value)
   await fetchAndRender()
+  console.log('[KLine] watch: fetchAndRender completed')
   // fetchAndRender 之后用正确的 props.name 更新一次
-  currentName.value = props.name || '上证指数'
+  currentName.value = props.name || '指标图表'
+  console.log('[KLine] watch: currentName updated to', currentName.value)
 })
 
 watch(() => [props.symbol, props.url, props.indicators], () => { fetchAndRender() }, { deep: true })

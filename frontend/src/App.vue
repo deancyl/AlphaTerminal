@@ -158,6 +158,10 @@ async function fetchMarketData() {
       fetch('/api/v1/market/sectors').then(r => r.ok ? r.json().then(d => d.sectors || []) : []),
       fetch('/api/v1/market/derivatives').then(r => r.ok ? r.json().then(d => d.derivatives || []) : []),
     ])
+    // 将 macro 数据合并到 marketOverview 中
+    if (ov) {
+      ov.macro = mc
+    }
     marketOverview.value  = ov
     macroData.value       = mc
     ratesData.value       = rt

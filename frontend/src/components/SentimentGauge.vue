@@ -76,11 +76,11 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(item, key) in windItems" :key="key"
+          <tr v-for="(item, key) in allItems" :key="key"
               class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
-              @click="$emit('symbol-click', { symbol: key, name: item.name })">
+              @click="$emit('symbol-click', { symbol: item.key, name: item.name })">
             <td class="py-1.5 text-gray-300">{{ item.name }}</td>
-            <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index) }}</td>
+            <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index || item.price) }}</td>
             <td class="py-1.5 text-right font-mono"
                 :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
@@ -141,6 +141,12 @@ const newsSentiment = ref({
 })
 
 const windItems = computed(() => props.marketData?.wind || {})
+const macroItems = computed(() => props.marketData?.macro || [])
+const allItems = computed(() => {
+  const wind = Object.entries(windItems.value || {}).map(([key, value]) => ({ key, ...value }))
+  const macro = macroItems.value.map((item, index) => ({ key: `macro_${index}`, ...item }))
+  return [...wind, ...macro]
+})
 
 const upPct = computed(() => {
   const t = data.value.total || 1
