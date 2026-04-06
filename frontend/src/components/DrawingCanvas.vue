@@ -23,6 +23,7 @@ const props = defineProps({
   activeTool:     { type: String,  default: '' },   // '' | 'line' | 'ray' | 'segment' | 'hray' | 'channel' | 'fib' | 'rect' | 'text'
   activeColor:    { type: String,  default: '#fbbf24' },
   magnetMode:     { type: Boolean, default: true },
+  locked:         { type: Boolean, default: false },  // 锁定时禁止绘制/拖拽
   symbol:        { type: String,  default: '' },
 })
 
@@ -265,6 +266,7 @@ function getCanvasPos(e) {
 
 function onMouseDown(e) {
   if (e.button !== 0) return
+  if (props.locked) return
   const { x, y } = getCanvasPos(e)
 
   if (props.activeTool === 'text') {
@@ -281,11 +283,14 @@ function onMouseDown(e) {
     return
   }
 
-  // 检查是否点击了已有图形的控制点
+  // 检查是否点击了已有图形的端点（不支持拖拽中段）
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
-    dragging.value = { ...hit, startX: x, startY: y }
+    // 只有端点才能拖拽（pointIdx >= 0）
+    if (hit.pointIdx >= 0) {
+      dragging.value = { ...hit, startX: x, startY: y }
+    }
     redraw()
     return
   }
@@ -306,12 +311,25 @@ function onMouseMove(e) {
   mouseX.value = x
   mouseY.value = y
 
+  // 更新光标样式
+  if (props.locked) {
+    cursorStyle.value = 'not-allowed'
+  } else if (props.activeTool) {
+    cursorStyle.value = 'crosshair'
+  } else if (dragging.value) {
+    cursorStyle.value = 'grabbing'
+  } else if (hoveredId.value) {
+    cursorStyle.value = hitTest(x, y)?.pointIdx === -1 ? 'move' : 'crosshair'
+  } else {
+    cursorStyle.value = 'default'
+  }
+
   if (dragging.value) {
-    // 拖拽已有图形的控制点
+    // 拖拽已有图形的控制点（端点）
     const snap = snapToKLine(x, y)
     const { idx, price } = toData(x, y)
     const shape = shapes.value.find(s => s.id === dragging.value.id)
-    if (shape && shape.points[dragging.value.pointIdx]) {
+    if (shape && shape.points[dragging.value.pointIdx] !== undefined && dragging.value.pointIdx >= 0) {
       shape.points[dragging.value.pointIdx] = { x: snap.x, y: snap.y, price: snap.price ?? price, idx }
       redraw()
     }
@@ -383,9 +401,9 @@ function onContextMenu(e) {
       redraw()
     }
   } else {
-    // 无图形处右键：区间统计触发
+    // 无图形处右键：区间统计触发（通知父组件处理）
     const { idx, price } = toData(x, y)
-    emit('range-select', { idx, price })
+    emit('range-select', { x, y, idx, price })
   }
 }
 
@@ -393,14 +411,57 @@ function onContextMenu(e) {
 function hitTest(x, y) {
   const R = 8
   for (const shape of shapes.value) {
+    // 先检测端点
     for (let i = 0; i < shape.points.length; i++) {
       const pt = toPixel(shape.points[i].price, shape.points[i].idx)
       if (Math.hypot(pt.x - x, pt.y - y) < R) {
         return { id: shape.id, pointIdx: i }
       }
     }
+    // 检测线段（line/ray/segment/hray）——悬停时高亮，但不允许拖拽中段
+    if (['line','ray','segment','hray'].includes(shape.type) && shape.points.length >= 2) {
+      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
+      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
+      const dist = distToSegment(x, y, p0.x, p0.y, p1.x, p1.y)
+      if (dist < R + 6) {
+        hoveredId.value = shape.id  // 高亮整条线
+        return { id: shape.id, pointIdx: -1 }  // -1 = 中段（选中但不可拖拽）
+      }
+    }
+    // 检测 fib 分割线
+    if (shape.type === 'fib' && shape.points.length >= 2) {
+      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
+      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+      for (const level of levels) {
+        const y_ = p0.y + (snap.y - p0.y) * level
+        if (Math.abs(y_ - y) < R + 6) return { id: shape.id, pointIdx: -1 }
+      }
+    }
+    // 检测矩形
+    if (shape.type === 'rect' && shape.points.length >= 2) {
+      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
+      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
+      const minX = Math.min(p0.x, p1.x), maxX = Math.max(p0.x, p1.x)
+      const minY = Math.min(p0.y, p1.y), maxY = Math.max(p0.y, p1.y)
+      const R2 = R + 6
+      if (x >= minX - R2 && x <= maxX + R2 && y >= minY - R2 && y <= maxY + R2) {
+        const d = Math.min(
+          x >= minX - R2 && x <= maxX + R2 ? Math.min(Math.abs(y - minY), Math.abs(y - maxY)) : Infinity,
+          y >= minY - R2 && y <= maxY + R2 ? Math.min(Math.abs(x - minX), Math.abs(x - maxX)) : Infinity,
+        )
+        if (d < R2) return { id: shape.id, pointIdx: -1 }
+      }
+    }
   }
   return null
+}
+
+function distToSegment(px, py, x0, y0, x1, y1) {
+  const dx = x1 - x0, dy = y1 - y0
+  if (dx === 0 && dy === 0) return Math.hypot(px - x0, py - y0)
+  const t = Math.max(0, Math.min(1, ((px - x0) * dx + (py - y0) * dy) / (dx * dx + dy * dy)))
+  return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
 }
 
 // ── 工具函数 ─────────────────────────────────────────────────
@@ -462,17 +523,40 @@ onMounted(() => {
   resizeCanvas()
   loadFromStorage()
   window.addEventListener('resize', resizeCanvas)
+  // 监听图表容器尺寸变化（ECharts 内部 resize 会触发）
+  if (canvasRef.value?.parentElement) {
+    const ro = new ResizeObserver(() => resizeCanvas())
+    ro.observe(canvasRef.value.parentElement)
+  }
+  // 键盘快捷键
+  window.addEventListener('keydown', onKeyDown)
 })
 
+let _canvasRo = null
 onUnmounted(() => {
   cancelAnimationFrame(animationFrame)
   window.removeEventListener('resize', resizeCanvas)
+  window.removeEventListener('keydown', onKeyDown)
+  _canvasRo?.disconnect()
 })
 
 // symbol 变化时加载对应画线数据
 watch(() => props.symbol, () => { loadFromStorage() })
 watch([() => props.activeTool, () => props.activeColor, () => props.magnetMode], () => redraw())
 watch(shapes, () => redraw(), { deep: true })
+
+// ── 键盘快捷键 ─────────────────────────────────────────────
+const KEY_TOOL = { l:'line', r:'ray', s:'segment', h:'hray', c:'channel', f:'fib', q:'rect', t:'text' }
+function onKeyDown(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  const key = e.key.toLowerCase()
+  if (e.key === 'Escape') { selectedId.value = null; drawing.value = null; redraw() }
+  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected() }
+  else if (KEY_TOOL[key]) {
+    // 通过 emit 冒泡给父组件，由父组件更新 drawTool
+    emit('tool-change', KEY_TOOL[key])
+  }
+}
 
 // ── 暴露方法 ────────────────────────────────────────────────
 defineExpose({ clearAll, deleteSelected, shapes })

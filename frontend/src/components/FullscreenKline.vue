@@ -55,7 +55,8 @@
         <div ref="chartRef" class="w-full h-full"></div>
         <DrawingCanvas v-if="isFull && drawVisible" ref="drawingCanvasRef" class="absolute inset-0 z-10"
           :chartInstance="chartInstance" :activeTool="drawTool" :activeColor="drawColor"
-          :magnetMode="magnetMode" :symbol="symbol" />
+          :magnetMode="magnetMode" :locked="drawLocked" :symbol="symbol"
+          @range-select="onRangeSelect" />
       </div>
       <QuotePanel v-if="isFull" class="shrink-0"
         :class="isMobile ? 'order-last' : ''"
@@ -410,6 +411,11 @@ onBeforeUnmount(() => { window.removeEventListener('resize', onResize) })
 onUnmounted(() => { resizeObserver?.disconnect(); chartInstance?.dispose(); chartInstance = null })
 
 function onResize() { windowWidth.value = window.innerWidth }
+
+function onRangeSelect({ idx, price }) {
+  // TODO: 显示区间统计面板（从历史数据计算区间涨跌幅/换手率变化）
+  console.log('[FullscreenKline] range-select idx:', idx, 'price:', price)
+}
 </script>
 
 <style scoped>
