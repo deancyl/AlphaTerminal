@@ -8,40 +8,28 @@
     <div class="px-3 py-2.5 border-b border-gray-700/40">
 
       <!-- 标的标题 -->
-      <div class="flex items-center justify-between mb-2">
+      <div class="flex items-center justify-between mb-3">
         <div>
-          <div class="text-[13px] font-bold text-gray-100 leading-tight">{{ data.name || symbol }}</div>
+          <div class="text-[13px] font-bold text-gray-100 leading-tight">{{ panelName || symbol }}</div>
           <div class="text-[10px] text-gray-500 font-mono mt-0.5">{{ symbol }}</div>
         </div>
+        <!-- 最新价（大字醒目） -->
         <div class="text-right">
-          <div class="text-[18px] font-mono font-bold" :class="priceColorClass">
-            {{ data.price != null ? data.price.toFixed(3) : '--' }}
+          <div class="text-[28px] font-mono font-bold leading-none" :class="priceColorClass">
+            {{ displayPrice }}
           </div>
-          <div class="text-[11px] font-mono mt-0.5" :class="priceColorClass">
-            <span>{{ data.change >= 0 ? '+' : '' }}{{ data.change?.toFixed(3) ?? '--' }}</span>
-            <span class="ml-1">({{ data.change_pct >= 0 ? '+' : '' }}{{ data.change_pct?.toFixed(2) ?? '--' }}%)</span>
+          <div class="text-[12px] font-mono mt-1" :class="priceColorClass">
+            <span>{{ displayChange }}</span>
+            <span class="ml-1">({{ displayChangePct }})</span>
           </div>
         </div>
       </div>
 
-      <!-- 基础盘口 -->
-      <div class="grid grid-cols-4 gap-x-2 gap-y-1 mb-2">
+      <!-- 基础盘口（加大行间距） -->
+      <div class="space-y-2 mb-2">
         <div v-for="item in basicFields" :key="item.key" class="flex justify-between items-center">
-          <span class="text-[10px] text-gray-500">{{ item.label }}</span>
-          <span class="text-[11px] font-mono text-gray-200">{{ item.formatter(data[item.key]) }}</span>
-        </div>
-      </div>
-
-      <!-- 估值与振幅 -->
-      <div class="border-t border-gray-700/30 pt-2 mt-1">
-        <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">估值与振幅</div>
-        <div class="grid grid-cols-2 gap-x-3 gap-y-1">
-          <div v-for="item in valuationFields" :key="item.key" class="flex justify-between items-center">
-            <span class="text-[10px] text-gray-500">{{ item.label }}</span>
-            <span class="text-[11px] font-mono" :class="item.valueClass ? item.valueClass(data[item.key]) : 'text-gray-200'">
-              {{ item.formatter ? item.formatter(data[item.key]) : (data[item.key] != null ? data[item.key] : '--') }}
-            </span>
-          </div>
+          <span class="text-[11px] text-gray-500">{{ item.label }}</span>
+          <span class="text-[12px] font-mono font-medium text-gray-200">{{ item.formatter(item.sourceFn ? item.sourceFn() : data[item.key]) }}</span>
         </div>
       </div>
 
@@ -132,46 +120,44 @@
 
     <!-- ═══ Module 3: 资金流向 ═══════════════════════════════════════ -->
     <div class="px-3 py-2.5 border-b border-gray-700/40">
-      <div class="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">资金流向</div>
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider">资金流向</div>
+        <div v-if="fundDonutData.isMock" class="text-[9px] text-gray-600 italic">模拟数据</div>
+      </div>
 
-      <template v-if="data.fund_main_net != null">
-        <!-- 主环路：环形图 -->
-        <div class="flex items-center gap-3 mb-3">
-          <div ref="fundDonutRef" style="width:72px;height:72px;"></div>
-          <div class="flex-1">
-            <div class="text-[11px] text-gray-300 mb-1">主力净流入</div>
-            <div class="text-[15px] font-mono font-bold" :class="data.fund_main_net >= 0 ? 'text-red-400' : 'text-green-400'">
-              {{ data.fund_main_net >= 0 ? '+' : '' }}{{ formatAmount(data.fund_main_net) }}
-            </div>
-            <div class="flex gap-2 mt-1">
-              <span class="text-[10px] text-red-400">入 {{ formatAmount(data.fund_main_in) }}</span>
-              <span class="text-[10px] text-green-400">出 {{ formatAmount(data.fund_main_out) }}</span>
-            </div>
+      <!-- 主环路：环形图 -->
+      <div class="flex items-center gap-3 mb-3">
+        <div ref="fundDonutRef" style="width:72px;height:72px;"></div>
+        <div class="flex-1">
+          <div class="text-[11px] text-gray-300 mb-1">主力净流入</div>
+          <div class="text-[15px] font-mono font-bold" :class="fundDonutData.net >= 0 ? 'text-red-400' : 'text-green-400'">
+            {{ fundDonutData.net >= 0 ? '+' : '' }}{{ formatAmount(fundDonutData.net) }}
+          </div>
+          <div class="flex gap-2 mt-1">
+            <span class="text-[10px] text-red-400">入 {{ formatAmount(fundDonutData.inAmt) }}</span>
+            <span class="text-[10px] text-green-400">出 {{ formatAmount(fundDonutData.outAmt) }}</span>
           </div>
         </div>
-        <!-- 各级拆解 -->
-        <div class="space-y-1.5">
-          <div v-for="level in fundLevels" :key="level.key"
-               class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-500 w-8 shrink-0">{{ level.label }}</span>
-            <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-              <div class="h-full rounded-full" :style="{ width: level.width + '%', backgroundColor: level.color }"></div>
-            </div>
-            <span class="text-[10px] font-mono w-14 text-right" :class="level.value >= 0 ? 'text-red-400' : 'text-green-400'">
-              {{ level.value >= 0 ? '+' : '' }}{{ formatAmount(level.value) }}
+      </div>
+
+      <!-- 各级拆解条 -->
+      <div class="space-y-2">
+        <div v-for="level in fundLevels" :key="level.label"
+             class="flex items-center gap-2">
+          <span class="text-[10px] text-gray-500 w-8 shrink-0">{{ level.label }}</span>
+          <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+            <div class="h-full rounded-full" :style="{ width: level.width + '%', backgroundColor: level.color }"></div>
+          </div>
+          <div class="flex flex-col items-end">
+            <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-red-400' : 'text-green-400'">
+              {{ level.inAmt >= 0 ? '+' : '' }}{{ formatAmount(level.inAmt) }}
+            </span>
+            <span class="text-[9px] font-mono" :class="level.outAmt >= 0 ? 'text-red-400' : 'text-green-400'">
+              {{ level.outAmt >= 0 ? '+' : '' }}{{ formatAmount(level.outAmt) }}
             </span>
           </div>
         </div>
-      </template>
-
-      <template v-else>
-        <!-- 暂无数据占位 -->
-        <div class="flex flex-col items-center py-4">
-          <div class="text-2xl mb-2 opacity-30">💧</div>
-          <div class="text-[11px] text-gray-500 text-center">资金流向数据需券商数据接口</div>
-          <div class="text-[10px] text-gray-600 mt-1">当前为模拟展示结构</div>
-        </div>
-      </template>
+      </div>
     </div>
 
     <!-- ═══ Module 4: 板块联动（个股） ════════════════════════════════ -->
@@ -224,29 +210,76 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 const props = defineProps({
   symbol:       { type: String,  default: '' },
   name:         { type: String,  default: '' },
-  // 实时快照数据（来自API）
-  realtimeData: { type: Object,  default: () => ({}) },
   // 十字光标历史快照（来自图表hover）
-  snapshotData: { type: Object,  default: null },   // null=使用realtimeData
+  snapshotData: { type: Object,  default: null },
+  // 来自 quote_detail API 的聚合数据
+  realtimeData: { type: Object,  default: () => ({}) },
+  // 最新一根K线数据（来自图表渲染数据，最可靠）
+  latestCandle: { type: Object,  default: null },
   isMobile:     { type: Boolean, default: false },
   panelWidth:   { type: Number,  default: 300 },
 })
 
+// snapshotData 优先，否则用 realtimeData + latestCandle 合并
 const data = computed(() => props.snapshotData || props.realtimeData)
 const isCrosshair = computed(() => !!props.snapshotData)
 
+// 名称：优先用 realtimeData.name，其次 props.name
+const panelName = computed(() => data.value.name || props.name || props.symbol)
+
+// ── 图表K线数据（最可靠的价格来源）─────────────────────────────
+// latestCandle 格式: { open, high, low, close, volume, change_pct, ... }
+const cdl = computed(() => props.latestCandle)
+
+// 最新价格（优先取K线数据，否则取API数据）
+const displayPrice = computed(() => {
+  if (cdl.value?.close != null) return cdl.value.close.toFixed(3)
+  if (data.value.price != null && data.value.price > 0) return data.value.price.toFixed(3)
+  return '--'
+})
+
+const displayChange = computed(() => {
+  if (cdl.value?.change != null) {
+    const c = cdl.value.change
+    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  }
+  if (data.value.change != null && data.value.change !== 0) {
+    const c = data.value.change
+    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  }
+  return '--'
+})
+
+const displayChangePct = computed(() => {
+  if (cdl.value?.change_pct != null) {
+    const c = cdl.value.change_pct
+    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  }
+  if (data.value.change_pct != null && data.value.change_pct !== 0) {
+    const c = data.value.change_pct
+    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  }
+  return '--'
+})
+
+// change_pct 用于颜色判定
+const _changePct = computed(() => {
+  if (cdl.value?.change_pct != null) return cdl.value.change_pct
+  if (data.value.change_pct != null) return data.value.change_pct
+  return null
+})
+
 // ── 颜色 ──────────────────────────────────────────────────────
 const priceColor = computed(() => {
-  const c = data.value.change_pct
+  const c = _changePct.value
   if (c == null) return '#9ca3af'
   return c >= 0 ? '#ef232a' : '#14b143'
 })
 const priceColorClass = computed(() => {
-  const c = data.value.change_pct
+  const c = _changePct.value
   if (c == null) return 'text-gray-400'
   return c >= 0 ? 'text-red-400' : 'text-green-400'
 })
-
 // ── 52周位置 ───────────────────────────────────────────────────
 const pricePosition = computed(() => {
   const { price, high_52w, low_52w } = data.value
@@ -266,16 +299,25 @@ const totalStocks = computed(() => {
   return (advance_count || 0) + (decline_count || 0) + (unchanged_count || 0) || 1
 })
 
-// ── 基础字段 ────────────────────────────────────────────────────
+// ── 基础字段（优先取最新K线数据，降级到API数据）─────────────────
+function candleVal(key) { return cdl.value?.[key] ?? data.value?.[key] }
+function candleOr(key, fallback) {
+  const v = candleVal(key)
+  return v != null && v !== 0 ? v : fallback
+}
+
 const basicFields = [
-  { key: 'open',   label: '开盘',  formatter: v => v != null ? v.toFixed(3) : '--' },
-  { key: 'high',   label: '最高',  formatter: v => v != null ? v.toFixed(3) : '--' },
-  { key: 'low',    label: '最低',  formatter: v => v != null ? v.toFixed(3) : '--' },
-  { key: 'close',  label: '昨收',  formatter: v => v != null ? v.toFixed(3) : '--' },
-  { key: 'volume', label: '成交量', formatter: v => v != null ? formatVol(v) : '--' },
-  { key: 'amount', label: '成交额', formatter: v => v != null ? formatAmount(v) : '--' },
-  { key: 'turnover_rate', label: '换手率', formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
-  { key: 'amplitude',     label: '振幅',   formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
+  { key: 'open',   label: '开盘',   sourceFn: () => candleOr('open',   null), formatter: v => v != null ? v.toFixed(3) : '--' },
+  { key: 'high',   label: '最高',   sourceFn: () => candleOr('high',   null), formatter: v => v != null ? v.toFixed(3) : '--' },
+  { key: 'low',    label: '最低',   sourceFn: () => candleOr('low',    null), formatter: v => v != null ? v.toFixed(3) : '--' },
+  { key: 'volume', label: '成交量', sourceFn: () => candleOr('volume', null), formatter: v => v != null ? formatVol(v) : '--' },
+  { key: 'amount', label: '成交额', sourceFn: () => candleOr('amount', null), formatter: v => v != null ? formatAmount(v) : '--' },
+  { key: 'turnover_rate', label: '换手率', sourceFn: () => data.value.turnover_rate ?? null,
+    formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
+  { key: 'amplitude',     label: '振幅',   sourceFn: () => data.value.amplitude ?? null,
+    formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
+  { key: 'pe_ttm', label: '市盈率TTM', sourceFn: () => data.value.pe_ttm ?? null,
+    formatter: v => v != null ? v.toFixed(2) : '--' },
 ]
 
 // ── 估值字段 ───────────────────────────────────────────────────
@@ -296,26 +338,59 @@ function returnColorClass(v) {
   return v >= 0 ? 'text-red-400' : 'text-green-400'
 }
 
-// ── 资金流向各级 ────────────────────────────────────────────────
+// ── 资金流向（mock数据填充UI占位）──────────────────────────────
+const fundFlowMock = {
+  main_net:   12.8e8,   // 主力净流入 +12.8亿
+  main_in:    35.2e8,
+  main_out:   22.4e8,
+  huge_in:    8.6e8, huge_out:  4.1e8,
+  big_in:     15.3e8, big_out:   10.2e8,
+  medium_in:  11.3e8, medium_out: 8.1e8,
+  small_in:   8.2e8, small_out:  6.5e8,
+}
+
 const fundLevels = computed(() => {
   const d = data.value
-  const makeLevel = (keyIn, keyOut, label, color) => ({
-    key: keyIn,
-    label,
-    color,
-    value: d[keyIn] ?? 0,
-    width: 50,   // 暂无真实数据，保持中性宽度
-  })
+  const hasReal = d.fund_main_net != null
+  const mock = hasReal ? false : true
+
+  const net   = hasReal ? (d.fund_main_net ?? 0)  : fundFlowMock.main_net
+  const netIn  = hasReal ? (d.fund_main_in ?? 0)  : fundFlowMock.main_in
+  const netOut = hasReal ? (d.fund_main_out ?? 0) : fundFlowMock.main_out
+  const total  = Math.abs(netIn) + Math.abs(netOut) || 1
+
+  const toPct = v => Math.min(100, Math.max(0, Math.abs(v) / total * 100))
+
   return [
-    { key: 'fund_huge_in',   label: '超大', color: '#f87171', value: data.value.fund_huge_in ?? 0,
-      width: 50 },
-    { key: 'fund_big_in',    label: '大单', color: '#fb923c', value: data.value.fund_big_in ?? 0,
-      width: 50 },
-    { key: 'fund_medium_in', label: '中单', color: '#fbbf24', value: data.value.fund_medium_in ?? 0,
-      width: 50 },
-    { key: 'fund_small_in',  label: '小单', color: '#6ee7b7', value: data.value.fund_small_in ?? 0,
-      width: 50 },
-  ].filter(l => l.value != null)
+    { label: '超大单', color: '#f87171',
+      inAmt: hasReal ? d.fund_huge_in : fundFlowMock.huge_in,
+      outAmt: hasReal ? d.fund_huge_out : fundFlowMock.huge_out,
+      width: toPct(hasReal ? d.fund_huge_in : fundFlowMock.huge_in) },
+    { label: '大单',   color: '#fb923c',
+      inAmt: hasReal ? d.fund_big_in : fundFlowMock.big_in,
+      outAmt: hasReal ? d.fund_big_out : fundFlowMock.big_out,
+      width: toPct(hasReal ? d.fund_big_in : fundFlowMock.big_in) },
+    { label: '中单',   color: '#fbbf24',
+      inAmt: hasReal ? d.fund_medium_in : fundFlowMock.medium_in,
+      outAmt: hasReal ? d.fund_medium_out : fundFlowMock.medium_out,
+      width: toPct(hasReal ? d.fund_medium_in : fundFlowMock.medium_in) },
+    { label: '小单',   color: '#6ee7b7',
+      inAmt: hasReal ? d.fund_small_in : fundFlowMock.small_in,
+      outAmt: hasReal ? d.fund_small_out : fundFlowMock.small_out,
+      width: toPct(hasReal ? d.fund_small_in : fundFlowMock.small_in) },
+  ]
+})
+
+// 资金环形图数据（始终有值）
+const fundDonutData = computed(() => {
+  const d = data.value
+  const hasReal = d.fund_main_net != null
+  return {
+    net:   hasReal ? d.fund_main_net  : fundFlowMock.main_net,
+    inAmt: hasReal ? d.fund_main_in   : fundFlowMock.main_in,
+    outAmt:hasReal ? d.fund_main_out  : fundFlowMock.main_out,
+    isMock: mock,
+  }
 })
 
 // ── 格式化 ─────────────────────────────────────────────────────
@@ -338,36 +413,38 @@ let donutInstance = null
 
 function renderDonut() {
   if (!fundDonutRef.value || !window.echarts) return
-  const d = data.value
-  if (d.fund_main_net == null) return
+  const fd = fundDonutData.value
+  if (!fd) return
 
   if (!donutInstance) {
     donutInstance = window.echarts.init(fundDonutRef.value, null, { renderer: 'canvas' })
   }
 
-  const net   = Math.abs(d.fund_main_net || 0)
-  const inAmt  = d.fund_main_in  || 0
-  const outAmt = d.fund_main_out || 0
-  const total  = inAmt + outAmt || 1
-
   donutInstance.setOption({
     backgroundColor: 'transparent',
-    tooltip: { show: false },
+    tooltip: {
+      show: true,
+      trigger: 'item',
+      backgroundColor: 'rgba(26,30,46,0.95)',
+      borderColor: '#4b5563',
+      textStyle: { color: '#9ca3af', fontSize: 10 },
+      formatter: '{b}: {c} ({d}%)',
+    },
     series: [{
       type: 'pie',
-      radius: ['55%', '80%'],
+      radius: ['50%', '78%'],
       center: ['50%', '50%'],
       avoidLabelOverlap: false,
       label: { show: false },
       data: [
-        { value: inAmt,  name: '流入', itemStyle: { color: '#ef232a' } },
-        { value: outAmt, name: '流出', itemStyle: { color: '#14b143' } },
+        { value: fd.inAmt,  name: '流入', itemStyle: { color: '#ef232a' } },
+        { value: fd.outAmt, name: '流出', itemStyle: { color: '#14b143' } },
       ],
     }],
   })
 }
 
-watch(() => data.value.fund_main_net, () => { nextTick(renderDonut) }, { immediate: true })
+watch(() => fundDonutData.value, () => { nextTick(renderDonut) }, { deep: true, immediate: true })
 onMounted(() => { nextTick(renderDonut) })
 onUnmounted(() => { donutInstance?.dispose(); donutInstance = null })
 </script>

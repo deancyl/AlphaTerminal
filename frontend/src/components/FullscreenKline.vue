@@ -88,7 +88,7 @@
       />
 
       <!-- ECharts 图表区域（自适应宽度） -->
-      <div class="flex-1 min-w-0 relative">
+      <div class="chart-area flex-1 min-w-0 relative">
         <!-- 加载遮罩 -->
         <div v-if="isLoading" class="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
           <div class="flex gap-1 items-end opacity-50">
@@ -129,6 +129,7 @@
         :name="props.name"
         :realtimeData="quoteData"
         :snapshotData="crosshairSnapshot"
+        :latestCandle="latestCandle"
         :isMobile="isMobile"
         :panelWidth="320"
       />
@@ -166,6 +167,7 @@ const latestChange     = ref(0)
 // 报价面板数据
 const quoteData        = ref({})
 const crosshairSnapshot = ref(null)   // 十字光标悬停的历史快照
+const latestCandle     = ref(null)    // 最新K线数据（传递给QuotePanel）
 const windowWidth      = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
 const isMobile         = computed(() => windowWidth.value < 900)
 const BREAKPOINT       = 900  // PC/Mobile 断点
@@ -233,6 +235,7 @@ async function fetchData() {
     const last = hist[hist.length - 1]
     latestPrice.value  = last.price  ?? last.close
     latestChange.value = last.change_pct ?? 0
+    latestCandle.value = last  // 同步最新K线到面板
 
     const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
     const sorted = isDesc ? [...hist].reverse() : hist
@@ -601,11 +604,13 @@ function toggleIndicator(key) {
 // ── 监听 ───────────────────────────────────────────────────────
 watch(() => props.symbol, () => {
   crosshairSnapshot.value = null
+  latestCandle.value = null
   fetchData()
   fetchQuoteDetail()
 })
 watch(period, () => {
   crosshairSnapshot.value = null
+  latestCandle.value = null
   fetchData()
 })
 watch(activeIndicators, () => {
@@ -632,3 +637,15 @@ function onResize() {
   windowWidth.value = window.innerWidth
 }
 </script>
+
+<style scoped>
+/* 移动端（≤900px）：报价面板掉到底部，K线图占满宽度 */
+@media (max-width: 900px) {
+  .chart-area {
+    flex-basis: 100% !important;
+    min-width: 0;
+    width: 100%;
+    height: 45vh;
+  }
+}
+</style>
