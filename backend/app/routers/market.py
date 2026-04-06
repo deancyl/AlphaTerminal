@@ -416,9 +416,9 @@ _SYMBOL_REGISTRY = [
     # A股个股（示例，实际可扩展到全市场）
     { 'symbol': 'sh600519', 'code': '600519', 'name': '贵州茅台',    'pinyin': 'GZMJ',  'market': 'AShare', 'type': 'stock' },
     { 'symbol': 'sh601318', 'code': '601318', 'name': '中国平安',    'pinyin': 'ZGPA',  'market': 'AShare', 'type': 'stock' },
-    { 'symbol': 'sh000858', 'code': '000858', 'name': '五粮液',      'pinyin': 'WLY',   'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sz000858', 'code': '000858', 'name': '五粮液',      'pinyin': 'WLY',   'market': 'AShare', 'type': 'stock' },
     { 'symbol': 'sh600036', 'code': '600036', 'name': '招商银行',    'pinyin': 'ZSYH',  'market': 'AShare', 'type': 'stock' },
-    { 'symbol': 'sh002594', 'code': '002594', 'name': '比亚迪',      'pinyin': 'BYD',   'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sz002594', 'code': '002594', 'name': '比亚迪',      'pinyin': 'BYD',   'market': 'AShare', 'type': 'stock' },
     # 宏观
     { 'symbol': 'GOLD',     'code': 'GOLD',   'name': '黄金(USD)',   'pinyin': 'JH',    'market': 'Macro',   'type': 'commodity' },
     { 'symbol': 'WTI',      'code': 'WTI',    'name': 'WTI原油',     'pinyin': 'YSCY',  'market': 'Macro',   'type': 'commodity' },
@@ -527,9 +527,13 @@ def _normalize_symbol(raw: str) -> str:
     # 去掉 sh/sz/hk 前缀后判断（replace 替换所有位置，与 registry 配套）
     clean = s.lower().replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
     # A股数字段判断：6开头→上海；其余（0/3开头）→深圳
+    # 特殊：A股指数000001/000300/000688 → 上海；399001/399006 → 深圳
     if clean.isdigit():
-        if clean.startswith('6'):
+        if clean.startswith('6') or clean in ('000001', '000300', '000688'):
             return 'sh' + clean
+        if clean.startswith(('0', '2', '3')):
+            return 'sz' + clean
+        # 8xx → 北交所，本项目暂不处理
         return 'sz' + clean
     return s
 
@@ -622,8 +626,11 @@ def _clean_symbol(raw: str) -> str:
         s = s[len("macro"):].lstrip('_')
     # 去掉 us/hk/jp 前缀（所有非 A 股指数存库时不带前缀）
     s = re.sub(r"^(us|hk|jp)", "", s, flags=re.IGNORECASE)
-    # 去掉 A 股前缀（DB 用纯数字存 A 股）
-    s = s.replace("sh", "").replace("sz", "").replace("SH", "").replace("SZ", "")
+    # 去掉 A 股前缀（DB 用纯数字存 A 股），用 removeprefix 避免误删中间出现的 sh/sz
+    for pfx in ("sh", "sz", "SH", "SZ"):
+        if s.startswith(pfx):
+            s = s[len(pfx):]
+            break
     return s.lower()
 
 
@@ -987,7 +994,7 @@ async def market_quote_detail(symbol: str):
     price      = w.get('index') or w.get('price') or 0.0
     change_pct = float(w.get('change_pct') or 0.0)
     change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
-    volume     = float(w.get('volume') or 0.0)
+    volume     = float(w.get('volume') or 0.0) or None
     status     = w.get('status') or ''
     market     = w.get('market') or 'AShare'
 
@@ -1000,9 +1007,11 @@ async def market_quote_detail(symbol: str):
     high_  = float(latest_row.get('high')  or price)
     low_   = float(latest_row.get('low')   or price)
     close_ = float(latest_row.get('close') or price)
-    amount = float(latest_row.get('amount') or 0.0)
-    turnover_rate = float(latest_row.get('turnover_rate') or 0.0)
-    amplitude    = round((high_ / low_ - 1) * 100, 2) if low_ and low_ > 0 else 0.0
+    # 指数的 amount/turnover_rate 字段在 DB 中常为 0（AkShare 不提供），视为无数据
+    amount = float(latest_row.get('amount') or 0.0) or None
+    turnover_rate = round(float(latest_row.get('turnover_rate') or 0.0), 4) or None
+    # 当 high_ == low_（当天只有一个数据点），用当前价与昨日收盘的差值估算振幅
+    amplitude = round((high_ / low_ - 1) * 100, 2) if low_ and low_ > 0 and high_ != low_ else                 (round(abs(price - (float(prev_row.get('close') or price))) / float(prev_row.get('close') or price) * 100, 2) if price and prev_row.get('close') and float(prev_row.get('close')) > 0 else None)
 
     # ── 历史 K 线（计算周期收益率 + 52 周高低）──────────────────
     # market_data_daily 存无前缀代码，_unprefix(norm) 去掉 sh/sz 前缀后正确匹配
@@ -1081,9 +1090,9 @@ async def market_quote_detail(symbol: str):
         "low":              round(low_,   3),
         "close":            round(close_, 3),
         "volume":           volume,
-        "amount":           round(amount, 2),
+        "amount":           round(amount, 2) if amount is not None else None,
         "amplitude":        amplitude,
-        "turnover_rate":    round(turnover_rate, 4),
+        "turnover_rate":    round(turnover_rate, 4) if turnover_rate is not None else None,
         "status":           status,
         "market":           market,
         # ── 估值 ──
