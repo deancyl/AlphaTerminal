@@ -546,23 +546,27 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
         if df is None or df.empty:
             return []
 
-        # AkShare 列名就是英文: ['date','open','high','low','close','volume']
-        # 直接访问，不需要 rename
+        # AkShare 返回列: ['date','open','high','low','close','volume']
+        # 数据按时间升序（最旧→最新），可用相邻行 close 计算涨跌幅
         date_col = df.columns[0]  # 'date'
-        # 动态匹配涨跌幅列名（akshare 版本差异：可能是 pct_chg / pct_change / 涨跌幅）
-        _pct_col = next((c for c in df.columns if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
 
         rows = []
         now_ts = int(time.time())
+        prev_close = None  # 前一行收盘价，用于计算 change_pct
         for i in range(len(df)):
             try:
                 dt     = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
                 open_  = float(df.iloc[i]["open"])
                 high   = float(df.iloc[i]["high"])
                 low    = float(df.iloc[i]["low"])
-                close  = float(df.iloc[i]["close"])   # ← 直接用 df["close"]，不经过任何 swap
+                close  = float(df.iloc[i]["close"])
                 volume = int(df.iloc[i]["volume"]) if "volume" in df.columns else 0
-                pct    = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
+                # AkShare stock_zh_index_daily 不含涨跌幅列，自己用相邻 close 计算
+                if prev_close is not None and prev_close != 0:
+                    pct = (close - prev_close) / prev_close * 100
+                else:
+                    pct = 0.0
+                prev_close = close
                 rows.append({
                     "symbol":    symbol,
                     "date":      str(df.iloc[i][date_col])[:10],
@@ -640,7 +644,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
         return []
 
 
-# ── 分时数据：Eastmoney push2his 5分钟K线（直连，不走代理）─────────────
+# ── 分时数据：Eastmoney push2his 5分钟K线 ────────────────────────────────
 def fetch_index_minute_history(
     symbol: str,
     limit: int = 50,
@@ -671,21 +675,42 @@ def fetch_index_minute_history(
         # 默认拉两年数据用于分页回溯
         beg, end = "20200101", "20991231"
 
-    import subprocess
     try:
-        raw = subprocess.check_output(
-            ["curl", "-s", "--noproxy", "*", "--max-time", "10",
-             f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
-             f"?secid={secid}"
-             f"&fields1=f1,f2,f3,f4,f5,f6"
-             f"&fields2=f51,f52,f53,f54,f55,f56,f57"
-             f"&klt={frequency}&fqt=1&beg={beg}&end={end}",
-             "-H", "Referer: https://quote.eastmoney.com/",
-             "-H", "User-Agent: Mozilla/5.0"],
-            stderr=subprocess.DEVNULL,
+        import httpx
+        url = (
+            f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
+            f"?secid={secid}"
+            f"&fields1=f1,f2,f3,f4,f5,f6"
+            f"&fields2=f51,f52,f53,f54,f55,f56,f57"
+            f"&klt={frequency}&fqt=1&beg={beg}&end={end}"
         )
-        import json
-        obj = json.loads(raw.decode("utf-8", errors="replace"))
+        proxies = {
+            "http://": "http://192.168.1.50:7897",
+            "https://": "http://192.168.1.50:7897",
+        }
+        # 重试 3 次，处理 Eastmoney 服务端不稳定导致的断连
+        obj = None
+        for attempt in range(3):
+            try:
+                with httpx.Client(
+                    proxies=proxies,
+                    timeout=15.0,
+                    follow_redirects=True,
+                    http1=True,
+                    http2=False,
+                    limits=httpx.Limits(max_keepalive_connections=1, max_connections=1),
+                ) as client:
+                    resp = client.get(url, headers={
+                        "Referer": "https://quote.eastmoney.com/",
+                        "User-Agent": "Mozilla/5.0",
+                        "Connection": "close",
+                    })
+                    obj = resp.json()
+                    break
+            except Exception as e:
+                if attempt == 2:
+                    raise
+                logger.warning(f"[Eastmoney] fetch_index_minute_history({symbol}) 第{attempt+1}次重试: {e}")
         klines = obj.get("data", {}).get("klines", [])
         rows = []
         for kl in klines:

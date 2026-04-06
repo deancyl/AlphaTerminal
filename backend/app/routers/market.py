@@ -539,6 +539,27 @@ def _clean_symbol(raw: str) -> str:
     s = s.replace("sh", "").replace("sz", "").replace("SH", "").replace("SZ", "")
     return s.lower()
 
+
+def _inject_change_pct(rows: list[dict]) -> list[dict]:
+    """
+    对 ASC 排列的历史 K 线内联注入 change_pct（利用相邻 close 计算）。
+    market_data_daily 表无 change_pct 列，需在此层内联计算。
+    """
+    if not rows:
+        return rows
+    result = []
+    prev_close = None
+    for r in rows:
+        close = float(r.get("close") or 0)
+        if prev_close is not None and prev_close != 0:
+            pct = (close - prev_close) / prev_close * 100
+        else:
+            pct = 0.0
+        result.append({**r, "change_pct": round(pct, 4)})
+        prev_close = close
+    return result
+
+
 @router.get("/market/history/{symbol}")
 async def market_history(
     symbol: str,
@@ -616,7 +637,7 @@ async def market_history(
             except Exception as e:
                 logger.warning(f"[Market History] 同步拉取失败，回退DB: {e}")
 
-        history  = list(reversed(raw_rows)) if raw_rows else []
+        history  = _inject_change_pct(list(reversed(raw_rows))) if raw_rows else []
         has_more = (offset + len(raw_rows)) < total if raw_rows else False
         chart_type = "candlestick"
 
@@ -660,7 +681,7 @@ async def market_history(
             except Exception as e:
                 logger.error(f"[Market History] AkShare 穿透失败: {e}")
 
-        history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
+        history  = _inject_change_pct(_apply_adjustment(list(reversed(raw_rows)), adjustment))
         has_more = (offset + len(raw_rows)) < total
         chart_type = "candlestick"
 

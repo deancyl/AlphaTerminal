@@ -3,7 +3,7 @@
   <div v-if="ui.klineFullscreen" class="flex flex-col terminal-panel" style="width:100%;z-index:50;display:flex;flex-direction:column;">
     <!-- 全屏顶部栏：指数+周期+指标+退出 -->
     <div class="flex items-center gap-2 px-4 py-2 border-b border-gray-700/50 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
+      <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       <div class="flex gap-1 ml-2">
         <button v-for="idx in indexOptions" :key="idx.symbol"
                 class="px-2 py-0.5 text-[10px] rounded border transition"
@@ -52,7 +52,7 @@
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <!-- 标题行 -->
         <div class="flex items-center justify-between mb-1 shrink-0">
-          <span class="text-terminal-accent font-bold text-sm">📈 {{ currentIndexOption.name }} K线</span>
+          <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
@@ -93,6 +93,10 @@
           </button>
         </div>
         <div class="flex-1 min-h-0">
+          <!-- 选中的指数名称 -->
+          <div class="text-xs text-gray-400 mb-1 px-1">
+            {{ currentIndexName }}
+          </div>
           <IndexLineChart
             :key="`${selectedIndex}-${selectedPeriod}`"
             :symbol="selectedIndex"
@@ -273,23 +277,28 @@ const _MACRO_NAME_MAP = {
 }
 
 function handleWindClick(item) {
-  // windItems 里的 macro 行 symbol=m.name（全名），需解析出实际品种
-  // 例如："SGE黄金(人民币)"→"GOLD"，"WTI原油(美元)"→"WTI"
+  // 宏观大宗（黄金/WTI/VIX/外汇）无 K 线数据，跳过图表切换
+  if (item.category === 'macro') {
+    setSymbol('GOLD', item.name || 'GOLD', '#fbbf24')
+    return
+  }
+
+  // 指数类：有独立 K 线，直接用 symbol
   let sym = item.symbol || item.key || ''
 
   // 名称特征匹配（宏观大宗没有 symbol 字段，只有全名）
   if (!/^[A-Za-z]{2,6}$/.test(sym)) {
     const lower = sym.toLowerCase()
     if (lower.includes('黄金') || lower.includes('xau') || lower.includes('gld')) {
-      sym = 'gold'
+      sym = 'GOLD'
     } else if (lower.includes('wti') || lower.includes('原油')) {
-      sym = 'wti'
+      sym = 'WTI'
     } else if (lower.includes('vix') || lower.includes('波幅') || lower.includes('vhsi')) {
-      sym = 'vix'
+      sym = 'VIX'
     } else if (lower.includes('人民币') || lower.includes('cny') || lower.includes('cny')) {
-      sym = 'cnh'
+      sym = 'CNH'
     } else if (lower.includes('美元') && !lower.includes('原油')) {
-      sym = 'dxy'
+      sym = 'DXY'
     } else {
       // 兜底：去掉数字和特殊字符后 normalize
       sym = normalizeSymbol(sym.replace(/[^\w]/g, ''))
@@ -298,35 +307,31 @@ function handleWindClick(item) {
 
   const norm = normalizeSymbol(sym)
   setSymbol(norm, item.name || sym, '#f87171')
-  // 用 queueMicrotask 确保在 watch(currentSymbol) 之后执行（不被覆盖）
-  queueMicrotask(() => {
-    selectedIndex.value = norm
-    currentIndexName.value = item.name || norm
-  })
+  currentIndexName.value = item.name || norm
 }
 
 function handleGlobalClick(item) {
   // globalItems 可能有 usIXIC / usNDX / hkHSI 等前缀
   const norm = normalizeSymbol(item.symbol || item.name || item.key || '')
   setSymbol(norm, item.name || norm, '#60a5fa')
-  queueMicrotask(() => {
-    selectedIndex.value = norm
-    currentIndexName.value = item.name || norm
-  })
+  currentIndexName.value = item.name || norm
 }
 
 function handleChinaClick(item) {
   setSymbol(item.symbol, item.name, '#f87171')
-  queueMicrotask(() => {
-    selectedIndex.value = item.symbol
-    currentIndexName.value = item.name || item.symbol
-  })
+  // currentIndexName 同步（selectedIndex 由 watch(currentSymbol) 统一处理）
+  currentIndexName.value = item.name || item.symbol
 }
 
 function handleSectorClick(sec) {
-  setSymbol('000001', sec.name, '#fbbf24')
+  // 板块无独立K线，使用板块的领涨股代码替代
+  const code = sec.top_stock?.code || '000001'
+  const topName = sec.top_stock?.name || ''
+  const displayName = topName ? `${sec.name}-${topName}` : sec.name
+  setSymbol(code, displayName, '#fbbf24')
   queueMicrotask(() => {
-    selectedIndex.value = '000001'
+    selectedIndex.value = code
+    currentIndexName.value = displayName
   })
 }
 
@@ -360,8 +365,11 @@ const indicators = [
 ]
 
 function switchIndex(idx) {
-  selectedIndex.value = idx.symbol
-  currentIndexName.value = idx.name || idx.symbol
+  setSymbol(idx.symbol, idx.name, idx.color)
+  queueMicrotask(() => {
+    selectedIndex.value = idx.symbol
+    currentIndexName.value = idx.name || idx.symbol
+  })
 }
 function switchPeriod(p)   { selectedPeriod.value = p }
 function toggleIndicator(k) {
@@ -417,6 +425,25 @@ function formatMacroPrice(item) {
 }
 
 // ── GridStack 锁定 ─────────────────────────────────────────────
+// ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
+// ── 标的切换时自动回退不支持的周期 ────────────────────────────────
+// ── StockScreener / Copilot 等外部改变了 currentSymbol 时同步 selectedIndex ──
+watch(currentSymbol, (sym) => {
+  if (sym && sym !== selectedIndex.value) {
+    selectedIndex.value = sym
+  }
+})
+
+// ── 标的切换时自动回退不支持的周期 ────────────────────────────────
+watch(selectedIndex, (sym) => {
+  // 分钟系（分时/1min/5min...）仅支持 _MIN_KLINE_SUPPORTED 中的5只A股指数
+  const MIN_SUPPORTED = new Set(['000001', '000300', '399001', '399006', '000688'])
+  const MIN_PERIODS  = new Set(['minutely', '1min', '5min', '15min', '30min', '60min'])
+  if (!MIN_SUPPORTED.has(sym) && MIN_PERIODS.has(selectedPeriod.value)) {
+    selectedPeriod.value = 'daily'
+  }
+})
+
 // ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
 watch(() => props.isLocked, (locked) => {
   if (grid) {
