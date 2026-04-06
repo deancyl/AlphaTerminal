@@ -136,3 +136,54 @@
 ---
 
 _Last Updated: 2026-04-06 by OpenClaw Agent_
+
+---
+
+## Beta 0.5.0 (2026-04-06) — 三大需求实现
+
+### ✅ 需求1：全局时间轴精度规范
+- `market_history` 响应新增 `offset` / `limit` / `has_more` 字段
+- 前端可据此判断是否触及历史边缘，触发懒加载
+
+### ✅ 需求2：历史数据深度扩容（日线 10 年）
+- `market_history` 日线 `limit` 默认值：500 → 2500（约 10 年）
+- 日线支持 `offset` 分页（透传给 `get_daily_history`）
+- 前端向左拖拽图表触及历史边缘时，可通过 `offset=N` 懒加载更早数据
+
+### ✅ 需求3：标的穿透抓取与持久化缓存
+- 新增 `fetch_us_index_history()`：Alpha Vantage TIME_SERIES_DAILY 获取美股 NDX/SPX/DJI 全量历史
+- `market_history` 在 `offset=0` 且数据库为空时，自动触发：拉取→落库→重查→返回
+- Alpha Vantage API Key 配置于 `backend/app/config/data_sources.py`
+  - 当前 `DEMO_KEY` 有严格限速（5 req/min，25 req/day）
+  - 生产部署请替换为真实 Key（https://www.alphavantage.co）
+- **健壮性**：异常时 `logger.warning` 降级，不阻塞正常 A 股数据
+
+### 🐛 已修复
+- Eastmoney 分时 `offset=0` 时多取 1 条作为 `prev_close` 参考，保证第一条 `change_pct` 准确
+
+---
+
+## 版本命名规范（锁定，2026-04-06）
+
+**主版本号永远定格在 0.4.x，不得出现 0.5.x 或更高主版本。**
+
+发布版本命名格式：`v0.4.{N}-beta`，其中 N 为自增序号。
+
+**已发布版本链（v0.3.2 → 最新）：**
+| 版本 | commit | 主要内容 |
+|------|--------|----------|
+| v0.3.2-beta | (已知) | 上一稳定版 |
+| v0.4.7-beta | 1b22cce8 | change_pct内联计算/Eastmoney httpx重试/清理db+dist |
+| v0.4.8-beta | 8acc4a0b | StockScreener点击个股名称不同步标题 |
+| v0.4.9-beta | 77c89b88 | P0三次修复：全市场名称/ForceRefresh/周月K change_pct |
+| v0.4.10-beta | cebed366 | 代码审查：CNHUSD bug/asyncio未导入/usNDX大小写 |
+| v0.4.11-beta | 4e1eb51b | market_lookup动态支持/Eastmoney分时/DB schema一致性 |
+| v0.4.12-beta | b5e6af32 | Eastmoney分时offset=0多取1条保证change_pct准确 |
+| v0.4.13-beta | 8f255014 | registry sz→sh对齐/还原normalize/revert回归错误 |
+| v0.4.14-beta | a4e5c6b5 | market_history offset分页/日线10年/US指数自动抓取 |
+| v0.4.15-beta | d5f2e8c1 | 指标图表全屏重构：布局去重/引擎点亮/DrawingToolbar |
+
+**GitHub Release 创建规范：**
+1. tag 用 GitHub API 创建 annotated tag + ref
+2. Release 用 GitHub API 创建（附完整 changelog）
+3. 禁止在 Release/Release notes 中使用 >= 0.5.0 的版本号
