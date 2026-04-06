@@ -2,8 +2,9 @@
 资讯流接口 - Phase 5
 API 只读全局缓存，后台线程负责刷新（<50ms 响应）
 """
+import asyncio
 import logging
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 

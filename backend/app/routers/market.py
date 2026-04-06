@@ -503,31 +503,52 @@ def _load_all_stock_names() -> list[dict]:
 def _normalize_symbol(raw: str) -> str:
     """
     将各种前端传入格式统一为带市场前缀的规范 symbol。
-    例如: '000001' → 'sh000001', 'sh000001' → 'sh000001', 'NDX' → 'usNDX'
+    例如: '000001' → 'sh000001', 'NDX' → 'usNDX', 'CNHUSD' → 'CNHUSD'
     """
-    s = raw.strip().lower()
-    # 已知美股
-    if s.upper() in ('NDX', 'SPX', 'DJI'):
-        return 'us' + s.upper()
-    # 已知日经
-    if s.upper() in ('N225', 'NI225', 'NIKKEI'):
-        return 'jpN225'
-    # 已知港股
-    if s.upper() in ('HSI',):
-        return 'hkHSI'
-    # 已知宏观（无前缀）
-    if s.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD'):
-        return s.upper()
-    # 去掉 sh/sz/hk 前缀后判断
-    clean = s.replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
-    # 判断是否 A 股（纯数字）
+    s = raw.strip()
+    # 只从字符串开头剥离市场前缀（避免 replace 误删字符串内部的 sh/sz/hk/us/jp/bj 子串）
+    lower = s.lower()
+    for p in ('sh', 'sz', 'hk', 'us', 'jp', 'bj'):
+        if lower.startswith(p):
+            clean = lower[len(p):]
+            break
+    else:
+        clean = lower
+
+    # ── A 股（纯数字）─────────────────────────────────────────────
     if clean.isdigit():
-        if clean.startswith(('0', '3', '6')):
-            # 根据规则判断交易所
-            if clean.startswith('6') or (len(clean) == 6 and clean[0:2] in ('00', '30')):
-                return 'sh' + clean
-            return 'sz' + clean
-    return s
+        # 6 或 9 开头 → 上海；00 或 30 开头（前两位）→ 上海（沪市特定指数规则）
+        # 0/1/2/3 开头 → 深圳；8 开头 → 北交所
+        if clean.startswith('6') or clean.startswith('9'):
+            return 'sh' + clean
+        if len(clean) == 6 and clean[0:2] in ('00', '30'):
+            return 'sh' + clean   # 特殊指数规则：000001→sh000001，000688→sh000688
+        if clean.startswith('8'):
+            return 'bj' + clean
+        return 'sz' + clean   # 兜底：0/1/2/3 开头的深圳股
+
+    # ── 已知美股指数 ─────────────────────────────────────────────
+    if clean.upper() in ('NDX',):
+        return 'usNDX'
+    if clean.upper() in ('SPX',):
+        return 'usSPX'
+    if clean.upper() in ('DJI',):
+        return 'usDJI'
+
+    # ── 已知港股指数 ─────────────────────────────────────────────
+    if clean.upper() in ('HSI',):
+        return 'hkHSI'
+
+    # ── 已知日经指数 ─────────────────────────────────────────────
+    if clean.upper() in ('N225', 'NI225', 'NIKKEI'):
+        return 'jpN225'
+
+    # ── 宏观大宗（无前缀，全部大写）────────────────────────────────
+    if clean.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD', 'DXY', 'CNH'):
+        return clean.upper()
+
+    # ── 无法识别：原样返回（小写化）───────────────────────────────
+    return lower
 
 
 @router.get("/market/symbols")
