@@ -38,7 +38,13 @@
     </div>
     <!-- 全屏图表 -->
     <div class="flex-1 min-h-0">
-      <AdvancedKlinePanel />
+      <FullscreenKline
+        :symbol="selectedIndex"
+        :name="currentIndexName"
+        :isFull="true"
+        @close="ui.klineFullscreen = false"
+        @symbol-change="onFullscreenSymbolChange"
+      />
     </div>
   </div>
 
@@ -226,7 +232,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import IndexLineChart    from './IndexLineChart.vue'
-import AdvancedKlinePanel from './AdvancedKlinePanel.vue'
+import FullscreenKline   from './FullscreenKline.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
 import HotSectors from './HotSectors.vue'
@@ -370,6 +376,9 @@ function switchIndex(idx) {
     selectedIndex.value = idx.symbol
     currentIndexName.value = idx.name || idx.symbol
   })
+}
+function onFullscreenSymbolChange({ symbol, name }) {
+  switchIndex({ symbol, name })
 }
 function switchPeriod(p)   { selectedPeriod.value = p }
 function toggleIndicator(k) {
