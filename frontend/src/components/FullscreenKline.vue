@@ -2,6 +2,7 @@
   <div
     class="fullscreen-kline flex flex-col bg-[#0a0e17]"
     :class="{ 'fullscreen-fullscreen': isFull }"
+    :style="isFull ? 'position:fixed!important;top:0!important;right:0!important;bottom:0!important;left:0!important;z-index:200!important;width:100vw!important;height:100vh!important' : ''"
     @keydown.esc="isFull && emit('close')"
     tabindex="0"
   >
@@ -620,6 +621,7 @@ watch(activeIndicators, () => {
 
 // ── 生命周期 ──────────────────────────────────────────────────
 onMounted(() => {
+  console.log('[DEBUG FullscreenKline] mounted! isFull=', isFull, 'symbol=', props.symbol)
   window.addEventListener('resize', onResize)
   initChart()
   fetchQuoteDetail()

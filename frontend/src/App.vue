@@ -99,15 +99,17 @@
 
   </div>
 
-  <!-- ━━━ 全屏 K 线（渲染在根级，脱离所有 overflow/stacking context 约束）━━━━ -->
-  <FullscreenKline
-    v-if="ui.klineFullscreen"
-    :symbol="fullscreenSymbol"
-    :name="fullscreenName"
-    :isFull="true"
-    @close="ui.klineFullscreen = false"
-    @symbol-change="openFullscreenKline"
-  />
+  <!-- ━━━ 全屏 K 线（Teleport到body，脱离所有overflow/stacking context约束）━━━━ -->
+  <Teleport to="body">
+    <FullscreenKline
+      v-if="ui.klineFullscreen"
+      :symbol="fullscreenSymbol"
+      :name="fullscreenName"
+      :isFull="true"
+      @close="() => { console.log('[DEBUG] close emitted'); ui.klineFullscreen = false }"
+      @symbol-change="openFullscreenKline"
+    />
+  </Teleport>
 </template>
 
 <script setup>
@@ -138,9 +140,11 @@ const fullscreenSymbol = ref('sh000001')
 const fullscreenName   = ref('上证指数')
 
 function openFullscreenKline({ symbol, name }) {
+  console.log('[DEBUG] openFullscreenKline called', { symbol, name, klineFullscreenBefore: ui.klineFullscreen })
   fullscreenSymbol.value = symbol || 'sh000001'
   fullscreenName.value  = name  || '上证指数'
-  ui.value.klineFullscreen = true
+  ui.klineFullscreen = true
+  console.log('[DEBUG] ui.klineFullscreen set to', ui.klineFullscreen, '| fullscreenSymbol:', fullscreenSymbol.value)
 }
 
 function toggleLock() {
