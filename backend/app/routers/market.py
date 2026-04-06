@@ -427,9 +427,9 @@ _SYMBOL_REGISTRY = [
     # A股个股（示例，实际可扩展到全市场）
     { 'symbol': 'sh600519', 'code': '600519', 'name': '贵州茅台',    'pinyin': 'GZMJ',  'market': 'AShare', 'type': 'stock' },
     { 'symbol': 'sh601318', 'code': '601318', 'name': '中国平安',    'pinyin': 'ZGPA',  'market': 'AShare', 'type': 'stock' },
-    { 'symbol': 'sz000858', 'code': '000858', 'name': '五粮液',      'pinyin': 'WLY',   'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sh000858', 'code': '000858', 'name': '五粮液',      'pinyin': 'WLY',   'market': 'AShare', 'type': 'stock' },
     { 'symbol': 'sh600036', 'code': '600036', 'name': '招商银行',    'pinyin': 'ZSYH',  'market': 'AShare', 'type': 'stock' },
-    { 'symbol': 'sz002594', 'code': '002594', 'name': '比亚迪',      'pinyin': 'BYD',   'market': 'AShare', 'type': 'stock' },
+    { 'symbol': 'sh002594', 'code': '002594', 'name': '比亚迪',      'pinyin': 'BYD',   'market': 'AShare', 'type': 'stock' },
     # 宏观
     { 'symbol': 'GOLD',     'code': 'GOLD',   'name': '黄金(USD)',   'pinyin': 'JH',    'market': 'Macro',   'type': 'commodity' },
     { 'symbol': 'WTI',      'code': 'WTI',    'name': 'WTI原油',     'pinyin': 'YSCY',  'market': 'Macro',   'type': 'commodity' },
@@ -512,52 +512,30 @@ def _load_all_stock_names() -> list[dict]:
 def _normalize_symbol(raw: str) -> str:
     """
     将各种前端传入格式统一为带市场前缀的规范 symbol。
-    例如: '000001' → 'sh000001', 'NDX' → 'usNDX', 'CNHUSD' → 'CNHUSD'
+    例如: '000001' → 'sh000001', 'sh000001' → 'sh000001', 'NDX' → 'usNDX'
     """
-    s = raw.strip()
-    # 只从字符串开头剥离市场前缀（避免 replace 误删字符串内部的 sh/sz/hk/us/jp/bj 子串）
-    lower = s.lower()
-    for p in ('sh', 'sz', 'hk', 'us', 'jp', 'bj'):
-        if lower.startswith(p):
-            clean = lower[len(p):]
-            break
-    else:
-        clean = lower
-
-    # ── A 股（纯数字）─────────────────────────────────────────────
-    if clean.isdigit():
-        # 6 或 9 开头 → 上海；00 或 30 开头（前两位）→ 上海（沪市特定指数规则）
-        # 0/1/2/3 开头 → 深圳；8 开头 → 北交所
-        if clean.startswith('6') or clean.startswith('9'):
-            return 'sh' + clean
-        if len(clean) == 6 and clean[0:2] in ('00', '30'):
-            return 'sh' + clean   # 特殊指数规则：000001→sh000001，000688→sh000688
-        if clean.startswith('8'):
-            return 'bj' + clean
-        return 'sz' + clean   # 兜底：0/1/2/3 开头的深圳股
-
-    # ── 已知美股指数 ─────────────────────────────────────────────
-    if clean.upper() in ('NDX',):
-        return 'usNDX'
-    if clean.upper() in ('SPX',):
-        return 'usSPX'
-    if clean.upper() in ('DJI',):
-        return 'usDJI'
-
-    # ── 已知港股指数 ─────────────────────────────────────────────
-    if clean.upper() in ('HSI',):
-        return 'hkHSI'
-
-    # ── 已知日经指数 ─────────────────────────────────────────────
-    if clean.upper() in ('N225', 'NI225', 'NIKKEI'):
+    s = raw.strip().lower()
+    # 已知美股（无前缀形式，如 'ndx'）
+    if s.upper() in ('NDX', 'SPX', 'DJI'):
+        return 'us' + s.upper()
+    # 已知日经
+    if s.upper() in ('N225', 'NI225', 'NIKKEI'):
         return 'jpN225'
-
-    # ── 宏观大宗（无前缀，全部大写）────────────────────────────────
-    if clean.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD', 'DXY', 'CNH'):
-        return clean.upper()
-
-    # ── 无法识别：原样返回（小写化）───────────────────────────────
-    return lower
+    # 已知港股
+    if s.upper() in ('HSI',):
+        return 'hkHSI'
+    # 已知宏观（无前缀）
+    if s.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD'):
+        return s.upper()
+    # 去掉 sh/sz/hk 前缀后判断（replace 替换所有位置，与 registry 配套）
+    clean = s.replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
+    # 判断是否 A 股（纯数字）
+    if clean.isdigit():
+        if clean.startswith(('0', '3', '6')):
+            if clean.startswith('6') or (len(clean) == 6 and clean[0:2] in ('00', '30')):
+                return 'sh' + clean
+            return 'sz' + clean
+    return s
 
 
 @router.get("/market/symbols")
@@ -580,12 +558,18 @@ async def market_symbols():
 
 @router.get("/market/lookup/{symbol}")
 async def market_lookup(symbol: str):
-    """单个 symbol 的元信息查询"""
+    """单个 symbol 的元信息查询（大小写折叠兜底）"""
     norm = _normalize_symbol(symbol)
-    item = _get_combined_lookup().get(norm)
-    if not item:
-        return { 'error': 'symbol not found', 'raw': symbol, 'normalized': norm }
-    return item
+    lookup = _get_combined_lookup()
+    item = lookup.get(norm)
+    if item:
+        return item
+    # 大小写折叠兜底（如 'hsi' → 'hkHSI'，'ndx' → 'usNDX'）
+    norm_lower = norm.lower()
+    for key, val in lookup.items():
+        if key.lower() == norm_lower:
+            return val
+    return { 'error': 'symbol not found', 'raw': symbol, 'normalized': norm }
 
 
 @router.get("/market/quote/{symbol}")
