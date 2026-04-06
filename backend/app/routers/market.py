@@ -440,6 +440,65 @@ _SYMBOL_REGISTRY = [
 # 快速 lookup 表
 _SYMBOL_LOOKUP = { item['symbol']: item for item in _SYMBOL_REGISTRY }
 
+# ── 全市场A股名称懒加载（不阻塞后端启动）───────────────────────────────
+_ALL_STOCK_NAMES: list[dict] = []      # 全量个股注册表
+_STOCK_NAMES_LOADED: bool = False
+_STOCK_LOAD_LOCK = threading.Lock()      # 防止并发多次加载
+
+def _pinyin_fallback(name: str) -> str:
+    """获取名称首字拼音（无 pypinyin 时回退到名称前4字）"""
+    try:
+        from pypinyin import lazy_pinyin
+        py = lazy_pinyin(name)
+        return ''.join(py) if py else name[:4]
+    except Exception:
+        return name[:4]  # 无 pypinyin 时用名称前4字做近似
+
+
+def _load_all_stock_names() -> list[dict]:
+    """
+    调用 akshare stock_info_a_code_name() 获取全市场A股代码+名称，
+    懒加载一次，线程安全，结果缓存于 _ALL_STOCK_NAMES。
+    """
+    global _ALL_STOCK_NAMES, _STOCK_NAMES_LOADED
+    if _STOCK_NAMES_LOADED:
+        return _ALL_STOCK_NAMES
+
+    with _STOCK_LOAD_LOCK:
+        if _STOCK_NAMES_LOADED:   # double-check（其他线程已加载）
+            return _ALL_STOCK_NAMES
+
+        try:
+            import akshare as ak
+            logger.info("[SymbolRegistry] 开始加载全市场A股名称...")
+            df = ak.stock_info_a_code_name()
+            rows = []
+            for _, row in df.iterrows():
+                code = str(row.get('code', '')).strip()
+                name = str(row.get('name', '')).strip()
+                if not code or not name or len(code) != 6:
+                    continue
+                # 交易所判断：6/9 开头=上海，0-3 开头=深圳，8 开头=北交所
+                prefix = 'sh' if code[0] in ('6', '9') else ('bj' if code[0] == '8' else 'sz')
+                symbol = f'{prefix}{code}'
+                rows.append({
+                    'symbol': symbol,
+                    'code':   code,
+                    'name':   name,
+                    'pinyin': _pinyin_fallback(name),
+                    'market': 'AShare',
+                    'type':   'stock',
+                })
+            _ALL_STOCK_NAMES = rows
+            _STOCK_NAMES_LOADED = True
+            logger.info(f"[SymbolRegistry] 全市场A股加载完成: {len(rows)} 只")
+        except Exception as e:
+            logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}")
+            _ALL_STOCK_NAMES = []
+            _STOCK_NAMES_LOADED = True   # 标记"已尝试"，避免重复拉取
+
+    return _ALL_STOCK_NAMES
+
 
 def _normalize_symbol(raw: str) -> str:
     """
@@ -473,9 +532,18 @@ def _normalize_symbol(raw: str) -> str:
 
 @router.get("/market/symbols")
 async def market_symbols():
-    """返回全量符号注册表，供前端搜索索引构建"""
+    """返回全量符号注册表（含全市场A股），供前端搜索索引构建"""
+    # 懒加载全市场A股名称（首次调用时从 akshare 拉取，之后走缓存）
+    all_stocks = _load_all_stock_names()
+    # 合并：静态注册表（指数+示例股）+ 全市场A股
+    static_symbols = {s['symbol'] for s in _SYMBOL_REGISTRY}
+    merged = list(_SYMBOL_REGISTRY) + [
+        s for s in all_stocks if s['symbol'] not in static_symbols
+    ]
     return {
-        'symbols': _SYMBOL_REGISTRY,
+        'symbols': merged,
+        'count': len(merged),
+        'loaded': _STOCK_NAMES_LOADED,
         'timestamp': datetime.now().isoformat(),
     }
 
@@ -701,7 +769,7 @@ async def market_history(
             except Exception as e:
                 logger.error(f"[Market History] 穿透失败: {e}")
 
-        history  = _apply_adjustment(list(reversed(raw_rows)), adjustment)
+        history  = _inject_change_pct(_apply_adjustment(list(reversed(raw_rows)), adjustment))
         has_more = (offset + len(raw_rows)) < total
         chart_type = "candlestick"
 

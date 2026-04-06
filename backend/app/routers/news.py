@@ -46,19 +46,37 @@ async def news_force_refresh():
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, refresh_news_cache, False)
 
+    # 记录刷新前的缓存条数，用于判断是否为"旧数据"
+    stale_count = len(get_cached_news(limit=200)) if is_cache_ready() else 0
+
     try:
         logger.info("[News] force_refresh: 开始同步抓取...")
         await _do()
         news = get_cached_news(limit=150)
         logger.info(f"[News] force_refresh: 获取到 {len(news)} 条")
+        # 有新数据或本来就有缓存 → items_stale=false；完全空白 → items_stale=true
+        items_stale = (len(news) == 0 and stale_count == 0)
         return {
-            "news":   news,
-            "source": "force_refresh",
-            "total":  len(news),
+            "news":        news,
+            "source":      "force_refresh",
+            "total":       len(news),
+            "items_stale": items_stale,
         }
     except Exception as e:
         logger.error(f"[News] force_refresh 失败: {type(e).__name__}: {e}", exc_info=True)
-        return {"news": [], "source": "error", "total": 0, "error": str(e)}
+        # HTTP 500 表示后端出错，前端应显示红色警告
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "news":        [],
+                "source":      "error",
+                "total":       0,
+                "error":       str(e),
+                "items_stale": True,
+                "stale_count": stale_count,
+            }
+        )
 
 
 @router.get("/news/detail")

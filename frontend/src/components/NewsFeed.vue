@@ -284,9 +284,37 @@ async function fetchNews(quiet = false) {
       ? '/api/v1/news/force_refresh'
       : `/api/v1/news/flash?_t=${Date.now()}`
     const res = await fetch(url, useForce ? { method: 'POST' } : {})
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    if (!res.ok) {
+      // 后端抛 HTTP 500：尝试从响应体提取错误详情
+      let errMsg = `HTTP ${res.status}`
+      try {
+        const errBody = await res.json()
+        const detail = errBody?.detail || {}
+        if (detail.error) {
+          errMsg = `抓取失败: ${detail.error}`
+          if (detail.stale_count > 0) {
+            refreshMsg.value = `⚠️ ${errMsg}（显示 ${detail.stale_count} 条旧数据）`
+          } else {
+            refreshMsg.value = `🔴 ${errMsg}`
+          }
+        }
+      } catch {}
+      if (!useForce || !refreshMsg.value) {
+        refreshMsg.value = `⚠️ ${errMsg}`
+      }
+      if (!quiet) { showRefreshed.value = true; setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000) }
+      return
+    }
     const data = await res.json()
     const incoming = data.news || []
+
+    // items_stale=true 表示后端抓取失败、返回了旧缓存
+    if (!quiet && data.items_stale && !incoming.length) {
+      refreshMsg.value = `⚠️ 网络异常，显示 ${data.stale_count || 0} 条旧数据`
+      showRefreshed.value = true
+      setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000)
+      return
+    }
 
     if (!incoming.length) return
 
