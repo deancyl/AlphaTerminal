@@ -13,6 +13,7 @@ from fastapi import APIRouter
 import httpx
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
+from app.services.sentiment_engine import SpotCache
 
 
 logger = logging.getLogger(__name__)
@@ -1039,12 +1040,20 @@ async def market_quote_detail(symbol: str):
     ret_ytd  = _period_return(ytd_start, len(ytd_start)) if len(ytd_start) >= 2 else None
     high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
 
-    # ── 涨跌家数（仅指数有成分股统计，目前无数据源→返回 null）───
-    is_index = market in ('AShare',) and norm in ('sh000001','sh000300','sz399001','sz399006')
-    advance_count   = None
-    decline_count   = None
-    unchanged_count = None
-    advance_rate    = None
+    # ── 涨跌家数（来自 SpotCache 的 Sina HQ 实时全市场数据）───
+    # SpotCache 由后台线程定期刷新，包含沪深全市场股票涨跌幅统计
+    _hist = SpotCache.get_histogram()
+    _ready = SpotCache.is_ready()
+    if _ready and _hist.get("total", 0) > 0:
+        advance_count   = _hist.get("advance", 0)
+        decline_count   = _hist.get("decline", 0)
+        unchanged_count = _hist.get("unchanged", 0)
+        advance_rate    = _hist.get("up_ratio", 0)   # 上涨比例 0~1
+    else:
+        advance_count   = None
+        decline_count   = None
+        unchanged_count = None
+        advance_rate    = None
 
     # ── 资金流向（暂无数据源→返回 null）────────────────────────
     fund_main_net   = None
