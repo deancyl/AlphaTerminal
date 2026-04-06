@@ -1,5 +1,22 @@
 <template>
-  <div class="flex h-screen bg-terminal-bg overflow-hidden">
+  <!-- 全屏容器：直接body子元素，不受任何overflow/stacking约束 -->
+  <div
+    v-show="ui.klineFullscreen"
+    :style="ui.klineFullscreen
+      ? 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;width:100vw;height:100vh;background:#0a0e17;display:flex;flex-direction:column'
+      : ''"
+  >
+    <FullscreenKline
+      :symbol="fullscreenSymbol"
+      :name="fullscreenName"
+      :isFull="true"
+      @close="() => { ui.klineFullscreen = false }"
+      @symbol-change="openFullscreenKline"
+    />
+  </div>
+
+  <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
+  <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
     <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
     <Sidebar
@@ -11,7 +28,8 @@
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
     <main
-      class="flex-1 flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+      class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
+      style="overflow-y:auto;overflow-x:hidden"
       :style="{ width: isCopilotOpen ? 'calc(100% - 340px)' : '100%' }"
     >
       <!-- 顶部状态栏 -->
@@ -99,17 +117,6 @@
 
   </div>
 
-  <!-- ━━━ 全屏 K 线（Teleport到body，脱离所有overflow/stacking context约束）━━━━ -->
-  <Teleport to="body">
-    <FullscreenKline
-      v-if="ui.klineFullscreen"
-      :symbol="fullscreenSymbol"
-      :name="fullscreenName"
-      :isFull="true"
-      @close="() => { console.log('[DEBUG] close emitted'); ui.klineFullscreen = false }"
-      @symbol-change="openFullscreenKline"
-    />
-  </Teleport>
 </template>
 
 <script setup>
