@@ -747,12 +747,13 @@ def fetch_index_minute_history(
             prev_close = close
 
         # 分页：Eastmoney 已按升序（ oldest → newest）返回
-        # offset=0 时取最近 limit 条；offset>0 时从历史段分页
+        # offset=0 时取最近 limit 条（多取的 1 条已在 pct 计算后排除）
+        # offset>0 时从历史段分页
         total = len(rows)
         if offset > 0:
             rows = rows[offset:offset + limit]
-        else:
-            rows = rows[-limit:] if limit else rows
+        elif limit:
+            rows = rows[-limit:]   # 保留最后 limit 条（最新数据）
         rows = rows[offset:offset + limit]
         logger.info(f"[Eastmoney] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows
