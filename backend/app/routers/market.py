@@ -594,6 +594,7 @@ async def market_quote(symbol: str):
         'price':        close,
         'change':       round(chg, 3),
         'change_pct':   round(chg_pct, 2),
+    offset: int = 0,       # 分页偏移（从最早日期计），首次加载 offset=0
         'volume':       float(latest.get('volume') or 0),
         'amount':       float(latest.get('amount') or 0),
         'amplitude':    round((float(latest.get('high') or 0) / float(latest.get('low') or 1) - 1) * 100, 2) if latest.get('high') and latest.get('low') else 0,
