@@ -108,13 +108,13 @@
               >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
               <span class="text-[9px] text-gray-200 truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>
-            <!-- 最新价 -->
-            <div class="text-[10px] font-mono text-gray-100 text-center">
+            <!-- 最新价（右对齐） -->
+            <div class="text-[10px] font-mono text-gray-100 text-right w-full">
               {{ item.category === 'macro' ? formatMacroPrice(item) : formatPrice(item.price) }}
             </div>
-            <!-- 涨跌幅 -->
+            <!-- 涨跌幅（右对齐） -->
             <div
-              class="text-[10px] font-mono font-bold"
+              class="text-[10px] font-mono font-bold text-right w-full"
               :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
             >
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
@@ -420,6 +420,6 @@ onUnmounted(() => {
 </script>
 
 <style>
-.grid-stack { width: 100%; }
-.grid-stack-item-content { inset: 4px; overflow: hidden; border-radius: 8px; }
+.grid-stack { width: 100%; height: 100%; overflow: hidden; }
+.grid-stack-item-content { inset: 4px; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
 </style>

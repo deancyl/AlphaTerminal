@@ -4,7 +4,7 @@
     <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
     <div class="bg-terminal-bg rounded border border-gray-700 p-2">
       <div class="flex items-center justify-between mb-1">
-        <span class="text-[10px] text-terminal-dim">📈 A股全天走势（上涨家数）</span>
+        <span class="text-[10px] text-terminal-dim">📈 全市场多空对比（全天走势）</span>
         <span class="text-[9px] text-terminal-dim">{{ intradayUpdateTime }}</span>
       </div>
       <!-- ECharts 折线图：上涨家数全天走势 -->
@@ -65,7 +65,7 @@
     </div>
 
     <!-- ── 简版行情列表（从 props.marketData.wind）──────────────── -->
-    <div class="overflow-auto flex-1">
+    <div class="overflow-hidden flex-1" style="max-height: 140px;">
       <table class="w-full text-xs">
         <thead>
           <tr class="text-terminal-dim border-b border-gray-700">
@@ -271,11 +271,10 @@ function buildHistogramOption(buckets) {
   const labels  = buckets.map(b => b.label)
   const counts  = buckets.map(b => b.count)
   const colors  = buckets.map(b => {
-    // 0% 桶：中灰
+    // 直接使用后端返回的颜色（后端已按 A 股颜色约定赋值）
+    // 后端约定：绿色=#14b143(跌)，红色=#ef232a(涨)，灰色=#4b5563(平盘)
     if (b.label === "平盘(0%)") return '#4b5563'
-    // 涨跌颜色跟随
-    const isNeg = b.label.includes("跌") || (b.label.startsWith("<") && !b.label.startsWith(">"))
-    return isNeg ? DOWN : UP
+    return b.color || (b.label.includes("涨") ? UP : DOWN)
   })
 
   return {

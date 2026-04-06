@@ -12,7 +12,7 @@
     </div>
 
     <!-- ── 表头（可排序列）────────────────────────────────── -->
-    <div class="overflow-x-auto flex-1 min-h-0">
+    <div class="overflow-x-auto overflow-y-auto flex-1 min-h-0">
       <table class="w-full text-xs whitespace-nowrap">
         <thead class="sticky top-0 z-10 bg-terminal-panel">
           <tr class="text-terminal-dim border-b border-gray-700">

@@ -53,12 +53,12 @@
                   :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
+            <!-- 时间左置（固定宽度，只显示 HH:MM） -->
+            <span class="shrink-0 text-[9px] text-gray-500 w-12 text-right">{{ formatTime(item.time) }}</span>
+            <!-- 标题 + 来源 -->
             <div class="flex-1 min-w-0">
               <p class="text-xs text-gray-200 leading-snug line-clamp-2">{{ item.title }}</p>
-              <div class="flex items-center gap-2 mt-1">
-                <span class="text-terminal-dim text-[9px]">{{ item.time }}</span>
-                <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
-              </div>
+              <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
             </div>
           </div>
         </div>
@@ -237,6 +237,13 @@ const modalContent = ref('')
 const modalLoading = ref(false)
 
 // ── 标签颜色映射 ──────────────────────────────────────────────────────
+
+function formatTime(timeStr) {
+  if (!timeStr) return '--:--'
+  // 只显示 HH:MM，截断日期前缀
+  const parts = timeStr.split(' ')
+  return parts.length >= 2 ? parts[1].slice(0, 5) : (timeStr.slice(0, 5))
+}
 function tagClass(tag) {
   if (!tag) return 'bg-gray-600/30 text-gray-400'
   if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-red-500/20 text-red-400'
