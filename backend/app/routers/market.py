@@ -437,13 +437,22 @@ _SYMBOL_REGISTRY = [
     { 'symbol': 'VIX',      'code': 'VIX',    'name': 'VIX恐慌指数',  'pinyin': 'VIX',  'market': 'Macro',   'type': 'index' },
 ]
 
-# 快速 lookup 表
-_SYMBOL_LOOKUP = { item['symbol']: item for item in _SYMBOL_REGISTRY }
-
 # ── 全市场A股名称懒加载（不阻塞后端启动）───────────────────────────────
 _ALL_STOCK_NAMES: list[dict] = []      # 全量个股注册表
 _STOCK_NAMES_LOADED: bool = False
 _STOCK_LOAD_LOCK = threading.Lock()      # 防止并发多次加载
+
+# 快速 lookup 表（动态 + 静态分开，market_lookup 合并查询）
+_SYMBOL_LOOKUP_STATIC = { item['symbol']: item for item in _SYMBOL_REGISTRY }
+
+
+def _get_combined_lookup() -> dict:
+    """返回完整 lookup：静态注册表 + 已加载的动态全市场A股（线程安全）"""
+    base = dict(_SYMBOL_LOOKUP_STATIC)
+    if _STOCK_NAMES_LOADED:
+        for s in _ALL_STOCK_NAMES:
+            base[s['symbol']] = s
+    return base
 
 def _pinyin_fallback(name: str) -> str:
     """获取名称首字拼音（无 pypinyin 时回退到名称前4字）"""
@@ -573,7 +582,7 @@ async def market_symbols():
 async def market_lookup(symbol: str):
     """单个 symbol 的元信息查询"""
     norm = _normalize_symbol(symbol)
-    item = _SYMBOL_LOOKUP.get(norm)
+    item = _get_combined_lookup().get(norm)
     if not item:
         return { 'error': 'symbol not found', 'raw': symbol, 'normalized': norm }
     return item

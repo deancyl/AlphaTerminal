@@ -719,15 +719,14 @@ def fetch_index_minute_history(
                 continue
             try:
                 rows.append({
-                    "time":       parts[0],
-                    "open":       float(parts[1]),
-                    "close":      float(parts[2]),
-                    "high":       float(parts[3]),
-                    "low":        float(parts[4]),
-                    "volume":     float(parts[5]),
-                    "price":      float(parts[2]),
-                    "change_pct": 0.0,
-                    "timestamp":   int(
+                    "time":     parts[0],
+                    "open":     float(parts[1]),
+                    "close":    float(parts[2]),
+                    "high":     float(parts[3]),
+                    "low":      float(parts[4]),
+                    "volume":   float(parts[5]),
+                    "price":    float(parts[2]),
+                    "timestamp": int(
                         __import__("time").mktime(
                             __import__("time").strptime(parts[0], "%Y-%m-%d %H:%M")
                         )
@@ -736,8 +735,24 @@ def fetch_index_minute_history(
             except (ValueError, IndexError, OSError):
                 continue
 
-        # 分页：offset → 从头取 offset~offset+limit
+        # 计算 change_pct：Eastmoney 已按时间升序返回，相邻 close 即为 prev_close
+        prev_close = None
+        for r in rows:
+            close = r["close"]
+            if prev_close is not None and prev_close != 0:
+                pct = (close - prev_close) / prev_close * 100
+            else:
+                pct = 0.0
+            r["change_pct"] = round(pct, 4)
+            prev_close = close
+
+        # 分页：Eastmoney 已按升序（ oldest → newest）返回
+        # offset=0 时取最近 limit 条；offset>0 时从历史段分页
         total = len(rows)
+        if offset > 0:
+            rows = rows[offset:offset + limit]
+        else:
+            rows = rows[-limit:] if limit else rows
         rows = rows[offset:offset + limit]
         logger.info(f"[Eastmoney] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows

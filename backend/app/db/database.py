@@ -40,9 +40,13 @@ def init_tables():
         conn.execute("CREATE TABLE IF NOT EXISTS write_buffer (symbol TEXT, name TEXT, data TEXT)")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS market_data_daily (
-                symbol TEXT, date TEXT, open REAL, high REAL, low REAL, 
-                close REAL, volume REAL, change_pct REAL, timestamp INTEGER,
-                data_type TEXT DEFAULT 'daily', UNIQUE(symbol, date)
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                symbol TEXT NOT NULL, date TEXT NOT NULL,
+                open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL,
+                close REAL NOT NULL, volume INTEGER NOT NULL,
+                timestamp INTEGER NOT NULL,
+                data_type TEXT NOT NULL DEFAULT 'daily',
+                UNIQUE(symbol, date)
             )
         """)
         conn.execute("""
@@ -70,8 +74,8 @@ def buffer_insert(data_list):
 
 def buffer_insert_daily(data_list):
     """
-    写入 market_data_daily（注意：实际表无 change_pct 列，change_pct 仅为展示计算）
-    实际列: id, symbol, date, open, high, low, close, volume, timestamp, data_type
+    写入 market_data_daily（change_pct 在 API 层内联计算，不落此表）
+    表列: id AUTOINCREMENT, symbol, date, open, high, low, close, volume, timestamp, data_type
     """
     if not data_list: return
     with _lock:
