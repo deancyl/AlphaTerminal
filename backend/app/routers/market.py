@@ -1034,9 +1034,10 @@ async def market_quote_detail(symbol: str):
         return round((cur / prev - 1) * 100, 4)
 
     def _52w_bounds(hist):
-        """52 周最高/最低（最近 252 个交易日）"""
+        """52 周最高/最低（最近 252 个交易日）。hist 为 DESC 排序（最新在前），需先反转取最近的 252 条。"""
         if not hist: return None, None, None, None
-        recent = hist[-252:] if len(hist) >= 252 else hist
+        # hist 是 DESC 排序，取最近 252 条（最后 252 个 = 最老的 252 条），需取前面的 252 条
+        recent = hist[:252] if len(hist) >= 252 else hist
         closes = [(float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close')]
         if not closes: return None, None, None, None
         closes.sort(key=lambda x: x[0])

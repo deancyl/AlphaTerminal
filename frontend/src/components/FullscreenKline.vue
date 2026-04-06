@@ -86,6 +86,7 @@ const activeIndicators = ref([])
 const isLoading = ref(false), chartError = ref('')
 const latestPrice = ref(null), latestChange = ref(0)
 const quoteData = ref({}), crosshairSnapshot = ref(null), latestCandle = ref(null)
+const indexStats = ref({})   // 当前交易日统计（52w高低/换手率/振幅/涨跌家数），hover时保留
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
 const isMobile = computed(() => windowWidth.value < 900)
 const drawTool = ref(''), drawColor = ref('#fbbf24'), magnetMode = ref(true)
@@ -143,6 +144,16 @@ async function fetchQuoteDetail() {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
     if (!res.ok) return
     quoteData.value = await res.json()
+    // 提取当日统计（52w高低/换手率/振幅/涨跌家数），hover 时保留
+    const d = quoteData.value
+    indexStats.value = {
+      high_52w: d.high_52w, low_52w: d.low_52w,
+      high_52w_date: d.high_52w_date, low_52w_date: d.low_52w_date,
+      turnover_rate: d.turnover_rate, amplitude: d.amplitude,
+      advance_count: d.advance_count, decline_count: d.decline_count,
+      unchanged_count: d.unchanged_count, advance_rate: d.advance_rate,
+      amount: d.amount,
+    }
   } catch (e) { console.warn('[FullscreenKline] quote_detail failed:', e.message) }
 }
 
@@ -357,12 +368,15 @@ function bindCrosshair(hist) {
     crosshairSnapshot.value = {
       name: props.name || props.symbol, symbol: props.symbol,
       price: h.close, open: h.open, high: h.high, low: h.low, close: h.close,
-      volume: h.volume, amount: h.amount ?? 0, change, change_pct,
+      volume: h.volume, amount: h.amount ?? indexStats.value.amount ?? 0, change, change_pct,
       timestamp: h.date || h.time || '',
       returns_5d: null, returns_20d: null, returns_60d: null, returns_ytd: null,
-      high_52w: null, low_52w: null, high_52w_date: null, low_52w_date: null,
-      pe_ttm: null, pb: null, turnover_rate: null, amplitude: null,
-      advance_count: null, decline_count: null, unchanged_count: null, advance_rate: null,
+      high_52w: indexStats.value.high_52w, low_52w: indexStats.value.low_52w,
+      high_52w_date: indexStats.value.high_52w_date, low_52w_date: indexStats.value.low_52w_date,
+      pe_ttm: null, pb: null,
+      turnover_rate: indexStats.value.turnover_rate, amplitude: indexStats.value.amplitude,
+      advance_count: indexStats.value.advance_count, decline_count: indexStats.value.decline_count,
+      unchanged_count: indexStats.value.unchanged_count, advance_rate: indexStats.value.advance_rate,
       fund_main_net: null, fund_main_in: null, fund_main_out: null,
       fund_huge_in: null, fund_huge_out: null, fund_big_in: null, fund_big_out: null,
       fund_medium_in: null, fund_medium_out: null, fund_small_in: null, fund_small_out: null,
