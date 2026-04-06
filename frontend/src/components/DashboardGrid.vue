@@ -432,6 +432,8 @@ watch(currentSymbol, (sym) => {
   if (sym && sym !== selectedIndex.value) {
     selectedIndex.value = sym
   }
+  // 同步名称（StockScreener 等外部组件通过 store.setSymbol 更新了 currentSymbolName）
+  currentIndexName.value = currentSymbolName.value || currentIndexName.value
 })
 
 // ── 标的切换时自动回退不支持的周期 ────────────────────────────────
