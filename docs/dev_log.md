@@ -375,3 +375,43 @@ fe688ed  Phase 7P0: VHSI real data + heatmap collapse fix ← 黄金节点
 ### Git Tag
 - `v0.3.1-beta` → `903c3d2`（2026-04-01 23:22）
 - `Beta-0.3.0` → 已归档为 pre-release（代码已过时）
+
+---
+
+## 开发进度同步（2026-04-06 10:35）
+
+### Git 提交记录
+```
+2ae25cc8  fix: P0三连环修复
+76c94e8b  fix: Symbol规范化、_parse_hkvhsi、缓冲区写入安全、前端_aSharePrefix
+bc986d08  feat: 多源历史数据系统 + A股数据完整迁移
+...（详见上方里程碑）
+1b22cce8  feat+fix: change_pct内联计算/A股日K注入/Eastmoney httpx重试/清理db+dist追踪 [2026-04-06]
+```
+
+### 本次代码审查发现的问题
+
+#### 🔴 P0：全市场个股名称未同步
+- **文件**：`backend/app/routers/market.py` 第 414 行 `_SYMBOL_REGISTRY`
+- **现状**：仅含 5 只示例股（贵州茅台/中国平安/五粮液/招商银行/比亚迪）+ 主要指数
+- **影响**：前端 CommandCenter 搜索无法找到全市场个股
+- **方案**：接入 `akshare stock_info_a_code_name()` 获取全市场 A 股代码名称（静态加载）
+
+#### 🟡 已知但未修复：分时数据 Bug
+- **现状**：MEMORY.md 记录 2026-04-01 已修复，但今日（2026-04-06）用户仍反馈图表错误
+- **分析**：
+  - `_INDEX_SECID_MAP` 在 `fetch_index_minute_history()` 函数内部定义（第 661 行）
+  - 映射：`000001→1.000001`，`399001→0.399001`，`000300→1.000300` 等
+  - 根因可能：`_clean_symbol()` 标准化后 symbol 格式与 map key 不匹配
+  - 待物理验证：前端传入 `sh000001` vs `000001` 经 `_clean_symbol` 后是否正确
+
+#### 已修复（本次提交）
+1. `fetch_china_index_history`：AkShare 日K的 `change_pct` 改由相邻 `close` 自计算（消除列名差异依赖）
+2. `market_history`：日K/周K/月K 全部通过 `_inject_change_pct()` 注入 `change_pct`
+3. `fetch_index_minute_history`：改用 `httpx`（替代 subprocess curl）+ 重试 3 次 + 走代理 `192.168.1.50:7897`
+4. `DashboardGrid.vue`：`handleWindClick` 修复宏观大宗（category='macro'）处理逻辑
+5. `DashboardGrid.vue`：K线标题统一改为「指标图表」，增加 `currentIndexName` 子标题
+
+### .gitignore 清理
+- 移除 `database.db`（35MB live market data，不应追踪）
+- 移除 `frontend/dist/index.html`（构建产物，不应追踪）
