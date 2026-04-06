@@ -528,15 +528,13 @@ onMounted(() => {
     const ro = new ResizeObserver(() => resizeCanvas())
     ro.observe(canvasRef.value.parentElement)
   }
-  // 键盘快捷键
-  window.addEventListener('keydown', onKeyDown)
+  // 键盘快捷键由父组件 FullscreenKline 统一处理，这里不再监听
 })
 
 let _canvasRo = null
 onUnmounted(() => {
   cancelAnimationFrame(animationFrame)
   window.removeEventListener('resize', resizeCanvas)
-  window.removeEventListener('keydown', onKeyDown)
   _canvasRo?.disconnect()
 })
 
@@ -544,19 +542,6 @@ onUnmounted(() => {
 watch(() => props.symbol, () => { loadFromStorage() })
 watch([() => props.activeTool, () => props.activeColor, () => props.magnetMode], () => redraw())
 watch(shapes, () => redraw(), { deep: true })
-
-// ── 键盘快捷键 ─────────────────────────────────────────────
-const KEY_TOOL = { l:'line', r:'ray', s:'segment', h:'hray', c:'channel', f:'fib', q:'rect', t:'text' }
-function onKeyDown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  const key = e.key.toLowerCase()
-  if (e.key === 'Escape') { selectedId.value = null; drawing.value = null; redraw() }
-  else if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelected() }
-  else if (KEY_TOOL[key]) {
-    // 通过 emit 冒泡给父组件，由父组件更新 drawTool
-    emit('tool-change', KEY_TOOL[key])
-  }
-}
 
 // ── 暴露方法 ────────────────────────────────────────────────
 defineExpose({ clearAll, deleteSelected, shapes })

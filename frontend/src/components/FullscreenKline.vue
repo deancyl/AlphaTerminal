@@ -56,6 +56,7 @@
         <DrawingCanvas v-if="isFull && drawVisible" ref="drawingCanvasRef" class="absolute inset-0 z-10"
           :chartInstance="chartInstance" :activeTool="drawTool" :activeColor="drawColor"
           :magnetMode="magnetMode" :locked="drawLocked" :symbol="symbol"
+          @tool-change="t => drawTool = t"
           @range-select="onRangeSelect" />
       </div>
       <QuotePanel v-if="isFull" class="shrink-0"
@@ -79,6 +80,21 @@ const props = defineProps({
   isFull: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'symbol-change'])
+
+// 键盘快捷键（绑定到 fullscreen 容器）
+const KEY_TOOL = { l:'line', r:'ray', s:'segment', h:'hray', c:'channel', f:'fib', q:'rect', t:'text' }
+function onKeydown(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  const key = e.key.toLowerCase()
+  if (e.key === 'escape') {
+    if (drawTool.value) drawTool.value = ''
+    else if (props.isFull) emit('close')
+  } else if (e.key === 'delete' || e.key === 'backspace') {
+    drawingCanvasRef.value?.deleteSelected()
+  } else if (KEY_TOOL[key]) {
+    drawTool.value = KEY_TOOL[key]
+  }
+}
 
 const chartRef = ref(null)
 let chartInstance = null, resizeObserver = null
