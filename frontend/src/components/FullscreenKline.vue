@@ -1,7 +1,7 @@
 <template>
   <div
     class="fullscreen-kline flex flex-col bg-[#0a0e17]"
-    :class="{ 'fixed inset-0 z-[200]': isFull }"
+    :class="{ 'fullscreen-fullscreen': isFull }"
     @keydown.esc="isFull && emit('close')"
     tabindex="0"
   >
@@ -639,6 +639,19 @@ function onResize() {
 </script>
 
 <style scoped>
+/* 父组件 DashboardGrid 有 position:relative (scoped [data-v-xxx])，
+   必须用 !important 才能让 fullscreen-fullscreen 的 position:fixed 胜出 */
+.fullscreen-fullscreen {
+  position: fixed !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 200 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+
 /* 移动端（≤900px）：报价面板掉到底部，K线图占满宽度 */
 @media (max-width: 900px) {
   .chart-area {
