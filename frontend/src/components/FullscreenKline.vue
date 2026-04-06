@@ -422,9 +422,19 @@ watch(() => props.symbol, () => { crosshairSnapshot.value = null; latestCandle.v
 watch(period, () => { crosshairSnapshot.value = null; latestCandle.value = null; fetchData() })
 watch(activeIndicators, () => { if (!chartInstance) return; fetchData() }, { deep: true })
 
-onMounted(() => { window.addEventListener('resize', onResize); initChart(); fetchQuoteDetail() })
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  document.addEventListener('keydown', onKeydown)
+  initChart()
+  fetchQuoteDetail()
+})
 onBeforeUnmount(() => { window.removeEventListener('resize', onResize) })
-onUnmounted(() => { resizeObserver?.disconnect(); chartInstance?.dispose(); chartInstance = null })
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  chartInstance?.dispose()
+  chartInstance = null
+  document.removeEventListener('keydown', onKeydown)
+})
 
 function onResize() { windowWidth.value = window.innerWidth }
 
