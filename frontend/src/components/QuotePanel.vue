@@ -389,7 +389,7 @@ const fundDonutData = computed(() => {
     net:   hasReal ? d.fund_main_net  : fundFlowMock.main_net,
     inAmt: hasReal ? d.fund_main_in   : fundFlowMock.main_in,
     outAmt:hasReal ? d.fund_main_out  : fundFlowMock.main_out,
-    isMock: mock,
+    isMock: d.fund_main_net == null,
   }
 })
 
