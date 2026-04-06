@@ -212,42 +212,30 @@ def _fetch_macro_data():
     global _MACRO_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
 
-    # 初始化默认值（静态兜底）
+    # 初始化默认值（静态兜底，网络失败时使用）
     usdcny_price = 6.8871; usdcny_pct = 0.0
-    gold_price = 4720.0; gold_pct = 0.0
-    wti_price = 101.0; wti_pct = 0.0
+    gold_price = 3318.40; gold_pct = 0.0
+    wti_price = 68.92; wti_pct = 0.0
     vhsi_price = 20.0; vhsi_pct = 0.0
 
     try:
-        # 一次性拉取所有需要的数据
         raw = _fetch_from_sina(["CNYUSD", "hf_GC", "hf_CL", "hkVHSI"])
-
-        usdcnh_price = 7.2531
-        usdcnh_pct   = 0.0
-        gold_price   = 3318.40
-        gold_pct     = 0.0
-        wti_price    = 68.92
-        wti_pct      = 0.0
-        fetched = False
 
         if "CNYUSD" in raw and raw["CNYUSD"]:
             try:
                 usdcny_price, usdcny_pct, _ = _parse_cnyusd(raw)
-                fetched = True
             except Exception as e:
                 logger.warning(f"[Macro] CNYUSD parse error: {e}")
 
         if "hf_GC" in raw and raw["hf_GC"]:
             try:
                 gold_price, gold_pct, _ = _parse_hf_gold(raw)
-                fetched = True
             except Exception as e:
                 logger.warning(f"[Macro] GOLD parse error: {e}")
 
         if "hf_CL" in raw and raw["hf_CL"]:
             try:
                 wti_price, wti_pct, _ = _parse_hf_cl(raw)
-                fetched = True
             except Exception as e:
                 logger.warning(f"[Macro] WTI parse error: {e}")
 

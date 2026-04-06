@@ -1,189 +1,137 @@
-# KNOWN ISSUES & ROADMAP — Beta 0.3.1
+# KNOWN ISSUES & ROADMAP — Beta 0.4.30
 
-> 研发进度表与技术债记录。
-
----
-
-## ✅ Beta 0.3.1 — 已发布（2026-04-01）
-
-| 日期 | Issue | 根因 | 修复方案 |
-|------|-------|------|---------|
-| 2026-04-01 | 分时显示 11.xx（平安银行价格） | `secid=0.000001` 指向错误标的 | `_INDEX_SECID_MAP` 精确映射 `000001→1.000001` |
-| 2026-04-01 | 月K/周K全空 | `buffer_insert_periodic(,"weekly")` 硬编码覆盖 | 移除第二个参数，动态列名匹配 |
-| 2026-04-01 | 风向标垂直留白 | 单列 full-width 垂直堆叠 | `grid grid-cols-2` 两列卡片网格 |
-| 2026-04-01 | 行业板块稀缺（仅8个） | 接口返回数据少 | 行业+概念融合 Top 20 + 关键词加权 |
-| 2026-04-01 | Header 名称残留 | `currentName` 仅从 props 初始化 | `watch props.symbol` 响应式重置 |
-| 2026-04-01 | SSHFS 死锁 | WAL 模式在 FUSE 挂载层卡死 | DB 迁移至 `/home/deancyl0607/alpha_ultimate.db` |
-| 2026-04-01 | DB 权限壁垒 | trim.openclaw UID 无写权限 | chmod 666 + DELETE 模式降级 |
-| 2026-04-06 | AkShare change_pct 列名差异 | `pct_chg`/`pct_change`/`涨跌幅` 各版本不同 | 改用相邻 close 自主计算 |
-| 2026-04-06 | Eastmoney 分时网络不稳定 | subprocess curl 无重试无代理 | 改用 httpx + 重试3次 + 代理 192.168.1.50:7897 |
-| 2026-04-06 | DashboardGrid handleWindClick 宏观处理 | macro category 未处理 | 增加 macro 分支，映射至 GOLD |
-| 2026-04-06 | K线标题显示残留 | 固定显示「上证指数K线」等 | 统一「指标图表」，增加 currentIndexName 子标题 |
-| 2026-04-06 | .gitignore 误追踪 database.db | 35MB live market data 入库 | 移除追踪，加入 .gitignore |
+> 研发进度表与技术债记录。更新于 2026-04-06。
 
 ---
 
-## 🔴 P0 — 进行中
+## ✅ Beta 0.4.x — 发布记录（2026-04-06 当天）
+
+| 版本 | 日期 | 核心修复 |
+|------|------|---------|
+| v0.4.24 | 04-06 22:00 | QuotePanel `isMock: mock` ReferenceError（黑屏）|
+| v0.4.25 | 04-06 22:40 | FullscreenKline `isFull is not defined` 重写（405行）|
+| v0.4.26 | 04-06 23:02 | App.vue 重复Teleport移除+调试日志清理；IndexLineChart 恢复干净版 |
+| v0.4.27 | 04-06 23:06 | IndexLineChart ChartToolbar 错误依赖修复（恢复 d8b9ce46）|
+| v0.4.28 | 04-06 23:30 | 52w高低计算错误（hist DESC 排序取错252条）；hover 时 indexStats 保留 |
+| v0.4.29 | 04-06 23:47 | Dashboard 布局滚动条+数字右对齐+快讯时间层级+柱状图颜色纠正 |
+| v0.4.30 | 04-06 23:58 | DrawingCanvas locked/键盘快捷键/线段命中/ResizeObserver；FullscreenKline 键盘全支持 |
+
+---
+
+## 🔴 P0 — 未完成
 
 ### Issue #1：Force Refresh 无差异化错误提示
 
-**描述**：`POST /news/force_refresh` 在抓取失败时仍返回 HTTP 200 + 旧缓存，前端显示"✅ 刚刚更新"但数据实为过期。
+**状态**：⚠️ 未完成
 
-**涉及文件**：
-- 后端：`backend/app/routers/news.py`
-- 前端：`frontend/src/components/NewsFeed.vue`
+**描述**：`POST /news/force_refresh` 在抓取失败时仍返回 HTTP 200 + 旧缓存，前端显示"✅ 刚刚更新"但数据实为过期。
 
 **修复方向**：
 - [ ] 后端返回 `{"error": "...", "items_stale": true, "total": N}`（N=旧缓存条数）
 - [ ] 前端检测 `error` 字段，显示红色「⚠️ 抓取失败，显示 {N} 条旧数据」
-- [ ] 前端设置 5s 请求超时，超时显示「⚠️ 抓取超时，请检查网络」
+- [ ] 前端设置 5s 请求超时
 
 ---
 
-### Issue #2：全市场个股名称未同步
+### Issue #2：全市场个股名称未同步（已有数据源）
 
-**描述**：`_SYMBOL_REGISTRY`（`backend/app/routers/market.py` 第 414 行）仅含 5 只示例股，全市场几千只 A 股个股名称缺失。导致前端 CommandCenter 搜索无法找到大多数股票。
+**状态**：✅ 已修复（后端使用 akshare stock_info_a_code_name，/api/v1/market/symbols 返回全量A股名称）
 
 **涉及文件**：
-- 后端：`backend/app/routers/market.py`（`_SYMBOL_REGISTRY`）
+- 后端：`backend/app/routers/market.py`（`/api/v1/market/symbols` 路由）
 - 前端：`frontend/src/composables/useMarketStore.js`（`symbolRegistry`）
 
-**修复方向**：
-- [ ] 方案A（静态）：`akshare stock_info_a_code_name()` 启动时一次性加载全市场 A 股代码+名称，写入 `_SYMBOL_REGISTRY`
-- [ ] 方案B（动态）：前端搜索时从 `StockScreener` 全市场行情数据实时匹配名称
-
 ---
 
-### Issue #3：分时数据 Bug（未确认根因）
+### Issue #3：涨跌家数空白（数据源缺失）
 
-**描述**：前端选择"分时"周期时图表显示错误。dev_log 记录 2026-04-01 已修复，但 2026-04-06 用户仍反馈。
+**状态**：⚠️ 数据源待接入
 
-**分析**：
-- `_INDEX_SECID_MAP` 在 `fetch_index_minute_history()` 内定义（`data_fetcher.py` 第 661 行）
-- 映射：`000001→1.000001`，`399001→0.399001`，`000300→1.000300`，`399006→0.399006`，`000688→1.000688`
-- `_MIN_KLINE_SUPPORTED` 在 `market.py` 第 594 行：`{"000001", "000300", "399001", "399006", "000688"}`
+**描述**：后端 `quote_detail` 返回 `advance_count: null`，前端"涨跌统计"卡片空白。
 
-**涉及文件**：
-- `backend/app/services/data_fetcher.py`（`fetch_index_minute_history`）
-- `backend/app/routers/market.py`（`_MIN_KLINE_SUPPORTED`，`clean_sym` 标准化）
-- `frontend/src/components/IndexLineChart.vue`（图表渲染）
+**根因**：沪深交易所不直接开放涨跌家数实时接口，需通过东方财富等第三方。
 
 **修复方向**：
-- [ ] 物理验证：前端传 `sh000001` vs `000001` 经 `_clean_symbol()` 后的实际值
-- [ ] 验证 Eastmoney API 返回的 klines 数据是否正确
+- [ ] 接入东方财富 A 股涨跌统计接口（`push_stock_stat_sina` 或同效接口）
+- [ ] 后端计算并缓存：`{ advance_count, decline_count, unchanged_count, advance_rate }`
+- [ ] 前端 QuotePanel 展示横向红绿比例条
 
 ---
 
-## 🟡 P1 — 计划中（Phase 4）
+### Issue #4：成交额/换手率/振幅 字段为空
 
-### Feature #1：K线图接入真实日/周/月 K 数据
-- **现状**：✅ Beta 0.3.1 已接入 AkShare A股指数历史数据（`stock_zh_index_daily`）
-- **方向**：Phase 4.1 测试个股日K（`stock_zh_a_hist`）+ 美股（Alpha Vantage）
+**状态**：⚠️ 部分完成
 
-### Feature #2：Copilot 与快讯模块上下文打通
-- **现状**：CopilotSidebar 是独立面板，无快讯数据传入
-- **方向**：将 `newsData` prop 注入 Copilot，支持「分析今日最新快讯」类指令
-- **依赖**：Phase 4.2 AI 指令路由设计
+**根因**：
+- `market_data_daily` 表无 `amount` 列（AkShare 日K返回数据不含此字段）
+- `get_price_history` 查询 symbol 前缀不匹配（`sh000001` vs `000001`）
 
-### Feature #3：板块/行业数据稳定化
-- **现状**：`SectorsCache` 依赖 `akshare` 接口，`industry` 和 `concept` 接口均失败，静态兜底数据为旧数据
-- **方向**：接入东方财富行业板块 API 作为主源
-- **依赖**：Phase 4.3 代理网络验证
-
-### Feature #4：数据库持久化（SQLite WAL）
-- **现状**：所有数据存于内存，重启后需重新拉取
-- **方向**：将 `_NEWS_CACHE` + `SpotCache` 定期写入 SQLite，支持启动时加载历史
+**修复方向**：
+- [ ] 扩展 `buffer_insert_daily` 加入 `amount`/`turnover_rate`/`amplitude` 字段
+- [ ] 修复 symbol 前缀匹配逻辑
 
 ---
 
-## 📋 技术债
+## 🟡 P1 — 中期功能
 
-| 优先级 | 项目 | 说明 |
-|--------|------|------|
-| 高 | 分时数据 Bug 未彻底定位 | 需物理验证 symbol 标准化链路 |
-| 高 | 全市场个股名称缺失 | CommandCenter 搜索不可用 |
-| 中 | Vite 热更新在某些网络下失效 | `vite.config.js` HMR 配置待优化 |
-| 中 | `sentiment_engine.py` 仍有 Sina 来源代码残留 | 旧 `news_economic_baidu` 分支未完全删除 |
-| 中 | 单元测试覆盖率为 0 | 建议对 `news_engine.py` 缓存逻辑添加 pytest |
-| 低 | `akshare` 无代理时直接失败 | 当前强依赖 `HTTP_PROXY`，断网场景无降级 |
+### Issue #5：条件选股
+
+**描述**：现有 StockScreener 只有展示功能，无筛选能力。
+
+**方向**：增加价格/换手率/涨跌幅/市值区间过滤。
 
 ---
 
-## 📅 发布节奏
+### Issue #6：画线工具完善
 
-| 版本 | 目标 | 状态 |
-|------|------|------|
-| Beta 0.2.0 | 核心 UI + 情绪面板 + 快讯初版 | ✅ 已发布 |
-| Beta 0.2.1 | 交互加固（锁定/Copilot） | ✅ 已发布 |
-| Beta 0.2.2 | 快讯时间戳修复 + CORS + 竞态消除 | ✅ 已发布 |
-| Beta 0.3.0 | Phase 4：K线数据 + Copilot 打通 + 板块稳定化 | 🚧 规划中 |
-| Beta 0.3.1 | Phase 5-8 修复 + 分时数据 + ECharts 溢出 | ✅ 已发布（2026-04-01） |
+**状态**：⚠️ 进行中
 
----
+**已完成**：locked 状态、键盘快捷键、线段命中高亮、ResizeObserver
 
-## 关键路径速查
-
-| 资源 | 路径 |
-|------|------|
-| 后端入口 | `backend/start_backend.py`（端口 8002） |
-| 前端入口 | `frontend/`（Vite，端口 60100） |
-| 数据库 | `/home/deancyl0607/alpha_ultimate.db` |
-| 代理 | `http://192.168.1.50:7897` |
-| GitHub | https://github.com/deancyl/AlphaTerminal |
-| Alpha Vantage API | `https://www.alphavantage.co`（美股数据） |
-| Eastmoney 分时 API | `https://push2his.eastmoney.com/api/qt/stock/kline/get` |
+**待完成**：
+- [ ] 右键菜单替代 `confirm()` 对话框
+- [ ] 选择/移动模式（切换工具而非每次绘制）
+- [ ] 文本标注改内联输入框
 
 ---
 
-_Last Updated: 2026-04-06 by OpenClaw Agent_
+### Issue #7：模拟组合
+
+**描述**：无持仓管理、盈亏计算功能。
+
+**方向**：localStorage 存储虚拟持仓，计算浮动盈亏。
 
 ---
 
-## Beta 0.5.0 (2026-04-06) — 三大需求实现
+## 🟢 P2 — 长期功能
 
-### ✅ 需求1：全局时间轴精度规范
-- `market_history` 响应新增 `offset` / `limit` / `has_more` 字段
-- 前端可据此判断是否触及历史边缘，触发懒加载
+### Issue #8：全球市场数据
 
-### ✅ 需求2：历史数据深度扩容（日线 10 年）
-- `market_history` 日线 `limit` 默认值：500 → 2500（约 10 年）
-- 日线支持 `offset` 分页（透传给 `get_daily_history`）
-- 前端向左拖拽图表触及历史边缘时，可通过 `offset=N` 懒加载更早数据
+- 美股指数（纳斯达克、标普500）实时行情
+- 恒指期货主力合约
+- 欧股/日股指数
 
-### ✅ 需求3：标的穿透抓取与持久化缓存
-- 新增 `fetch_us_index_history()`：Alpha Vantage TIME_SERIES_DAILY 获取美股 NDX/SPX/DJI 全量历史
-- `market_history` 在 `offset=0` 且数据库为空时，自动触发：拉取→落库→重查→返回
-- Alpha Vantage API Key 配置于 `backend/app/config/data_sources.py`
-  - 当前 `DEMO_KEY` 有严格限速（5 req/min，25 req/day）
-  - 生产部署请替换为真实 Key（https://www.alphavantage.co）
-- **健壮性**：异常时 `logger.warning` 降级，不阻塞正常 A 股数据
+### Issue #9：技术指标扩展
 
-### 🐛 已修复
-- Eastmoney 分时 `offset=0` 时多取 1 条作为 `prev_close` 参考，保证第一条 `change_pct` 准确
+- RSI、DMI、OBV、SAR 等新指标
+- 多周期 K 线同时展示（日+周+月）
+- 指标参数自定义
+
+### Issue #10：回测框架
+
+- 接入 akshare 历史数据
+- 均线策略回测（买入/卖出信号）
+- 绩效统计（收益率、夏普比率、最大回撤）
 
 ---
 
-## 版本命名规范（锁定，2026-04-06）
+## 📝 技术债
 
-**主版本号永远定格在 0.4.x，不得出现 0.5.x 或更高主版本。**
-
-发布版本命名格式：`v0.4.{N}-beta`，其中 N 为自增序号。
-
-**已发布版本链（v0.3.2 → 最新）：**
-| 版本 | commit | 主要内容 |
-|------|--------|----------|
-| v0.3.2-beta | (已知) | 上一稳定版 |
-| v0.4.7-beta | 1b22cce8 | change_pct内联计算/Eastmoney httpx重试/清理db+dist |
-| v0.4.8-beta | 8acc4a0b | StockScreener点击个股名称不同步标题 |
-| v0.4.9-beta | 77c89b88 | P0三次修复：全市场名称/ForceRefresh/周月K change_pct |
-| v0.4.10-beta | cebed366 | 代码审查：CNHUSD bug/asyncio未导入/usNDX大小写 |
-| v0.4.11-beta | 4e1eb51b | market_lookup动态支持/Eastmoney分时/DB schema一致性 |
-| v0.4.12-beta | b5e6af32 | Eastmoney分时offset=0多取1条保证change_pct准确 |
-| v0.4.13-beta | 8f255014 | registry sz→sh对齐/还原normalize/revert回归错误 |
-| v0.4.14-beta | a4e5c6b5 | market_history offset分页/日线10年/US指数自动抓取 |
-| v0.4.15-beta | d5f2e8c1 | 指标图表全屏重构：布局去重/引擎点亮/DrawingToolbar |
-
-**GitHub Release 创建规范：**
-1. tag 用 GitHub API 创建 annotated tag + ref
-2. Release 用 GitHub API 创建（附完整 changelog）
-3. 禁止在 Release/Release notes 中使用 >= 0.5.0 的版本号
+| # | 债项 | 位置 | 清理状态 |
+|---|------|------|---------|
+| 1 | market.py `fetched` 死变量 | `_get_macro_data()` | ✅ 已删除（v0.4.31）|
+| 2 | market.py `usdcnh_price` 未使用 | `_get_macro_data()` | ✅ 已删除（v0.4.31）|
+| 3 | market.py 静态 fallbacks 被立即覆盖 | `_get_macro_data()` | ✅ 已合并（v0.4.31）|
+| 4 | KNOWN_ISSUES_TODO.md 文档滞后 | 根目录 | ✅ 更新至 v0.4.30（v0.4.31）|
+| 5 | 全局无单元测试 | backend/ | ⚠️ 待建立 |
+| 6 | 后端无统一错误码/日志规范 | backend/app/ | ⚠️ 待建立 |
