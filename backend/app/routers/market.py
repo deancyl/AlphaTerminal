@@ -514,7 +514,7 @@ def _normalize_symbol(raw: str) -> str:
     将各种前端传入格式统一为带市场前缀的规范 symbol。
     例如: '000001' → 'sh000001', 'sh000001' → 'sh000001', 'NDX' → 'usNDX'
     """
-    s = raw.strip().lower()
+    s = raw.strip()
     # 已知美股（无前缀形式，如 'ndx'）
     if s.upper() in ('NDX', 'SPX', 'DJI'):
         return 'us' + s.upper()
@@ -525,16 +525,23 @@ def _normalize_symbol(raw: str) -> str:
     if s.upper() in ('HSI',):
         return 'hkHSI'
     # 已知宏观（无前缀）
-    if s.upper() in ('GOLD', 'WTI', 'VIX', 'CNHUSD'):
+    if s.upper() in ('GOLD', 'WTI', 'VIX'):
         return s.upper()
+    # CNH/USD 特殊处理：保留 removeprefix 风格，s.upper() 用于比较
+    upper_s = s.upper()
+    if upper_s == 'CNHUSD':
+        return 'CNHUSD'
+    if upper_s.startswith('CNH'):
+        suffix = upper_s[len('CNH'):]
+        if suffix.isdigit() or suffix.startswith('USD'):
+            return 'CNHUSD'
     # 去掉 sh/sz/hk 前缀后判断（replace 替换所有位置，与 registry 配套）
-    clean = s.replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
-    # 判断是否 A 股（纯数字）
+    clean = s.lower().replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
+    # A股数字段判断：6开头→上海；其余（0/3开头）→深圳
     if clean.isdigit():
-        if clean.startswith(('0', '3', '6')):
-            if clean.startswith('6') or (len(clean) == 6 and clean[0:2] in ('00', '30')):
-                return 'sh' + clean
-            return 'sz' + clean
+        if clean.startswith('6'):
+            return 'sh' + clean
+        return 'sz' + clean
     return s
 
 
@@ -580,7 +587,7 @@ async def market_quote(symbol: str):
     """
     norm = _normalize_symbol(symbol)
     from app.db import get_price_history
-    rows = get_price_history(norm, limit=2)  # 最新+昨日
+    rows = get_price_history(_unprefix(norm), limit=2)  # 最新+昨日（realtime表存无前缀）
     if not rows:
         return { 'error': 'no data', 'symbol': norm }
     latest = rows[0]  # DESC，最新在前
@@ -603,6 +610,15 @@ async def market_quote(symbol: str):
 
 
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
+def _unprefix(raw: str) -> str:
+    """去掉 sh/sz/hk/us/jp 前缀，用于查询 market_data_realtime（该表存无前缀 symbol）。"""
+    s = str(raw).strip()
+    for p in ('sh', 'sz', 'hk', 'us', 'jp', 'SH', 'SZ', 'HK', 'US', 'JP'):
+        if s.startswith(p):
+            return s[len(p):]
+    return s
+
+
 def _clean_symbol(raw: str) -> str:
     """
     规范化 symbol：
@@ -974,8 +990,9 @@ async def market_quote_detail(symbol: str):
     norm = _normalize_symbol(symbol)
     from app.db import get_price_history, get_daily_history
 
-    # ── 基础实时行情（从 get_latest_prices 拿）──────────────────
-    rows_latest = get_latest_prices([norm]) if hasattr(get_latest_prices, '__code__') else []
+    # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
+    db_sym = _unprefix(norm)   # 'sh000001' → '000001'
+    rows_latest = get_latest_prices([db_sym]) if hasattr(get_latest_prices, '__code__') else []
     w = rows_latest[0] if rows_latest else {}
 
     price      = w.get('index') or w.get('price') or 0.0
@@ -985,7 +1002,7 @@ async def market_quote_detail(symbol: str):
     status     = w.get('status') or ''
     market     = w.get('market') or 'AShare'
 
-    # ── 实时快照（从 DB 取最新2条算当日 OHLC）──────────────────
+    # ── 实时快照（从 DB 取最新2条算当日 OHLC，market_data_daily 存带前缀）──
     rows = get_price_history(norm, limit=2) if hasattr(get_price_history, '__code__') else []
     latest_row = rows[0] if rows else {}
     prev_row   = rows[1] if len(rows) > 1 else latest_row
@@ -999,8 +1016,10 @@ async def market_quote_detail(symbol: str):
     amplitude    = round((high_ / low_ - 1) * 100, 2) if low_ and low_ > 0 else 0.0
 
     # ── 历史 K 线（计算周期收益率 + 52 周高低）──────────────────
-    hist_1y  = get_daily_history(norm, limit=250, offset=0) if hasattr(get_daily_history, '__code__') else []
-    hist_all = get_daily_history(norm, limit=9999, offset=0) if hasattr(get_daily_history, '__code__') else []
+    # market_data_daily 存无前缀代码，_unprefix(norm) 去掉 sh/sz 前缀后正确匹配
+    db_sym = _unprefix(norm)
+    hist_1y  = get_daily_history(db_sym, limit=250, offset=0) if hasattr(get_daily_history, '__code__') else []
+    hist_all = get_daily_history(db_sym, limit=9999, offset=0) if hasattr(get_daily_history, '__code__') else []
 
     def _latest_n(hist, n):
         """最近 n 条收盘价（升序）"""

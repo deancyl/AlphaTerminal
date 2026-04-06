@@ -1,55 +1,6 @@
 <template>
-  <!-- ━━━ 全屏模式：K线全屏（受Sidebar/TopBar/Copilot边界约束）━━━━━━━━━ -->
-  <div v-if="ui.klineFullscreen" class="flex flex-col terminal-panel" style="width:100%;z-index:50;display:flex;flex-direction:column;">
-    <!-- 全屏顶部栏：指数+周期+指标+退出 -->
-    <div class="flex items-center gap-2 px-4 py-2 border-b border-gray-700/50 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
-      <div class="flex gap-1 ml-2">
-        <button v-for="idx in indexOptions" :key="idx.symbol"
-                class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="selectedIndex === idx.symbol
-                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                  : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-                @click="switchIndex(idx)">
-          {{ idx.name }}
-        </button>
-      </div>
-      <div class="flex gap-1">
-        <button v-for="p in periods" :key="p.key"
-                class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="selectedPeriod === p.key
-                  ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                  : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-                @click="switchPeriod(p.key)">
-          {{ p.label }}
-        </button>
-      </div>
-      <span class="ml-2 text-terminal-dim text-[9px]">指标:</span>
-      <button v-for="ind in indicators" :key="ind.key"
-              class="px-1.5 py-0.5 text-[9px] rounded border transition"
-              :class="activeIndicators.includes(ind.key)
-                ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
-                : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
-              @click="toggleIndicator(ind.key)">
-        {{ ind.label }}
-      </button>
-      <button class="ml-auto shrink-0 px-3 py-1 text-xs rounded border border-gray-600 text-gray-400 hover:border-red-500/50 hover:text-red-400 transition-colors"
-              @click="ui.klineFullscreen = false" title="退出全屏（ESC）">✕ 退出全屏</button>
-    </div>
-    <!-- 全屏图表 -->
-    <div class="flex-1 min-h-0">
-      <FullscreenKline
-        :symbol="selectedIndex"
-        :name="currentIndexName"
-        :isFull="true"
-        @close="ui.klineFullscreen = false"
-        @symbol-change="onFullscreenSymbolChange"
-      />
-    </div>
-  </div>
-
   <!-- ━━━ 正常网格模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <div v-show="!ui.klineFullscreen" class="grid-stack" ref="gridRef">
+  <div class="grid-stack" ref="gridRef">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
@@ -62,7 +13,7 @@
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-            @click="ui.klineFullscreen = true"
+            @click="emit('open-fullscreen', { symbol: selectedIndex, name: currentIndexName })"
             title="全屏"
           >⛶ 全屏</button>
         </div>
@@ -110,7 +61,7 @@
             :color="currentIndexOption.color"
             :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
             :indicators="activeIndicators"
-            @fullscreen-change="ui.klineFullscreen = true"
+
           />
         </div>
       </div>
@@ -232,13 +183,11 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import IndexLineChart    from './IndexLineChart.vue'
-import FullscreenKline   from './FullscreenKline.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
 import HotSectors from './HotSectors.vue'
 import StockScreener from './StockScreener.vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
-import { useUiStore } from '../composables/useUiStore.js'
 
 const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol } = useMarketStore()
 const currentIndexName = ref('上证指数')
@@ -254,21 +203,12 @@ const props = defineProps({
   isLocked:       { type: Boolean, default: true },
 })
 
-const emit = defineEmits(['toggle-lock'])
+const emit = defineEmits(['toggle-lock', 'open-fullscreen'])
 
 const gridRef          = ref(null)
 const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
-
-// ━━━ 全屏模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-const { ui } = useUiStore()
-
-function onKeyDown(e) {
-  if (e.key === 'Escape' && ui.klineFullscreen) {
-    ui.klineFullscreen = false
-  }
-}
 
 // ── 列表点击联动 ─────────────────────────────────────────────────
 // 宏观品种名称 → symbol 映射（windItems 的宏观行没有 symbol 字段）
@@ -467,7 +407,6 @@ function toggleLock() {
 }
 
 onMounted(async () => {
-  window.addEventListener('keydown', onKeyDown)
   await nextTick()
   if (typeof window !== 'undefined' && window.GridStack) {
     grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
@@ -476,7 +415,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('keydown', onKeyDown)
   grid?.destroy(false)
 })
 </script>

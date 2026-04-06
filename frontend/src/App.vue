@@ -71,6 +71,7 @@
           :derivatives-data="derivativesData"
           :is-locked="isLocked"
           @toggle-lock="toggleLock"
+          @open-fullscreen="openFullscreenKline"
         />
         <!-- 债券行情 -->
         <BondDashboard v-else-if="currentView === 'bond'" />
@@ -97,6 +98,16 @@
     </aside>
 
   </div>
+
+  <!-- ━━━ 全屏 K 线（渲染在根级，脱离所有 overflow/stacking context 约束）━━━━ -->
+  <FullscreenKline
+    v-if="ui.klineFullscreen"
+    :symbol="fullscreenSymbol"
+    :name="fullscreenName"
+    :isFull="true"
+    @close="ui.klineFullscreen = false"
+    @symbol-change="openFullscreenKline"
+  />
 </template>
 
 <script setup>
@@ -106,6 +117,7 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard  from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
+import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
 
 const { ui } = useUiStore()
@@ -120,6 +132,16 @@ function handleSidebarNavigate(viewId) {
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const isLocked = ref(true)     // 网格默认锁定
+
+// 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
+const fullscreenSymbol = ref('sh000001')
+const fullscreenName   = ref('上证指数')
+
+function openFullscreenKline({ symbol, name }) {
+  fullscreenSymbol.value = symbol || 'sh000001'
+  fullscreenName.value  = name  || '上证指数'
+  ui.value.klineFullscreen = true
+}
 
 function toggleLock() {
   isLocked.value = !isLocked.value
