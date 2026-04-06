@@ -69,6 +69,7 @@
 
     <!-- ══ 主图表区域 ══════════════════════════════════════════════ -->
     <div class="flex-1 min-h-0 relative flex">
+
       <!-- 左侧画线工具栏 -->
       <DrawingToolbar
         v-if="isFull"
@@ -86,7 +87,7 @@
         @clear="drawingCanvasRef?.clearAll()"
       />
 
-      <!-- ECharts 图表 -->
+      <!-- ECharts 图表区域（自适应宽度） -->
       <div class="flex-1 min-w-0 relative">
         <!-- 加载遮罩 -->
         <div v-if="isLoading" class="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
@@ -118,14 +119,28 @@
           :symbol="symbol"
         />
       </div>
+
+      <!-- ══ 右侧报价面板（全屏时显示） ═════════════════════════════ -->
+      <QuotePanel
+        v-if="isFull"
+        class="shrink-0"
+        :class="isMobile ? 'order-last' : ''"
+        :symbol="symbol"
+        :name="props.name"
+        :realtimeData="quoteData"
+        :snapshotData="crosshairSnapshot"
+        :isMobile="isMobile"
+        :panelWidth="320"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import DrawingCanvas  from './DrawingCanvas.vue'
+import QuotePanel     from './QuotePanel.vue'
 
 // ── Props / Emit ───────────────────────────────────────────────
 const props = defineProps({
@@ -147,6 +162,13 @@ const isLoading        = ref(false)
 const chartError       = ref('')
 const latestPrice      = ref(null)
 const latestChange     = ref(0)
+
+// 报价面板数据
+const quoteData        = ref({})
+const crosshairSnapshot = ref(null)   // 十字光标悬停的历史快照
+const windowWidth      = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
+const isMobile         = computed(() => windowWidth.value < 900)
+const BREAKPOINT       = 900  // PC/Mobile 断点
 
 // 画线状态
 const drawTool    = ref('')
@@ -215,10 +237,23 @@ async function fetchData() {
     const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
     const sorted = isDesc ? [...hist].reverse() : hist
     renderChart(sorted, type)
+    bindCrosshair(sorted)  // 使用排序后的升序数据（与图表渲染一致）
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
   } finally {
     isLoading.value = false
+  }
+}
+
+// ── 报价面板数据 ────────────────────────────────────────────────
+async function fetchQuoteDetail() {
+  try {
+    const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
+    if (!res.ok) return
+    const d = await res.json()
+    quoteData.value = d
+  } catch (e) {
+    console.warn('[FullscreenKline] quote_detail fetch failed:', e.message)
   }
 }
 
@@ -482,6 +517,58 @@ function buildSubSeries(closes, highs, lows, sub, xIdx, yIdx) {
   return []
 }
 
+// ── 十字光标 → 报价面板联动 ───────────────────────────────────
+function bindCrosshair(hist) {
+  if (!chartInstance) return
+  chartInstance.off('mousemove')
+  chartInstance.getZr().off('mouseleave')
+
+  chartInstance.on('mousemove', (params) => {
+    if (params.dataIndex == null && params.dataIndex !== 0) return
+    const idx = params.dataIndex
+    if (idx < 0 || idx >= hist.length) return
+    const h = hist[idx]
+    if (!h) return
+
+    // 用历史数据构造快照（格式与 quote_detail 一致）
+    const prevClose = idx > 0 ? hist[idx - 1].close : h.close
+    const change = h.close - prevClose
+    const change_pct = prevClose ? (change / prevClose * 100) : 0
+
+    crosshairSnapshot.value = {
+      name:       props.name || props.symbol,
+      symbol:     props.symbol,
+      price:      h.close,
+      open:       h.open,
+      high:       h.high,
+      low:        h.low,
+      close:      h.close,
+      volume:     h.volume,
+      amount:     h.amount ?? 0,
+      change:     change,
+      change_pct: change_pct,
+      timestamp:  h.date || h.time || '',
+      returns_5d: null, returns_20d: null, returns_60d: null, returns_ytd: null,
+      high_52w: null, low_52w: null, high_52w_date: null, low_52w_date: null,
+      pe_ttm: null, pb: null,
+      turnover_rate: null, amplitude: null,
+      advance_count: null, decline_count: null, unchanged_count: null, advance_rate: null,
+      fund_main_net: null, fund_main_in: null, fund_main_out: null,
+      fund_huge_in: null, fund_huge_out: null,
+      fund_big_in: null, fund_big_out: null,
+      fund_medium_in: null, fund_medium_out: null,
+      fund_small_in: null, fund_small_out: null,
+      industry: null, industry_change_pct: null, concepts: [],
+      // 标记为快照
+      _is_snapshot: true,
+    }
+  })
+
+  chartInstance.getZr().on('mouseleave', () => {
+    crosshairSnapshot.value = null
+  })
+}
+
 // ── 渲染 ───────────────────────────────────────────────────────
 function renderChart(hist, type) {
   if (!chartInstance) return
@@ -512,20 +599,36 @@ function toggleIndicator(key) {
 }
 
 // ── 监听 ───────────────────────────────────────────────────────
-watch(() => props.symbol, fetchData)
-watch(() => period,      fetchData)
+watch(() => props.symbol, () => {
+  crosshairSnapshot.value = null
+  fetchData()
+  fetchQuoteDetail()
+})
+watch(period, () => {
+  crosshairSnapshot.value = null
+  fetchData()
+})
 watch(activeIndicators, () => {
   if (!chartInstance) return
-  // 重新渲染以应用新指标（数据已加载，只需重新构建option）
-  // 触发一次 fetchData 获取 hist 然后重新 render
   fetchData()
 }, { deep: true })
 
 // ── 生命周期 ──────────────────────────────────────────────────
-onMounted(() => { initChart() })
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  initChart()
+  fetchQuoteDetail()
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onResize)
+})
 onUnmounted(() => {
   resizeObserver?.disconnect()
   chartInstance?.dispose()
   chartInstance = null
 })
+
+function onResize() {
+  windowWidth.value = window.innerWidth
+}
 </script>

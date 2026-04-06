@@ -594,7 +594,6 @@ async def market_quote(symbol: str):
         'price':        close,
         'change':       round(chg, 3),
         'change_pct':   round(chg_pct, 2),
-    offset: int = 0,       # 分页偏移（从最早日期计），首次加载 offset=0
         'volume':       float(latest.get('volume') or 0),
         'amount':       float(latest.get('amount') or 0),
         'amplitude':    round((float(latest.get('high') or 0) / float(latest.get('low') or 1) - 1) * 100, 2) if latest.get('high') and latest.get('low') else 0,
@@ -934,4 +933,170 @@ async def market_derivatives():
             }
             for r in rows
         ],
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+# 详细行情（综合报价面板）
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/market/quote_detail/{symbol}")
+async def market_quote_detail(symbol: str):
+    """
+    综合报价面板数据（模块一~四合一接口）。
+
+    返回字段含以下模块（部分字段需数据库有历史数据才能计算，
+    无数据时返回 null 而非报错，保证面板降级可用）：
+
+    Module 1 - 基础行情与估值：
+      name, symbol, price, change, change_pct, volume, amount,
+      open, high, low, close,
+      amplitude, turnover_rate,
+      pe_ttm, pb,                       # 无数据→null
+      returns_5d, returns_20d, returns_60d, returns_ytd,  # 无数据→null
+      high_52w, low_52w, high_52w_date, low_52w_date,    # 无数据→null
+
+    Module 2 - 市场情绪（仅指数）：
+      advance_count, decline_count, unchanged_count,  # 暂无→null
+      advance_rate,                                  # 涨家数占比
+
+    Module 3 - 资金流向（暂无数据源→全 null，预留结构）：
+      fund_main_net, fund_main_in, fund_main_out,
+      fund_huge_in, fund_huge_out,   # 超大单
+      fund_big_in,  fund_big_out,    # 大单
+      fund_medium_in, fund_medium_out, # 中单
+      fund_small_in, fund_small_out   # 小单
+
+    Module 4 - 板块联动（暂无数据源→全 null，预留结构）：
+      industry, industry_change_pct,
+      concepts: [{name, change_pct}, ...]
+    """
+    norm = _normalize_symbol(symbol)
+    from app.db import get_price_history, get_daily_history
+
+    # ── 基础实时行情（从 get_latest_prices 拿）──────────────────
+    rows_latest = get_latest_prices([norm]) if hasattr(get_latest_prices, '__code__') else []
+    w = rows_latest[0] if rows_latest else {}
+
+    price      = w.get('index') or w.get('price') or 0.0
+    change_pct = float(w.get('change_pct') or 0.0)
+    change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
+    volume     = float(w.get('volume') or 0.0)
+    status     = w.get('status') or ''
+    market     = w.get('market') or 'AShare'
+
+    # ── 实时快照（从 DB 取最新2条算当日 OHLC）──────────────────
+    rows = get_price_history(norm, limit=2) if hasattr(get_price_history, '__code__') else []
+    latest_row = rows[0] if rows else {}
+    prev_row   = rows[1] if len(rows) > 1 else latest_row
+
+    open_  = float(latest_row.get('open')  or price)
+    high_  = float(latest_row.get('high')  or price)
+    low_   = float(latest_row.get('low')   or price)
+    close_ = float(latest_row.get('close') or price)
+    amount = float(latest_row.get('amount') or 0.0)
+    turnover_rate = float(latest_row.get('turnover_rate') or 0.0)
+    amplitude    = round((high_ / low_ - 1) * 100, 2) if low_ and low_ > 0 else 0.0
+
+    # ── 历史 K 线（计算周期收益率 + 52 周高低）──────────────────
+    hist_1y  = get_daily_history(norm, limit=250, offset=0) if hasattr(get_daily_history, '__code__') else []
+    hist_all = get_daily_history(norm, limit=9999, offset=0) if hasattr(get_daily_history, '__code__') else []
+
+    def _latest_n(hist, n):
+        """最近 n 条收盘价（升序）"""
+        return hist[-n:] if len(hist) >= n else hist
+
+    def _period_return(hist, n):
+        """最近 n 日收益率（最新收盘/第n个收盘 - 1）*100"""
+        if len(hist) < n: return None
+        cur  = float(hist[-1].get('close', 0))
+        prev = float(hist[-n].get('close', 0))
+        if not prev: return None
+        return round((cur / prev - 1) * 100, 4)
+
+    def _52w_bounds(hist):
+        """52 周最高/最低（最近 252 个交易日）"""
+        if not hist: return None, None, None, None
+        recent = hist[-252:] if len(hist) >= 252 else hist
+        closes = [(float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close')]
+        if not closes: return None, None, None, None
+        closes.sort(key=lambda x: x[0])
+        return closes[-1][0], closes[-1][1], closes[0][0], closes[0][1]
+
+    ret_5d  = _period_return(hist_all, 5)
+    ret_20d = _period_return(hist_all, 20)
+    ret_60d = _period_return(hist_all, 60)
+    # 今年以来（累计收益率，粗略用年初至今交易日）
+    ytd_start = [r for r in hist_all if str(getattr(r, 'get', lambda x: None)('date', ''))[:4] == str(datetime.now().year)]
+    ret_ytd  = _period_return(ytd_start, len(ytd_start)) if len(ytd_start) >= 2 else None
+    high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
+
+    # ── 涨跌家数（仅指数有成分股统计，目前无数据源→返回 null）───
+    is_index = market in ('AShare',) and norm in ('sh000001','sh000300','sz399001','sz399006')
+    advance_count   = None
+    decline_count   = None
+    unchanged_count = None
+    advance_rate    = None
+
+    # ── 资金流向（暂无数据源→返回 null）────────────────────────
+    fund_main_net   = None
+    fund_main_in    = None
+    fund_main_out   = None
+    fund_huge_in    = None; fund_huge_out   = None
+    fund_big_in     = None; fund_big_out    = None
+    fund_medium_in  = None; fund_medium_out = None
+    fund_small_in   = None; fund_small_out  = None
+
+    # ── 板块联动（暂无数据源→返回 null）────────────────────────
+    industry        = None
+    industry_change_pct = None
+    concepts        = []
+
+    return {
+        # ── Module 1: 基础行情 ──
+        "name":             w.get('name') or norm,
+        "symbol":           norm,
+        "price":            round(price, 3),
+        "change":           change_val,
+        "change_pct":       round(change_pct, 2),
+        "open":             round(open_,  3),
+        "high":             round(high_,  3),
+        "low":              round(low_,   3),
+        "close":            round(close_, 3),
+        "volume":           volume,
+        "amount":           round(amount, 2),
+        "amplitude":        amplitude,
+        "turnover_rate":    round(turnover_rate, 4),
+        "status":           status,
+        "market":           market,
+        # ── 估值 ──
+        "pe_ttm":           None,   # 需财务数据源
+        "pb":               None,   # 需财务数据源
+        # ── 周期收益 ──
+        "returns_5d":       ret_5d,
+        "returns_20d":      ret_20d,
+        "returns_60d":      ret_60d,
+        "returns_ytd":      ret_ytd,
+        # ── 52 周高低 ──
+        "high_52w":         round(high_52w, 3) if high_52w else None,
+        "low_52w":          round(low_52w,  3) if low_52w  else None,
+        "high_52w_date":    h52w_date,
+        "low_52w_date":    l52w_date,
+        # ── Module 2: 市场情绪 ──
+        "advance_count":    advance_count,
+        "decline_count":    decline_count,
+        "unchanged_count": unchanged_count,
+        "advance_rate":     advance_rate,
+        # ── Module 3: 资金流向 ──
+        "fund_main_net":    fund_main_net,
+        "fund_main_in":     fund_main_in,
+        "fund_main_out":   fund_main_out,
+        "fund_huge_in":    fund_huge_in,  "fund_huge_out":  fund_huge_out,
+        "fund_big_in":     fund_big_in,   "fund_big_out":   fund_big_out,
+        "fund_medium_in":  fund_medium_in,"fund_medium_out": fund_medium_out,
+        "fund_small_in":   fund_small_in, "fund_small_out": fund_small_out,
+        # ── Module 4: 板块联动 ──
+        "industry":               industry,
+        "industry_change_pct":   industry_change_pct,
+        "concepts":              concepts,
     }
