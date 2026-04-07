@@ -174,6 +174,7 @@ class SpotCache:
                 "chg":      s["chg"],
                 "chg_pct":  s["chg_pct"],
                 "turnover": s["turnover"],
+                "amount":   s.get("amount", 0),    # 成交额（元）
                 "volume":   s["volume"],
                 "market":   s.get("market", "SH"),
             })
