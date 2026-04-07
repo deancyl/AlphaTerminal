@@ -2,7 +2,7 @@
   <!-- Canvas 覆盖层：透明背景，捕获图表上所有鼠标事件 -->
   <canvas
     ref="canvasRef"
-    class="absolute inset-0 w-full h-full"
+    class="absolute inset-0 w-full"
     :style="{ cursor: cursorStyle }"
     @mousedown="onMouseDown"
     @mousemove="onMouseMove"
@@ -10,6 +10,27 @@
     @dblclick="onDblClick"
     @contextmenu.prevent="onContextMenu"
   />
+
+  <!-- 自定义右键菜单 -->
+  <div
+    v-if="ctxMenu.show"
+    :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+    class="fixed z-[9999] bg-terminal-panel border border-gray-600 rounded-lg shadow-2xl py-1 min-w-[140px] text-xs"
+    @click.stop
+  >
+    <div
+      class="flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
+      @click="ctxDeleteShape"
+    >
+      🗑️ 删除选中线段
+    </div>
+    <div
+      class="flex items-center gap-2 px-3 py-1.5 text-gray-400 hover:bg-white/5 cursor-pointer transition-colors border-t border-gray-700"
+      @click="ctxMenu.show = false"
+    >
+      ✕ 取消
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -48,6 +69,7 @@ const shapes = ref([])             // [{ id, type, points:[{x,y,price,idx}], col
 const drawing = ref(null)          // { type, points:[], color }
 const selectedId = ref(null)       // 选中图形 id
 const hoveredId  = ref(null)        // 悬停图形 id
+const ctxMenu     = ref({ show: false, x: 0, y: 0, targetId: null })  // 右键菜单状态
 
 // 拖拽状态
 const dragging = ref(null)          // { id, pointIdx, startX, startY }
@@ -392,19 +414,34 @@ function onContextMenu(e) {
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
-    const action = confirm('删除此画线？')
-    if (action) {
-      shapes.value = shapes.value.filter(s => s.id !== hit.id)
-      selectedId.value = null
-      emit('deleted', hit.id)
-      saveToStorage()
-      redraw()
+    // 显示自定义右键菜单（替代原生 confirm）
+    ctxMenu.value = {
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      targetId: hit.id,
     }
   } else {
     // 无图形处右键：区间统计触发（通知父组件处理）
     const { idx, price } = toData(x, y)
     emit('range-select', { x, y, idx, price })
   }
+}
+
+// ── 右键菜单操作 ──────────────────────────────────────────────
+function ctxDeleteShape() {
+  const id = ctxMenu.value.targetId
+  if (!id) return
+  shapes.value = shapes.value.filter(s => s.id !== id)
+  selectedId.value = null
+  emit('deleted', id)
+  saveToStorage()
+  redraw()
+  ctxMenu.value.show = false
+}
+
+function hideCtxMenu() {
+  ctxMenu.value.show = false
 }
 
 // ── 命中测试 ─────────────────────────────────────────────────
@@ -523,6 +560,7 @@ onMounted(() => {
   resizeCanvas()
   loadFromStorage()
   window.addEventListener('resize', resizeCanvas)
+  window.addEventListener('click', hideCtxMenu)      // 点击其他区域关闭右键菜单
   // 监听图表容器尺寸变化（ECharts 内部 resize 会触发）
   if (canvasRef.value?.parentElement) {
     const ro = new ResizeObserver(() => resizeCanvas())
@@ -535,6 +573,7 @@ let _canvasRo = null
 onUnmounted(() => {
   cancelAnimationFrame(animationFrame)
   window.removeEventListener('resize', resizeCanvas)
+  window.removeEventListener('click', hideCtxMenu)
   _canvasRo?.disconnect()
 })
 
