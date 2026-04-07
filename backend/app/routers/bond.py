@@ -156,10 +156,12 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             percentile = float(np.sum(series < current_yield) / len(series) * 100)
         else:
             percentile = None
-        # 限制 history 为最近 N 条
+        # 按 period 回溯窗口动态限制记录数（1M≈22/3M≈66/6M≈132/1Y≈252/3Y≈756交易日）
+        days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
+        n_rows = days_map.get(period, 252)
         history = [
             {"date": str(r[0]), "yield": float(r[1])}
-            for r in df[[df.columns[0], tenor_col]].dropna().tail(60).values
+            for r in df[[df.columns[0], tenor_col]].dropna().tail(n_rows).values
         ]
         return {
             "tenor": tenor,
