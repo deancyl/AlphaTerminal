@@ -111,7 +111,8 @@ const drawVisible = ref(true), drawLocked = ref(false), drawingCanvasRef = ref(n
 
 const allIndicators = [
   { key: 'MACD', label: 'MACD' }, { key: 'BOLL', label: 'BOLL' },
-  { key: 'KDJ',  label: 'KDJ' },  { key: 'WR',   label: 'W&R' },
+  { key: 'KDJ',  label: 'KDJ' },  { key: 'RSI',  label: 'RSI' },
+  { key: 'WR',   label: 'W&R' },
 ]
 const indexOptions = [
   { symbol: '000001', name: '上证' }, { symbol: '000300', name: '沪深300' },
@@ -207,7 +208,8 @@ function buildKLineOpt(hist) {
     { type: 'value', scale: true, gridIndex: 1, position: 'left', axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
     ...(sub ? [{ type: 'value', scale: true, gridIndex: 2, position: 'left', axisLine: { show: false },
       axisLabel: { color: '#6b7280', fontSize: 9 }, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
-      max: sub==='WR'?0:'auto', min: sub==='WR'?-100:'auto' }] : []),
+      max: sub==='WR'?0: sub==='RSI'?100:'auto',
+      min: sub==='WR'?-100: sub==='RSI'?0:'auto' }] : []),
   ]
   return {
     backgroundColor: 'transparent', grid, xAxis, yAxis, series,
@@ -314,6 +316,31 @@ function calcKDJ(closes, highs, lows, n=9) {
   }
   return { k, d, j }
 }
+function calcRSI(closes, n=14) {
+  if (!closes || closes.length < n) return closes ? closes.map(() => null) : []
+  const gains = [], losses = []
+  for (let i = 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1]
+    gains.push(diff > 0 ? diff : 0)
+    losses.push(diff < 0 ? -diff : 0)
+  }
+  // 前 n 个均值
+  let avgGain = gains.slice(0, n).reduce((a, b) => a + b, 0) / n
+  let avgLoss = losses.slice(0, n).reduce((a, b) => a + b, 0) / n
+  const rsi = [null] // 前 n-1 个无意义
+  for (let i = 0; i < n - 1; i++) rsi.push(null)
+  // 第 n 个
+  rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
+  // 后续用 EMA 平滑
+  const k = 2 / (n + 1)
+  for (let i = n; i < closes.length - 1; i++) {
+    avgGain = gains[i] * k + avgGain * (1 - k)
+    avgLoss = losses[i] * k + avgLoss * (1 - k)
+    rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
+  }
+  return rsi
+}
+
 function calcWR(closes, highs, lows, n=10) {
   return closes.map((_, i) => {
     if (i<n-1) return null
@@ -359,6 +386,13 @@ function buildSubSeries(closes, highs, lows, sub, xIdx, yIdx) {
     const wr = calcWR(closes, highs, lows)
     return [{ name:'W&R', type:'line', data:wr.map(v=>v==null?'-':v), xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#fb923c',width:1.2},
       markLine:{silent:true,symbol:'none',lineStyle:{color:'#4b5563',type:'dashed',width:1},data:[{yAxis:-20},{yAxis:-80}],label:{show:true,formatter:'{c}',fontSize:8,color:'#6b7280'}} }]
+  }
+  if (sub==='RSI') {
+    const rsi = calcRSI(closes, 14)
+    return [
+      { name:'RSI(14)', type:'line', data:rsi, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none',
+        lineStyle:{color:'#c084fc',width:1.5}, markLine:{silent:true,symbol:'none',lineStyle:{color:'#4b5563',type:'dashed',width:1},data:[{yAxis:70},{yAxis:30}],label:{show:true,formatter:'{c}',fontSize:8,color:'#6b7280'}} },
+    ]
   }
   return []
 }
