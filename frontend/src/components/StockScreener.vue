@@ -267,7 +267,7 @@ async function fetchAllStocks() {
   loading.value = true
   try {
     // 拉最大页，获取全部股票（SpotCache 约4000只）
-    const url = `/api/v1/market/stocks?page=1&page_size=5000&sort_by=${sortBy.value}&asc=${asc.value}`
+    const url = `/api/v1/market/stocks?page=1&page_size=100&sort_by=${sortBy.value}&asc=${asc.value}`
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const d = await res.json()
