@@ -4,8 +4,11 @@ AlphaTerminal Backend - FastAPI Application Entry Point
 import asyncio
 import logging
 import signal
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,56 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── 全局异常处理器 ───────────────────────────────────────────────────────────
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """422: 参数校验失败 — 返回统一格式"""
+    body = {}
+    try:
+        body = await request.body()
+    except Exception:
+        pass
+    errors = exc.errors()
+    first = errors[0] if errors else {}
+    field = ".".join(str(l) for l in (first.get("loc") or []))
+    msg   = first.get("msg", "") or str(exc)
+    logger.warning(f"[422 ValidationError] path={request.url.path} field={field} msg={msg}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "code": 422,
+            "message": f"参数校验失败: {field} {msg}",
+            "detail": errors,
+        },
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """4xx: HTTP异常 — 返回统一格式"""
+    logger.warning(f"[HTTP {exc.status_code}] path={request.url.path} detail={exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "code": exc.status_code,
+            "message": str(exc.detail),
+        },
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """500: 未捕获异常 — 不泄露堆栈"""
+    import traceback
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    logger.error(f"[500 InternalError] path={request.url.path}\n{tb}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "code": 500,
+            "message": "服务器内部错误，请稍后重试",
+        },
+    )
 
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
