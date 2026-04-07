@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio
+from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio, websocket as ws_router
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -114,6 +114,7 @@ app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
 app.include_router(bond.router, prefix="/api/v1", tags=["bond"])
 app.include_router(futures.router, prefix="/api/v1", tags=["futures"])
 app.include_router(portfolio.router, prefix="/api/v1", tags=["portfolio"])
+app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 
 
 @app.get("/health")
