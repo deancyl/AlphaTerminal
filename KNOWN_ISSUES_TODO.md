@@ -61,15 +61,16 @@
 
 ### Issue #4：成交额/换手率/振幅 字段为空
 
-**状态**：⚠️ 部分完成
+**状态**：✅ 已完成（v0.4.37-beta）
 
-**根因**：
-- `market_data_daily` 表无 `amount` 列（AkShare 日K返回数据不含此字段）
-- symbol 前缀匹配逻辑（`_unprefix` 已修复）
+**实现**：
+- `market_data_daily` 表新增 `amount`(成交额/元), `turnover_rate`(换手率/%), `amplitude`(振幅/%)
+- `buffer_insert_daily` 写入时提取 AkShare 原生字段，换手率自动乘100转%
+- `amplitude = (high-low)/prev_close*100`（前复权收盘价计算）
+- `scripts/backfill_p1_data.py` 幂等回填脚本（32只核心A股，400交易日）
+- 指数（上证/深证/创业板/科创50）无此字段，自动降级为 0.0
 
-**修复方向**：
-- [ ] 扩展 `buffer_insert_daily` 加入 `amount` / `turnover_rate` / `amplitude` 字段
-- [ ] 日K历史数据回填时补充上述字段
+**验证**：600519 贵州茅台 成交额 29.5 亿，换手率 0.161%，振幅 1.025% ✅
 
 ---
 
