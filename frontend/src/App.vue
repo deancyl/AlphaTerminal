@@ -7,11 +7,17 @@
       : ''"
   >
     <FullscreenKline
+      v-show="!futuresFullscreen"
       :symbol="fullscreenSymbol"
       :name="fullscreenName"
       :isFull="true"
       @close="() => { ui.klineFullscreen = false }"
       @symbol-change="openFullscreenKline"
+    />
+    <FuturesPanel
+      v-show="futuresFullscreen"
+      :symbol="futuresFullscreenSymbol"
+      @close="() => { futuresFullscreen = false; ui.klineFullscreen = false }"
     />
   </div>
 
@@ -96,7 +102,7 @@
         <!-- 投资组合 -->
         <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
         <!-- 期货行情 -->
-        <FuturesDashboard v-else-if="currentView === 'futures'" />
+        <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
       </div>
     </main>
 
@@ -128,6 +134,7 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
 import PortfolioDashboard from './components/PortfolioDashboard.vue'
+import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
@@ -137,9 +144,17 @@ const { ui } = useUiStore()
 // Phase 5: 侧边栏与视图切换状态
 const isSidebarOpen = ref(false)   // 侧边栏默认收起
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
+const futuresFullscreen = ref(false)
+const futuresFullscreenSymbol = ref('IF0')
 
 function handleSidebarNavigate(viewId) {
   currentView.value = viewId
+}
+
+function openFuturesFullscreen({ symbol }) {
+  futuresFullscreenSymbol.value = symbol || 'IF0'
+  futuresFullscreen.value = true
+  ui.klineFullscreen = true
 }
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理

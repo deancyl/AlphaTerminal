@@ -6,7 +6,8 @@
       <div
         v-for="card in futuresCards"
         :key="card.symbol"
-        class="flex-1 terminal-panel border border-gray-800 rounded px-4 py-3 flex flex-col gap-1"
+        class="flex-1 terminal-panel border border-gray-800 rounded px-4 py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
+        @click="openFuturesCard(card)"
       >
         <div class="flex items-center justify-between">
           <span class="text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
@@ -91,9 +92,15 @@
 import { ref, onMounted } from 'vue'
 import FuturesMainChart from './FuturesMainChart.vue'
 
+const emit = defineEmits(['open-futures'])
+
 const futuresCards     = ref([])
 const commodityBlocks  = ref([])
 const commodityUpdateTime = ref('')
+
+function openFuturesCard(card) {
+  emit('open-futures', { symbol: card.symbol || card.name })
+}
 
 async function fetchFuturesData() {
   try {
