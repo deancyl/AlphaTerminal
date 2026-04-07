@@ -36,9 +36,29 @@ _MOCK_BONDS = [
 
 
 def _fetch_bond_data():
-    """后台抓取国债收益率曲线（akshare bond_china_yield，5秒超时兜底Mock）"""
+    """后台抓取国债收益率曲线（akshare bond_china_yield，5秒超时兜底Mock）
+    同时提取商业银行普通债(AAA)曲线，用于计算真实信用利差"""
     global _BOND_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    def parse_row(row):
+        tenors = {}
+        for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
+            if col in row and row[col] is not None:
+                try:
+                    tenors[col] = round(float(row[col]), 4)
+                except (ValueError, TypeError):
+                    pass
+        return tenors
+
+    def calc_spreads(gov_row, other_row):
+        spreads = {}
+        for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
+            g = gov_row.get(col)
+            o = other_row.get(col)
+            if g is not None and o is not None:
+                spreads[col] = round((o - g) * 100, 2)   # bps
+        return spreads
 
     try:
         import akshare as ak
@@ -48,30 +68,36 @@ def _fetch_bond_data():
         df = ak.bond_china_yield()
         if df is not None and not df.empty:
             latest_date = df["日期"].max()
-            row = df[df["日期"] == latest_date].iloc[-1]
+            latest_df = df[df["日期"] == latest_date]
 
-            # 构建收益率曲线 {期限: 收益率}
-            tenors = {}
-            for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
-                if col in row and row[col] is not None:
-                    try:
-                        tenors[col] = round(float(row[col]), 4)
-                    except (ValueError, TypeError):
-                        pass
+            gov_row = None
+            comm_row = None
+            for _, row in latest_df.iterrows():
+                cn = str(row.get("曲线名称", ""))
+                if "国债" in cn and gov_row is None:
+                    gov_row = parse_row(row)
+                elif "商业" in cn and comm_row is None:
+                    comm_row = parse_row(row)
+
+            spreads = {}
+            if gov_row and comm_row:
+                spreads = calc_spreads(gov_row, comm_row)
 
             with _CACHE_LOCK:
                 _BOND_CACHE = {
-                    "yield_curve": tenors,
+                    "yield_curve": gov_row or {},
+                    "comm_yield": comm_row or {},
+                    "spreads_bps": spreads,   # 商业债-国债 利差（单位：bp）
                     "update_time": now_str,
                     "source": "akshare",
                 }
                 _LAST_FETCH_TIME = time.time()
-            logger.info(f"[Bond] yield curve fetched: {tenors}")
+            logger.info(f"[Bond] yield curve + spreads fetched")
             return
     except Exception as e:
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
-    # 降级兜底：静态 Mock 收益率曲线
+    # 降级兜底：静态 Mock
     with _CACHE_LOCK:
         _BOND_CACHE = {
             "yield_curve": {
@@ -79,6 +105,12 @@ def _fetch_bond_data():
                 "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
                 "10年": 3.1185, "30年": 3.7156,
             },
+            "comm_yield": {
+                "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
+                "3年": 3.3284, "5年": 3.5453, "7年": 3.6985,
+                "10年": 3.8367, "30年": 4.4626,
+            },
+            "spreads_bps": {},
             "update_time": now_str,
             "source": "mock",
         }
@@ -104,11 +136,37 @@ def _get_bond_cache() -> dict:
         return dict(_BOND_CACHE) if _BOND_CACHE else {}
 
 
+@router.get("/bond/curve")
+async def bond_curve():
+    """
+    完整债券曲线数据（含信用利差）
+
+    返回:
+      yield_curve:   国债收益率曲线 {期限: 收益率%}
+      comm_yield:    商业银行普通债(AAA)收益率曲线
+      spreads_bps:   商业债-国债利差 {期限: bps数}（正数=信用溢价）
+      update_time:  数据时间
+      source:        数据来源
+
+    利差含义：
+      bp > 0：信用债收益率高于国债（正常）
+      bp < 0：信用债收益率低于国债（异常，可能为数据问题）
+    """
+    cache = _get_bond_cache()
+    return {
+        "timestamp":    datetime.now().isoformat(),
+        "yield_curve": cache.get("yield_curve", {}),
+        "comm_yield":  cache.get("comm_yield", {}),
+        "spreads_bps": cache.get("spreads_bps", {}),
+        "update_time": cache.get("update_time", ""),
+        "source":      cache.get("source", "unknown"),
+    }
+
+
 @router.get("/bond/yield_curve")
 async def bond_yield_curve():
     """
-    国债收益率曲线
-    返回：{tenors: {期限: 收益率%}, update_time: str, source: str}
+    国债收益率曲线（仅国债，回落兼容）
     """
     cache = _get_bond_cache()
     return {

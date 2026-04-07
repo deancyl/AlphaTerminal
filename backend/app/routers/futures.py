@@ -25,8 +25,6 @@ WATCHED_COMMODITIES = {
     # (symbol, name, unit)
     "RB0": ("螺纹钢",   "元/吨"),
     "HC0": ("热卷",     "元/吨"),
-    "SA0": ("纯碱",     "元/吨"),
-    "LC0": ("碳酸锂",   "元/吨"),
     "I0":  ("铁矿石",   "元/吨"),
     "JM0": ("焦煤",     "元/吨"),
     "J0":  ("焦炭",     "元/吨"),
@@ -38,6 +36,27 @@ WATCHED_COMMODITIES = {
     "UR0": ("尿素",     "元/吨"),
     "EG0": ("乙二醇",   "元/吨"),
     "PP0": ("聚丙烯",   "元/吨"),
+    "LC0": ("碳酸锂",   "元/吨"),
+    "SA0": ("纯碱",     "元/吨"),
+}
+
+# 板块映射：symbol → (板块名, emoji)
+COMMODITY_SECTORS = {
+    "RB0": ("黑色建材", "🔨"),
+    "HC0": ("黑色建材", "🔨"),
+    "I0":  ("黑色建材", "🔨"),
+    "JM0": ("黑色建材", "🔨"),
+    "J0":  ("黑色建材", "🔨"),
+    "SC0": ("能源化工", "⚡"),
+    "FU0": ("能源化工", "⚡"),
+    "TA0": ("能源化工", "⚡"),
+    "MA0": ("能源化工", "⚡"),
+    "V0":  ("能源化工", "⚡"),
+    "UR0": ("能源化工", "⚡"),
+    "EG0": ("能源化工", "⚡"),
+    "PP0": ("能源化工", "⚡"),
+    "LC0": ("新能源",   "🔋"),
+    "SA0": ("新能源",   "🔋"),
 }
 
 SINA_HEADERS = {
@@ -89,6 +108,7 @@ def _fetch_futures_data():
     commodities = []
     for sym, (name, unit) in WATCHED_COMMODITIES.items():
         d = spot_data.get(sym, {})
+        sector_key = COMMODITY_SECTORS.get(sym, ("其他", "📦"))
         commodities.append({
             "symbol":     sym,
             "name":       name,
@@ -96,6 +116,8 @@ def _fetch_futures_data():
             "price":      d.get("price", 0),
             "change_pct": d.get("change_pct", 0),
             "tick":       d.get("tick", ""),
+            "sector":     sector_key[0],
+            "sector_emoji": sector_key[1],
         })
 
     # Mock 股指期货主力（IF/IC/IM，当作数据可用时）

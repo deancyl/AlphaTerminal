@@ -35,40 +35,55 @@
     <!-- 主体：上方大宗商品热力图 + 下方主力合约图表 -->
     <div class="flex flex-col gap-3 flex-1 min-h-0">
 
-      <!-- 大宗商品涨跌方块阵列（热力图风格） -->
+      <!-- 大宗商品板块分组热力图 -->
       <div class="terminal-panel border border-gray-800 rounded p-4">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs text-terminal-dim">🛢️ 国内大宗商品主力合约</span>
           <span class="text-[9px] text-terminal-dim">{{ commodityUpdateTime || '...' }}</span>
         </div>
-        <div class="grid grid-cols-6 gap-2">
-          <div
-            v-for="item in commodityBlocks"
-            v-if="item && item.symbol"
-            :key="item.symbol"
-            class="rounded border flex flex-col items-center justify-center py-2 px-1 cursor-default transition-all hover:brightness-125"
-            style="min-height: 52px;"
-            :style="{
-              borderColor: (item.change_pct || 0) >= 0
-                ? 'rgba(239,68,68,0.35)'
-                : 'rgba(34,197,94,0.35)',
-              background: (item.change_pct || 0) >= 0
-                ? 'rgba(239,68,68,0.08)'
-                : 'rgba(34,197,94,0.08)',
-            }"
-          >
-            <span class="text-[10px] text-gray-300 truncate w-full text-center">{{ item.name || item.symbol }}</span>
+
+        <!-- 按板块分组渲染 -->
+        <div v-for="sector in commoditySectors" :key="sector.name" class="mb-4 last:mb-0">
+          <!-- 板块头：名称 + 加权平均涨跌幅 -->
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="text-[10px]">{{ sector.emoji }} {{ sector.name }}</span>
             <span
-              class="text-xs font-mono mt-0.5"
-              :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
-            >{{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct ?? 0).toFixed(2) }}%</span>
+              class="text-[10px] font-mono px-1.5 py-0.5 rounded"
+              :class="sector.avgChange >= 0 ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'"
+            >
+              {{ sector.avgChange >= 0 ? '+' : '' }}{{ sector.avgChange.toFixed(2) }}%
+            </span>
           </div>
-          <div v-if="!commodityBlocks || commodityBlocks.length === 0"
-               class="col-span-6 text-center text-terminal-dim text-xs py-4">
-            暂无数据
+          <!-- 板块内商品方块（超过4个用6列，否则3列） -->
+          <div class="grid gap-2" :class="sector.items.length > 4 ? 'grid-cols-6' : 'grid-cols-3'">
+            <div
+              v-for="item in sector.items"
+              :key="item.symbol"
+              class="rounded border flex flex-col items-center justify-center py-2 px-1 cursor-default transition-all hover:brightness-125"
+              style="min-height: 52px;"
+              :style="{
+                borderColor: (item.change_pct || 0) >= 0
+                  ? 'rgba(239,68,68,0.35)'
+                  : 'rgba(34,197,94,0.35)',
+                background: (item.change_pct || 0) >= 0
+                  ? 'rgba(239,68,68,0.08)'
+                  : 'rgba(34,197,94,0.08)',
+              }"
+            >
+              <span class="text-[10px] text-gray-300 truncate w-full text-center">{{ item.name }}</span>
+              <span
+                class="text-xs font-mono mt-0.5"
+                :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+              >{{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct ?? 0).toFixed(2) }}%</span>
+            </div>
           </div>
         </div>
+        <div v-if="!commodityBlocks || commodityBlocks.length === 0"
+             class="text-center text-terminal-dim text-xs py-4">
+          暂无数据
+        </div>
       </div>
+
 
       <!-- 下方：主力合约走势图（真实图表） -->
       <div class="flex-1 terminal-panel border border-gray-800 rounded p-4 flex flex-col">
@@ -89,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import FuturesMainChart from './FuturesMainChart.vue'
 
 const emit = defineEmits(['open-futures'])
@@ -97,6 +112,22 @@ const emit = defineEmits(['open-futures'])
 const futuresCards     = ref([])
 const commodityBlocks  = ref([])
 const commodityUpdateTime = ref('')
+
+// 板块分组 + 板块平均涨跌幅
+const commoditySectors = computed(() => {
+  const map = {}
+  for (const item of (commodityBlocks.value || [])) {
+    const s = item.sector || '其他'
+    if (!map[s]) map[s] = { name: s, emoji: item.sector_emoji || '📦', items: [], total: 0, count: 0 }
+    map[s].items.push(item)
+    map[s].total += (item.change_pct || 0)
+    map[s].count += 1
+  }
+  return Object.values(map).map(g => ({
+    ...g,
+    avgChange: g.count > 0 ? g.total / g.count : 0,
+  }))
+})
 
 function openFuturesCard(card) {
   emit('open-futures', { symbol: card.symbol || card.name })
@@ -115,7 +146,7 @@ async function fetchFuturesData() {
 
     if (mc) {
       const commodities = mc.commodities || []
-      commodityBlocks.value = commodities.slice(0, 12)
+      commodityBlocks.value = commodities
       commodityUpdateTime.value = mc.update_time || ''
     }
   } catch (e) {
