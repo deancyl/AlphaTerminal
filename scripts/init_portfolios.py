@@ -19,7 +19,7 @@ def init():
 
     accounts = [
         {"name": "主账户",       "type": "main"},
-        {"name": "涵涵专项账户", "type": "special_plan"},
+        {"name": "子账户", "type": "special_plan"},
     ]
 
     now = datetime.now().isoformat()
