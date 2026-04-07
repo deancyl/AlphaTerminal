@@ -4,6 +4,8 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+
+const emit = defineEmits(['datazoom'])
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {
@@ -245,6 +247,12 @@ onMounted(async () => {
   chart.setOption(buildOption(props.chartData))
   _ro = new ResizeObserver(() => chart?.resize())
   if (chartEl.value) _ro.observe(chartEl.value)
+
+  // 向上传递 datazoom 事件（用于懒加载）
+  chart.on('datazoom', () => {
+    const zr = chart.getOption()?.dataZoom?.[0]
+    if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
+  })
 })
 
 onBeforeUnmount(() => {

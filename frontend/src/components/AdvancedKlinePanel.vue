@@ -2,7 +2,7 @@
   <!-- 全屏 K 线分析面板 -->
   <div class="flex flex-col w-full h-full overflow-hidden">
 
-    <!-- 顶部控制栏：数据盘口+图表控制台 -->
+    <!-- 顶部控制栏 -->
     <QuoteHeader
       :name="symbolName"
       :symbol="currentSymbol"
@@ -23,7 +23,7 @@
       @export-png="exportPNG"
     />
 
-    <!-- 主图区（flex-1，绑定 ResizeObserver） -->
+    <!-- 主图区 -->
     <div class="flex-1 min-h-0 relative" ref="chartContainerRef">
       <!-- 画线工具栏（左侧） -->
       <div class="absolute left-0 top-0 bottom-0 z-20 flex items-center">
@@ -42,13 +42,23 @@
         />
       </div>
 
-      <!-- ECharts 主图表 -->
-      <div ref="chartRef" class="w-full h-full" @contextmenu.prevent="onChartContextMenu"></div>
+      <!-- BaseKLineChart 哑组件（内部全权负责 ECharts 渲染） -->
+      <BaseKLineChart
+        ref="baseChartRef"
+        class="w-full h-full"
+        :chart-data="processedChartData"
+        :sub-charts="activeSubCharts"
+        :tick="liveTick"
+        :symbol="currentSymbol"
+        @datazoom="onDataZoom"
+      />
 
       <!-- 加载/穿透中遮罩 -->
-      <div v-if="isLoading || isFetching"
+      <div
+        v-if="isLoading || isFetching"
         class="absolute inset-0 z-30 flex flex-col items-center justify-center"
-        style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);">
+        style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);"
+      >
         <div class="text-blue-400 text-xs mb-2 font-mono">
           {{ isFetching ? '📡 首次访问，正在穿透拉取全量历史…' : '⏳ 加载中…' }}
         </div>
@@ -65,8 +75,7 @@
           class="w-full px-3 py-1.5 text-[11px] text-left text-gray-300 hover:bg-gray-700/60 flex items-center gap-2"
           @click="onDrillDown"
         >
-          <span>📊</span>
-          <span>查看历史分时</span>
+          <span>📊</span><span>查看历史分时</span>
           <span class="text-gray-600 ml-auto text-[9px]">{{ ctxMenu.date || '' }}</span>
         </button>
         <button
@@ -99,7 +108,7 @@
       >← 返回日线</button>
     </div>
 
-    <!-- 副图区（固定高度） -->
+    <!-- 副图区（SubChart 独立管理自己的 ECharts 实例） -->
     <SubChart
       :hist="histData"
       :activeTab="subChartTab"
@@ -115,7 +124,7 @@
       <CommandCenter @select="onSymbolSelect" />
     </div>
 
-    <!-- 区间统计浮窗（条件渲染） -->
+    <!-- 区间统计浮窗 -->
     <IntervalStats
       v-if="intervalStats"
       :stats="intervalStats"
@@ -127,52 +136,84 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts/core'
-import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, LegendComponent,
-  DataZoomComponent, MarkLineComponent, MarkAreaComponent,
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { buildChartData } from '../utils/chartDataBuilder.js'
+import { calcMA } from '../utils/indicators.js'
 
 import QuoteHeader    from './QuoteHeader.vue'
 import CommandCenter  from './CommandCenter.vue'
 import SubChart       from './SubChart.vue'
-import CrosshairInfo  from './CrosshairInfo.vue'
 import IntervalStats  from './IntervalStats.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import DrawingCanvas  from './DrawingCanvas.vue'
-
-import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
-import { normalizeSymbol, buildXAxisLabels } from '../utils/symbols.js'
-import { UP, DOWN } from '../utils/indicators.js'
-
-echarts.use([
-  CandlestickChart, LineChart, BarChart,
-  GridComponent, TooltipComponent, LegendComponent,
-  DataZoomComponent, MarkLineComponent, MarkAreaComponent,
-  CanvasRenderer,
-])
+import BaseKLineChart from './BaseKLineChart.vue'
 
 const {
   currentSymbol, currentSymbolName,
   setSymbol, isAShare, isIntradayPeriod,
 } = useMarketStore()
 
-// ── 状态 ──────────────────────────────────────────────────────
-const period         = ref('daily')    // daily | weekly | monthly | minutely | 1min | 5min | ...
-const adjustment     = ref('none')     // none | qfq | hfq
-const yAxisType      = ref('linear')   // linear | log
+// ── Refs ────────────────────────────────────────────────────────
+const baseChartRef        = ref(null)
+const chartContainerRef   = ref(null)
+const drawingCanvasRef    = ref(null)
+const isLoading           = ref(false)
+const isFetching          = ref(false)
+const hasMore             = ref(false)
+const loadOffset          = ref(0)
+
+// chartInstance：暴露给 DrawingCanvas 做坐标吸附
+const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? null)
+
+// ── 核心数据（shallowRef 避免大数组深度劫持）─────────────────────
+const histData  = shallowRef([])          // 完整历史 ASC
+const overlayData = shallowRef([])        // 叠加标的 {date, close}[]
+const liveTick   = shallowRef(null)       // 实时 tick
+
+// chartData 专用 shallowRef，避免每次 histData 变化触发父级深度 diff
+const processedChartData = shallowRef({ isEmpty: true })
+
+function rebuildChartData() {
+  processedChartData.value = histData.value.length
+    ? buildChartData(histData.value, period.value, indicatorParams.value, overlayData.value)
+    : { isEmpty: true }
+}
+
+// visibleHist：视图窗口数据（由 datazoom 决定）
+const visibleHist = computed(() => histData.value)
+
+// ── 控制状态 ────────────────────────────────────────────────────
+const period          = ref('daily')
+const adjustment      = ref('none')
+const yAxisType       = ref('linear')
 const overlaySymbol   = ref('')
 const overlayName     = ref('')
-const overlayData     = ref([])    // 叠加标的的历史数据（{date, close}[]）
-const subChartTab    = ref('VOL')       // VOL | MACD | KDJ | RSI | BOLL
-const indicatorParams = ref({ MACD: { fast: 12, slow: 26, signal: 9 }, KDJ: { n: 9 }, RSI: { period: 14 }, BOLL: { period: 20, stdDev: 2 } })
-const currentQuote    = ref({})         // 实时快照
-const hoverData       = ref({})         // 十字光标数据
+const subChartTab     = ref('VOL')
+const indicatorParams = ref({
+  MACD: { fast: 12, slow: 26, signal: 9 },
+  KDJ:  { n: 9 },
+  RSI:  { period: 14 },
+  BOLL: { period: 20, stdDev: 2 },
+})
+const currentQuote    = ref({})
+const hoverData       = ref({})
+const intervalStats   = ref(null)
+const drillDownDate   = ref(null)   // YYYYMMDD，null = 普通模式
+const drawingTool     = ref('')
+const drawingColor    = ref('#fbbf24')
+const magnetMode      = ref(true)
+const drawingVisible  = ref(true)
+const drawingLocked   = ref(false)
+const ctxMenu         = ref({ visible: false, x: 0, y: 0, date: '', idx: -1 })
+
+// ── 派生数据 ────────────────────────────────────────────────────
+// activeSubCharts：subChartTab → BaseKLineChart subCharts 数组格式
+const activeSubCharts = computed(() => {
+  const map = { VOL: ['VOL'], MACD: ['VOL', 'MACD'], KDJ: ['VOL', 'KDJ'], RSI: ['VOL', 'RSI'], BOLL: ['VOL'] }
+  return map[subChartTab.value] ?? ['VOL']
+})
 
 // MA 最新值（左上角浮显）
 const maDisplays = computed(() => {
@@ -189,65 +230,27 @@ const maDisplays = computed(() => {
     { period: 20, color: '#c084fc', value: ma20[last] ?? null },
   ].filter(m => m.value != null)
 })
-const intervalStats   = ref(null)
-const histData        = ref([])
-const visibleHist     = ref([])
-// 各周期单次拉取上限（Issue 2：历史深度扩容）
+
+const symbolName = computed(() => currentSymbolName.value || currentSymbol.value.replace(/^(sh|sz|us|hk|jp)/i, ''))
+
+// 各周期单次拉取上限
 const PERIOD_LIMITS = {
-  daily:   5000,   // ~20 年
-  weekly:  500,    // ~10 年
-  monthly: 300,    // ~25 年
-  minutely: 300,
-  '1min': 300, '5min': 300, '15min': 300, '30min': 300, '60min': 300,
+  daily: 5000, weekly: 500, monthly: 300,
+  minutely: 300, '1min': 300, '5min': 300, '15min': 300, '30min': 300, '60min': 300,
 }
 const limit = computed(() => PERIOD_LIMITS[period.value] ?? 300)
-const drillDownDate = ref(null)  // YYYYMMDD, null means normal mode
 
-function exitDrillDown() {
-  drillDownDate.value = null
-  period.value = 'daily'
-  loadOffset.value = 0
-  histData.value = []
-  visibleHist.value = []
-  fetchHistory()
-  startQuotePolling(30_000)
-}                       // 每次请求的 K 线根数
-const chartRef        = ref(null)
-const chartContainerRef = ref(null)
-const isLoading       = ref(false)
-const isFetching      = ref(false)     // 穿透拉取中（首次无缓存）
-const chartError      = ref('')
-const hasMore         = ref(false)
-const loadOffset      = ref(0)         // 懒加载偏移量
-
-let chartInstance = null
-let resizeObserver = null
-const drawingCanvasRef = ref(null)
-
-// 画线状态
-const drawingTool     = ref('')
-const drawingColor    = ref('#fbbf24')
-const magnetMode     = ref(true)
-const drawingVisible  = ref(true)
-const drawingLocked   = ref(false)
-
-// 右键菜单状态
-const ctxMenu = ref({ visible: false, x: 0, y: 0, date: '', idx: -1 })
-
-// 下钻状态（查看历史分时）
-
-// 实时行情轮询
+// ── 实时行情轮询 ────────────────────────────────────────────────
 let quotePollingTimer = null
 
 async function fetchLatestQuote() {
   const sym = currentSymbol.value
-  if (!sym || drillDownDate.value) return  // 下钻模式不轮询
+  if (!sym || drillDownDate.value) return
   try {
     const res = await fetch(`/api/v1/market/quote/${sym}`)
     if (!res.ok) return
     const data = await res.json()
     if (data.error) return
-    // 仅更新快照，不重置历史数据
     currentQuote.value = {
       price:        data.price,
       change:       data.change,
@@ -256,6 +259,12 @@ async function fetchLatestQuote() {
       amount:       data.amount,
       amplitude:    data.amplitude,
       turnover_rate: data.turnover_rate,
+    }
+    // 触发 BaseKLineChart 的 tick 闪烁
+    liveTick.value = {
+      price:  data.price,
+      volume: data.volume,
+      time:   Date.now(),
     }
   } catch (_) {}
 }
@@ -273,68 +282,33 @@ function stopQuotePolling() {
   }
 }
 
-// ── 标的信息 ──────────────────────────────────────────────────
-const symbolName = computed(() => currentSymbolName.value || currentSymbol.value.replace(/^(sh|sz|us|hk|jp)/i, ''))
-
-// ── 指标参数 ──────────────────────────────────────────────────
-function calcMA5()  { return calcMA(visibleHist.value.map(h => h.close), 5) }
-function calcMA10() { return calcMA(visibleHist.value.map(h => h.close), 10) }
-function calcMA20() { return calcMA(visibleHist.value.map(h => h.close), 20) }
-function calcBOLLLocal() { return calcBOLL(visibleHist.value.map(h => h.close), indicatorParams.value.BOLL?.period || 20, indicatorParams.value.BOLL?.stdDev || 2) }
-function calcMACDLocal() {
-  const p = indicatorParams.value.MACD || {}
-  return calcMACD(visibleHist.value.map(h => h.close), p.fast || 12, p.slow || 26, p.signal || 9)
-}
-function calcKDJLocal() {
-  const p = indicatorParams.value.KDJ || {}
-  return calcKDJ(
-    visibleHist.value.map(h => h.close),
-    visibleHist.value.map(h => h.high),
-    visibleHist.value.map(h => h.low),
-    p.n || 9
-  )
-}
-function calcRSILocal() {
-  const p = indicatorParams.value.RSI || {}
-  return calcRSI(visibleHist.value.map(h => h.close), p.period || 14)
-}
-
-// ── 数据获取 ──────────────────────────────────────────────────
+// ── 数据获取 ────────────────────────────────────────────────────
 async function fetchHistory(append = false) {
   const sym = currentSymbol.value
   if (!sym) return
   isLoading.value = true
-  chartError.value = ''
 
   try {
     const params = new URLSearchParams({
-      period: period.value,
-      limit: String(limit),
+      period: drillDownDate.value ? '1min' : period.value,
+      limit:  String(limit.value),
       offset: append ? String(loadOffset.value) : '0',
       adjustment: adjustment.value,
     })
-    // 下钻模式：指定具体交易日
-    if (drillDownDate.value) {
-      params.set('trade_date', drillDownDate.value)
-      params.set('period', '1min')  // 下钻后固定为1分钟K线
-    }
-    const url = `/api/v1/market/history/${sym}?${params}`
-    const res = await fetch(url)
+    if (drillDownDate.value) params.set('trade_date', drillDownDate.value)
+
+    const res = await fetch(`/api/v1/market/history/${sym}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
 
-    // 穿透拉取标志：首次请求无缓存时后端正在 AkShare 穿透
     isFetching.value = data.fetching ?? false
 
     const items = (data.history || []).map(sanitizeItem)
-
-    // API 可能返回 DESC（新股在左）或 ASC（老新在左），统一规范为 ASC 存储
     const isDesc = items.length >= 2 &&
       new Date(items[0].date).getTime() > new Date(items[items.length - 1].date).getTime()
     const sortedItems = isDesc ? [...items].reverse() : items
 
     if (append) {
-      // 已有数据是 ASC，新数据也是 ASC，直接拼接
       histData.value = [...sortedItems, ...histData.value]
       loadOffset.value += sortedItems.length
     } else {
@@ -342,30 +316,30 @@ async function fetchHistory(append = false) {
       loadOffset.value = sortedItems.length
     }
 
-    visibleHist.value = histData.value
     hasMore.value = data.has_more ?? items.length >= 300
 
-    // 更新快照
     if (items.length > 0) {
-      const last = items[items.length - 1]
+      const last  = items[items.length - 1]
+      const prev  = items[items.length - 2]
       currentQuote.value = {
         price:        last.close,
-        change:       last.close - (items[items.length - 2]?.close || last.close),
-        change_pct:   last.change_pct ?? ((last.close - (items[items.length - 2]?.close || last.close)) / (items[items.length - 2]?.close || 1) * 100),
+        change:       last.close - (prev?.close || last.close),
+        change_pct:   last.change_pct ?? ((last.close - (prev?.close || last.close)) / (prev?.close || 1) * 100),
         volume:       last.volume,
         amount:       last.amount || (last.close * last.volume),
         amplitude:    last.amplitude,
         turnover_rate: last.turnover_rate,
       }
     }
+
+    rebuildChartData()
   } catch (e) {
-    chartError.value = '数据加载失败：' + e.message
+    console.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
   } finally {
     isLoading.value = false
   }
 }
 
-// ── 数据清洗 ──────────────────────────────────────────────────
 function sanitizeItem(r) {
   return {
     date:       r.date || r.time || '',
@@ -382,13 +356,16 @@ function sanitizeItem(r) {
   }
 }
 
-// ── 事件处理 ───────────────────────────────────────────────────
+// ── 事件处理 ────────────────────────────────────────────────────
 function onSymbolSelect(item) {
   setSymbol(item.symbol, item.name, '#00ff88', item.market)
   period.value = 'daily'
   loadOffset.value = 0
   histData.value = []
-  visibleHist.value = []
+  overlayData.value = []
+  overlaySymbol.value = ''
+  overlayName.value = ''
+  processedChartData.value = { isEmpty: true }
   fetchHistory()
 }
 
@@ -396,296 +373,72 @@ function onPeriodChange(p) {
   period.value = p
   loadOffset.value = 0
   histData.value = []
-  visibleHist.value = []
+  processedChartData.value = { isEmpty: true }
   fetchHistory()
 }
 
 function onOverlayChange(payload) {
-  const sym = typeof payload === 'string' ? payload : (payload?.symbol ?? '')
-  const name = typeof payload === 'string' ? '' : (payload?.name ?? sym)
+  const sym  = typeof payload === 'string' ? payload : (payload?.symbol ?? '')
+  const name  = typeof payload === 'string' ? '' : (payload?.name ?? sym)
   overlaySymbol.value = sym
   overlayName.value = name
   if (sym) fetchOverlayHistory(sym)
-  else overlayData.value = []
+  else { overlayData.value = []; rebuildChartData() }
 }
 
 async function fetchOverlayHistory(sym) {
   if (!sym) { overlayData.value = []; return }
   try {
     const params = new URLSearchParams({ period: 'daily', limit: '3000', offset: '0' })
-    const url = `/api/v1/market/history/${sym}?${params}`
-    const res = await fetch(url)
+    const res = await fetch(`/api/v1/market/history/${sym}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    // 规范化为 DATE ASC（与 histData DESC 互补，用于按日期匹配）
     const raw = (data.history || []).map(r => ({
       date:  r.date || r.time || '',
       close: Number(r.close) || 0,
-    })).reverse()  // 转成 ASC，最旧在前最新在后
+    })).reverse()
     overlayData.value = raw
-  } catch (e) {
+    rebuildChartData()
+  } catch (_) {
     overlayData.value = []
   }
 }
 
-// ── ECharts 配置 ──────────────────────────────────────────────
-function buildOption() {
-  const hist = visibleHist.value
-  if (!hist.length) return {}
-
-  const times   = buildXAxisLabels(hist, period.value)
-  const closes  = hist.map(h => h.close)
-  const highs   = hist.map(h => h.high)
-  const lows    = hist.map(h => h.low)
-  const volumes = hist.map(h => h.volume)
-
-  const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
-  const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
-
-  const subInd = subChartTab.value
-  const showVOL  = subInd === 'VOL'
-  const showMACD = subInd === 'MACD'
-  const showKDJ  = subInd === 'KDJ'
-  const showRSI  = subInd === 'RSI'
-  const showBOLL = subInd === 'BOLL'
-
-  const mainH = 62, volH = 20, indH = 15
-  const mainTop = 2
-  const volTop  = mainTop + mainH + 1
-  const indTop  = volTop + volH + 1
-
-  const grid = [
-    { top: `${mainTop}%`, height: `${mainH}%`, right: 60, left: 55, bottom: 0 },
-    { top: `${volTop}%`,  height: `${volH}%`,  right: 60, left: 55, bottom: 0 },
-  ]
-  if (subInd !== 'VOL') grid.push({ top: `${indTop}%`, height: `${indH}%`, right: 60, left: 55, bottom: 0 })
-
-  const xAxis = [
-    { gridIndex: 0, type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false } },
-    { gridIndex: 1, type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } },
-  ]
-  if (subInd !== 'VOL') xAxis.push({ gridIndex: 2, type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { show: false } })
-
-  const yAxis = [
-    { gridIndex: 0, type: yAxisType.value, min: yMin, max: yMax, axisLine: { lineStyle: { color: '#374151' } }, splitLine: { lineStyle: { color: '#1f2937' } }, scale: true },
-    { gridIndex: 1, type: 'value', axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false }, axisLabel: { formatter: v => (v / 1e8).toFixed(0) + '亿' } },
-  ]
-  if (subInd !== 'VOL') yAxis.push({ gridIndex: 2, type: 'value', axisLine: { lineStyle: { color: '#374151' } }, splitLine: { show: false } })
-
-  // ── K线烛台 ───────────────────────────────────────────────
-  const kSeries = {
-    name: 'K线', type: 'candlestick',
-    data: hist.map(h => [h.open, h.close, h.low, h.high]),
-    xAxisIndex: 0, yAxisIndex: 0,
-    itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN },
+// DataZoom 事件（BaseKLineChart 向上传递缩放范围）
+function onDataZoom({ start, end }) {
+  // 懒加载：当左侧边缘 < 5% 时预加载更早数据
+  if (start < 5 && hasMore.value && !isLoading.value) {
+    fetchHistory(true)
   }
-
-  // ── MA 均线 ────────────────────────────────────────────────
-  const ma5  = calcMA5()
-  const ma10 = calcMA10()
-  const ma20 = calcMA20()
-  const maSeries = [
-    { name: 'MA5',  data: ma5,  color: '#ffffff', width: 1 },
-    { name: 'MA10', data: ma10, color: '#fbbf24', width: 1 },
-    { name: 'MA20', data: ma20, color: '#c084fc', width: 1 },
-  ].map(cfg => ({
-    ...cfg, type: 'line', xAxisIndex: 0, yAxisIndex: 0,
-    smooth: false, symbol: 'none',
-    lineStyle: { color: cfg.color, width: cfg.width },
-  }))
-
-  // ── BOLL ────────────────────────────────────────────────────
-  const bollSeries = showBOLL ? (() => {
-    const { mid, upper, lower } = calcBOLLLocal()
-    return [
-      { name: 'BOLL-M', data: mid,   color: '#a78bfa', width: 1.2, type: 'line', smooth: false, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0,
-        lineStyle: { color: '#a78bfa', width: 1.2 } },
-      { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', smooth: false, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0,
-        lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
-      { name: 'BOLL-L', data: lower, color: '#a78bfa', width: 1, type: 'line', smooth: false, symbol: 'none', xAxisIndex: 0, yAxisIndex: 0,
-        lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
-    ]
-  })() : []
-
-  // ── 成交量 ─────────────────────────────────────────────────
-  const volSeries = {
-    name: 'VOL', type: 'bar',
-    data: hist.map(h => ({ value: h.volume, itemStyle: { color: h.close >= h.open ? UP + '44' : DOWN + '44' } })),
-    xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 6,
-  }
-
-  // ── 副图指标 ───────────────────────────────────────────────
-  const subSeries = []
-  if (showMACD) {
-    const { dif, dea, macd } = calcMACDLocal()
-    subSeries.push(
-      { name: 'DIF', type: 'line', data: dif, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
-      { name: 'DEA', type: 'line', data: dea, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
-      { name: 'MACD', type: 'bar',
-        data: macd.map(v => ({ value: Math.abs(v), itemStyle: { color: v >= 0 ? UP : DOWN } })),
-        xAxisIndex: 2, yAxisIndex: 2, barMaxWidth: 4 },
-    )
-  }
-  if (showKDJ) {
-    const { k, d, j } = calcKDJLocal()
-    subSeries.push(
-      { name: 'K', type: 'line', data: k, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
-      { name: 'D', type: 'line', data: d, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
-      { name: 'J', type: 'line', data: j, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 } },
-    )
-  }
-  if (showRSI) {
-    const rsi = calcRSILocal()
-    subSeries.push(
-      { name: 'RSI', type: 'line', data: rsi, xAxisIndex: 2, yAxisIndex: 2, smooth: false, symbol: 'none',
-        lineStyle: { color: '#34d399', width: 1.5 } },
-    )
-  }
-
-  // ── 叠加标的线（相对强弱对比）────────────────────────────────
-  const overlaySeries = (() => {
-    if (!overlayData.value.length || !hist.length) return []
-    const ovMap = {}
-    for (const d of overlayData.value) {
-      ovMap[d.date] = d.close
-    }
-    // 按主图时间对齐（若主图某日无叠加数据则跳过）
-    const data = hist.map((h, i) => [i, ovMap[h.date] ?? null])
-    if (data.every(d => d[1] == null)) return []
-    return [{
-      name: overlayName.value || overlaySymbol.value,
-      type: 'line',
-      data,
-      xAxisIndex: 0, yAxisIndex: 0,
-      smooth: false, symbol: 'none',
-      lineStyle: { color: '#06b6d4', width: 1.5, type: 'solid', opacity: 0.8 },
-      connectNulls: true,
-    }]
-  })()
-
-  const series = [kSeries, ...maSeries, ...bollSeries, ...overlaySeries, volSeries, ...subSeries]
-
-  // ── DataZoom（缩放+平移）────────────────────────────────────
-  const dataZoom = [
-    { type: 'inside', xAxisIndex: [0, 1, 2], start: 70, end: 100 },
-    {
-      type: 'slider', xAxisIndex: [0, 1, 2], start: 70, end: 100,
-      bottom: 4, height: 18,
-      borderColor: '#374151', backgroundColor: '#1f2937',
-      dataBackground: { lineStyle: { color: '#4b5563' }, areaStyle: { color: '#1f2937' } },
-      selectedDataBackground: { lineStyle: { color: '#60a5fa' }, areaStyle: { color: '#1e3a5f' } },
-      fillerColor: 'rgba(96, 165, 250, 0.1)',
-      handleStyle: { color: '#60a5fa', borderColor: '#60a5fa' },
-      textStyle: { color: '#9ca3af', fontSize: 9 },
-    },
-  ]
-
-  return { grid, xAxis, yAxis, series, dataZoom }
 }
 
-// ── 渲染图表 ───────────────────────────────────────────────────
-function renderChart() {
-  // 检查 DOM 是否有有效尺寸（防止全屏切换时容器未渲染就初始化）
-  const container = chartRef.value
-  if (!container || container.clientWidth === 0 || container.clientHeight === 0) return
-
-  if (!chartInstance) {
-    chartInstance = echarts.init(container, null, { renderer: 'canvas' })
-
-    // 十字光标 tooltip
-    chartInstance.getZr().on('mousemove', (params) => {
-      const point = [params.offsetX, params.offsetY]
-      const converted = chartInstance.convertFromPixel({ gridIndex: 0 }, point)
-      if (converted && visibleHist.value[converted[0]] !== undefined) {
-        const h = visibleHist.value[converted[0]]
-        hoverData.value = {
-          date:   h.date,
-          time:   h.time,
-          open:   h.open,
-          high:   h.high,
-          low:    h.low,
-          close:  h.close,
-          volume: h.volume,
-          change_pct: h.change_pct,
-        }
-      }
-    })
-
-    chartInstance.getZr().on('mouseleave', () => { hoverData.value = {} })
-
-    // 缩放时更新 visibleHist
-    chartInstance.on('datazoom', (params) => {
-      const zr = chartInstance.getOption().dataZoom?.[0]
-      if (zr) {
-        const total = histData.value.length
-        const start = Math.round((zr.start || 0) / 100 * total)
-        const end   = Math.round((zr.end || 100) / 100 * total)
-        visibleHist.value = histData.value.slice(start, end)
-        // 懒加载：当 start < 5% 时加载更早数据
-        if (start < total * 0.05 && hasMore.value && !isLoading.value) {
-          fetchHistory(true)
-        }
-      }
-    })
-  }
-
-  chartInstance.setOption(buildOption(), { notMerge: false })
-}
-
-// ── ResizeObserver ─────────────────────────────────────────────
-function setupResizeObserver() {
-  resizeObserver = new ResizeObserver(() => {
-    chartInstance?.resize()
-  })
-  resizeObserver.observe(chartContainerRef.value)
-}
-
-// ── 导出 PNG ───────────────────────────────────────────────────
+// ── 导出 PNG ────────────────────────────────────────────────────
 async function exportPNG() {
-  if (!chartInstance) return
+  const inst = chartInstance.value
+  if (!inst) return
   try {
-    // 1. ECharts 图表层
-    const chartUrl = chartInstance.getDataURL({
-      type: 'png', pixelRatio: 2, backgroundColor: '#0f172a'
-    })
-
-    // 2. 创建合成画布
-    const width  = chartRef.value.clientWidth  * 2
-    const height = chartRef.value.clientHeight * 2
+    const chartUrl = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#0f172a' })
+    const container = chartContainerRef.value
+    const w = container.clientWidth  * 2
+    const h = container.clientHeight * 2
     const canvas = document.createElement('canvas')
-    canvas.width  = width
-    canvas.height = height
+    canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')
-
-    // 3. 加载并绘制 ECharts 层
     const chartImg = new Image()
-    await new Promise((resolve, reject) => {
-      chartImg.onload = resolve
-      chartImg.onerror = reject
-      chartImg.src = chartUrl
-    })
-    ctx.drawImage(chartImg, 0, 0, width, height)
-
-    // 4. 若画线层可见且有内容，叠加 DrawingCanvas
+    await new Promise((resolve, reject) => { chartImg.onload = resolve; chartImg.onerror = reject; chartImg.src = chartUrl })
+    ctx.drawImage(chartImg, 0, 0, w, h)
     if (drawingVisible.value && drawingCanvasRef.value?.$el) {
-      const drawCanvas = drawingCanvasRef.value.$el.querySelector('canvas')
-      if (drawCanvas) {
-        ctx.drawImage(drawCanvas, 0, 0, width, height)
-      }
+      const dc = drawingCanvasRef.value.$el.querySelector('canvas')
+      if (dc) ctx.drawImage(dc, 0, 0, w, h)
     }
-
-    // 5. 导出合成图
-    const finalUrl = canvas.toDataURL('image/png')
     const a = document.createElement('a')
-    a.href = finalUrl
+    a.href = canvas.toDataURL('image/png')
     a.download = `${symbolName.value}_${period.value}_${Date.now()}.png`
     a.click()
-  } catch (e) {
-    console.error('PNG导出失败:', e)
-  }
+  } catch (e) { console.error('PNG导出失败:', e) }
 }
 
-// ── 区间统计（右键框选）────────────────────────────────────────
+// ── 区间统计 ────────────────────────────────────────────────────
 const rangeStart = ref(null)
 
 function onRangeSelect({ idx }) {
@@ -701,13 +454,10 @@ function onRangeSelect({ idx }) {
       const highs = slice.map(h => h.high)
       const lows  = slice.map(h => h.low)
       intervalStats.value = {
-        startDate: first.date,
-        endDate:   last.date,
-        tradeDays: slice.length,
+        startDate: first.date, endDate: last.date, tradeDays: slice.length,
         changePct,
         maxAmplitude: +((Math.max(...highs) / Math.min(...lows) * 100) - 100).toFixed(2),
-        highest:   Math.max(...highs),
-        lowest:    Math.min(...lows),
+        highest: Math.max(...highs), lowest: Math.min(...lows),
         totalVolume: slice.reduce((a, h) => a + (h.volume || 0), 0),
         totalAmount: slice.reduce((a, h) => a + (h.amount || 0), 0),
         totalTurnoverRate: slice.reduce((a, h) => a + (h.turnover_rate || 0), 0),
@@ -717,77 +467,62 @@ function onRangeSelect({ idx }) {
   }
 }
 
-// ── 画线事件（IndexedDB 自动持久化，此处可扩展日志）─────────────
-function onShapeDrawn() {}
-function onShapeDeleted() {}
-function onShapesCleared() {}
-
-// ── 右键上下文菜单 ─────────────────────────────────────────────
+// ── 右键菜单 ────────────────────────────────────────────────────
 function onChartContextMenu(e) {
-  if (drawingTool.value) return  // 画线模式不弹菜单
+  if (drawingTool.value) return
   const rect = chartContainerRef.value.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-
-  // 从 ECharts 获取当前光标下的数据索引
-  let targetIdx = -1, targetDate = ''
-  if (chartInstance) {
-    try {
-      const pt = chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
-      if (pt) {
-        targetIdx = Math.round(pt[0])
-        if (targetIdx >= 0 && targetIdx < histData.value.length) {
-          targetDate = histData.value[targetIdx].date || ''
-        }
-      }
-    } catch (_) {}
-  }
-
-  ctxMenu.value = { visible: true, x, y, date: targetDate, idx: targetIdx }
-  // 延迟关闭（点击他处）
-  setTimeout(() => {
-    window.addEventListener('click', closeCtxMenu, { once: true })
-  }, 0)
+  ctxMenu.value = { visible: true, x: e.clientX - rect.left, y: e.clientY - rect.top, date: '', idx: -1 }
+  setTimeout(() => window.addEventListener('click', closeCtxMenu, { once: true }), 0)
 }
 
-function closeCtxMenu() {
-  ctxMenu.value.visible = false
-}
+function closeCtxMenu() { ctxMenu.value.visible = false }
 
-// ── 历史分时下钻 ───────────────────────────────────────────────
 function onDrillDown() {
   ctxMenu.value.visible = false
   if (ctxMenu.value.idx < 0 || !ctxMenu.value.date) return
   stopQuotePolling()
-  const dateStr = ctxMenu.value.date  // YYYY-MM-DD
-  const yyyymmdd = dateStr.replace(/-/g, '')
-  drillDownDate.value = yyyymmdd
-  period.value = '1min'  // 切换到1分钟周期
+  drillDownDate.value = ctxMenu.value.date.replace(/-/g, '')
+  period.value = '1min'
   loadOffset.value = 0
   histData.value = []
-  visibleHist.value = []
+  processedChartData.value = { isEmpty: true }
   fetchHistory()
 }
 
-// ── 生命周期 ───────────────────────────────────────────────────
+function exitDrillDown() {
+  drillDownDate.value = null
+  period.value = 'daily'
+  loadOffset.value = 0
+  histData.value = []
+  processedChartData.value = { isEmpty: true }
+  fetchHistory()
+  startQuotePolling(30_000)
+}
+
+// ── 画线事件（IndexedDB 持久化在 DrawingCanvas 内部处理）──────────
+function onShapeDrawn()  {}
+function onShapeDeleted() {}
+function onShapesCleared() {}
+
+// ── 监听响应 ────────────────────────────────────────────────────
+// 指标/周期变化 → 重建图表数据
+watch([period, yAxisType, subChartTab, indicatorParams], () => {
+  rebuildChartData()
+})
+
+watch(currentSymbol, () => {
+  fetchHistory()
+  startQuotePolling(30_000)
+})
+
+// ── 生命周期 ────────────────────────────────────────────────────
 onMounted(() => {
-  setupResizeObserver()
   fetchHistory()
   startQuotePolling(30_000)
 })
 
 onUnmounted(() => {
-  resizeObserver?.disconnect()
-  chartInstance?.dispose()
   stopQuotePolling()
+  baseChartRef.value?.getChartInstance?.()?.dispose()
 })
-
-// ── 监听响应 ───────────────────────────────────────────────────
-watch(currentSymbol, () => {
-  fetchHistory()
-  startQuotePolling(30_000)  // 切换标的后重启轮询
-})
-watch([period, yAxisType, subChartTab, indicatorParams], () => renderChart())
-watch(histData, () => nextTick(renderChart))
-watch(overlayData, () => nextTick(renderChart))
 </script>
