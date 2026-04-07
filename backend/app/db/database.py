@@ -44,6 +44,9 @@ def init_tables():
                 symbol TEXT NOT NULL, date TEXT NOT NULL,
                 open REAL NOT NULL, high REAL NOT NULL, low REAL NOT NULL,
                 close REAL NOT NULL, volume INTEGER NOT NULL,
+                amount REAL DEFAULT 0.0,
+                turnover_rate REAL DEFAULT 0.0,
+                amplitude REAL DEFAULT 0.0,
                 timestamp INTEGER NOT NULL,
                 data_type TEXT NOT NULL DEFAULT 'daily',
                 UNIQUE(symbol, date)
@@ -74,8 +77,8 @@ def buffer_insert(data_list):
 
 def buffer_insert_daily(data_list):
     """
-    写入 market_data_daily（change_pct 在 API 层内联计算，不落此表）
-    表列: id AUTOINCREMENT, symbol, date, open, high, low, close, volume, timestamp, data_type
+    写入 market_data_daily
+    表列: id, symbol, date, open, high, low, close, volume, amount, turnover_rate, amplitude, timestamp, data_type
     """
     if not data_list: return
     with _lock:
@@ -85,11 +88,14 @@ def buffer_insert_daily(data_list):
             try:
                 conn.execute(
                     "INSERT OR REPLACE INTO market_data_daily "
-                    "(symbol, date, open, high, low, close, volume, timestamp, data_type) "
-                    "VALUES (?,?,?,?,?,?,?,?,?)",
+                    "(symbol, date, open, high, low, close, volume, amount, turnover_rate, amplitude, timestamp, data_type) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     (str(i.get('symbol','')), str(i.get('date','')),
                      float(i.get('open',0)), float(i.get('high',0)), float(i.get('low',0)),
                      float(i.get('close',0)), int(i.get('volume',0)),
+                     float(i.get('amount', 0.0)),
+                     float(i.get('turnover_rate', 0.0)),
+                     float(i.get('amplitude', 0.0)),
                      int(i.get('timestamp',0)), str(i.get('data_type','daily'))))
                 ok += 1
             except (sqlite3.IntegrityError, sqlite3.OperationalError, ValueError, TypeError) as e:

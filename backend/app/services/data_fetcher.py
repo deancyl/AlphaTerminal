@@ -794,6 +794,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
         _pct_col = next((c for c in df.columns
                         if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
         rows = []
+        prev_close = None
         for i in range(len(df)):
             try:
                 dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
@@ -803,17 +804,31 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                 close = float(df.iloc[i]["close"])
                 vol   = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
                 pct   = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
+                # amount: 成交额（元），指数无此字段
+                amount = float(df.iloc[i]["amount"]) if "amount" in df.columns else 0.0
+                # turnover_rate: 换手率(%)，AkShare返回小数形式(如0.0023)，转%
+                raw_turnover = float(df.iloc[i]["turnover"]) if "turnover" in df.columns else None
+                turnover_rate = round(raw_turnover * 100, 4) if raw_turnover is not None else 0.0
+                # amplitude: 振幅(%) = (high - low) / prev_close * 100
+                if prev_close and prev_close != 0:
+                    amplitude = round((high - low) / prev_close * 100, 4)
+                else:
+                    amplitude = 0.0
+                prev_close = close
                 rows.append({
-                    "symbol":     symbol,
-                    "date":       str(df.iloc[i][date_col])[:10],
-                    "open":       open_,
-                    "high":       high,
-                    "low":        low,
-                    "close":      close,
-                    "volume":     vol,
-                    "change_pct": pct,
-                    "timestamp":  dt,
-                    "data_type":  "daily",
+                    "symbol":       symbol,
+                    "date":         str(df.iloc[i][date_col])[:10],
+                    "open":         open_,
+                    "high":         high,
+                    "low":          low,
+                    "close":        close,
+                    "volume":       vol,
+                    "amount":       amount,
+                    "turnover_rate": turnover_rate,
+                    "amplitude":    amplitude,
+                    "change_pct":   pct,
+                    "timestamp":    dt,
+                    "data_type":    "daily",
                 })
             except Exception as e:
                 logger.warning(f"[AkShare Stock] 解析第{i}行失败: {e}")
