@@ -1,62 +1,90 @@
 """
-WebSocket 路由：/ws/market/{symbol}
-订阅指定股票的实时行情 tick
+WebSocket 路由 — 统一端点 /ws/market
+支持 JSON 动态订阅/取消订阅
+心跳保活 55 秒
 """
 import asyncio
+import json
+import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.services.ws_manager import ws_manager
+from app.services.ws_manager import ws_manager, WSConnection
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-@router.websocket("/ws/market/{symbol}")
-async def ws_market(ws: WebSocket, symbol: str):
+@router.websocket("/ws/market")
+async def ws_market(ws: WebSocket):
     """
-    前端 WS 客户端连接格式:
-      ws://host:8002/ws/market/600519
+    统一 WebSocket 端点。
 
-    后端推送格式 (JSON):
-      {
-        "symbol": "600519",
-        "price": 1680.5,
-        "chg": 20.5,
-        "chg_pct": 1.23,
-        "volume": 1234567,
-        "amount": 9876543210,
-        "timestamp": 1712467200
-      }
+    客户端连接后，通过发送 JSON 消息订阅股票：
+      {"action": "subscribe",   "symbols": ["600519", "000858"]}
+      {"action": "unsubscribe", "symbols": ["600519"]}
+      {"action": "ping"}       → 服务端回复 {"type": "pong"}
 
-    前端可发送心跳 (text: "ping")，服务端回复 "pong"
+    服务端推送格式（由 scheduler 广播）：
+      {"symbol": "600519", "price": 1680.5, "chg": 20.5,
+       "chg_pct": 1.23, "volume": 123456, "amount": 98765432,
+       "timestamp": 1712467200}
     """
-    # 标准化 symbol（去掉 sh/sz 前缀）
-    clean = symbol.strip().lower()
-    for p in ("sh", "sz", "hk", "us", "jp"):
-        if clean.startswith(p):
-            clean = clean[len(p):]
-            break
-    sym = clean
+    # 注册连接
+    conn = await ws_manager.connect(ws)
 
-    await ws_manager.connect(ws, sym)
+    async def send_json(data):
+        try:
+            await ws.send_text(json.dumps(data, ensure_ascii=False))
+        except Exception:
+            pass
+
+    async def handle_message(raw: str):
+        try:
+            msg = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        action = msg.get("action", "")
+        symbols = msg.get("symbols", [])
+
+        if action == "subscribe":
+            await conn.subscribe(symbols)
+            await send_json({
+                "type": "subscribed",
+                "symbols": list(await conn.get_symbols())
+            })
+
+        elif action == "unsubscribe":
+            await conn.unsubscribe(symbols)
+            await send_json({
+                "type": "unsubscribed",
+                "symbols": list(await conn.get_symbols())
+            })
+
+        elif action == "ping":
+            await send_json({"type": "pong"})
+
     try:
+        # 处理连接后的第一条消息：通常是 subscribe
+        first = await asyncio.wait_for(ws.receive_text(), timeout=10.0)
+        await handle_message(first)
+
+        # 主循环
         while True:
             try:
                 data = await asyncio.wait_for(ws.receive_text(), timeout=55.0)
             except asyncio.TimeoutError:
-                # 心跳保活：55秒无消息则发送 ping
+                # 55s 无消息，发送心跳探测
                 try:
-                    await ws.send_text("pong")
+                    await ws.send_text(json.dumps({"type": "pong"}))
                 except Exception:
                     break
                 continue
 
-            if data == "ping":
-                await ws.send_text("pong")
-                continue
-
-            # 忽略其他客户端消息
-            await ws.receive_text()
+            await handle_message(data)
 
     except WebSocketDisconnect:
         pass
+    except Exception:
+        pass
     finally:
-        await ws_manager.disconnect(ws, sym)
+        await ws_manager.disconnect(conn)

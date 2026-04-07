@@ -1,10 +1,14 @@
 /**
  * useMarketStream — WebSocket 实时行情 hook
- * 替代 setInterval 轮询，实现毫秒级价格更新
  *
  * 用法:
- *   const { tick, connect, disconnect } = useMarketStream('600519')
- *   watch(tick, (t) => { /* 更新最后一根K线 *\/ })
+ *   const { tick, connect, disconnect, connected } = useMarketStream()
+ *   connect('600519')     // 订阅单只股票
+ *   connect(['600519','000858']) // 批量订阅
+ *   watch(tick, (t) => { if (t) applyTick(t) })
+ *
+ * 协议: 连接 /ws/market → 发送 {"action":"subscribe","symbols":[...]}
+ *       服务端推送: {"symbol":"600519","price":1680.5,...}
  */
 import { ref, onUnmounted } from 'vue'
 
@@ -12,49 +16,53 @@ const WS_BASE = import.meta.env.VITE_WS_BASE || `ws://${location.host}`
 
 export function useMarketStream(initialSymbol = '') {
   const symbol    = ref(initialSymbol)
-  const tick      = ref(null)      // 最新 tick 数据
+  const tick      = ref(null)       // 最新 tick
   const connected = ref(false)
   const error     = ref(null)
 
-  let ws        = null
-  let retryTimer = null
-  let retryDelay = 2000  // 重连延迟（毫秒）
+  let ws         = null
+  let retryTimer  = null
+  let retryDelay  = 2000
   const MAX_DELAY = 30000
 
-  function connect(sym) {
-    if (sym) symbol.value = sym
-    if (!symbol.value) return
-    _createConnection()
+  function connect(symOrList, onReconnect = null) {
+    if (symOrList) {
+      symbol.value = Array.isArray(symOrList) ? symOrList[0] : symOrList
+    }
+    _createConnection(symOrList, onReconnect)
   }
 
-  function _createConnection() {
-    if (ws) {
-      ws.onclose = null
-      ws.onerror = null
-      ws.close()
-      ws = null
-    }
+  function _createConnection(symOrList, onReconnect) {
+    if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); ws = null }
     clearTimeout(retryTimer)
 
-    const url = `${WS_BASE}/ws/market/${symbol.value}`
+    const url = `${WS_BASE}/ws/market`
     try {
       ws = new WebSocket(url)
     } catch (e) {
-      error.value = `WebSocket 创建失败: ${e.message}`
+      error.value = `创建失败: ${e.message}`
       _scheduleRetry()
       return
     }
 
-    ws.onopen = () => {
+    ws.onopen = async () => {
       connected.value = true
-      error.value    = null
-      retryDelay     = 2000  // 重置延迟
+      error.value     = null
+      retryDelay      = 2000
+      // 发送订阅指令
+      const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
+      try {
+        ws.send(JSON.stringify({ action: 'subscribe', symbols: syms }))
+      } catch (e) {
+        console.warn('[MarketStream] subscribe send failed:', e)
+      }
+      if (onReconnect) onReconnect()
     }
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        if (data === 'pong') return   // 心跳响应
+        if (data.type === 'pong' || data.type === 'subscribed') return
         tick.value = data
       } catch (e) {
         console.warn('[MarketStream] parse error:', e)
@@ -62,26 +70,21 @@ export function useMarketStream(initialSymbol = '') {
     }
 
     ws.onerror = () => {
-      error.value = 'WebSocket 连接错误'
+      error.value    = '连接错误'
       connected.value = false
     }
 
-    ws.onclose = (event) => {
+    ws.onclose = (e) => {
       connected.value = false
-      ws = null
-      // 非正常关闭（code != 1000）则重连
-      if (event.code !== 1000) {
-        _scheduleRetry()
-      }
+      if (e.code !== 1000) _scheduleRetry()
     }
   }
 
   function _scheduleRetry() {
     clearTimeout(retryTimer)
     retryTimer = setTimeout(() => {
-      if (symbol.value) _createConnection()
+      if (symbol.value) _createConnection(symbol.value)
     }, retryDelay)
-    // 指数退避，避免频繁重连
     retryDelay = Math.min(retryDelay * 1.5, MAX_DELAY)
   }
 
@@ -94,35 +97,20 @@ export function useMarketStream(initialSymbol = '') {
       ws = null
     }
     connected.value = false
-    tick.value = null
+    tick.value      = null
   }
 
-  // 心跳保活（每 50 秒发一次 ping）
-  let heartbeatTimer = null
-  function _startHeartbeat() {
-    heartbeatTimer = setInterval(() => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send('ping')
-      }
-    }, 50_000)
-  }
-
-  function _stopHeartbeat() {
-    clearInterval(heartbeatTimer)
-    heartbeatTimer = null
-  }
+  // 30 秒心跳
+  let hbTimer = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: 'ping' }))
+    }
+  }, 30_000)
 
   onUnmounted(() => {
     disconnect()
-    _stopHeartbeat()
+    clearInterval(hbTimer)
   })
 
-  return {
-    symbol,
-    tick,          // ref: 最新 tick 数据
-    connected,    // ref: 是否已连接
-    error,         // ref: 错误信息
-    connect,       // (symbol?) => void
-    disconnect,    // () => void
-  }
+  return { symbol, tick, connected, error, connect, disconnect }
 }
