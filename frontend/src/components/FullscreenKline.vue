@@ -1,484 +1,236 @@
 <template>
-  <div class="fullscreen-kline flex flex-col bg-[#0a0e17]"
-    :class="{ 'fullscreen-fullscreen': isFull }"
-    :style="isFull ? 'position:fixed!important;top:0!important;right:0!important;bottom:0!important;left:0!important;z-index:200!important;width:100vw!important;height:100vh!important' : ''"
-    @keydown.esc="isFull && emit('close')" tabindex="0">
-    <div class="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-gray-700/60 bg-[#0d1220]">
-      <div class="flex items-center gap-1">
-        <button v-for="idx in indexOptions" :key="idx.symbol"
-          class="px-2 py-0.5 text-[11px] rounded border transition"
-          :class="symbol === idx.symbol ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'"
-          @click="switchSymbol(idx.symbol, idx.name)">{{ idx.name }}</button>
+  <div
+    class="flex flex-col w-full h-full overflow-hidden bg-[#0a0e17]"
+    @keydown.esc="isFull && emit('close')" tabindex="0"
+  >
+    <!-- 顶部状态栏 -->
+    <div class="flex items-center gap-2 px-3 py-1 border-b border-gray-800 shrink-0">
+      <!-- 周期选择 -->
+      <div class="flex gap-1">
+        <button v-for="p in periods" :key="p.value"
+          class="px-2 py-0.5 text-[10px] rounded transition"
+          :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          @click="period = p.value">{{ p.label }}</button>
       </div>
-      <div class="w-px h-4 bg-gray-700/50"></div>
-      <div class="flex items-center gap-1">
-        <button v-for="p in periods" :key="p.key"
-          class="px-2 py-0.5 text-[11px] rounded border transition"
-          :class="period === p.key ? 'bg-blue-500/20 border-blue-500/50 text-blue-400' : 'border-gray-700 text-gray-500 hover:border-gray-500 hover:text-gray-300'"
-          @click="period = p.key">{{ p.label }}</button>
+      <div class="flex-1" />
+      <!-- 指标选择 -->
+      <div class="flex gap-1">
+        <button v-for="ind in ['MA','BOLL','MACD','KDJ','RSI','WR']" :key="ind"
+          class="px-1.5 py-0.5 text-[9px] rounded border transition"
+          :class="activeIndicators.includes(ind)
+            ? 'border-terminal-accent text-terminal-accent'
+            : 'border-gray-700 text-gray-600 hover:border-gray-500'"
+          @click="toggleIndicator(ind)">{{ ind }}</button>
       </div>
-      <div class="w-px h-4 bg-gray-700/50"></div>
-      <div class="flex items-center gap-1">
-        <button v-for="ind in allIndicators" :key="ind.key"
-          class="px-1.5 py-0.5 text-[10px] rounded border transition"
-          :class="activeIndicators.includes(ind.key) ? 'bg-purple-500/20 border-purple-500/50 text-purple-400' : 'border-gray-700 text-gray-600 hover:border-gray-500 hover:text-gray-400'"
-          @click="toggleIndicator(ind.key)">{{ ind.label }}</button>
-      </div>
-      <div class="ml-3 flex items-center gap-2">
-        <span class="text-[13px] font-mono font-bold" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">{{ latestPrice != null ? latestPrice.toFixed(2) : '--' }}</span>
-        <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">{{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%</span>
-      </div>
-      <div class="ml-auto flex items-center gap-2">
-        <button class="px-3 py-0.5 text-[11px] rounded border border-gray-600 text-gray-500 hover:border-red-500/50 hover:text-red-400 transition" @click="emit('close')">✕ 关闭</button>
-      </div>
+      <div class="flex-1" />
+      <!-- 画线工具 -->
+      <DrawingToolbar v-if="isFull" v-model:tool="drawTool" v-model:color="drawColor" v-model:locked="drawLocked" />
+      <!-- 最新价 -->
+      <span class="text-[13px] font-mono font-bold" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
+        {{ latestPrice != null ? latestPrice.toFixed(2) : '--' }}
+      </span>
+      <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
+        {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
+      </span>
+      <button v-if="isFull" class="px-3 py-0.5 text-[11px] rounded border border-gray-600 text-gray-500 hover:border-red-500/50 hover:text-red-400 transition" @click="emit('close')">✕ 关闭</button>
     </div>
-    <div class="flex-1 min-h-0 relative flex">
-      <DrawingToolbar v-if="isFull" class="shrink-0 z-20"
-        :activeTool="drawTool" :activeColor="drawColor" :magnetMode="magnetMode"
-        :visible="drawVisible" :locked="drawLocked"
-        @tool-change="t => drawTool = t" @color-change="c => drawColor = c"
-        @magnet-toggle="magnetMode = !magnetMode"
-        @visibility-toggle="drawVisible = !drawVisible"
-        @lock-toggle="drawLocked = !drawLocked"
-        @clear="drawingCanvasRef?.clearAll()" />
-      <div class="chart-area flex-1 min-w-0 relative">
-        <div v-if="isLoading" class="absolute inset-0 z-10 flex items-end justify-center pb-6 pointer-events-none">
-          <div class="flex gap-1 items-end opacity-50">
-            <div v-for="i in 24" :key="i" class="w-1 bg-terminal-accent rounded-t animate-pulse" :style="{ height: `${20 + ((i * 37) % 70)}%` }"></div>
-          </div>
-        </div>
-        <div v-if="chartError" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90">
-          <div class="text-3xl mb-2">📊</div>
-          <div class="text-terminal-dim text-xs">{{ chartError }}</div>
-          <button class="mt-2 px-3 py-1 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/40" @click="fetchData">重试</button>
-        </div>
-        <div ref="chartRef" class="w-full h-full"></div>
-        <DrawingCanvas v-if="isFull && drawVisible" ref="drawingCanvasRef" class="absolute inset-0 z-10"
-          :chartInstance="chartInstance" :activeTool="drawTool" :activeColor="drawColor"
-          :magnetMode="magnetMode" :locked="drawLocked" :symbol="symbol"
-          @tool-change="t => drawTool = t"
-          @range-select="onRangeSelect" />
+
+    <!-- 主图区域 -->
+    <div class="flex flex-1 min-w-0 relative">
+      <!-- 错误状态 -->
+      <div v-if="chartError" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90">
+        <div class="text-red-400 text-sm">{{ chartError }}</div>
+        <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
       </div>
+
+      <!-- K线图 BaseKLineChart -->
+      <BaseKLineChart
+        ref="klineRef"
+        class="flex-1 min-w-0"
+        :rawData="klineRaw"
+        :tick="liveTick"
+        :symbol="props.symbol"
+        :type="periodLabel"
+      />
+
+      <!-- 画线覆盖层（isFull 模式） -->
+      <DrawingCanvas
+        v-if="isFull && drawVisible"
+        class="absolute inset-0 z-10"
+        :chartInstance="drawingChartInstance"
+        :activeTool="drawTool"
+        :activeColor="drawColor"
+        :locked="drawLocked"
+      />
+
+      <!-- 右侧详情面板 -->
       <QuotePanel v-if="isFull" class="shrink-0"
-        :class="isMobile ? 'order-last' : ''"
-        :symbol="symbol" :name="props.name"
-        :realtimeData="quoteData" :snapshotData="crosshairSnapshot"
-        :latestCandle="latestCandle" :isMobile="isMobile" :panelWidth="320" />
+        :symbol="props.symbol"
+        :realtimeData="quoteData"
+        :snapshotData="null"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import DrawingCanvas  from './DrawingCanvas.vue'
 import QuotePanel     from './QuotePanel.vue'
+import BaseKLineChart from './BaseKLineChart.vue'
+import { useMarketStream } from '../composables/useMarketStream.js'
+import { calcMA, calcBOLL, calcEMA, calcMACD, calcKDJ } from '../utils/indicators.js'
 
 const props = defineProps({
-  symbol: { type: String, default: '000001' },
-  name:   { type: String, default: '上证指数' },
-  isFull: { type: Boolean, default: false },
+  symbol:   { type: String, required: true },
+  isFull:   { type: Boolean, default: false },
+  showVol:  { type: Boolean, default: true },
 })
 const emit = defineEmits(['close', 'symbol-change'])
 
-// 键盘快捷键（绑定到 fullscreen 容器）
-const KEY_TOOL = { l:'line', r:'ray', s:'segment', h:'hray', c:'channel', f:'fib', q:'rect', t:'text' }
-function onKeydown(e) {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
-  const key = e.key.toLowerCase()
-  if (e.key === 'escape') {
-    if (drawTool.value) drawTool.value = ''
-    else if (props.isFull) emit('close')
-  } else if (e.key === 'delete' || e.key === 'backspace') {
-    drawingCanvasRef.value?.deleteSelected()
-  } else if (KEY_TOOL[key]) {
-    drawTool.value = KEY_TOOL[key]
-  }
-}
-
-const chartRef = ref(null)
-let chartInstance = null, resizeObserver = null
-const period = ref('daily')
+// ── 状态 ──────────────────────────────────────────────────────
+const period         = ref('daily')
 const activeIndicators = ref([])
 const isLoading = ref(false), chartError = ref('')
 const latestPrice = ref(null), latestChange = ref(0)
-const quoteData = ref({}), crosshairSnapshot = ref(null), latestCandle = ref(null)
-const indexStats = ref({})   // 当前交易日统计（52w高低/换手率/振幅/涨跌家数），hover时保留
-const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
-const isMobile = computed(() => windowWidth.value < 900)
+const quoteData   = ref({})
+const histData    = ref([])      // 原始历史数据 [{date, open, close, low, high, volume}, ...]
 const drawTool = ref(''), drawColor = ref('#fbbf24'), magnetMode = ref(true)
-const drawVisible = ref(true), drawLocked = ref(false), drawingCanvasRef = ref(null)
+const drawVisible = ref(true), drawLocked = ref(false)
+const drawingCanvasRef = ref(null)
+const klineRef = ref(null)
 
+// ── WebSocket 实时 tick ───────────────────────────────────────
+const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+
+watch(() => props.symbol, (sym) => {
+  if (!sym) return
+  histData.value = []
+  latestPrice.value = null
+  latestChange.value = 0
+  fetchData()
+  fetchQuoteDetail()
+  wsConnect(sym)
+}, { immediate: true })
+
+// ── Computed ───────────────────────────────────────────────────
+const klineRaw = computed(() =>
+  histData.value.map(d => [new Date(d.date).getTime(), d.open, d.close, d.low, d.high, d.volume ?? 0])
+)
+
+const periodLabel = computed(() => {
+  const map = { daily:'日K', weekly:'周K', monthly:'月K', minutely:'分时', '1min':'1分', '5min':'5分', '15min':'15分', '30min':'30分', '60min':'60分' }
+  return map[period.value] || period.value
+})
+
+// ── 指标 ──────────────────────────────────────────────────────
 const allIndicators = [
-  { key: 'MACD', label: 'MACD' }, { key: 'BOLL', label: 'BOLL' },
-  { key: 'KDJ',  label: 'KDJ' },  { key: 'RSI',  label: 'RSI' },
-  { key: 'WR',   label: 'W&R' },
+  { key: 'MA',   label: 'MA' },
+  { key: 'BOLL', label: 'BOLL' },
+  { key: 'MACD', label: 'MACD' },
+  { key: 'KDJ', label: 'KDJ' },
+  { key: 'RSI', label: 'RSI' },
+  { key: 'WR',  label: 'WR' },
 ]
-const indexOptions = [
-  { symbol: '000001', name: '上证' }, { symbol: '000300', name: '沪深300' },
-  { symbol: '399001', name: '深证' }, { symbol: '399006', name: '创业板' },
-]
+
+// ── 周期 ──────────────────────────────────────────────────────
 const periods = [
-  { key: 'minutely', label: '分时' }, { key: 'daily', label: '日K' },
-  { key: 'weekly',  label: '周K' },   { key: 'monthly', label: '月K' },
+  { label: '日', value: 'daily' },
+  { label: '周', value: 'weekly' },
+  { label: '月', value: 'monthly' },
+  { label: '5分', value: '5min' },
+  { label: '15分', value: '15min' },
+  { label: '30分', value: '30min' },
+  { label: '60分', value: '60min' },
 ]
 
-const UP = '#ef232a', DOWN = '#14b143'
+// ── DrawingCanvas chart 实例桥接 ─────────────────────────────
+const drawingChartInstance = ref(null)
 
-function _sanitize(raw) {
-  if (!Array.isArray(raw)) return []
-  return raw.map(r => ({
-    date: r.date || String(r.timestamp || ''), time: r.time || '',
-    open: Number(r.open)||0, close: Number(r.close)||0,
-    high: Number(r.high)||0, low: Number(r.low)||0,
-    volume: Number(r.volume)||0,
-    price: Number(r.price != null ? r.price : r.close)||0,
-    change_pct: Number(r.change_pct)||0,
-  }))
-}
+watch(klineRef, async (ref) => {
+  if (!ref) return
+  // 等待 BaseKLineChart 内部 chart 实例可用
+  await nextTick()
+  drawingChartInstance.value = ref.getChartInstance()
+}, { flush: 'post' })
 
+// ── 数据拉取 ──────────────────────────────────────────────────
 async function fetchData() {
-  isLoading.value = true; chartError.value = ''
+  if (!props.symbol) return
+  isLoading.value = true
+  chartError.value = ''
   try {
-    const res = await fetch(`/api/v1/market/history/${props.symbol}?period=${period.value}&_t=${Date.now()}`)
+    const params = new URLSearchParams({
+      symbol: props.symbol,
+      period : period.value,
+      adjust : 'none',
+      limit  : 2000,
+    })
+    const res = await fetch(`/api/v1/market/klinedata/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    const hist = _sanitize(data.history || [])
-    if (!hist.length) { chartError.value = '暂无历史数据'; return }
-    const last = hist[hist.length - 1]
-    latestPrice.value = last.price ?? last.close
+    const raw = await res.json()
+    if (!Array.isArray(raw) || raw.length === 0) { chartError.value = '暂无历史数据'; return }
+    // 排序：原始数据可能是任意顺序
+    const sorted = [...raw].sort((a, b) => new Date(a.date) - new Date(b.date))
+    histData.value = sorted
+    // 更新头部价格
+    const last = sorted[sorted.length - 1]
+    latestPrice.value  = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
-    latestCandle.value = last
-    const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
-    const sorted = isDesc ? [...hist].reverse() : hist
-    renderChart(sorted, data.chart_type || 'candlestick')
-    bindCrosshair(sorted)
-  } catch (e) { chartError.value = `加载失败: ${e.message}` }
-  finally { isLoading.value = false }
+  } catch (e) {
+    chartError.value = `加载失败: ${e.message}`
+  } finally {
+    isLoading.value = false
+  }
 }
 
 async function fetchQuoteDetail() {
+  if (!props.symbol) return
   try {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
     if (!res.ok) return
     quoteData.value = await res.json()
-    // 提取当日统计（52w高低/换手率/振幅/涨跌家数），hover 时保留
-    const d = quoteData.value
-    indexStats.value = {
-      high_52w: d.high_52w, low_52w: d.low_52w,
-      high_52w_date: d.high_52w_date, low_52w_date: d.low_52w_date,
-      turnover_rate: d.turnover_rate, amplitude: d.amplitude,
-      advance_count: d.advance_count, decline_count: d.decline_count,
-      unchanged_count: d.unchanged_count, advance_rate: d.advance_rate,
-      amount: d.amount,
-    }
-  } catch (e) { console.warn('[FullscreenKline] quote_detail failed:', e.message) }
-}
-
-function buildKLineOpt(hist) {
-  const times = hist.map(h => h.time && h.time.length >= 16 ? h.time.slice(0,16) : (h.date||'').slice(0,10))
-  const closes = hist.map(h => h.close), highs = hist.map(h => h.high), lows = hist.map(h => h.low)
-  const yMin = +(Math.min(...closes)*0.997).toFixed(2), yMax = +(Math.max(...closes)*1.003).toFixed(2)
-  const sub = activeIndicators.value[0] || null
-  const mainH = 60, volH = 20, mainTop = 2, volTop = mainTop + mainH + 1
-  const subTop = sub ? volTop + volH + 1 : 0, subH = sub ? 17 : 0
-  const grid = [
-    { top: `${mainTop}%`, height: `${mainH}%`, right: 8, left: 60, bottom: 0 },
-    { top: `${volTop}%`,  height: `${volH}%`,  right: 8, left: 60, bottom: 0 },
-    ...(sub ? [{ top: `${subTop}%`, height: `${subH}%`, right: 8, left: 60, bottom: 0 }] : []),
-  ]
-  const series = [
-    { name: 'K线', type: 'candlestick', data: hist.map(h => [h.open,h.close,h.low,h.high]),
-      xAxisIndex: 0, yAxisIndex: 0, itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN } },
-    ...buildMASeries(closes, 0, 0),
-    ...(activeIndicators.value.includes('BOLL') ? buildBOLLSeries(closes, 0, 0) : []),
-    { name: '成交量', type: 'bar', data: hist.map(h => ({ value: h.volume, itemStyle: { color: h.close>=h.open?UP+'33':DOWN+'33' } })),
-      xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 6 },
-    ...(sub ? buildSubSeries(closes, highs, lows, sub, 2, 2) : []),
-  ]
-  const xAxisBase = { type: 'category', data: times, boundaryGap: true, axisLine: { lineStyle: { color: '#2d3748' } }, splitLine: { show: false } }
-  const xAxis = [
-    { ...xAxisBase, gridIndex: 0, axisLabel: { color: '#6b7280', fontSize: 9, interval: Math.max(0, Math.floor(times.length/6)-1) } },
-    { ...xAxisBase, gridIndex: 1, axisLabel: { show: false } },
-    ...(sub ? [{ ...xAxisBase, gridIndex: 2, axisLabel: { show: false } }] : []),
-  ]
-  const yAxis = [
-    { type: 'value', scale: true, gridIndex: 0, position: 'left', min: yMin, max: yMax, axisLine: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 9, formatter: v => v.toFixed(0) }, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } } },
-    { type: 'value', scale: true, gridIndex: 1, position: 'left', axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
-    ...(sub ? [{ type: 'value', scale: true, gridIndex: 2, position: 'left', axisLine: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 9 }, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
-      max: sub==='WR'?0: sub==='RSI'?100:'auto',
-      min: sub==='WR'?-100: sub==='RSI'?0:'auto' }] : []),
-  ]
-  return {
-    backgroundColor: 'transparent', grid, xAxis, yAxis, series,
-    tooltip: { trigger: 'axis', type: 'cross',
-      axisPointer: { type: 'cross', lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' }, crossStyle: { color: '#9ca3af', width: 1 } },
-      backgroundColor: 'rgba(26,30,46,0.96)', borderColor: '#4b5563', textStyle: { color: '#9ca3af', fontSize: 11 },
-      formatter(params) {
-        const kp = params.find(p => p.seriesName === 'K线'); if (!kp) return ''
-        const idx = kp.dataIndex, h = hist[idx]; if (!h) return ''
-        const o=h.open, c=h.close, l=h.low, hi=h.high, chg=h.change_pct, col=c>=o?UP:DOWN
-        return `<span style="color:#6b7280;font-size:10px">${kp.axisValue}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">开</span> <span style="color:#e5e7eb;font-size:11px">${o.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">高</span> <span style="color:#e5e7eb;font-size:11px">${hi.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">低</span> <span style="color:#e5e7eb;font-size:11px">${l.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> <span style="color:${chg>=0?UP:DOWN};font-size:10px">${chg>=0?'+':''}${chg.toFixed(2)}%</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">量</span> <span style="color:#9ca3af;font-size:11px">${(h.volume/1e8).toFixed(2)}亿</span>`
-      } },
-    dataZoom: [
-      { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 80, end: 100 },
-      { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 12, bottom: 2,
-        borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)', handleStyle: { color: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-        dataBackground: { lineStyle: { color: '#374151' }, areaStyle: { color: 'rgba(59,130,246,0.06)' } } },
-    ],
+  } catch (e) {
+    console.warn('[FullscreenKline] quote_detail failed:', e.message)
   }
 }
 
-function buildLineOpt(hist) {
-  const times = hist.map(h => h.time && h.time.length >= 16 ? h.time.slice(0,16) : (h.date||'').slice(0,10))
-  const prices = hist.map(h => Number(h.price != null ? h.price : h.close))
-  const vols = hist.map(h => Number(h.volume))
-  const rawMin = Math.min(...prices), rawMax = Math.max(...prices)
-  const pad = (rawMax - rawMin) * 0.01
-  const yMin = +(rawMin - pad).toFixed(2), yMax = +(rawMax + pad).toFixed(2)
-  const upCount = prices.filter((p,i) => i>0 && p>prices[i-1]).length
-  const lineColor = upCount >= prices.length/2 ? UP : DOWN
-  const mainH = 75, volH = 22, mainTop = 2, volTop = mainTop + mainH + 1
-  let sum = 0; const avg = prices.map((p,i) => { sum += p; return +(sum/(i+1)).toFixed(3) })
-  return {
-    backgroundColor: 'transparent',
-    grid: [{ top: `${mainTop}%`, height: `${mainH}%`, right: 8, left: 60, bottom: 0 }, { top: `${volTop}%`, height: `${volH}%`, right: 8, left: 60, bottom: 0 }],
-    xAxis: [
-      { type: 'category', data: times, boundaryGap: false, gridIndex: 0, axisLine: { lineStyle: { color: '#2d3748' } },
-        axisLabel: { color: '#6b7280', fontSize: 9, interval: Math.max(0, Math.floor(times.length/6)-1) }, splitLine: { show: false } },
-      { type: 'category', data: times, boundaryGap: false, gridIndex: 1, axisLine: { lineStyle: { color: '#2d3748' } }, axisLabel: { show: false }, splitLine: { show: false } },
-    ],
-    yAxis: [
-      { type: 'value', scale: true, gridIndex: 0, position: 'left', min: yMin, max: yMax, axisLine: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9, formatter: v => v.toFixed(2) }, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } } },
-      { type: 'value', scale: true, gridIndex: 1, position: 'left', axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
-    ],
-    series: [
-      { name: '价格', type: 'line', data: prices, smooth: 0.3, symbol: 'none', lineStyle: { color: lineColor, width: 1.5 },
-        areaStyle: { color: { type: 'linear', x:0, y:0, x2:0, y2:1, colorStops: [{ offset:0, color: lineColor+'28' }, { offset:1, color: lineColor+'00' }] } } },
-      { name: '均价', type: 'line', data: avg, smooth: 0.3, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' } },
-      { name: '成交量', type: 'bar', data: vols.map(v => ({ value: v, itemStyle: { color: lineColor+'33' } })), xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 4 },
-    ],
-    tooltip: { trigger: 'axis', type: 'cross', axisPointer: { lineStyle: { color: '#374151' } },
-      backgroundColor: '#1a1e2e', borderColor: '#374151', textStyle: { color: '#9ca3af', fontSize: 11 },
-      formatter: (params) => {
-        const p = params[0]; if (!p) return ''
-        const idx = p.dataIndex
-        return `<span style="color:#6b7280;font-size:10px">${p.axisValue}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">价</span> <span style="color:${lineColor};font-size:11px">${(prices[idx]||0).toFixed(3)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">均</span> <span style="color:#fbbf24;font-size:11px">${avg[idx]?.toFixed(3)}</span><br/>`
-          + `<span style="color:#6b7280;font-size:10px">量</span> <span style="color:#9ca3af;font-size:11px">${(vols[idx]/1e8).toFixed(2)}亿</span>`
-      } },
-    dataZoom: [
-      { type: 'inside', xAxisIndex: [0,1], start: 80, end: 100 },
-      { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 12, bottom: 2,
-        borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)', handleStyle: { color: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-        dataBackground: { lineStyle: { color: '#374151' }, areaStyle: { color: 'rgba(59,130,246,0.06)' } } },
-    ],
-  }
-}
-
-function calcMA(data, n) { return data.map((_, i) => i < n-1 ? null : +(data.slice(i-n+1,i+1).reduce((a,b)=>a+b,0)/n).toFixed(3)) }
-function calcBOLL(closes) {
-  const P=20, mid=[], upper=[], lower=[]
-  for (let i=0; i<closes.length; i++) {
-    if (i<P-1) { mid.push('-'); upper.push('-'); lower.push('-'); continue }
-    const s=closes.slice(i-P+1,i+1), m=s.reduce((a,b)=>a+b,0)/P
-    const std=Math.sqrt(s.reduce((a,b)=>a+(b-m)**2,0)/P)
-    mid.push(+m.toFixed(3)); upper.push(+(m+2*std).toFixed(3)); lower.push(+(m-2*std).toFixed(3))
-  }
-  return { mid, upper, lower }
-}
-function calcEMA(data, n) { const k=2/(n+1), r=[]; let e=data[0]; for (let i=0; i<data.length; i++) { e=i===0?data[0]:data[i]*k+e*(1-k); r.push(+e.toFixed(4)) } return r }
-function calcMACD(closes) {
-  const e12=calcEMA(closes,12), e26=calcEMA(closes,26)
-  const dif=e12.map((v,i)=>+(v-e26[i]).toFixed(4))
-  const dea=calcEMA(dif,9)
-  return { dif, dea, macd: dif.map((v,i)=>+((v-dea[i])*2).toFixed(4)) }
-}
-function calcKDJ(closes, highs, lows, n=9) {
-  const k=[], d=[], j=[]
-  for (let i=0; i<closes.length; i++) {
-    if (i<n-1) { k.push('-'); d.push('-'); j.push('-'); continue }
-    const rh=Math.max(...highs.slice(i-n+1,i+1)), rl=Math.min(...lows.slice(i-n+1,i+1))
-    const rsv=rh===rl?50:(closes[i]-rl)/(rh-rl)*100
-    const pk=k[i-1]!=='-'?k[i-1]:50, pd=d[i-1]!=='-'?d[i-1]:50
-    k.push(+(2/3*pk+1/3*rsv).toFixed(2)); d.push(+(2/3*pd+1/3*k[i]).toFixed(2)); j.push(+(3*k[i]-2*d[i]).toFixed(2))
-  }
-  return { k, d, j }
-}
-function calcRSI(closes, n=14) {
-  if (!closes || closes.length < n) return closes ? closes.map(() => null) : []
-  const gains = [], losses = []
-  for (let i = 1; i < closes.length; i++) {
-    const diff = closes[i] - closes[i - 1]
-    gains.push(diff > 0 ? diff : 0)
-    losses.push(diff < 0 ? -diff : 0)
-  }
-  // 前 n 个均值
-  let avgGain = gains.slice(0, n).reduce((a, b) => a + b, 0) / n
-  let avgLoss = losses.slice(0, n).reduce((a, b) => a + b, 0) / n
-  const rsi = [null] // 前 n-1 个无意义
-  for (let i = 0; i < n - 1; i++) rsi.push(null)
-  // 第 n 个
-  rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
-  // 后续用 EMA 平滑
-  const k = 2 / (n + 1)
-  for (let i = n; i < closes.length - 1; i++) {
-    avgGain = gains[i] * k + avgGain * (1 - k)
-    avgLoss = losses[i] * k + avgLoss * (1 - k)
-    rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
-  }
-  return rsi
-}
-
-function calcWR(closes, highs, lows, n=10) {
-  return closes.map((_, i) => {
-    if (i<n-1) return null
-    const rh=Math.max(...highs.slice(i-n+1,i+1)), rl=Math.min(...lows.slice(i-n+1,i+1))
-    if (rh===rl) return 0
-    return +((rh-closes[i])/(rh-rl)*-100).toFixed(2)
-  })
-}
-
-function buildMASeries(closes, xIdx, yIdx) {
-  return [
-    { name:'MA5',  type:'line', data:calcMA(closes,5),  xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#ffffff',width:1} },
-    { name:'MA10', type:'line', data:calcMA(closes,10), xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#fbbf24',width:1} },
-    { name:'MA20', type:'line', data:calcMA(closes,20), xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#c084fc',width:1} },
-  ]
-}
-function buildBOLLSeries(closes, xIdx, yIdx) {
-  const { mid, upper, lower } = calcBOLL(closes)
-  return [
-    { name:'BOLL-M', type:'line', data:mid,  xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#a78bfa',width:1.2} },
-    { name:'BOLL-U', type:'line', data:upper, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#a78bfa',width:1,type:'dashed'} },
-    { name:'BOLL-L', type:'line', data:lower, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#a78bfa',width:1,type:'dashed'} },
-  ]
-}
-function buildSubSeries(closes, highs, lows, sub, xIdx, yIdx) {
-  if (sub==='MACD') {
-    const { dif, dea, macd } = calcMACD(closes)
-    return [
-      { name:'DIF', type:'line', data:dif,  xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#60a5fa',width:1.2} },
-      { name:'DEA', type:'line', data:dea,  xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#f87171',width:1.2} },
-      { name:'MACD', type:'bar', data:macd.map(v=>({value:Math.abs(v), itemStyle:{color:v>=0?UP:DOWN}})), xAxisIndex:xIdx, yAxisIndex:yIdx, barMaxWidth:4 },
-    ]
-  }
-  if (sub==='KDJ') {
-    const { k, d, j } = calcKDJ(closes, highs, lows)
-    return [
-      { name:'K', type:'line', data:k, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#f87171',width:1.2} },
-      { name:'D', type:'line', data:d, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#60a5fa',width:1.2} },
-      { name:'J', type:'line', data:j, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#fbbf24',width:1.2} },
-    ]
-  }
-  if (sub==='WR') {
-    const wr = calcWR(closes, highs, lows)
-    return [{ name:'W&R', type:'line', data:wr.map(v=>v==null?'-':v), xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none', lineStyle:{color:'#fb923c',width:1.2},
-      markLine:{silent:true,symbol:'none',lineStyle:{color:'#4b5563',type:'dashed',width:1},data:[{yAxis:-20},{yAxis:-80}],label:{show:true,formatter:'{c}',fontSize:8,color:'#6b7280'}} }]
-  }
-  if (sub==='RSI') {
-    const rsi = calcRSI(closes, 14)
-    return [
-      { name:'RSI(14)', type:'line', data:rsi, xAxisIndex:xIdx, yAxisIndex:yIdx, smooth:true, symbol:'none',
-        lineStyle:{color:'#c084fc',width:1.5}, markLine:{silent:true,symbol:'none',lineStyle:{color:'#4b5563',type:'dashed',width:1},data:[{yAxis:70},{yAxis:30}],label:{show:true,formatter:'{c}',fontSize:8,color:'#6b7280'}} },
-    ]
-  }
-  return []
-}
-
-function renderChart(hist, type) {
-  if (!chartInstance) return
-  const opt = type === 'line' ? buildLineOpt(hist) : buildKLineOpt(hist)
-  chartInstance.clear()
-  chartInstance.setOption(opt, { notMerge: true })
-}
-
-function bindCrosshair(hist) {
-  if (!chartInstance) return
-  chartInstance.off('mousemove')
-  chartInstance.getZr().off('mouseleave')
-  chartInstance.on('mousemove', (params) => {
-    if (params.dataIndex == null && params.dataIndex !== 0) return
-    const idx = params.dataIndex
-    if (idx < 0 || idx >= hist.length) return
-    const h = hist[idx]; if (!h) return
-    const prevClose = idx > 0 ? hist[idx-1].close : h.close
-    const change = h.close - prevClose
-    const change_pct = prevClose ? (change/prevClose*100) : 0
-    crosshairSnapshot.value = {
-      name: props.name || props.symbol, symbol: props.symbol,
-      price: h.close, open: h.open, high: h.high, low: h.low, close: h.close,
-      volume: h.volume, amount: h.amount ?? indexStats.value.amount ?? 0, change, change_pct,
-      timestamp: h.date || h.time || '',
-      returns_5d: null, returns_20d: null, returns_60d: null, returns_ytd: null,
-      high_52w: indexStats.value.high_52w, low_52w: indexStats.value.low_52w,
-      high_52w_date: indexStats.value.high_52w_date, low_52w_date: indexStats.value.low_52w_date,
-      pe_ttm: null, pb: null,
-      turnover_rate: indexStats.value.turnover_rate, amplitude: indexStats.value.amplitude,
-      advance_count: indexStats.value.advance_count, decline_count: indexStats.value.decline_count,
-      unchanged_count: indexStats.value.unchanged_count, advance_rate: indexStats.value.advance_rate,
-      fund_main_net: null, fund_main_in: null, fund_main_out: null,
-      fund_huge_in: null, fund_huge_out: null, fund_big_in: null, fund_big_out: null,
-      fund_medium_in: null, fund_medium_out: null, fund_small_in: null, fund_small_out: null,
-      industry: null, industry_change_pct: null, concepts: [],
-    }
-  })
-  chartInstance.getZr().on('mouseleave', () => { crosshairSnapshot.value = null })
-}
-
-function initChart() {
-  if (!chartRef.value || !window.echarts) return
-  chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  resizeObserver = new ResizeObserver(() => chartInstance?.resize())
-  resizeObserver.observe(chartRef.value)
-  fetchData()
-}
-
-function switchSymbol(sym, name) { emit('symbol-change', { symbol: sym, name }) }
 function toggleIndicator(key) {
-  const idx = activeIndicators.value.indexOf(key)
-  if (idx >= 0) activeIndicators.value.splice(idx, 1)
-  else { if (activeIndicators.value.length >= 1) activeIndicators.value.splice(0, 1, key); else activeIndicators.value.push(key) }
+  const arr = activeIndicators.value
+  const idx = arr.indexOf(key)
+  if (idx >= 0) arr.splice(idx, 1)
+  else arr.push(key)
 }
 
-watch(() => props.symbol, () => { crosshairSnapshot.value = null; latestCandle.value = null; fetchData(); fetchQuoteDetail() })
-watch(period, () => { crosshairSnapshot.value = null; latestCandle.value = null; fetchData() })
-watch(activeIndicators, () => { if (!chartInstance) return; fetchData() }, { deep: true })
+// ── 周期切换重拉数据 ─────────────────────────────────────────
+watch(period, () => {
+  histData.value = []
+  latestPrice.value = null
+  fetchData()
+})
 
+// ── 生命周期 ──────────────────────────────────────────────────
 onMounted(() => {
   window.addEventListener('resize', onResize)
-  document.addEventListener('keydown', onKeydown)
-  initChart()
-  fetchQuoteDetail()
+  if (props.symbol) {
+    fetchData()
+    fetchQuoteDetail()
+    wsConnect(props.symbol)
+  }
 })
-onBeforeUnmount(() => { window.removeEventListener('resize', onResize) })
+
 onUnmounted(() => {
-  resizeObserver?.disconnect()
-  chartInstance?.dispose()
-  chartInstance = null
-  document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('resize', onResize)
+  wsDisconnect()
 })
 
 function onResize() { windowWidth.value = window.innerWidth }
-
-function onRangeSelect({ idx, price }) {
-  // TODO: 显示区间统计面板（从历史数据计算区间涨跌幅/换手率变化）
-  console.log('[FullscreenKline] range-select idx:', idx, 'price:', price)
-}
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
 </script>
 
 <style scoped>
-.fullscreen-fullscreen { position: fixed !important; top: 0 !important; right: 0 !important; bottom: 0 !important; left: 0 !important; z-index: 200 !important; width: 100vw !important; height: 100vh !important; }
-@media (max-width: 900px) { .chart-area { flex-basis: 100% !important; min-width: 0; width: 100%; height: 45vh; } }
+@media (max-width: 900px) {
+  :deep(.chart-area) { flex-basis: 100% !important; min-width: 0; width: 100%; height: 45vh; }
+}
 </style>
