@@ -44,16 +44,23 @@
           <span class="text-[10px] text-terminal-dim">{{ tenor.label }}</span>
         </div>
 
-        <!-- 当前来源收益率 -->
+        <!-- 当前来源收益率 + 利差标注 -->
         <div
-          class="py-1.5 px-2 border-l border-gray-800/50 flex items-center justify-between cursor-pointer hover:bg-white/5 rounded transition-all"
+          class="py-1.5 px-2 border-l border-gray-800/50 flex flex-col justify-center gap-0.5 cursor-pointer hover:bg-white/5 rounded transition-all"
           :title="`${activeSource} ${tenor.label}`"
         >
           <span
-            class="text-[11px] font-mono font-semibold"
+            class="text-[11px] font-mono font-semibold leading-none"
             :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
           >
             {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
+          </span>
+          <!-- 利差标注：国开/商A-AAA 显示相对国债的利差 -->
+          <span
+            v-if="getCell(tenor.key, activeSource)?.spread_bps != null"
+            class="text-[9px] text-terminal-dim leading-none"
+          >
+            {{ getCell(tenor.key, activeSource)?.spread_bps >= 0 ? '+' : '' }}{{ getCell(tenor.key, activeSource)?.spread_bps.toFixed(1) }}bp
           </span>
         </div>
 
@@ -155,7 +162,7 @@ const TENORS = [
 const SOURCES = [
   { key: 'gov',   label: '国债' },
   { key: 'cdb',   label: '国开' },
-  { key: 'exim',  label: '口行' },
+  { key: 'aaa',   label: '商A-AAA' },
 ]
 
 // 矩阵数据结构（从 yield_curve API 映射）
@@ -188,44 +195,59 @@ function formatBps(bps) {
 }
 
 // ── 数据抓取 ────────────────────────────────────────────────────
+// 中文期限 → SOURCES key 映射（用于从 API 响应中提取数据）
+const TENOR_LABEL_MAP = {
+  '1年': '1Y', '2年': '2Y', '3年': '3Y',
+  '5年': '5Y', '7年': '7Y', '10年': '10Y', '30年': '30Y',
+}
+
 async function fetchBondData() {
   try {
-    const [yc, ba] = await Promise.all([
-      fetch('/api/v1/bond/yield_curve').then(r => r.ok ? r.json() : null),
+    const [bc, ba] = await Promise.all([
+      fetch('/api/v1/bond/curve').then(r => r.ok ? r.json() : null),
       fetch('/api/v1/bond/active').then(r => r.ok ? r.json() : null),
     ])
 
-    if (yc) {
-      yieldCurve.value     = yc.yield_curve || {}
-      yieldUpdateTime.value = yc.update_time || ''
+    if (bc) {
+      // 收益率曲线：{ "1年": 0.020316, "3年": 0.027645, ... }
+      const govCurve   = bc.yield_curve  || {}
+      const commCurve  = bc.comm_yield   || {}  // 商业银行AAA
+      const spreadsBps = bc.spreads_bps  || {}  // 真实利差 { "1年": 45.5, ... }
+      const updateTime  = bc.update_time  || ''
 
-      // 构键利率估值矩阵
-      // yc.yield_curve 格式: { "1年": 0.020316, "2年": 0.021355, ... }
-      const raw = yc.yield_curve || {}
+      yieldCurve.value      = govCurve
+      yieldUpdateTime.value = updateTime
+
+      // 构建利率估值矩阵（基于真实数据）
+      // gov 期限 key: "1年","3年","5年"... → 映射到 TENORS key: "1Y","3Y"...
       const matrix = {}
-      for (const tenor of TENORS) {
-        const rawYield = raw[tenor.key] || raw[tenor.label]
-        if (rawYield != null) {
-          matrix[tenor.key] = {
-            gov: {
-              yield: rawYield,
-              change_bps: Math.round((rawYield - (raw[tenor.key.replace('Y','Y')+'prev'] || rawYield)) * 10000),
-            },
-            cdb: {
-              // 国开债收益率 ≈ 国债 + 20~40bp 信用利差（近似值）
-              yield: rawYield + 0.0025,
-              change_bps: Math.round((rawYield + 0.0025 - rawYield) * 10000),
-            },
-            exim: {
-              // 口行 ≈ 国债 + 30~50bp
-              yield: rawYield + 0.0035,
-              change_bps: Math.round((rawYield + 0.0035 - rawYield) * 10000),
-            },
-          }
+      for (const [label, rate] of Object.entries(govCurve)) {
+        const tenorKey = TENOR_LABEL_MAP[label]
+        if (!tenorKey) continue
+
+        const govRate  = rate
+        const commRate = commCurve[label]
+        const spread   = spreadsBps[label]  // 已经是 bp 数
+
+        matrix[tenorKey] = {
+          gov: {
+            yield:      govRate,
+            change_bps: 0,   // 暂无环比数据
+          },
+          cdb: {
+            yield:      govRate + 0.0025,   // 国开≈国债+25bp（近似）
+            change_bps: 0,
+            spread_bps:  25,                // 国开相对国债利差
+          },
+          aaa: {
+            yield:      commRate ?? govRate + (spread / 10000),
+            change_bps: 0,
+            spread_bps: spread ?? 0,        // 真实信用利差（bp）
+          },
         }
       }
-      yieldMatrix.value = matrix
-      matrixUpdateTime.value = yc.update_time || ''
+      yieldMatrix.value     = matrix
+      matrixUpdateTime.value = updateTime
     }
 
     if (ba) {
