@@ -59,9 +59,44 @@ def init_tables():
                 timestamp INTEGER, UNIQUE(symbol, date, period)
             )
         """)
+        # ── P3: 多账户模拟组合 ──────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS portfolios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT UNIQUE NOT NULL,
+                type TEXT NOT NULL DEFAULT 'main',
+                created_at TEXT NOT NULL,
+                total_cost REAL NOT NULL DEFAULT 0.0
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS positions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                shares INTEGER NOT NULL DEFAULT 0,
+                avg_cost REAL NOT NULL DEFAULT 0.0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(portfolio_id, symbol),
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS portfolio_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                total_asset REAL NOT NULL DEFAULT 0.0,
+                total_cost REAL NOT NULL DEFAULT 0.0,
+                UNIQUE(portfolio_id, date),
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            )
+        """)
         conn.commit()
         conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_sym ON market_data_daily(symbol)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_p ON market_data_periodic(symbol, period)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pos_port ON positions(portfolio_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)")
         conn.commit()
         conn.close()
     print(f"✅ DB Ready: {_db_path}")
