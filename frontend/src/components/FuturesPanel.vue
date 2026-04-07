@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, watch, onUnmounted } from 'vue'
 import BaseKLineChart from './BaseKLineChart.vue'
 import { useMarketStream } from '../composables/useMarketStream.js'
 
@@ -65,7 +65,7 @@ const emit = defineEmits(['symbol-change'])
 const inputSymbol  = ref(props.symbol || 'IF0')
 const currentSymbol = ref(props.symbol || 'IF0')
 const period       = ref('daily')
-const histData     = ref([])
+const histData     = shallowRef([])
 const latestPrice  = ref(null)
 const latestChange = ref(0)
 const latestHold   = ref(null)
@@ -90,10 +90,9 @@ const periodLabel = computed(() => {
   return m[period.value] || period.value
 })
 
-// ── rawData: [[ts, open, close, low, high, vol], ...] ────────
+// ── rawData: [[ts, open, close, low, high, vol, hold], ...] ────────
 const klineRaw = computed(() =>
   histData.value.map(d => {
-    // date string → timestamp (ms)
     let ts
     if (d.timestamp) {
       ts = d.timestamp
@@ -102,14 +101,14 @@ const klineRaw = computed(() =>
       const d2 = new Date(dateStr.replace(' ', 'T'))
       ts = isNaN(d2.getTime()) ? 0 : d2.getTime()
     }
-    return [ts, d.open, d.close, d.low, d.high, d.volume ?? 0]
+    return [ts, d.open, d.close, d.low, d.high, d.volume ?? 0, d.hold ?? null]
   })
 )
 
 // ── WS tick → 更新最新K线 + 价格/持仓 ─────────────────────────
+// shallowRef 下需整体替换数组以触发 Vue 响应式
 watch(liveTick, (t) => {
   if (!t || !histData.value.length) return
-  // 仅处理订阅品种
   const sym = (t.symbol || '').toLowerCase()
   if (sym !== currentSymbol.value.toLowerCase()) return
 
@@ -117,15 +116,20 @@ watch(liveTick, (t) => {
   latestChange.value = t.chg_pct ?? 0
   latestHold.value   = t.hold ?? null
 
-  // 增量更新最后一根K线
-  const last = histData.value[histData.value.length - 1]
+  // 整体替换（shallowRef 需重新赋值引用才触发响应）
+  const arr = histData.value.slice()
+  const last = arr[arr.length - 1]
   if (!last) return
   const price = t.price
-  last.close = price
-  last.high  = Math.max(last.high || 0, price)
-  last.low   = Math.min(last.low  || 0, price)
-  last.volume = (last.volume || 0) + (t.volume || 0)
-  if (t.hold != null) last.hold = t.hold
+  arr[arr.length - 1] = {
+    ...last,
+    close:  price,
+    high:   Math.max(last.high  || 0, price),
+    low:    Math.min(last.low   || 0, price),
+    volume: (last.volume || 0) + (t.volume || 0),
+    hold:   t.hold != null ? t.hold : last.hold,
+  }
+  histData.value = arr
 })
 
 // ── 数据拉取 ─────────────────────────────────────────────────

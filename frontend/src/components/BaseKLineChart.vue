@@ -157,6 +157,13 @@ function buildOption(raw, tickSym, tick) {
         name: 'VOL', type: 'bar', data: volumes,
         xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 8,
       },
+      {
+        name: '持仓量', type: 'line', data: raw.map(d => d[6] || null),
+        xAxisIndex: 1, yAxisIndex: 1,
+        smooth: true, symbol: 'none',
+        lineStyle: { color: '#f59e0b', width: 1.5 },
+        tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
+      },
     ],
   }
 }
@@ -189,7 +196,7 @@ onBeforeUnmount(() => {
 watch(() => props.rawData, (newData) => {
   if (!chart) return
   chart.setOption(buildOption(newData, props.symbol, props.tick))
-}, { deep: true })
+})
 
 watch(() => props.tick, (t) => {
   if (!chart || !props.rawData.length) return
