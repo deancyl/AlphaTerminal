@@ -19,51 +19,181 @@ echarts.use([
 ])
 
 const props = defineProps({
-  rawData: { type: Array, default: () => [] },
-  tick:    { type: Object, default: null },
-  symbol:  { type: String, default: '' },
-  type:    { type: String, default: 'daily' },
+  // 核心：由 chartDataBuilder 算好的所有图表数据
+  chartData: { type: Object, required: true },
+
+  // 布局控制：副图显示什么？例如 ['VOL'] 或 ['VOL', 'MACD']
+  // 默认至少显示成交量
+  subCharts: { type: Array, default: () => ['VOL'] },
+
+  // 增量 tick (用于闪烁最新现价)
+  tick: { type: Object, default: null },
+  symbol: { type: String, default: '' },
 })
 
 const chartEl = ref(null)
 let chart = null
 let _ro = null
+let _lastChartData = null   // 保留引用用于 tick patch
 
-// rawData: [[ts, open, close, low, high, vol], ...]
-function ohlc2kline(raw) {
-  return raw.map(d => [d[0], d[1], d[4], d[3], d[2]])
-}
+// ── 动态构建 ECharts Option ──────────────────────────────────────
+function buildOption(cData) {
+  if (!cData || cData.isEmpty) return {}
 
-function buildMA(closes, n) {
-  return closes.map((_, i) => {
-    if (i < n - 1) return '-'
-    const avg = closes.slice(i - n + 1, i + 1).reduce((a, b) => a + b, 0) / n
-    return +avg.toFixed(2)
+  const {
+    times, klineData, volumes,
+    maData, bollData, subChartData,
+    overlaySeriesData, yMin, yMax
+  } = cData
+
+  const subCount = props.subCharts.length  // 1(只有VOL) 或 2(VOL+指标)
+
+  // ── 1. 动态计算 Grid / XAxis / YAxis ──
+  const grids  = []
+  const xAxes  = []
+  const yAxes  = []
+
+  // 主图 Grid (Index 0)
+  const mainHeight = subCount === 2 ? '55%' : '65%'
+  grids.push({ top: 10, height: mainHeight, left: 55, right: 8 })
+  xAxes.push({
+    type: 'category', data: times, gridIndex: 0,
+    axisLabel: { show: false },
+    axisLine: { lineStyle: { color: '#374151' } },
   })
-}
+  yAxes.push({
+    type: 'value', gridIndex: 0, scale: true,
+    min: yMin, max: yMax,
+    splitLine: { lineStyle: { color: '#1f2937' } },
+    axisLabel: { color: '#6b7280', fontSize: 9 },
+  })
 
-function buildOption(raw, tickSym, tick) {
-  const kData = ohlc2kline(raw)
-  const closes = raw.map(d => d[2])
-  const volumes = raw.map(d => ({
-    value: d[5] || 0,
-    itemStyle: { color: d[2] >= d[1] ? '#ef232a' : '#14b143' },
-  }))
-  const ma5  = buildMA(closes, 5)
-  const ma10 = buildMA(closes, 10)
-  const ma20 = buildMA(closes, 20)
+  // 动态生成副图 Grids
+  let currentTop = subCount === 2 ? 60 : 70
+  const subHeight = subCount === 2 ? '15%' : '20%'
 
-  // tick incremental update
-  let finalData = kData
-  if (tick && tickSym === props.symbol && tick.price > 0) {
-    const last = kData[kData.length - 1]
-    if (last) {
-      last[4] = tick.price
-      last[2] = Math.max(last[2], tick.price)
-      last[3] = Math.min(last[3], tick.price)
-      finalData = [...kData]
-    }
+  props.subCharts.forEach((subName, index) => {
+    const gridIdx = index + 1
+    grids.push({ top: `${currentTop}%`, height: subHeight, left: 55, right: 8 })
+    xAxes.push({
+      type: 'category', data: times, gridIndex: gridIdx,
+      axisLabel: { show: index === subCount - 1 },  // 只有最下面一个副图显示X轴日期
+      axisLine: { lineStyle: { color: '#374151' } },
+    })
+    yAxes.push({
+      type: 'value', gridIndex: gridIdx,
+      splitLine: { show: false },
+      axisLabel: {
+        color: '#6b7280', fontSize: 9,
+        formatter: subName === 'VOL' ? (v) => {
+          if (v >= 1e8) return (v / 1e8).toFixed(0) + '亿'
+          if (v >= 1e4) return (v / 1e4).toFixed(0) + '万'
+          return v
+        } : undefined,
+      },
+    })
+    if (subCount === 2) currentTop += 18
+  })
+
+  // ── 2. 组装 Series ──
+  const series = []
+
+  // 主图：K线
+  series.push({
+    name: 'K线', type: 'candlestick', data: klineData,
+    xAxisIndex: 0, yAxisIndex: 0,
+    itemStyle: {
+      color: '#ef232a', color0: '#14b143',
+      borderColor: '#ef232a', borderColor0: '#14b143',
+    },
+    barMaxWidth: 8,
+  })
+
+  // 主图：均线
+  if (maData?.ma5) {
+    series.push(
+      {
+        name: 'MA5', type: 'line', data: maData.ma5,
+        xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
+        lineStyle: { color: '#ffffff', width: 1 },
+      },
+      {
+        name: 'MA10', type: 'line', data: maData.ma10,
+        xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
+        lineStyle: { color: '#fbbf24', width: 1 },
+      },
+      {
+        name: 'MA20', type: 'line', data: maData.ma20,
+        xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
+        lineStyle: { color: '#c084fc', width: 1 },
+      }
+    )
   }
+
+  // 副图 Series 分配
+  props.subCharts.forEach((subName, index) => {
+    const axisIdx = index + 1
+
+    if (subName === 'VOL') {
+      series.push({
+        name: 'VOL', type: 'bar', data: volumes,
+        xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 8,
+      })
+
+    } else if (subName === 'MACD' && subChartData?.MACD) {
+      const m = subChartData.MACD
+      series.push(
+        {
+          name: 'DIF', type: 'line', data: m.dif,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+          lineStyle: { color: '#60a5fa', width: 1 },
+        },
+        {
+          name: 'DEA', type: 'line', data: m.dea,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+          lineStyle: { color: '#f87171', width: 1 },
+        },
+        {
+          name: 'MACD', type: 'bar',
+          data: m.macd.map(v => ({
+            value: Math.abs(v),
+            itemStyle: { color: v >= 0 ? '#ef232a' : '#14b143' },
+          })),
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx,
+        }
+      )
+
+    } else if (subName === 'KDJ' && subChartData?.KDJ) {
+      const k = subChartData.KDJ
+      series.push(
+        {
+          name: 'K', type: 'line', data: k.k,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+          lineStyle: { color: '#ffffff', width: 1 },
+        },
+        {
+          name: 'D', type: 'line', data: k.d,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+          lineStyle: { color: '#fbbf24', width: 1 },
+        },
+        {
+          name: 'J', type: 'line', data: k.j,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+          lineStyle: { color: '#c084fc', width: 1 },
+        }
+      )
+
+    } else if (subName === 'RSI' && subChartData?.RSI) {
+      series.push({
+        name: 'RSI', type: 'line', data: subChartData.RSI,
+        xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
+        lineStyle: { color: '#60a5fa', width: 1 },
+      })
+    }
+  })
+
+  // ── 3. DataZoom / Tooltip ──
+  const allGridIndices = xAxes.map((_, i) => i)
 
   return {
     backgroundColor: 'transparent',
@@ -75,115 +205,44 @@ function buildOption(raw, tickSym, tick) {
       textStyle: { color: '#d1d5db', fontSize: 11 },
     },
     legend: { show: false },
-    grid: [
-      { top: 8, bottom: '35%', left: 48, right: 8 },
-      { top: '68%', bottom: 30, left: 48, right: 8 },
-    ],
-    xAxis: [
-      {
-        type: 'category', gridIndex: 0, data: finalData.map(d => d[0]),
-        axisLabel: {
-          color: '#6b7280', fontSize: 9,
-          formatter: v => {
-            const d = new Date(v)
-            return `${d.getMonth() + 1}/${d.getDate()}`
-          },
-        },
-        splitLine: { show: false },
-      },
-      {
-        type: 'category', gridIndex: 1, data: finalData.map(d => d[0]),
-        axisLabel: { show: false }, splitLine: { show: false },
-      },
-    ],
-    yAxis: [
-      {
-        scale: true, gridIndex: 0, position: 'left',
-        axisLabel: { color: '#6b7280', fontSize: 9 },
-        splitLine: { lineStyle: { color: '#1f2937' } },
-      },
-      {
-        scale: true, gridIndex: 1, position: 'left',
-        axisLabel: {
-          color: '#6b7280', fontSize: 9,
-          formatter: v => {
-            if (v >= 1e8) return (v / 1e8).toFixed(0) + '亿'
-            if (v >= 1e4) return (v / 1e4).toFixed(0) + '万'
-            return v
-          },
-        },
-        splitLine: { lineStyle: { color: '#1f2937' } },
-      },
-    ],
+    grid: grids,
+    xAxis: xAxes,
+    yAxis: yAxes,
+    series,
     dataZoom: [
-      { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100 },
+      { type: 'inside', xAxisIndex: allGridIndices, start: 70, end: 100 },
       {
-        type: 'slider', xAxisIndex: [0, 1], start: 70, end: 100,
-        bottom: 4, height: 16,
+        type: 'slider', xAxisIndex: allGridIndices,
+        bottom: 0, height: 16,
         borderColor: '#374151', fillerColor: 'rgba(96,165,250,0.1)',
         handleStyle: { color: '#60a5fa' },
         textStyle: { color: '#6b7280', fontSize: 9 },
       },
     ],
-    series: [
-      {
-        name: 'K线', type: 'candlestick', data: finalData,
-        xAxisIndex: 0, yAxisIndex: 0,
-        itemStyle: {
-          color: '#ef232a', color0: '#14b143',
-          borderColor: '#ef232a', borderColor0: '#14b143',
-        },
-        barMaxWidth: 8,
-      },
-      {
-        name: 'MA5', type: 'line', data: ma5,
-        xAxisIndex: 0, yAxisIndex: 0,
-        smooth: true, symbol: 'none',
-        lineStyle: { color: '#ffffff', width: 1 },
-      },
-      {
-        name: 'MA10', type: 'line', data: ma10,
-        xAxisIndex: 0, yAxisIndex: 0,
-        smooth: true, symbol: 'none',
-        lineStyle: { color: '#fbbf24', width: 1 },
-      },
-      {
-        name: 'MA20', type: 'line', data: ma20,
-        xAxisIndex: 0, yAxisIndex: 0,
-        smooth: true, symbol: 'none',
-        lineStyle: { color: '#c084fc', width: 1 },
-      },
-      {
-        name: 'VOL', type: 'bar', data: volumes,
-        xAxisIndex: 1, yAxisIndex: 1, barMaxWidth: 8,
-      },
-      {
-        name: '持仓量', type: 'line', data: raw.map(d => d[6] || null),
-        xAxisIndex: 1, yAxisIndex: 1,
-        smooth: true, symbol: 'none',
-        lineStyle: { color: '#f59e0b', width: 1.5 },
-        tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
-      },
-    ],
   }
 }
 
-function applyTickFast(raw, tickSym, tick) {
-  if (!chart || !tick || tickSym !== props.symbol) return
-  const last = raw[raw.length - 1]
+// ── Tick 增量更新（patch 最后根 K 线） ───────────────────────────
+function applyTickFast(cData, tick) {
+  if (!chart || !tick || !tick.price) return
+  const last = cData.klineData[cData.klineData.length - 1]
   if (!last) return
-  last[4] = tick.price
-  last[2] = Math.max(last[2], tick.price)
-  last[3] = Math.min(last[3], tick.price)
-  last[5] = (last[5] || 0) + (tick.volume || 0)
-  const kData = ohlc2kline(raw)
-  chart.setOption({ series: [{ name: 'K线', data: kData }] }, false)
+  const [o, , l, h] = last
+  last[1] = tick.price
+  last[2] = Math.min(l, tick.price)
+  last[3] = Math.max(h, tick.price)
+  chart.setOption(
+    { series: [{ name: 'K线', data: cData.klineData }] },
+    false  // notMerge=false: 只合并K线series，不影响其他
+  )
 }
 
+// ── 生命周期 ────────────────────────────────────────────────────
 onMounted(async () => {
   await nextTick()
   chart = echarts.init(chartEl.value, 'dark')
-  chart.setOption(buildOption(props.rawData, props.symbol, props.tick))
+  _lastChartData = props.chartData
+  chart.setOption(buildOption(props.chartData))
   _ro = new ResizeObserver(() => chart?.resize())
   if (chartEl.value) _ro.observe(chartEl.value)
 })
@@ -193,14 +252,17 @@ onBeforeUnmount(() => {
   chart?.dispose()
 })
 
-watch(() => props.rawData, (newData) => {
-  if (!chart) return
-  chart.setOption(buildOption(newData, props.symbol, props.tick))
+// 核心 watcher：chartData 或 subCharts 变化时全量重建
+watch([() => props.chartData, () => props.subCharts], () => {
+  if (!chart || !props.chartData || props.chartData.isEmpty) return
+  _lastChartData = props.chartData
+  chart.setOption(buildOption(props.chartData), { notMerge: true })
 })
 
+// tick watcher：增量 patch 最后根 K 线
 watch(() => props.tick, (t) => {
-  if (!chart || !props.rawData.length) return
-  applyTickFast(props.rawData, props.symbol, t)
+  if (!chart || !_lastChartData || _lastChartData.isEmpty) return
+  applyTickFast(_lastChartData, t)
 })
 
 defineExpose({ getChartInstance: () => chart })
