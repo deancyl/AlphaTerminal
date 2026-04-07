@@ -7,24 +7,46 @@
     <div class="flex items-center gap-2 px-3 py-1 border-b border-gray-800 shrink-0">
       <!-- 周期选择 -->
       <div class="flex gap-1">
-        <button v-for="p in periods" :key="p.value"
+        <button
+          v-for="p in periods" :key="p.value"
           class="px-2 py-0.5 text-[10px] rounded transition"
           :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
-          @click="period = p.value">{{ p.label }}</button>
+          @click="period = p.value"
+        >{{ p.label }}</button>
       </div>
+
       <div class="flex-1" />
-      <!-- 指标选择 -->
+
+      <!-- 副图选择 -->
       <div class="flex gap-1">
-        <button v-for="ind in ['MA','BOLL','MACD','KDJ','RSI','WR']" :key="ind"
+        <button
+          v-for="ind in subChartOptions" :key="ind.key"
           class="px-1.5 py-0.5 text-[9px] rounded border transition"
-          :class="activeIndicators.includes(ind)
+          :class="activeSubChart === ind.key
             ? 'border-terminal-accent text-terminal-accent'
             : 'border-gray-700 text-gray-600 hover:border-gray-500'"
-          @click="toggleIndicator(ind)">{{ ind }}</button>
+          @click="activeSubChart = ind.key"
+        >{{ ind.label }}</button>
       </div>
+
       <div class="flex-1" />
+
       <!-- 画线工具 -->
-      <DrawingToolbar v-if="isFull" v-model:tool="drawTool" v-model:color="drawColor" v-model:locked="drawLocked" />
+      <DrawingToolbar
+        v-if="isFull"
+        :activeTool="drawTool"
+        :activeColor="drawColor"
+        :magnetMode="magnetMode"
+        :visible="drawVisible"
+        :locked="drawLocked"
+        @tool-change="t => drawTool = t"
+        @color-change="c => drawColor = c"
+        @magnet-toggle="magnetMode = !magnetMode"
+        @visibility-toggle="drawVisible = !drawVisible"
+        @lock-toggle="drawLocked = !drawLocked"
+        @clear="drawingCanvasRef?.clearAll()"
+      />
+
       <!-- 最新价 -->
       <span class="text-[13px] font-mono font-bold" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
         {{ latestPrice != null ? latestPrice.toFixed(2) : '--' }}
@@ -32,39 +54,54 @@
       <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
         {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
       </span>
-      <button v-if="isFull" class="px-3 py-0.5 text-[11px] rounded border border-gray-600 text-gray-500 hover:border-red-500/50 hover:text-red-400 transition" @click="emit('close')">✕ 关闭</button>
+      <button
+        v-if="isFull"
+        class="px-3 py-0.5 text-[11px] rounded border border-gray-600 text-gray-500 hover:border-red-500/50 hover:text-red-400 transition"
+        @click="emit('close')"
+      >✕ 关闭</button>
     </div>
 
     <!-- 主图区域 -->
     <div class="flex flex-1 min-w-0 relative">
       <!-- 错误状态 -->
-      <div v-if="chartError" class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90">
+      <div
+        v-if="chartError"
+        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90"
+      >
         <div class="text-red-400 text-sm">{{ chartError }}</div>
         <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
       </div>
 
-      <!-- K线图 BaseKLineChart -->
+      <!-- 统一 BaseKLineChart 哑组件 -->
       <BaseKLineChart
-        ref="klineRef"
+        ref="baseChartRef"
         class="flex-1 min-w-0"
-        :rawData="klineRaw"
+        :chart-data="processedChartData"
+        :sub-charts="activeSubCharts"
         :tick="liveTick"
         :symbol="props.symbol"
-        :type="periodLabel"
       />
 
-      <!-- 画线覆盖层（isFull 模式） -->
+      <!-- 画线覆盖层 -->
       <DrawingCanvas
         v-if="isFull && drawVisible"
+        ref="drawingCanvasRef"
         class="absolute inset-0 z-10"
-        :chartInstance="drawingChartInstance"
+        :chartInstance="chartInstance"
         :activeTool="drawTool"
         :activeColor="drawColor"
-        :locked="drawLocked"
+        :magnetMode="magnetMode"
+        :symbol="props.symbol"
+        @drawn="onShapeDrawn"
+        @deleted="onShapeDeleted"
+        @cleared="onShapesCleared"
+        @range-select="onRangeSelect"
       />
 
       <!-- 右侧详情面板 -->
-      <QuotePanel v-if="isFull" class="shrink-0"
+      <QuotePanel
+        v-if="isFull"
+        class="shrink-0"
         :symbol="props.symbol"
         :realtimeData="quoteData"
         :snapshotData="null"
@@ -74,114 +111,112 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import DrawingCanvas  from './DrawingCanvas.vue'
 import QuotePanel     from './QuotePanel.vue'
 import BaseKLineChart from './BaseKLineChart.vue'
+import { buildChartData } from '../utils/chartDataBuilder.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
-import { calcMA, calcBOLL, calcEMA, calcMACD, calcKDJ } from '../utils/indicators.js'
 
 const props = defineProps({
-  symbol:   { type: String, required: true },
-  isFull:   { type: Boolean, default: false },
-  showVol:  { type: Boolean, default: true },
+  symbol:  { type: String, required: true },
+  isFull:  { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'symbol-change'])
 
-// ── 状态 ──────────────────────────────────────────────────────
-const period         = ref('daily')
-const activeIndicators = ref([])
-const isLoading = ref(false), chartError = ref('')
-const latestPrice = ref(null), latestChange = ref(0)
-const quoteData   = ref({})
-const histData    = ref([])      // 原始历史数据 [{date, open, close, low, high, volume}, ...]
-const drawTool = ref(''), drawColor = ref('#fbbf24'), magnetMode = ref(true)
-const drawVisible = ref(true), drawLocked = ref(false)
-const drawingCanvasRef = ref(null)
-const klineRef = ref(null)
+// ── State ──────────────────────────────────────────────────────
+const period          = ref('daily')
+const chartError      = ref('')
+const latestPrice     = ref(null)
+const latestChange    = ref(0)
+const quoteData       = ref({})
+const histData        = shallowRef([])
+const processedChartData = shallowRef({ isEmpty: true })
 
-// ── WebSocket 实时 tick ───────────────────────────────────────
-const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+// 副图选项（VOL / MACD / KDJ / RSI）
+const subChartOptions = [
+  { key: 'VOL',  label: 'VOL' },
+  { key: 'MACD', label: 'MACD' },
+  { key: 'KDJ',  label: 'KDJ' },
+  { key: 'RSI',  label: 'RSI' },
+]
+const activeSubChart = ref('VOL')
 
-watch(() => props.symbol, (sym) => {
-  if (!sym) return
-  histData.value = []
-  latestPrice.value = null
-  latestChange.value = 0
-  fetchData()
-  fetchQuoteDetail()
-  wsConnect(sym)
-}, { immediate: true })
-
-// ── Computed ───────────────────────────────────────────────────
-const klineRaw = computed(() =>
-  histData.value.map(d => [new Date(d.date).getTime(), d.open, d.close, d.low, d.high, d.volume ?? 0])
-)
-
-const periodLabel = computed(() => {
-  const map = { daily:'日K', weekly:'周K', monthly:'月K', minutely:'分时', '1min':'1分', '5min':'5分', '15min':'15分', '30min':'30分', '60min':'60分' }
-  return map[period.value] || period.value
+const activeSubCharts = computed(() => {
+  if (activeSubChart.value === 'VOL') return ['VOL']
+  return ['VOL', activeSubChart.value]
 })
 
-// ── 指标 ──────────────────────────────────────────────────────
-const allIndicators = [
-  { key: 'MA',   label: 'MA' },
-  { key: 'BOLL', label: 'BOLL' },
-  { key: 'MACD', label: 'MACD' },
-  { key: 'KDJ', label: 'KDJ' },
-  { key: 'RSI', label: 'RSI' },
-  { key: 'WR',  label: 'WR' },
-]
+// 画线
+const drawTool      = ref('')
+const drawColor     = ref('#fbbf24')
+const magnetMode    = ref(true)
+const drawVisible   = ref(true)
+const drawLocked    = ref(false)
+const drawingCanvasRef = ref(null)
+
+// Refs
+const baseChartRef = ref(null)
+const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? null)
+
+// ── WebSocket ─────────────────────────────────────────────────
+const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+
+watch(liveTick, (t) => {
+  if (!t || !histData.value.length) return
+  const sym = (t.symbol || '').toLowerCase()
+  if (sym !== props.symbol?.toLowerCase()) return
+  latestPrice.value  = t.price
+  latestChange.value = t.chg_pct ?? 0
+  const arr = histData.value.slice()
+  const last = arr[arr.length - 1]
+  if (!last) return
+  const price = t.price
+  arr[arr.length - 1] = {
+    ...last,
+    close:  price,
+    high:   Math.max(last.high || 0, price),
+    low:    Math.min(last.low  || 0, price),
+    volume: (last.volume || 0) + (t.volume || 0),
+  }
+  histData.value = arr
+})
 
 // ── 周期 ──────────────────────────────────────────────────────
 const periods = [
-  { label: '日', value: 'daily' },
-  { label: '周', value: 'weekly' },
-  { label: '月', value: 'monthly' },
-  { label: '5分', value: '5min' },
+  { label: '日',   value: 'daily' },
+  { label: '周',   value: 'weekly' },
+  { label: '月',   value: 'monthly' },
+  { label: '5分',  value: '5min' },
   { label: '15分', value: '15min' },
   { label: '30分', value: '30min' },
   { label: '60分', value: '60min' },
 ]
 
-// ── DrawingCanvas chart 实例桥接 ─────────────────────────────
-const drawingChartInstance = ref(null)
-
-watch(klineRef, async (ref) => {
-  if (!ref) return
-  // 等待 BaseKLineChart 内部 chart 实例可用
-  await nextTick()
-  drawingChartInstance.value = ref.getChartInstance()
-}, { flush: 'post' })
-
 // ── 数据拉取 ──────────────────────────────────────────────────
 async function fetchData() {
   if (!props.symbol) return
-  isLoading.value = true
   chartError.value = ''
   try {
     const params = new URLSearchParams({
       symbol: props.symbol,
-      period : period.value,
-      adjust : 'none',
-      limit  : 2000,
+      period:  period.value,
+      adjust:  'none',
+      limit:   2000,
     })
     const res = await fetch(`/api/v1/market/klinedata/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const raw = await res.json()
     if (!Array.isArray(raw) || raw.length === 0) { chartError.value = '暂无历史数据'; return }
-    // 排序：原始数据可能是任意顺序
     const sorted = [...raw].sort((a, b) => new Date(a.date) - new Date(b.date))
     histData.value = sorted
-    // 更新头部价格
+    processedChartData.value = buildChartData(sorted, period.value, {}, [])
     const last = sorted[sorted.length - 1]
     latestPrice.value  = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
-  } finally {
-    isLoading.value = false
   }
 }
 
@@ -191,28 +226,41 @@ async function fetchQuoteDetail() {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
     if (!res.ok) return
     quoteData.value = await res.json()
-  } catch (e) {
-    console.warn('[FullscreenKline] quote_detail failed:', e.message)
-  }
+  } catch (e) { console.warn('[FullscreenKline] quote_detail failed:', e.message) }
 }
 
-function toggleIndicator(key) {
-  const arr = activeIndicators.value
-  const idx = arr.indexOf(key)
-  if (idx >= 0) arr.splice(idx, 1)
-  else arr.push(key)
-}
-
-// ── 周期切换重拉数据 ─────────────────────────────────────────
+// ── 监听 ──────────────────────────────────────────────────────
 watch(period, () => {
   histData.value = []
-  latestPrice.value = null
+  processedChartData.value = { isEmpty: true }
   fetchData()
 })
 
+watch(() => props.symbol, (sym) => {
+  if (!sym) return
+  histData.value = []
+  processedChartData.value = { isEmpty: true }
+  latestPrice.value = null
+  latestChange.value = 0
+  fetchData()
+  fetchQuoteDetail()
+  wsConnect(sym)
+}, { immediate: true })
+
+// 副图变化时重建图表数据
+watch(activeSubChart, () => {
+  if (!histData.value.length) return
+  processedChartData.value = buildChartData(histData.value, period.value, {}, [])
+})
+
+// ── 画线事件 ──────────────────────────────────────────────────
+function onShapeDrawn()  {}
+function onShapeDeleted() {}
+function onShapesCleared() {}
+function onRangeSelect() {}
+
 // ── 生命周期 ──────────────────────────────────────────────────
 onMounted(() => {
-  window.addEventListener('resize', onResize)
   if (props.symbol) {
     fetchData()
     fetchQuoteDetail()
@@ -221,12 +269,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  window.removeEventListener('resize', onResize)
   wsDisconnect()
+  baseChartRef.value?.getChartInstance?.()?.dispose()
 })
-
-function onResize() { windowWidth.value = window.innerWidth }
-const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1200)
 </script>
 
 <style scoped>
