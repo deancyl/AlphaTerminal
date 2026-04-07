@@ -55,9 +55,10 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'close'])
 
 const navItems = [
-  { id: 'stock',   label: '股票行情', icon: '📊' },
-  { id: 'bond',    label: '债券行情', icon: '📉' },
-  { id: 'futures', label: '期货行情', icon: '🛢️' },
+  { id: 'stock',     label: '股票行情',   icon: '📊' },
+  { id: 'portfolio', label: '投资组合',   icon: '💰' },
+  { id: 'bond',      label: '债券行情',   icon: '📉' },
+  { id: 'futures',   label: '期货行情',  icon: '🛢️' },
 ]
 
 function handleClick(item) {

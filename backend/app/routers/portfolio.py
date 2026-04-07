@@ -47,8 +47,7 @@ async def list_portfolios():
             "SELECT id, name, type, created_at, total_cost FROM portfolios ORDER BY id"
         ).fetchall()
         conn.close()
-    return {"portfolios": [_row2dict([rows], ["id","name","type","created_at","total_cost"])[0] for rows in []] or
-            [{"id": r[0], "name": r[1], "type": r[2], "created_at": r[3], "total_cost": r[4]} for r in rows]}
+    return {"portfolios": _row2dict(rows, ["id", "name", "type", "created_at", "total_cost"])}
 
 @router.post("/")
 async def create_portfolio(body: PortfolioIn):
@@ -260,7 +259,7 @@ def _save_snapshot_impl(portfolio_id: int):
     if not rows:
         return {"ok": False, "message": "无持仓，无须保存"}
 
-    # 从 market_data_daily 取最新收盘价
+    # 从 market_data_realtime（SpotCache 刷新的实时表）取最新价格
     from app.db.database import get_latest_prices
     symbols = [r[0] for r in rows]
     prices  = {s["symbol"]: s["price"] for s in get_latest_prices(symbols)}

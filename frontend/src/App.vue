@@ -93,6 +93,8 @@
         />
         <!-- 债券行情 -->
         <BondDashboard v-else-if="currentView === 'bond'" />
+        <!-- 投资组合 -->
+        <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" />
       </div>
@@ -123,8 +125,9 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
-import BondDashboard  from './components/BondDashboard.vue'
+import BondDashboard   from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
+import PortfolioDashboard from './components/PortfolioDashboard.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
