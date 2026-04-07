@@ -104,7 +104,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import FuturesMainChart from './FuturesMainChart.vue'
 
 const emit = defineEmits(['open-futures'])
@@ -154,8 +154,14 @@ async function fetchFuturesData() {
   }
 }
 
+let timer = null
+
 onMounted(() => {
   fetchFuturesData()
-  setInterval(fetchFuturesData, 180_000)  // 每3分钟刷新
+  timer = setInterval(fetchFuturesData, 180_000)  // 每3分钟刷新
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
 })
 </script>

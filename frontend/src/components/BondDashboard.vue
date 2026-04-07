@@ -145,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import YieldCurveChart from './YieldCurveChart.vue'
 
 // ── 常量 ──────────────────────────────────────────────────────────
@@ -258,9 +258,15 @@ async function fetchBondData() {
   }
 }
 
+let timer = null
+
 onMounted(() => {
   fetchBondData()
   // 矩阵每5分钟刷新（债券低频）
-  setInterval(fetchBondData, 5 * 60 * 1000)
+  timer = setInterval(fetchBondData, 5 * 60 * 1000)
+})
+
+onUnmounted(() => {
+  if (timer) clearInterval(timer)
 })
 </script>
