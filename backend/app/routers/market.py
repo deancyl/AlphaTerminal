@@ -816,6 +816,93 @@ async def market_history(
     }
 
 
+_FUTURES_FREQ_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
+
+
+@router.get("/market/futures/{symbol}")
+async def futures_history(
+    symbol: str,
+    period: str = "daily",
+    limit: int = 2000,
+):
+    """
+    期货历史行情 — 直连 AkShare Sina，无数据库层。
+
+    周期：
+      daily   日K（主力连续合约，symbol=IF0/RB0/...）
+      1min/5min/15min/30min/60min  分钟K（当前主力合约）
+
+    返回格式：
+      { symbol, period, history: [{date, open, high, low, close, volume, hold}, ...] }
+
+    hold（持仓量）是期货核心指标，代表多空双方未平仓合约数。
+    """
+    import akshare as ak
+    import time
+
+    clean_sym = symbol.strip().lower()
+
+    # 日K
+    if period == "daily":
+        try:
+            df = ak.futures_zh_daily_sina(symbol=clean_sym.upper())
+            if df is None or df.empty:
+                return {"symbol": clean_sym, "period": period, "history": []}
+            df = df.tail(limit)
+            rows = []
+            for _, r in df.iterrows():
+                rows.append({
+                    "date":      str(r["date"]),
+                    "open":      round(float(r["open"]), 2),
+                    "high":      round(float(r["high"]), 2),
+                    "low":       round(float(r["low"]), 2),
+                    "close":     round(float(r["close"]), 2),
+                    "volume":    int(r["volume"]) if r["volume"] == r["volume"] else 0,
+                    "hold":      int(r["hold"]) if r["hold"] == r["hold"] else 0,   # 持仓量（Open Interest）
+                })
+            return {"symbol": clean_sym, "period": period, "history": list(reversed(rows))}
+        except Exception as e:
+            logger.error(f"[Futures] daily failed {clean_sym}: {e}")
+            return {"symbol": clean_sym, "period": period, "history": [], "error": str(e)}
+
+    # 分钟K
+    elif period in _FUTURES_FREQ_MAP:
+        freq = _FUTURES_FREQ_MAP[period]
+        try:
+            df = ak.futures_zh_minute_sina(symbol=clean_sym.upper(), period=str(freq))
+            if df is None or df.empty:
+                return {"symbol": clean_sym, "period": period, "history": []}
+            df = df.tail(limit)
+            rows = []
+            for _, r in df.iterrows():
+                # datetime: "2026-04-07 14:40:00"
+                dt_str = str(r["datetime"])
+                # 转为 Unix timestamp（秒）
+                try:
+                    from datetime import datetime
+                    dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                    ts = int(dt_obj.timestamp() * 1000)
+                except Exception:
+                    ts = 0
+                rows.append({
+                    "date":    dt_str,
+                    "open":    round(float(r["open"]), 2),
+                    "high":    round(float(r["high"]), 2),
+                    "low":     round(float(r["low"]), 2),
+                    "close":   round(float(r["close"]), 2),
+                    "volume":  int(r["volume"]) if r["volume"] == r["volume"] else 0,
+                    "hold":    int(r["hold"]) if r["hold"] == r["hold"] else 0,
+                    "timestamp": ts,
+                })
+            return {"symbol": clean_sym, "period": period, "history": rows}
+        except Exception as e:
+            logger.error(f"[Futures] minute failed {clean_sym}: {e}")
+            return {"symbol": clean_sym, "period": period, "history": [], "error": str(e)}
+
+    else:
+        return {"symbol": clean_sym, "period": period, "history": []}
+
+
 @router.get("/market/rates")
 async def market_rates():
     """利率数据"""
