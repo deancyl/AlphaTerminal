@@ -1,56 +1,155 @@
+# ============================================
 # Python
+# ============================================
 __pycache__/
 *.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
 *.so
+*.egg
+*.egg-info/
+dist/
+build/
+distributions/
+
+# Virtual environments
 .venv/
 venv/
 ENV/
 env/
-.env
-*.egg-info/
-dist/
-build/
-*.egg
+virtualenv/
 
-# Node
+# Jupyter
+.ipynb_checkpoints/
+profile_default/
+ipython_config.py
+
+# ============================================
+# Node.js
+# ============================================
 node_modules/
 npm-debug.log*
 yarn-debug.log*
+yarn-error.log*
 .yarn/
 .pnp
 .pnp.js
+package-lock.json
 
+# ============================================
 # Build outputs
+# ============================================
 dist/
+build/
 *.local
 *.log
+logs/
+frontend/dist/
+backend/dist/
 
-# Database (contains live market data)
-backend/cache/*.db
-backend/cache/*.db-shm
-backend/cache/*.db-wal
+# ============================================
+# Database & Cache
+# ============================================
+# SQLite files (all *.db variants)
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.db.lock
 
+# Project database (root level)
+database.db
+sample_data.db
+test.db
+
+# Cache directories
+backend/cache/
+cache/
+tmp/
+temp/
+
+# ============================================
 # OS
+# ============================================
 .DS_Store
 Thumbs.db
+ehthumbs.db
+Icon?
+.Records
+*~
 *.swp
 *.swo
-*~
+*.swn
+.*.swm
+.*.swl
+.*.swk
 
-# IDE
+# KDE
+.directory
+
+# ============================================
+# IDE & Editor
+# ============================================
 .vscode/
 .idea/
 *.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+*.sublime-workspace
+*.sublime-project
+.komodotools
+Session.vim
+\#*\#
+.\#*
 
-# Secrets / tokens
+# ============================================
+# Secrets / Credentials
+# ============================================
+.env
+.env.*
+.env.local
+.env.*.local
+secrets/
+credentials/
 *token*
 *secret*
 *credential*
-.env.local
-.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
-# OS pyc cache
-**/__pycache__/
-*.pyc
-database.db
-frontend/dist/
+# ============================================
+# Test & Coverage
+# ============================================
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================
+# Data exports (regeneratable)
+# ============================================
+data/raw/*
+data/exports/*
+!data/.gitkeep
+
+# ============================================
+# Misc
+# ============================================
+*.tgz
+vendor/
+libs/
+externals/
