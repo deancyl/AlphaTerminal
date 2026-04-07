@@ -239,8 +239,13 @@ async def get_snapshots(
 
 @router.post("/{portfolio_id}/snapshots")
 async def save_snapshot(portfolio_id: int):
+    """手动保存当日快照（供路由调用）"""
+    return _save_snapshot_impl(portfolio_id)
+
+
+def _save_snapshot_impl(portfolio_id: int):
     """
-    手动保存当日快照（也可由收盘后定时任务调用）
+    保存当日净值快照（同步函数，供 scheduler 直接调用）
     计算: total_asset = Σ(shares * latest_close)，total_cost = Σ(shares * avg_cost)
     """
     today = date.today().isoformat()

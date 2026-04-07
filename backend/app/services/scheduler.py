@@ -122,6 +122,40 @@ def start_scheduler():
         logger.info("[Scheduler] 启动时行业板块缓存已触发")
     threading.Thread(target=_startup_sectors, daemon=True).start()
 
+    # ── P3: 每日收盘快照（15:30 执行）────────────────────────────
+    def _record_portfolio_snapshots():
+        """遍历所有账户，计算当日 total_asset，写入 portfolio_snapshots"""
+        import datetime as _dt
+        today = _dt.date.today().isoformat()
+        try:
+            from app.routers.portfolio import _save_snapshot_impl as _save_one
+            # 动态获取所有 portfolio_id
+            from app.db.database import _get_conn
+            with _get_conn() as conn:
+                rows = conn.execute("SELECT id FROM portfolios").fetchall()
+            for (pid,) in rows:
+                result = _save_one(pid)
+                logger.info(f"[PortfolioSnap] pid={pid} date={today} asset={result.get('total_asset',0)}")
+        except Exception as e:
+            logger.error(f"[PortfolioSnap] 快照失败: {e}")
+
+    scheduler.add_job(
+        _record_portfolio_snapshots,
+        "cron",
+        hour=15, minute=30,
+        id="portfolio_snapshot",
+        name="PortfolioSnapshot",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 账户净值快照任务已注册（每个交易日 15:30）")
+
+    # 启动时立即触发一次快照（非阻塞）
+    def _startup_snapshot():
+        import time as _t; _t.sleep(5)
+        _record_portfolio_snapshots()
+        logger.info("[Scheduler] 启动时账户快照已触发")
+    threading.Thread(target=_startup_snapshot, daemon=True).start()
+
     # 每 10 秒将缓冲写入主表
     scheduler.add_job(
         flush_write_buffer,
