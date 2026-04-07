@@ -141,6 +141,17 @@ function buildOption(cData) {
         name: 'VOL', type: 'bar', data: volumes,
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 8,
       })
+      // OI（持仓量）：有 oi 字段时画成折线叠加在 VOL 区域
+      const oiData = volumes.map((v, i) => ({ value: v.oi, itemStyle: { color: '#f59e0b' } }))
+      if (oiData.some(v => v.value != null)) {
+        series.push({
+          name: 'OI', type: 'line', data: oiData,
+          xAxisIndex: axisIdx, yAxisIndex: axisIdx,
+          smooth: false, symbol: 'none',
+          lineStyle: { color: '#f59e0b', width: 1.5 },
+          tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
+        })
+      }
 
     } else if (subName === 'MACD' && subChartData?.MACD) {
       const m = subChartData.MACD

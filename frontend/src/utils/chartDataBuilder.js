@@ -26,9 +26,10 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   // ECharts Candlestick: [open, close, lowest, highest]
   const klineData = rawHist.map(h => [h.open, h.close, h.low, h.high])
 
-  // 成交量序列 (附带涨跌颜色)
+  // 成交量序列 (附带涨跌颜色；期货额外附带持仓量 OI)
   const volumes = rawHist.map(h => ({
     value: h.volume,
+    oi:    h.hold ?? null,   // 持仓量（期货独有）
     itemStyle: { color: h.close >= h.open ? UP + '44' : DOWN + '44' }
   }))
 

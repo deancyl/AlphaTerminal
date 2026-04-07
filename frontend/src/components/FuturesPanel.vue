@@ -13,10 +13,12 @@
 
       <!-- 周期选择 -->
       <div class="flex gap-1 ml-2">
-        <button v-for="p in periods" :key="p.value"
+        <button
+          v-for="p in periods" :key="p.value"
           class="px-2 py-0.5 text-[10px] rounded transition"
           :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
-          @click="period = p.value">{{ p.label }}</button>
+          @click="period = p.value"
+        >{{ p.label }}</button>
       </div>
 
       <!-- 合约信息 -->
@@ -27,53 +29,59 @@
       <span class="text-[10px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
         {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
       </span>
-      <!-- OI 持仓量 -->
       <span class="text-[10px] font-mono text-gray-500">OI: {{ latestHold?.toLocaleString() ?? '--' }}</span>
     </div>
 
     <!-- 错误状态 -->
-    <div v-if="chartError" class="absolute inset-0 z-20 flex items-center justify-center bg-[#0a0e17]/80">
+    <div v-if="chartError" class="flex-1 flex items-center justify-center">
       <div class="text-red-400 text-sm">{{ chartError }}</div>
     </div>
 
-    <!-- K线图 -->
-    <div class="flex-1 min-w-0 relative">
+    <!-- K线图（统一 BaseKLineChart 哑组件） -->
+    <div v-else class="flex-1 min-w-0 relative">
       <BaseKLineChart
         ref="klineRef"
         class="w-full h-full"
-        :rawData="klineRaw"
+        :chart-data="processedChartData"
+        :sub-charts="['VOL']"
         :tick="liveTick"
         :symbol="currentSymbol"
-        :type="periodLabel"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, watch, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from 'vue'
 import BaseKLineChart from './BaseKLineChart.vue'
+import { buildChartData } from '../utils/chartDataBuilder.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 
-// ── Props ─────────────────────────────────────────────────────
 const props = defineProps({
   symbol: { type: String, default: 'IF0' },
 })
 const emit = defineEmits(['symbol-change'])
 
 // ── State ─────────────────────────────────────────────────────
-const inputSymbol  = ref(props.symbol || 'IF0')
+const inputSymbol   = ref(props.symbol || 'IF0')
 const currentSymbol = ref(props.symbol || 'IF0')
-const period       = ref('daily')
-const histData     = shallowRef([])
-const latestPrice  = ref(null)
-const latestChange = ref(0)
-const latestHold   = ref(null)
-const chartError   = ref('')
-const klineRef     = ref(null)
+const period        = ref('daily')
+const histData      = shallowRef([])
+const latestPrice   = ref(null)
+const latestChange  = ref(0)
+const latestHold    = ref(null)
+const chartError    = ref('')
+const klineRef      = ref(null)
 
 // ── WebSocket ─────────────────────────────────────────────────
 const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+
+// ── 图表数据（统一结构化格式）────────────────────────────────────
+const processedChartData = computed(() =>
+  histData.value.length
+    ? buildChartData(histData.value, period.value, {}, [])
+    : { isEmpty: true }
+)
 
 // ── Period ────────────────────────────────────────────────────
 const periods = [
@@ -85,28 +93,7 @@ const periods = [
   { label: '60分', value: '60min' },
 ]
 
-const periodLabel = computed(() => {
-  const m = { daily:'日K', '1min':'1分', '5min':'5分', '15min':'15分', '30min':'30分', '60min':'60分' }
-  return m[period.value] || period.value
-})
-
-// ── rawData: [[ts, open, close, low, high, vol, hold], ...] ────────
-const klineRaw = computed(() =>
-  histData.value.map(d => {
-    let ts
-    if (d.timestamp) {
-      ts = d.timestamp
-    } else {
-      const dateStr = d.date || d.datetime || ''
-      const d2 = new Date(dateStr.replace(' ', 'T'))
-      ts = isNaN(d2.getTime()) ? 0 : d2.getTime()
-    }
-    return [ts, d.open, d.close, d.low, d.high, d.volume ?? 0, d.hold ?? null]
-  })
-)
-
-// ── WS tick → 更新最新K线 + 价格/持仓 ─────────────────────────
-// shallowRef 下需整体替换数组以触发 Vue 响应式
+// ── WS tick → 增量更新 histData（shallowRef + 整体替换）──────────
 watch(liveTick, (t) => {
   if (!t || !histData.value.length) return
   const sym = (t.symbol || '').toLowerCase()
@@ -116,7 +103,6 @@ watch(liveTick, (t) => {
   latestChange.value = t.chg_pct ?? 0
   latestHold.value   = t.hold ?? null
 
-  // 整体替换（shallowRef 需重新赋值引用才触发响应）
   const arr = histData.value.slice()
   const last = arr[arr.length - 1]
   if (!last) return
@@ -139,21 +125,15 @@ async function fetchData() {
   try {
     const params = new URLSearchParams({
       symbol: currentSymbol.value,
-      period : period.value,
-      limit  : 2000,
+      period:  period.value,
+      limit:   2000,
     })
     const res = await fetch(`/api/v1/market/futures/${currentSymbol.value}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.error) {
-      chartError.value = data.error
-      return
-    }
+    if (data.error) { chartError.value = data.error; return }
     histData.value = data.history || []
-    if (!histData.value.length) {
-      chartError.value = '暂无数据'
-      return
-    }
+    if (!histData.value.length) { chartError.value = '暂无数据'; return }
     const last = histData.value[histData.value.length - 1]
     latestPrice.value  = last.close
     latestChange.value = 0
