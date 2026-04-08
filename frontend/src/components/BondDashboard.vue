@@ -5,10 +5,17 @@
     <div class="terminal-panel border border-gray-800 rounded p-3 shrink-0">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 利率估值矩阵</span>
-        <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
+        <div class="flex items-center gap-2">
+          <!-- 隐含税率图例 -->
+          <span class="text-[9px] text-purple-400/80 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-purple-500/60"></span>
+            隐含税率
+          </span>
+          <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
+        </div>
       </div>
 
-      <!-- Tab 切换：国债 / 国开 / 口行（解决手机端垂直空间挤压） -->
+      <!-- Tab 切换：国债 / 国开 / 商A-AAA -->
       <div class="flex border-b border-gray-700 mb-1.5">
         <button
           v-for="src in SOURCES"
@@ -23,7 +30,7 @@
         </button>
       </div>
 
-      <!-- 矩阵表头（单列当前来源） -->
+      <!-- 矩阵表头 -->
       <div class="grid" :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }">
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">
@@ -32,29 +39,37 @@
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">基点变化</div>
       </div>
 
-      <!-- 矩阵数据行（7期限 × 当前来源） -->
+      <!-- 矩阵数据行 -->
       <div
         v-for="tenor in TENORS"
         :key="`${activeSource}-${tenor.key}`"
-        class="grid hover:bg-white/5 transition-colors rounded"
+        class="grid hover:bg-white/5 transition-colors rounded cursor-pointer"
         :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }"
+        @click="openHistory(tenor)"
       >
         <!-- 期限标签 -->
         <div class="py-1.5 px-1 flex items-center">
           <span class="text-[10px] text-terminal-dim">{{ tenor.label }}</span>
         </div>
 
-        <!-- 当前来源收益率 + 利差标注 -->
-        <div
-          class="py-1.5 px-2 border-l border-gray-800/50 flex flex-col justify-center gap-0.5 cursor-pointer hover:bg-white/5 rounded transition-all"
-          :title="`${activeSource} ${tenor.label}`"
-        >
-          <span
-            class="text-[11px] font-mono font-semibold leading-none"
-            :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
-          >
-            {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
-          </span>
+        <!-- 当前来源收益率 + 利差/隐含税率 -->
+        <div class="py-1.5 px-2 border-l border-gray-800/50 flex flex-col justify-center gap-0.5">
+          <div class="flex items-center gap-1.5">
+            <span
+              class="text-[11px] font-mono font-semibold leading-none"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
+            >
+              {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
+            </span>
+            <!-- 隐含税率（仅国开列） -->
+            <span
+              v-if="activeSource === 'cdb' && getCell(tenor.key, 'gov')?.yield && getCell(tenor.key, 'cdb')?.yield"
+              class="text-[9px] px-1 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-400/90 leading-none"
+              :title="`隐含税率 = (国开-国债)/国开`"
+            >
+              税{{ impliedTaxRate(getCell(tenor.key, 'gov')?.yield, getCell(tenor.key, 'cdb')?.yield) }}
+            </span>
+          </div>
           <!-- 利差标注：国开/商A-AAA 显示相对国债的利差 -->
           <span
             v-if="getCell(tenor.key, activeSource)?.spread_bps != null"
@@ -73,7 +88,6 @@
             >
               {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
             </span>
-            <!-- 迷你变化条 -->
             <div
               class="h-0.5 rounded-full mt-0.5"
               :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'bg-red-400/40' : 'bg-green-400/40'"
@@ -89,30 +103,46 @@
       </div>
     </div>
 
-    <!-- ── 主体：左侧收益率曲线 + 右侧债券列表 ─────────────── -->
+    <!-- ── 主体：左侧曲线组 + 右侧债券列表 ─────────────── -->
     <div class="flex gap-2 flex-1 min-h-0">
 
-      <!-- 左侧：国债收益率曲线 -->
-      <div class="flex-1 terminal-panel border border-gray-800 rounded p-3 flex flex-col">
-        <div class="flex items-center justify-between mb-1.5 shrink-0">
-          <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
-          <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
-        </div>
-        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
-          <YieldCurveChart
-            v-if="Object.keys(yieldCurve).length > 0"
-            :yield-curve="yieldCurve"
-            :curve-1m="yieldCurve1m"
-            :curve-1y="yieldCurve1y"
-            :update-time="yieldUpdateTime"
-          />
-          <div v-else class="w-full h-full flex items-center justify-center">
-            <span class="text-terminal-dim text-[10px]">加载中...</span>
+      <!-- 左侧：国债收益率曲线 + 期限利差图 -->
+      <div class="flex-1 flex flex-col gap-2">
+
+        <!-- 收益率曲线 -->
+        <div class="terminal-panel border border-gray-800 rounded p-3 flex flex-col" style="flex: 2;">
+          <div class="flex items-center justify-between mb-1.5 shrink-0">
+            <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
+            <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
           </div>
+          <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
+            <YieldCurveChart
+              v-if="Object.keys(yieldCurve).length > 0"
+              :yield-curve="yieldCurve"
+              :curve-1m="yieldCurve1m"
+              :curve-1y="yieldCurve1y"
+              :update-time="yieldUpdateTime"
+            />
+            <div v-else class="w-full h-full flex items-center justify-center">
+              <span class="text-terminal-dim text-[10px]">加载中...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 10Y-2Y 期限利差走势 -->
+        <div class="terminal-panel border border-gray-800 rounded p-3 flex flex-col" style="flex: 1; min-height: 130px;">
+          <YieldSpreadChart
+            :tenors10y="spreadHistory10y"
+            :tenors2y="spreadHistory2y"
+            :update-time="spreadUpdateTime"
+            :isLoading="spreadLoading"
+            :hasError="!!spreadError"
+            :errorMsg="spreadError"
+          />
         </div>
       </div>
 
-      <!-- 右侧：活跃债券列表（简化版） -->
+      <!-- 右侧：活跃债券列表 -->
       <div class="w-56 shrink-0 terminal-panel border border-gray-800 rounded p-3 flex flex-col">
         <div class="flex items-center justify-between mb-1.5 shrink-0">
           <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
@@ -143,12 +173,22 @@
       </div>
 
     </div>
+
+    <!-- ── 历史分位弹窗 ───────────────────────────────── -->
+    <BondHistoryModal
+      :visible="historyModalVisible"
+      :tenor="historyModalTenor"
+      period="1Y"
+      @close="historyModalVisible = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import YieldCurveChart from './YieldCurveChart.vue'
+import YieldSpreadChart from './YieldSpreadChart.vue'
+import BondHistoryModal from './BondHistoryModal.vue'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [
@@ -162,33 +202,48 @@ const TENORS = [
 ]
 
 const SOURCES = [
-  { key: 'gov',   label: '国债' },
-  { key: 'cdb',   label: '国开' },
-  { key: 'aaa',   label: '商A-AAA' },
+  { key: 'gov', label: '国债' },
+  { key: 'cdb', label: '国开' },
+  { key: 'aaa', label: '商A-AAA' },
 ]
 
-// 矩阵数据结构（从 yield_curve API 映射）
-// yield_curve: { "1年": { gov: {yield, change_bps}, cdb: {...}, exim: {...} }, ... }
-const yieldMatrix = ref({})
+// ── 状态 ──────────────────────────────────────────────────────────
+const yieldMatrix     = ref({})
 const matrixUpdateTime = ref('')
 const yieldCurve    = ref({})
 const yieldCurve1m  = ref({})
 const yieldCurve1y  = ref({})
 const yieldUpdateTime = ref('')
-const bondList = ref([])
+const bondList      = ref([])
+const activeSource  = ref('gov')
 
-// 手机端 Tab 切换（国债/国开/口行）
-const activeSource = ref('gov')   // 默认显示国债
+// 历史分位弹窗
+const historyModalVisible = ref(false)
+const historyModalTenor  = ref('10年')  // 中文期限
 
+// 10Y-2Y 期限利差
+const spreadHistory10y   = ref([])
+const spreadHistory2y    = ref([])
+const spreadUpdateTime  = ref('')
+const spreadLoading     = ref(false)
+const spreadError       = ref('')
+
+// ── 计算属性 ──────────────────────────────────────────────────────
 const hasData = computed(() => Object.keys(yieldMatrix.value).length > 0)
 
 function getCell(tenor, source) {
   return yieldMatrix.value[tenor]?.[source] || null
 }
 
+// 隐含税率：(国开 - 国债) / 国开 * 100%
+function impliedTaxRate(govRate, cdbRate) {
+  if (!govRate || !cdbRate || cdbRate === 0) return '--'
+  const tax = ((cdbRate - govRate) / cdbRate) * 100
+  return Number(tax.toFixed(1)) + '%'
+}
+
 function formatYield(v) {
   if (v == null || isNaN(v)) return '--'
-  // akshare bond_china_yield 返回值已是百分比形式（如 1.8244 = 1.8244%），无需 /100
   return Number(v).toFixed(4) + '%'
 }
 
@@ -198,8 +253,7 @@ function formatBps(bps) {
   return `${sign}${bps.toFixed(1)}bp`
 }
 
-// ── 数据抓取 ────────────────────────────────────────────────────
-// 中文期限 → SOURCES key 映射（用于从 API 响应中提取数据）
+// ── 数据抓取 ──────────────────────────────────────────────────────
 const TENOR_LABEL_MAP = {
   '1年': '1Y', '2年': '2Y', '3年': '3Y',
   '5年': '5Y', '7年': '7Y', '10年': '10Y', '30年': '30Y',
@@ -213,46 +267,39 @@ async function fetchBondData() {
     ])
 
     if (bc) {
-      // 收益率曲线：{ "1年": 0.020316, "3年": 0.027645, ... }
       const govCurve   = bc.yield_curve  || {}
-      const commCurve  = bc.comm_yield   || {}  // 商业银行AAA
-      const spreadsBps = bc.spreads_bps  || {}  // 真实利差 { "1年": 45.5, ... }
-      const updateTime  = bc.update_time  || ''
+      const commCurve = bc.comm_yield   || {}
+      const spreadsBps = bc.spreads_bps || {}
+      const updateTime = bc.update_time  || ''
 
-      yieldCurve.value      = govCurve
-      yieldCurve1m.value   = bc.yield_curve_1m || {}
-      yieldCurve1y.value   = bc.yield_curve_1y || {}
+      yieldCurve.value       = govCurve
+      yieldCurve1m.value    = bc.yield_curve_1m || {}
+      yieldCurve1y.value    = bc.yield_curve_1y || {}
       yieldUpdateTime.value = updateTime
 
-      // 构建利率估值矩阵（基于真实数据）
-      // gov 期限 key: "1年","3年","5年"... → 映射到 TENORS key: "1Y","3Y"...
       const matrix = {}
       for (const [label, rate] of Object.entries(govCurve)) {
         const tenorKey = TENOR_LABEL_MAP[label]
         if (!tenorKey) continue
-
         const govRate  = rate
         const commRate = commCurve[label]
-        const spread   = spreadsBps[label]  // 已经是 bp 数
+        const spread   = spreadsBps[label]
 
         matrix[tenorKey] = {
-          gov: {
-            yield:      govRate,
-            change_bps: 0,   // 暂无环比数据
-          },
+          gov: { yield: govRate, change_bps: 0 },
           cdb: {
-            yield:      govRate + 0.0025,   // 国开≈国债+25bp（近似）
+            yield:      govRate + 0.0025,
             change_bps: 0,
-            spread_bps:  25,                // 国开相对国债利差
+            spread_bps: 25,
           },
           aaa: {
             yield:      commRate ?? govRate + (spread / 10000),
             change_bps: 0,
-            spread_bps: spread ?? 0,        // 真实信用利差（bp）
+            spread_bps: spread ?? 0,
           },
         }
       }
-      yieldMatrix.value     = matrix
+      yieldMatrix.value      = matrix
       matrixUpdateTime.value = updateTime
     }
 
@@ -264,11 +311,37 @@ async function fetchBondData() {
   }
 }
 
+// 10Y-2Y 利差历史（取最近 252 个交易日，即 1 年）
+async function fetchSpreadHistory() {
+  spreadLoading.value = true
+  spreadError.value   = ''
+  try {
+    const [data10y, data2y] = await Promise.all([
+      fetch(`/api/v1/bond/history?tenor=10年&period=1Y`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/v1/bond/history?tenor=2年&period=1Y`).then(r => r.ok ? r.json() : null),
+    ])
+    spreadHistory10y.value  = (data10y?.history || []).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory2y.value   = (data2y?.history  || []).map(d => ({ date: d.date, yield: d.yield }))
+    spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
+  } catch (e) {
+    spreadError.value = e.message
+  } finally {
+    spreadLoading.value = false
+  }
+}
+
+// ── 交互 ──────────────────────────────────────────────────────────
+function openHistory(tenor) {
+  historyModalTenor.value  = tenor.label  // 如 "10年"
+  historyModalVisible.value = true
+}
+
+// ── 生命周期 ──────────────────────────────────────────────────────
 let timer = null
 
 onMounted(() => {
   fetchBondData()
-  // 矩阵每5分钟刷新（债券低频）
+  fetchSpreadHistory()
   timer = setInterval(fetchBondData, 5 * 60 * 1000)
 })
 
