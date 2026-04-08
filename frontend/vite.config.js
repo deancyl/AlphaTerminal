@@ -16,6 +16,11 @@ export default defineConfig({
         target: 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
+      '/ws': {
+        target: 'ws://127.0.0.1:8002',
+        ws: true,           // 启用 WebSocket 代理
+        changeOrigin: true,
+      },
     },
   },
   optimizeDeps: {

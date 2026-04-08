@@ -12,9 +12,9 @@
  */
 import { ref, onUnmounted } from 'vue'
 
-// 局域网直连后端 WebSocket（绕过 Nginx WSS 配置问题）
-// 生产/开发均直连 8002，避免浏览器 Mixed Content 阻断
-const WS_BASE = import.meta.env.VITE_WS_BASE || 'ws://127.0.0.1:8002'
+// 使用相对路径，由 Nginx/Vite proxy 自动代理到后端 WebSocket
+// 避免浏览器 Mixed Content 阻断（不再直连 ws://127.0.0.1:8002）
+const WS_BASE = import.meta.env.VITE_WS_BASE || ''
 
 export function useMarketStream(initialSymbol = '') {
   const symbol    = ref(initialSymbol)
@@ -72,13 +72,15 @@ export function useMarketStream(initialSymbol = '') {
     }
 
     ws.onerror = () => {
-      error.value    = '连接错误'
+      error.value    = 'WS 连接错误（将降级为 HTTP 轮询）'
       connected.value = false
     }
 
     ws.onclose = (e) => {
       connected.value = false
-      if (e.code !== 1000) _scheduleRetry()
+      // 连接被拒绝（浏览器 HTTPS→WS 混合内容 / 代理未配置）时停止重试
+      if (e.code !== 1000 && e.code !== 1006) _scheduleRetry()
+      // 1006 = abnormal closure（通常是代理未配置），停止刷屏重试
     }
   }
 
