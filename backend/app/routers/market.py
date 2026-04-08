@@ -767,8 +767,14 @@ async def market_history(
             logger.info(f"[Market History] 本地无 {clean_sym} 日K，触发 AkShare 穿透…")
             fetching = True
             try:
-                from app.services.data_fetcher import fetch_stock_history
-                rows = fetch_stock_history(clean_sym)
+                # 判断是个股还是指数
+                _INDEX_SYMBOLS = {"000001", "000300", "399001", "399006", "000688", "399005"}
+                if clean_sym in _INDEX_SYMBOLS:
+                    from app.services.data_fetcher import fetch_index_daily_history
+                    rows = fetch_index_daily_history(clean_sym)
+                else:
+                    from app.services.data_fetcher import fetch_stock_history
+                    rows = fetch_stock_history(clean_sym)
                 if rows:
                     raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
                     total    = get_daily_count(clean_sym)
@@ -788,8 +794,15 @@ async def market_history(
             logger.info(f"[Market History] 本地无 {clean_sym} {period}K，触发穿透…")
             fetching = True
             try:
-                from app.services.data_fetcher import fetch_stock_history
-                fetch_stock_history(clean_sym)
+                # 判断是个股还是指数
+                _INDEX_SYMBOLS = {"000001", "000300", "399001", "399006", "000688", "399005"}
+                if clean_sym in _INDEX_SYMBOLS:
+                    from app.services.data_fetcher import fetch_index_daily_history
+                    # 指数周月线由日线聚合生成，只需拉取日线
+                    fetch_index_daily_history(clean_sym)
+                else:
+                    from app.services.data_fetcher import fetch_stock_history
+                    fetch_stock_history(clean_sym)
                 raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
                 total    = get_periodic_count(clean_sym, period)
             except Exception as e:

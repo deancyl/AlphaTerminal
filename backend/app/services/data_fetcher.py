@@ -886,6 +886,115 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
         return []
 
 
+def fetch_index_daily_history(symbol: str) -> list[dict]:
+    """
+    按需穿透拉取A股指数日K线历史（全部数据），写入 market_data_daily 表。
+    支持指数: sh000001(上证), sz399001(深证), sz399006(创业板), sh000300(沪深300)等
+    akshare stock_zh_index_daily: symbol 如 "sh000001", "sz399001"
+    """
+    try:
+        import akshare as ak, pandas as pd
+        from datetime import datetime
+
+        # symbol 可能是 "000001"（前端传入）或 "sh000001"（标准格式）
+        # AkShare 指数接口需要带 sh/sz 前缀
+        ak_sym = symbol
+        if not any(symbol.startswith(p) for p in ("sh", "sz", "SH", "SZ")):
+            # 推算交易所：6/9开头=上海，0/1/2/3开头=深圳；直接补足6位
+            numeric = symbol.strip().zfill(6)
+            prefix = "sh" if numeric.startswith("6") or numeric.startswith("9") else "sz"
+            ak_sym = f"{prefix}{numeric}"
+
+        logger.info(f"[AkShare Index] 开始拉取指数 {ak_sym}")
+        df = ak.stock_zh_index_daily(symbol=ak_sym)
+        if df is None or df.empty:
+            logger.warning(f"[AkShare Index] {ak_sym} 无数据返回")
+            return []
+
+        # 列名映射（新浪接口返回的列名）
+        date_col = df.columns[0]
+        rows = []
+        for i in range(len(df)):
+            try:
+                dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
+                open_ = float(df.iloc[i]["open"])
+                high  = float(df.iloc[i]["high"])
+                low   = float(df.iloc[i]["low"])
+                close = float(df.iloc[i]["close"])
+                vol   = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                # 计算涨跌幅
+                prev_close = float(df.iloc[i - 1]["close"]) if i > 0 else open_
+                pct = round((close - prev_close) / prev_close * 100, 4) if prev_close else 0.0
+
+                rows.append({
+                    "symbol":     symbol,  # 存无前缀格式如 "000001"
+                    "date":       str(df.iloc[i][date_col])[:10],
+                    "open":       open_,
+                    "high":       high,
+                    "low":        low,
+                    "close":      close,
+                    "volume":     vol,
+                    "amount":     0.0,  # 指数无成交额字段
+                    "change_pct": pct,
+                    "timestamp":  dt,
+                    "data_type":  "daily",
+                })
+            except Exception as e:
+                logger.warning(f"[AkShare Index] 解析第{i}行失败: {e}")
+                continue
+
+        if rows:
+            from app.db import buffer_insert_daily, buffer_insert_periodic
+            buffer_insert_daily(rows)
+            logger.info(f"[AkShare Index] {symbol} 日K写入 {len(rows)} 条")
+
+            # ── 周线 + 月线聚合（从日线计算）────────────────────
+            df_d = pd.DataFrame(rows)
+            df_d["date"] = pd.to_datetime(df_d["date"])
+            periodic_rows = []
+
+            # Weekly
+            df_d["year_wk"] = (df_d["date"].dt.isocalendar().year.astype(str) + "_"
+                               + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2))
+            for yw, grp in df_d.groupby("year_wk", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "weekly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            # Monthly
+            df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+            for ym, grp in df_d.groupby("ym", sort=True):
+                open_  = float(grp.iloc[0]["open"])
+                close_ = float(grp.iloc[-1]["close"])
+                periodic_rows.append({
+                    "symbol": symbol, "date": str(grp.iloc[0]["date"])[:10],
+                    "period": "monthly",
+                    "open": open_, "high": float(grp["high"].max()),
+                    "low":  float(grp["low"].min()), "close": close_,
+                    "volume": float(grp["volume"].sum()),
+                    "change_pct": round((close_ - open_) / open_ * 100 if open_ else 0, 4),
+                    "timestamp": int(pd.Timestamp(str(grp.iloc[0]["date"])[:10]).timestamp()),
+                })
+
+            if periodic_rows:
+                buffer_insert_periodic(periodic_rows)
+                logger.info(f"[AkShare Index] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
+
+        return rows
+    except Exception as e:
+        logger.error(f"[AkShare Index] fetch_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}")
+        traceback.print_exc()
+        return []
+
+
 def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
     """
     通过 Alpha Vantage API 拉取美股指数日K线历史。
