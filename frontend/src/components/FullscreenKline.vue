@@ -65,7 +65,7 @@
           :chart-instance="chart"
           :data="histData"
           :visible="crosshairState.visible"
-          :locked="drawingState.activeTool !== '' || drawingState.locked"
+          :locked="drawingStore.isDrawing || drawingStore.locked"
           :show-labels="crosshairState.showLabels"
           :show-tooltip="crosshairState.showTooltip"
           class="crosshair-overlay"
@@ -74,13 +74,13 @@
 
         <!-- 画线 Canvas 覆盖层 -->
         <DrawingCanvas
-          v-if="drawingState.visible"
+          v-if="drawingStore.visible"
           ref="drawingCanvasRef"
           :chart-instance="chart"
-          :active-tool="drawingState.activeTool"
-          :active-color="drawingState.activeColor"
-          :magnet-mode="drawingState.magnetMode"
-          :locked="drawingState.locked"
+          :active-tool="drawingStore.activeTool"
+          :active-color="drawingStore.activeColor"
+          :magnet-mode="drawingStore.magnetMode"
+          :locked="drawingStore.locked"
           :symbol="props.symbol"
           :period="period"
           class="drawing-canvas"
@@ -91,17 +91,17 @@
 
         <!-- 画线工具栏 -->
         <DrawingToolbar
-          :active-tool="drawingState.activeTool"
-          :active-color="drawingState.activeColor"
-          :magnet-mode="drawingState.magnetMode"
-          :visible="drawingState.visible"
-          :locked="drawingState.locked"
+          :active-tool="drawingStore.activeTool"
+          :active-color="drawingStore.activeColor"
+          :magnet-mode="drawingStore.magnetMode"
+          :visible="drawingStore.visible"
+          :locked="drawingStore.locked"
           class="drawing-toolbar"
-          @tool-change="onToolChange"
-          @color-change="onColorChange"
-          @magnet-toggle="drawingState.magnetMode = !drawingState.magnetMode"
-          @visibility-toggle="drawingState.visible = !drawingState.visible"
-          @lock-toggle="drawingState.locked = !drawingState.locked"
+          @tool-change="drawingStore.toggleTool"
+          @color-change="drawingStore.setColor"
+          @magnet-toggle="drawingStore.toggleMagnet"
+          @visibility-toggle="drawingStore.toggleVisible"
+          @lock-toggle="drawingStore.toggleLocked"
           @clear="onClearDrawings"
         />
       </div>
@@ -127,6 +127,7 @@ import {
   MarkLineComponent, VisualMapComponent, LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { useDrawingStore } from '../stores/drawing.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
@@ -145,6 +146,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'symbol-change'])
+
+// Pinia Store
+const drawingStore = useDrawingStore()
 
 // 状态
 const period = ref('daily')
@@ -170,13 +174,6 @@ const hoveredCandle = ref(null)
 
 // 画线相关
 const drawingCanvasRef = ref(null)
-const drawingState = ref({
-  activeTool: '',
-  activeColor: '#fbbf24',
-  magnetMode: true,
-  visible: true,
-  locked: false,
-})
 
 // 周期选项
 const periods = [
@@ -230,14 +227,6 @@ function onCandleHover(candle) {
 }
 
 // 画线工具事件处理
-function onToolChange(tool) {
-  drawingState.value.activeTool = tool
-}
-
-function onColorChange(color) {
-  drawingState.value.activeColor = color
-}
-
 function onClearDrawings() {
   drawingCanvasRef.value?.clearAll()
 }
@@ -273,7 +262,7 @@ function handleKeydown(e) {
   if (toolMap[e.key]) {
     e.preventDefault()
     const tool = toolMap[e.key]
-    drawingState.value.activeTool = drawingState.value.activeTool === tool ? '' : tool
+    drawingStore.toggleTool(tool)
   }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -281,15 +270,15 @@ function handleKeydown(e) {
   }
 
   if (e.key === 'Escape') {
-    drawingState.value.activeTool = ''
+    drawingStore.setTool('')
   }
 
   if (e.key === 'm' || e.key === 'M') {
-    drawingState.value.magnetMode = !drawingState.value.magnetMode
+    drawingStore.toggleMagnet()
   }
 
   if (e.key === 'v' || e.key === 'V') {
-    drawingState.value.visible = !drawingState.value.visible
+    drawingStore.toggleVisible()
   }
 }
 
