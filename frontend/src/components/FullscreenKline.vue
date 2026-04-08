@@ -6,7 +6,7 @@
         <span class="symbol-name">{{ props.name || props.symbol }}</span>
         <span class="symbol-code">{{ props.symbol }}</span>
       </div>
-      
+
       <div class="header-center">
         <!-- 周期选择 -->
         <div class="period-selector">
@@ -19,7 +19,7 @@
             {{ p.label }}
           </button>
         </div>
-        
+
         <!-- 副图选择 -->
         <div class="indicator-selector">
           <button
@@ -32,7 +32,7 @@
           </button>
         </div>
       </div>
-      
+
       <div class="header-right">
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
@@ -48,17 +48,17 @@
         <div v-if="loading" class="loading-overlay">
           <div class="loading-text">加载中...</div>
         </div>
-        
+
         <!-- 错误状态 -->
         <div v-else-if="chartError" class="error-overlay">
           <div class="error-text">{{ chartError }}</div>
           <button class="error-close" @click="chartError = ''">关闭</button>
         </div>
-        
+
         <!-- ECharts 容器 -->
         <div ref="chartEl" class="chart-wrapper"></div>
       </div>
-      
+
       <!-- 右侧信息面板 -->
       <QuotePanel
         :symbol="props.symbol"
@@ -121,12 +121,16 @@ const periods = [
   { label: '60分', value: '60min' },
 ]
 
-// 副图选项
+// 副图选项 - 扩展更多专业指标
 const subChartOptions = [
   { key: 'VOL', label: '成交量' },
   { key: 'MACD', label: 'MACD' },
   { key: 'KDJ', label: 'KDJ' },
   { key: 'RSI', label: 'RSI' },
+  { key: 'BOLL', label: '布林带' },
+  { key: 'OBV', label: 'OBV' },
+  { key: 'DMI', label: 'DMI' },
+  { key: 'CCI', label: 'CCI' },
 ]
 const activeSubChart = ref('VOL')
 
@@ -169,42 +173,42 @@ function formatVolume(val) {
 // 获取历史数据
 async function fetchData() {
   if (!props.symbol) return
-  
+
   loading.value = true
   chartError.value = ''
-  
+
   try {
     const params = new URLSearchParams({
       period: period.value,
       limit: '500',
       offset: '0',
     })
-    
+
     const res = await fetch(`/api/v1/market/history/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    
+
     const data = await res.json()
     const historyArray = data.history || data
-    
+
     if (!Array.isArray(historyArray) || historyArray.length === 0) {
       chartError.value = '暂无历史数据'
       histData.value = []
       return
     }
-    
+
     // 按日期排序
-    histData.value = historyArray.sort((a, b) => 
+    histData.value = historyArray.sort((a, b) =>
       new Date(a.date) - new Date(b.date)
     )
-    
+
     // 更新最新价格
     const last = histData.value[histData.value.length - 1]
     latestPrice.value = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
-    
+
     // 渲染图表
     renderChart()
-    
+
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
     console.error('[FullscreenKline] fetchData error:', e)
@@ -216,7 +220,7 @@ async function fetchData() {
 // 获取实时行情
 async function fetchQuote() {
   if (!props.symbol) return
-  
+
   try {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
     if (res.ok) {
@@ -230,36 +234,45 @@ async function fetchQuote() {
 // 渲染图表
 function renderChart() {
   if (!chartEl.value || histData.value.length === 0) return
-  
+
   // 初始化图表
   if (!chart) {
     chart = echarts.init(chartEl.value)
     window.addEventListener('resize', handleResize)
   }
-  
+
   const data = histData.value
   const dates = data.map(d => d.date)
   const klineData = data.map(d => [d.open, d.close, d.low, d.high])
-  const volumes = data.map(d => d.volume)
-  
+
   // 计算 MA
   const ma5 = calcMA(data, 5)
   const ma10 = calcMA(data, 10)
   const ma20 = calcMA(data, 20)
-  
+  const ma60 = calcMA(data, 60)
+
+  // 根据副图指标类型计算数据
+  const subChartData = calcSubChartData(data, activeSubChart.value)
+
   const option = {
     backgroundColor: 'transparent',
     animation: false,
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
-      backgroundColor: 'rgba(10, 14, 23, 0.9)',
+      backgroundColor: 'rgba(10, 14, 23, 0.95)',
       borderColor: '#374151',
       textStyle: { color: '#e5e7eb', fontSize: 11 },
     },
+    legend: {
+      data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60', ...subChartData.legend],
+      textStyle: { color: '#9ca3af', fontSize: 10 },
+      top: 5,
+      left: 60,
+    },
     grid: [
-      { left: 60, right: 20, top: 30, height: '55%' },
-      { left: 60, right: 20, top: '68%', height: '25%' },
+      { left: 60, right: 20, top: 40, height: '52%' },
+      { left: 60, right: 20, top: '68%', height: '24%' },
     ],
     xAxis: [
       {
@@ -288,13 +301,14 @@ function renderChart() {
       {
         type: 'value',
         gridIndex: 1,
-        splitLine: { show: false },
+        scale: subChartData.scale,
+        splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
         axisLabel: { color: '#6b7280', fontSize: 10 },
       },
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 10, height: 20 },
+      { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 8, height: 18 },
     ],
     series: [
       // K线
@@ -312,56 +326,133 @@ function renderChart() {
         },
       },
       // MA5
-      {
-        name: 'MA5',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: ma5,
-        smooth: true,
-        lineStyle: { color: '#fbbf24', width: 1 },
-        symbol: 'none',
-      },
+      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
       // MA10
-      {
-        name: 'MA10',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: ma10,
-        smooth: true,
-        lineStyle: { color: '#60a5fa', width: 1 },
-        symbol: 'none',
-      },
+      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
       // MA20
-      {
-        name: 'MA20',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: ma20,
-        smooth: true,
-        lineStyle: { color: '#c084fc', width: 1 },
-        symbol: 'none',
-      },
-      // 成交量
-      {
-        name: '成交量',
-        type: 'bar',
-        xAxisIndex: 1,
-        yAxisIndex: 1,
-        data: volumes,
-        itemStyle: {
-          color: (params) => {
-            const idx = params.dataIndex
-            return data[idx].close >= data[idx].open ? '#ef232a' : '#14b143'
-          },
-        },
-      },
+      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
+      // MA60
+      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
+      // 副图指标
+      ...subChartData.series,
     ],
   }
-  
+
   chart.setOption(option, true)
+}
+
+// 计算副图指标数据
+function calcSubChartData(data, indicator) {
+  const closes = data.map(d => d.close)
+  const volumes = data.map(d => d.volume)
+
+  switch (indicator) {
+    case 'VOL':
+      return {
+        legend: ['成交量'],
+        scale: false,
+        series: [{
+          name: '成交量',
+          type: 'bar',
+          xAxisIndex: 1,
+          yAxisIndex: 1,
+          data: volumes,
+          itemStyle: {
+            color: (params) => {
+              const idx = params.dataIndex
+              return data[idx].close >= data[idx].open ? '#ef232a' : '#14b143'
+            },
+          },
+        }]
+      }
+
+    case 'MACD':
+      const macd = calcMACD(closes)
+      return {
+        legend: ['DIF', 'DEA', 'MACD'],
+        scale: true,
+        series: [
+          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? '#ef232a' : '#14b143' } },
+        ]
+      }
+
+    case 'KDJ':
+      const kdj = calcKDJ(data)
+      return {
+        legend: ['K', 'D', 'J'],
+        scale: true,
+        series: [
+          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    case 'RSI':
+      const rsi6 = calcRSI(closes, 6)
+      const rsi12 = calcRSI(closes, 12)
+      const rsi24 = calcRSI(closes, 24)
+      return {
+        legend: ['RSI6', 'RSI12', 'RSI24'],
+        scale: true,
+        series: [
+          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi6, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi12, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi24, lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    case 'BOLL':
+      const boll = calcBOLL(closes)
+      return {
+        legend: ['MID', 'UP', 'LOW'],
+        scale: true,
+        series: [
+          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.up, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
+          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.low, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    case 'OBV':
+      const obv = calcOBV(data)
+      const obvMa = calcMA(obv.map(v => ({ close: v })), 30)
+      return {
+        legend: ['OBV', 'MA30'],
+        scale: true,
+        series: [
+          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obvMa, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    case 'DMI':
+      const dmi = calcDMI(data)
+      return {
+        legend: ['PDI', 'MDI', 'ADX'],
+        scale: true,
+        series: [
+          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
+          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
+          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    case 'CCI':
+      const cci = calcCCI(data)
+      return {
+        legend: ['CCI'],
+        scale: true,
+        series: [
+          { name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: cci, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+        ]
+      }
+
+    default:
+      return { legend: [], scale: false, series: [] }
+  }
 }
 
 // 计算移动平均线
@@ -374,9 +465,177 @@ function calcMA(data, period) {
     }
     let sum = 0
     for (let j = 0; j < period; j++) {
-      sum += data[i - j].close
+      sum += data[i - j].close ?? data[i - j]
     }
     result.push((sum / period).toFixed(2))
+  }
+  return result
+}
+
+// 计算 MACD
+function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
+  const emaFast = calcEMA(closes, fast)
+  const emaSlow = calcEMA(closes, slow)
+  const dif = emaFast.map((v, i) => v === '-' || emaSlow[i] === '-' ? '-' : (parseFloat(v) - parseFloat(emaSlow[i])).toFixed(2))
+  const dea = calcEMA(dif.filter(v => v !== '-').map(v => parseFloat(v)), signal)
+  const fullDea = new Array(dif.filter(v => v === '-').length).fill('-').concat(dea)
+  const macd = dif.map((v, i) => v === '-' || fullDea[i] === '-' ? '-' : ((parseFloat(v) - parseFloat(fullDea[i])) * 2).toFixed(2))
+  return { dif, dea: fullDea, macd }
+}
+
+function calcEMA(data, period) {
+  const k = 2 / (period + 1)
+  const result = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push('-')
+    } else if (i === period - 1) {
+      let sum = 0
+      for (let j = 0; j < period; j++) sum += data[i - j]
+      result.push((sum / period).toFixed(2))
+    } else {
+      const ema = data[i] * k + parseFloat(result[i - 1]) * (1 - k)
+      result.push(ema.toFixed(2))
+    }
+  }
+  return result
+}
+
+// 计算 KDJ
+function calcKDJ(data, n = 9, m1 = 3, m2 = 3) {
+  const k = [], d = [], j = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < n - 1) {
+      k.push('-'); d.push('-'); j.push('-')
+      continue
+    }
+    let low = data[i].low, high = data[i].high
+    for (let x = 1; x < n; x++) {
+      low = Math.min(low, data[i - x].low)
+      high = Math.max(high, data[i - x].high)
+    }
+    const rsv = high === low ? 0 : (data[i].close - low) / (high - low) * 100
+    if (i === n - 1) {
+      k.push(rsv.toFixed(2))
+      d.push(rsv.toFixed(2))
+    } else {
+      const kVal = (2 / 3 * parseFloat(k[i - 1]) + 1 / 3 * rsv).toFixed(2)
+      const dVal = (2 / 3 * parseFloat(d[i - 1]) + 1 / 3 * parseFloat(kVal)).toFixed(2)
+      k.push(kVal)
+      d.push(dVal)
+    }
+    j.push((3 * parseFloat(k[i]) - 2 * parseFloat(d[i])).toFixed(2))
+  }
+  return { k, d, j }
+}
+
+// 计算 RSI
+function calcRSI(closes, period = 14) {
+  const result = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) {
+      result.push('-')
+      continue
+    }
+    let gain = 0, loss = 0
+    for (let j = 1; j <= period; j++) {
+      const change = closes[i - j + 1] - closes[i - j]
+      if (change > 0) gain += change
+      else loss -= change
+    }
+    const rs = loss === 0 ? 100 : gain / loss
+    result.push((100 - 100 / (1 + rs)).toFixed(2))
+  }
+  return result
+}
+
+// 计算布林带
+function calcBOLL(closes, period = 20, multiplier = 2) {
+  const mid = calcMA(closes.map(c => ({ close: c })), period)
+  const up = [], low = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period - 1) {
+      up.push('-'); low.push('-')
+      continue
+    }
+    let sum = 0
+    for (let j = 0; j < period; j++) {
+      sum += Math.pow(closes[i - j] - parseFloat(mid[i]), 2)
+    }
+    const std = Math.sqrt(sum / period)
+    up.push((parseFloat(mid[i]) + multiplier * std).toFixed(2))
+    low.push((parseFloat(mid[i]) - multiplier * std).toFixed(2))
+  }
+  return { mid, up, low }
+}
+
+// 计算 OBV
+function calcOBV(data) {
+  const result = [0]
+  for (let i = 1; i < data.length; i++) {
+    const change = data[i].close - data[i - 1].close
+    const vol = change > 0 ? data[i].volume : change < 0 ? -data[i].volume : 0
+    result.push(result[i - 1] + vol)
+  }
+  return result.map(v => v / 1e6)
+}
+
+// 计算 DMI
+function calcDMI(data, period = 14) {
+  const pdi = [], mdi = [], adx = []
+  const tr = [], plusDM = [], minusDM = []
+
+  for (let i = 1; i < data.length; i++) {
+    const highDiff = data[i].high - data[i - 1].high
+    const lowDiff = data[i - 1].low - data[i].low
+    plusDM.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0)
+    minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0)
+    tr.push(Math.max(data[i].high - data[i].low, Math.abs(data[i].high - data[i - 1].close), Math.abs(data[i].low - data[i - 1].close)))
+  }
+
+  for (let i = 0; i < data.length; i++) {
+    if (i < period) {
+      pdi.push('-'); mdi.push('-'); adx.push('-')
+      continue
+    }
+    let trSum = 0, plusDMSum = 0, minusDMSum = 0
+    for (let j = 0; j < period; j++) {
+      trSum += tr[i - j - 1]
+      plusDMSum += plusDM[i - j - 1]
+      minusDMSum += minusDM[i - j - 1]
+    }
+    pdi.push((plusDMSum / trSum * 100).toFixed(2))
+    mdi.push((minusDMSum / trSum * 100).toFixed(2))
+    const dx = (Math.abs(parseFloat(pdi[i]) - parseFloat(mdi[i])) / (parseFloat(pdi[i]) + parseFloat(mdi[i])) * 100).toFixed(2)
+    if (i === period) {
+      adx.push(dx)
+    } else {
+      adx.push(((parseFloat(adx[i - 1]) * (period - 1) + parseFloat(dx)) / period).toFixed(2))
+    }
+  }
+  return { pdi, mdi, adx }
+}
+
+// 计算 CCI
+function calcCCI(data, period = 14) {
+  const result = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push('-')
+      continue
+    }
+    let tpSum = 0
+    for (let j = 0; j < period; j++) {
+      tpSum += (data[i - j].high + data[i - j].low + data[i - j].close) / 3
+    }
+    const sma = tpSum / period
+    let mdSum = 0
+    for (let j = 0; j < period; j++) {
+      mdSum += Math.abs((data[i - j].high + data[i - j].low + data[i - j].close) / 3 - sma)
+    }
+    const md = mdSum / period
+    const tp = (data[i].high + data[i].low + data[i].close) / 3
+    result.push(md === 0 ? '0' : ((tp - sma) / (0.015 * md)).toFixed(2))
   }
   return result
 }
@@ -385,6 +644,11 @@ function calcMA(data, period) {
 function handleResize() {
   chart?.resize()
 }
+
+// 监听副图指标变化
+watch(activeSubChart, () => {
+  renderChart()
+})
 
 // 监听周期变化
 watch(period, () => {
@@ -615,12 +879,12 @@ onUnmounted(() => {
   .quote-panel-wrapper {
     display: none;
   }
-  
+
   .header-center {
     flex-direction: column;
     gap: 8px;
   }
-  
+
   .symbol-code {
     display: none;
   }
