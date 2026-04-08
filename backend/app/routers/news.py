@@ -1,14 +1,45 @@
 """
 资讯流接口 - Phase 5
 API 只读全局缓存，后台线程负责刷新（<50ms 响应）
+
+Phase B: 统一 API 响应格式
+- 所有响应使用标准格式: {code, message, data, timestamp}
+- code: 0 表示成功，非 0 表示错误
 """
 import asyncio
 import logging
+import time
 from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ── API 响应标准化工具 ─────────────────────────────────────────────────
+def success_response(data, message="success"):
+    """创建成功响应"""
+    return {
+        "code": 0,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+def error_response(code, message, data=None):
+    """创建错误响应"""
+    return {
+        "code": code,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+class ErrorCode:
+    SUCCESS = 0
+    BAD_REQUEST = 100
+    NOT_FOUND = 104
+    INTERNAL_ERROR = 200
+    THIRD_PARTY_ERROR = 302
 
 
 @router.get("/news/flash")
@@ -22,14 +53,14 @@ async def news_flash():
 
     if not is_cache_ready():
         logger.warning("[News] 缓存未就绪，返回空列表")
-        return {"news": [], "source": "cache_empty", "total": 0}
+        return success_response({"news": [], "source": "cache_empty", "total": 0})
 
     news = get_cached_news(limit=150)
     if not news:
         logger.warning("[News] 缓存为空")
-        return {"news": [], "source": "cache_empty", "total": 0}
+        return success_response({"news": [], "source": "cache_empty", "total": 0})
 
-    return {"news": news, "source": "cache", "total": len(news)}
+    return success_response({"news": news, "source": "cache", "total": len(news)})
 
 
 @router.post("/news/force_refresh")
@@ -57,19 +88,18 @@ async def news_force_refresh():
         logger.info(f"[News] force_refresh: 获取到 {len(news)} 条")
         # 有新数据或本来就有缓存 → items_stale=false；完全空白 → items_stale=true
         items_stale = (len(news) == 0 and stale_count == 0)
-        return {
+        return success_response({
             "news":        news,
             "source":      "force_refresh",
             "total":       len(news),
             "items_stale": items_stale,
-        }
+        })
     except Exception as e:
         logger.error(f"[News] force_refresh 失败: {type(e).__name__}: {e}", exc_info=True)
-        # HTTP 500 表示后端出错，前端应显示红色警告
-        from fastapi import HTTPException
-        raise HTTPException(
-            status_code=500,
-            detail={
+        return error_response(
+            ErrorCode.INTERNAL_ERROR,
+            f"强制刷新失败: {str(e)}",
+            {
                 "news":        [],
                 "source":      "error",
                 "total":       0,

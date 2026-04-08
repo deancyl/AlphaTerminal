@@ -312,12 +312,14 @@ async function fetchNews(quiet = false) {
       if (!quiet) { showRefreshed.value = true; setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000) }
       return
     }
-    const data = await res.json()
-    const incoming = data.news || []
+    const d = await res.json()
+    // 兼容新旧格式
+    const payload = d.data || d
+    const incoming = payload.news || []
 
     // items_stale=true 表示后端抓取失败、返回了旧缓存
-    if (!quiet && data.items_stale && !incoming.length) {
-      refreshMsg.value = `⚠️ 网络异常，显示 ${data.stale_count || 0} 条旧数据`
+    if (!quiet && payload.items_stale && !incoming.length) {
+      refreshMsg.value = `⚠️ 网络异常，显示 ${payload.stale_count || 0} 条旧数据`
       showRefreshed.value = true
       setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000)
       return

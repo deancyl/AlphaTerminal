@@ -253,9 +253,12 @@ async function fetchIntraday() {
     const res = await fetch('/api/v1/market/sentiment/intraday')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const d = await res.json()
-    if (d.intraday && d.intraday.length > 0) {
-      intradayData.value = d.intraday
-      intradayUpdateTime.value = d.timestamp || ''
+    // 兼容新旧格式
+    const intraday = (d.data && d.data.intraday) || d.intraday || []
+    if (intraday.length > 0) {
+      intradayData.value = intraday
+      const ts = (d.data && d.data.timestamp) || d.timestamp || ''
+      intradayUpdateTime.value = typeof ts === 'number' ? new Date(ts).toLocaleTimeString('zh-CN', { hour12: false }) : ts
       if (intradayInst) {
         intradayInst.setOption(buildIntradayOption(intradayData.value), true)
       }
@@ -334,21 +337,23 @@ async function fetchHistogram() {
     const res = await fetch('/api/v1/market/sentiment/histogram')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const d = await res.json()
+    // 兼容新旧格式：标准格式 d.data.xxx，或旧格式 d.xxx
+    const payload = d.data || d
     // Phase 4: 提取 news_sentiment 字段
-    if (d.news_sentiment) {
+    if (payload.news_sentiment) {
       newsSentiment.value = {
-        score:         d.news_sentiment.score         ?? 0.0,
-        label:          d.news_sentiment.label          ?? '中性',
-        bullish_count:  d.news_sentiment.bullish_count ?? 0,
-        bearish_count:  d.news_sentiment.bearish_count ?? 0,
-        total_count:    d.news_sentiment.total_count   ?? 0,
-        keywords:       d.news_sentiment.keywords      ?? [],
-        timestamp:      d.news_sentiment.timestamp     ?? '',
+        score:         payload.news_sentiment.score         ?? 0.0,
+        label:          payload.news_sentiment.label          ?? '中性',
+        bullish_count:  payload.news_sentiment.bullish_count ?? 0,
+        bearish_count:  payload.news_sentiment.bearish_count ?? 0,
+        total_count:    payload.news_sentiment.total_count   ?? 0,
+        keywords:       payload.news_sentiment.keywords      ?? [],
+        timestamp:      payload.news_sentiment.timestamp     ?? '',
       }
     }
-    data.value = d
+    data.value = payload
     if (chartInst) {
-      chartInst.setOption(buildHistogramOption(d.buckets), true)
+      chartInst.setOption(buildHistogramOption(payload.buckets), true)
     }
   } catch (e) {
     console.warn('[SentimentGauge] fetch failed:', e.message)
