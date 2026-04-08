@@ -399,39 +399,52 @@ async def market_overview():
         label = wind_labels.get(sym, (sym, r["market"], "已休市"))
         wind_data[sym] = {
             "name":       r["name"] or label[0],
-            "index":      r["price"],
+            "price":      r["price"],
             "change_pct": r["change_pct"],
             "volume":     r["volume"],
             "status":     label[2],
             "market":     r["market"],
         }
 
-    return {
-        "timestamp": datetime.now().isoformat(),
+    return success_response({
         "wind": wind_data,
-    }
+        "meta": {
+            "markets": {
+                "AShare": {"open": is_open_cn, "status": status_cn},
+                "HK": {"open": is_open_hk, "status": status_hk},
+                "US": {"open": is_open_us, "status": status_us},
+            }
+        }
+    })
 
 
 # ── Task 2: 国内10+核心指数 ──────────────────────────────────────────────
 @router.get("/market/china_all")
 async def market_china_all():
     """国内10+核心指数（上证、沪深300、深证、创业板、科创50…）"""
-    is_open, status = is_market_open("A_SHARE")
-    rows = get_latest_prices(CHINA_ALL_SYMBOLS)
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "china_all": _serialize_price_rows(rows, include_status=True, status=status),
-    }
+    try:
+        is_open, status = is_market_open("A_SHARE")
+        rows = get_latest_prices(CHINA_ALL_SYMBOLS)
+        return success_response({
+            "china_all": _serialize_price_rows(rows, include_status=True, status=status),
+            "meta": {"market_open": is_open, "status": status}
+        })
+    except Exception as e:
+        logger.error(f"[market_china_all] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取国内指数失败: {str(e)}")
 
 
 @router.get("/market/indices")
 async def market_indices():
     """A股四大指数列表"""
-    rows = get_latest_prices(INDEX_SYMBOLS)
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "indices": _serialize_price_rows(rows),
-    }
+    try:
+        rows = get_latest_prices(INDEX_SYMBOLS)
+        return success_response({
+            "indices": _serialize_price_rows(rows)
+        })
+    except Exception as e:
+        logger.error(f"[market_indices] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取指数列表失败: {str(e)}")
 
 
 # ── Phase 10: 符号注册表（供前端搜索索引）───────────────────────────────

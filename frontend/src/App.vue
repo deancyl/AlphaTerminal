@@ -153,6 +153,7 @@ import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
+import { fetchApiBatch } from './utils/apiClient.js'
 
 const { ui } = useUiStore()
 
@@ -233,24 +234,25 @@ function updateClock() {
 
 async function fetchMarketData() {
   try {
-    const [ov, mc, rt, nv, gl, ca, sc, dr] = await Promise.all([
-      fetch('/api/v1/market/overview').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/market/macro').then(r => r.ok ? r.json().then(d => d.macro || []) : []),
-      fetch('/api/v1/market/rates').then(r => r.ok ? r.json().then(d => d.rates || []) : []),
-      fetch('/api/v1/news/flash').then(r => r.ok ? r.json().then(d => d.news || []) : []),
-      fetch('/api/v1/market/global').then(r => r.ok ? r.json().then(d => d.global || []) : []),
-      fetch('/api/v1/market/china_all').then(r => r.ok ? r.json().then(d => d.china_all || []) : []),
-      fetch('/api/v1/market/sectors').then(r => r.ok ? r.json().then(d => d.sectors || []) : []),
-      fetch('/api/v1/market/derivatives').then(r => r.ok ? r.json().then(d => d.derivatives || []) : []),
+    const results = await fetchApiBatch([
+      { url: '/api/v1/market/overview', key: 'overview', default: null },
+      { url: '/api/v1/market/macro', key: 'macro', default: [] },
+      { url: '/api/v1/market/rates', key: 'rates', default: [] },
+      { url: '/api/v1/news/flash', key: 'news', default: [] },
+      { url: '/api/v1/market/global', key: 'global', default: [] },
+      { url: '/api/v1/market/china_all', key: 'china_all', default: [] },
+      { url: '/api/v1/market/sectors', key: 'sectors', default: [] },
+      { url: '/api/v1/market/derivatives', key: 'derivatives', default: [] },
     ])
-    marketOverview.value  = ov
-    macroData.value       = mc
-    ratesData.value       = rt
-    newsData.value        = nv
-    globalData.value      = gl
-    chinaAllData.value    = ca
-    sectorsData.value     = sc
-    derivativesData.value = dr
+    
+    marketOverview.value  = results.overview
+    macroData.value       = results.macro?.macro || results.macro || []
+    ratesData.value       = results.rates?.rates || results.rates || []
+    newsData.value        = results.news?.news || results.news || []
+    globalData.value      = results.global?.global || results.global || []
+    chinaAllData.value    = results.china_all?.china_all || results.china_all || []
+    sectorsData.value     = results.sectors?.sectors || results.sectors || []
+    derivativesData.value = results.derivatives?.derivatives || results.derivatives || []
   } catch (e) {
     console.error('[App] fetchMarketData error:', e)
   }
