@@ -305,7 +305,9 @@ async function fetchBondData() {
     }
 
     if (ba) {
-      bondList.value = (ba.bonds || []).slice(0, 12)
+      // 兼容新旧格式
+      const bonds = (ba.data && ba.data.bonds) || ba.bonds || []
+      bondList.value = bonds.slice(0, 12)
     }
   } catch (e) {
     console.warn('[BondDashboard] fetch failed:', e)

@@ -271,7 +271,9 @@ async function fetchAllStocks() {
     const res = await fetch(url)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const d = await res.json()
-    const raw = d.stocks || []
+    // 兼容新旧格式
+    const payload = d.data || d
+    const raw = payload.stocks || []
     // 全量存入，附带 seq 序号
     allStocks.value = raw.map((s, i) => ({ ...s, seq: i + 1 }))
   } catch (e) {

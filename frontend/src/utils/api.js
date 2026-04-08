@@ -11,7 +11,9 @@ export async function apiFetch(url, timeoutMs = 8000) {
     const res = await fetch(url, { signal: controller.signal })
     clearTimeout(timer)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return await res.json()
+    const d = await res.json()
+    // 兼容新旧格式：标准格式 d.data.xxx，或旧格式 d.xxx
+    return d.data !== undefined ? d.data : d
   } catch (e) {
     clearTimeout(timer)
     if (e.name === 'AbortError') throw new Error(`请求超时（${timeoutMs / 1000}s）`)
