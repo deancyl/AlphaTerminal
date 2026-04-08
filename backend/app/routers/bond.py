@@ -67,43 +67,67 @@ def _fetch_bond_data():
 
         df = ak.bond_china_yield()
         if df is not None and not df.empty:
-            latest_date = df["日期"].max()
-            latest_df = df[df["日期"] == latest_date]
+            # 按日期升序排列，便于按位置索引历史截面
+            df = df.sort_values("日期").reset_index(drop=True)
 
-            gov_row = None
+            def get_gov_row(df_slice):
+                """从同日期的多曲线行中提取国债行"""
+                for _, row in df_slice.iterrows():
+                    cn = str(row.get("曲线名称", ""))
+                    if "国债" in cn:
+                        return parse_row(row)
+                return None
+
+            latest_date  = df["日期"].max()
+            latest_df    = df[df["日期"] == latest_date]
+            gov_row      = get_gov_row(latest_df)
+
+            # 历史截面：1个月前（约22交易日）和1年前（约252交易日）
+            gov_row_1m = get_gov_row(df.iloc[-22:-1]) if len(df) >= 23 else None
+            gov_row_1y = get_gov_row(df.iloc[-252:-1]) if len(df) >= 253 else None
+
+            # 商业银行 AAA 曲线（取最新日期截面）
             comm_row = None
             for _, row in latest_df.iterrows():
                 cn = str(row.get("曲线名称", ""))
-                if "国债" in cn and gov_row is None:
-                    gov_row = parse_row(row)
-                elif "商业" in cn and comm_row is None:
+                if "商业" in cn and comm_row is None:
                     comm_row = parse_row(row)
 
-            spreads = {}
-            if gov_row and comm_row:
-                spreads = calc_spreads(gov_row, comm_row)
+            spreads = calc_spreads(gov_row, comm_row) if gov_row and comm_row else {}
 
             with _CACHE_LOCK:
                 _BOND_CACHE = {
-                    "yield_curve": gov_row or {},
-                    "comm_yield": comm_row or {},
-                    "spreads_bps": spreads,   # 商业债-国债 利差（单位：bp）
-                    "update_time": now_str,
-                    "source": "akshare",
+                    "yield_curve":      gov_row or {},
+                    "yield_curve_1m":  gov_row_1m or {},
+                    "yield_curve_1y":  gov_row_1y or {},
+                    "comm_yield":      comm_row or {},
+                    "spreads_bps":     spreads,
+                    "update_time":     now_str,
+                    "source":          "akshare",
                 }
                 _LAST_FETCH_TIME = time.time()
-            logger.info(f"[Bond] yield curve + spreads fetched")
+            logger.info(f"[Bond] yield curve + spreads + history fetched")
             return
     except Exception as e:
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
-    # 降级兜底：静态 Mock
+    # 降级兜底：静态 Mock（含历史截面）
     with _CACHE_LOCK:
         _BOND_CACHE = {
             "yield_curve": {
                 "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
                 "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
                 "10年": 3.1185, "30年": 3.7156,
+            },
+            "yield_curve_1m": {
+                "3月": 2.0816, "6月": 2.1955, "1年": 2.5225,
+                "3年": 2.8345, "5年": 3.0273, "7年": 3.2012,
+                "10年": 3.1985, "30年": 3.7956,
+            },
+            "yield_curve_1y": {
+                "3月": 2.2316, "6月": 2.3355, "1年": 2.6525,
+                "3年": 2.9645, "5年": 3.1373, "7年": 3.3112,
+                "10年": 3.2185, "30年": 3.9156,
             },
             "comm_yield": {
                 "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
@@ -139,14 +163,16 @@ def _get_bond_cache() -> dict:
 @router.get("/bond/curve")
 async def bond_curve():
     """
-    完整债券曲线数据（含信用利差）
+    完整债券曲线数据（含信用利差 + 历史曲线对比）
 
     返回:
-      yield_curve:   国债收益率曲线 {期限: 收益率%}
-      comm_yield:    商业银行普通债(AAA)收益率曲线
-      spreads_bps:   商业债-国债利差 {期限: bps数}（正数=信用溢价）
-      update_time:  数据时间
-      source:        数据来源
+      yield_curve:      国债收益率曲线 {期限: 收益率%}
+      yield_curve_1m:   1个月前国债收益率曲线（用于曲线形态对比）
+      yield_curve_1y:   1年前国债收益率曲线（用于长期趋势判断）
+      comm_yield:       商业银行普通债(AAA)收益率曲线
+      spreads_bps:      商业债-国债利差 {期限: bps数}（正数=信用溢价）
+      update_time:     数据时间
+      source:           数据来源
 
     利差含义：
       bp > 0：信用债收益率高于国债（正常）
@@ -154,12 +180,14 @@ async def bond_curve():
     """
     cache = _get_bond_cache()
     return {
-        "timestamp":    datetime.now().isoformat(),
-        "yield_curve": cache.get("yield_curve", {}),
-        "comm_yield":  cache.get("comm_yield", {}),
-        "spreads_bps": cache.get("spreads_bps", {}),
-        "update_time": cache.get("update_time", ""),
-        "source":      cache.get("source", "unknown"),
+        "timestamp":       datetime.now().isoformat(),
+        "yield_curve":     cache.get("yield_curve", {}),
+        "yield_curve_1m":  cache.get("yield_curve_1m", {}),
+        "yield_curve_1y":  cache.get("yield_curve_1y", {}),
+        "comm_yield":      cache.get("comm_yield", {}),
+        "spreads_bps":     cache.get("spreads_bps", {}),
+        "update_time":     cache.get("update_time", ""),
+        "source":          cache.get("source", "unknown"),
     }
 
 

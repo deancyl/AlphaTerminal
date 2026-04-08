@@ -102,6 +102,8 @@
           <YieldCurveChart
             v-if="Object.keys(yieldCurve).length > 0"
             :yield-curve="yieldCurve"
+            :curve-1m="yieldCurve1m"
+            :curve-1y="yieldCurve1y"
             :update-time="yieldUpdateTime"
           />
           <div v-else class="w-full h-full flex items-center justify-center">
@@ -170,6 +172,8 @@ const SOURCES = [
 const yieldMatrix = ref({})
 const matrixUpdateTime = ref('')
 const yieldCurve    = ref({})
+const yieldCurve1m  = ref({})
+const yieldCurve1y  = ref({})
 const yieldUpdateTime = ref('')
 const bondList = ref([])
 
@@ -216,6 +220,8 @@ async function fetchBondData() {
       const updateTime  = bc.update_time  || ''
 
       yieldCurve.value      = govCurve
+      yieldCurve1m.value   = bc.yield_curve_1m || {}
+      yieldCurve1y.value   = bc.yield_curve_1y || {}
       yieldUpdateTime.value = updateTime
 
       // 构建利率估值矩阵（基于真实数据）
