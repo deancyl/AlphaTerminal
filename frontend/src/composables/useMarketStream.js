@@ -12,7 +12,9 @@
  */
 import { ref, onUnmounted } from 'vue'
 
-const WS_BASE = import.meta.env.VITE_WS_BASE || `ws://${location.host}`
+// 局域网直连后端 WebSocket（绕过 Nginx WSS 配置问题）
+// 生产/开发均直连 8002，避免浏览器 Mixed Content 阻断
+const WS_BASE = import.meta.env.VITE_WS_BASE || 'ws://127.0.0.1:8002'
 
 export function useMarketStream(initialSymbol = '') {
   const symbol    = ref(initialSymbol)

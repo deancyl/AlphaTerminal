@@ -279,6 +279,19 @@ function applyTickFast(cData, tick) {
 // ── 生命周期 ────────────────────────────────────────────────────
 onMounted(async () => {
   await nextTick()
+  // 等待 DOM 有实际宽高（Flex 布局可能在 nextTick 时仍未完成）
+  const tryInit = () => {
+    if (!chartEl.value || !chartEl.value.clientWidth || !chartEl.value.clientHeight) return false
+    return true
+  }
+  if (!tryInit()) {
+    await new Promise(resolve => {
+      const ro = new ResizeObserver(() => {
+        if (tryInit()) { ro.disconnect(); resolve() }
+      })
+      if (chartEl.value) ro.observe(chartEl.value)
+    })
+  }
   chart = echarts.init(chartEl.value, 'dark')
   _lastChartData = props.chartData
   chart.setOption(buildOption(props.chartData))
