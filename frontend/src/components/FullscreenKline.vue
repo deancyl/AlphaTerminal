@@ -103,23 +103,15 @@
       </div>
 
       <!-- 右侧详情面板 -->
-      <QuotePanel
-        v-if="isFull"
-        class="shrink-0"
-        :symbol="props.symbol"
-        :realtimeData="quoteData"
-        :snapshotData="null"
-      />
-    </div>
-
-      <!-- 右侧详情面板 -->
-      <QuotePanel
-        v-if="isFull"
-        class="shrink-0"
-        :symbol="props.symbol"
-        :realtimeData="quoteData"
-        :snapshotData="null"
-      />
+      <div class="shrink-0 w-48 border-l border-gray-700">
+        <QuotePanel
+          v-if="isFull"
+          class="shrink-0"
+          :symbol="props.symbol"
+          :realtimeData="quoteData"
+          :snapshotData="null"
+        />
+      </div>
     </div>
   </div>
 </template>
