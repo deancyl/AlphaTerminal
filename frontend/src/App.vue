@@ -3,7 +3,8 @@
   <Teleport to="body">
     <div
       v-if="ui.klineFullscreen"
-      class="fixed inset-0 z-[9999] w-screen h-screen bg-[#0a0e17] flex flex-col overflow-hidden"
+      class="fixed inset-0 w-screen h-screen bg-[#0a0e17] flex flex-col overflow-hidden"
+      style="z-index: 99999 !important;"
     >
       <FullscreenKline
         v-if="!futuresFullscreen"

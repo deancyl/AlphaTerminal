@@ -277,20 +277,26 @@ function applyTickFast(cData, tick) {
 }
 
 // ── 生命周期 ────────────────────────────────────────────────────
-onMounted(async () => {
-  await nextTick()
-  // Teleport 脱离主 DOM 树，onMounted 时容器必有尺寸
-  chart = echarts.init(chartEl.value, 'dark')
-  _lastChartData = props.chartData
-  chart.setOption(buildOption(props.chartData))
-  _ro = new ResizeObserver(() => chart?.resize())
-  if (chartEl.value) _ro.observe(chartEl.value)
-
-  // 向上传递 datazoom 事件（用于懒加载）
-  chart.on('datazoom', () => {
-    const zr = chart.getOption()?.dataZoom?.[0]
-    if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
+onMounted(() => {
+  // 彻底抛弃 nextTick 等待，完全交给 ResizeObserver 充当守门员
+  _ro = new ResizeObserver((entries) => {
+    if (!chartEl.value) return
+    const { width, height } = entries[0].contentRect
+    if (width <= 0 || height <= 0) return
+    if (!chart) {
+      // 第一次拿到实际尺寸，初始化图表
+      chart = echarts.init(chartEl.value, 'dark')
+      _lastChartData = props.chartData
+      chart.setOption(buildOption(props.chartData))
+      chart.on('datazoom', () => {
+        const zr = chart.getOption()?.dataZoom?.[0]
+        if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
+      })
+    } else {
+      chart.resize()
+    }
   })
+  if (chartEl.value) _ro.observe(chartEl.value)
 })
 
 onBeforeUnmount(() => {
