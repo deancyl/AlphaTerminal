@@ -113,6 +113,26 @@ const cursorStyle = ref('default')
 
 const storage = localforage.createInstance({ name: 'AlphaTerminal', storeName: 'drawings_v3' })
 
+// XSS 防护：转义 HTML 特殊字符
+function escapeHtml(text) {
+  if (!text || typeof text !== 'string') return text
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// XSS 防护：验证文本输入
+function sanitizeText(text) {
+  if (!text || typeof text !== 'string') return ''
+  // 限制长度
+  const maxLength = 100
+  let sanitized = text.slice(0, maxLength)
+  // 移除控制字符
+  sanitized = sanitized.replace(/[\x00-\x1F\x7F]/g, '')
+  // 转义 HTML
+  return escapeHtml(sanitized)
+}
+
 // 历史记录
 function saveHistory() {
   undoStack.value.push(JSON.stringify(shapes.value))
@@ -543,6 +563,11 @@ function onMouseDown(e) {
   if (props.activeTool === 'text') {
     const text = prompt('输入标注文字：')
     if (text) {
+      const sanitizedText = sanitizeText(text)
+      if (!sanitizedText) {
+        alert('输入内容无效，请重新输入')
+        return
+      }
       const data = toData(x, y)
       if (data) {
         saveHistory()
@@ -551,7 +576,7 @@ function onMouseDown(e) {
           type: 'text',
           points: [{ price: data.price, timestamp: data.timestamp }],
           color: props.activeColor,
-          text,
+          text: sanitizedText,
           fontSize: 12,
           lineWidth: 1.5,
           createdAt: Date.now()
@@ -764,7 +789,11 @@ function applyStyle() {
   shape.color = styleEditor.value.color
   shape.lineWidth = styleEditor.value.lineWidth
   shape.lineDash = styleEditor.value.lineDash
-  if (shape.type === 'text') shape.text = styleEditor.value.text
+  if (shape.type === 'text') {
+    const sanitized = sanitizeText(styleEditor.value.text)
+    shape.text = sanitized
+    styleEditor.value.text = sanitized
+  }
   
   saveToStorage()
   redraw()
