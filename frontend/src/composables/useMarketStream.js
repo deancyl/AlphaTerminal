@@ -1,10 +1,15 @@
 /**
  * useMarketStream — WebSocket 实时行情 hook（单例模式）
- *
+ * 
  * 所有调用方共享同一个 WebSocket 连接。
  * 只有当最后一个组件 unmount 时才真正关闭连接。
  * 跨组件的订阅自动合并去重。
- *
+ * 
+ * 改进:
+ * - 添加数据淘汰机制，防止内存无限增长
+ * - 优化重连策略，指数退避 + 最大重试次数
+ * - 添加连接状态监控
+ * 
  * 用法:
  *   const { tick, connect, disconnect, connected } = useMarketStream()
  *   connect('600519')
@@ -12,38 +17,52 @@
  */
 import { ref, onUnmounted } from 'vue'
 
-const WS_BASE = import.meta.env.VITE_WS_BASE || ''   // 相对路径，生产由 Nginx 代理
+const WS_BASE = import.meta.env.VITE_WS_BASE || ''
 
 // ── 模块级单例状态（所有组件共享）───────────────────────────────
-let _ws        = null
+let _ws = null
 let _retryTimer = null
 let _retryDelay = 2000
 const _MAX_DELAY = 30000
+const _MAX_RETRIES = 10  // 最大重试次数
+let _retryCount = 0      // 当前重试计数
 const _connectedCount = ref(0)
 
-// 全局 tick 和状态，所有组件实例读写同一份
-const globalTick     = ref(null)
+// 全局 tick 和状态
+const globalTick = ref(null)
 const globalConnected = ref(false)
-const globalError   = ref(null)
+const globalError = ref(null)
+const globalReconnecting = ref(false)
 
 // 当前已订阅的符号集合（去重）
 const subscribedSyms = new Set()
 
-// 当前待订阅的符号（下次 connect 时生效）
-let pendingSyms = []
+// 数据历史限制（防止内存泄漏）
+const MAX_TICK_HISTORY = 1000
+const tickHistory = []
 
 // ── 内部函数 ──────────────────────────────────────────────────
 
 function _newConnection() {
-  if (_ws) return  // 已在连接中或已连接
+  if (_ws) return
 
+  globalReconnecting.value = true
   const url = `${WS_BASE}/ws/market`
-  _ws = new WebSocket(url)
+  
+  try {
+    _ws = new WebSocket(url)
+  } catch (e) {
+    console.error('[MarketStream] WebSocket 创建失败:', e)
+    _scheduleRetry()
+    return
+  }
 
   _ws.onopen = () => {
     globalConnected.value = true
     globalError.value = null
+    globalReconnecting.value = false
     _retryDelay = 2000
+    _retryCount = 0
     _doSubscribe()
   }
 
@@ -51,23 +70,40 @@ function _newConnection() {
     try {
       const data = JSON.parse(event.data)
       if (data.type === 'pong' || data.type === 'subscribed') return
+      
+      // 数据淘汰机制
+      tickHistory.push(data)
+      if (tickHistory.length > MAX_TICK_HISTORY) {
+        tickHistory.shift()
+      }
+      
       globalTick.value = data
     } catch (e) {
       console.warn('[MarketStream] parse error:', e)
     }
   }
 
-  _ws.onerror = () => {
+  _ws.onerror = (e) => {
+    console.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
     globalConnected.value = false
   }
 
   _ws.onclose = (e) => {
+    console.log('[MarketStream] 连接关闭:', e.code, e.reason)
     globalConnected.value = false
+    globalReconnecting.value = false
     _ws = null
-    // 1006 = abnormal closure（通常是代理未配置），停止刷屏重试
-    if (e.code !== 1000 && e.code !== 1006 && subscribedSyms.size > 0) {
-      _scheduleRetry()
+    
+    // 1000 = 正常关闭，不重连
+    // 1006 = abnormal closure，需要重连
+    if (e.code !== 1000 && subscribedSyms.size > 0) {
+      if (_retryCount < _MAX_RETRIES) {
+        _scheduleRetry()
+      } else {
+        globalError.value = '连接失败次数过多，请刷新页面重试'
+        console.error('[MarketStream] 达到最大重试次数，停止重连')
+      }
     }
   }
 }
@@ -84,10 +120,18 @@ function _doSubscribe() {
 }
 
 function _scheduleRetry() {
+  if (_retryCount >= _MAX_RETRIES) return
+  
   clearTimeout(_retryTimer)
+  globalReconnecting.value = true
+  _retryCount++
+  
+  console.log(`[MarketStream] ${(_retryDelay/1000).toFixed(1)}秒后第${_retryCount}次重连...`)
+  
   _retryTimer = setTimeout(() => {
     if (subscribedSyms.size > 0) _newConnection()
   }, _retryDelay)
+  
   _retryDelay = Math.min(_retryDelay * 1.5, _MAX_DELAY)
 }
 
@@ -101,7 +145,6 @@ export function useMarketStream(initialSymbol = '') {
   if (initialSymbol) {
     subscribedSyms.add(initialSymbol)
     if (!_ws && globalConnected.value === false) {
-      pendingSyms.push(initialSymbol)
       _newConnection()
     } else if (_ws && _ws.readyState === WebSocket.OPEN) {
       _doSubscribe()
@@ -125,7 +168,6 @@ export function useMarketStream(initialSymbol = '') {
 
   function disconnect() {
     _connectedCount.value = Math.max(0, _connectedCount.value - 1)
-    // 只有最后一个组件离开时才关闭连接
     if (_connectedCount.value <= 0) {
       clearTimeout(_retryTimer)
       if (_ws) {
@@ -135,11 +177,15 @@ export function useMarketStream(initialSymbol = '') {
         _ws = null
       }
       globalConnected.value = false
+      globalReconnecting.value = false
       subscribedSyms.clear()
+      tickHistory.length = 0
+      _retryCount = 0
+      _retryDelay = 2000
     }
   }
 
-  // 30 秒心跳（只发一次，不重复建 timer）
+  // 30 秒心跳
   let _hbActive = false
   function _startHeartbeat() {
     if (_hbActive) return
@@ -155,13 +201,19 @@ export function useMarketStream(initialSymbol = '') {
   onUnmounted(disconnect)
 
   return {
-    // 代理到全局状态（所有组件实例共享）
-    tick:      globalTick,
+    tick: globalTick,
     connected: globalConnected,
-    error:     globalError,
-    // 组件私有
-    symbol:    localSymbol,
+    reconnecting: globalReconnecting,
+    error: globalError,
+    symbol: localSymbol,
     connect,
     disconnect,
+    // 获取连接统计
+    getStats: () => ({
+      subscribedCount: subscribedSyms.size,
+      historyCount: tickHistory.length,
+      retryCount: _retryCount,
+      connectionCount: _connectedCount.value
+    })
   }
 }
