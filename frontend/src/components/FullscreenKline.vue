@@ -1,289 +1,672 @@
 <template>
-  <div
-    class="flex flex-col w-full h-full overflow-hidden bg-[#0a0e17]"
-    @keydown.esc="isFull && emit('close')" tabindex="0"
-  >
-    <!-- 顶部状态栏 -->
-    <div class="flex items-center gap-2 px-3 py-1 border-b border-gray-800 shrink-0">
-      <!-- 周期选择 -->
-      <div class="flex gap-1">
-        <button
-          v-for="p in periods" :key="p.value"
-          class="px-2 py-0.5 text-[10px] rounded transition"
-          :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
-          @click="period = p.value"
-        >{{ p.label }}</button>
+  <div class="fullscreen-kline" @keydown.esc="emit('close')" tabindex="0">
+    <!-- 顶部工具栏 -->
+    <header class="kline-header">
+      <div class="header-left">
+        <span class="symbol-name">{{ props.name || props.symbol }}</span>
+        <span class="symbol-code">{{ props.symbol }}</span>
       </div>
-
-      <div class="flex-1" />
-
-      <!-- 副图选择 -->
-      <div class="flex gap-1">
-        <button
-          v-for="ind in subChartOptions" :key="ind.key"
-          class="px-1.5 py-0.5 text-[9px] rounded border transition"
-          :class="activeSubChart === ind.key
-            ? 'border-terminal-accent text-terminal-accent'
-            : 'border-gray-700 text-gray-600 hover:border-gray-500'"
-          @click="activeSubChart = ind.key"
-        >{{ ind.label }}</button>
-      </div>
-
-      <div class="flex-1" />
-
-      <!-- 画线工具 -->
-      <DrawingToolbar
-        v-if="isFull"
-        :activeTool="drawTool"
-        :activeColor="drawColor"
-        :magnetMode="magnetMode"
-        :visible="drawVisible"
-        :locked="drawLocked"
-        @tool-change="t => drawTool = t"
-        @color-change="c => drawColor = c"
-        @magnet-toggle="magnetMode = !magnetMode"
-        @visibility-toggle="drawVisible = !drawVisible"
-        @lock-toggle="drawLocked = !drawLocked"
-        @clear="drawingCanvasRef?.clearAll()"
-      />
-
-      <!-- 最新价 -->
-      <span class="text-[13px] font-mono font-bold" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
-        {{ latestPrice != null ? latestPrice.toFixed(2) : '--' }}
-      </span>
-      <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
-        {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
-      </span>
-      <button
-        v-if="isFull"
-        class="px-3 py-0.5 text-[11px] rounded border border-gray-600 text-gray-500 hover:border-red-500/50 hover:text-red-400 transition"
-        @click="emit('close')"
-      >✕ 关闭</button>
-    </div>
-
-    <!-- 主图区域 -->
-    <div class="flex flex-1 min-w-0 relative">
-      <!-- 图表区：遮罩限定在此 div 内，不覆盖右侧 QuotePanel -->
-      <div class="flex-1 relative min-w-0 h-full">
-
-        <!-- 错误遮罩（absolute 填满图表区）-->
-        <div
-          v-if="chartError"
-          class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90"
-        >
-          <div class="text-red-400 text-sm">{{ chartError }}</div>
-          <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
+      
+      <div class="header-center">
+        <!-- 周期选择 -->
+        <div class="period-selector">
+          <button
+            v-for="p in periods"
+            :key="p.value"
+            :class="['period-btn', { active: period === p.value }]"
+            @click="period = p.value"
+          >
+            {{ p.label }}
+          </button>
         </div>
-
-        <!-- 统一 BaseKLineChart -->
-        <BaseKLineChart
-          ref="baseChartRef"
-          class="w-full h-full"
-          :chart-data="processedChartData"
-          :sub-charts="activeSubCharts"
-          :tick="liveTick"
-          :symbol="props.symbol"
-        />
-
-        <!-- 画线覆盖层 -->
-        <DrawingCanvas
-          v-if="isFull && drawVisible"
-          ref="drawingCanvasRef"
-          class="absolute inset-0 z-10"
-          :chartInstance="chartInstance"
-          :activeTool="drawTool"
-          :activeColor="drawColor"
-          :magnetMode="magnetMode"
-          :symbol="props.symbol"
-          @drawn="onShapeDrawn"
-          @deleted="onShapeDeleted"
-          @cleared="onShapesCleared"
-          @range-select="onRangeSelect"
-        />
+        
+        <!-- 副图选择 -->
+        <div class="indicator-selector">
+          <button
+            v-for="ind in subChartOptions"
+            :key="ind.key"
+            :class="['indicator-btn', { active: activeSubChart === ind.key }]"
+            @click="activeSubChart = ind.key"
+          >
+            {{ ind.label }}
+          </button>
+        </div>
       </div>
-
-      <!-- 右侧详情面板 -->
-      <div class="shrink-0 w-48 border-l border-gray-700">
-        <QuotePanel
-          v-if="isFull"
-          class="shrink-0"
-          :symbol="props.symbol"
-          :realtimeData="quoteData"
-          :snapshotData="null"
-        />
+      
+      <div class="header-right">
+        <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
+        <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
+        <button class="close-btn" @click="emit('close')">✕ 关闭</button>
       </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <div class="kline-body">
+      <!-- 左侧图表区 -->
+      <div class="chart-container">
+        <!-- 加载状态 -->
+        <div v-if="loading" class="loading-overlay">
+          <div class="loading-text">加载中...</div>
+        </div>
+        
+        <!-- 错误状态 -->
+        <div v-else-if="chartError" class="error-overlay">
+          <div class="error-text">{{ chartError }}</div>
+          <button class="error-close" @click="chartError = ''">关闭</button>
+        </div>
+        
+        <!-- ECharts 容器 -->
+        <div ref="chartEl" class="chart-wrapper"></div>
+      </div>
+      
+      <!-- 右侧信息面板 -->
+      <aside class="info-panel">
+        <div class="info-section">
+          <h3 class="section-title">实时行情</h3>
+          <div class="info-row">
+            <span class="info-label">最新</span>
+            <span class="info-value" :class="priceColor">{{ latestPriceText }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">涨跌</span>
+            <span class="info-value" :class="priceColor">{{ latestChangeText }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">开盘</span>
+            <span class="info-value">{{ formatPrice(quoteData.open) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">最高</span>
+            <span class="info-value">{{ formatPrice(quoteData.high) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">最低</span>
+            <span class="info-value">{{ formatPrice(quoteData.low) }}</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">成交量</span>
+            <span class="info-value">{{ formatVolume(quoteData.volume) }}</span>
+          </div>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import DrawingToolbar from './DrawingToolbar.vue'
-import DrawingCanvas  from './DrawingCanvas.vue'
-import QuotePanel     from './QuotePanel.vue'
-import BaseKLineChart from './BaseKLineChart.vue'
-import { buildChartData } from '../utils/chartDataBuilder.js'
-import { useMarketStream } from '../composables/useMarketStream.js'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import * as echarts from 'echarts/core'
+import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
+import {
+  GridComponent, TooltipComponent, DataZoomComponent,
+  MarkLineComponent, VisualMapComponent, LegendComponent
+} from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
+
+// 注册 ECharts 组件
+echarts.use([
+  CandlestickChart, LineChart, BarChart,
+  GridComponent, TooltipComponent, DataZoomComponent,
+  MarkLineComponent, VisualMapComponent, LegendComponent,
+  CanvasRenderer,
+])
 
 const props = defineProps({
-  symbol:  { type: String, required: true },
-  isFull:  { type: Boolean, default: false },
+  symbol: { type: String, required: true },
+  name:   { type: String, default: '' },
 })
+
 const emit = defineEmits(['close', 'symbol-change'])
 
-// ── State ──────────────────────────────────────────────────────
-const period          = ref('daily')
-const chartError      = ref('')
-const latestPrice     = ref(null)
-const latestChange    = ref(0)
-const quoteData       = ref({})
-const histData        = shallowRef([])
-const processedChartData = shallowRef({ isEmpty: true })
+// 状态
+const period = ref('daily')
+const loading = ref(false)
+const chartError = ref('')
+const histData = ref([])
+const quoteData = ref({})
+const latestPrice = ref(null)
+const latestChange = ref(0)
 
-// 副图选项（VOL / MACD / KDJ / RSI）
-const subChartOptions = [
-  { key: 'VOL',  label: 'VOL' },
-  { key: 'MACD', label: 'MACD' },
-  { key: 'KDJ',  label: 'KDJ' },
-  { key: 'RSI',  label: 'RSI' },
-]
-const activeSubChart = ref('VOL')
+// 图表实例
+const chartEl = ref(null)
+let chart = null
 
-const activeSubCharts = computed(() => {
-  if (activeSubChart.value === 'VOL') return ['VOL']
-  return ['VOL', activeSubChart.value]
-})
-
-// 画线
-const drawTool      = ref('')
-const drawColor     = ref('#fbbf24')
-const magnetMode    = ref(true)
-const drawVisible   = ref(true)
-const drawLocked    = ref(false)
-const drawingCanvasRef = ref(null)
-
-// Refs
-const baseChartRef = ref(null)
-const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? null)
-
-// ── WebSocket ─────────────────────────────────────────────────
-const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
-
-watch(liveTick, (t) => {
-  if (!t || !histData.value.length) return
-  const sym = (t.symbol || '').toLowerCase()
-  if (sym !== props.symbol?.toLowerCase()) return
-  latestPrice.value  = t.price
-  latestChange.value = t.chg_pct ?? 0
-  const arr = histData.value.slice()
-  const last = arr[arr.length - 1]
-  if (!last) return
-  const price = t.price
-  arr[arr.length - 1] = {
-    ...last,
-    close:  price,
-    high:   Math.max(last.high || 0, price),
-    low:    Math.min(last.low  || 0, price),
-    volume: (last.volume || 0) + (t.volume || 0),
-  }
-  histData.value = arr
-})
-
-// ── 周期 ──────────────────────────────────────────────────────
+// 周期选项
 const periods = [
-  { label: '日',   value: 'daily' },
-  { label: '周',   value: 'weekly' },
-  { label: '月',   value: 'monthly' },
-  { label: '5分',  value: '5min' },
+  { label: '日K', value: 'daily' },
+  { label: '周K', value: 'weekly' },
+  { label: '月K', value: 'monthly' },
+  { label: '5分', value: '5min' },
   { label: '15分', value: '15min' },
   { label: '30分', value: '30min' },
   { label: '60分', value: '60min' },
 ]
 
-// ── 数据拉取 ──────────────────────────────────────────────────
+// 副图选项
+const subChartOptions = [
+  { key: 'VOL', label: '成交量' },
+  { key: 'MACD', label: 'MACD' },
+  { key: 'KDJ', label: 'KDJ' },
+  { key: 'RSI', label: 'RSI' },
+]
+const activeSubChart = ref('VOL')
+
+// 计算属性
+const priceColor = computed(() => {
+  if (latestChange.value > 0) return 'price-up'
+  if (latestChange.value < 0) return 'price-down'
+  return 'price-flat'
+})
+
+const latestPriceText = computed(() => {
+  if (latestPrice.value == null) return '--'
+  return latestPrice.value.toFixed(2)
+})
+
+const latestChangeText = computed(() => {
+  if (latestChange.value == null) return '--'
+  const sign = latestChange.value >= 0 ? '+' : ''
+  return `${sign}${latestChange.value.toFixed(2)}%`
+})
+
+// 格式化函数
+function formatPrice(val) {
+  if (val == null || isNaN(val)) return '--'
+  return Number(val).toFixed(2)
+}
+
+function formatVolume(val) {
+  if (val == null || isNaN(val)) return '--'
+  if (val >= 1e8) return (val / 1e8).toFixed(2) + '亿'
+  if (val >= 1e4) return (val / 1e4).toFixed(2) + '万'
+  return val.toString()
+}
+
+// 获取历史数据
 async function fetchData() {
   if (!props.symbol) return
+  
+  loading.value = true
   chartError.value = ''
+  
   try {
     const params = new URLSearchParams({
-      period:  period.value,
-      adjustment: 'none',
-      limit:   2000,
-      offset:  '0',
+      period: period.value,
+      limit: '500',
+      offset: '0',
     })
+    
     const res = await fetch(`/api/v1/market/history/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const raw = await res.json()
-    // 后端返回 { symbol, period, history: [...] }
-    const historyArray = raw.history || raw
-    if (!Array.isArray(historyArray) || historyArray.length === 0) { chartError.value = '暂无历史数据'; return }
-    const sorted = [...historyArray].sort((a, b) => new Date(a.date) - new Date(b.date))
-    histData.value = sorted
-    processedChartData.value = buildChartData(sorted, period.value, {}, [])
-    const last = sorted[sorted.length - 1]
-    latestPrice.value  = last.close ?? last.price
+    
+    const data = await res.json()
+    const historyArray = data.history || data
+    
+    if (!Array.isArray(historyArray) || historyArray.length === 0) {
+      chartError.value = '暂无历史数据'
+      histData.value = []
+      return
+    }
+    
+    // 按日期排序
+    histData.value = historyArray.sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    )
+    
+    // 更新最新价格
+    const last = histData.value[histData.value.length - 1]
+    latestPrice.value = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
+    
+    // 渲染图表
+    renderChart()
+    
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
+    console.error('[FullscreenKline] fetchData error:', e)
+  } finally {
+    loading.value = false
   }
 }
 
-async function fetchQuoteDetail() {
+// 获取实时行情
+async function fetchQuote() {
   if (!props.symbol) return
+  
   try {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
-    if (!res.ok) return
-    quoteData.value = await res.json()
-  } catch (e) { console.warn('[FullscreenKline] quote_detail failed:', e.message) }
+    if (res.ok) {
+      quoteData.value = await res.json()
+    }
+  } catch (e) {
+    console.warn('[FullscreenKline] fetchQuote error:', e.message)
+  }
 }
 
-// ── 监听 ──────────────────────────────────────────────────────
+// 渲染图表
+function renderChart() {
+  if (!chartEl.value || histData.value.length === 0) return
+  
+  // 初始化图表
+  if (!chart) {
+    chart = echarts.init(chartEl.value)
+    window.addEventListener('resize', handleResize)
+  }
+  
+  const data = histData.value
+  const dates = data.map(d => d.date)
+  const klineData = data.map(d => [d.open, d.close, d.low, d.high])
+  const volumes = data.map(d => d.volume)
+  
+  // 计算 MA
+  const ma5 = calcMA(data, 5)
+  const ma10 = calcMA(data, 10)
+  const ma20 = calcMA(data, 20)
+  
+  const option = {
+    backgroundColor: 'transparent',
+    animation: false,
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'cross' },
+      backgroundColor: 'rgba(10, 14, 23, 0.9)',
+      borderColor: '#374151',
+      textStyle: { color: '#e5e7eb', fontSize: 11 },
+    },
+    grid: [
+      { left: 60, right: 20, top: 30, height: '55%' },
+      { left: 60, right: 20, top: '68%', height: '25%' },
+    ],
+    xAxis: [
+      {
+        type: 'category',
+        data: dates,
+        gridIndex: 0,
+        axisLabel: { show: false },
+        axisLine: { lineStyle: { color: '#374151' } },
+      },
+      {
+        type: 'category',
+        data: dates,
+        gridIndex: 1,
+        axisLabel: { color: '#6b7280', fontSize: 10 },
+        axisLine: { lineStyle: { color: '#374151' } },
+      },
+    ],
+    yAxis: [
+      {
+        type: 'value',
+        gridIndex: 0,
+        scale: true,
+        splitLine: { lineStyle: { color: '#1f2937' } },
+        axisLabel: { color: '#6b7280', fontSize: 10 },
+      },
+      {
+        type: 'value',
+        gridIndex: 1,
+        splitLine: { show: false },
+        axisLabel: { color: '#6b7280', fontSize: 10 },
+      },
+    ],
+    dataZoom: [
+      { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },
+      { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 10, height: 20 },
+    ],
+    series: [
+      // K线
+      {
+        name: 'K线',
+        type: 'candlestick',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: klineData,
+        itemStyle: {
+          color: '#ef232a',
+          color0: '#14b143',
+          borderColor: '#ef232a',
+          borderColor0: '#14b143',
+        },
+      },
+      // MA5
+      {
+        name: 'MA5',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: ma5,
+        smooth: true,
+        lineStyle: { color: '#fbbf24', width: 1 },
+        symbol: 'none',
+      },
+      // MA10
+      {
+        name: 'MA10',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: ma10,
+        smooth: true,
+        lineStyle: { color: '#60a5fa', width: 1 },
+        symbol: 'none',
+      },
+      // MA20
+      {
+        name: 'MA20',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: ma20,
+        smooth: true,
+        lineStyle: { color: '#c084fc', width: 1 },
+        symbol: 'none',
+      },
+      // 成交量
+      {
+        name: '成交量',
+        type: 'bar',
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        data: volumes,
+        itemStyle: {
+          color: (params) => {
+            const idx = params.dataIndex
+            return data[idx].close >= data[idx].open ? '#ef232a' : '#14b143'
+          },
+        },
+      },
+    ],
+  }
+  
+  chart.setOption(option, true)
+}
+
+// 计算移动平均线
+function calcMA(data, period) {
+  const result = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) {
+      result.push('-')
+      continue
+    }
+    let sum = 0
+    for (let j = 0; j < period; j++) {
+      sum += data[i - j].close
+    }
+    result.push((sum / period).toFixed(2))
+  }
+  return result
+}
+
+// 窗口大小变化处理
+function handleResize() {
+  chart?.resize()
+}
+
+// 监听周期变化
 watch(period, () => {
-  histData.value = []
-  processedChartData.value = { isEmpty: true }
   fetchData()
 })
 
-watch(() => props.symbol, (sym) => {
-  if (!sym) return
-  histData.value = []
-  processedChartData.value = { isEmpty: true }
-  latestPrice.value = null
-  latestChange.value = 0
-  fetchData()
-  fetchQuoteDetail()
-  wsConnect(sym)
+// 监听 symbol 变化
+watch(() => props.symbol, (newSym) => {
+  if (newSym) {
+    fetchData()
+    fetchQuote()
+  }
 }, { immediate: true })
 
-// 副图变化时重建图表数据
-watch(activeSubChart, () => {
-  if (!histData.value.length) return
-  processedChartData.value = buildChartData(histData.value, period.value, {}, [])
-})
-
-// ── 画线事件 ──────────────────────────────────────────────────
-function onShapeDrawn()  {}
-function onShapeDeleted() {}
-function onShapesCleared() {}
-function onRangeSelect() {}
-
-// ── 生命周期 ──────────────────────────────────────────────────
+// 生命周期
 onMounted(() => {
   if (props.symbol) {
     fetchData()
-    fetchQuoteDetail()
-    wsConnect(props.symbol)
+    fetchQuote()
   }
 })
 
 onUnmounted(() => {
-  wsDisconnect()
-  baseChartRef.value?.getChartInstance?.()?.dispose()
+  window.removeEventListener('resize', handleResize)
+  chart?.dispose()
+  chart = null
 })
 </script>
 
 <style scoped>
-@media (max-width: 900px) {
-  :deep(.chart-area) { flex-basis: 100% !important; min-width: 0; width: 100%; height: 45vh; }
+.fullscreen-kline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #0a0e17;
+  display: flex;
+  flex-direction: column;
+  z-index: 99999;
+}
+
+/* 顶部工具栏 */
+.kline-header {
+  height: 48px;
+  background: #111827;
+  border-bottom: 1px solid #374151;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.symbol-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.symbol-code {
+  font-size: 11px;
+  color: #6b7280;
+  font-family: monospace;
+}
+
+.header-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  justify-content: center;
+}
+
+.period-selector,
+.indicator-selector {
+  display: flex;
+  gap: 4px;
+}
+
+.period-btn,
+.indicator-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid #374151;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.period-btn:hover,
+.indicator-btn:hover {
+  border-color: #6b7280;
+  color: #e5e7eb;
+}
+
+.period-btn.active,
+.indicator-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: white;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 200px;
+  justify-content: flex-end;
+}
+
+.latest-price {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.latest-change {
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.price-up { color: #ef4444; }
+.price-down { color: #22c55e; }
+.price-flat { color: #9ca3af; }
+
+.close-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  border: 1px solid #4b5563;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.close-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* 主体区域 */
+.kline-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+/* 图表容器 */
+.chart-container {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.chart-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* 加载和错误遮罩 */
+.loading-overlay,
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 14, 23, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.loading-text,
+.error-text {
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.error-close {
+  margin-top: 12px;
+  padding: 6px 16px;
+  font-size: 12px;
+  border: 1px solid #4b5563;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.error-close:hover {
+  border-color: #6b7280;
+  color: #e5e7eb;
+}
+
+/* 右侧信息面板 */
+.info-panel {
+  width: 220px;
+  background: #111827;
+  border-left: 1px solid #374151;
+  padding: 16px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.info-section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #1f2937;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.info-value {
+  font-size: 13px;
+  font-family: monospace;
+  color: #e5e7eb;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .info-panel {
+    display: none;
+  }
+  
+  .header-center {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .symbol-code {
+    display: none;
+  }
 }
 </style>
