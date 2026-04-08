@@ -170,6 +170,33 @@
 
 ---
 
+## ✅ Phase 9 — 债券固收深度分析（v0.4.59-beta）
+
+**完成时间**：2026-04-08
+**Epic 1：隐含税率 (Implied Tax Rate)** ✅
+- 国开列新增紫色 Badge：`税X.X% = (国开收益率 - 国债收益率) / 国开收益率`
+- 公式：隐含税率 = `(cdb - gov) / cdb * 100%`，反映机构买债的免税溢价
+- 颜色：紫色（`bg-purple-500/15`），区别于涨跌红绿
+
+**Epic 2：历史分位走势弹窗** ✅
+- 新增 `BondHistoryModal.vue`：点击矩阵任意期限行触发弹窗
+- 调用 `/bond/history?tenor=X年&period=1Y`（利用已写好但从未激活的接口）
+- 顶部大字：当前收益率 + 历史分位色标（红<20%极度低估，绿>80%极度高估）
+- 迷你分位柱 + ECharts Sparkline + 当前收益率水平横线（MarkLine）
+
+**Epic 3：10Y-2Y 期限利差走势图** ✅
+- 新增 `YieldSpreadChart.vue`：柱状图展示 10Y-2Y 每日差值（bp）
+- 蓝色柱 = 利差为正（正常），红色柱 = 利差为负（倒挂预警）
+- 0 基准线 + 悬浮提示（日期 + 利差 bp 数）
+- 数据：并发请求 10年 + 2年历史 `/bond/history`，前端计算差值
+
+**文件变更**：
+- `BondDashboard.vue`：集成三大功能，472 行 → 全面改造
+- `YieldSpreadChart.vue` 🆕：期限利差柱状图组件
+- `BondHistoryModal.vue` 🆕：历史分位弹窗组件
+
+---
+
 ## 🟢 P4 — 长期功能
 
 ### Issue #8：全球市场数据
