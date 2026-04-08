@@ -323,10 +323,13 @@ async def market_macro():
     Phase 5: 宏观核心数据（USD/CNH · COMEX黄金 · WTI原油 · VIX恐慌指数）
     5 分钟 TTL 缓存，不阻塞 API 响应
     """
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "macro": list(_get_macro_data().values()),
-    }
+    try:
+        return success_response({
+            "macro": list(_get_macro_data().values()),
+        })
+    except Exception as e:
+        logger.error(f"[market_macro] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取宏观数据失败: {str(e)}")
 
 def _serialize_price_row(row: dict, include_status: bool = False, status: str = None) -> dict:
     """
@@ -972,19 +975,22 @@ async def futures_history(
 @router.get("/market/rates")
 async def market_rates():
     """利率数据"""
-    rows = get_latest_prices(RATE_SYMBOLS)
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "rates": [
-            {
-                "symbol":  r["symbol"],
-                "name":    r["name"],
-                "rate":    r["price"],
-                "timestamp": r["timestamp"],
-            }
-            for r in rows
-        ],
-    }
+    try:
+        rows = get_latest_prices(RATE_SYMBOLS)
+        return success_response({
+            "rates": [
+                {
+                    "symbol":  r["symbol"],
+                    "name":    r["name"],
+                    "rate":    r["price"],
+                    "timestamp": r["timestamp"],
+                }
+                for r in rows
+            ],
+        })
+    except Exception as e:
+        logger.error(f"[market_rates] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取利率数据失败: {str(e)}")
 
 
 # ── 复权因子计算（QFQ/HFQ）────────────────────────────────────────
@@ -1040,28 +1046,31 @@ def _apply_adjustment(rows, method):
 @router.get("/market/global")
 async def market_global():
     """全球核心市场指数（恒生、道琼斯、纳斯达克、标普500、日经）"""
-    is_open_hk, status_hk = is_market_open("HK")
-    is_open_us, status_us = is_market_open("US")
-    is_open_jp, status_jp = is_market_open("JP")
+    try:
+        is_open_hk, status_hk = is_market_open("HK")
+        is_open_us, status_us = is_market_open("US")
+        is_open_jp, status_jp = is_market_open("JP")
 
-    status_map = {"HSI": status_hk, "DJI": status_us, "IXIC": status_us, "SPX": status_us, "N225": status_jp}
+        status_map = {"HSI": status_hk, "DJI": status_us, "IXIC": status_us, "SPX": status_us, "N225": status_jp}
 
-    rows = get_latest_prices(GLOBAL_SYMBOLS)
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "global": [
-            {
-                "symbol":     r["symbol"],
-                "name":       r["name"],
-                "price":      r["price"],
-                "change_pct": r["change_pct"],
-                "volume":     r["volume"],
-                "status":     status_map.get(r["symbol"], "已休市"),
-                "market":     r["market"],
-            }
-            for r in rows
-        ],
-    }
+        rows = get_latest_prices(GLOBAL_SYMBOLS)
+        return success_response({
+            "global": [
+                {
+                    "symbol":     r["symbol"],
+                    "name":       r["name"],
+                    "price":      r["price"],
+                    "change_pct": r["change_pct"],
+                    "volume":     r["volume"],
+                    "status":     status_map.get(r["symbol"], "已休市"),
+                    "market":     r["market"],
+                }
+                for r in rows
+            ],
+        })
+    except Exception as e:
+        logger.error(f"[market_global] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
 
 
 # ── Task 1: 行业板块（只读缓存，后台Job填充，路由绝不阻塞）──────────────
@@ -1071,34 +1080,38 @@ async def market_sectors():
     真实行业板块数据 — Task 1: 毫秒级响应
     所有 akshare 调用全部移到后台 Job，API 只读 _SECTORS_CACHE
     """
-    from app.services.sectors_cache import get_sectors
-    sectors = get_sectors()
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "sectors": sectors,
-    }
+    try:
+        from app.services.sectors_cache import get_sectors
+        sectors = get_sectors()
+        return success_response({"sectors": sectors})
+    except Exception as e:
+        logger.error(f"[market_sectors] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取行业板块失败: {str(e)}")
 
 
 # ── Phase 6: 期货与大宗商品 ──────────────────────────────────────────────
 @router.get("/market/derivatives")
 async def market_derivatives():
     """期货与大宗商品（IF期指主力、SGE黄金、WTI原油）"""
-    rows = get_latest_prices(DERIVATIVE_SYMBOLS)
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "derivatives": [
-            {
-                "symbol":     r["symbol"],
-                "name":       r["name"],
-                "price":      r["price"],
-                "change_pct": r["change_pct"],
-                "volume":     r["volume"],
-                "status":     "日内更新",
-                "market":     r["market"],
-            }
-            for r in rows
-        ],
-    }
+    try:
+        rows = get_latest_prices(DERIVATIVE_SYMBOLS)
+        return success_response({
+            "derivatives": [
+                {
+                    "symbol":     r["symbol"],
+                    "name":       r["name"],
+                    "price":      r["price"],
+                    "change_pct": r["change_pct"],
+                    "volume":     r["volume"],
+                    "status":     "日内更新",
+                    "market":     r["market"],
+                }
+                for r in rows
+            ],
+        })
+    except Exception as e:
+        logger.error(f"[market_derivatives] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取期货数据失败: {str(e)}")
 
 
 # ══════════════════════════════════════════════════════════════
