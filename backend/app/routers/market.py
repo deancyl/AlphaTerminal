@@ -2,6 +2,10 @@
 市场数据接口 - Phase 7 + Phase 5
 所有数据从 SQLite market_data_realtime 读取
 宏观大宗商品（USD/CNH·黄金·WTI·VIX）由腾讯/Sina 实时接口抓取，10 分钟缓存
+
+Phase B: 统一 API 响应格式
+- 所有响应使用标准格式: {code, message, data, timestamp}
+- code: 0 表示成功，非 0 表示错误
 """
 import logging
 import os
@@ -18,6 +22,33 @@ from app.services.sentiment_engine import SpotCache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ── API 响应标准化工具 ─────────────────────────────────────────────────
+def success_response(data, message="success"):
+    """创建成功响应"""
+    return {
+        "code": 0,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+def error_response(code, message, data=None):
+    """创建错误响应"""
+    return {
+        "code": code,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+# 错误码定义
+class ErrorCode:
+    SUCCESS = 0
+    BAD_REQUEST = 100
+    NOT_FOUND = 104
+    INTERNAL_ERROR = 200
+    THIRD_PARTY_ERROR = 302
 
 # ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
 os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
