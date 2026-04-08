@@ -263,8 +263,8 @@ const TENOR_LABEL_MAP = {
 async function fetchBondData() {
   try {
     const [bc, ba] = await Promise.all([
-      fetch('/api/v1/bond/curve').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/bond/active').then(r => r.ok ? r.json() : null),
+      apiFetch('/api/v1/bond/curve'),
+      apiFetch('/api/v1/bond/active'),
     ])
 
     if (bc) {
@@ -320,8 +320,8 @@ async function fetchSpreadHistory() {
   spreadError.value   = ''
   try {
     const [data10y, data2y] = await Promise.all([
-      apiFetch('/api/v1/bond/history?tenor=10年&period=1Y', 10000).catch(() => null),
-      apiFetch('/api/v1/bond/history?tenor=2年&period=1Y', 10000).catch(() => null),
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(() => null),
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('2年')}&period=1Y`, 10000).catch(() => null),
     ])
     spreadHistory10y.value  = (data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadHistory2y.value   = (data2y?.history  || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
