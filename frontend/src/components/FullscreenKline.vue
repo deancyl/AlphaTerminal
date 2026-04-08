@@ -63,40 +63,54 @@
 
     <!-- 主图区域 -->
     <div class="flex flex-1 min-w-0 relative">
-      <!-- 错误状态 -->
-      <div
-        v-if="chartError"
-        class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90"
-      >
-        <div class="text-red-400 text-sm">{{ chartError }}</div>
-        <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
+      <!-- 图表区：遮罩限定在此 div 内，不覆盖右侧 QuotePanel -->
+      <div class="flex-1 relative min-w-0 h-full">
+
+        <!-- 错误遮罩（absolute 填满图表区）-->
+        <div
+          v-if="chartError"
+          class="absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#0a0e17]/90"
+        >
+          <div class="text-red-400 text-sm">{{ chartError }}</div>
+          <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
+        </div>
+
+        <!-- 统一 BaseKLineChart -->
+        <BaseKLineChart
+          ref="baseChartRef"
+          class="w-full h-full"
+          :chart-data="processedChartData"
+          :sub-charts="activeSubCharts"
+          :tick="liveTick"
+          :symbol="props.symbol"
+        />
+
+        <!-- 画线覆盖层 -->
+        <DrawingCanvas
+          v-if="isFull && drawVisible"
+          ref="drawingCanvasRef"
+          class="absolute inset-0 z-10"
+          :chartInstance="chartInstance"
+          :activeTool="drawTool"
+          :activeColor="drawColor"
+          :magnetMode="magnetMode"
+          :symbol="props.symbol"
+          @drawn="onShapeDrawn"
+          @deleted="onShapeDeleted"
+          @cleared="onShapesCleared"
+          @range-select="onRangeSelect"
+        />
       </div>
 
-      <!-- 统一 BaseKLineChart 哑组件（flex 自然填满剩余空间） -->
-      <BaseKLineChart
-        ref="baseChartRef"
-        class="w-full h-full"
-        :chart-data="processedChartData"
-        :sub-charts="activeSubCharts"
-        :tick="liveTick"
+      <!-- 右侧详情面板 -->
+      <QuotePanel
+        v-if="isFull"
+        class="shrink-0"
         :symbol="props.symbol"
+        :realtimeData="quoteData"
+        :snapshotData="null"
       />
-
-      <!-- 画线覆盖层 -->
-      <DrawingCanvas
-        v-if="isFull && drawVisible"
-        ref="drawingCanvasRef"
-        class="absolute inset-0 z-10"
-        :chartInstance="chartInstance"
-        :activeTool="drawTool"
-        :activeColor="drawColor"
-        :magnetMode="magnetMode"
-        :symbol="props.symbol"
-        @drawn="onShapeDrawn"
-        @deleted="onShapeDeleted"
-        @cleared="onShapesCleared"
-        @range-select="onRangeSelect"
-      />
+    </div>
 
       <!-- 右侧详情面板 -->
       <QuotePanel
