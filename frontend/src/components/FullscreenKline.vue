@@ -244,7 +244,7 @@ watch(() => props.symbol, (sym) => {
   latestChange.value = 0
   fetchData()
   fetchQuoteDetail()
-  wsConnect(sym)
+  // wsConnect(sym)  // 临时屏蔽：避免浏览器控制台刷 WS 错误，便于肉眼观察 UI
 }, { immediate: true })
 
 // 副图变化时重建图表数据
@@ -264,12 +264,12 @@ onMounted(() => {
   if (props.symbol) {
     fetchData()
     fetchQuoteDetail()
-    wsConnect(props.symbol)
+    // wsConnect(props.symbol)  // 临时屏蔽
   }
 })
 
 onUnmounted(() => {
-  wsDisconnect()
+  // wsDisconnect()  // 临时屏蔽
   baseChartRef.value?.getChartInstance?.()?.dispose()
 })
 </script>
