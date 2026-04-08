@@ -414,7 +414,7 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style>
 .fullscreen-kline {
   position: fixed;
   top: 0;
@@ -600,8 +600,14 @@ onUnmounted(() => {
 .quote-panel-wrapper {
   width: 300px;
   flex-shrink: 0;
-  background: #111827;
-  border-left: 1px solid #374151;
+  height: 100%;
+  overflow: hidden;
+}
+
+.quote-panel-wrapper :deep(.quote-panel) {
+  height: 100% !important;
+  max-width: none !important;
+  min-width: auto !important;
 }
 
 /* 响应式 */
