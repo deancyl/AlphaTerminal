@@ -214,8 +214,10 @@ async function fetchData() {
     const res = await fetch(`/api/v1/market/history/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const raw = await res.json()
-    if (!Array.isArray(raw) || raw.length === 0) { chartError.value = '暂无历史数据'; return }
-    const sorted = [...raw].sort((a, b) => new Date(a.date) - new Date(b.date))
+    // 后端返回 { symbol, period, history: [...] }
+    const historyArray = raw.history || raw
+    if (!Array.isArray(historyArray) || historyArray.length === 0) { chartError.value = '暂无历史数据'; return }
+    const sorted = [...historyArray].sort((a, b) => new Date(a.date) - new Date(b.date))
     histData.value = sorted
     processedChartData.value = buildChartData(sorted, period.value, {}, [])
     const last = sorted[sorted.length - 1]
