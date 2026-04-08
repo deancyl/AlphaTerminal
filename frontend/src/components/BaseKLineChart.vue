@@ -142,7 +142,7 @@ function buildOption(cData) {
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 8,
       })
       // OI（持仓量）：有 oi 字段时画成折线叠加在 VOL 区域
-      const oiData = volumes.map((v, i) => ({ value: v.oi, itemStyle: { color: '#f59e0b' } }))
+      const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: '#f59e0b' } }))
       if (oiData.some(v => v.value != null)) {
         series.push({
           name: 'OI', type: 'line', data: oiData,
@@ -152,6 +152,31 @@ function buildOption(cData) {
           tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
         })
       }
+
+    } else if (subName === 'D_OI') {
+      // ΔOI 持仓变化柱（多空资金流向）
+      // 逻辑：涨+增仓→红(多头进攻) 跌+增仓→绿(空头进攻) 减仓→灰
+      const doiData = volumes.map((v) => {
+        const d = v.deltaOI
+        if (d == null) return { value: null }
+        const isUp = v.priceUp
+        let color = '#6b7280'  // 减仓灰
+        if (d > 0 && isUp)  color = UP       // 涨增仓 → 多头红
+        else if (d > 0 && !isUp) color = DOWN // 跌增仓 → 空头绿
+        return { value: d, itemStyle: { color } }
+      })
+      series.push({
+        name: 'ΔOI', type: 'bar', data: doiData,
+        xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 6,
+        tooltip: {
+          formatter: p => {
+            const v = p.value
+            if (v == null) return 'ΔOI: -'
+            const sign = v >= 0 ? '+' : ''
+            return `ΔOI: ${sign}${v.toLocaleString()}`
+          }
+        },
+      })
 
     } else if (subName === 'MACD' && subChartData?.MACD) {
       const m = subChartData.MACD

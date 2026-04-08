@@ -26,12 +26,21 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   // ECharts Candlestick: [open, close, lowest, highest]
   const klineData = rawHist.map(h => [h.open, h.close, h.low, h.high])
 
-  // 成交量序列 (附带涨跌颜色；期货额外附带持仓量 OI)
-  const volumes = rawHist.map(h => ({
-    value: h.volume,
-    oi:    h.hold ?? null,   // 持仓量（期货独有）
-    itemStyle: { color: h.close >= h.open ? UP + '44' : DOWN + '44' }
-  }))
+  // 成交量序列（含期货持仓量 / ΔOI / 涨跌方向）
+  const oiValues = rawHist.map(h => h.hold ?? null)
+  const volumes = rawHist.map((h, i) => {
+    const priceUp = h.close >= h.open
+    // ΔOI = 当根持仓 - 前根持仓（增仓为正，减仓为负）
+    const prevOI = i > 0 ? (rawHist[i - 1].hold ?? null) : null
+    const deltaOI = (prevOI != null && h.hold != null) ? h.hold - prevOI : null
+    return {
+      value:    h.volume,
+      oi:       h.hold ?? null,        // 持仓量（期货独有）
+      deltaOI,                          // 持仓变化（增仓正，减仓负）
+      priceUp,                          // 当根涨跌方向
+      itemStyle: { color: priceUp ? UP + '44' : DOWN + '44' },
+    }
+  })
 
   // 2. 主图叠加指标 (MA, BOLL)
   const maData = {

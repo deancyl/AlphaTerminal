@@ -21,8 +21,21 @@
         >{{ p.label }}</button>
       </div>
 
-      <!-- 合约信息 -->
+      <!-- 副图选择 -->
+      <div class="flex gap-1">
+        <button
+          v-for="ind in subChartOptions" :key="ind.key"
+          class="px-1.5 py-0.5 text-[9px] rounded border transition"
+          :class="activeSubChart === ind.key
+            ? 'border-terminal-accent text-terminal-accent'
+            : 'border-gray-700 text-gray-600 hover:border-gray-500'"
+          @click="activeSubChart = ind.key"
+        >{{ ind.label }}</button>
+      </div>
+
       <div class="flex-1" />
+
+      <!-- 最新价 + OI -->
       <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
         {{ latestPrice ?? '--' }}
       </span>
@@ -43,7 +56,7 @@
         ref="klineRef"
         class="w-full h-full"
         :chart-data="processedChartData"
-        :sub-charts="['VOL']"
+        :sub-charts="activeSubCharts"
         :tick="liveTick"
         :symbol="currentSymbol"
       />
@@ -77,6 +90,18 @@ const klineRef      = ref(null)
 const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
 
 // ── 图表数据（统一结构化格式）────────────────────────────────────
+const subChartOptions = [
+  { key: 'VOL',  label: 'VOL' },
+  { key: 'D_OI', label: 'ΔOI' },
+  { key: 'MACD', label: 'MACD' },
+]
+const activeSubChart = ref('D_OI')   // 期货默认显示 ΔOI
+
+const activeSubCharts = computed(() => {
+  if (activeSubChart.value === 'VOL') return ['VOL']
+  return ['VOL', activeSubChart.value]
+})
+
 const processedChartData = computed(() =>
   histData.value.length
     ? buildChartData(histData.value, period.value, {}, [])
@@ -157,6 +182,10 @@ function loadSymbol() {
 
 // ── 监听 ──────────────────────────────────────────────────────
 watch(period, () => { fetchData() })
+watch(activeSubChart, () => {
+  if (!histData.value.length) return
+  processedChartData.value = buildChartData(histData.value, period.value, {}, [])
+})
 
 watch(() => props.symbol, (s) => {
   if (!s) return
