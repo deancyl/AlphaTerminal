@@ -21,6 +21,11 @@ _CACHE_LOCK      = threading.RLock()
 _LAST_FETCH_TIME = 0
 _REFRESH_SEM     = threading.Semaphore(1)
 
+# ── 历史数据缓存（1小时，避免每次请求都爬 akshare）─────────────────
+_HISTORY_CACHE      = None   # DataFrame 或 None
+_HISTORY_CACHE_TIME = 0
+_HISTORY_TTL        = 3600  # 1 小时（秒）
+
 # ── Mock 活跃债券数据（无可靠免费接口时的兜底）────────────────────
 _MOCK_BONDS = [
     {"code": "019736", "name": "23附息国债05",  "rate": "1.721%", "ytm": 1.721, "change_bps": +1.3,  "type": "国债"},
@@ -222,6 +227,20 @@ async def bond_active():
     }
 
 
+async def _get_bond_history_df():
+    """带 1 小时 TTL 的内存缓存，避免每次请求都爬 akshare"""
+    global _HISTORY_CACHE, _HISTORY_CACHE_TIME
+    now = time.time()
+    if _HISTORY_CACHE is None or (now - _HISTORY_CACHE_TIME) > _HISTORY_TTL:
+        import akshare as ak, warnings
+        warnings.filterwarnings("ignore")
+        logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
+        df = await asyncio.to_thread(ak.bond_china_yield)
+        _HISTORY_CACHE = df
+        _HISTORY_CACHE_TIME = now
+    return _HISTORY_CACHE
+
+
 @router.get("/bond/history")
 async def bond_history(tenor: str = "10年", period: str = "1Y"):
     """
@@ -231,22 +250,19 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
     返回: {tenor, current, percentile, history: [{date, yield}], source}
     """
     try:
-        import akshare as ak, warnings, numpy as np
-        warnings.filterwarnings("ignore")
-        df = await asyncio.to_thread(ak.bond_china_yield)   # time-series DataFrame: date + multiple tenor columns
+        import numpy as np
+        df = await _get_bond_history_df()
         if df is None or df.empty:
             raise ValueError("empty df")
         tenor_col = next((c for c in df.columns if tenor in c), None)
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
-        # 计算当前收益率在历史分布中的分位数
         series = df[tenor_col].dropna().astype(float)
         current_yield = series.iloc[-1] if len(series) else None
         if current_yield is not None:
             percentile = float(np.sum(series < current_yield) / len(series) * 100)
         else:
             percentile = None
-        # 按 period 回溯窗口动态限制记录数（1M≈22/3M≈66/6M≈132/1Y≈252/3Y≈756交易日）
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
         history = [

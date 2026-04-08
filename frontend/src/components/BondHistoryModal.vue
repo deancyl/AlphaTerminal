@@ -36,7 +36,7 @@
           <div class="flex flex-col">
             <span class="text-[10px] text-terminal-dim">当前收益率</span>
             <span class="text-[18px] font-mono font-bold" :class="changeColor">
-              {{ currentYield?.toFixed(4) }}%
+              {{ currentYield != null ? currentYield.toFixed(4) + '%' : '--' }}
             </span>
           </div>
           <div class="h-8 w-px bg-gray-700"></div>
@@ -159,8 +159,7 @@ async function fetchHistory() {
     historyData.value = data.history || []
     currentYield.value = data.current ?? null
     percentile.value   = data.percentile ?? null
-    await nextTick()
-    renderChart()
+    await renderChart()
   } catch (e) {
     clearTimeout(timer)
     error.value = String(e.message || '加载失败')
@@ -169,14 +168,16 @@ async function fetchHistory() {
   }
 }
 
-function renderChart() {
+async function renderChart() {
   if (!chartRef.value || !window.echarts || !historyData.value.length) return
+  await nextTick()
   if (chartInst.value) {
     chartInst.value.clear()
     chartInst.value.dispose()
     chartInst.value = null
   }
   chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+  chartInst.value.resize()
 
   const data  = historyData.value
   const dates = data.map(d => d.date)
