@@ -297,16 +297,46 @@ async def market_macro():
         "macro": list(_get_macro_data().values()),
     }
 
+def _serialize_price_row(row: dict, include_status: bool = False, status: str = None) -> dict:
+    """
+    统一序列化价格数据行
+    
+    Args:
+        row: 数据库原始行数据
+        include_status: 是否包含市场状态字段
+        status: 市场状态值（仅当 include_status=True 时有效）
+    
+    Returns:
+        标准化后的数据字典
+    """
+    result = {
+        "symbol": row["symbol"],
+        "name": row["name"],
+        "price": row["price"],
+        "change_pct": row["change_pct"],
+        "volume": row["volume"],
+        "market": row["market"],
+    }
+    if include_status and status:
+        result["status"] = status
+    return result
+
+
+def _serialize_price_rows(rows: list, include_status: bool = False, status: str = None) -> list:
+    """批量序列化价格数据行"""
+    return [_serialize_price_row(r, include_status, status) for r in rows]
+
+
 # ── 风向标指数（Task 2: 精简 overview，只保留核心风向标）─────────────────
-WIND_SYMBOLS = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]  # 上证 · 沪深300 · 深证 · 创业板 · 恒生 · 纳斯达克
-INDEX_SYMBOLS = ["000001", "000300", "399001", "399006"]  # A股四大指数
-CHINA_ALL_SYMBOLS = [   # Task 2: 国内10+核心指数
-    "000001", "000300", "399001", "399006",  # 基础四大
-    "000688", "000905", "000852", "000016",  # 科创50·中证500·中证1000·上证50
-    "000510", "399100",                         # 上证380·深证A指
+WIND_SYMBOLS = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]
+INDEX_SYMBOLS = ["000001", "000300", "399001", "399006"]
+CHINA_ALL_SYMBOLS = [
+    "000001", "000300", "399001", "399006",
+    "000688", "000905", "000852", "000016",
+    "000510", "399100",
 ]
-RATE_SYMBOLS  = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
-GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]  # Task 2: 扩容全球
+RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
+GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
 DERIVATIVE_SYMBOLS = ["IF", "GC", "CL"]
 
 
@@ -359,18 +389,7 @@ async def market_china_all():
     rows = get_latest_prices(CHINA_ALL_SYMBOLS)
     return {
         "timestamp": datetime.now().isoformat(),
-        "china_all": [
-            {
-                "symbol":     r["symbol"],
-                "name":       r["name"],
-                "price":      r["price"],
-                "change_pct": r["change_pct"],
-                "volume":     r["volume"],
-                "status":     status,
-                "market":     r["market"],
-            }
-            for r in rows
-        ],
+        "china_all": _serialize_price_rows(rows, include_status=True, status=status),
     }
 
 
@@ -380,17 +399,7 @@ async def market_indices():
     rows = get_latest_prices(INDEX_SYMBOLS)
     return {
         "timestamp": datetime.now().isoformat(),
-        "indices": [
-            {
-                "symbol":     r["symbol"],
-                "name":       r["name"],
-                "price":      r["price"],
-                "change_pct": r["change_pct"],
-                "volume":     r["volume"],
-                "timestamp":  r["timestamp"],
-            }
-            for r in rows
-        ],
+        "indices": _serialize_price_rows(rows),
     }
 
 
