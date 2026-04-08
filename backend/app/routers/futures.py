@@ -4,6 +4,7 @@
 缓存策略：3 分钟 TTL，后台异步刷新
 """
 import logging
+import asyncio
 import re
 import threading
 import time
@@ -222,7 +223,8 @@ async def futures_term_structure(symbol: str = "RB"):
     try:
         import akshare as ak, warnings
         warnings.filterwarnings("ignore")
-        df = ak.futures_zh_realtime(symbol=zh_name)
+        # 同步 IO 放入线程池，避免阻塞 FastAPI 事件循环
+        df = await asyncio.to_thread(ak.futures_zh_realtime, symbol=zh_name)
 
         curves = []
         for _, row in df.iterrows():

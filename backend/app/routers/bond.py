@@ -67,8 +67,9 @@ def _fetch_bond_data():
 
         df = ak.bond_china_yield()
         if df is not None and not df.empty:
-            # 按日期升序排列，便于按位置索引历史截面
+            # 按日期升序排列，按唯一日期索引历史截面
             df = df.sort_values("日期").reset_index(drop=True)
+            unique_dates = sorted(df["日期"].unique())
 
             def get_gov_row(df_slice):
                 """从同日期的多曲线行中提取国债行"""
@@ -78,13 +79,15 @@ def _fetch_bond_data():
                         return parse_row(row)
                 return None
 
-            latest_date  = df["日期"].max()
+            latest_date  = unique_dates[-1]
             latest_df    = df[df["日期"] == latest_date]
             gov_row      = get_gov_row(latest_df)
 
-            # 历史截面：1个月前（约22交易日）和1年前（约252交易日）
-            gov_row_1m = get_gov_row(df.iloc[-22:-1]) if len(df) >= 23 else None
-            gov_row_1y = get_gov_row(df.iloc[-252:-1]) if len(df) >= 253 else None
+            # 历史截面：取唯一日期列表中的 1个月前（约22交易日）和 1年前（约252交易日）
+            date_1m = unique_dates[-22] if len(unique_dates) >= 22 else None
+            date_1y = unique_dates[-252] if len(unique_dates) >= 252 else None
+            gov_row_1m = get_gov_row(df[df["日期"] == date_1m]) if date_1m else None
+            gov_row_1y = get_gov_row(df[df["日期"] == date_1y]) if date_1y else None
 
             # 商业银行 AAA 曲线（取最新日期截面）
             comm_row = None

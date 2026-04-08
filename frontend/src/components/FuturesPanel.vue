@@ -82,6 +82,8 @@
         :symbol="termSymbol"
         :name="termName"
         :data="termStructureData"
+        :isLoading="termLoading"
+        :hasError="!!termError"
       />
     </div>
   </div>
@@ -112,10 +114,11 @@ const klineRef      = ref(null)
 
 // ── 视图模式 ───────────────────────────────────────────────────
 const viewMode         = ref('kline')   // 'kline' | 'term'
-const termSymbol       = ref('')         // 品种代码如 RB
-const termName         = ref('')         // 中文名如 螺纹钢
-const termStructureData = ref([])         // 期限结构数据
+const termSymbol       = ref('')
+const termName         = ref('')
+const termStructureData = ref([])
 const termError        = ref('')
+const termLoading      = ref(false)
 
 // ── WebSocket ─────────────────────────────────────────────────
 const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
@@ -129,6 +132,7 @@ async function fetchTermStructure() {
   const prefix = inputSymbol.value.trim().toUpperCase().replace(/0$/, '')
   if (!prefix) return
   termError.value = ''
+  termLoading.value = true
   try {
     const res = await fetch(`/api/v1/futures/term_structure?symbol=${prefix}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -139,6 +143,8 @@ async function fetchTermStructure() {
     termStructureData.value = data.term_structure || []
   } catch (e) {
     termError.value = `加载失败: ${e.message}`
+  } finally {
+    termLoading.value = false
   }
 }
 

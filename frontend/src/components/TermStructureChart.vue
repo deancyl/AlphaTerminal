@@ -14,12 +14,15 @@
       <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
 
-    <!-- 错误 / 加载 -->
-    <div v-if="error" class="flex-1 flex items-center justify-center">
-      <span class="text-red-400 text-xs">{{ error }}</span>
+    <!-- 错误 / 加载 / 空数据 -->
+    <div v-if="props.hasError" class="flex-1 flex items-center justify-center">
+      <span class="text-red-400 text-xs">{{ error || '加载失败' }}</span>
+    </div>
+    <div v-else-if="props.isLoading" class="flex-1 flex items-center justify-center">
+      <span class="text-terminal-dim text-xs">加载中…</span>
     </div>
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center">
-      <span class="text-terminal-dim text-xs">加载中…</span>
+      <span class="text-terminal-dim text-xs">暂无期限结构数据</span>
     </div>
 
     <!-- 图表 -->
@@ -31,8 +34,10 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 
 const props = defineProps({
-  symbol: { type: String, default: 'RB' },   // 品种代码如 RB
-  name:   { type: String, default: '' },     // 中文名如 螺纹钢
+  symbol:    { type: String, default: 'RB' },
+  name:      { type: String, default: '' },
+  isLoading: { type: Boolean, default: false },
+  hasError:  { type: Boolean, default: false },
 })
 
 const chartRef  = ref(null)

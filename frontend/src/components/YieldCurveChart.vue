@@ -129,7 +129,16 @@ function buildChart() {
   chartInstance.setOption(option, true)
 }
 
-async function initChart() { await nextTick(); buildChart() }
+async function initChart() {
+  await nextTick()
+  if (!chartRef.value || !window.echarts) return
+  if (chartInstance) {
+    chartInstance.clear()
+    chartInstance.dispose()
+    chartInstance = null
+  }
+  buildChart()
+}
 
 let resizeObserver = null
 onMounted(() => {
@@ -139,6 +148,13 @@ onMounted(() => {
     resizeObserver.observe(chartRef.value)
   }
 })
-onUnmounted(() => { resizeObserver?.disconnect(); chartInstance?.dispose() })
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  if (chartInstance) {
+    chartInstance.clear()
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 watch([() => props.yieldCurve, () => props.curve1m, () => props.curve1y], () => { initChart() }, { deep: true })
 </script>
