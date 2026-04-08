@@ -10,7 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-Beta%20v0.4.35-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Release](https://img.shields.io/badge/Release-Beta%20v0.4.57-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
@@ -59,6 +59,17 @@ cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
 - **全市场覆盖**：A股（沪深 300 + 重点蓝筹）/ 港股 / 美股指数
 - **实时刷新**：后台每 3 分钟增量拉取，API 响应 < 5ms
 
+### 债券分析（Phase 8）
+- **真实信用利差**：接入 `/bond/curve` API，商业银行 AAA vs 国债实时利差（bp）
+- **历史曲线对比**：今日实线 + 1个月前虚线（dashed）+ 1年前点线（dotted）
+- **期限利差矩阵**：7 期限 × 3 品种（国债/国开/商A-AAA）利率估值表
+
+### 期货分析（Phase 8）
+- **量价仓联动（ΔOI）**：持仓变化红绿柱（涨增仓红/跌增仓绿/减仓灰）
+- **期限结构图（Forward Curve）**：主力 K 线 / 期限结构双视图切换
+  - Contango（远月升水↑）：远月 > 近月，现货充足
+  - Backwardation（近月升水↓）：近月 > 远月，现货紧缺
+
 ### 行业板块
 - **真实行业板块**：新浪财经行业（84个）+ 概念板块（175个）融合
 - **关键词加权**：AI / 算力 / 半导体 / 机器人等主题优先展示
@@ -91,6 +102,7 @@ cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
 │               http://0.0.0.0:8002  (API Only)             │
 │                                                             │
 │   /api/v1/market/overview    /api/v1/news/flash           │
+│   /api/v1/bond/curve          /api/v1/futures/term_structure │
 │   /api/v1/news/force_refresh  /api/v1/market/sectors      │
 │                                                             │
 │   APScheduler 调度任务（后台线程）                          │
@@ -118,6 +130,8 @@ AlphaTerminal/
 │   │   ├── routers/
 │   │   │   ├── market.py       # 行情 / 板块 / 个股搜索
 │   │   │   ├── news.py         # 快讯 / force_refresh
+│   │   │   ├── bond.py         # 债券收益率曲线 / 信用利差
+│   │   │   ├── futures.py      # 期货行情 / 期限结构
 │   │   │   └── sentiment.py    # 市场情绪
 │   │   └── services/
 │   │       ├── data_fetcher.py  # AkShare / httpx 数据获取
@@ -130,12 +144,22 @@ AlphaTerminal/
 ├── frontend/
 │   └── src/
 │       ├── App.vue              # 主布局 + Navbar
+│       ├── utils/
+│       │   ├── chartDataBuilder.js  # K线数据计算引擎（MA/BOLL/MACD/KDJ/RSI/ΔOI）
+│       │   ├── indicators.js        # 技术指标纯函数
+│       │   └── symbols.js           # 符号工具函数
 │       └── components/
-│           ├── DashboardGrid.vue # GridStack 网格
-│           ├── NewsFeed.vue     # 快讯面板
-│           ├── QuotePanel.vue    # 行情卡片
-│           ├── DrawingCanvas.vue # 画线工具
-│           └── FullscreenKline.vue # 全屏 K 线
+│           ├── DashboardGrid.vue    # GridStack 网格
+│           ├── NewsFeed.vue         # 快讯面板
+│           ├── QuotePanel.vue        # 行情卡片
+│           ├── DrawingCanvas.vue     # 画线工具
+│           ├── BaseKLineChart.vue   # 统一K线哑组件（数据驱动）
+│           ├── AdvancedKlinePanel.vue # 高级K线面板（Controller层）
+│           ├── FullscreenKline.vue  # 全屏K线
+│           ├── FuturesPanel.vue     # 期货面板（K线+ΔOI+期限结构）
+│           ├── TermStructureChart.vue # 期限结构图（Forward Curve）
+│           ├── BondDashboard.vue   # 债券看板（利率矩阵+历史曲线对比）
+│           └── YieldCurveChart.vue  # 收益率曲线（含历史截面对比）
 ├── scripts/
 │   ├── init_env.sh              # ✅ 环境初始化脚本（克隆后运行）
 │   ├── init_database.py         # 数据库初始化
