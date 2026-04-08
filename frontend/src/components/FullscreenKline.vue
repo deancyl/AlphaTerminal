@@ -60,35 +60,13 @@
       </div>
       
       <!-- 右侧信息面板 -->
-      <aside class="info-panel">
-        <div class="info-section">
-          <h3 class="section-title">实时行情</h3>
-          <div class="info-row">
-            <span class="info-label">最新</span>
-            <span class="info-value" :class="priceColor">{{ latestPriceText }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">涨跌</span>
-            <span class="info-value" :class="priceColor">{{ latestChangeText }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">开盘</span>
-            <span class="info-value">{{ formatPrice(quoteData.open) }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">最高</span>
-            <span class="info-value">{{ formatPrice(quoteData.high) }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">最低</span>
-            <span class="info-value">{{ formatPrice(quoteData.low) }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">成交量</span>
-            <span class="info-value">{{ formatVolume(quoteData.volume) }}</span>
-          </div>
-        </div>
-      </aside>
+      <QuotePanel
+        :symbol="props.symbol"
+        :name="props.name"
+        :realtimeData="quoteData"
+        :latestCandle="latestCandle"
+        class="quote-panel-wrapper"
+      />
     </div>
   </div>
 </template>
@@ -102,6 +80,7 @@ import {
   MarkLineComponent, VisualMapComponent, LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import QuotePanel from './QuotePanel.vue'
 
 // 注册 ECharts 组件
 echarts.use([
@@ -156,6 +135,11 @@ const priceColor = computed(() => {
   if (latestChange.value > 0) return 'price-up'
   if (latestChange.value < 0) return 'price-down'
   return 'price-flat'
+})
+
+const latestCandle = computed(() => {
+  if (histData.value.length === 0) return null
+  return histData.value[histData.value.length - 1]
 })
 
 const latestPriceText = computed(() => {
@@ -612,51 +596,17 @@ onUnmounted(() => {
   color: #e5e7eb;
 }
 
-/* 右侧信息面板 */
-.info-panel {
-  width: 220px;
+/* 右侧 QuotePanel 包装器 */
+.quote-panel-wrapper {
+  width: 300px;
+  flex-shrink: 0;
   background: #111827;
   border-left: 1px solid #374151;
-  padding: 16px;
-  overflow-y: auto;
-  flex-shrink: 0;
-}
-
-.info-section {
-  margin-bottom: 20px;
-}
-
-.section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #1f2937;
-}
-
-.info-label {
-  font-size: 12px;
-  color: #6b7280;
-}
-
-.info-value {
-  font-size: 13px;
-  font-family: monospace;
-  color: #e5e7eb;
 }
 
 /* 响应式 */
 @media (max-width: 768px) {
-  .info-panel {
+  .quote-panel-wrapper {
     display: none;
   }
   
