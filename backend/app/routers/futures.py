@@ -2,6 +2,8 @@
 期货行情路由 - Phase 7
 数据源：akshare futures_zh_realtime（国内期货） + Sina hf_（国际商品）
 缓存策略：3 分钟 TTL，后台异步刷新
+
+Phase B: 统一 API 响应格式
 """
 import logging
 import asyncio
@@ -14,6 +16,31 @@ import httpx
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ── API 响应标准化工具 ─────────────────────────────────────────────────
+def success_response(data, message="success"):
+    """创建成功响应"""
+    return {
+        "code": 0,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+def error_response(code, message, data=None):
+    """创建错误响应"""
+    return {
+        "code": code,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+class ErrorCode:
+    SUCCESS = 0
+    BAD_REQUEST = 100
+    NOT_FOUND = 104
+    INTERNAL_ERROR = 200
 
 # ── 缓存 ────────────────────────────────────────────────────────
 _FUTURES_CACHE    = {}
@@ -162,12 +189,15 @@ async def futures_main_indexes():
     """
     股指期货主力（IF · IC · IM）
     """
-    cache = _get_futures_cache()
-    return {
-        "timestamp":    datetime.now().isoformat(),
-        "index_futures": cache.get("index_futures", []),
-        "update_time":  cache.get("update_time", ""),
-    }
+    try:
+        cache = _get_futures_cache()
+        return success_response({
+            "index_futures": cache.get("index_futures", []),
+            "update_time":  cache.get("update_time", ""),
+        })
+    except Exception as e:
+        logger.error(f"[futures_main_indexes] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取股指期货失败: {str(e)}")
 
 
 @router.get("/futures/commodities")
@@ -175,12 +205,15 @@ async def futures_commodities():
     """
     国内大宗商品期货实时行情
     """
-    cache = _get_futures_cache()
-    return {
-        "timestamp":  datetime.now().isoformat(),
-        "commodities": cache.get("commodities", []),
-        "update_time": cache.get("update_time", ""),
-    }
+    try:
+        cache = _get_futures_cache()
+        return success_response({
+            "commodities": cache.get("commodities", []),
+            "update_time": cache.get("update_time", ""),
+        })
+    except Exception as e:
+        logger.error(f"[futures_commodities] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取大宗商品失败: {str(e)}")
 
 
 @router.get("/futures/term_structure")
@@ -218,7 +251,7 @@ async def futures_term_structure(symbol: str = "RB"):
             break
 
     if not zh_name:
-        return {"error": f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities"}
+        return error_response(ErrorCode.BAD_REQUEST, f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities", {"symbol": prefix, "name": None, "term_structure": []})
 
     try:
         import akshare as ak, warnings
@@ -260,20 +293,21 @@ async def futures_term_structure(symbol: str = "RB"):
             })
 
         if not curves:
-            return {"error": f"品种 {prefix}({zh_name}) 暂无可用合约数据", "symbol": prefix, "name": zh_name, "term_structure": []}
+            return error_response(ErrorCode.NOT_FOUND, f"品种 {prefix}({zh_name}) 暂无可用合约数据", {"symbol": prefix, "name": zh_name, "term_structure": []})
 
         # 按交割月升序排列
         curves = sorted(curves, key=lambda x: x["month"])
 
         logger.info(f"[Futures] term_structure {prefix}({zh_name}): {len(curves)} contracts")
-        return {
+        return success_response({
             "symbol": prefix,
             "name":   zh_name,
             "term_structure": curves,
-        }
+        })
 
     except Exception as e:
         logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取期限结构失败: {type(e).__name__}: {str(e)}", {"symbol": prefix, "name": zh_name, "term_structure": []})
         return {"error": f"获取失败: {type(e).__name__}: {e}", "symbol": prefix, "name": zh_name, "term_structure": []}
 
 

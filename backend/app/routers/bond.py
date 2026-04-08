@@ -2,6 +2,8 @@
 债券行情路由 - Phase 7
 数据源：akshare bond_china_yield + 国债/信用债 Mock
 缓存策略：5 分钟 TTL，后台异步刷新
+
+Phase B: 统一 API 响应格式
 """
 import asyncio
 import logging
@@ -13,6 +15,31 @@ import httpx
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ── API 响应标准化工具 ─────────────────────────────────────────────────
+def success_response(data, message="success"):
+    """创建成功响应"""
+    return {
+        "code": 0,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+def error_response(code, message, data=None):
+    """创建错误响应"""
+    return {
+        "code": code,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+class ErrorCode:
+    SUCCESS = 0
+    BAD_REQUEST = 100
+    NOT_FOUND = 104
+    INTERNAL_ERROR = 200
 
 # ── 缓存 ────────────────────────────────────────────────────────
 _BOND_CACHE      = {}
@@ -187,17 +214,20 @@ async def bond_curve():
       bp > 0：信用债收益率高于国债（正常）
       bp < 0：信用债收益率低于国债（异常，可能为数据问题）
     """
-    cache = _get_bond_cache()
-    return {
-        "timestamp":       datetime.now().isoformat(),
-        "yield_curve":     cache.get("yield_curve", {}),
-        "yield_curve_1m":  cache.get("yield_curve_1m", {}),
-        "yield_curve_1y":  cache.get("yield_curve_1y", {}),
-        "comm_yield":      cache.get("comm_yield", {}),
-        "spreads_bps":     cache.get("spreads_bps", {}),
-        "update_time":     cache.get("update_time", ""),
-        "source":          cache.get("source", "unknown"),
-    }
+    try:
+        cache = _get_bond_cache()
+        return success_response({
+            "yield_curve":     cache.get("yield_curve", {}),
+            "yield_curve_1m":  cache.get("yield_curve_1m", {}),
+            "yield_curve_1y":  cache.get("yield_curve_1y", {}),
+            "comm_yield":      cache.get("comm_yield", {}),
+            "spreads_bps":     cache.get("spreads_bps", {}),
+            "update_time":     cache.get("update_time", ""),
+            "source":          cache.get("source", "unknown"),
+        })
+    except Exception as e:
+        logger.error(f"[bond_curve] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取债券曲线失败: {str(e)}")
 
 
 @router.get("/bond/yield_curve")
@@ -205,13 +235,16 @@ async def bond_yield_curve():
     """
     国债收益率曲线（仅国债，回落兼容）
     """
-    cache = _get_bond_cache()
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "yield_curve": cache.get("yield_curve", {}),
-        "update_time": cache.get("update_time", ""),
-        "source": cache.get("source", "unknown"),
-    }
+    try:
+        cache = _get_bond_cache()
+        return success_response({
+            "yield_curve": cache.get("yield_curve", {}),
+            "update_time": cache.get("update_time", ""),
+            "source": cache.get("source", "unknown"),
+        })
+    except Exception as e:
+        logger.error(f"[bond_yield_curve] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取国债收益率曲线失败: {str(e)}")
 
 
 @router.get("/bond/active")
@@ -220,11 +253,10 @@ async def bond_active():
     活跃债券列表（Mock 数据 + 真实来源开发中）
     返回：{bonds: [{code, name, rate, ytm, change_bps, type}]}
     """
-    return {
-        "timestamp": datetime.now().isoformat(),
+    return success_response({
         "bonds": _MOCK_BONDS,
         "source": "mock",
-    }
+    })
 
 
 async def _get_bond_history_df():
@@ -269,22 +301,22 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             {"date": str(r[0]), "yield": float(r[1])}
             for r in df[[df.columns[0], tenor_col]].dropna().tail(n_rows).values
         ]
-        return {
+        return success_response({
             "tenor": tenor,
             "current": round(current_yield, 6) if current_yield else None,
             "percentile": round(percentile, 1) if percentile is not None else None,
             "history": history,
             "source": "akshare",
-        }
+        })
     except Exception as e:
         logger.warning(f"[Bond] history endpoint error: {e}")
-        return {
+        return success_response({
             "tenor": tenor,
             "current": _BOND_CACHE.get("yield_curve", {}).get(tenor, 0),
             "percentile": None,
             "history": [],
             "source": "error",
-        }
+        })
 
 
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
