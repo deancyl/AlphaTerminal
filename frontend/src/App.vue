@@ -136,6 +136,13 @@
         :derivatives-data="derivativesData"
         :rates-data="ratesData"
         :news-data="newsData"
+        :watch-list="watchList"
+        @open-chart="openFullscreenKline"
+        @show-north-flow="showNorthFlow"
+        @show-limit-up="showLimitUp"
+        @show-limit-down="showLimitDown"
+        @show-unusual="showUnusual"
+        @show-watchlist="currentView = 'stock'"
       />
     </aside>
 
@@ -215,6 +222,27 @@ function toggleCopilot() {
   isCopilotOpen.value = !isCopilotOpen.value
 }
 
+// Copilot 事件处理
+function showNorthFlow() {
+  console.log('[Copilot] 北向资金')
+  // 可以在此打开北向资金面板
+}
+
+function showLimitUp() {
+  console.log('[Copilot] 涨停板')
+  // 可以在此打开涨停板面板
+}
+
+function showLimitDown() {
+  console.log('[Copilot] 跌停板')
+  // 可以在此打开跌停板面板
+}
+
+function showUnusual() {
+  console.log('[Copilot] 盘中异动')
+  // 可以在此打开异动面板
+}
+
 const marketOverview  = ref(null)
 const macroData      = ref([])   // Phase 5: USD/CNH · 黄金 · WTI · VIX
 const ratesData       = ref([])
@@ -224,6 +252,7 @@ const chinaAllData    = ref([])
 const sectorsData     = ref([])
 const derivativesData = ref([])
 const currentTime     = ref('')
+const watchList       = ref([])   // 自选股列表
 
 let clockTimer = null
 

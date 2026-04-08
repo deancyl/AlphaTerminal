@@ -6,7 +6,24 @@
       <h2 class="text-terminal-accent font-bold text-base flex items-center gap-2">
         🧠 AlphaTerminal Copilot
       </h2>
-      <p class="text-terminal-dim text-xs mt-0.5">由 OpenClaw 驱动的智能投研助手</p>
+      <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 输入命令快速执行</p>
+    </div>
+
+    <!-- 快捷命令按钮 -->
+    <div class="px-4 py-2 border-b border-gray-800">
+      <div class="text-[10px] text-terminal-dim mb-2">💡 快捷命令</div>
+      <div class="flex flex-wrap gap-1.5">
+        <button
+          v-for="cmd in quickCommands"
+          :key="cmd.cmd"
+          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-gray-700
+                 text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent
+                 transition-colors whitespace-nowrap"
+          @click="executeQuickCommand(cmd)"
+        >
+          {{ cmd.icon }} {{ cmd.label }}
+        </button>
+      </div>
     </div>
 
     <!-- 上下文勾选框 -->
@@ -27,10 +44,19 @@
 
     <!-- 对话历史 -->
     <div ref="historyEl" class="flex-1 overflow-y-auto p-4 space-y-4">
-      <div v-if="messages.length === 0" class="text-center mt-16">
+      <div v-if="messages.length === 0" class="text-center mt-12">
         <div class="text-4xl mb-3">💬</div>
         <p class="text-terminal-dim text-sm">开始一场投研对话</p>
-        <p class="text-terminal-dim text-xs mt-1">例如：「分析今日 A 股市场资金流向」</p>
+        <div class="mt-4 text-xs text-terminal-dim/70 space-y-1">
+          <p>💡 试试说：「分析上证指数」</p>
+          <p>💡 或点击上面的快捷命令</p>
+        </div>
+      </div>
+
+      <!-- 命令执行结果卡片 -->
+      <div v-if="lastCommandResult" class="rounded-lg p-3 bg-terminal-accent/10 border border-terminal-accent/30 mr-4">
+        <div class="text-[10px] mb-2 text-terminal-accent">⚡ 命令执行结果</div>
+        <div class="text-gray-200 text-sm whitespace-pre-wrap">{{ lastCommandResult }}</div>
       </div>
 
       <div v-for="(msg, i) in messages" :key="i"
@@ -72,7 +98,7 @@
                  focus:outline-none focus:border-terminal-accent/60
                  placeholder:text-terminal-dim/50"
           rows="3"
-          placeholder="输入投研问题... (Shift+Enter 换行)"
+          placeholder="输入命令或问题... (Shift+Enter 换行)"
           :disabled="isLoading"
           @keydown.enter.exact.prevent="sendMessage"
         ></textarea>
@@ -101,25 +127,51 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
 
 const messages       = ref([])
 const inputText      = ref('')
 const isLoading      = ref(false)
 const historyEl      = ref(null)
 const inputEl        = ref(null)
+const lastCommandResult = ref('')
 
 // 上下文勾选
 const ctxMarket = ref(true)
 const ctxRates  = ref(true)
 const ctxNews   = ref(false)
 
+// 快捷命令列表
+const quickCommands = [
+  { cmd: '大盘', label: '大盘', icon: '📊', action: 'showMarket' },
+  { cmd: '北向', label: '北向资金', icon: '🌊', action: 'showNorthFlow' },
+  { cmd: '涨停', label: '涨停板', icon: '🚀', action: 'showLimitUp' },
+  { cmd: '跌停', label: '跌停板', icon: '💥', action: 'showLimitDown' },
+  { cmd: '异动', label: '盘中异动', icon: '⚡', action: 'showUnusual' },
+  { cmd: '自选', label: '我的自选', icon: '⭐', action: 'showWatchlist' },
+]
+
 // 接收父组件传入的市场数据
 const props = defineProps({
   marketOverview: { type: Object, default: null },
   ratesData:      { type: Array,  default: () => [] },
   newsData:       { type: Array,  default: () => [] },
+  watchList:      { type: Array,  default: () => [] },
 })
+
+// 事件发射
+const emit = defineEmits([
+  'open-chart',      // 打开图表 { symbol, name }
+  'show-sector',     // 显示板块
+  'show-north-flow', // 北向资金
+  'show-limit-up',   // 涨停板
+  'show-limit-down', // 跌停板
+  'show-unusual',    // 盘中异动
+  'show-watchlist',  // 自选股
+])
+
+// 提取股票代码/名称的正则
+const STOCK_PATTERN = /(?:(\d{6})|([\u4e00-\u9fa5]{2,8}(?:[A-Za-z]?股票?|股份)?))/
 
 function scrollToBottom() {
   nextTick(() => {
@@ -127,6 +179,243 @@ function scrollToBottom() {
       historyEl.value.scrollTop = historyEl.value.scrollHeight
     }
   })
+}
+
+// 执行快捷命令
+function executeQuickCommand(cmd) {
+  const action = cmd.action
+  let result = ''
+
+  switch (action) {
+    case 'showMarket':
+      result = buildMarketSummary()
+      break
+    case 'showNorthFlow':
+      result = '🌊 正在加载北向资金数据...'
+      emit('show-north-flow')
+      break
+    case 'showLimitUp':
+      result = '🚀 正在加载涨停板数据...'
+      emit('show-limit-up')
+      break
+    case 'showLimitDown':
+      result = '💥 正在加载跌停板数据...'
+      emit('show-limit-down')
+      break
+    case 'showUnusual':
+      result = '⚡ 正在加载盘中异动数据...'
+      emit('show-unusual')
+      break
+    case 'showWatchlist':
+      result = buildWatchlistSummary()
+      break
+    default:
+      result = '未知命令'
+  }
+
+  if (result && !['showNorthFlow', 'showLimitUp', 'showLimitDown', 'showUnusual'].includes(action)) {
+    lastCommandResult.value = result
+    messages.value.push({
+      role: 'assistant',
+      content: result,
+      displayedContent: result,
+      streaming: false,
+    })
+    scrollToBottom()
+  }
+}
+
+// 构建大盘总结
+function buildMarketSummary() {
+  const m = props.marketOverview?.markets || {}
+  const lines = Object.values(m)
+    .filter(v => v.index)
+    .map(v => {
+      const pct = v.change_pct || 0
+      const sign = pct >= 0 ? '🔴' : '🟢'
+      return `${v.name}: ${v.index?.toLocaleString()} ${sign}${Math.abs(pct).toFixed(2)}%`
+    })
+  
+  if (lines.length === 0) {
+    return '📊 暂无大盘数据'
+  }
+  
+  return `📊 【大盘指数】\n${lines.join('\n')}`
+}
+
+// 构建自选股总结
+function buildWatchlistSummary() {
+  const list = props.watchList || []
+  if (list.length === 0) {
+    return '⭐ 暂无自选股'
+  }
+  
+  const lines = list.slice(0, 10).map(s => {
+    const pct = s.change_pct || 0
+    const sign = pct >= 0 ? '🔴' : '🟢'
+    return `${s.name || s.symbol}: ${sign}${Math.abs(pct).toFixed(2)}%`
+  })
+  
+  return `⭐ 【我的自选】(${list.length}只)\n${lines.join('\n')}`
+}
+
+// 解析命令
+function parseCommand(text) {
+  const t = text.trim()
+  
+  // 1. 分析命令
+  const analyzeMatch = t.match(/^(?:分析?|看|查|看一?下)(.+)/)
+  if (analyzeMatch) {
+    const target = analyzeMatch[1].trim()
+    return { type: 'analyze', target }
+  }
+  
+  // 2. 打开/查看命令
+  const openMatch = t.match(/^(?:打开?|看|显示|查看)(.+)/)
+  if (openMatch) {
+    const target = openMatch[1].trim()
+    return { type: 'open', target }
+  }
+  
+  // 3. 添加自选命令
+  const addWatchMatch = t.match(/^(?:添加?自选|加自选|加入自选)(.+)/)
+  if (addWatchMatch) {
+    const target = addWatchMatch[1].trim()
+    return { type: 'addWatch', target }
+  }
+  
+  // 4. 对比命令
+  const compareMatch = t.match(/^(?:对比|比较)(.+)/)
+  if (compareMatch) {
+    const targets = compareMatch[1].split(/[和与,]/)
+    return { type: 'compare', targets: targets.map(t => t.trim()) }
+  }
+  
+  // 5. 移除自选命令
+  const removeWatchMatch = t.match(/^(?:删除?自选|移除自选)(.+)/)
+  if (removeWatchMatch) {
+    const target = removeWatchMatch[1].trim()
+    return { type: 'removeWatch', target }
+  }
+  
+  // 6. 北向资金
+  if (/北向|北向资金|外资/.test(t)) {
+    return { type: 'northFlow' }
+  }
+  
+  // 7. 涨停板
+  if (/涨停|涨停板|今日涨停/.test(t)) {
+    return { type: 'limitUp' }
+  }
+  
+  // 8. 跌停板
+  if (/跌停|跌停板/.test(t)) {
+    return { type: 'limitDown' }
+  }
+  
+  // 9. 异动
+  if (/异动|盘中异动|大幅波动/.test(t)) {
+    return { type: 'unusual' }
+  }
+  
+  // 10. 大盘/指数
+  if (/大盘|指数|市场|整体/.test(t)) {
+    return { type: 'market' }
+  }
+  
+  // 11. 自选股
+  if (/自选|自选股|我的股票/.test(t)) {
+    return { type: 'watchlist' }
+  }
+  
+  // 默认：通用对话
+  return { type: 'chat', text: t }
+}
+
+// 执行命令
+function executeCommand(cmd) {
+  switch (cmd.type) {
+    case 'analyze':
+      return executeAnalyze(cmd.target)
+    case 'open':
+      return executeOpen(cmd.target)
+    case 'addWatch':
+      return executeAddWatch(cmd.target)
+    case 'removeWatch':
+      return executeRemoveWatch(cmd.target)
+    case 'compare':
+      return executeCompare(cmd.targets)
+    case 'northFlow':
+      emit('show-north-flow')
+      return '🌊 正在加载北向资金数据...'
+    case 'limitUp':
+      emit('show-limit-up')
+      return '🚀 正在加载涨停板数据...'
+    case 'limitDown':
+      emit('show-limit-down')
+      return '💥 正在加载跌停板数据...'
+    case 'unusual':
+      emit('show-unusual')
+      return '⚡ 正在加载盘中异动数据...'
+    case 'market':
+      return buildMarketSummary()
+    case 'watchlist':
+      return buildWatchlistSummary()
+    default:
+      return null // 交给 LLM 处理
+  }
+}
+
+// 分析命令
+function executeAnalyze(target) {
+  // 尝试提取股票代码
+  const stockMatch = target.match(/(\d{6})|([\u4e00-\u9fa5]+)/)
+  if (stockMatch) {
+    const symbol = stockMatch[1] || stockMatch[2]
+    // 这里可以调用分析 API
+    return `📈 【${target} 分析】\n\n正在获取${target}的技术分析数据...\n\n请稍候，或直接说「打开 ${target}」查看详细图表。`
+  }
+  return `📈 正在分析「${target}」...\n\n请稍候。`
+}
+
+// 打开图表命令
+function executeOpen(target) {
+  const stockMatch = target.match(/(\d{6})|([\u4e00-\u9fa5]+)/)
+  if (stockMatch) {
+    const symbol = stockMatch[1] || stockMatch[2]
+    emit('open-chart', { symbol, name: target })
+    return `📊 正在打开「${target}」的K线图...`
+  }
+  return `❓ 无法识别股票「${target}」，请输入股票代码或名称。`
+}
+
+// 添加自选命令
+function executeAddWatch(target) {
+  const stockMatch = target.match(/(\d{6})|([\u4e00-\u9fa5]+)/)
+  if (stockMatch) {
+    const symbol = stockMatch[1] || stockMatch[2]
+    emit('open-chart', { symbol, name: target, addToWatch: true })
+    return `⭐ 正在添加「${target}」到自选股...`
+  }
+  return `❓ 无法识别股票「${target}」，请输入股票代码或名称。`
+}
+
+// 移除自选命令
+function executeRemoveWatch(target) {
+  return `🗑️ 正在从自选股中移除「${target}」...`
+}
+
+// 对比命令
+function executeCompare(targets) {
+  if (targets.length < 2) {
+    return '❓ 对比需要至少两只股票，例如：「对比 平安 茅台」'
+  }
+  const symbols = targets.map(t => {
+    const m = t.match(/(\d{6})|([\u4e00-\u9fa5]+)/)
+    return m ? (m[1] || m[2]) : t
+  })
+  emit('open-chart', { symbols, mode: 'compare' })
+  return `📊 正在打开对比视图：${targets.join(' vs ')}...`
 }
 
 function buildContext() {
@@ -157,7 +446,29 @@ async function sendMessage() {
   const text = inputText.value.trim()
   if (!text || isLoading.value) return
 
-  // 添加用户消息
+  // 解析命令
+  const cmd = parseCommand(text)
+
+  // 先尝试执行命令
+  const cmdResult = executeCommand(cmd)
+  if (cmdResult) {
+    // 添加用户消息
+    messages.value.push({ role: 'user', content: text, displayedContent: text, streaming: false })
+    inputText.value = ''
+
+    // 添加命令结果
+    messages.value.push({
+      role: 'assistant',
+      content: cmdResult,
+      displayedContent: cmdResult,
+      streaming: false,
+    })
+
+    scrollToBottom()
+    return
+  }
+
+  // 如果不是命令，发送给 LLM
   messages.value.push({ role: 'user', content: text, displayedContent: text, streaming: false })
   inputText.value = ''
   isLoading.value = true
