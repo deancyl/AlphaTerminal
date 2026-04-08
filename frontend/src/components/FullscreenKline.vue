@@ -200,12 +200,12 @@ async function fetchData() {
   chartError.value = ''
   try {
     const params = new URLSearchParams({
-      symbol: props.symbol,
       period:  period.value,
-      adjust:  'none',
+      adjustment: 'none',
       limit:   2000,
+      offset:  '0',
     })
-    const res = await fetch(`/api/v1/market/klinedata/${props.symbol}?${params}`)
+    const res = await fetch(`/api/v1/market/history/${props.symbol}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const raw = await res.json()
     if (!Array.isArray(raw) || raw.length === 0) { chartError.value = '暂无历史数据'; return }

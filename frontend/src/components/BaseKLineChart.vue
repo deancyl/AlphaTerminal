@@ -4,8 +4,6 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-
-const emit = defineEmits(['datazoom'])
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {
@@ -13,12 +11,15 @@ import {
   MarkLineComponent, VisualMapComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { UP, DOWN } from '../utils/indicators.js'
 
 echarts.use([
   CandlestickChart, LineChart, BarChart,
   GridComponent, TooltipComponent, DataZoomComponent,
   MarkLineComponent, VisualMapComponent, CanvasRenderer,
 ])
+
+const emit = defineEmits(['datazoom'])
 
 const props = defineProps({
   // 核心：由 chartDataBuilder 算好的所有图表数据

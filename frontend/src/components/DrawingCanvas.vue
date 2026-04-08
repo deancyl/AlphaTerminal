@@ -38,6 +38,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import localforage from 'localforage'
 import { UP, DOWN } from '../utils/indicators.js'
 
+defineOptions({ inheritAttrs: false })
+
 const props = defineProps({
   // 绑定到哪个 ECharts 实例（通过 convertFromPixel 转换坐标）
   chartInstance:  { type: Object,  default: null },
