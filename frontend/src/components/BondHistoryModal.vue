@@ -1,8 +1,10 @@
 <template>
+  <!-- Teleport 到 body，避免父组件 overflow/z-index 裁切 -->
+  <Teleport to="body">
   <!-- 遮罩 -->
   <div
     v-if="visible"
-    class="fixed inset-0 z-50 flex items-center justify-center"
+    class="fixed inset-0 z-[9999] flex items-center justify-center"
     style="background: rgba(0,0,0,0.65); backdrop-filter: blur(3px);"
     @click.self="close"
   >
@@ -88,6 +90,7 @@
 
     </div>
   </div>
+  </Teleport>
 </template>
 
 <script setup>
