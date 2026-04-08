@@ -127,6 +127,7 @@ import {
   getUnusualStocks,
   getTopSectors,
   getNorthFlowRanking,
+  getLimitSummary,
   clearCache,
 } from '../services/copilotData.js'
 import {
@@ -229,22 +230,33 @@ async function executeQuickCommand(cmd) {
 async function showMarket() {
   isLoading.value = true
   try {
-    // 获取大盘和板块数据
-    const [overview, sectors, stocks] = await Promise.all([
+    // 同时获取多个数据源
+    const [overview, sectors, limitSummary] = await Promise.all([
       getMarketOverview(),
       getSectors(),
-      getChinaStocks(),
+      getLimitSummary(),
     ])
     
     const text = formatMarketOverview(overview)
     
-    // 添加市场情绪分析
+    // 市场情绪分析
     const sentiment = analyzeMarketSentiment(overview?.indices, sectors)
+    const sentimentText = formatMarketSentiment({ market: sentiment })
     
-    // 获取板块排行
+    // 涨停汇总
+    let limitText = ''
+    if (limitSummary && (limitSummary.zt_count > 0 || limitSummary.dt_count > 0)) {
+      limitText = `\n📌 【涨跌停汇总】\n` +
+        `涨停: ${limitSummary.zt_count} 只\n` +
+        `跌停: ${limitSummary.dt_count} 只\n` +
+        `市场情绪: ${limitSummary.market_sentiment || '分析中'}`
+    }
+    
+    // 板块排行
     const topSectors = await getTopSectors(3)
+    const sectorsText = formatTopSectors(topSectors)
     
-    addAssistantMessage(text + '\n\n' + formatMarketSentiment({ market: sentiment }) + '\n\n' + formatTopSectors(topSectors))
+    addAssistantMessage(text + '\n\n' + sentimentText + limitText + '\n\n' + sectorsText)
   } catch (e) {
     addErrorMessage(`获取大盘数据失败: ${e.message}`)
   } finally {
@@ -255,8 +267,27 @@ async function showMarket() {
 async function showSectors() {
   isLoading.value = true
   try {
-    const data = await getTopSectors(5)
-    addAssistantMessage(formatTopSectors(data))
+    const [sectors, limitSummary] = await Promise.all([
+      getSectors(),
+      getLimitSummary(),
+    ])
+    
+    const lines = []
+    lines.push(formatTopSectors({ top: sectors, bottom: sectors }))
+    
+    // 添加涨停板块分布
+    if (limitSummary?.zt_industry) {
+      const topInd = Object.entries(limitSummary.zt_industry).slice(0, 3)
+      if (topInd.length > 0) {
+        lines.push('')
+        lines.push('🏆 【涨停集中板块】')
+        for (const [ind, count] of topInd) {
+          lines.push(`  ${ind}: ${count}只涨停`)
+        }
+      }
+    }
+    
+    addAssistantMessage(lines.join('\n'))
   } catch (e) {
     addErrorMessage(`获取板块数据失败: ${e.message}`)
   } finally {
@@ -279,8 +310,11 @@ async function showNorthFlow() {
 async function showLimitUp() {
   isLoading.value = true
   try {
-    const stocks = await getLimitUpStocks()
-    addAssistantMessage(formatLimitUp(stocks))
+    const [stocks, summary] = await Promise.all([
+      getLimitUpStocks(),
+      getLimitSummary(),
+    ])
+    addAssistantMessage(formatLimitUp(stocks, summary))
   } catch (e) {
     addErrorMessage(`获取涨停数据失败: ${e.message}`)
   } finally {
@@ -303,8 +337,20 @@ async function showLimitDown() {
 async function showUnusual() {
   isLoading.value = true
   try {
-    const stocks = await getUnusualStocks()
-    addAssistantMessage(formatUnusualStocks(stocks))
+    const [stocks, limitSummary] = await Promise.all([
+      getUnusualStocks(),
+      getLimitSummary(),
+    ])
+    const lines = []
+    lines.push(formatUnusualStocks(stocks))
+    if (limitSummary?.strongest?.length > 0) {
+      lines.push('')
+      lines.push('🔥 【强势股】换手率最高:')
+      for (const s of limitSummary.strongest.slice(0, 3)) {
+        lines.push(`  ${s.name}: 换手率${s.turnover_rate?.toFixed(1)}% 涨幅${s.change_pct?.toFixed(2)}%`)
+      }
+    }
+    addAssistantMessage(lines.join('\n'))
   } catch (e) {
     addErrorMessage(`获取异动数据失败: ${e.message}`)
   } finally {
