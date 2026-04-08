@@ -99,6 +99,7 @@ def _fetch_futures_data():
     global _FUTURES_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
     spot_data = {}
+    fetch_success = False
 
     try:
         # 腾讯 qt.gtimg.cn 国内期货现货（直连不过代理）
@@ -127,11 +128,24 @@ def _fetch_futures_data():
                 except Exception:
                     continue
             logger.info(f"[Futures] Tencent qt data: {len(spot_data)} items")
+            if len(spot_data) > 0:
+                fetch_success = True
         except Exception as e:
             logger.warning(f"[Futures] Tencent fetch failed: {e}")
 
     except Exception as e:
         logger.warning(f"[Futures] overall fetch failed: {e}")
+
+    # 如果腾讯数据获取失败，使用 Mock 数据作为 fallback
+    if not fetch_success or len(spot_data) == 0:
+        logger.warning("[Futures] Using mock commodity data as fallback")
+        # 使用 Mock 商品数据的 price/change_pct
+        for sym, mock_item in enumerate(_MOCK_COMMODITIES):
+            spot_data[mock_item["symbol"]] = {
+                "price": mock_item.get("price", 0),
+                "change_pct": mock_item.get("change_pct", 0),
+                "tick": mock_item.get("tick", ""),
+            }
 
     # 整理商品期货列表
     commodities = []
