@@ -1,25 +1,25 @@
 <template>
-  <!-- 全屏容器：直接body子元素，不受任何overflow/stacking约束 -->
-  <div
-    v-show="ui.klineFullscreen"
-    :style="ui.klineFullscreen
-      ? 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:200;width:100vw;height:100vh;background:#0a0e17;display:flex;flex-direction:column'
-      : ''"
-  >
-    <FullscreenKline
-      v-show="!futuresFullscreen"
-      :symbol="fullscreenSymbol"
-      :name="fullscreenName"
-      :isFull="true"
-      @close="() => { ui.klineFullscreen = false }"
-      @symbol-change="openFullscreenKline"
-    />
-    <FuturesPanel
-      v-show="futuresFullscreen"
-      :symbol="futuresFullscreenSymbol"
-      @close="() => { futuresFullscreen = false; ui.klineFullscreen = false }"
-    />
-  </div>
+  <!-- Teleport 全屏到 body，脱离主界面 DOM 树，强制 100vw/100vh -->
+  <Teleport to="body">
+    <div
+      v-if="ui.klineFullscreen"
+      class="fixed inset-0 z-[9999] w-screen h-screen bg-[#0a0e17] flex flex-col overflow-hidden"
+    >
+      <FullscreenKline
+        v-if="!futuresFullscreen"
+        :symbol="fullscreenSymbol"
+        :name="fullscreenName"
+        :isFull="true"
+        @close="() => { ui.klineFullscreen = false }"
+        @symbol-change="openFullscreenKline"
+      />
+      <FuturesPanel
+        v-if="futuresFullscreen"
+        :symbol="futuresFullscreenSymbol"
+        @close="() => { futuresFullscreen = false; ui.klineFullscreen = false }"
+      />
+    </div>
+  </Teleport>
 
   <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
