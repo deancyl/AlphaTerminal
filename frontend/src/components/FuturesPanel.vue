@@ -6,13 +6,27 @@
       <input
         v-model="inputSymbol"
         class="w-20 px-2 py-0.5 text-[11px] rounded bg-gray-800 border border-gray-600 text-gray-200 focus:border-terminal-accent outline-none"
-        placeholder="IF0 / RB0"
+        placeholder="RB / I / SC"
         @keydown.enter="loadSymbol"
       />
       <button class="px-2 py-0.5 text-[10px] rounded bg-terminal-accent text-white hover:opacity-80" @click="loadSymbol">切换</button>
 
-      <!-- 周期选择 -->
-      <div class="flex gap-1 ml-2">
+      <!-- 视图切换：K线 / 期限结构 -->
+      <div class="flex gap-1 ml-2 border border-gray-700 rounded">
+        <button
+          class="px-2 py-0.5 text-[9px] rounded transition"
+          :class="viewMode === 'kline' ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          @click="viewMode = 'kline'"
+        >K线图</button>
+        <button
+          class="px-2 py-0.5 text-[9px] rounded transition"
+          :class="viewMode === 'term' ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          @click="switchToTerm"
+        >期限结构</button>
+      </div>
+
+      <!-- 周期选择（仅K线模式） -->
+      <div v-if="viewMode === 'kline'" class="flex gap-1">
         <button
           v-for="p in periods" :key="p.value"
           class="px-2 py-0.5 text-[10px] rounded transition"
@@ -21,8 +35,8 @@
         >{{ p.label }}</button>
       </div>
 
-      <!-- 副图选择 -->
-      <div class="flex gap-1">
+      <!-- 副图选择（仅K线模式） -->
+      <div v-if="viewMode === 'kline'" class="flex gap-1">
         <button
           v-for="ind in subChartOptions" :key="ind.key"
           class="px-1.5 py-0.5 text-[9px] rounded border transition"
@@ -50,8 +64,8 @@
       <div class="text-red-400 text-sm">{{ chartError }}</div>
     </div>
 
-    <!-- K线图（统一 BaseKLineChart 哑组件） -->
-    <div v-else class="flex-1 min-w-0 relative">
+    <!-- K线图 -->
+    <div v-else-if="viewMode === 'kline'" class="flex-1 min-w-0 relative">
       <BaseKLineChart
         ref="klineRef"
         class="w-full h-full"
@@ -61,12 +75,22 @@
         :symbol="currentSymbol"
       />
     </div>
+
+    <!-- 期限结构图 -->
+    <div v-else-if="viewMode === 'term'" class="flex-1 min-w-0 relative">
+      <TermStructureChart
+        :symbol="termSymbol"
+        :name="termName"
+        :data="termStructureData"
+      />
+    </div>
   </div>
 </template>
 
 <script setup>
 import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from 'vue'
 import BaseKLineChart from './BaseKLineChart.vue'
+import TermStructureChart from './TermStructureChart.vue'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 
@@ -86,8 +110,37 @@ const latestHold    = ref(null)
 const chartError    = ref('')
 const klineRef      = ref(null)
 
+// ── 视图模式 ───────────────────────────────────────────────────
+const viewMode         = ref('kline')   // 'kline' | 'term'
+const termSymbol       = ref('')         // 品种代码如 RB
+const termName         = ref('')         // 中文名如 螺纹钢
+const termStructureData = ref([])         // 期限结构数据
+const termError        = ref('')
+
 // ── WebSocket ─────────────────────────────────────────────────
 const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+
+async function switchToTerm() {
+  viewMode.value = 'term'
+  await fetchTermStructure()
+}
+
+async function fetchTermStructure() {
+  const prefix = inputSymbol.value.trim().toUpperCase().replace(/0$/, '')
+  if (!prefix) return
+  termError.value = ''
+  try {
+    const res = await fetch(`/api/v1/futures/term_structure?symbol=${prefix}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    if (data.error) { termError.value = data.error; return }
+    termSymbol.value = data.symbol
+    termName.value   = data.name
+    termStructureData.value = data.term_structure || []
+  } catch (e) {
+    termError.value = `加载失败: ${e.message}`
+  }
+}
 
 // ── 图表数据（统一结构化格式）────────────────────────────────────
 const subChartOptions = [
@@ -178,6 +231,7 @@ function loadSymbol() {
   wsDisconnect()
   wsConnect(s)
   fetchData()
+  if (viewMode.value === 'term') fetchTermStructure()
 }
 
 // ── 监听 ──────────────────────────────────────────────────────

@@ -4,6 +4,7 @@
 缓存策略：3 分钟 TTL，后台异步刷新
 """
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -179,6 +180,99 @@ async def futures_commodities():
         "commodities": cache.get("commodities", []),
         "update_time": cache.get("update_time", ""),
     }
+
+
+@router.get("/futures/term_structure")
+async def futures_term_structure(symbol: str = "RB"):
+    """
+    大宗商品期货期限结构（Forward Curve）
+
+    参数:
+      symbol: 品种代码，如 RB（螺纹钢）、I（铁矿石）、SC（原油）
+
+    返回:
+      symbol:         品种代码
+      name:           中文名称
+      term_structure:  各交割月合约列表，按月份升序
+        - contract:  合约代码（如 RB2405）
+        - month:     交割月（如 2405）
+        - price:     最新价
+        - oi:        持仓量（Open Interest）
+
+    用途：
+      - Contango（升水）：远月 > 近月，向上倾斜曲线 → 现货充足
+      - Backwardation（贴水）：近月 > 远月，向下倾斜曲线 → 现货紧缺
+    """
+    # 去除数字和特殊字符，提取字母前缀
+    prefix = re.sub(r'[^A-Za-z]', '', symbol).upper()
+    if not prefix:
+        return {"error": f"无效品种代码: {symbol}"}
+
+    # 从 WATCHED_COMMODITIES 反查中文名
+    zh_name = None
+    for sym_key, (name, _unit) in WATCHED_COMMODITIES.items():
+        key_prefix = re.sub(r'[^A-Za-z]', '', sym_key).upper()
+        if key_prefix == prefix:
+            zh_name = name
+            break
+
+    if not zh_name:
+        return {"error": f"暂不支持品种: {prefix}，支持的品种见 /futures/commodities"}
+
+    try:
+        import akshare as ak, warnings
+        warnings.filterwarnings("ignore")
+        df = ak.futures_zh_realtime(symbol=zh_name)
+
+        curves = []
+        for _, row in df.iterrows():
+            contract_sym = str(row.get("symbol", "")).strip()
+            price = row.get("trade") if row.get("trade") is not None else row.get("最新价")
+            vol   = row.get("volume") if row.get("volume") is not None else row.get("成交量")
+            oi    = row.get("position") if row.get("position") is not None else row.get("持仓量", 0)
+
+            try: price = float(price)
+            except (TypeError, ValueError): price = None
+            try: vol = float(vol)
+            except (TypeError, ValueError): vol = None
+            try: oi = float(oi) if oi is not None else 0.0
+            except (TypeError, ValueError): oi = 0.0
+
+            # 过滤僵尸合约（无成交量或无价格）
+            if (vol is None or vol == 0) and (price is None or price == 0):
+                continue
+            if price is None or price <= 0:
+                continue
+
+            # 提取交割月数字：RB2405 → 2405
+            month_match = re.search(r'\d+$', contract_sym)
+            if not month_match:
+                continue
+            month_code = month_match.group()
+
+            curves.append({
+                "contract": contract_sym.upper(),
+                "month":    month_code,
+                "price":    round(price, 2),
+                "oi":       int(oi) if oi else 0,
+            })
+
+        if not curves:
+            return {"error": f"品种 {prefix}({zh_name}) 暂无可用合约数据", "symbol": prefix, "name": zh_name, "term_structure": []}
+
+        # 按交割月升序排列
+        curves = sorted(curves, key=lambda x: x["month"])
+
+        logger.info(f"[Futures] term_structure {prefix}({zh_name}): {len(curves)} contracts")
+        return {
+            "symbol": prefix,
+            "name":   zh_name,
+            "term_structure": curves,
+        }
+
+    except Exception as e:
+        logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}")
+        return {"error": f"获取失败: {type(e).__name__}: {e}", "symbol": prefix, "name": zh_name, "term_structure": []}
 
 
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
