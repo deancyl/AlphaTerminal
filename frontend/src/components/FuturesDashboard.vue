@@ -106,6 +106,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import FuturesMainChart from './FuturesMainChart.vue'
+import { apiFetch } from '../utils/api.js'
 
 const emit = defineEmits(['open-futures'])
 
@@ -136,8 +137,8 @@ function openFuturesCard(card) {
 async function fetchFuturesData() {
   try {
     const [mi, mc] = await Promise.all([
-      fetch('/api/v1/futures/main_indexes').then(r => r.ok ? r.json() : null),
-      fetch('/api/v1/futures/commodities').then(r => r.ok ? r.json() : null),
+      apiFetch('/api/v1/futures/main_indexes'),
+      apiFetch('/api/v1/futures/commodities'),
     ])
 
     if (mi) {
