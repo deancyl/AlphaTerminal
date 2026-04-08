@@ -72,10 +72,10 @@
         <button class="mt-2 text-xs text-gray-500 hover:text-gray-300" @click="chartError = ''">关闭</button>
       </div>
 
-      <!-- 统一 BaseKLineChart 哑组件（absolute 撑满父容器） -->
+      <!-- 统一 BaseKLineChart 哑组件（flex 自然填满剩余空间） -->
       <BaseKLineChart
         ref="baseChartRef"
-        class="absolute inset-0 w-full h-full"
+        class="w-full h-full"
         :chart-data="processedChartData"
         :sub-charts="activeSubCharts"
         :tick="liveTick"
