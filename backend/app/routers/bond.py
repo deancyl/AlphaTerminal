@@ -3,6 +3,7 @@
 数据源：akshare bond_china_yield + 国债/信用债 Mock
 缓存策略：5 分钟 TTL，后台异步刷新
 """
+import asyncio
 import logging
 import threading
 import time
@@ -232,7 +233,7 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
     try:
         import akshare as ak, warnings, numpy as np
         warnings.filterwarnings("ignore")
-        df = ak.bond_china_yield()   # time-series DataFrame: date + multiple tenor columns
+        df = await asyncio.to_thread(ak.bond_china_yield)   # time-series DataFrame: date + multiple tenor columns
         if df is None or df.empty:
             raise ValueError("empty df")
         tenor_col = next((c for c in df.columns if tenor in c), None)

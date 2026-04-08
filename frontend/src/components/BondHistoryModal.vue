@@ -102,11 +102,11 @@ const emit = defineEmits(['close'])
 
 const chartRef   = ref(null)
 const chartInst  = ref(null)
-const isLoading   = ref(false)
-const error       = ref('')
-const historyData = ref([])
+const isLoading    = ref(false)
+const error        = ref('')
+const historyData  = ref([])
 const currentYield = ref(null)
-const percentile  = ref(null)
+const percentile   = ref(null)
 
 const periodLabel = computed(() => ({ '1M': '近1月', '3M': '近3月', '6M': '近6月', '1Y': '近1年', '3Y': '近3年' }[props.period] || props.period))
 const tenorLabel  = computed(() => props.tenor)
@@ -140,19 +140,30 @@ async function fetchHistory() {
   percentile.value = null
   currentYield.value = null
 
+  // 超时兜底（8秒强制关闭 loading）
+  const timer = setTimeout(() => {
+    if (isLoading.value) {
+      isLoading.value = false
+      error.value = '请求超时，请检查网络或稍后重试'
+    }
+  }, 8000)
+
   try {
     const res = await fetch(`/api/v1/bond/history?tenor=${encodeURIComponent(props.tenor)}&period=${props.period}`)
+    clearTimeout(timer)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.error || !data.history?.length) throw new Error(data.error || '无数据')
-    historyData.value = data.history
-    currentYield.value = data.current
-    percentile.value   = data.percentile
-
+    if (data.error || !data.history?.length) {
+      throw new Error(data.error || '暂无历史数据（AkShare 限流或网络中断）')
+    }
+    historyData.value = data.history || []
+    currentYield.value = data.current ?? null
+    percentile.value   = data.percentile ?? null
     await nextTick()
     renderChart()
   } catch (e) {
-    error.value = e.message
+    clearTimeout(timer)
+    error.value = String(e.message || '加载失败')
   } finally {
     isLoading.value = false
   }
