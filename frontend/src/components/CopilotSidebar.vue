@@ -131,20 +131,19 @@ import {
 } from '../services/copilotData.js'
 import {
   generateAnalysisReport,
-  analyzeChangeStats,
+  analyzeMarketSentiment,
 } from '../services/copilotAnalysis.js'
 import {
-  formatStockList,
-  formatSectorList,
   formatMarketOverview,
+  formatSectorList,
   formatLimitUp,
   formatLimitDown,
   formatUnusualStocks,
   formatAnalysisReport,
-  formatMarketStats,
-  formatCompareStocks,
-  formatNorthFlowRanking,
+  formatMarketSentiment,
   formatTopSectors,
+  formatNorthFlowRanking,
+  formatSearchResults,
   formatHelp,
 } from '../services/copilotResponse.js'
 
@@ -230,20 +229,22 @@ async function executeQuickCommand(cmd) {
 async function showMarket() {
   isLoading.value = true
   try {
-    const data = await getMarketOverview()
-    const text = formatMarketOverview(data)
+    // 获取大盘和板块数据
+    const [overview, sectors, stocks] = await Promise.all([
+      getMarketOverview(),
+      getSectors(),
+      getChinaStocks(),
+    ])
     
-    // 补充市场统计
-    const stocks = await getChinaStocks()
-    if (stocks && stocks.length > 0) {
-      const stats = analyzeChangeStats(stocks)
-      if (stats) {
-        addAssistantMessage(text + '\n\n' + formatMarketStats(stats))
-        return
-      }
-    }
+    const text = formatMarketOverview(overview)
     
-    addAssistantMessage(text)
+    // 添加市场情绪分析
+    const sentiment = analyzeMarketSentiment(overview?.indices, sectors)
+    
+    // 获取板块排行
+    const topSectors = await getTopSectors(3)
+    
+    addAssistantMessage(text + '\n\n' + formatMarketSentiment({ market: sentiment }) + '\n\n' + formatTopSectors(topSectors))
   } catch (e) {
     addErrorMessage(`获取大盘数据失败: ${e.message}`)
   } finally {
@@ -331,12 +332,13 @@ async function analyzeStock(keyword) {
     if (results.length === 1) {
       // 只有一个结果，直接分析
       const stock = results[0]
-      const report = generateAnalysisReport(stock)
+      // 获取大盘数据作为背景
+      const overview = await getMarketOverview()
+      const report = generateAnalysisReport(stock, overview)
       addAssistantMessage(formatAnalysisReport(report))
     } else {
-      // 多个结果，让用户选择
-      const listText = formatStockList(results, `搜索「${keyword}」结果`)
-      addAssistantMessage(listText + '\n\n💡 请输入完整股票名称或代码进行详细分析')
+      // 多个结果，显示列表
+      addAssistantMessage(formatSearchResults(results, keyword))
     }
   } catch (e) {
     addErrorMessage(`分析失败: ${e.message}`)
