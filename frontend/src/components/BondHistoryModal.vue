@@ -92,6 +92,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick } from 'vue'
+import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({
   visible:   { type: Boolean, default: false },
@@ -141,19 +142,11 @@ async function fetchHistory() {
   percentile.value = null
   currentYield.value = null
 
-  // 超时兜底（8秒强制关闭 loading）
-  const timer = setTimeout(() => {
-    if (isLoading.value) {
-      isLoading.value = false
-      error.value = '请求超时，请检查网络或稍后重试'
-    }
-  }, 8000)
-
   try {
-    const res = await fetch(`/api/v1/bond/history?tenor=${encodeURIComponent(props.tenor)}&period=${props.period}`)
-    clearTimeout(timer)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await apiFetch(
+      `/api/v1/bond/history?tenor=${encodeURIComponent(props.tenor)}&period=${props.period}`,
+      10000
+    )
     if (data.error || !data.history?.length) {
       throw new Error(data.error || '暂无历史数据（AkShare 限流或网络中断）')
     }
@@ -162,7 +155,6 @@ async function fetchHistory() {
     percentile.value   = data.percentile ?? null
     await renderChart()
   } catch (e) {
-    clearTimeout(timer)
     error.value = String(e.message || '加载失败')
   } finally {
     isLoading.value = false

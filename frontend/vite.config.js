@@ -20,5 +20,20 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['gridstack'],
+    exclude: ['echarts'],   // 通过 CDN 加载，不打入 bundle
+  },
+  build: {
+    rollupOptions: {
+      external: ['echarts'], // CDN 加载，标记为 external
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('vue'))       return 'vendor-vue'
+            if (id.includes('gridstack')) return 'vendor-gridstack'
+          }
+        },
+      },
+    },
+    chunkSizeWarningLimit: 600,
   },
 })

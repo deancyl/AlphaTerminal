@@ -189,6 +189,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import YieldCurveChart from './YieldCurveChart.vue'
 import YieldSpreadChart from './YieldSpreadChart.vue'
 import BondHistoryModal from './BondHistoryModal.vue'
+import { apiFetch } from '../utils/api.js'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [
@@ -317,11 +318,11 @@ async function fetchSpreadHistory() {
   spreadError.value   = ''
   try {
     const [data10y, data2y] = await Promise.all([
-      fetch(`/api/v1/bond/history?tenor=10年&period=1Y`).then(r => r.ok ? r.json() : null),
-      fetch(`/api/v1/bond/history?tenor=2年&period=1Y`).then(r => r.ok ? r.json() : null),
+      apiFetch('/api/v1/bond/history?tenor=10年&period=1Y', 10000).catch(() => null),
+      apiFetch('/api/v1/bond/history?tenor=2年&period=1Y', 10000).catch(() => null),
     ])
-    spreadHistory10y.value  = (data10y?.history || []).map(d => ({ date: d.date, yield: d.yield }))
-    spreadHistory2y.value   = (data2y?.history  || []).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory10y.value  = (data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory2y.value   = (data2y?.history  || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
   } catch (e) {
     spreadError.value = e.message
