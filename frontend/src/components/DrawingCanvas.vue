@@ -1,266 +1,514 @@
 <template>
-  <!-- Canvas 覆盖层：透明背景，捕获图表上所有鼠标事件 -->
-  <canvas
-    ref="canvasRef"
-    class="absolute inset-0 w-full"
-    :style="{ cursor: cursorStyle }"
-    @mousedown="onMouseDown"
-    @mousemove="onMouseMove"
-    @mouseup="onMouseUp"
-    @dblclick="onDblClick"
-    @contextmenu.prevent="onContextMenu"
-  />
+  <div class="drawing-layer" :class="{ 'locked': props.locked }">
+    <canvas
+      ref="canvasRef"
+      class="drawing-canvas"
+      :style="{ cursor: cursorStyle }"
+      @mousedown="onMouseDown"
+      @mousemove="onMouseMove"
+      @mouseup="onMouseUp"
+      @dblclick="onDblClick"
+      @contextmenu.prevent="onContextMenu"
+      @mouseleave="onMouseLeave"
+    />
 
-  <!-- 自定义右键菜单 -->
-  <div
-    v-if="ctxMenu.show"
-    :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-    class="fixed z-[9999] bg-terminal-panel border border-gray-600 rounded-lg shadow-2xl py-1 min-w-[140px] text-xs"
-    @click.stop
-  >
-    <div
-      class="flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-500/10 cursor-pointer transition-colors"
-      @click="ctxDeleteShape"
-    >
-      🗑️ 删除选中线段
+    <!-- 悬停提示 -->
+    <div v-if="hoverInfo.show" class="hover-tooltip" :style="{ left: hoverInfo.x + 'px', top: hoverInfo.y + 'px' }">
+      {{ hoverInfo.text }}
     </div>
-    <div
-      class="flex items-center gap-2 px-3 py-1.5 text-gray-400 hover:bg-white/5 cursor-pointer transition-colors border-t border-gray-700"
-      @click="ctxMenu.show = false"
-    >
-      ✕ 取消
+
+    <!-- 右键菜单 -->
+    <div v-if="ctxMenu.show" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
+      <div class="menu-item" @click="editSelected">
+        <span class="icon">✏️</span> 编辑样式
+      </div>
+      <div class="menu-item" @click="duplicateSelected">
+        <span class="icon">📋</span> 复制
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item delete" @click="ctxDeleteShape">
+        <span class="icon">🗑️</span> 删除
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item" @click="ctxMenu.show = false">
+        <span class="icon">✕</span> 取消
+      </div>
+    </div>
+
+    <!-- 样式编辑弹窗 -->
+    <div v-if="styleEditor.show" class="style-editor" :style="{ left: styleEditor.x + 'px', top: styleEditor.y + 'px' }">
+      <div class="editor-title">编辑画线样式</div>
+      <div class="editor-row">
+        <label>颜色</label>
+        <input type="color" v-model="styleEditor.color" @change="applyStyle">
+      </div>
+      <div class="editor-row">
+        <label>线宽</label>
+        <input type="range" v-model.number="styleEditor.lineWidth" min="1" max="5" step="0.5" @input="applyStyle">
+        <span>{{ styleEditor.lineWidth }}px</span>
+      </div>
+      <div class="editor-row">
+        <label>线型</label>
+        <select v-model="styleEditor.lineDash" @change="applyStyle">
+          <option value="">实线</option>
+          <option value="5,3">虚线</option>
+          <option value="10,3,2,3">点划线</option>
+          <option value="2,2">点线</option>
+        </select>
+      </div>
+      <div class="editor-row" v-if="styleEditor.shape?.type === 'text'">
+        <label>文字</label>
+        <input type="text" v-model="styleEditor.text" @change="applyStyle">
+      </div>
+      <div class="editor-actions">
+        <button @click="styleEditor.show = false">关闭</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import localforage from 'localforage'
-import { UP, DOWN } from '../utils/indicators.js'
 
 defineOptions({ inheritAttrs: false })
 
 const props = defineProps({
-  // 绑定到哪个 ECharts 实例（通过 convertFromPixel 转换坐标）
   chartInstance:  { type: Object,  default: null },
-  activeTool:     { type: String,  default: '' },   // '' | 'line' | 'ray' | 'segment' | 'hray' | 'channel' | 'fib' | 'rect' | 'text'
+  activeTool:     { type: String,  default: '' },
   activeColor:    { type: String,  default: '#fbbf24' },
   magnetMode:     { type: Boolean, default: true },
-  locked:         { type: Boolean, default: false },  // 锁定时禁止绘制/拖拽
-  symbol:        { type: String,  default: '' },
+  locked:         { type: Boolean, default: false },
+  symbol:         { type: String,  default: '' },
+  period:         { type: String,  default: 'daily' },
 })
 
-const emit = defineEmits([
-  'drawn',        // (shape) 新绘制了图形
-  'deleted',      // (id) 删除了图形
-  'cleared',      // ()  清除了全部
-])
+const emit = defineEmits(['drawn', 'deleted', 'cleared', 'undo', 'redo'])
 
-// ── 状态 ────────────────────────────────────────────────────
+// 状态
 const canvasRef = ref(null)
 let ctx = null
 let animationFrame = null
 
-// 坐标映射：像素坐标 → 数据索引 + 像素偏移
-const coordConverter = ref(null)   // { gridIndex, xAxisIndex } 传给 chartInstance.convertFromPixel
+const shapes = ref([])
+const undoStack = ref([])
+const redoStack = ref([])
+const MAX_HISTORY = 50
 
-// 所有已保存的图形
-const shapes = ref([])             // [{ id, type, points:[{x,y,price,idx}], color, locked, text? }]
+const drawing = ref(null)
+const selectedId = ref(null)
+const hoveredId = ref(null)
 
-// 正在绘制的图形
-const drawing = ref(null)          // { type, points:[], color }
-const selectedId = ref(null)       // 选中图形 id
-const hoveredId  = ref(null)        // 悬停图形 id
-const ctxMenu     = ref({ show: false, x: 0, y: 0, targetId: null })  // 右键菜单状态
+const ctxMenu = ref({ show: false, x: 0, y: 0, targetId: null })
+const styleEditor = ref({ show: false, x: 0, y: 0, shape: null, color: '', lineWidth: 1.5, lineDash: '', text: '' })
+const hoverInfo = ref({ show: false, x: 0, y: 0, text: '' })
 
-// 拖拽状态
-const dragging = ref(null)          // { id, pointIdx, startX, startY }
-const resizing = ref(null)          // { id, pointIdx, startX, startY }
+const dragging = ref(null)
+const dragStartPos = ref(null)
 
-// 鼠标位置
 const mouseX = ref(0)
 const mouseY = ref(0)
-const snappedPoint = ref(null)      // 磁吸后的 { x, y, price, idx }
-const cursorStyle  = ref('default')
+const snappedPoint = ref(null)
+const cursorStyle = ref('default')
 
-// ── 磁吸 ────────────────────────────────────────────────────
-function snapToKLine(x, y) {
-  if (!props.chartInstance || !props.magnetMode || !props.symbol) return { x, y }
-  const opt = props.chartInstance.getOption()
-  const grid = opt.grid?.[0]
-  if (!grid) return { x, y }
+const storage = localforage.createInstance({ name: 'AlphaTerminal', storeName: 'drawings_v3' })
 
-  // 从像素坐标转换为数据索引
-  try {
-    const converted = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
-    if (!converted) return { x, y }
-    const idx = Math.round(converted[0])
-    const price = converted[1]
-    if (idx < 0) return { x, y }
-
-    // 获取该索引对应的 K 线数据
-    const seriesData = props.chartInstance.getOption().series
-    const candlestickData = seriesData?.[0]?.data
-    if (!candlestickData || !candlestickData[idx]) return { x, y }
-
-    if (idx < 0 || idx >= candlestickData.length) return { x, y }
-    const [open, close, low, high] = candlestickData[idx] || []
-    if (high == null || low == null) return { x, y }
-    const SNAP_THRESHOLD = 15  // 像素
-
-    // 吸附到最近的 OHLC 价格
-    const candidates = [open, close, low, high]
-    let closest = null, minDist = Infinity
-    for (const c of candidates) {
-      if (c == null) continue
-      const py = props.chartInstance.convertToPixel({ gridIndex: 0 }, [0, c])?.[1]
-      if (py == null) continue
-      const dist = Math.abs(py - y)
-      if (dist < minDist) { minDist = dist; closest = c }
-    }
-
-    if (closest !== null && minDist < SNAP_THRESHOLD) {
-      const snappedY = props.chartInstance.convertToPixel({ gridIndex: 0 }, [0, closest])?.[1]
-      if (snappedY != null) {
-        return { x, y: snappedY, price: closest, idx }
-      }
-    }
-  } catch (e) { /* ignore */ }
-
-  return { x, y }
+// 历史记录
+function saveHistory() {
+  undoStack.value.push(JSON.stringify(shapes.value))
+  if (undoStack.value.length > MAX_HISTORY) undoStack.value.shift()
+  redoStack.value = []
 }
 
-// ── 像素/数据坐标互转 ───────────────────────────────────────
-function toPixel(price, idx) {
-  if (!props.chartInstance) return { x: 0, y: 0 }
+function undo() {
+  if (undoStack.value.length === 0) return
+  redoStack.value.push(JSON.stringify(shapes.value))
+  shapes.value = JSON.parse(undoStack.value.pop())
+  saveToStorage()
+  redraw()
+  emit('undo')
+}
+
+function redo() {
+  if (redoStack.value.length === 0) return
+  undoStack.value.push(JSON.stringify(shapes.value))
+  shapes.value = JSON.parse(redoStack.value.pop())
+  saveToStorage()
+  redraw()
+  emit('redo')
+}
+
+// 坐标转换
+function getTimestampByIndex(idx) {
   try {
-    return {
-      x: props.chartInstance.convertToPixel({ gridIndex: 0 }, [idx, price])?.[0] ?? 0,
-      y: props.chartInstance.convertToPixel({ gridIndex: 0 }, [idx, price])?.[1] ?? 0,
+    const option = props.chartInstance.getOption()
+    const times = option.xAxis?.[0]?.data
+    if (times && times[idx]) return new Date(times[idx]).getTime()
+  } catch (e) {}
+  return null
+}
+
+function getIndexByTimestamp(timestamp) {
+  if (!timestamp) return null
+  try {
+    const option = props.chartInstance.getOption()
+    const times = option.xAxis?.[0]?.data
+    if (!times) return null
+    
+    let left = 0, right = times.length - 1
+    let closestIdx = 0, minDiff = Infinity
+    
+    while (left <= right) {
+      const mid = Math.floor((left + right) / 2)
+      const midTime = new Date(times[mid]).getTime()
+      const diff = Math.abs(midTime - timestamp)
+      
+      if (diff < minDiff) { minDiff = diff; closestIdx = mid }
+      if (midTime < timestamp) left = mid + 1
+      else if (midTime > timestamp) right = mid - 1
+      else break
     }
-  } catch { return { x: 0, y: 0 } }
+    return closestIdx
+  } catch (e) { return null }
+}
+
+function toPixel(price, timestamp) {
+  if (!props.chartInstance) return null
+  try {
+    const idx = getIndexByTimestamp(timestamp)
+    if (idx == null) return null
+    const pixel = props.chartInstance.convertToPixel({ gridIndex: 0 }, [idx, price])
+    return pixel ? { x: pixel[0], y: pixel[1] } : null
+  } catch { return null }
 }
 
 function toData(x, y) {
-  if (!props.chartInstance) return { idx: 0, price: 0 }
+  if (!props.chartInstance) return null
   try {
-    const [idx, price] = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y]) ?? [0, 0]
-    return { idx: Math.round(idx), price }
-  } catch { return { idx: 0, price: 0 } }
+    const [idx, price] = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
+    return { idx: Math.round(idx), price, timestamp: getTimestampByIndex(Math.round(idx)) }
+  } catch { return null }
 }
 
-// ── 绘图 ────────────────────────────────────────────────────
-function drawShape(ctx, shape, isHovered = false, isSelected = false) {
-  if (!shape.points || shape.points.length < 1) return
-  ctx.save()
-  ctx.strokeStyle = shape.color || '#fbbf24'
-  ctx.lineWidth = isSelected ? 2 : (isHovered ? 1.8 : 1.2)
-  ctx.setLineDash(shape.type === 'hray' || shape.type === 'ray' ? [6, 4] : [])
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-
-  const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
-
-  if (shape.type === 'line' || shape.type === 'segment' || shape.type === 'trend') {
-    // 直线/线段/趋势线
-    if (shape.points.length < 2) {
-      // 绘制到鼠标位置
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(snap.x, snap.y); ctx.stroke()
-    } else {
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke()
-      if (shape.type === 'segment') {
-        // 画端点
-        ctx.fillStyle = shape.color
-        ;[p0, p1].forEach(p => { ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fill() })
+// 磁吸
+function snapToKLine(x, y) {
+  if (!props.chartInstance || !props.magnetMode) return { x, y }
+  
+  try {
+    const converted = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
+    if (!converted) return { x, y }
+    
+    const [idx, price] = converted
+    const roundedIdx = Math.round(idx)
+    
+    const option = props.chartInstance.getOption()
+    const candlestickData = option.series?.[0]?.data
+    
+    if (!candlestickData || roundedIdx < 0 || roundedIdx >= candlestickData.length) {
+      return { x, y }
+    }
+    
+    const [open, close, low, high] = candlestickData[roundedIdx]
+    const SNAP_THRESHOLD = 20
+    
+    const candidates = [
+      { price: open, label: '开' },
+      { price: close, label: '收' },
+      { price: low, label: '低' },
+      { price: high, label: '高' }
+    ]
+    
+    let closest = null, minDist = Infinity
+    for (const c of candidates) {
+      const pixelY = props.chartInstance.convertToPixel({ gridIndex: 0 }, [0, c.price])?.[1]
+      if (pixelY == null) continue
+      const dist = Math.abs(pixelY - y)
+      if (dist < minDist && dist < SNAP_THRESHOLD) {
+        minDist = dist
+        closest = c
       }
     }
-  } else if (shape.type === 'ray') {
-    // 射线（向右延伸）
-    if (shape.points.length < 2) {
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(snap.x, snap.y); ctx.stroke()
-    } else {
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
-      const dx = p1.x - p0.x, dy = p1.y - p0.y
-      const scale = 5000
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p0.x + dx * scale, p0.y + dy * scale); ctx.stroke()
+    
+    if (closest) {
+      const snappedY = props.chartInstance.convertToPixel({ gridIndex: 0 }, [0, closest.price])?.[1]
+      return { 
+        x, y: snappedY ?? y, price: closest.price, 
+        timestamp: getTimestampByIndex(roundedIdx),
+        idx: roundedIdx, magnetTo: closest.label
+      }
     }
-  } else if (shape.type === 'hray') {
-    // 水平射线
-    if (shape.points.length < 2) {
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      ctx.beginPath(); ctx.moveTo(0, p0.y); ctx.lineTo(canvasRef.value?.width || 1000, p0.y); ctx.stroke()
-    } else {
-      const py = p0.y
-      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvasRef.value?.width || 1000, py); ctx.stroke()
-    }
-  } else if (shape.type === 'channel') {
-    // 平行通道
-    if (shape.points.length < 2) {
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      const dy = snap.y - p0.y
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(snap.x, snap.y); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y + dy); ctx.lineTo(snap.x, snap.y + dy); ctx.stroke()
-    } else {
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
-      const dy = p1.y - p0.y
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(p0.x, p0.y - dy); ctx.lineTo(p1.x, p1.y - dy); ctx.stroke()
-    }
-  } else if (shape.type === 'fib') {
-    // 黄金分割（从 p0 到鼠标位）
-    const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
-    const labels = ['0', '23.6', '38.2', '50', '61.8', '78.6', '100']
-    ctx.setLineDash([])
-    levels.forEach((level, i) => {
-      const y = p0.y + (snap.y - p0.y) * level
-      ctx.strokeStyle = i === 2 || i === 4 ? shape.color : shape.color + '88'
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasRef.value?.width || 1000, y); ctx.stroke()
-      ctx.fillStyle = shape.color
-      ctx.font = '10px monospace'
-      ctx.fillText(labels[i] + '%', 4, y - 2)
-    })
-    // 绘制主趋势线
-    ctx.strokeStyle = shape.color
-    ctx.setLineDash([])
-    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(snap.x, snap.y); ctx.stroke()
-  } else if (shape.type === 'rect') {
-    // 矩形
-    if (shape.points.length < 2) {
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      ctx.beginPath(); ctx.rect(p0.x, p0.y, snap.x - p0.x, snap.y - p0.y); ctx.stroke()
-    } else {
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
-      ctx.beginPath(); ctx.rect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y); ctx.stroke()
-      ctx.fillStyle = (shape.color || '#fbbf24') + '15'
-      ctx.fillRect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y)
-    }
-  } else if (shape.type === 'text') {
-    // 文本标注
-    if (shape.text) {
-      ctx.fillStyle = shape.color || '#fbbf24'
-      ctx.font = '12px sans-serif'
-      ctx.fillText(shape.text, p0.x, p0.y)
-    }
-  }
+  } catch (e) {}
+  
+  return { x, y }
+}
 
-  // 选中状态：画控制点
+// 绘图
+function drawShape(ctx, shape, isHovered = false, isSelected = false) {
+  if (!shape.points || shape.points.length < 1) return
+  
+  const pixelPoints = shape.points.map(p => toPixel(p.price, p.timestamp)).filter(Boolean)
+  if (pixelPoints.length === 0) return
+  
+  ctx.save()
+  
+  ctx.strokeStyle = shape.color || '#fbbf24'
+  ctx.lineWidth = shape.lineWidth || (isSelected ? 2.5 : isHovered ? 2 : 1.5)
+  
+  const dash = shape.lineDash ? shape.lineDash.split(',').map(Number) : []
+  if (shape.type === 'hray' || shape.type === 'ray' || shape.type === 'trend') {
+    ctx.setLineDash(dash.length ? dash : [5, 3])
+  } else {
+    ctx.setLineDash(dash)
+  }
+  
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  
+  const p0 = pixelPoints[0]
+  
+  switch (shape.type) {
+    case 'trend':
+    case 'line':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        const dx = p1.x - p0.x, dy = p1.y - p0.y
+        const scale = 10000
+        ctx.beginPath()
+        ctx.moveTo(p0.x - dx * scale, p0.y - dy * scale)
+        ctx.lineTo(p1.x + dx * scale, p1.y + dy * scale)
+        ctx.stroke()
+        
+        if (shape.type === 'trend' || shape.arrow) {
+          drawArrow(ctx, p0.x - dx * scale, p0.y - dy * scale, p1.x + dx * scale, p1.y + dy * scale)
+        }
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(snap.x, snap.y)
+        ctx.stroke()
+      }
+      break
+      
+    case 'segment':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p1.x, p1.y)
+        ctx.stroke()
+        
+        if (shape.arrow) drawArrow(ctx, p0.x, p0.y, p1.x, p1.y)
+        
+        ctx.fillStyle = shape.color
+        ctx.beginPath(); ctx.arc(p0.x, p0.y, 3, 0, Math.PI * 2); ctx.fill()
+        ctx.beginPath(); ctx.arc(p1.x, p1.y, 3, 0, Math.PI * 2); ctx.fill()
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(snap.x, snap.y)
+        ctx.stroke()
+      }
+      break
+      
+    case 'ray':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        const dx = p1.x - p0.x, dy = p1.y - p0.y
+        const scale = 10000
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p0.x + dx * scale, p0.y + dy * scale)
+        ctx.stroke()
+        
+        if (shape.arrow) drawArrow(ctx, p0.x, p0.y, p0.x + dx * scale, p0.y + dy * scale)
+        
+        ctx.fillStyle = shape.color
+        ctx.beginPath(); ctx.arc(p0.x, p0.y, 3, 0, Math.PI * 2); ctx.fill()
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(snap.x, snap.y)
+        ctx.stroke()
+      }
+      break
+      
+    case 'hray':
+      {
+        const canvasWidth = canvasRef.value?.width || 1000
+        ctx.beginPath()
+        ctx.moveTo(0, p0.y)
+        ctx.lineTo(canvasWidth, p0.y)
+        ctx.stroke()
+        
+        ctx.fillStyle = shape.color
+        ctx.font = '11px monospace'
+        const priceText = shape.points[0].price.toFixed(2)
+        ctx.fillText(priceText, 4, p0.y - 4)
+      }
+      break
+      
+    case 'vline':
+      {
+        const canvasHeight = canvasRef.value?.height || 1000
+        ctx.beginPath()
+        ctx.moveTo(p0.x, 0)
+        ctx.lineTo(p0.x, canvasHeight)
+        ctx.stroke()
+        
+        const date = new Date(shape.points[0].timestamp)
+        const dateText = `${date.getMonth() + 1}/${date.getDate()}`
+        ctx.fillStyle = shape.color
+        ctx.font = '10px monospace'
+        ctx.fillText(dateText, p0.x + 4, 12)
+      }
+      break
+      
+    case 'channel':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        const dy = p1.y - p0.y
+        
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y - dy)
+        ctx.lineTo(p1.x, p1.y - dy)
+        ctx.stroke()
+        
+        ctx.setLineDash([3, 2])
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y + dy)
+        ctx.lineTo(p1.x, p1.y + dy)
+        ctx.stroke()
+        
+        ctx.setLineDash(dash)
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p1.x, p1.y)
+        ctx.stroke()
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        const dy = snap.y - p0.y
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(snap.x, snap.y)
+        ctx.stroke()
+        ctx.setLineDash([3, 2])
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y - dy)
+        ctx.lineTo(snap.x, snap.y - dy)
+        ctx.stroke()
+      }
+      break
+      
+    case 'fib':
+      {
+        const p1 = pixelPoints[1] || (snappedPoint.value || { x: mouseX.value, y: mouseY.value })
+        const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
+        const labels = ['0', '23.6%', '38.2%', '50%', '61.8%', '78.6%', '100%']
+        const canvasWidth = canvasRef.value?.width || 1000
+        
+        levels.forEach((level, i) => {
+          const y = p0.y + (p1.y - p0.y) * level
+          ctx.strokeStyle = (i === 2 || i === 4) ? shape.color : shape.color + '66'
+          ctx.setLineDash(i === 0 || i === 6 ? [] : [3, 2])
+          ctx.lineWidth = (i === 2 || i === 4) ? 1.5 : 1
+          
+          ctx.beginPath()
+          ctx.moveTo(0, y)
+          ctx.lineTo(canvasWidth, y)
+          ctx.stroke()
+          
+          ctx.fillStyle = shape.color
+          ctx.font = '10px monospace'
+          ctx.fillText(labels[i], 4, y - 2)
+        })
+        
+        ctx.strokeStyle = shape.color
+        ctx.setLineDash(dash)
+        ctx.lineWidth = shape.lineWidth || 1
+        ctx.beginPath()
+        ctx.moveTo(p0.x, p0.y)
+        ctx.lineTo(p1.x, p1.y)
+        ctx.stroke()
+      }
+      break
+      
+    case 'rect':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        ctx.beginPath()
+        ctx.rect(p0.x, p0.y, p1.x - p0.x, p1.y - p0.y)
+        ctx.stroke()
+        ctx.fillStyle = (shape.color || '#fbbf24') + '10'
+        ctx.fill()
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        ctx.beginPath()
+        ctx.rect(p0.x, p0.y, snap.x - p0.x, snap.y - p0.y)
+        ctx.stroke()
+      }
+      break
+      
+    case 'circle':
+      if (pixelPoints.length >= 2) {
+        const p1 = pixelPoints[1]
+        const r = Math.hypot(p1.x - p0.x, p1.y - p0.y)
+        ctx.beginPath()
+        ctx.arc(p0.x, p0.y, r, 0, Math.PI * 2)
+        ctx.stroke()
+      } else if (drawing.value?.id === shape.id) {
+        const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
+        const r = Math.hypot(snap.x - p0.x, snap.y - p0.y)
+        ctx.beginPath()
+        ctx.arc(p0.x, p0.y, r, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      break
+      
+    case 'text':
+      if (shape.text) {
+        ctx.font = `bold ${shape.fontSize || 12}px sans-serif`
+        const metrics = ctx.measureText(shape.text)
+        
+        ctx.fillStyle = '#0a0e17cc'
+        ctx.fillRect(p0.x - 2, p0.y - (shape.fontSize || 12), metrics.width + 4, (shape.fontSize || 12) + 4)
+        
+        ctx.fillStyle = shape.color
+        ctx.fillText(shape.text, p0.x, p0.y)
+      }
+      break
+  }
+  
   if (isSelected) {
     ctx.fillStyle = '#ffffff'
     ctx.strokeStyle = shape.color || '#fbbf24'
     ctx.lineWidth = 1.5
     ctx.setLineDash([])
-    shape.points.forEach(pt => {
-      const p = toPixel(pt.price, pt.idx)
-      ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2)
-      ctx.fill(); ctx.stroke()
+    
+    pixelPoints.forEach((p) => {
+      ctx.beginPath()
+      ctx.arc(p.x, p.y, 5, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.stroke()
     })
   }
-
+  
   ctx.restore()
+}
+
+function drawArrow(ctx, x1, y1, x2, y2) {
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const arrowLen = 10
+  const arrowAngle = Math.PI / 6
+  
+  ctx.beginPath()
+  ctx.moveTo(x2, y2)
+  ctx.lineTo(x2 - arrowLen * Math.cos(angle - arrowAngle), y2 - arrowLen * Math.sin(angle - arrowAngle))
+  ctx.moveTo(x2, y2)
+  ctx.lineTo(x2 - arrowLen * Math.cos(angle + arrowAngle), y2 - arrowLen * Math.sin(angle + arrowAngle))
+  ctx.stroke()
 }
 
 function redraw() {
@@ -269,20 +517,18 @@ function redraw() {
   animationFrame = requestAnimationFrame(() => {
     const canvas = canvasRef.value
     ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-    // 绘制已保存的图形
+    
     shapes.value.forEach(shape => {
       drawShape(ctx, shape, shape.id === hoveredId.value, shape.id === selectedId.value)
     })
-
-    // 绘制正在绘制的图形
+    
     if (drawing.value) {
       drawShape(ctx, drawing.value)
     }
   })
 }
 
-// ── 鼠标事件 ─────────────────────────────────────────────────
+// 鼠标事件
 function getCanvasPos(e) {
   const rect = canvasRef.value.getBoundingClientRect()
   return { x: e.clientX - rect.left, y: e.clientY - rect.top }
@@ -291,42 +537,67 @@ function getCanvasPos(e) {
 function onMouseDown(e) {
   if (e.button !== 0) return
   if (props.locked) return
+  
   const { x, y } = getCanvasPos(e)
-
+  
   if (props.activeTool === 'text') {
-    // 文本：直接输入
     const text = prompt('输入标注文字：')
     if (text) {
-      const { idx, price } = toData(x, y)
-      const id = genId()
-      const shape = { id, type: 'text', points: [{ x, y, price, idx }], color: props.activeColor, text }
-      shapes.value.push(shape)
-      emit('drawn', shape)
-      saveToStorage()
+      const data = toData(x, y)
+      if (data) {
+        saveHistory()
+        const shape = {
+          id: genId(),
+          type: 'text',
+          points: [{ price: data.price, timestamp: data.timestamp }],
+          color: props.activeColor,
+          text,
+          fontSize: 12,
+          lineWidth: 1.5,
+          createdAt: Date.now()
+        }
+        shapes.value.push(shape)
+        emit('drawn', shape)
+        saveToStorage()
+      }
     }
     return
   }
-
-  // 检查是否点击了已有图形的端点（不支持拖拽中段）
+  
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
-    // 只有端点才能拖拽（pointIdx >= 0）
     if (hit.pointIdx >= 0) {
-      dragging.value = { ...hit, startX: x, startY: y }
+      dragging.value = { id: hit.id, pointIdx: hit.pointIdx }
+      dragStartPos.value = { x, y }
+    } else {
+      const shape = shapes.value.find(s => s.id === hit.id)
+      if (shape && shape.type !== 'hray' && shape.type !== 'vline') {
+        dragging.value = { id: hit.id, pointIdx: -1, startX: x, startY: y }
+        dragStartPos.value = { x, y, points: JSON.parse(JSON.stringify(shape.points)) }
+      }
     }
     redraw()
     return
   }
-
-  // 开始绘制新图形
-  selectedId.value = null
-  const { idx, price } = toData(x, y)
+  
+  if (!props.activeTool) return
+  
+  const data = toData(x, y)
+  if (!data) return
+  
   const snapped = snapToKLine(x, y)
+  selectedId.value = null
   drawing.value = {
+    id: 'drawing-' + Date.now(),
     type: props.activeTool,
-    points: [{ x: snapped.x, y: snapped.y, price: snapped.price ?? price, idx }],
+    points: [{
+      price: snapped.price ?? data.price,
+      timestamp: snapped.timestamp ?? data.timestamp
+    }],
     color: props.activeColor,
+    lineWidth: 1.5,
+    createdAt: Date.now()
   }
 }
 
@@ -334,64 +605,107 @@ function onMouseMove(e) {
   const { x, y } = getCanvasPos(e)
   mouseX.value = x
   mouseY.value = y
-
-  // 更新光标样式
+  
   if (props.locked) {
     cursorStyle.value = 'not-allowed'
   } else if (props.activeTool) {
     cursorStyle.value = 'crosshair'
   } else if (dragging.value) {
-    cursorStyle.value = 'grabbing'
+    cursorStyle.value = dragging.value.pointIdx >= 0 ? 'grabbing' : 'move'
   } else if (hoveredId.value) {
-    cursorStyle.value = hitTest(x, y)?.pointIdx === -1 ? 'move' : 'crosshair'
+    const hit = hitTest(x, y)
+    cursorStyle.value = hit?.pointIdx >= 0 ? 'grab' : 'pointer'
   } else {
     cursorStyle.value = 'default'
   }
-
+  
   if (dragging.value) {
-    // 拖拽已有图形的控制点（端点）
-    const snap = snapToKLine(x, y)
-    const { idx, price } = toData(x, y)
     const shape = shapes.value.find(s => s.id === dragging.value.id)
-    if (shape && shape.points[dragging.value.pointIdx] !== undefined && dragging.value.pointIdx >= 0) {
-      shape.points[dragging.value.pointIdx] = { x: snap.x, y: snap.y, price: snap.price ?? price, idx }
+    if (!shape) return
+    
+    if (dragging.value.pointIdx >= 0) {
+      const data = toData(x, y)
+      if (data) {
+        const snapped = snapToKLine(x, y)
+        shape.points[dragging.value.pointIdx] = {
+          price: snapped.price ?? data.price,
+          timestamp: snapped.timestamp ?? data.timestamp
+        }
+        redraw()
+      }
+    } else {
+      const dx = x - dragStartPos.value.x
+      const dy = y - dragStartPos.value.y
+      
+      shape.points = dragStartPos.value.points.map((p) => {
+        const pixel = toPixel(p.price, p.timestamp)
+        if (!pixel) return p
+        const newPixel = { x: pixel.x + dx, y: pixel.y + dy }
+        const data = toData(newPixel.x, newPixel.y)
+        return data ? { price: data.price, timestamp: data.timestamp } : p
+      })
       redraw()
     }
     return
   }
-
-  // 更新磁吸
+  
   if (props.activeTool) {
     snappedPoint.value = snapToKLine(x, y)
-    if (drawing.value) {
-      redraw()
-    }
+    if (drawing.value) redraw()
   }
-
-  // 检测悬停
+  
   const hit = hitTest(x, y)
-  hoveredId.value = hit?.id ?? null
-  redraw()
+  if (hit?.id !== hoveredId.value) {
+    hoveredId.value = hit?.id ?? null
+    
+    if (hit) {
+      const shape = shapes.value.find(s => s.id === hit.id)
+      if (shape) {
+        hoverInfo.value = {
+          show: true,
+          x: x + 12,
+          y: y - 24,
+          text: `${getToolLabel(shape.type)} - ${shape.points[0]?.price?.toFixed(2) ?? ''}`
+        }
+      }
+    } else {
+      hoverInfo.value.show = false
+    }
+    redraw()
+  }
 }
 
 function onMouseUp(e) {
   if (dragging.value) {
-    saveToStorage()
+    if (dragStartPos.value && (Math.abs(e.clientX - dragStartPos.value.x) > 2 || Math.abs(e.clientY - dragStartPos.value.y) > 2)) {
+      saveHistory()
+      saveToStorage()
+    }
     dragging.value = null
+    dragStartPos.value = null
     return
   }
-
+  
   if (!drawing.value || !props.activeTool) return
-
+  
   const { x, y } = getCanvasPos(e)
+  const data = toData(x, y)
+  if (!data) return
+  
   const snapped = snapToKLine(x, y)
-  const { idx, price } = toData(x, y)
-
-  drawing.value.points.push({ x: snapped.x, y: snapped.y, price: snapped.price ?? price, idx: idx })
-
-  // 完成绘制的条件
-  const minPoints = { line: 2, ray: 2, segment: 2, hray: 2, channel: 2, fib: 2, rect: 2 }
+  drawing.value.points.push({
+    price: snapped.price ?? data.price,
+    timestamp: snapped.timestamp ?? data.timestamp
+  })
+  
+  const minPoints = { 
+    trend: 2, line: 2, ray: 2, segment: 2, 
+    hray: 1, vline: 1, channel: 2, fib: 2, 
+    rect: 2, circle: 2 
+  }
+  
   if ((minPoints[drawing.value.type] || 2) <= drawing.value.points.length) {
+    saveHistory()
     const shape = { ...drawing.value, id: genId() }
     shapes.value.push(shape)
     emit('drawn', shape)
@@ -402,11 +716,11 @@ function onMouseUp(e) {
 }
 
 function onDblClick(e) {
-  // 双击已有图形 → 选中（弹出操作菜单）
   const { x, y } = getCanvasPos(e)
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
+    editSelected()
     redraw()
   }
 }
@@ -416,24 +730,73 @@ function onContextMenu(e) {
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
-    // 显示自定义右键菜单（替代原生 confirm）
-    ctxMenu.value = {
-      show: true,
-      x: e.clientX,
-      y: e.clientY,
-      targetId: hit.id,
-    }
-  } else {
-    // 无图形处右键：区间统计触发（通知父组件处理）
-    const { idx, price } = toData(x, y)
-    emit('range-select', { x, y, idx, price })
+    ctxMenu.value = { show: true, x: e.clientX, y: e.clientY, targetId: hit.id }
   }
 }
 
-// ── 右键菜单操作 ──────────────────────────────────────────────
+function onMouseLeave() {
+  hoverInfo.value.show = false
+}
+
+// 菜单操作
+function editSelected() {
+  const shape = shapes.value.find(s => s.id === selectedId.value)
+  if (!shape) return
+  
+  styleEditor.value = {
+    show: true,
+    x: Math.min(ctxMenu.value.x || 200, window.innerWidth - 200),
+    y: Math.min(ctxMenu.value.y || 200, window.innerHeight - 200),
+    shape,
+    color: shape.color || '#fbbf24',
+    lineWidth: shape.lineWidth || 1.5,
+    lineDash: shape.lineDash || '',
+    text: shape.text || ''
+  }
+  ctxMenu.value.show = false
+}
+
+function applyStyle() {
+  const shape = styleEditor.value.shape
+  if (!shape) return
+  
+  saveHistory()
+  shape.color = styleEditor.value.color
+  shape.lineWidth = styleEditor.value.lineWidth
+  shape.lineDash = styleEditor.value.lineDash
+  if (shape.type === 'text') shape.text = styleEditor.value.text
+  
+  saveToStorage()
+  redraw()
+}
+
+function duplicateSelected() {
+  const shape = shapes.value.find(s => s.id === selectedId.value)
+  if (!shape) return
+  
+  saveHistory()
+  const newShape = {
+    ...JSON.parse(JSON.stringify(shape)),
+    id: genId(),
+    points: shape.points.map(p => ({
+      ...p,
+      timestamp: p.timestamp + 86400000
+    })),
+    createdAt: Date.now()
+  }
+  shapes.value.push(newShape)
+  selectedId.value = newShape.id
+  
+  saveToStorage()
+  redraw()
+  ctxMenu.value.show = false
+}
+
 function ctxDeleteShape() {
-  const id = ctxMenu.value.targetId
+  const id = ctxMenu.value.targetId || selectedId.value
   if (!id) return
+  
+  saveHistory()
   shapes.value = shapes.value.filter(s => s.id !== id)
   selectedId.value = null
   emit('deleted', id)
@@ -442,57 +805,63 @@ function ctxDeleteShape() {
   ctxMenu.value.show = false
 }
 
-function hideCtxMenu() {
-  ctxMenu.value.show = false
-}
-
-// ── 命中测试 ─────────────────────────────────────────────────
 function hitTest(x, y) {
   const R = 8
-  for (const shape of shapes.value) {
-    // 先检测端点
-    for (let i = 0; i < shape.points.length; i++) {
-      const pt = toPixel(shape.points[i].price, shape.points[i].idx)
-      if (Math.hypot(pt.x - x, pt.y - y) < R) {
-        return { id: shape.id, pointIdx: i }
+  
+  for (let i = shapes.value.length - 1; i >= 0; i--) {
+    const shape = shapes.value[i]
+    const pixelPoints = shape.points.map(p => toPixel(p.price, p.timestamp)).filter(Boolean)
+    if (pixelPoints.length === 0) continue
+    
+    for (let j = 0; j < pixelPoints.length; j++) {
+      const p = pixelPoints[j]
+      if (Math.hypot(p.x - x, p.y - y) < R) {
+        return { id: shape.id, pointIdx: j }
       }
     }
-    // 检测线段（line/ray/segment/hray）——悬停时高亮，但不允许拖拽中段
-    if (['line','ray','segment','hray'].includes(shape.type) && shape.points.length >= 2) {
-      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
+    
+    if (pixelPoints.length >= 2) {
+      const p0 = pixelPoints[0]
+      const p1 = pixelPoints[1]
       const dist = distToSegment(x, y, p0.x, p0.y, p1.x, p1.y)
-      if (dist < R + 6) {
-        hoveredId.value = shape.id  // 高亮整条线
-        return { id: shape.id, pointIdx: -1 }  // -1 = 中段（选中但不可拖拽）
+      if (dist < R + 4) {
+        return { id: shape.id, pointIdx: -1 }
       }
     }
-    // 检测 fib 分割线
-    if (shape.type === 'fib' && shape.points.length >= 2) {
-      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
-      const snap = snappedPoint.value || { x: mouseX.value, y: mouseY.value }
-      const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1.0]
-      for (const level of levels) {
-        const y_ = p0.y + (snap.y - p0.y) * level
-        if (Math.abs(y_ - y) < R + 6) return { id: shape.id, pointIdx: -1 }
+    
+    if (shape.type === 'hray' && pixelPoints.length >= 1) {
+      if (Math.abs(pixelPoints[0].y - y) < R + 4) {
+        return { id: shape.id, pointIdx: -1 }
       }
     }
-    // 检测矩形
-    if (shape.type === 'rect' && shape.points.length >= 2) {
-      const p0 = toPixel(shape.points[0].price, shape.points[0].idx)
-      const p1 = toPixel(shape.points[1].price, shape.points[1].idx)
+    
+    if (shape.type === 'vline' && pixelPoints.length >= 1) {
+      if (Math.abs(pixelPoints[0].x - x) < R + 4) {
+        return { id: shape.id, pointIdx: -1 }
+      }
+    }
+    
+    if (shape.type === 'rect' && pixelPoints.length >= 2) {
+      const p0 = pixelPoints[0]
+      const p1 = pixelPoints[1]
       const minX = Math.min(p0.x, p1.x), maxX = Math.max(p0.x, p1.x)
       const minY = Math.min(p0.y, p1.y), maxY = Math.max(p0.y, p1.y)
-      const R2 = R + 6
-      if (x >= minX - R2 && x <= maxX + R2 && y >= minY - R2 && y <= maxY + R2) {
-        const d = Math.min(
-          x >= minX - R2 && x <= maxX + R2 ? Math.min(Math.abs(y - minY), Math.abs(y - maxY)) : Infinity,
-          y >= minY - R2 && y <= maxY + R2 ? Math.min(Math.abs(x - minX), Math.abs(x - maxX)) : Infinity,
-        )
-        if (d < R2) return { id: shape.id, pointIdx: -1 }
+      
+      if (x >= minX - R && x <= maxX + R && y >= minY - R && y <= maxY + R) {
+        const onBorder = x <= minX + R || x >= maxX - R || y <= minY + R || y >= maxY - R
+        if (onBorder) return { id: shape.id, pointIdx: -1 }
       }
     }
+    
+    if (shape.type === 'circle' && pixelPoints.length >= 2) {
+      const p0 = pixelPoints[0]
+      const p1 = pixelPoints[1]
+      const r = Math.hypot(p1.x - p0.x, p1.y - p0.y)
+      const dist = Math.abs(Math.hypot(x - p0.x, y - p0.y) - r)
+      if (dist < R + 4) return { id: shape.id, pointIdx: -1 }
+    }
   }
+  
   return null
 }
 
@@ -503,12 +872,21 @@ function distToSegment(px, py, x0, y0, x1, y1) {
   return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy))
 }
 
-// ── 工具函数 ─────────────────────────────────────────────────
+function getToolLabel(type) {
+  const labels = {
+    trend: '趋势线', line: '直线', ray: '射线', segment: '线段',
+    hray: '水平线', vline: '垂直线', channel: '平行通道', fib: '斐波那契',
+    rect: '矩形', circle: '圆形', text: '文本'
+  }
+  return labels[type] || type
+}
+
 function genId() {
-  return Math.random().toString(36).slice(2, 10)
+  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
 }
 
 function clearAll() {
+  saveHistory()
   shapes.value = []
   selectedId.value = null
   drawing.value = null
@@ -519,6 +897,7 @@ function clearAll() {
 
 function deleteSelected() {
   if (selectedId.value) {
+    saveHistory()
     shapes.value = shapes.value.filter(s => s.id !== selectedId.value)
     emit('deleted', selectedId.value)
     selectedId.value = null
@@ -527,32 +906,61 @@ function deleteSelected() {
   }
 }
 
-// ── 持久化 ───────────────────────────────────────────────────
-const storage = localforage.createInstance({ name: 'AlphaTerminal', storeName: 'drawings' })
+function getShapes() {
+  return shapes.value
+}
 
 async function saveToStorage() {
   try {
-    await storage.setItem(props.symbol || 'default', JSON.stringify(shapes.value))
-  } catch (e) { /* ignore */ }
+    const key = `${props.symbol}_${props.period}`
+    await storage.setItem(key, JSON.stringify(shapes.value))
+  } catch (e) { console.error('保存画线失败:', e) }
 }
 
 async function loadFromStorage() {
   try {
-    const raw = await storage.getItem(props.symbol || 'default')
-    if (raw) shapes.value = JSON.parse(raw)
-    else shapes.value = []
-  } catch {
+    const key = `${props.symbol}_${props.period}`
+    const raw = await storage.getItem(key)
+    if (raw) {
+      shapes.value = JSON.parse(raw)
+    } else {
+      await loadFromOtherPeriods()
+    }
+  } catch (e) {
     shapes.value = []
   }
+  undoStack.value = []
+  redoStack.value = []
   redraw()
 }
 
-// ── 生命周期 ───────────────────────────────────────────────
+async function loadFromOtherPeriods() {
+  try {
+    const allKeys = await storage.keys()
+    const symbolKeys = allKeys.filter(k => k.startsWith(`${props.symbol}_`))
+    
+    if (symbolKeys.length === 0) return
+    
+    const allShapes = []
+    for (const key of symbolKeys) {
+      const raw = await storage.getItem(key)
+      if (raw) allShapes.push(...JSON.parse(raw))
+    }
+    
+    const seen = new Set()
+    shapes.value = allShapes.filter(s => {
+      if (seen.has(s.id)) return false
+      seen.add(s.id)
+      return true
+    })
+  } catch (e) {}
+}
+
 function resizeCanvas() {
   if (!canvasRef.value) return
   const parent = canvasRef.value.parentElement
   if (!parent) return
-  canvasRef.value.width  = parent.clientWidth
+  canvasRef.value.width = parent.clientWidth
   canvasRef.value.height = parent.clientHeight
   redraw()
 }
@@ -561,29 +969,204 @@ onMounted(() => {
   ctx = canvasRef.value.getContext('2d')
   resizeCanvas()
   loadFromStorage()
+  
   window.addEventListener('resize', resizeCanvas)
-  window.addEventListener('click', hideCtxMenu)      // 点击其他区域关闭右键菜单
-  // 监听图表容器尺寸变化（ECharts 内部 resize 会触发）
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.context-menu') && !e.target.closest('.style-editor')) {
+      ctxMenu.value.show = false
+    }
+  })
+  
   if (canvasRef.value?.parentElement) {
     const ro = new ResizeObserver(() => resizeCanvas())
     ro.observe(canvasRef.value.parentElement)
   }
-  // 键盘快捷键由父组件 FullscreenKline 统一处理，这里不再监听
 })
 
-let _canvasRo = null
 onUnmounted(() => {
   cancelAnimationFrame(animationFrame)
   window.removeEventListener('resize', resizeCanvas)
-  window.removeEventListener('click', hideCtxMenu)
-  _canvasRo?.disconnect()
 })
 
-// symbol 变化时加载对应画线数据
-watch(() => props.symbol, () => { loadFromStorage() })
+watch(() => [props.symbol, props.period], () => loadFromStorage(), { immediate: true })
 watch([() => props.activeTool, () => props.activeColor, () => props.magnetMode], () => redraw())
 watch(shapes, () => redraw(), { deep: true })
 
-// ── 暴露方法 ────────────────────────────────────────────────
-defineExpose({ clearAll, deleteSelected, shapes })
+defineExpose({ 
+  clearAll, deleteSelected, getShapes, undo, redo,
+  canUndo: () => undoStack.value.length > 0,
+  canRedo: () => redoStack.value.length > 0
+})
 </script>
+
+<style scoped>
+.drawing-layer {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+}
+
+.drawing-layer.locked {
+  pointer-events: none;
+}
+
+.drawing-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.hover-tooltip {
+  position: fixed;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #e5e7eb;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+}
+
+.context-menu {
+  position: fixed;
+  background: rgba(17, 24, 39, 0.98);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 6px;
+  padding: 4px 0;
+  min-width: 140px;
+  z-index: 1001;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #e5e7eb;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.menu-item:hover {
+  background: rgba(75, 85, 99, 0.3);
+}
+
+.menu-item.delete {
+  color: #f87171;
+}
+
+.menu-item.delete:hover {
+  background: rgba(248, 113, 113, 0.15);
+}
+
+.menu-divider {
+  height: 1px;
+  background: rgba(75, 85, 99, 0.3);
+  margin: 4px 0;
+}
+
+.icon {
+  font-size: 12px;
+}
+
+.style-editor {
+  position: fixed;
+  background: rgba(17, 24, 39, 0.98);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 180px;
+  z-index: 1002;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.editor-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f3f4f6;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.editor-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.editor-row label {
+  font-size: 11px;
+  color: #9ca3af;
+  min-width: 40px;
+}
+
+.editor-row input[type="color"] {
+  width: 28px;
+  height: 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.editor-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+}
+
+.editor-row input[type="text"] {
+  flex: 1;
+  background: rgba(31, 41, 55, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: #e5e7eb;
+}
+
+.editor-row select {
+  flex: 1;
+  background: rgba(31, 41, 55, 0.8);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 4px;
+  padding: 4px;
+  font-size: 11px;
+  color: #e5e7eb;
+}
+
+.editor-row span {
+  font-size: 10px;
+  color: #6b7280;
+  min-width: 24px;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(75, 85, 99, 0.3);
+}
+
+.editor-actions button {
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #60a5fa;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.editor-actions button:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+</style>

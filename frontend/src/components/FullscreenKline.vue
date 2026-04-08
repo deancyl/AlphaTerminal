@@ -1,5 +1,5 @@
 <template>
-  <div class="fullscreen-kline" @keydown.esc="emit('close')" tabindex="0">
+  <div class="fullscreen-kline" @keydown="handleKeydown" tabindex="0">
     <!-- 顶部工具栏 -->
     <header class="kline-header">
       <div class="header-left">
@@ -57,6 +57,53 @@
 
         <!-- ECharts 容器 -->
         <div ref="chartEl" class="chart-wrapper"></div>
+
+        <!-- 十字指针覆盖层 -->
+        <CrosshairOverlay
+          v-if="!loading && !chartError"
+          ref="crosshairRef"
+          :chart-instance="chart"
+          :data="histData"
+          :visible="crosshairState.visible"
+          :locked="drawingState.activeTool !== '' || drawingState.locked"
+          :show-labels="crosshairState.showLabels"
+          :show-tooltip="crosshairState.showTooltip"
+          class="crosshair-overlay"
+          @candle-hover="onCandleHover"
+        />
+
+        <!-- 画线 Canvas 覆盖层 -->
+        <DrawingCanvas
+          v-if="drawingState.visible"
+          ref="drawingCanvasRef"
+          :chart-instance="chart"
+          :active-tool="drawingState.activeTool"
+          :active-color="drawingState.activeColor"
+          :magnet-mode="drawingState.magnetMode"
+          :locked="drawingState.locked"
+          :symbol="props.symbol"
+          :period="period"
+          class="drawing-canvas"
+          @drawn="onShapeDrawn"
+          @deleted="onShapeDeleted"
+          @cleared="onShapesCleared"
+        />
+
+        <!-- 画线工具栏 -->
+        <DrawingToolbar
+          :active-tool="drawingState.activeTool"
+          :active-color="drawingState.activeColor"
+          :magnet-mode="drawingState.magnetMode"
+          :visible="drawingState.visible"
+          :locked="drawingState.locked"
+          class="drawing-toolbar"
+          @tool-change="onToolChange"
+          @color-change="onColorChange"
+          @magnet-toggle="drawingState.magnetMode = !drawingState.magnetMode"
+          @visibility-toggle="drawingState.visible = !drawingState.visible"
+          @lock-toggle="drawingState.locked = !drawingState.locked"
+          @clear="onClearDrawings"
+        />
       </div>
 
       <!-- 右侧信息面板 -->
@@ -81,8 +128,10 @@ import {
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import QuotePanel from './QuotePanel.vue'
+import DrawingCanvas from './DrawingCanvas.vue'
+import DrawingToolbar from './DrawingToolbar.vue'
+import CrosshairOverlay from './CrosshairOverlay.vue'
 
-// 注册 ECharts 组件
 echarts.use([
   CandlestickChart, LineChart, BarChart,
   GridComponent, TooltipComponent, DataZoomComponent,
@@ -110,6 +159,25 @@ const latestChange = ref(0)
 const chartEl = ref(null)
 let chart = null
 
+// 十字指针状态
+const crosshairRef = ref(null)
+const crosshairState = ref({
+  visible: true,
+  showLabels: true,
+  showTooltip: true,
+})
+const hoveredCandle = ref(null)
+
+// 画线相关
+const drawingCanvasRef = ref(null)
+const drawingState = ref({
+  activeTool: '',
+  activeColor: '#fbbf24',
+  magnetMode: true,
+  visible: true,
+  locked: false,
+})
+
 // 周期选项
 const periods = [
   { label: '日K', value: 'daily' },
@@ -121,7 +189,7 @@ const periods = [
   { label: '60分', value: '60min' },
 ]
 
-// 副图选项 - 扩展更多专业指标
+// 副图选项
 const subChartOptions = [
   { key: 'VOL', label: '成交量' },
   { key: 'MACD', label: 'MACD' },
@@ -157,23 +225,77 @@ const latestChangeText = computed(() => {
   return `${sign}${latestChange.value.toFixed(2)}%`
 })
 
-// 格式化函数
-function formatPrice(val) {
-  if (val == null || isNaN(val)) return '--'
-  return Number(val).toFixed(2)
+function onCandleHover(candle) {
+  hoveredCandle.value = candle
 }
 
-function formatVolume(val) {
-  if (val == null || isNaN(val)) return '--'
-  if (val >= 1e8) return (val / 1e8).toFixed(2) + '亿'
-  if (val >= 1e4) return (val / 1e4).toFixed(2) + '万'
-  return val.toString()
+// 画线工具事件处理
+function onToolChange(tool) {
+  drawingState.value.activeTool = tool
+}
+
+function onColorChange(color) {
+  drawingState.value.activeColor = color
+}
+
+function onClearDrawings() {
+  drawingCanvasRef.value?.clearAll()
+}
+
+function onShapeDrawn(shape) {
+  console.log('[FullscreenKline] Shape drawn:', shape)
+}
+
+function onShapeDeleted(id) {
+  console.log('[FullscreenKline] Shape deleted:', id)
+}
+
+function onShapesCleared() {
+  console.log('[FullscreenKline] All shapes cleared')
+}
+
+// 键盘快捷键
+function handleKeydown(e) {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+
+  const toolMap = {
+    't': 'trend', 'T': 'trend',
+    'l': 'line', 'L': 'line',
+    'r': 'ray', 'R': 'ray',
+    's': 'segment', 'S': 'segment',
+    'h': 'hray', 'H': 'hray',
+    'c': 'channel', 'C': 'channel',
+    'f': 'fib', 'F': 'fib',
+    'q': 'rect', 'Q': 'rect',
+    'a': 'text', 'A': 'text',
+  }
+
+  if (toolMap[e.key]) {
+    e.preventDefault()
+    const tool = toolMap[e.key]
+    drawingState.value.activeTool = drawingState.value.activeTool === tool ? '' : tool
+  }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    drawingCanvasRef.value?.deleteSelected()
+  }
+
+  if (e.key === 'Escape') {
+    drawingState.value.activeTool = ''
+  }
+
+  if (e.key === 'm' || e.key === 'M') {
+    drawingState.value.magnetMode = !drawingState.value.magnetMode
+  }
+
+  if (e.key === 'v' || e.key === 'V') {
+    drawingState.value.visible = !drawingState.value.visible
+  }
 }
 
 // 获取历史数据
 async function fetchData() {
   if (!props.symbol) return
-
   loading.value = true
   chartError.value = ''
 
@@ -196,17 +318,12 @@ async function fetchData() {
       return
     }
 
-    // 按日期排序
-    histData.value = historyArray.sort((a, b) =>
-      new Date(a.date) - new Date(b.date)
-    )
+    histData.value = historyArray.sort((a, b) => new Date(a.date) - new Date(b.date))
 
-    // 更新最新价格
     const last = histData.value[histData.value.length - 1]
     latestPrice.value = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
 
-    // 渲染图表
     renderChart()
 
   } catch (e) {
@@ -220,12 +337,9 @@ async function fetchData() {
 // 获取实时行情
 async function fetchQuote() {
   if (!props.symbol) return
-
   try {
     const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
-    if (res.ok) {
-      quoteData.value = await res.json()
-    }
+    if (res.ok) quoteData.value = await res.json()
   } catch (e) {
     console.warn('[FullscreenKline] fetchQuote error:', e.message)
   }
@@ -235,7 +349,6 @@ async function fetchQuote() {
 function renderChart() {
   if (!chartEl.value || histData.value.length === 0) return
 
-  // 初始化图表
   if (!chart) {
     chart = echarts.init(chartEl.value)
     window.addEventListener('resize', handleResize)
@@ -245,13 +358,11 @@ function renderChart() {
   const dates = data.map(d => d.date)
   const klineData = data.map(d => [d.open, d.close, d.low, d.high])
 
-  // 计算 MA
   const ma5 = calcMA(data, 5)
   const ma10 = calcMA(data, 10)
   const ma20 = calcMA(data, 20)
   const ma60 = calcMA(data, 60)
 
-  // 根据副图指标类型计算数据
   const subChartData = calcSubChartData(data, activeSubChart.value)
 
   const option = {
@@ -275,65 +386,23 @@ function renderChart() {
       { left: 60, right: 20, top: '68%', height: '24%' },
     ],
     xAxis: [
-      {
-        type: 'category',
-        data: dates,
-        gridIndex: 0,
-        axisLabel: { show: false },
-        axisLine: { lineStyle: { color: '#374151' } },
-      },
-      {
-        type: 'category',
-        data: dates,
-        gridIndex: 1,
-        axisLabel: { color: '#6b7280', fontSize: 10 },
-        axisLine: { lineStyle: { color: '#374151' } },
-      },
+      { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false }, axisLine: { lineStyle: { color: '#374151' } } },
+      { type: 'category', data: dates, gridIndex: 1, axisLabel: { color: '#6b7280', fontSize: 10 }, axisLine: { lineStyle: { color: '#374151' } } },
     ],
     yAxis: [
-      {
-        type: 'value',
-        gridIndex: 0,
-        scale: true,
-        splitLine: { lineStyle: { color: '#1f2937' } },
-        axisLabel: { color: '#6b7280', fontSize: 10 },
-      },
-      {
-        type: 'value',
-        gridIndex: 1,
-        scale: subChartData.scale,
-        splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
-        axisLabel: { color: '#6b7280', fontSize: 10 },
-      },
+      { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1f2937' } }, axisLabel: { color: '#6b7280', fontSize: 10 } },
+      { type: 'value', gridIndex: 1, scale: subChartData.scale, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } }, axisLabel: { color: '#6b7280', fontSize: 10 } },
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },
       { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 8, height: 18 },
     ],
     series: [
-      // K线
-      {
-        name: 'K线',
-        type: 'candlestick',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: klineData,
-        itemStyle: {
-          color: '#ef232a',
-          color0: '#14b143',
-          borderColor: '#ef232a',
-          borderColor0: '#14b143',
-        },
-      },
-      // MA5
+      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, itemStyle: { color: '#ef232a', color0: '#14b143', borderColor: '#ef232a', borderColor0: '#14b143' } },
       { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-      // MA10
       { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-      // MA20
       { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
-      // MA60
       { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
-      // 副图指标
       ...subChartData.series,
     ],
   }
@@ -352,127 +421,100 @@ function calcSubChartData(data, indicator) {
         legend: ['成交量'],
         scale: false,
         series: [{
-          name: '成交量',
-          type: 'bar',
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          data: volumes,
-          itemStyle: {
-            color: (params) => {
-              const idx = params.dataIndex
-              return data[idx].close >= data[idx].open ? '#ef232a' : '#14b143'
-            },
-          },
+          name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: volumes,
+          itemStyle: { color: (params) => data[params.dataIndex].close >= data[params.dataIndex].open ? '#ef232a' : '#14b143' },
         }]
       }
-
     case 'MACD':
       const macd = calcMACD(closes)
       return {
-        legend: ['DIF', 'DEA', 'MACD'],
-        scale: true,
+        legend: ['DIF', 'DEA', 'MACD'], scale: true,
         series: [
           { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
           { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
           { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? '#ef232a' : '#14b143' } },
         ]
       }
-
     case 'KDJ':
       const kdj = calcKDJ(data)
       return {
-        legend: ['K', 'D', 'J'],
-        scale: true,
+        legend: ['K', 'D', 'J'], scale: true,
         series: [
           { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
           { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
           { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
         ]
       }
-
     case 'RSI':
-      const rsi6 = calcRSI(closes, 6)
-      const rsi12 = calcRSI(closes, 12)
-      const rsi24 = calcRSI(closes, 24)
       return {
-        legend: ['RSI6', 'RSI12', 'RSI24'],
-        scale: true,
+        legend: ['RSI6', 'RSI12', 'RSI24'], scale: true,
         series: [
-          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi6, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi12, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: rsi24, lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
+          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
+          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
         ]
       }
-
     case 'BOLL':
       const boll = calcBOLL(closes)
       return {
-        legend: ['MID', 'UP', 'LOW'],
-        scale: true,
+        legend: ['MID', 'UP', 'LOW'], scale: true,
         series: [
           { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
           { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.up, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
           { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.low, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
         ]
       }
-
     case 'OBV':
       const obv = calcOBV(data)
-      const obvMa = calcMA(obv.map(v => ({ close: v })), 30)
       return {
-        legend: ['OBV', 'MA30'],
-        scale: true,
+        legend: ['OBV', 'MA30'], scale: true,
         series: [
           { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obvMa, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => ({ close: v })), 30), lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
         ]
       }
-
     case 'DMI':
       const dmi = calcDMI(data)
       return {
-        legend: ['PDI', 'MDI', 'ADX'],
-        scale: true,
+        legend: ['PDI', 'MDI', 'ADX'], scale: true,
         series: [
           { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
           { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
           { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
         ]
       }
-
     case 'CCI':
-      const cci = calcCCI(data)
       return {
-        legend: ['CCI'],
-        scale: true,
-        series: [
-          { name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: cci, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-        ]
+        legend: ['CCI'], scale: true,
+        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(data), lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' }]
       }
-
     default:
       return { legend: [], scale: false, series: [] }
   }
 }
 
-// 计算移动平均线
 function calcMA(data, period) {
   const result = []
   for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) {
-      result.push('-')
-      continue
-    }
+    if (i < period - 1) { result.push('-'); continue }
     let sum = 0
-    for (let j = 0; j < period; j++) {
-      sum += data[i - j].close ?? data[i - j]
-    }
+    for (let j = 0; j < period; j++) sum += data[i - j].close ?? data[i - j]
     result.push((sum / period).toFixed(2))
   }
   return result
 }
 
-// 计算 MACD
+function calcEMA(data, period) {
+  const k = 2 / (period + 1)
+  const result = []
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) result.push('-')
+    else if (i === period - 1) { let sum = 0; for (let j = 0; j < period; j++) sum += data[i - j]; result.push((sum / period).toFixed(2)) }
+    else { const ema = data[i] * k + parseFloat(result[i - 1]) * (1 - k); result.push(ema.toFixed(2)) }
+  }
+  return result
+}
+
 function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
   const emaFast = calcEMA(closes, fast)
   const emaSlow = calcEMA(closes, slow)
@@ -483,62 +525,30 @@ function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
   return { dif, dea: fullDea, macd }
 }
 
-function calcEMA(data, period) {
-  const k = 2 / (period + 1)
-  const result = []
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) {
-      result.push('-')
-    } else if (i === period - 1) {
-      let sum = 0
-      for (let j = 0; j < period; j++) sum += data[i - j]
-      result.push((sum / period).toFixed(2))
-    } else {
-      const ema = data[i] * k + parseFloat(result[i - 1]) * (1 - k)
-      result.push(ema.toFixed(2))
-    }
-  }
-  return result
-}
-
-// 计算 KDJ
-function calcKDJ(data, n = 9, m1 = 3, m2 = 3) {
+function calcKDJ(data, n = 9) {
   const k = [], d = [], j = []
   for (let i = 0; i < data.length; i++) {
-    if (i < n - 1) {
-      k.push('-'); d.push('-'); j.push('-')
-      continue
-    }
+    if (i < n - 1) { k.push('-'); d.push('-'); j.push('-'); continue }
     let low = data[i].low, high = data[i].high
-    for (let x = 1; x < n; x++) {
-      low = Math.min(low, data[i - x].low)
-      high = Math.max(high, data[i - x].high)
-    }
+    for (let x = 1; x < n; x++) { low = Math.min(low, data[i - x].low); high = Math.max(high, data[i - x].high) }
     const rsv = high === low ? 0 : (data[i].close - low) / (high - low) * 100
-    if (i === n - 1) {
-      k.push(rsv.toFixed(2))
-      d.push(rsv.toFixed(2))
-    } else {
+    if (i === n - 1) { k.push(rsv.toFixed(2)); d.push(rsv.toFixed(2)) }
+    else {
       const kVal = (2 / 3 * parseFloat(k[i - 1]) + 1 / 3 * rsv).toFixed(2)
       const dVal = (2 / 3 * parseFloat(d[i - 1]) + 1 / 3 * parseFloat(kVal)).toFixed(2)
-      k.push(kVal)
-      d.push(dVal)
+      k.push(kVal); d.push(dVal)
     }
     j.push((3 * parseFloat(k[i]) - 2 * parseFloat(d[i])).toFixed(2))
   }
   return { k, d, j }
 }
 
-// 计算 RSI
 function calcRSI(closes, period = 14) {
   const result = []
   for (let i = 0; i < closes.length; i++) {
-    if (i < period) {
-      result.push('-')
-      continue
-    }
+    if (i < period) { result.push('-'); continue }
     let gain = 0, loss = 0
-    for (let j = 1; j <= period; j++) {
+    for (let j = 1; j <= period; j++) { 
       const change = closes[i - j + 1] - closes[i - j]
       if (change > 0) gain += change
       else loss -= change
@@ -549,19 +559,13 @@ function calcRSI(closes, period = 14) {
   return result
 }
 
-// 计算布林带
 function calcBOLL(closes, period = 20, multiplier = 2) {
   const mid = calcMA(closes.map(c => ({ close: c })), period)
   const up = [], low = []
   for (let i = 0; i < closes.length; i++) {
-    if (i < period - 1) {
-      up.push('-'); low.push('-')
-      continue
-    }
+    if (i < period - 1) { up.push('-'); low.push('-'); continue }
     let sum = 0
-    for (let j = 0; j < period; j++) {
-      sum += Math.pow(closes[i - j] - parseFloat(mid[i]), 2)
-    }
+    for (let j = 0; j < period; j++) sum += Math.pow(closes[i - j] - parseFloat(mid[i]), 2)
     const std = Math.sqrt(sum / period)
     up.push((parseFloat(mid[i]) + multiplier * std).toFixed(2))
     low.push((parseFloat(mid[i]) - multiplier * std).toFixed(2))
@@ -569,7 +573,6 @@ function calcBOLL(closes, period = 20, multiplier = 2) {
   return { mid, up, low }
 }
 
-// 计算 OBV
 function calcOBV(data) {
   const result = [0]
   for (let i = 1; i < data.length; i++) {
@@ -580,11 +583,9 @@ function calcOBV(data) {
   return result.map(v => v / 1e6)
 }
 
-// 计算 DMI
 function calcDMI(data, period = 14) {
   const pdi = [], mdi = [], adx = []
   const tr = [], plusDM = [], minusDM = []
-
   for (let i = 1; i < data.length; i++) {
     const highDiff = data[i].high - data[i - 1].high
     const lowDiff = data[i - 1].low - data[i].low
@@ -592,47 +593,28 @@ function calcDMI(data, period = 14) {
     minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0)
     tr.push(Math.max(data[i].high - data[i].low, Math.abs(data[i].high - data[i - 1].close), Math.abs(data[i].low - data[i - 1].close)))
   }
-
   for (let i = 0; i < data.length; i++) {
-    if (i < period) {
-      pdi.push('-'); mdi.push('-'); adx.push('-')
-      continue
-    }
+    if (i < period) { pdi.push('-'); mdi.push('-'); adx.push('-'); continue }
     let trSum = 0, plusDMSum = 0, minusDMSum = 0
-    for (let j = 0; j < period; j++) {
-      trSum += tr[i - j - 1]
-      plusDMSum += plusDM[i - j - 1]
-      minusDMSum += minusDM[i - j - 1]
-    }
+    for (let j = 0; j < period; j++) { trSum += tr[i - j - 1]; plusDMSum += plusDM[i - j - 1]; minusDMSum += minusDM[i - j - 1] }
     pdi.push((plusDMSum / trSum * 100).toFixed(2))
     mdi.push((minusDMSum / trSum * 100).toFixed(2))
     const dx = (Math.abs(parseFloat(pdi[i]) - parseFloat(mdi[i])) / (parseFloat(pdi[i]) + parseFloat(mdi[i])) * 100).toFixed(2)
-    if (i === period) {
-      adx.push(dx)
-    } else {
-      adx.push(((parseFloat(adx[i - 1]) * (period - 1) + parseFloat(dx)) / period).toFixed(2))
-    }
+    if (i === period) adx.push(dx)
+    else adx.push(((parseFloat(adx[i - 1]) * (period - 1) + parseFloat(dx)) / period).toFixed(2))
   }
   return { pdi, mdi, adx }
 }
 
-// 计算 CCI
 function calcCCI(data, period = 14) {
   const result = []
   for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) {
-      result.push('-')
-      continue
-    }
+    if (i < period - 1) { result.push('-'); continue }
     let tpSum = 0
-    for (let j = 0; j < period; j++) {
-      tpSum += (data[i - j].high + data[i - j].low + data[i - j].close) / 3
-    }
+    for (let j = 0; j < period; j++) tpSum += (data[i - j].high + data[i - j].low + data[i - j].close) / 3
     const sma = tpSum / period
     let mdSum = 0
-    for (let j = 0; j < period; j++) {
-      mdSum += Math.abs((data[i - j].high + data[i - j].low + data[i - j].close) / 3 - sma)
-    }
+    for (let j = 0; j < period; j++) mdSum += Math.abs((data[i - j].high + data[i - j].low + data[i - j].close) / 3 - sma)
     const md = mdSum / period
     const tp = (data[i].high + data[i].low + data[i].close) / 3
     result.push(md === 0 ? '0' : ((tp - sma) / (0.015 * md)).toFixed(2))
@@ -640,38 +622,19 @@ function calcCCI(data, period = 14) {
   return result
 }
 
-// 窗口大小变化处理
 function handleResize() {
   chart?.resize()
 }
 
-// 监听副图指标变化
-watch(activeSubChart, () => {
-  renderChart()
+watch(activeSubChart, () => renderChart())
+watch(period, () => fetchData())
+watch(() => props.symbol, (newSym) => { if (newSym) { fetchData(); fetchQuote() } }, { immediate: true })
+
+onMounted(() => { 
+  if (props.symbol) { fetchData(); fetchQuote() }
 })
 
-// 监听周期变化
-watch(period, () => {
-  fetchData()
-})
-
-// 监听 symbol 变化
-watch(() => props.symbol, (newSym) => {
-  if (newSym) {
-    fetchData()
-    fetchQuote()
-  }
-}, { immediate: true })
-
-// 生命周期
-onMounted(() => {
-  if (props.symbol) {
-    fetchData()
-    fetchQuote()
-  }
-})
-
-onUnmounted(() => {
+onUnmounted(() => { 
   window.removeEventListener('resize', handleResize)
   chart?.dispose()
   chart = null
@@ -679,214 +642,46 @@ onUnmounted(() => {
 </script>
 
 <style>
-.fullscreen-kline {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: #0a0e17;
-  display: flex;
-  flex-direction: column;
-  z-index: 99999;
-}
+.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0a0e17; display: flex; flex-direction: column; z-index: 99999; outline: none; }
 
-/* 顶部工具栏 */
-.kline-header {
-  height: 48px;
-  background: #111827;
-  border-bottom: 1px solid #374151;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  flex-shrink: 0;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 150px;
-}
-
-.symbol-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #f3f4f6;
-}
-
-.symbol-code {
-  font-size: 11px;
-  color: #6b7280;
-  font-family: monospace;
-}
-
-.header-center {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: 1;
-  justify-content: center;
-}
-
-.period-selector,
-.indicator-selector {
-  display: flex;
-  gap: 4px;
-}
-
-.period-btn,
-.indicator-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  border: 1px solid #374151;
-  background: transparent;
-  color: #9ca3af;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.period-btn:hover,
-.indicator-btn:hover {
-  border-color: #6b7280;
-  color: #e5e7eb;
-}
-
-.period-btn.active,
-.indicator-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: white;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 200px;
-  justify-content: flex-end;
-}
-
-.latest-price {
-  font-size: 16px;
-  font-weight: 700;
-  font-family: monospace;
-}
-
-.latest-change {
-  font-size: 13px;
-  font-family: monospace;
-}
-
+.kline-header { height: 48px; background: #111827; border-bottom: 1px solid #374151; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
+.header-left { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.symbol-name { font-size: 14px; font-weight: 600; color: #f3f4f6; }
+.symbol-code { font-size: 11px; color: #6b7280; font-family: monospace; }
+.header-center { display: flex; align-items: center; gap: 16px; flex: 1; justify-content: center; }
+.period-selector, .indicator-selector { display: flex; gap: 4px; }
+.period-btn, .indicator-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #374151; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.period-btn:hover, .indicator-btn:hover { border-color: #6b7280; color: #e5e7eb; }
+.period-btn.active, .indicator-btn.active { background: #2563eb; border-color: #2563eb; color: white; }
+.header-right { display: flex; align-items: center; gap: 12px; min-width: 200px; justify-content: flex-end; }
+.latest-price { font-size: 16px; font-weight: 700; font-family: monospace; }
+.latest-change { font-size: 13px; font-family: monospace; }
 .price-up { color: #ef4444; }
 .price-down { color: #22c55e; }
 .price-flat { color: #9ca3af; }
+.close-btn { padding: 6px 14px; font-size: 12px; border: 1px solid #4b5563; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.close-btn:hover { border-color: #ef4444; color: #ef4444; }
 
-.close-btn {
-  padding: 6px 14px;
-  font-size: 12px;
-  border: 1px solid #4b5563;
-  background: transparent;
-  color: #9ca3af;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
+.kline-body { flex: 1; display: flex; overflow: hidden; }
+.chart-container { flex: 1; position: relative; min-width: 0; }
+.chart-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
 
-.close-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-}
+.loading-overlay, .error-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 14, 23, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
+.loading-text, .error-text { font-size: 14px; color: #9ca3af; }
+.error-close { margin-top: 12px; padding: 6px 16px; font-size: 12px; border: 1px solid #4b5563; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; }
+.error-close:hover { border-color: #6b7280; color: #e5e7eb; }
 
-/* 主体区域 */
-.kline-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
+.drawing-canvas { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; z-index: 5; }
+.drawing-toolbar { position: absolute; top: 56px; left: 12px; z-index: 10; }
+.crosshair-overlay { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; z-index: 6; }
+.crosshair-overlay { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; z-index: 6; }
 
-/* 图表容器 */
-.chart-container {
-  flex: 1;
-  position: relative;
-  min-width: 0;
-}
+.quote-panel-wrapper { width: 300px; flex-shrink: 0; height: 100%; overflow: hidden; }
+.quote-panel-wrapper :deep(.quote-panel) { height: 100% !important; max-width: none !important; min-width: auto !important; }
 
-.chart-wrapper {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
-
-/* 加载和错误遮罩 */
-.loading-overlay,
-.error-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(10, 14, 23, 0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.loading-text,
-.error-text {
-  font-size: 14px;
-  color: #9ca3af;
-}
-
-.error-close {
-  margin-top: 12px;
-  padding: 6px 16px;
-  font-size: 12px;
-  border: 1px solid #4b5563;
-  background: transparent;
-  color: #9ca3af;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.error-close:hover {
-  border-color: #6b7280;
-  color: #e5e7eb;
-}
-
-/* 右侧 QuotePanel 包装器 */
-.quote-panel-wrapper {
-  width: 300px;
-  flex-shrink: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.quote-panel-wrapper :deep(.quote-panel) {
-  height: 100% !important;
-  max-width: none !important;
-  min-width: auto !important;
-}
-
-/* 响应式 */
 @media (max-width: 768px) {
-  .quote-panel-wrapper {
-    display: none;
-  }
-
-  .header-center {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .symbol-code {
-    display: none;
-  }
+  .quote-panel-wrapper { display: none; }
+  .header-center { flex-direction: column; gap: 8px; }
+  .symbol-code { display: none; }
 }
 </style>
