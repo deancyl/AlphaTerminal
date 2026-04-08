@@ -7,7 +7,8 @@
     @click.self="close"
   >
     <!-- 弹窗主体 -->
-    <div class="terminal-panel border border-gray-700 rounded-xl p-4 w-[480px] max-w-[90vw] flex flex-col gap-3 shadow-2xl">
+    <div class="terminal-panel border border-gray-700 rounded-xl p-4 w-[540px] max-w-[95vw] flex flex-col gap-3 shadow-2xl"
+         style="max-height: 90vh; overflow-y: auto;">
 
       <!-- 头部 -->
       <div class="flex items-center justify-between">
@@ -78,7 +79,7 @@
         </div>
 
         <!-- 折线图 -->
-        <div ref="chartRef" style="height: 160px;" class="w-full"></div>
+        <div ref="chartRef" style="height: 200px; width: 100%;" class="w-full"></div>
       </template>
 
       <div v-else class="flex items-center justify-center py-6">
@@ -156,7 +157,7 @@ async function fetchHistory() {
     if (data.error || !data.history?.length) {
       throw new Error(data.error || '暂无历史数据（AkShare 限流或网络中断）')
     }
-    historyData.value = data.history || []
+    historyData.value = (data.history || []).filter(item => item.yield > 0)
     currentYield.value = data.current ?? null
     percentile.value   = data.percentile ?? null
     await renderChart()
@@ -227,6 +228,23 @@ async function renderChart() {
           silent: true, symbol: 'none',
           lineStyle: { color: '#fbbf24', width: 1.5, type: 'dashed' },
           data: cur != null ? [{ yAxis: cur, label: { formatter: `当前 ${cur.toFixed(3)}%`, color: '#fbbf24', fontSize: 8 } }] : [],
+        },
+        // 历史高低点标注
+        markPoint: {
+          symbol: 'circle',
+          symbolSize: 6,
+          data: [
+            {
+              type: 'max', name: '最高',
+              itemStyle: { color: '#f87171' },
+              label: { formatter: `最高 ${maxY.toFixed(3)}%`, color: '#f87171', fontSize: 9, position: 'top' },
+            },
+            {
+              type: 'min', name: '最低',
+              itemStyle: { color: '#60a5fa' },
+              label: { formatter: `最低 ${minY.toFixed(3)}%`, color: '#60a5fa', fontSize: 9, position: 'bottom' },
+            },
+          ],
         },
       },
     ],
