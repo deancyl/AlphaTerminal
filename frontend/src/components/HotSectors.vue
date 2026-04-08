@@ -78,6 +78,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { apiFetch } from '../utils/api.js'
 
 const emit = defineEmits(['sector-click'])
 
@@ -89,19 +90,18 @@ let refreshTimer = null
 
 async function fetchSectors() {
   try {
-    const res = await fetch('/api/v1/market/sectors')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const d = await res.json()
-    // 兼容新旧格式：标准格式 d.data.sectors，或旧格式 d.sectors
-    const sectorsList = (d.data && d.data.sectors) || d.sectors || []
+    // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
+    const d = await apiFetch('/api/v1/market/sectors')
+    if (!d) return
+    // d 已经是解包后的对象，直接访问 sectors
+    const sectorsList = d.sectors || []
     sectors.value = sectorsList
-    // 更新时间戳显示（兼容 number 或 string 格式）
-    const ts = d.data?.timestamp || d.timestamp
-    if (ts) {
-      if (typeof ts === 'number') {
-        tsDisplay.value = `更新 ${new Date(ts).toLocaleTimeString('zh-CN', { hour12: false })}`
-      } else if (typeof ts === 'string') {
-        const t = ts.includes('T') ? ts.slice(11, 19) : ''
+    // 更新时间戳显示
+    if (d.timestamp) {
+      if (typeof d.timestamp === 'number') {
+        tsDisplay.value = `更新 ${new Date(d.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}`
+      } else if (typeof d.timestamp === 'string') {
+        const t = d.timestamp.includes('T') ? d.timestamp.slice(11, 19) : ''
         tsDisplay.value = t ? `更新 ${t}` : ''
       }
     }

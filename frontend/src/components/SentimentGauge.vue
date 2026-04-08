@@ -104,6 +104,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { on as busOn } from '../composables/useEventBus.js'
+import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -250,15 +251,14 @@ function initIntradayChart() {
 
 async function fetchIntraday() {
   try {
-    const res = await fetch('/api/v1/market/sentiment/intraday')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const d = await res.json()
-    // 兼容新旧格式
-    const intraday = (d.data && d.data.intraday) || d.intraday || []
+    // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
+    const d = await apiFetch('/api/v1/market/sentiment/intraday')
+    if (!d) return
+    // d 已经是解包后的对象，直接访问 intraday
+    const intraday = d.intraday || []
     if (intraday.length > 0) {
       intradayData.value = intraday
-      const ts = (d.data && d.data.timestamp) || d.timestamp || ''
-      intradayUpdateTime.value = typeof ts === 'number' ? new Date(ts).toLocaleTimeString('zh-CN', { hour12: false }) : ts
+      intradayUpdateTime.value = d.timestamp ? new Date(d.timestamp).toLocaleTimeString('zh-CN', { hour12: false }) : ''
       if (intradayInst) {
         intradayInst.setOption(buildIntradayOption(intradayData.value), true)
       }
@@ -334,11 +334,9 @@ function initChart() {
 
 async function fetchHistogram() {
   try {
-    const res = await fetch('/api/v1/market/sentiment/histogram')
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const d = await res.json()
-    // 兼容新旧格式：标准格式 d.data.xxx，或旧格式 d.xxx
-    const payload = d.data || d
+    // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
+    const payload = await apiFetch('/api/v1/market/sentiment/histogram')
+    if (!payload) return
     // Phase 4: 提取 news_sentiment 字段
     if (payload.news_sentiment) {
       newsSentiment.value = {
