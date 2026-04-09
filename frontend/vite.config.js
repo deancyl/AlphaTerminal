@@ -25,7 +25,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['gridstack'],
-    exclude: ['echarts'],   // 通过 CDN 加载，不打入 bundle
+    exclude: ['echarts', '@mlc-ai/web-llm'],   // 通过 CDN 加载，不打入 bundle；web-llm 动态加载
   },
   build: {
     rollupOptions: {

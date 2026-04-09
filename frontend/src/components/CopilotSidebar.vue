@@ -177,19 +177,19 @@ const isWebllmLoading = ref(false)
 let webllmEngine = null
 
 // 初始化 WebLLM（懒加载）
+// 初始化 WebLLM（懒加载）
 async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型（约 400MB）\n⏱️ 预计 30秒-1 分钟，请保持页面打开')
+  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型（约 400MB）')
   
   try {
-    // 动态导入 web-llm v0.2.x API
+    // 动态导入 web-llm
     const webllm = await import('@mlc-ai/web-llm')
     
     // 进度回调
     const initProgressCallback = (progress) => {
-      // WebLLM progress: { progress: number, text: string, ... }
       let pct = 0
       let text = ''
       
@@ -200,14 +200,11 @@ async function initWebllm() {
         text = progress.text || ''
       }
       
-      // 解析 text 获取更多信息（如 "5% completed"）
+      // 解析 text 获取更多信息
       const match = String(text || progress || '').match(/(\d+)%/)
-      if (match) {
-        pct = parseInt(match[1])
-      }
+      if (match) pct = parseInt(match[1])
       
-      // 更新加载提示
-      const statusText = text || `下载模型中 (${pct.toFixed(0)}%)`
+      const statusText = text || `下载中 (${pct.toFixed(0)}%)`
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.content.includes('正在加载')) {
         lastMsg.displayedContent = `⏳ 加载模型中... ${pct.toFixed(0)}%\n${statusText}`
@@ -215,36 +212,24 @@ async function initWebllm() {
       }
     }
     
-    // 使用 MLCEngine 类（更稳定）
-    const engine = new webllm.MLCEngine({
-      initProgressCallback,
-    })
+    // 使用 CreateMLCEngine（官方推荐方式）
+    webllmEngine = await webllm.CreateMLCEngine(
+      'Qwen3-0.6B-q4f16_1-MLC',
+      { initProgressCallback }
+    )
     
-    // 加载模型 - 使用较小的 Qwen3-0.6B 模型
-    // 添加重试逻辑：如果缓存失败，使用 use_cache: false
-    try {
-      await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
-    } catch (cacheErr) {
-      console.warn('[WebLLM] Cache failed, retrying without cache:', cacheErr)
-      // 清理缓存并重试
-      if ('caches' in window) {
-        const cacheKeys = await caches.keys()
-        for (const key of cacheKeys) {
-          await caches.delete(key)
-        }
-      }
-      await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
-    }
-    
-    webllmEngine = engine
     webllmReady.value = true
     isWebllmLoading.value = false
     
-    // 移除加载提示，添加成功提示
     messages.value = messages.value.filter(m => m.content.includes('正在加载'))
-    addAssistantMessage('✅ WebLLM 模型加载成功！现在可以使用本地 AI 进行对话。')
+    addAssistantMessage('✅ WebLLM 模型加载成功！')
     
   } catch (err) {
+    console.error('[WebLLM] Init error:', err)
+    isWebllmLoading.value = false
+    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n请确保使用 Chrome/Edge 最新版并启用 WebGPU。`)
+  }
+}
     console.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
     addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n可能原因：\n• 浏览器不支持 WebGPU\n• 网络连接问题\n• 缓存存储已满\n\n请尝试：刷新页面、清除浏览器缓存、或使用云端模式。`)
