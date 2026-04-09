@@ -181,10 +181,9 @@ async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型\n如遇 WebGPU 错误，请尝试使用云端模式')
+  addAssistantMessage('⏳ 正在加载 WebLLM (尝试更小的模型)...')
   
   try {
-    // 动态导入 web-llm
     const webllmModule = await import('@mlc-ai/web-llm')
     
     // 进度回调
@@ -207,24 +206,43 @@ async function initWebllm() {
       }
     }
     
-    // 尝试使用 ServiceWorker 模式（更稳定）
-    const { CreateServiceWorkerMLCEngine } = webllmModule
+    // 尝试更小的模型列表（按优先级）
+    const modelOptions = [
+      'SmolLM2-360M-Instruct-q0f16-MLC',  // 最小 (~200MB)
+      'Llama-3.2-1B-Instruct-q0f16-MLC',  // 较小 (~500MB)
+      'Qwen3-0.6B-q4f16_1-MLC',           // 之前失败的模型
+    ]
     
-    webllmEngine = await CreateServiceWorkerMLCEngine(
-      'Qwen3-0.6B-q4f16_1-MLC',
-      { initProgressCallback }
-    )
+    let engine = null
+    let lastError = null
     
-    webllmReady.value = true
-    isWebllmLoading.value = false
+    for (const model of modelOptions) {
+      try {
+        addAssistantMessage(`尝试加载 ${model}...`)
+        const { CreateMLCEngine } = webllmModule
+        engine = await CreateMLCEngine(model, { initProgressCallback })
+        webllmReady.value = true
+        break
+      } catch (err) {
+        console.warn(`[WebLLM] ${model} failed:`, err.message)
+        lastError = err
+        // 继续尝试下一个模型
+      }
+    }
     
-    messages.value = messages.value.filter(m => m.content.includes('正在加载'))
-    addAssistantMessage('✅ WebLLM 模型加载成功！')
+    if (webllmReady.value && engine) {
+      webllmEngine = engine
+      isWebllmLoading.value = false
+      messages.value = messages.value.filter(m => m.content.includes('正在加载'))
+      addAssistantMessage('✅ WebLLM 模型加载成功！')
+    } else {
+      throw lastError || new Error('所有模型加载失败')
+    }
     
   } catch (err) {
     console.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
-    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n您的浏览器可能不支持 WebGPU 或存在驱动问题。\n\n可尝试：\n1. 使用 Chrome/Edge 最新版\n2. 更新显卡驱动\n3. 或继续使用云端模式`)
+    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n您的设备可能不支持本地 LLM。\n\n可尝试：\n1. 更新浏览器和显卡驱动\n2. 使用其他设备（Mac/高端 PC）\n3. 继续使用云端模式`)
   }
 }
 
