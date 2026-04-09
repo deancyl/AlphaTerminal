@@ -507,9 +507,11 @@ const riskMetrics = computed(() => {
 })
 
 // 行业归因 (从持仓推断行业分布，需接入行业数据)
+// 防御性检查: 确保 positions 是数组
 const sectorAttribution = computed(() => {
-  if (!store.positions.length) return []
-  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
+  const positions = Array.isArray(store.positions) ? store.positions : []
+  if (!positions.length) return []
+  const totalValue = positions.reduce((s, p) => s + (p.market_value || 0), 0)
   if (totalValue === 0) return []
   
   // 按 symbol 分组汇总 (实际应接行业数据，这里用估算)
