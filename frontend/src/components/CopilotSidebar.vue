@@ -199,10 +199,6 @@ async function initWebllm() {
         text = progress.text || ''
       }
       
-      // 解析 text 获取更多信息
-      const match = String(text || progress || '').match(/(\d+)%/)
-      if (match) pct = parseInt(match[1])
-      
       const statusText = text || `下载中 (${pct.toFixed(0)}%)`
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.content.includes('正在加载')) {
@@ -211,12 +207,22 @@ async function initWebllm() {
       }
     }
     
-    // 使用 CreateMLCEngine（官方推荐方式）
-    webllmEngine = await webllm.CreateMLCEngine(
-      'Qwen3-0.6B-q4f16_1-MLC',
-      { initProgressCallback }
-    )
+    // 尝试禁用缓存，使用内存模式
+    const engineConfig = {
+      initProgressCallback,
+      // 禁用 IndexedDB 缓存，改用内存缓存
+      appConfig: {
+        useIndexedDBCache: false,
+      }
+    }
     
+    // 使用 MLCEngine（更底层控制）
+    const engine = new webllm.MLCEngine(engineConfig)
+    
+    // 加载模型
+    await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
+    
+    webllmEngine = engine
     webllmReady.value = true
     isWebllmLoading.value = false
     
