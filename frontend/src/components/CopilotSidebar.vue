@@ -174,7 +174,7 @@ import {
 const llmMode = ref('cloud')  // 'cloud' | 'webllm'
 const webllmReady = ref(false)
 const isWebllmLoading = ref(false)
-let webllmChat = null
+let webllmEngine = null
 
 // 初始化 WebLLM（懒加载）
 async function initWebllm() {
@@ -184,16 +184,19 @@ async function initWebllm() {
   addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...')
   
   try {
-    const { ChatModule } = await import('@mlc-ai/web-llm')
+    // 动态导入 web-llm v0.2.x API
+    const webllm = await import('@mlc-ai/web-llm')
     
-    webllmChat = new ChatModule()
-    
-    // 使用较小的模型以保证兼容性
+    // 进度回调
     const initProgressCallback = (progress) => {
       console.log('[WebLLM] Loading:', (progress * 100).toFixed(1) + '%')
     }
     
-    await webllmChat.reload('Llama-3.1-8B-Instruct-q4f32_1-MLC', initProgressCallback)
+    // 使用 CreateMLCEngine 创建引擎
+    webllmEngine = await webllm.CreateMLCEngine(
+      'Llama-3.1-8B-Instruct-q4f32_1-MLC',
+      { initProgressCallback }
+    )
     
     webllmReady.value = true
     isWebllmLoading.value = false
@@ -225,7 +228,7 @@ async function toggleLlmMode() {
 
 // 使用 WebLLM 生成回复
 async function generateWithWebllm(prompt, context) {
-  if (!webllmReady.value || !webllmChat) {
+  if (!webllmReady.value || !webllmEngine) {
     throw new Error('WebLLM 未就绪')
   }
   
@@ -238,17 +241,28 @@ async function generateWithWebllm(prompt, context) {
   
   fullPrompt += `\n\n用户问题：${prompt}`
   
+  // 使用流式生成
   const chunks = []
-  await webllmChat.generate(fullPrompt, (chunk) => {
-    chunks.push(chunk)
-    // 实时更新显示
-    const lastMsg = messages.value[messages.value.length - 1]
-    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
-      lastMsg.displayedContent = chunks.join('')
-      lastMsg.content = chunks.join('')
-      scrollToBottom()
-    }
+  const stream = await webllmEngine.chat.completions.create({
+    messages: [{ role: 'user', content: fullPrompt }],
+    stream: true,
+    temperature: 0.7,
+    max_tokens: 2000,
   })
+  
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || ''
+    if (content) {
+      chunks.push(content)
+      // 实时更新显示
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+        lastMsg.displayedContent = chunks.join('')
+        lastMsg.content = chunks.join('')
+        scrollToBottom()
+      }
+    }
+  }
   
   return chunks.join('')
 }
@@ -786,7 +800,7 @@ async function sendToLLM(text) {
     }
     
     // 根据模式选择不同的生成方式
-    if (llmMode.value === 'webllm' && webllmReady.value && webllmChat) {
+    if (llmMode.value === 'webllm' && webllmReady.value && webllmEngine) {
       // 使用 WebLLM 本地生成
       await generateWithWebllm(text, context)
       messages.value[aiMsgIndex].streaming = false
