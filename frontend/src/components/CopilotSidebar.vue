@@ -181,7 +181,7 @@ async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...\n（首次加载约需 1-2 分钟，请耐心等待）')
+  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...\n\n📥 首次加载需下载模型（约 4GB）\n⏱️ 预计 1-3 分钟，请保持页面打开')
   
   try {
     // 动态导入 web-llm v0.2.x API
@@ -190,17 +190,27 @@ async function initWebllm() {
     // 进度回调
     const initProgressCallback = (progress) => {
       // WebLLM progress: { progress: number, text: string, ... }
-      const pct = typeof progress === 'number' 
-        ? progress * 100 
-        : (progress?.progress || 0) * 100
-      const text = progress?.text || ''
-      const msg = `⏳ 加载模型中... ${pct.toFixed(0)}% ${text ? '- ' + text : ''}`
-      console.log('[WebLLM]', msg)
+      let pct = 0
+      let text = ''
+      
+      if (typeof progress === 'number') {
+        pct = progress * 100
+      } else if (progress?.progress !== undefined) {
+        pct = progress.progress * 100
+        text = progress.text || ''
+      }
+      
+      // 解析 text 获取更多信息（如 "5% completed"）
+      const match = String(text || progress || '').match(/(\d+)%/)
+      if (match) {
+        pct = parseInt(match[1])
+      }
       
       // 更新加载提示
+      const statusText = text || `下载模型中 (${pct.toFixed(0)}%)`
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.content.includes('正在加载')) {
-        lastMsg.displayedContent = msg
+        lastMsg.displayedContent = `⏳ 加载模型中... ${pct.toFixed(0)}%\n${statusText}`
         scrollToBottom()
       }
     }
