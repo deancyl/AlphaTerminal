@@ -78,11 +78,12 @@ const DOWN = '#14b143'
 // ─────────────────────────────────────────────────────────────────
 // 数据清洗
 // ─────────────────────────────────────────────────────────────────
-function _sanitize(raw) {
+function _sanitize(raw, isMinute = false) {
   if (!Array.isArray(raw) || !raw.length) return []
   return raw.map(r => ({
-    date:       r.date   || String(r.timestamp || ''),
-    time:       r.time   || '',
+    // 分钟数据用 time 字段，日线数据用 date 字段
+    date:       isMinute ? (r.time ? r.time.split(' ')[0] : '') : (r.date || String(r.timestamp || '')),
+    time:       r.time || r.date || String(r.timestamp || ''),
     open:       Number(r.open)  || 0,
     close:      Number(r.close) || 0,
     high:       Number(r.high)  || 0,
@@ -597,7 +598,9 @@ async function fetchAndRender() {
     const data = await res.json()
     const type = data.chart_type || 'candlestick'
     chartType.value = type
-    const hist = _sanitize(data.history || [])
+    // 分钟数据需要特殊处理
+    const isMinute = type === 'line' || props.url.includes('minutely') || props.url.includes('period=1m') || props.url.includes('period=5m')
+    const hist = _sanitize(data.history || [], isMinute)
 
     // 将 raw hist 塞给 option，方便 hover 时访问
     // 确保数据按时间正序（左边=最旧，右边=最新）
@@ -621,7 +624,7 @@ async function fetchAndRender() {
 
     // 回填最新一根数据到 hover bar（保证刷新后默认显示）
     lastHistRaw = data.history || []
-    fillHoverBarLatest(_sanitize(lastHistRaw))
+    fillHoverBarLatest(_sanitize(lastHistRaw, isMinute))
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
     console.error('[KLine]', e)
