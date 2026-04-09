@@ -84,9 +84,10 @@
              : msg.isError
                ? 'bg-red-500/10 border border-red-500/30 text-red-300 mr-4'
                : 'bg-terminal-bg border border-gray-700 mr-4'">
-        <div class="text-[10px] mb-1.5"
+        <div class="text-[10px] mb-1.5 flex items-center gap-1"
              :class="msg.role === 'user' ? 'text-terminal-accent' : 'text-terminal-dim'">
-          {{ msg.role === 'user' ? '你' : '🤖 AlphaTerminal' }}
+          <span>{{ msg.role === 'user' ? '你' : '🤖 AlphaTerminal' }}</span>
+          <span v-if="msg.fromCache" class="text-[9px] text-green-400">📋 缓存</span>
         </div>
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="text-gray-100">{{ msg.content }}</div>
@@ -306,6 +307,40 @@ const inputText      = ref('')
 const isLoading      = ref(false)
 const historyEl      = ref(null)
 const inputEl        = ref(null)
+
+// ========== 云端 Copilot 缓存优化 ==========
+const RESPONSE_CACHE = new Map()  // 简单内存缓存
+const CACHE_TTL = 5 * 60 * 1000   // 5分钟缓存
+let currentAbortController = null  // 用于取消请求
+
+// 清理过期缓存
+function cleanCache() {
+  const now = Date.now()
+  for (const [key, value] of RESPONSE_CACHE) {
+    if (now - value.timestamp > CACHE_TTL) {
+      RESPONSE_CACHE.delete(key)
+    }
+  }
+}
+
+// 获取缓存
+function getCachedResponse(prompt) {
+  const key = prompt.trim().toLowerCase()
+  const cached = RESPONSE_CACHE.get(key)
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.response
+  }
+  return null
+}
+
+// 设置缓存
+function setCachedResponse(prompt, response) {
+  const key = prompt.trim().toLowerCase()
+  RESPONSE_CACHE.set(key, {
+    response,
+    timestamp: Date.now()
+  })
+}
 
 const ctxMarket = ref(true)
 const ctxRates  = ref(false)
@@ -814,6 +849,12 @@ async function showNorthFlowTopBuy() {
 // ========== LLM 对话 ==========
 
 async function sendToLLM(text) {
+  // 清理过期缓存
+  cleanCache()
+  
+  // 检查缓存
+  const cachedResponse = getCachedResponse(text)
+  
   addUserMessage(text)
   isLoading.value = true
   
@@ -823,7 +864,8 @@ async function sendToLLM(text) {
     role: 'assistant', 
     content: '', 
     displayedContent: '🧠 正在思考...', 
-    streaming: true 
+    streaming: true,
+    fromCache: false
   })
   
   try {
@@ -832,13 +874,29 @@ async function sendToLLM(text) {
     if (ctxMarket.value && props.marketOverview) {
       context += formatMarketOverview(props.marketOverview) + '\n'
     }
+    if (ctxNews.value && props.newsData?.length > 0) {
+      context += '\n📰 最新快讯：\n' + props.newsData.slice(0, 3).map(n => `- ${n.title}`).join('\n')
+    }
     
     // 根据模式选择不同的生成方式
     if (llmMode.value === 'webllm' && webllmReady.value && webllmEngine) {
       // 使用 WebLLM 本地生成
       await generateWithWebllm(text, context)
       messages.value[aiMsgIndex].streaming = false
+    } else if (cachedResponse) {
+      // 使用缓存（立即显示，无流式）
+      messages.value[aiMsgIndex].displayedContent = cachedResponse
+      messages.value[aiMsgIndex].content = cachedResponse
+      messages.value[aiMsgIndex].streaming = false
+      messages.value[aiMsgIndex].fromCache = true
+      scrollToBottom()
     } else {
+      // 取消之前的请求
+      if (currentAbortController) {
+        currentAbortController.abort()
+      }
+      currentAbortController = new AbortController()
+      
       // 使用云端 API
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
@@ -847,6 +905,7 @@ async function sendToLLM(text) {
           prompt: text,
           context: context || undefined,
         }),
+        signal: currentAbortController.signal
       })
       
       if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -876,17 +935,27 @@ async function sendToLLM(text) {
             }
             if (data.done) {
               messages.value[aiMsgIndex].streaming = false
+              // 缓存响应
+              if (fullContent) {
+                setCachedResponse(text, fullContent)
+              }
             }
           } catch {}
         }
       }
     }
   } catch (err) {
+    if (err.name === 'AbortError') {
+      // 请求被取消，不显示错误
+      messages.value.splice(aiMsgIndex, 1)
+      return
+    }
     messages.value[aiMsgIndex].displayedContent = `❌ 请求失败: ${err.message}\n\n💡 您可以尝试直接使用快捷命令查询数据`
     messages.value[aiMsgIndex].isError = true
     messages.value[aiMsgIndex].streaming = false
   } finally {
     isLoading.value = false
+    currentAbortController = null
     scrollToBottom()
   }
 }
