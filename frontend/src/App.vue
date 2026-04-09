@@ -98,7 +98,30 @@
       </header>
 
       <!-- 主视图区域（Phase 5 视图切换） -->
-      <div class="flex-1 overflow-auto p-4">
+      <div class="flex-1 overflow-auto p-4 relative">
+        <!-- F1修复: 骨架屏加载状态 -->
+        <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
+          <!-- 风向标骨架 -->
+          <div class="grid grid-cols-4 gap-2">
+            <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-panel border border-gray-700"></div>
+          </div>
+          <!-- 新闻/板块骨架 -->
+          <div class="grid grid-cols-2 gap-2">
+            <div class="h-32 rounded bg-terminal-panel border border-gray-700"></div>
+            <div class="h-32 rounded bg-terminal-panel border border-gray-700"></div>
+          </div>
+          <!-- K线骨架 -->
+          <div class="h-48 rounded bg-terminal-panel border border-gray-700"></div>
+          <div class="text-terminal-dim text-xs text-center">正在加载市场数据...</div>
+        </div>
+
+        <!-- F2修复: 加载错误提示 -->
+        <div v-if="loadError && !isInitialLoading" 
+             class="mb-2 px-3 py-2 rounded border border-red-800 bg-red-900/30 text-red-400 text-xs flex items-center justify-between">
+          <span>⚠️ 数据加载失败: {{ loadError }}</span>
+          <button @click="fetchMarketData" class="px-2 py-0.5 bg-red-800 rounded text-red-300 hover:bg-red-700">重试</button>
+        </div>
+
         <!-- 股票行情（默认） -->
         <DashboardGrid
           v-if="currentView === 'stock'"
@@ -167,6 +190,8 @@ const { ui } = useUiStore()
 // 全局错误处理
 const hasError = ref(false)
 const errorMessage = ref('')
+const isInitialLoading = ref(true)  // 初始加载骨架屏
+const loadError = ref(null)          // 加载错误信息
 
 function clearError() {
   hasError.value = false
@@ -290,8 +315,15 @@ async function fetchMarketData() {
     // 修复: sectors 新格式 {code, data: {sectors:[...]}} → results.sectors = {sectors:[...]}
     sectorsData.value     = results.sectors?.sectors || results.sectors?.data?.sectors || (Array.isArray(results.sectors) ? results.sectors : [])
     derivativesData.value = results.derivatives?.derivatives || results.derivatives?.data?.derivatives || results.derivatives || []
+    
+    // 数据加载完成，关闭骨架屏
+    isInitialLoading.value = false
+    loadError.value = null
   } catch (e) {
     console.error('[App] fetchMarketData error:', e)
+    // 加载失败，显示错误提示
+    loadError.value = e.message || '数据加载失败'
+    isInitialLoading.value = false
   }
 }
 

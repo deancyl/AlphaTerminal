@@ -141,9 +141,24 @@
               {{ formatAmt(stock.amount) }}
             </td>
           </tr>
-          <tr v-if="!pageStocks.length && !loading">
+          <!-- F1修复: 股票列表骨架屏 -->
+          <tr v-if="loading && !pageStocks.length">
+            <td colspan="8" class="py-1">
+              <div class="space-y-1 animate-pulse">
+                <div v-for="i in 8" :key="i" class="flex gap-1">
+                  <div class="h-3 rounded bg-terminal-panel w-10"></div>
+                  <div class="h-3 rounded bg-terminal-panel w-16"></div>
+                  <div class="flex-1 h-3 rounded bg-terminal-panel"></div>
+                  <div class="h-3 rounded bg-terminal-panel w-14"></div>
+                  <div class="h-3 rounded bg-terminal-panel w-14"></div>
+                  <div class="h-3 rounded bg-terminal-panel w-10"></div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr v-else-if="!pageStocks.length">
             <td colspan="8" class="py-8 text-center text-terminal-dim text-xs">
-              {{ allStocks.length === 0 ? '数据加载中（约30秒后可用）...' : '无符合条件的数据' }}
+              {{ allStocks.length === 0 ? '数据加载中...' : '无符合条件的数据' }}
             </td>
           </tr>
         </tbody>

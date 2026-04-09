@@ -62,7 +62,17 @@
             </div>
           </div>
         </div>
-        <div v-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
+        <!-- F1修复: 新闻骨架屏 -->
+        <div v-if="isRefreshing && !pagedItems.length" class="space-y-2 animate-pulse">
+          <div v-for="i in 5" :key="i" class="flex items-start gap-2">
+            <div class="w-8 h-4 rounded bg-terminal-panel"></div>
+            <div class="flex-1 space-y-1">
+              <div class="h-4 rounded bg-terminal-panel w-3/4"></div>
+              <div class="h-3 rounded bg-terminal-panel w-1/2"></div>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
           暂无快讯数据
         </div>
       </div>
