@@ -189,12 +189,18 @@ async function initWebllm() {
     
     // 进度回调
     const initProgressCallback = (progress) => {
-      const msg = `[WebLLM] 加载中: ${(progress * 100).toFixed(1)}% - ${progress.text || ''}`
-      console.log(msg)
+      // WebLLM progress: { progress: number, text: string, ... }
+      const pct = typeof progress === 'number' 
+        ? progress * 100 
+        : (progress?.progress || 0) * 100
+      const text = progress?.text || ''
+      const msg = `⏳ 加载模型中... ${pct.toFixed(0)}% ${text ? '- ' + text : ''}`
+      console.log('[WebLLM]', msg)
+      
       // 更新加载提示
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.content.includes('正在加载')) {
-        lastMsg.displayedContent = `⏳ 正在加载 WebLLM 模型...\n${(progress * 100).toFixed(0)}%`
+        lastMsg.displayedContent = msg
         scrollToBottom()
       }
     }
