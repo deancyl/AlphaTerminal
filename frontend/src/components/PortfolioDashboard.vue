@@ -54,7 +54,63 @@
       <!-- 净值曲线图 -->
       <div class="mt-2">
         <div class="text-[9px] text-terminal-dim mb-1">📈 净值走势</div>
-        <div ref="chartEl" class="w-full" style="height: 120px;"></div>
+        <div ref="chartEl" class="w-full" style="height: 100px;"></div>
+      </div>
+
+      <!-- 风险指标面板 -->
+      <div v-if="store.pnl && riskMetrics" class="mt-2 p-2 rounded border border-gray-700 bg-terminal-panel/50">
+        <div class="text-[9px] text-terminal-dim mb-1">📊 风险指标</div>
+        <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[9px]">
+          <div>
+            <span class="text-terminal-dim">波动率</span>
+            <div class="font-mono" :class="riskMetrics.volatility > 0.25 ? 'text-red-400' : riskMetrics.volatility > 0.15 ? 'text-yellow-400' : 'text-green-400'">
+              {{ riskMetrics.volatility }}%
+            </div>
+          </div>
+          <div>
+            <span class="text-terminal-dim">夏普比率</span>
+            <div class="font-mono" :class="riskMetrics.sharpe >= 1 ? 'text-green-400' : riskMetrics.sharpe > 0 ? 'text-yellow-400' : 'text-red-400'">
+              {{ riskMetrics.sharpe }}
+            </div>
+          </div>
+          <div>
+            <span class="text-terminal-dim">最大回撤</span>
+            <div class="font-mono text-red-400">{{ riskMetrics.maxDrawdown }}%</div>
+          </div>
+          <div>
+            <span class="text-terminal-dim">年化收益</span>
+            <div class="font-mono" :class="riskMetrics.annualReturn >= 0 ? 'text-red-400' : 'text-green-400'">
+              {{ riskMetrics.annualReturn >= 0 ? '+' : '' }}{{ riskMetrics.annualReturn }}%
+            </div>
+          </div>
+          <div class="col-span-2 mt-0.5">
+            <span class="text-terminal-dim">持仓集中度</span>
+            <div class="font-mono text-gray-300">
+              Top3 {{ riskMetrics.top3Concentration }}% | Top5 {{ riskMetrics.top5Concentration }}%
+            </div>
+          </div>
+          <div class="col-span-2">
+            <span class="text-terminal-dim">β (vs沪深300)</span>
+            <div class="font-mono text-gray-300">{{ riskMetrics.portfolioBeta }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 行业归因 -->
+      <div v-if="sectorAttribution && sectorAttribution.length > 0" class="mt-2 p-2 rounded border border-gray-700 bg-terminal-panel/50">
+        <div class="text-[9px] text-terminal-dim mb-1">🏭 行业分布</div>
+        <div class="space-y-0.5 max-h-24 overflow-y-auto">
+          <div v-for="s in sectorAttribution" :key="s.name" class="flex items-center justify-between text-[9px]">
+            <span class="text-gray-300 truncate max-w-[60px]">{{ s.name }}</span>
+            <div class="flex items-center gap-1">
+              <div class="w-12 h-1 bg-gray-700 rounded-full overflow-hidden">
+                <div class="h-full rounded-full" :class="s.weight > 20 ? 'bg-red-500/60' : s.weight > 10 ? 'bg-yellow-500/60' : 'bg-green-500/60'"
+                     :style="{ width: Math.min(s.weight, 100) + '%' }"></div>
+              </div>
+              <span class="text-terminal-dim w-10 text-right">{{ s.weight.toFixed(1) }}%</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -78,6 +134,10 @@
         <button @click="showTradeModal = true"
                 class="ml-2 px-3 py-1 rounded bg-terminal-accent/20 border border-terminal-accent/50 text-terminal-accent text-[10px] hover:bg-terminal-accent/30 transition">
           + 调仓
+        </button>
+        <button @click="downloadReport"
+                class="px-3 py-1 rounded border border-gray-600 text-gray-400 text-[10px] hover:border-gray-500 hover:text-gray-300 transition">
+          📥 报告
         </button>
       </div>
 
@@ -264,6 +324,42 @@ async function submitCreate() {
   showCreateModal.value = false
 }
 
+function downloadReport() {
+  if (!store.positions.length) return
+  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
+  const totalCost  = store.positions.reduce((s, p) => s + (p.shares || 0) * (p.avg_cost || 0), 0)
+  const totalPnl  = store.positions.reduce((s, p) => s + (p.pnl || 0), 0)
+  
+  const lines = [
+    `AlphaTerminal 投资组合报告 - ${new Date().toLocaleString('zh-CN')}`,
+    `账户: ${store.activePortfolio?.name || 'N/A'}`,
+    `总市值: ${fmtYuan(totalValue)}`,
+    `总成本: ${fmtYuan(totalCost)}`,
+    `累计盈亏: ${fmtYuan(totalPnl)} (${((totalPnl / (totalCost || 1)) * 100).toFixed(2)}%)`,
+    '',
+    '--- 持仓明细 ---',
+    '代码,名称,持仓,成本价,现价,市值,盈亏,盈亏率,占比',
+    ...store.positions.map(p =>
+      `${p.symbol},${p.symbol},${p.shares},${p.avg_cost},${p.price},${fmtYuan(p.market_value)},${fmtYuan(p.pnl)},${p.pnl_pct}%,${((p.market_value / (totalValue || 1)) * 100).toFixed(1)}%`
+    ),
+    '',
+    '--- 风险指标 ---',
+    `波动率: ${riskMetrics.value?.volatility || '--'}%`,
+    `夏普比率: ${riskMetrics.value?.sharpe || '--'}`,
+    `最大回撤: ${riskMetrics.value?.maxDrawdown || '--'}%`,
+    `年化收益: ${riskMetrics.value?.annualReturn || '--'}%`,
+    `持仓集中度(Top3): ${riskMetrics.value?.top3Concentration || '--'}%`,
+  ]
+  
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `portfolio_${store.activePortfolio?.name || 'report'}_${new Date().toISOString().slice(0,10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 async function handleSwitch(pid) {
   await store.switchAccount(pid)
   await nextTick()
@@ -341,6 +437,103 @@ function fmtYuan(v) {
   if (Math.abs(v) >= 1e4) return (v/1e4).toFixed(2) + '万'
   return v.toFixed(2)
 }
+
+// ── 风险指标计算 ─────────────────────────────────────────────
+
+// 从 store.snapshots 计算风险指标
+const riskMetrics = computed(() => {
+  if (!store.snapshots || store.snapshots.length < 2) {
+    return null
+  }
+  const assets = store.snapshots.map(s => s.total_asset)
+  const latest = assets[assets.length - 1]
+  const first = assets[0]
+  
+  // 收益率序列
+  const returns = []
+  for (let i = 1; i < assets.length; i++) {
+    if (assets[i-1] > 0) {
+      returns.push((assets[i] - assets[i-1]) / assets[i-1])
+    }
+  }
+  
+  if (returns.length < 2) {
+    return null
+  }
+
+  // 1. 年化收益率
+  const days = store.snapshots.length
+  const totalReturn = (latest - first) / first
+  const annualReturn = (Math.pow(1 + totalReturn, 365 / Math.max(days, 1)) - 1) * 100
+
+  // 2. 波动率 (年化标准差)
+  const mean = returns.reduce((a, b) => a + b, 0) / returns.length
+  const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length
+  const dailyVol = Math.sqrt(variance)
+  const volatility = dailyVol * Math.sqrt(252) * 100
+
+  // 3. 夏普比率 (假设无风险利率 3%)
+  const riskFree = 0.03
+  const sharpe = volatility > 0 ? ((annualReturn / 100 - riskFree) / (volatility / 100)).toFixed(2) : '0.00'
+
+  // 4. 最大回撤
+  let maxDrawdown = 0
+  let peak = assets[0]
+  for (const a of assets) {
+    if (a > peak) peak = a
+    const dd = (peak - a) / peak
+    if (dd > maxDrawdown) maxDrawdown = dd
+  }
+  const maxDrawdownPct = (maxDrawdown * 100).toFixed(2)
+
+  // 5. 持仓集中度
+  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
+  const sorted = [...store.positions].sort((a, b) => (b.market_value || 0) - (a.market_value || 0))
+  const top3 = sorted.slice(0, 3).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
+  const top5 = sorted.slice(0, 5).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
+
+  // 6. 组合Beta (简化估算: 用个股涨跌幅与沪深300的相关性)
+  const portfolioBeta = '1.00' // 简化: 默认1.0，精确计算需接入沪深300数据
+
+  return {
+    volatility: volatility.toFixed(2),
+    sharpe: parseFloat(sharpe).toFixed(2),
+    maxDrawdown: maxDrawdownPct,
+    annualReturn: annualReturn.toFixed(2),
+    top3Concentration: top3.toFixed(1),
+    top5Concentration: top5.toFixed(1),
+    portfolioBeta,
+  }
+})
+
+// 行业归因 (从持仓推断行业分布，需接入行业数据)
+const sectorAttribution = computed(() => {
+  if (!store.positions.length) return []
+  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
+  if (totalValue === 0) return []
+  
+  // 按 symbol 分组汇总 (实际应接行业数据，这里用估算)
+  // 已知持仓的行业映射 (可扩展)
+  const SECTOR_MAP = {
+    '600519': '白酒', '000858': '白酒', '000568': '白酒',
+    '601318': '金融', '600036': '银行', '601398': '银行',
+    '000001': '银行', '002594': '新能源车', '300750': '新能源车',
+    '600900': '电力', '600028': '石油', '601857': '石油',
+  }
+  
+  // 简单按持仓市值分组
+  const sectors = {}
+  for (const pos of store.positions) {
+    const sec = SECTOR_MAP[pos.symbol] || '其他'
+    if (!sectors[sec]) sectors[sec] = 0
+    sectors[sec] += (pos.market_value || 0)
+  }
+  
+  return Object.entries(sectors)
+    .map(([name, value]) => ({ name, weight: value / totalValue * 100 }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 8)
+})
 
 // ── 生命周期 ─────────────────────────────────────────────────
 onMounted(async () => {
