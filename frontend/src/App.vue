@@ -281,13 +281,14 @@ async function fetchMarketData() {
     ratesData.value       = results.rates?.rates || results.rates?.data?.rates || results.rates || []
     // 修复: news/flash 新格式 {code, data: {news:[...]}} → results.news = {news:[...]}
     // 兼容旧格式 news:[...] 直接返回（Array.isArray 判断）
-    newsData.value        = results.news?.news || results.news?.data?.news || Array.isArray(results.news) ? results.news : []
+    newsData.value        = results.news?.news || results.news?.data?.news || (Array.isArray(results.news) ? results.news : [])
     globalData.value      = results.global?.global || results.global?.data?.global || results.global || []
     // 修复: china_all 新格式 {code, data: {china_all:[...]}} → results.china_all = {china_all:[...]}
     // 兼容旧格式 china_all:[...] 直接返回
-    chinaAllData.value    = results.china_all?.china_all || results.china_all?.data?.china_all || Array.isArray(results.china_all) ? results.china_all : []
+    // 注意: 必须用括号包裹三元运算，避免优先级问题
+    chinaAllData.value    = results.china_all?.china_all || results.china_all?.data?.china_all || (Array.isArray(results.china_all) ? results.china_all : [])
     // 修复: sectors 新格式 {code, data: {sectors:[...]}} → results.sectors = {sectors:[...]}
-    sectorsData.value     = results.sectors?.sectors || results.sectors?.data?.sectors || Array.isArray(results.sectors) ? results.sectors : []
+    sectorsData.value     = results.sectors?.sectors || results.sectors?.data?.sectors || (Array.isArray(results.sectors) ? results.sectors : [])
     derivativesData.value = results.derivatives?.derivatives || results.derivatives?.data?.derivatives || results.derivatives || []
   } catch (e) {
     console.error('[App] fetchMarketData error:', e)
