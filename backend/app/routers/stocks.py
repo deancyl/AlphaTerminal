@@ -2,14 +2,26 @@
 涨跌停/异动/北向资金 API
 数据来源: akshare 东方财富
 """
+import asyncio
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
 
+# 设置代理（ akshare 需访问国内服务器）
+os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
+os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
+os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
+os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# 线程池执行器用于运行阻塞代码
+_executor = ThreadPoolExecutor(max_workers=2)
 
 # 缓存配置
 _CACHE = {}
@@ -23,7 +35,9 @@ def _cache_or_fetch(key, fetch_fn, ttl=_CACHE_TTL):
         return _CACHE[key]['data']
     try:
         data = fetch_fn()
-        _CACHE[key] = {'data': data, 'time': now}
+        # 不缓存空结果，只缓存有效数据
+        if data:
+            _CACHE[key] = {'data': data, 'time': now}
         return data
     except Exception as e:
         logger.warning(f"[Stocks API] {key} fetch failed: {e}")
@@ -168,35 +182,122 @@ async def get_unusual():
     return success_response({'unusual': data, 'count': len(data)})
 
 
+# 缓存的股票列表
+_STOCK_CACHE = []
+_STOCK_CACHE_LOADED = False
+
+
+def _load_stock_cache():
+    """加载股票缓存"""
+    global _STOCK_CACHE, _STOCK_CACHE_LOADED
+    if _STOCK_CACHE_LOADED:
+        return
+    
+    try:
+        import akshare as ak
+        try:
+            df_sh = ak.stock_info_sh_name_code()
+            if df_sh is not None and len(df_sh) > 0:
+                for _, row in df_sh.head(1000).iterrows():
+                    code = str(row.get('证券代码', '')).strip()
+                    name = str(row.get('证券简称', '')).strip()
+                    if code and name:
+                        _STOCK_CACHE.append({'code': code, 'name': name, 'market': 'SH'})
+        except Exception as e:
+            logger.warning(f"[Stocks] SH load error: {e}")
+        
+        try:
+            df_sz = ak.stock_info_sz_name_code()
+            if df_sz is not None and len(df_sz) > 0:
+                for _, row in df_sz.head(1000).iterrows():
+                    code = str(row.get('A股代码', '')).strip()
+                    name = str(row.get('A股简称', '')).strip()
+                    if code and name:
+                        _STOCK_CACHE.append({'code': code, 'name': name, 'market': 'SZ'})
+        except Exception as e:
+            logger.warning(f"[Stocks] SZ load error: {e}")
+        
+        _STOCK_CACHE_LOADED = True
+        logger.info(f"[Stocks] Stock cache loaded: {len(_STOCK_CACHE)} stocks")
+    except Exception as e:
+        logger.warning(f"[Stocks] Cache load error: {e}")
+
+
+# 预加载常用股票（后备）
+_COMMON_STOCKS = [
+    {'code': '600519', 'name': '贵州茅台', 'market': 'SH'},
+    {'code': '000001', 'name': '平安银行', 'market': 'SZ'},
+    {'code': '000002', 'name': '万科A', 'market': 'SZ'},
+    {'code': '600036', 'name': '招商银行', 'market': 'SH'},
+    {'code': '601318', 'name': '中国平安', 'market': 'SH'},
+    {'code': '600030', 'name': '中信证券', 'market': 'SH'},
+    {'code': '000858', 'name': '五粮液', 'market': 'SZ'},
+    {'code': '002594', 'name': '比亚迪', 'market': 'SZ'},
+    {'code': '300750', 'name': '宁德时代', 'market': 'SZ'},
+    {'code': '600016', 'name': '民生银行', 'market': 'SH'},
+    {'code': '601166', 'name': '兴业银行', 'market': 'SH'},
+    {'code': '600000', 'name': '浦发银行', 'market': 'SH'},
+    {'code': '000333', 'name': '美的集团', 'market': 'SZ'},
+    {'code': '002415', 'name': '海康威视', 'market': 'SZ'},
+    {'code': '600276', 'name': '恒瑞医药', 'market': 'SH'},
+    {'code': '688981', 'name': '中芯国际', 'market': 'SH'},
+    {'code': '688111', 'name': '金山办公', 'market': 'SH'},
+    {'code': '300059', 'name': '东方财富', 'market': 'SZ'},
+    {'code': '002230', 'name': '科大讯飞', 'market': 'SZ'},
+    {'code': '000776', 'name': '广发证券', 'market': 'SZ'},
+    {'code': '601012', 'name': '隆基绿能', 'market': 'SH'},
+    {'code': '600585', 'name': '海螺水泥', 'market': 'SH'},
+    {'code': '601628', 'name': '中国人寿', 'market': 'SH'},
+    {'code': '600028', 'name': '中国石化', 'market': 'SH'},
+    {'code': '601857', 'name': '中国石油', 'market': 'SH'},
+    {'code': '600887', 'name': '伊利股份', 'market': 'SH'},
+    {'code': '603288', 'name': '海天味业', 'market': 'SH'},
+    {'code': '600009', 'name': '上海机场', 'market': 'SH'},
+    {'code': '601888', 'name': '中国中免', 'market': 'SH'},
+]
+
+
+def _search_stocks_local(q):
+    """本地搜索"""
+    q_lower = q.lower()
+    results = []
+    
+    # 直接搜索常用股票
+    for stock in _COMMON_STOCKS:
+        if q_lower in stock['code'].lower() or q_lower in stock['name'].lower():
+            results.append(stock)
+            if len(results) >= 20:
+                break
+    
+    return results
+
+
 @router.get("/search")
 async def search_stocks(q: str = ""):
     """
     搜索股票代码和名称
-    返回 A 股全市场股票基础信息
-    来源: akshare stock_info_a_code_name
     """
+    print(f"[Stocks] SEARCH CALLED with q='{q}'", flush=True)
+    logger.info(f"[Stocks] search called with q='{q}'")
+    
     if not q or len(q) < 1:
         return success_response({'stocks': [], 'count': 0})
 
-    def fetch():
-        import akshare as ak
-        try:
-            df = ak.stock_info_a_code_name()
-            if df is None or len(df) == 0:
-                return []
-            # 搜索
-            q_lower = q.lower()
-            mask = df.apply(lambda r: 
-                q_lower in str(r.get('code', '')).lower() or 
-                q_lower in str(r.get('name', '')).lower(), axis=1)
-            results = df[mask].head(20)
-            return results.to_dict('records')
-        except Exception as e:
-            logger.warning(f"[Stocks] search error: {e}")
-            return []
-
-    data = _cache_or_fetch(f'search_{q}', fetch, ttl=600)
-    return success_response({'stocks': data, 'count': len(data) if isinstance(data, list) else 0})
+    loop = asyncio.get_event_loop()
+    try:
+        results = await asyncio.wait_for(
+            loop.run_in_executor(_executor, _search_stocks_local, q),
+            timeout=10.0
+        )
+        logger.info(f"[Stocks] search returned {len(results)} results")
+    except asyncio.TimeoutError:
+        logger.warning("[Stocks] search timeout")
+        results = []
+    except Exception as e:
+        logger.warning(f"[Stocks] search error: {e}")
+        results = []
+    
+    return success_response({'stocks': results, 'count': len(results)})
 
 
 @router.get("/quote")
