@@ -181,14 +181,11 @@ async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型（约 400MB）')
+  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型\n如遇 WebGPU 错误，请尝试使用云端模式')
   
   try {
     // 动态导入 web-llm
     const webllmModule = await import('@mlc-ai/web-llm')
-    
-    // 打印可用导出以便调试
-    console.log('[WebLLM] Available exports:', Object.keys(webllmModule))
     
     // 进度回调
     const initProgressCallback = (progress) => {
@@ -210,13 +207,10 @@ async function initWebllm() {
       }
     }
     
-    // 使用 CreateMLCEngine - 官方推荐方式
-    const { CreateMLCEngine, prebuiltAppConfig } = webllmModule
+    // 尝试使用 ServiceWorker 模式（更稳定）
+    const { CreateServiceWorkerMLCEngine } = webllmModule
     
-    console.log('[WebLLM] prebuiltAppConfig models:', 
-      prebuiltAppConfig.model_list.map(m => m.model_id).slice(0, 10))
-    
-    webllmEngine = await CreateMLCEngine(
+    webllmEngine = await CreateServiceWorkerMLCEngine(
       'Qwen3-0.6B-q4f16_1-MLC',
       { initProgressCallback }
     )
@@ -230,7 +224,7 @@ async function initWebllm() {
   } catch (err) {
     console.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
-    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n请确保使用 Chrome/Edge 最新版并启用 WebGPU。`)
+    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n您的浏览器可能不支持 WebGPU 或存在驱动问题。\n\n可尝试：\n1. 使用 Chrome/Edge 最新版\n2. 更新显卡驱动\n3. 或继续使用云端模式`)
   }
 }
 
