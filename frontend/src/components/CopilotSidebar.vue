@@ -3,10 +3,32 @@
 
     <!-- 标题区 -->
     <div class="p-4 border-b border-gray-800 shrink-0">
-      <h2 class="text-terminal-accent font-bold text-base flex items-center gap-2">
-        🧠 AlphaTerminal Copilot
-      </h2>
-      <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 数据驱动分析</p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-terminal-accent font-bold text-base flex items-center gap-2">
+            🧠 AlphaTerminal Copilot
+          </h2>
+          <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 数据驱动分析</p>
+        </div>
+        <!-- 模式切换按钮 -->
+        <button
+          class="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border transition"
+          :class="llmMode === 'webllm'
+            ? 'border-green-500/50 bg-green-500/10 text-green-400'
+            : 'border-purple-500/50 bg-purple-500/10 text-purple-400'"
+          @click="toggleLlmMode"
+          :disabled="isWebllmLoading"
+        >
+          <span v-if="isWebllmLoading" class="w-3 h-3 border border-green-400/50 border-t-green-400 rounded-full animate-spin"></span>
+          <span v-else>{{ llmMode === 'webllm' ? '🌐 WebLLM' : '🤖 云端' }}</span>
+        </button>
+      </div>
+      <!-- WebLLM 状态提示 -->
+      <div v-if="llmMode === 'webllm'" class="mt-2 text-[10px]">
+        <span v-if="webllmReady" class="text-green-400">✓ 模型已加载</span>
+        <span v-else-if="isWebllmLoading" class="text-yellow-400">⏳ 加载中...</span>
+        <span v-else class="text-red-400">✗ 点击切换到 WebLLM 模式</span>
+      </div>
     </div>
 
     <!-- 快捷命令按钮 -->
@@ -116,7 +138,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import {
   getMarketOverview,
   getSectors,
@@ -147,6 +169,89 @@ import {
   formatSearchResults,
   formatHelp,
 } from '../services/copilotResponse.js'
+
+// WebLLM 状态
+const llmMode = ref('cloud')  // 'cloud' | 'webllm'
+const webllmReady = ref(false)
+const isWebllmLoading = ref(false)
+let webllmChat = null
+
+// 初始化 WebLLM（懒加载）
+async function initWebllm() {
+  if (webllmReady.value || isWebllmLoading.value) return
+  
+  isWebllmLoading.value = true
+  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...')
+  
+  try {
+    const { ChatModule } = await import('@mlc-ai/web-llm')
+    
+    webllmChat = new ChatModule()
+    
+    // 使用较小的模型以保证兼容性
+    const initProgressCallback = (progress) => {
+      console.log('[WebLLM] Loading:', (progress * 100).toFixed(1) + '%')
+    }
+    
+    await webllmChat.reload('Llama-3.1-8B-Instruct-q4f32_1-MLC', initProgressCallback)
+    
+    webllmReady.value = true
+    isWebllmLoading.value = false
+    
+    // 移除加载提示，添加成功提示
+    messages.value = messages.value.filter(m => !m.content.includes('正在加载 WebLLM'))
+    addAssistantMessage('✅ WebLLM 模型加载成功！现在可以使用本地 AI 进行对话。')
+    
+  } catch (err) {
+    console.error('[WebLLM] Init error:', err)
+    isWebllmLoading.value = false
+    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n请确保浏览器支持 WebGPU 或尝试使用云端模式。`)
+  }
+}
+
+// 切换 LLM 模式
+async function toggleLlmMode() {
+  if (llmMode.value === 'cloud') {
+    // 切换到 WebLLM 模式
+    llmMode.value = 'webllm'
+    await initWebllm()
+  } else {
+    // 切换回云端模式
+    llmMode.value = 'cloud'
+    webllmReady.value = false
+    addAssistantMessage('已切换回云端模式（Mock AI）。如需使用本地 AI，请点击切换到 WebLLM。')
+  }
+}
+
+// 使用 WebLLM 生成回复
+async function generateWithWebllm(prompt, context) {
+  if (!webllmReady.value || !webllmChat) {
+    throw new Error('WebLLM 未就绪')
+  }
+  
+  // 构建完整提示词
+  let fullPrompt = `你是一个专业的金融投研助手AlphaTerminal，专门为中国A股投资者提供数据分析、市场解读和投资建议。当前时间：2026年4月。请用中文回答，保持专业但不要过于正式。`
+  
+  if (context) {
+    fullPrompt += `\n\n参考数据：\n${context}`
+  }
+  
+  fullPrompt += `\n\n用户问题：${prompt}`
+  
+  const chunks = []
+  await webllmChat.generate(fullPrompt, (chunk) => {
+    chunks.push(chunk)
+    // 实时更新显示
+    const lastMsg = messages.value[messages.value.length - 1]
+    if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
+      lastMsg.displayedContent = chunks.join('')
+      lastMsg.content = chunks.join('')
+      scrollToBottom()
+    }
+  })
+  
+  return chunks.join('')
+}
 
 const messages       = ref([])
 const inputText      = ref('')
@@ -680,45 +785,52 @@ async function sendToLLM(text) {
       context += formatMarketOverview(props.marketOverview) + '\n'
     }
     
-    // 发送到后端
-    const response = await fetch('/api/v1/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-      body: JSON.stringify({ 
-        prompt: text,
-        context: context || undefined,
-      }),
-    })
-    
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
-    
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let fullContent = ''
-    
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+    // 根据模式选择不同的生成方式
+    if (llmMode.value === 'webllm' && webllmReady.value && webllmChat) {
+      // 使用 WebLLM 本地生成
+      await generateWithWebllm(text, context)
+      messages.value[aiMsgIndex].streaming = false
+    } else {
+      // 使用云端 API
+      const response = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+        body: JSON.stringify({ 
+          prompt: text,
+          context: context || undefined,
+        }),
+      })
       
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n')
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
       
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue
-        const payload = line.slice(6)
-        try {
-          const data = JSON.parse(payload)
-          if (data.error) throw new Error(data.error)
-          if (data.content !== undefined) {
-            fullContent += data.content
-            messages.value[aiMsgIndex].displayedContent = fullContent
-            messages.value[aiMsgIndex].content = fullContent
-            scrollToBottom()
-          }
-          if (data.done) {
-            messages.value[aiMsgIndex].streaming = false
-          }
-        } catch {}
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+      
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        
+        const chunk = decoder.decode(value, { stream: true })
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6)
+          try {
+            const data = JSON.parse(payload)
+            if (data.error) throw new Error(data.error)
+            if (data.content !== undefined) {
+              fullContent += data.content
+              messages.value[aiMsgIndex].displayedContent = fullContent
+              messages.value[aiMsgIndex].content = fullContent
+              scrollToBottom()
+            }
+            if (data.done) {
+              messages.value[aiMsgIndex].streaming = false
+            }
+          } catch {}
+        }
       }
     }
   } catch (err) {
