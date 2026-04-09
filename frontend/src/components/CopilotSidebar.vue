@@ -185,7 +185,10 @@ async function initWebllm() {
   
   try {
     // 动态导入 web-llm
-    const webllm = await import('@mlc-ai/web-llm')
+    const webllmModule = await import('@mlc-ai/web-llm')
+    
+    // 打印可用导出以便调试
+    console.log('[WebLLM] Available exports:', Object.keys(webllmModule))
     
     // 进度回调
     const initProgressCallback = (progress) => {
@@ -207,22 +210,17 @@ async function initWebllm() {
       }
     }
     
-    // 尝试禁用缓存，使用内存模式
-    const engineConfig = {
-      initProgressCallback,
-      // 禁用 IndexedDB 缓存，改用内存缓存
-      appConfig: {
-        useIndexedDBCache: false,
-      }
-    }
+    // 使用 CreateMLCEngine - 官方推荐方式
+    const { CreateMLCEngine, prebuiltAppConfig } = webllmModule
     
-    // 使用 MLCEngine（更底层控制）
-    const engine = new webllm.MLCEngine(engineConfig)
+    console.log('[WebLLM] prebuiltAppConfig models:', 
+      prebuiltAppConfig.model_list.map(m => m.model_id).slice(0, 10))
     
-    // 加载模型
-    await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
+    webllmEngine = await CreateMLCEngine(
+      'Qwen3-0.6B-q4f16_1-MLC',
+      { initProgressCallback }
+    )
     
-    webllmEngine = engine
     webllmReady.value = true
     isWebllmLoading.value = false
     
