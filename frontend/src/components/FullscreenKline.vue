@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {
@@ -127,6 +127,7 @@ import {
   MarkLineComponent, VisualMapComponent, LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import { apiFetch } from '../utils/apiCompat.js'
 import { useDrawingStore } from '../stores/drawing.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
@@ -263,22 +264,34 @@ function handleKeydown(e) {
     e.preventDefault()
     const tool = toolMap[e.key]
     drawingStore.toggleTool(tool)
+    return
   }
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
     drawingCanvasRef.value?.deleteSelected()
+    return
   }
 
   if (e.key === 'Escape') {
     drawingStore.setTool('')
+    return
   }
 
   if (e.key === 'm' || e.key === 'M') {
     drawingStore.toggleMagnet()
+    return
   }
 
   if (e.key === 'v' || e.key === 'V') {
     drawingStore.toggleVisible()
+    return
+  }
+}
+
+// 修复F5: window 级别快捷键（Esc 关闭全屏，焦点丢失时也能响应）
+function handleWindowKeydown(e) {
+  if (e.key === 'Escape') {
+    emit('close')
   }
 }
 
@@ -295,11 +308,9 @@ async function fetchData() {
       offset: '0',
     })
 
-    const res = await fetch(`/api/v1/market/history/${props.symbol}?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-
-    const data = await res.json()
-    const historyArray = data.history || data
+    // 修复: 使用 apiFetch 兼容统一响应格式 {code, message, data}
+    const d = await apiFetch(`/api/v1/market/history/${props.symbol}?${params}`)
+    const historyArray = d?.history || d || []
 
     if (!Array.isArray(historyArray) || historyArray.length === 0) {
       chartError.value = '暂无历史数据'
@@ -327,8 +338,9 @@ async function fetchData() {
 async function fetchQuote() {
   if (!props.symbol) return
   try {
-    const res = await fetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
-    if (res.ok) quoteData.value = await res.json()
+    // 修复: 使用 apiFetch 兼容统一响应格式
+    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
+    if (d) quoteData.value = d
   } catch (e) {
     console.warn('[FullscreenKline] fetchQuote error:', e.message)
   }
@@ -621,12 +633,24 @@ watch(() => props.symbol, (newSym) => { if (newSym) { fetchData(); fetchQuote() 
 
 onMounted(() => { 
   if (props.symbol) { fetchData(); fetchQuote() }
+  // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
+  window.addEventListener('keydown', handleWindowKeydown)
+})
+
+// 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
+onBeforeUnmount(() => {
+  chart?.dispose()
+  chart = null
+  window.removeEventListener('keydown', handleWindowKeydown)
+  window.removeEventListener('resize', handleResize)
 })
 
 onUnmounted(() => { 
-  window.removeEventListener('resize', handleResize)
-  chart?.dispose()
-  chart = null
+  // 双重保险：onUnmounted 也清理一次
+  if (chart) {
+    chart.dispose()
+    chart = null
+  }
 })
 </script>
 

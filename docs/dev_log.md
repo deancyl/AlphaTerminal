@@ -415,3 +415,46 @@ bc986d08  feat: 多源历史数据系统 + A股数据完整迁移
 ### .gitignore 清理
 - 移除 `database.db`（35MB live market data，不应追踪）
 - 移除 `frontend/dist/index.html`（构建产物，不应追踪）
+
+## 2026-04-09 v0.4.106 - 代码审计与 P0 修复
+
+### 代码审计 (AUDIT_REPORT_v4.md)
+
+完成全面项目审计，评估：
+1. 与专业金融平台（Wind/Bloomberg）的差距
+2. 前端 UI 潜在问题（P0~P2 分级）
+3. 前后端代码协同问题
+4. 整体代码质量
+
+### P0 修复 (v0.4.106)
+
+#### F1: `quote_detail` API 完全损坏
+- **根因**: `w.get('index')` 取不到数据（字段是 `price`），且 `get_price_history(db_sym)` 参数错误
+- **修复**: 改为 `w.get('price')`，统一用 `db_sym` 查 `market_data_daily`
+- **额外**: amplitude 计算改为 `(high-low)/prev_close * 100`
+- **文件**: `backend/app/routers/market.py`
+
+#### F2: Symbol Normalization 三套并行
+- **修复**: `_unprefix(norm)` 在所有 DB 查询处统一使用
+- **文件**: `backend/app/routers/market.py`
+
+#### F3: ECharts 内存泄漏
+- **修复**: 添加 `onBeforeUnmount` 立即 dispose，保留 `onUnmounted` 双重保险
+- **文件**: `frontend/src/components/FullscreenKline.vue`
+
+#### F4: API 响应格式不统一
+- **修复**: `market_history` 和 `quote_detail` 统一使用 `success_response()` 包装
+- **新增**: `frontend/src/utils/apiCompat.js` - 统一数据提取器，兼容新旧格式
+- **更新组件**: `FullscreenKline.vue`, `IndexLineChart.vue`, `AdvancedKlinePanel.vue`
+
+#### F5: 键盘快捷键失效
+- **修复**: 注册 window 级别 `keydown` 监听器，`Escape` 正确触发关闭
+- **文件**: `frontend/src/components/FullscreenKline.vue`
+
+#### F6-F8: 其他清理
+- `hasattr(..., '__code__')` → `callable(...)` 规范
+- 修复 `get_daily_history` 的 callable 检查
+
+### API 变更
+- `GET /market/quote_detail/{symbol}` → `{code:0, data: {...}}`
+- `GET /market/history/{symbol}` → `{code:0, data: {...}}`

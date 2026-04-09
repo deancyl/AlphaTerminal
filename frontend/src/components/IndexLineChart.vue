@@ -51,6 +51,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { apiFetch } from '../utils/apiCompat.js'
 
 const props = defineProps({
   symbol:     { type: String, default: '000001' },
@@ -593,14 +594,12 @@ function _cancelLeaveTimer() {
 async function fetchAndRender() {
   chartError.value = ''; isLoading.value = true
   try {
-    const res = await fetch(props.url + `&_t=${Date.now()}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    const type = data.chart_type || 'candlestick'
+    const d = await apiFetch(props.url + `&_t=${Date.now()}`)
+    const type = d?.chart_type || 'candlestick'
     chartType.value = type
     // 分钟数据需要特殊处理
     const isMinute = type === 'line' || props.url.includes('minutely') || props.url.includes('period=1m') || props.url.includes('period=5m')
-    const hist = _sanitize(data.history || [], isMinute)
+    const hist = _sanitize(d?.history || d || [], isMinute)
 
     // 将 raw hist 塞给 option，方便 hover 时访问
     // 确保数据按时间正序（左边=最旧，右边=最新）
@@ -608,7 +607,7 @@ async function fetchAndRender() {
     const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
     const sortedHist = isDesc ? [...hist].reverse() : hist
     const opt = buildOption(sortedHist, type)
-    opt._rawHist = data.history || []
+    opt._rawHist = d?.history || d || []
 
     currentName.value = props.name || '指标图表'
 
@@ -623,7 +622,7 @@ async function fetchAndRender() {
     chartInstance.setOption(opt, { notMerge: true })
 
     // 回填最新一根数据到 hover bar（保证刷新后默认显示）
-    lastHistRaw = data.history || []
+    lastHistRaw = d?.history || d || []
     fillHoverBarLatest(_sanitize(lastHistRaw, isMinute))
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`

@@ -873,7 +873,7 @@ async def market_history(
         history    = get_price_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
-    return {
+    result = {
         "symbol":     clean_sym,
         "period":     period,
         "chart_type": chart_type,
@@ -883,6 +883,7 @@ async def market_history(
         "timestamp":  datetime.now().isoformat(),
         "history":    history,
     }
+    return success_response(result)
 
 
 _FUTURES_FREQ_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
@@ -1154,18 +1155,20 @@ async def market_quote_detail(symbol: str):
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
     db_sym = _unprefix(norm)   # 'sh000001' → '000001'
-    rows_latest = get_latest_prices([db_sym]) if hasattr(get_latest_prices, '__code__') else []
+    rows_latest = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
     w = rows_latest[0] if rows_latest else {}
 
-    price      = w.get('index') or w.get('price') or 0.0
+    # 修复：market_data_realtime 表的 price 字段即为当前价（不是 'index'）
+    price      = float(w.get('price') or 0.0)
     change_pct = float(w.get('change_pct') or 0.0)
     change_val = round(price * change_pct / 100, 3) if price and change_pct else 0.0
     volume     = float(w.get('volume') or 0.0) or None
     status     = w.get('status') or ''
     market     = w.get('market') or 'AShare'
 
-    # ── 实时快照（从 DB 取最新2条算当日 OHLC，market_data_daily 存带前缀）──
-    rows = get_price_history(norm, limit=2) if hasattr(get_price_history, '__code__') else []
+    # ── 实时快照（从 DB 取最新2条算当日 OHLC）──
+    # 注意：market_data_daily 表存纯数字 symbol（无 sh/sz 前缀），所以用 db_sym 查
+    rows = get_price_history(db_sym, limit=2) if callable(get_price_history) else []
     latest_row = rows[0] if rows else {}
     prev_row   = rows[1] if len(rows) > 1 else latest_row
 
@@ -1176,14 +1179,17 @@ async def market_quote_detail(symbol: str):
     # 指数的 amount/turnover_rate 字段在 DB 中常为 0（AkShare 不提供），视为无数据
     amount = float(latest_row.get('amount') or 0.0) or None
     turnover_rate = round(float(latest_row.get('turnover_rate') or 0.0), 4) or None
-    # 当 high_ == low_（当天只有一个数据点），用当前价与昨日收盘的差值估算振幅
-    amplitude = round((high_ / low_ - 1) * 100, 2) if low_ and low_ > 0 and high_ != low_ else                 (round(abs(price - (float(prev_row.get('close') or price))) / float(prev_row.get('close') or price) * 100, 2) if price and prev_row.get('close') and float(prev_row.get('close')) > 0 else None)
+    # 振幅 = (最高-最低)/昨收 × 100；当日仅一价时用 (现价-昨收)/昨收
+    prev_close = float(prev_row.get('close') or 0.0)
+    if low_ and low_ > 0 and high_ != low_:
+        amplitude = round((high_ - low_) / prev_close * 100, 2) if prev_close else None
+    else:
+        amplitude = round(abs(price - prev_close) / prev_close * 100, 2) if prev_close and prev_close > 0 else None
 
     # ── 历史 K 线（计算周期收益率 + 52 周高低）──────────────────
-    # market_data_daily 存无前缀代码，_unprefix(norm) 去掉 sh/sz 前缀后正确匹配
-    db_sym = _unprefix(norm)
-    hist_1y  = get_daily_history(db_sym, limit=250, offset=0) if hasattr(get_daily_history, '__code__') else []
-    hist_all = get_daily_history(db_sym, limit=9999, offset=0) if hasattr(get_daily_history, '__code__') else []
+    # market_data_daily 存无前缀代码，用 db_sym 查询
+    hist_1y  = get_daily_history(db_sym, limit=250, offset=0) if callable(get_daily_history) else []
+    hist_all = get_daily_history(db_sym, limit=9999, offset=0) if callable(get_daily_history) else []
 
     def _latest_n(hist, n):
         """最近 n 条收盘价（升序）"""
@@ -1244,7 +1250,7 @@ async def market_quote_detail(symbol: str):
     industry_change_pct = None
     concepts        = []
 
-    return {
+    result = {
         # ── Module 1: 基础行情 ──
         "name":             w.get('name') or norm,
         "symbol":           norm,
@@ -1292,3 +1298,4 @@ async def market_quote_detail(symbol: str):
         "industry_change_pct":   industry_change_pct,
         "concepts":              concepts,
     }
+    return success_response(result)

@@ -139,6 +139,7 @@
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { apiFetch } from '../utils/apiCompat.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { calcMA } from '../utils/indicators.js'
 
@@ -297,13 +298,11 @@ async function fetchHistory(append = false) {
     })
     if (drillDownDate.value) params.set('trade_date', drillDownDate.value)
 
-    const res = await fetch(`/api/v1/market/history/${sym}?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
+    const data = await apiFetch(`/api/v1/market/history/${sym}?${params}`)
 
-    isFetching.value = data.fetching ?? false
+    isFetching.value = data?.fetching ?? false
 
-    const items = (data.history || []).map(sanitizeItem)
+    const items = (data?.history || []).map(sanitizeItem)
     const isDesc = items.length >= 2 &&
       new Date(items[0].date).getTime() > new Date(items[items.length - 1].date).getTime()
     const sortedItems = isDesc ? [...items].reverse() : items
@@ -316,7 +315,7 @@ async function fetchHistory(append = false) {
       loadOffset.value = sortedItems.length
     }
 
-    hasMore.value = data.has_more ?? items.length >= 300
+    hasMore.value = data?.has_more ?? items.length >= 300
 
     if (items.length > 0) {
       const last  = items[items.length - 1]
