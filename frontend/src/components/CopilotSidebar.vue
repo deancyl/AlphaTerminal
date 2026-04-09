@@ -177,7 +177,6 @@ const isWebllmLoading = ref(false)
 let webllmEngine = null
 
 // 初始化 WebLLM（懒加载）
-// 初始化 WebLLM（懒加载）
 async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
@@ -228,11 +227,6 @@ async function initWebllm() {
     console.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
     addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n请确保使用 Chrome/Edge 最新版并启用 WebGPU。`)
-  }
-}
-    console.error('[WebLLM] Init error:', err)
-    isWebllmLoading.value = false
-    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n可能原因：\n• 浏览器不支持 WebGPU\n• 网络连接问题\n• 缓存存储已满\n\n请尝试：刷新页面、清除浏览器缓存、或使用云端模式。`)
   }
 }
 
