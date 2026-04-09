@@ -220,8 +220,21 @@ async function initWebllm() {
       initProgressCallback,
     })
     
-    // 使用较小的 Qwen3-0.6B 模型（约 400MB，下载更快）
-    await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
+    // 加载模型 - 使用较小的 Qwen3-0.6B 模型
+    // 添加重试逻辑：如果缓存失败，使用 use_cache: false
+    try {
+      await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
+    } catch (cacheErr) {
+      console.warn('[WebLLM] Cache failed, retrying without cache:', cacheErr)
+      // 清理缓存并重试
+      if ('caches' in window) {
+        const cacheKeys = await caches.keys()
+        for (const key of cacheKeys) {
+          await caches.delete(key)
+        }
+      }
+      await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
+    }
     
     webllmEngine = engine
     webllmReady.value = true
