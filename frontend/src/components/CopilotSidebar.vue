@@ -181,6 +181,17 @@ let webllmEngine = null
 async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
+  // F3修复: 移动端检测，低内存设备禁用WebLLM
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+  const isLowMemory = navigator.deviceMemory && navigator.deviceMemory < 4  // 小于4GB内存
+  
+  if (isMobile || isLowMemory) {
+    isWebllmLoading.value = false
+    addAssistantMessage('📱 检测到移动设备或低内存环境，已自动禁用 WebLLM 模式。\n\n请使用云端模式，或切换到桌面设备体验本地 AI。')
+    llmMode.value = 'cloud'
+    return
+  }
+  
   isWebllmLoading.value = true
   addAssistantMessage('⏳ 正在加载 WebLLM (尝试更小的模型)...')
   
@@ -207,15 +218,12 @@ async function initWebllm() {
       }
     }
     
-    // 尝试更小的模型列表（按优先级）
+    // F2修复: 仅尝试1个最小模型，避免内存溢出
     const modelOptions = [
-      'SmolLM2-360M-Instruct-q0f16-MLC',  // 最小 (~200MB)
-      'Llama-3.2-1B-Instruct-q0f16-MLC',  // 较小 (~500MB)
-      'Qwen3-0.6B-q4f16_1-MLC',           // 之前失败的模型
+      'SmolLM2-360M-Instruct-q0f16-MLC',  // 最小 (~200MB)，移动端友好
     ]
     
     let engine = null
-    let lastError = null
     
     for (const model of modelOptions) {
       try {
@@ -226,8 +234,7 @@ async function initWebllm() {
         break
       } catch (err) {
         console.warn(`[WebLLM] ${model} failed:`, err.message)
-        lastError = err
-        // 继续尝试下一个模型
+        addAssistantMessage(`❌ ${model} 加载失败: ${err.message}`)
       }
     }
     
@@ -237,7 +244,8 @@ async function initWebllm() {
       messages.value = messages.value.filter(m => m.content.includes('正在加载'))
       addAssistantMessage('✅ WebLLM 模型加载成功！')
     } else {
-      throw lastError || new Error('所有模型加载失败')
+      isWebllmLoading.value = false
+      addAssistantMessage(`❌ WebLLM 加载失败。\n\n您的设备可能不支持本地 LLM。\n\n可尝试：\n1. 更新浏览器和显卡驱动\n2. 使用其他设备（Mac/高端 PC）\n3. 继续使用云端模式`)
     }
     
   } catch (err) {

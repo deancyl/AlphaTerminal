@@ -163,6 +163,7 @@ const latestChange = ref(0)
 // 图表实例
 const chartEl = ref(null)
 let chart = null
+let refreshTimer = null  // F1修复: K线自动刷新定时器
 
 // 十字指针状态
 const crosshairRef = ref(null)
@@ -635,12 +636,19 @@ onMounted(() => {
   if (props.symbol) { fetchData(); fetchQuote() }
   // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
   window.addEventListener('keydown', handleWindowKeydown)
+  
+  // F1修复: K线数据30秒自动刷新
+  refreshTimer = setInterval(() => {
+    if (props.symbol) { fetchData(); fetchQuote() }
+  }, 30000)
 })
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
 onBeforeUnmount(() => {
   chart?.dispose()
   chart = null
+  // F1修复: 清理自动刷新定时器
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
   window.removeEventListener('keydown', handleWindowKeydown)
   window.removeEventListener('resize', handleResize)
 })

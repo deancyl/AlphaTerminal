@@ -1337,16 +1337,3 @@ async def market_quote_detail(symbol: str):
         "concepts":              concepts,
     }
     return success_response(result)
-
-
-
-# ── 临时调试路由 ───────────────────────────────────────────────────
-@router.get("/debug/test_direct")
-async def debug_test_direct():
-    """直接返回简单字典"""
-    return {"code": 999, "message": "direct test", "data": {"hello": "world"}}
-
-@router.get("/debug/test_wrap")
-async def debug_test_wrap():
-    """测试 success_response"""
-    return success_response({"hello": "wrapped"})

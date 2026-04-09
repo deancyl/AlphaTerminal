@@ -120,8 +120,8 @@
               class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
               @click="handleClick(stock)">
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
-            <td class="py-0.5 px-0.5 text-gray-200 text-[10px]">{{ stock.name }}</td>
-            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.code }}</td>
+            <td class="py-0.5 px-0.5 text-gray-200 text-[10px] max-w-[80px] truncate" :title="stock.name">{{ stock.name }}</td>
+            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[60px]">{{ stock.code }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ stock.price }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
                 :class="stock.chg_pct >= 0 ? 'text-red-400' : 'text-green-400'">
