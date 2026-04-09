@@ -181,7 +181,7 @@ async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...\n\n📥 首次加载需下载模型（约 4GB）\n⏱️ 预计 1-3 分钟，请保持页面打开')
+  addAssistantMessage('⏳ 正在加载 WebLLM (Qwen3-0.6B)...\n\n📥 首次加载需下载模型（约 400MB）\n⏱️ 预计 30秒-1 分钟，请保持页面打开')
   
   try {
     // 动态导入 web-llm v0.2.x API
@@ -220,8 +220,8 @@ async function initWebllm() {
       initProgressCallback,
     })
     
-    // 加载模型 - 使用较小的模型以提高成功率
-    await engine.reload('Llama-3.1-8B-Instruct-q4f32_1-MLC')
+    // 使用较小的 Qwen3-0.6B 模型（约 400MB，下载更快）
+    await engine.reload('Qwen3-0.6B-q4f16_1-MLC')
     
     webllmEngine = engine
     webllmReady.value = true
