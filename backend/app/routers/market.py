@@ -378,10 +378,6 @@ _REALTIME_CACHE = {"wind": None, "china_all": None, "_ts": 0}
 _CACHE_TTL = 10  # 秒
 
 
-# ── Task 2: 修复后的 market/overview ─────────────────────────────────────
-@router.get("/market/overview")
-
-
 def _get_cached_wind(force=False):
     """获取风向标实时数据，10秒内复用缓存"""
     import time
@@ -412,6 +408,8 @@ def _get_cached_wind(force=False):
         return _REALTIME_CACHE["wind"] or {}
 
 
+# ── Task 2: 修复后的 market/overview ─────────────────────────────────────
+@router.get("/market/overview")
 async def market_overview():
     """
     市场概览 — 风向标视图（实时调 Sina，10秒缓存）
@@ -437,7 +435,7 @@ async def market_overview():
         if sym in wind_data and "status" not in wind_data[sym]:
             wind_data[sym]["status"] = label[2]
 
-    return success_response({
+    result = success_response({
         "wind": wind_data,
         "meta": {
             "markets": {
@@ -447,6 +445,7 @@ async def market_overview():
             }
         }
     })
+    return result
 
 
 # ── Task 2: 国内10+核心指数（实时）─────────────────────────────────────
@@ -1338,3 +1337,16 @@ async def market_quote_detail(symbol: str):
         "concepts":              concepts,
     }
     return success_response(result)
+
+
+
+# ── 临时调试路由 ───────────────────────────────────────────────────
+@router.get("/debug/test_direct")
+async def debug_test_direct():
+    """直接返回简单字典"""
+    return {"code": 999, "message": "direct test", "data": {"hello": "world"}}
+
+@router.get("/debug/test_wrap")
+async def debug_test_wrap():
+    """测试 success_response"""
+    return success_response({"hello": "wrapped"})
