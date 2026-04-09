@@ -108,6 +108,7 @@ import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
+  macroData:  { type: Array,  default: () => [] },
 })
 defineEmits(['symbol-click'])
 
@@ -141,8 +142,11 @@ const newsSentiment = ref({
   total_count: 0, keywords: [], timestamp: '',
 })
 
-const windItems = computed(() => props.marketData?.wind || {})
-const macroItems = computed(() => props.marketData?.macro || [])
+const windItems = computed(() => {
+  // 修复: marketData 从 DashboardGrid 传来时就是 wind 对象本身（不是 {wind: {...}}）
+  return props.marketData || {}
+})
+const macroItems = computed(() => props.macroData || [])
 const allItems = computed(() => {
   const wind = Object.entries(windItems.value || {}).map(([key, value]) => ({ key, ...value }))
   const macro = macroItems.value.map((item, index) => ({ key: `macro_${index}`, ...item }))

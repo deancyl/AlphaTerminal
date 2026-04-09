@@ -373,14 +373,49 @@ RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
 GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
 DERIVATIVE_SYMBOLS = ["IF", "GC", "CL"]
 
+# ── 实时行情缓存（10秒 TTL，避免频繁调 Sina）─────────────────────────
+_REALTIME_CACHE = {"wind": None, "china_all": None, "_ts": 0}
+_CACHE_TTL = 10  # 秒
+
 
 # ── Task 2: 修复后的 market/overview ─────────────────────────────────────
 @router.get("/market/overview")
+
+
+def _get_cached_wind(force=False):
+    """获取风向标实时数据，10秒内复用缓存"""
+    import time
+    now = time.time()
+    if not force and _REALTIME_CACHE["wind"] and (now - _REALTIME_CACHE["_ts"]) < _CACHE_TTL:
+        return _REALTIME_CACHE["wind"]
+    try:
+        from app.services.data_fetcher import fetch_china_indices, fetch_global_indices
+        # A股4大指数（实时）+ 全球指数（港美）
+        rows_cn  = fetch_china_indices()           # 新浪实时
+        rows_int = fetch_global_indices()           # 腾讯/Sina 实时
+        rows = rows_cn + rows_int
+        wind_data = {}
+        for r in rows:
+            sym = r.get("symbol", "")
+            wind_data[sym] = {
+                "name":       r.get("name", sym),
+                "price":      r.get("price", 0),
+                "change_pct": r.get("change_pct", 0),
+                "volume":     r.get("volume", 0),
+                "market":     r.get("market", ""),
+            }
+        _REALTIME_CACHE["wind"] = wind_data
+        _REALTIME_CACHE["_ts"]  = now
+        return wind_data
+    except Exception as e:
+        logger.warning(f"[market_overview] 实时拉取失败，回退缓存: {e}")
+        return _REALTIME_CACHE["wind"] or {}
+
+
 async def market_overview():
     """
-    市场概览 — 风向标视图
+    市场概览 — 风向标视图（实时调 Sina，10秒缓存）
     包含：上证、沪深300、恒生、纳斯达克（动态交易状态）
-    SHIBOR 已移除（单独卡片）
     """
     is_open_cn, status_cn = is_market_open("A_SHARE")
     is_open_hk, status_hk  = is_market_open("HK")
@@ -395,19 +430,12 @@ async def market_overview():
         "IXIC":   ("纳斯达克",  "US",     status_us),
     }
 
-    rows = get_latest_prices(WIND_SYMBOLS)
-    wind_data = {}
-    for r in rows:
-        sym = r["symbol"]
-        label = wind_labels.get(sym, (sym, r["market"], "已休市"))
-        wind_data[sym] = {
-            "name":       r["name"] or label[0],
-            "price":      r["price"],
-            "change_pct": r["change_pct"],
-            "volume":     r["volume"],
-            "status":     label[2],
-            "market":     r["market"],
-        }
+    # 修复: 直接从 Sina 实时拉取（替代 DB 的 60s 延迟）
+    wind_data = _get_cached_wind()
+    # 补充 status 字段（DB 数据无此字段）
+    for sym, label in wind_labels.items():
+        if sym in wind_data and "status" not in wind_data[sym]:
+            wind_data[sym]["status"] = label[2]
 
     return success_response({
         "wind": wind_data,
@@ -421,13 +449,24 @@ async def market_overview():
     })
 
 
-# ── Task 2: 国内10+核心指数 ──────────────────────────────────────────────
+# ── Task 2: 国内10+核心指数（实时）─────────────────────────────────────
 @router.get("/market/china_all")
 async def market_china_all():
-    """国内10+核心指数（上证、沪深300、深证、创业板、科创50…）"""
+    """国内10+核心指数（直接调 Sina，10秒缓存）"""
     try:
+        import time
         is_open, status = is_market_open("A_SHARE")
-        rows = get_latest_prices(CHINA_ALL_SYMBOLS)
+        # 实时拉取（带10秒缓存）
+        now = time.time()
+        cache_key = "china_all"
+        cached = _REALTIME_CACHE.get(cache_key)
+        if cached and (now - _REALTIME_CACHE["_ts"]) < _CACHE_TTL:
+            rows = cached
+        else:
+            from app.services.data_fetcher import fetch_china_all_indices
+            rows = fetch_china_all_indices()
+            _REALTIME_CACHE[cache_key] = rows
+            _REALTIME_CACHE["_ts"] = now
         return success_response({
             "china_all": _serialize_price_rows(rows, include_status=True, status=status),
             "meta": {"market_open": is_open, "status": status}

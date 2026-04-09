@@ -60,43 +60,43 @@ def start_scheduler():
         logger.info("[Scheduler] 启动完成，历史K线回填 + Sina HQ 个股已触发")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
-    # 每 3 分钟拉取一次实时数据（akshare 有频率限制）
+    # 每 60 秒拉取一次实时数据（akshare 有频率限制）
     from app.services.data_fetcher import fetch_all_and_buffer
     scheduler.add_job(
         fetch_all_and_buffer,
         "interval",
-        seconds=180,
+        seconds=60,
         id="data_fetch",
         name="AkShareDataFetch",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 数据拉取任务已注册（每3分钟）")
+    logger.info("[Scheduler] 数据拉取任务已注册（每60秒，实时行情）")
 
-    # 每 3 分钟刷新全市场个股缓存（Sina HQ）
+    # 每 60 秒刷新全市场个股缓存（Sina HQ）
     from app.services.sentiment_engine import trigger_spot_fetch
     scheduler.add_job(
         trigger_spot_fetch,
         "interval",
-        seconds=180,
+        seconds=60,
         id="sentiment_fetch",
         name="SentimentFetch",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 全市场个股刷新任务已注册（每3分钟，Sina HQ）")
+    logger.info("[Scheduler] 全市场个股刷新任务已注册（每60秒，Sina HQ）")
 
-    # 每 20 分钟刷新一次新闻池（多源轮询）
+    # 每 2 分钟刷新一次新闻池（多源轮询）
     from app.services.sentiment_engine import trigger_news_fetch
     scheduler.add_job(
         trigger_news_fetch,
         "interval",
-        seconds=5 * 60,
+        seconds=120,
         id="news_refresh",
         name="NewsRefresh",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 新闻刷新任务已注册（每20分钟，多源）")
+    logger.info("[Scheduler] 新闻刷新任务已注册（每2分钟，多源）")
 
-    # Task 1: 每 5 分钟刷新行业板块缓存（后台 akshare，绝不在 API 线程调用）
+    # Task 1: 每 2 分钟刷新行业板块缓存（后台 akshare，绝不在 API 线程调用）
     def _sectors_job():
         from app.services.sectors_cache import fetch_and_cache_sectors
         try:
@@ -108,12 +108,12 @@ def start_scheduler():
     scheduler.add_job(
         _sectors_job,
         "interval",
-        seconds=300,
+        seconds=120,
         id="sectors_refresh",
         name="SectorsRefresh",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 行业板块刷新任务已注册（每5分钟，后台akshae）")
+    logger.info("[Scheduler] 行业板块刷新任务已注册（每2分钟，后台akshae）")
 
     # 启动时立即触发一次板块缓存（不阻塞主线程）
     def _startup_sectors():

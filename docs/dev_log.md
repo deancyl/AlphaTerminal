@@ -458,3 +458,42 @@ bc986d08  feat: 多源历史数据系统 + A股数据完整迁移
 ### API 变更
 - `GET /market/quote_detail/{symbol}` → `{code:0, data: {...}}`
 - `GET /market/history/{symbol}` → `{code:0, data: {...}}`
+
+## 2026-04-09 v0.4.107 - 黑屏修复 + 实时性修复
+
+### 🔴 P0: 黑屏问题修复
+**根因**: `npm run preview` 没有 proxy 配置，`/api` 请求全部 404  
+**修复**: 切换到 `npm run dev`（有 `server.proxy` 配置）  
+**注意**: 以后前端启动必须用 `npm run dev`，不能用 `npm run preview`
+
+### 🔴 P0: 数据流断裂修复
+**根因**: 后端 `market_overview` 直接返回 Sina 数据（无 `data.wind` 包装），前端多处 `results.overview?.wind` 取不到
+
+**修复内容**:
+1. `App.vue` → `marketOverview.value = results.overview?.wind || results.overview || null`
+2. `DashboardGrid.vue` → `props.marketData?.wind` → `props.marketData`（marketData 已是 wind 对象）
+3. `DashboardGrid.vue` → `item.index` → `item.price ?? item.index ?? 0`（Sina 格式）
+4. `SentimentGauge.vue` → `props.marketData?.wind` → `props.marketData`
+5. `SentimentGauge.vue` → 添加 `macroData` prop 定义
+6. `DashboardGrid.vue` → `SentimentGauge` 添加 `:macro-data="macroData"` prop
+
+### 🔴 P0: 实时性修复
+**根因**: `quote_detail` 从 DB 读（最大70秒延迟），`market_overview` 也从 DB 读
+
+**修复**: 核心市场接口直接调 Sina API + 10秒缓存
+1. `market.py` → `market_overview` 直接调用 `fetch_china_indices()` + `fetch_global_indices()`
+2. `market.py` → `market_china_all` 直接调用 `fetch_china_all_indices()`
+3. 新增 `_REALTIME_CACHE` + `_CACHE_TTL = 10` 缓存机制
+
+**调度器优化** (scheduler.py):
+- `fetch_all_and_buffer`: 60s → 30s
+- `flush_write_buffer`: 10s → 5s
+- `trigger_spot_fetch`: 60s → 30s
+
+**前端轮询优化** (App.vue):
+- `fetchMarketData` 轮询间隔: 30s → 15s
+
+### API 变更
+- `GET /market/overview` → 直接返回 Sina 实时数据，10秒缓存
+- `GET /market/china_all` → 直接返回 Sina 实时数据，10秒缓存
+- `GET /market/quote_detail/{symbol}` → amplitude 正确计算，price 从 DB（有延迟）

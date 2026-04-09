@@ -72,7 +72,7 @@
     <div class="grid-stack-item"
          gs-x="0" gs-y="6" gs-w="8" gs-h="5" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
-        <SentimentGauge :market-data="marketData" @symbol-click="handleWindClick" />
+        <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
       </div>
     </div>
 
@@ -333,15 +333,16 @@ const tsDisplay  = computed(() => timestamp.value.slice(11, 19) || '')
 
 // Phase 5: 合并4大指数 + 4大宏观 = 8个风向标
 const windItems = computed(() => {
-  const indices = props.marketData?.wind || {}
+  // 修复: marketData 从 App.vue 传来时已经是 wind 对象本身（不是 {wind: {...}}）
+  const indices = props.marketData || {}
   const macros  = props.macroData  || []
 
-  // 指数行（保留原有结构）
+  // 指数行（实时 Sina 数据：item.price 是当前价）
   const indexRows = Object.entries(indices).map(([sym, item]) => ({
     symbol:     sym,
     name:       item.name,
-    price:      item.index,
-    change_pct: item.change_pct,
+    price:      item.price ?? item.index ?? 0,  // 兼容新旧格式
+    change_pct: item.change_pct ?? 0,
     status:     item.status,
     category:   'index',   // 指数
   }))
