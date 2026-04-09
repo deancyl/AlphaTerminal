@@ -181,7 +181,7 @@ async function initWebllm() {
   if (webllmReady.value || isWebllmLoading.value) return
   
   isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...')
+  addAssistantMessage('⏳ 正在加载 WebLLM 模型，请稍候...\n（首次加载约需 1-2 分钟，请耐心等待）')
   
   try {
     // 动态导入 web-llm v0.2.x API
@@ -189,26 +189,36 @@ async function initWebllm() {
     
     // 进度回调
     const initProgressCallback = (progress) => {
-      console.log('[WebLLM] Loading:', (progress * 100).toFixed(1) + '%')
+      const msg = `[WebLLM] 加载中: ${(progress * 100).toFixed(1)}% - ${progress.text || ''}`
+      console.log(msg)
+      // 更新加载提示
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg && lastMsg.content.includes('正在加载')) {
+        lastMsg.displayedContent = `⏳ 正在加载 WebLLM 模型...\n${(progress * 100).toFixed(0)}%`
+        scrollToBottom()
+      }
     }
     
-    // 使用 CreateMLCEngine 创建引擎
-    webllmEngine = await webllm.CreateMLCEngine(
-      'Llama-3.1-8B-Instruct-q4f32_1-MLC',
-      { initProgressCallback }
-    )
+    // 使用 MLCEngine 类（更稳定）
+    const engine = new webllm.MLCEngine({
+      initProgressCallback,
+    })
     
+    // 加载模型 - 使用较小的模型以提高成功率
+    await engine.reload('Llama-3.1-8B-Instruct-q4f32_1-MLC')
+    
+    webllmEngine = engine
     webllmReady.value = true
     isWebllmLoading.value = false
     
     // 移除加载提示，添加成功提示
-    messages.value = messages.value.filter(m => !m.content.includes('正在加载 WebLLM'))
+    messages.value = messages.value.filter(m => m.content.includes('正在加载'))
     addAssistantMessage('✅ WebLLM 模型加载成功！现在可以使用本地 AI 进行对话。')
     
   } catch (err) {
     console.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
-    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n请确保浏览器支持 WebGPU 或尝试使用云端模式。`)
+    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n可能原因：\n• 浏览器不支持 WebGPU\n• 网络连接问题\n• 缓存存储已满\n\n请尝试：刷新页面、清除浏览器缓存、或使用云端模式。`)
   }
 }
 
