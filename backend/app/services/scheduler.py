@@ -51,13 +51,23 @@ def start_scheduler():
     # 启动时：先从 SQLite 加载历史缓存 + 新闻预热 + 直接灌 china_all 备用数据
     import threading
     def initial_backfill():
-        import time; time.sleep(2)
-        # 先回填历史K线（日K写入 buffer，flush_write_buffer 每10秒会刷到DB）
-        backfill_daily_history()
-        # 直接触发 Sina HQ 拉取（后台线程）
+        import time; time.sleep(1)
+        try:
+            # 回填历史K线（1年前数据，用于日K图）
+            backfill_daily_history()
+            logger.info("[Scheduler] 历史K线回填完成")
+        except Exception as e:
+            logger.error(f"[Scheduler] 历史K线回填失败: {e}", exc_info=True)
+        
+        # 立即触发 Sina HQ 拉取（后台线程，包含今日实时数据）
         from app.services.sentiment_engine import trigger_spot_fetch
-        trigger_spot_fetch()
-        logger.info("[Scheduler] 启动完成，历史K线回填 + Sina HQ 个股已触发")
+        try:
+            trigger_spot_fetch()
+            logger.info("[Scheduler] Sina HQ 个股触发完成")
+        except Exception as e:
+            logger.error(f"[Scheduler] Sina HQ 触发失败: {e}", exc_info=True)
+        
+        logger.info("[Scheduler] 启动初始化完成")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
     # 每 60 秒拉取一次实时数据（akshare 有频率限制）
@@ -71,6 +81,27 @@ def start_scheduler():
         replace_existing=True,
     )
     logger.info("[Scheduler] 数据拉取任务已注册（每60秒，实时行情）")
+
+    # 每 5 分钟刷新今日日K线（确保当日K线入库）
+    def _refresh_today_daily():
+        """今日日K线定时刷新"""
+        from app.services.data_fetcher import fetch_china_index_history
+        for sym in ["000001", "000300", "399001", "399006", "000688"]:
+            try:
+                rows = fetch_china_index_history(sym)
+                logger.debug(f"[Scheduler] 今日K线 {sym}: {len(rows)} rows, latest={rows[-1]['date'] if rows else 'N/A'}")
+            except Exception as e:
+                logger.warning(f"[Scheduler] 今日K线 {sym} 刷新失败: {e}")
+
+    scheduler.add_job(
+        _refresh_today_daily,
+        "interval",
+        seconds=300,
+        id="today_daily_refresh",
+        name="TodayDailyRefresh",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 今日日K刷新任务已注册（每5分钟）")
 
     # 每 60 秒刷新全市场个股缓存（Sina HQ）
     from app.services.sentiment_engine import trigger_spot_fetch
