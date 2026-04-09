@@ -497,3 +497,24 @@ bc986d08  feat: 多源历史数据系统 + A股数据完整迁移
 - `GET /market/overview` → 直接返回 Sina 实时数据，10秒缓存
 - `GET /market/china_all` → 直接返回 Sina 实时数据，10秒缓存
 - `GET /market/quote_detail/{symbol}` → amplitude 正确计算，price 从 DB（有延迟）
+
+## 2026-04-09 v0.4.108 - Decorator Bug Fix
+
+### 🔴 P0: market/overview API 返回格式错误
+**根因**: 在 market.py 中编辑时，`@router.get("/market/overview")` 装饰器被错误地放在了 `_get_cached_wind()` 函数定义之前，而不是 `async def market_overview()` 之前
+- FastAPI 路由将 `/market/overview` 映射到了 `_get_cached_wind` 函数
+- `_get_cached_wind` 直接返回 `{wind: {...}}`（无 code/data 包装）
+- 前端 `results.overview?.wind` 取不到数据 → DashboardGrid 不渲染 → 黑屏
+
+**修复**: 将 `@router.get("/market/overview")` 移至 `async def market_overview()` 之前
+
+**调试方法**: 
+- `python3 -c "from app.routers import market; [print(r.path, r.endpoint.__name__) for r in market.router.routes if 'overview' in r.path]"`
+- 输出显示 `overview -> _get_cached_wind`（错误）vs `overview -> market_overview`（正确）
+
+**验证**:
+```
+curl http://localhost:8002/api/v1/market/overview | python3 -c "import json,sys; d=json.load(sys.stdin); print('code' in d)"
+修复前: False
+修复后: True
+```
