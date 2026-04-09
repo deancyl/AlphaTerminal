@@ -5,6 +5,8 @@
     <div class="flex items-center justify-between mb-1 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">🔍 全市场个股</span>
       <div class="flex items-center gap-2">
+        <input v-model="searchQuery" type="text" placeholder="搜索代码/名称"
+               class="w-24 bg-terminal-bg border border-gray-700 rounded px-2 py-0.5 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-terminal-accent outline-none" />
         <span class="text-terminal-dim text-[10px]">{{ filteredStocks.length }} 只</span>
         <span class="w-1.5 h-1.5 rounded-full"
               :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
@@ -183,6 +185,7 @@ const allStocks = ref([])   // 全量股票（一次加载，分页在前端）
 const loading    = ref(false)
 const page       = ref(1)
 const pageSize   = ref(50)   // 前端分页粒度
+const searchQuery = ref('')   // 全市场搜索
 const sortBy     = ref('chg_pct')
 const asc        = ref(false)
 
@@ -252,6 +255,15 @@ const pageStocks = computed(() => {
 // 过滤条件变化时自动归位第1页
 watch(filteredStocks, () => { page.value = 1 })
 
+// 搜索防抖（300ms后触发API搜索）
+let searchTimer = null
+watch(searchQuery, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    fetchAllStocks()  // 新API支持服务端搜索
+  }, 300)
+})
+
 // ── 可见页码 ─────────────────────────────────────────────────────
 const visiblePages = computed(() => {
   const p = pages.value
@@ -260,22 +272,63 @@ const visiblePages = computed(() => {
   if (cur <= 3) return [1, 2, 3, 4, 5]
   if (cur >= p - 2) return [p - 4, p - 3, p - 2, p - 1, p]
   return [cur - 2, cur - 1, cur, cur + 1, cur + 2]
-})
+});
 
-// ── 加载数据（一次拉全量，前端分页/过滤）────────────────────────
+// ── 加载数据（从全市场缓存 API 加载，支持搜索）────────────────
 async function fetchAllStocks() {
   loading.value = true
   try {
-    // 拉最大页，获取全部股票（SpotCache 约4000只）
-    const url = `/api/v1/market/stocks?page=1&page_size=100&sort_by=${sortBy.value}&asc=${asc.value}`
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const d = await res.json()
-    // 兼容新旧格式
-    const payload = d.data || d
-    const raw = payload.stocks || []
-    // 全量存入，附带 seq 序号
-    allStocks.value = raw.map((s, i) => ({ ...s, seq: i + 1 }))
+    // 调用新的全市场个股 API (支持搜索、分页)
+    // 先尝试获取全量数据（用于前端过滤），若搜索则用 API 搜索
+    const pageSize = 200  // 每页获取量
+    let page = 1
+    let allFetched = []
+    
+    while (true) {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      })
+      if (searchQuery.value.trim()) {
+        params.set('search', searchQuery.value.trim())
+      }
+      
+      const res = await fetch(`/api/v1/market/all_stocks?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const d = await res.json()
+      const payload = d.data || d
+      const stocks = payload.stocks || []
+      
+      if (!stocks.length) break
+      
+      allFetched = allFetched.concat(stocks.map((s, i) => ({
+        ...s,
+        seq: allFetched.length + i + 1,
+        // 统一字段名（兼容表格渲染）
+        price: parseFloat(s.trade) || 0,
+        chg_pct: parseFloat(s.changepercent) || 0,
+        chg: parseFloat(s.change) || 0,
+        turnover: parseFloat(s.turnoverratio) || 0,
+        amount: parseFloat(s.amount) || 0,
+        per: s.per !== null && s.per !== undefined && s.per !== '-' ? parseFloat(s.per) : null,
+        pb:  s.pb  !== null && s.pb  !== undefined && s.pb  !== '-' ? parseFloat(s.pb)  : null,
+        volume: parseFloat(s.volume) || 0,
+        mktcap: parseFloat(s.mktcap) || 0,
+      })))
+      
+      if (!searchQuery.value.trim() && payload.total && allFetched.length >= payload.total) {
+        break  // 全量获取完成
+      }
+      if (stocks.length < pageSize) break  // 最后一页
+      if (page >= 5) break  // 最多获取5页（1000条），防止搜索过多
+      page++
+      
+      // 避免请求过快
+      await new Promise(r => setTimeout(r, 50))
+    }
+    
+    allStocks.value = allFetched
+    console.log(`[StockScreener] 加载完成: ${allFetched.length} 只`)
   } catch (e) {
     console.warn('[StockScreener] fetch failed:', e.message)
   } finally {

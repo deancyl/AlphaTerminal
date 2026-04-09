@@ -103,6 +103,37 @@ def start_scheduler():
     )
     logger.info("[Scheduler] 今日日K刷新任务已注册（每5分钟）")
 
+    # 全市场A股定时刷新 (每10分钟抓取全量数据)
+    def _fetch_all_stocks_job():
+        from app.services.data_fetcher import fetch_all_china_stocks
+        from app.db import upsert_all_stocks
+        try:
+            rows = fetch_all_china_stocks(max_pages=60)
+            if rows:
+                upsert_all_stocks(rows)
+                logger.info(f"[Scheduler] 全市场A股刷新完成: {len(rows)} 只")
+        except Exception as e:
+            logger.error(f"[Scheduler] 全市场A股刷新失败: {e}", exc_info=True)
+
+    scheduler.add_job(
+        _fetch_all_stocks_job,
+        "interval",
+        seconds=600,
+        id="all_stocks_refresh",
+        name="AllStocksRefresh",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 全市场A股刷新任务已注册（每10分钟）")
+
+    # 启动时立即触发一次全量抓取（后台）
+    def _initial_all_stocks():
+        import time as _time
+        _time.sleep(3)
+        _fetch_all_stocks_job()
+    import threading
+    threading.Thread(target=_initial_all_stocks, daemon=True).start()
+    logger.info("[Scheduler] 全市场A股初始抓取已触发（后台，3秒后开始）")
+
     # 每 60 秒刷新全市场个股缓存（Sina HQ）
     from app.services.sentiment_engine import trigger_spot_fetch
     scheduler.add_job(

@@ -13,7 +13,7 @@ import re
 import threading
 import time
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 import httpx
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
@@ -474,6 +474,37 @@ async def market_china_all():
         logger.error(f"[market_china_all] 错误: {e}")
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取国内指数失败: {str(e)}")
 
+
+@router.get("/market/all_stocks")
+async def market_all_stocks(request: Request):
+    """
+    全市场A股列表（来自 market_all_stocks 缓存表）
+    支持搜索: ?search=茅台
+    分页: ?page=1&page_size=50
+    """
+    try:
+        from app.db.database import get_all_stocks, get_all_stocks_count
+        from fastapi import Query
+        
+        # 获取参数 (从 Request 中提取)
+        params = dict(request.query_params)
+        search = params.get('search', '').strip()
+        page = max(1, int(params.get('page', 1)))
+        page_size = min(200, max(1, int(params.get('page_size', 50))))
+        offset = (page - 1) * page_size
+        
+        total, rows = get_all_stocks(limit=page_size, offset=offset, search=search if search else None)
+        
+        return success_response({
+            "stocks": rows,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total + page_size - 1) // page_size if total > 0 else 0,
+        })
+    except Exception as e:
+        logger.error(f"[market_all_stocks] 错误: {e}", exc_info=True)
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
 
 @router.get("/market/indices")
 async def market_indices():

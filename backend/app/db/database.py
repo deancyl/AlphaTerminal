@@ -99,6 +99,8 @@ def init_tables():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)")
         conn.commit()
         conn.close()
+        # ── 全市场个股缓存表 ──────────────────────────────────────
+        init_all_stocks_table()
     print(f"✅ DB Ready: {_db_path}")
 
 def buffer_insert(data_list):
@@ -250,3 +252,99 @@ def get_periodic_history(symbol, period, limit=200, offset=0):
         return [dict(r) for r in rows]
 
 get_price_history = get_daily_history
+
+# ═══════════════════════════════════════════════════════════════
+# 全市场个股缓存 (all_stocks)
+# ═══════════════════════════════════════════════════════════════
+
+def init_all_stocks_table():
+    """初始化全市场个股表"""
+    with _lock:
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS market_all_stocks (
+                symbol      TEXT PRIMARY KEY,
+                code        TEXT,
+                name        TEXT,
+                price       REAL,
+                change_pct  REAL,
+                per         REAL,
+                pb          REAL,
+                mktcap      REAL,
+                nmc         REAL,
+                volume       REAL,
+                amount       REAL,
+                turnover     REAL,
+                price_high   REAL,
+                price_low    REAL,
+                open_price   REAL,
+                updated_at   REAL
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+def upsert_all_stocks(rows):
+    """批量写入全市场个股数据"""
+    if not rows:
+        return
+    with _lock:
+        conn = _get_conn()
+        conn.executemany("""
+            INSERT OR REPLACE INTO market_all_stocks
+            (symbol, code, name, price, change_pct, per, pb, mktcap, nmc, volume, amount, turnover, price_high, price_low, open_price, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            (
+                r['symbol'], r['code'], r['name'],
+                float(r.get('trade') or 0),
+                float(r.get('changepercent') or 0),
+                float(r.get('per') or 0) if r.get('per') not in (None, '') else None,
+                float(r.get('pb') or 0) if r.get('pb') not in (None, '') else None,
+                float(r.get('mktcap') or 0),
+                float(r.get('nmc') or 0),
+                float(r.get('volume') or 0),
+                float(r.get('amount') or 0),
+                float(r.get('turnoverratio') or 0),
+                float(r.get('high') or 0),
+                float(r.get('low') or 0),
+                float(r.get('open') or 0),
+                __import__('time').time()
+            )
+            for r in rows
+        ])
+        conn.commit()
+        conn.close()
+
+def get_all_stocks(limit=5000, offset=0, search=None):
+    """获取全市场个股列表，支持搜索"""
+    with _lock:
+        conn = _get_conn()
+        if search:
+            pattern = f"%{search}%"
+            rows = conn.execute("""
+                SELECT * FROM market_all_stocks
+                WHERE (code LIKE ? OR name LIKE ?) AND price > 0
+                ORDER BY code
+                LIMIT ? OFFSET ?
+            """, (pattern, pattern, limit, offset)).fetchall()
+            total = conn.execute("""
+                SELECT COUNT(*) AS cnt FROM market_all_stocks
+                WHERE (code LIKE ? OR name LIKE ?) AND price > 0
+            """, (pattern, pattern)).fetchone()['cnt']
+        else:
+            rows = conn.execute("""
+                SELECT * FROM market_all_stocks WHERE price > 0
+                ORDER BY code LIMIT ? OFFSET ?
+            """, (limit, offset)).fetchall()
+            total = conn.execute("SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+        conn.close()
+        return total, [dict(r) for r in rows]
+
+def get_all_stocks_count():
+    """返回全市场个股总数"""
+    with _lock:
+        conn = _get_conn()
+        cnt = conn.execute("SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+        conn.close()
+        return cnt
