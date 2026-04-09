@@ -35,11 +35,11 @@
       </div>
     </div>
 
-    <!-- ── 新闻列表（固定高度，显示 7 条） ───────────────────────── -->
+    <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
     <div
       ref="listEl"
       class="flex-1 overflow-y-auto"
-      style="height: 0; min-height: 380px;"
+      style="height: 0; min-height: 200px;"
     >
       <div class="space-y-1.5">
         <div
