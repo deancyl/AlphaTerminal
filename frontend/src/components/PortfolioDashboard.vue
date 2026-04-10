@@ -372,13 +372,14 @@ async function handleRefresh() {
 
 // ── ECharts 净值曲线 ──────────────────────────────────────────
 function renderChart() {
-  if (!chartEl.value || !store.snapshots.length) return
+  if (!chartEl.value || !store.snapshots.value?.length) return
   if (!chart.value) {
     chart.value = echarts.init(chartEl.value, 'dark')
   }
-  const dates = store.snapshots.map(s => s.date)
-  const assets = store.snapshots.map(s => s.total_asset)
-  const costs  = store.snapshots.map(s => s.total_cost)
+  const snaps = store.snapshots.value
+  const dates = snaps.map(s => s.date)
+  const assets = snaps.map(s => s.total_asset)
+  const costs  = snaps.map(s => s.total_cost)
 
   chart.value.setOption({
     backgroundColor: 'transparent',
@@ -442,10 +443,11 @@ function fmtYuan(v) {
 
 // 从 store.snapshots 计算风险指标
 const riskMetrics = computed(() => {
-  if (!store.snapshots || store.snapshots.length < 2) {
+  const snaps = store.snapshots.value
+  if (!snaps || snaps.length < 2) {
     return null
   }
-  const assets = store.snapshots.map(s => s.total_asset)
+  const assets = snaps.map(s => s.total_asset)
   const latest = assets[assets.length - 1]
   const first = assets[0]
   
@@ -462,7 +464,7 @@ const riskMetrics = computed(() => {
   }
 
   // 1. 年化收益率
-  const days = store.snapshots.length
+  const days = snaps.length
   const totalReturn = (latest - first) / first
   const annualReturn = (Math.pow(1 + totalReturn, 365 / Math.max(days, 1)) - 1) * 100
 
@@ -552,7 +554,7 @@ onUnmounted(() => {
 })
 
 // snapshots 变化时重绘图表
-watch(() => store.snapshots.length, () => {
+watch(() => store.snapshots.value?.length ?? 0, () => {
   nextTick(renderChart)
 })
 

@@ -114,13 +114,13 @@ function stopPoll() {
 // ── 导出 ────────────────────────────────────────────────────
 export function usePortfolioStore() {
   return {
-    // state
-    portfolios,
-    activePid,
-    positions,
-    pnl,
-    snapshots,
-    loading,
+    // state (导出 .value 使其在 JS 中为实际数组/对象，而非 ref 本身)
+    portfolios:       portfolios,
+    activePid:        activePid,
+    positions:        positions,
+    pnl:              pnl,
+    snapshots:        snapshots,       // ref([])，组件内用 store.snapshots.value
+    loading:          loading,
     // computed
     activePortfolio: computed(() =>
       portfolios.value.find(p => p.id === activePid.value) || null

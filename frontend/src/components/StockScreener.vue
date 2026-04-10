@@ -95,7 +95,7 @@
           <tr class="text-terminal-dim border-b border-gray-700">
             <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-8"
                 @click="setSort('seq')">#</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 min-w-[60px]"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-[72px] shrink-0"
                 @click="setSort('name')">名称</th>
             <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
                 @click="setSort('code')">代码</th>
@@ -122,8 +122,8 @@
               class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
               @click="handleClick(stock)">
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
-            <td class="py-0.5 px-0.5 text-gray-200 text-[10px] max-w-[80px] truncate" :title="stock.name">{{ stock.name }}</td>
-            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[60px]">{{ stock.code }}</td>
+            <td class="py-0.5 px-0.5 text-gray-200 text-[10px] max-w-[70px] truncate" :title="stock.name">{{ stock.name }}</td>
+            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[62px]">{{ stock.code }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ stock.price }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
                 :class="stock.chg_pct >= 0 ? 'text-red-400' : 'text-green-400'">
@@ -302,7 +302,7 @@ async function fetchAllStocks() {
     while (true) {
       const params = new URLSearchParams({
         page: String(page),
-        page_size: String(pageSize),
+        page_size: String(Math.min(pageSize, 200)),  // 最多200条/页
       })
       if (searchQuery.value.trim()) {
         params.set('search', searchQuery.value.trim())
@@ -320,10 +320,11 @@ async function fetchAllStocks() {
         ...s,
         seq: allFetched.length + i + 1,
         // 统一字段名（兼容表格渲染）
-        price: parseFloat(s.trade) || 0,
-        chg_pct: parseFloat(s.changepercent) || 0,
+        // 优先用 price（DB字段），trade 是 Eastmoney 原始字段
+        price: parseFloat(s.price ?? s.trade ?? 0) || 0,
+        chg_pct: parseFloat(s.change_pct ?? s.changepercent ?? 0) || 0,
         chg: parseFloat(s.change) || 0,
-        turnover: parseFloat(s.turnoverratio) || 0,
+        turnover: parseFloat(s.turnover ?? s.turnoverratio ?? 0) || 0,
         amount: parseFloat(s.amount) || 0,
         per: s.per !== null && s.per !== undefined && s.per !== '-' ? parseFloat(s.per) : null,
         pb:  s.pb  !== null && s.pb  !== undefined && s.pb  !== '-' ? parseFloat(s.pb)  : null,
@@ -335,7 +336,7 @@ async function fetchAllStocks() {
         break  // 全量获取完成
       }
       if (stocks.length < pageSize) break  // 最后一页
-      if (page >= 5) break  // 最多获取5页（1000条），防止搜索过多
+      if (page >= 30) break  // 最多获取30页（6000条），覆盖全市场
       page++
       
       // 避免请求过快
