@@ -1533,3 +1533,80 @@ def refresh_today_from_minute():
         if data and data.get("close"):
             buffer_insert_daily([data])
             print(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
+
+
+# ── 实时周期K线聚合（周线/月线）────────────────────────────
+def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
+    """
+    从日K线聚合周期K线（周线=周/月线=月）
+    周线: 每周汇总（开盘=周首日，high=周最高，low=周最低，收盘=周末日）
+    月线: 每月汇总
+    """
+    import time as t
+    from datetime import datetime, timedelta
+    
+    try:
+        # 读取最近60天日K线
+        rows = get_daily_history(symbol, limit=60)
+        if not rows:
+            return []
+        
+        # 按周/月分组
+        grouped = {}
+        for r in rows:
+            dt = datetime.strptime(r.get("date", ""), "%Y-%m-%d")
+            if period == "weekly":
+                # 周一作为周起始
+                week_start = dt - timedelta(days=dt.weekday())
+                key = week_start.strftime("%Y-%m-%d")
+            else:  # monthly
+                key = f"{dt.year}-{dt.month:02d}-01"
+            
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(r)
+        
+        # 聚合
+        result = []
+        for key in sorted(grouped.keys(), reverse=True)[:10]:
+            group = grouped[key]
+            opens = [g.get("open", 0) for g in group if g.get("open")]
+            highs = [g.get("high", 0) for g in group if g.get("high")]
+            lows = [g.get("low", 0) for g in group if g.get("low")]
+            closes = [g.get("close", 0) for g in group if g.get("close")]
+            volumes = [g.get("volume", 0) for g in group if g.get("volume")]
+            
+            if opens and closes:
+                result.append({
+                    "symbol": symbol,
+                    "date": key,
+                    "period": period,
+                    "open": opens[-1],  # 最早日期 = 周一开盘
+                    "high": max(highs) if highs else 0,
+                    "low": min([l for l in lows if l > 0]) if lows else 0,
+                    "close": closes[0],  # 最新日期 = 周五收盘
+                    "volume": sum(volumes),
+                    "timestamp": int(t.time()),
+                })
+        
+        return result
+    except Exception as e:
+        return []
+
+
+def refresh_period_klines():
+    """刷新周线和月线"""
+    from app.db import buffer_insert_periodic
+    
+    for sym in ["000001", "000300", "399001", "399006", "000688"]:
+        # 周线
+        weekly = fetch_period_klines_from_daily(sym, "weekly")
+        if weekly:
+            buffer_insert_periodic(weekly)
+            print(f"[Period] {sym} weekly: {len(weekly)} bars")
+        
+        # 月线  
+        monthly = fetch_period_klines_from_daily(sym, "monthly")
+        if monthly:
+            buffer_insert_periodic(monthly)
+            print(f"[Period] {sym} monthly: {len(monthly)} bars")

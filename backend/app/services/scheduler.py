@@ -105,11 +105,12 @@ def start_scheduler():
 
     # ── 实时日K线刷新（每30秒，使用Sina HQ）──────────────────────────
     def _realtime_daily_job():
-        from app.services.data_fetcher import refresh_today_from_minute
+        from app.services.data_fetcher import refresh_today_from_minute, refresh_period_klines
         try:
             refresh_today_from_minute()
+            refresh_period_klines()  # 周线/月线同步刷新
         except Exception as e:
-            logger.warning(f"[Scheduler] 实时日K刷新失败: {e}")
+            logger.warning(f"[Scheduler] 实时K线刷新失败: {e}")
 
     scheduler.add_job(
         _realtime_daily_job,
