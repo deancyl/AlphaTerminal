@@ -254,7 +254,7 @@ async def futures_term_structure(symbol: str = "RB"):
     # 去除数字和特殊字符，提取字母前缀
     prefix = re.sub(r'[^A-Za-z]', '', symbol).upper()
     if not prefix:
-        return {"error": f"无效品种代码: {symbol}"}
+        return success_response(None, f"无效品种代码: {symbol}")
 
     # 从 WATCHED_COMMODITIES 反查中文名
     zh_name = None
@@ -322,7 +322,6 @@ async def futures_term_structure(symbol: str = "RB"):
     except Exception as e:
         logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}")
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期限结构失败: {type(e).__name__}: {str(e)}", {"symbol": prefix, "name": zh_name, "term_structure": []})
-        return {"error": f"获取失败: {type(e).__name__}: {e}", "symbol": prefix, "name": zh_name, "term_structure": []}
 
 
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────

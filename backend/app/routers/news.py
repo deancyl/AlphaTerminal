@@ -156,14 +156,14 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
                 content = article.get_text(separator="\n", strip=True)
 
         if len(content) < 50:
-            return {"content": "原文解析失败（页面结构不支持自动提取），请点击链接查看网页。", "url": url}
+            return success_response({"content": "原文解析失败（页面结构不支持自动提取），请点击链接查看网页。", "url": url})
 
         logger.info(f"[News] 成功抓取 {url}，提取 {len(content)} 字符")
-        return {"content": content[:8000], "url": url}
+        return success_response({"content": content[:8000], "url": url})
 
     except Exception as e:
         logger.error(f"[News] news_detail 失败: {type(e).__name__}: {e}", exc_info=True)
-        return {"content": "原文解析失败，请点击链接查看网页。", "url": url}
+        return success_response({"content": "原文解析失败，请点击链接查看网页。", "url": url})
 
 
 @router.get("/news/transcript/{video_id}")

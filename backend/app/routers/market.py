@@ -688,13 +688,13 @@ async def market_lookup(symbol: str):
     lookup = _get_combined_lookup()
     item = lookup.get(norm)
     if item:
-        return item
+        return success_response(item)
     # 大小写折叠兜底（如 'hsi' → 'hkHSI'，'ndx' → 'usNDX'）
     norm_lower = norm.lower()
     for key, val in lookup.items():
         if key.lower() == norm_lower:
-            return val
-    return { 'error': 'symbol not found', 'raw': symbol, 'normalized': norm }
+            return success_response(val)
+    return success_response(None, 'symbol not found')
 
 
 @router.get("/market/quote/{symbol}")
@@ -707,7 +707,7 @@ async def market_quote(symbol: str):
     from app.db import get_price_history
     rows = get_price_history(_unprefix(norm), limit=2)  # 最新+昨日（realtime表存无前缀）
     if not rows:
-        return { 'error': 'no data', 'symbol': norm }
+        return success_response(None, 'no data')
     latest = rows[0]  # DESC，最新在前
     prev   = rows[1] if len(rows) > 1 else latest
     close  = float(latest.get('close') or 0)
@@ -1002,7 +1002,7 @@ async def futures_history(
             return {"symbol": clean_sym, "period": period, "history": list(reversed(rows))}
         except Exception as e:
             logger.error(f"[Futures] daily failed {clean_sym}: {e}")
-            return {"symbol": clean_sym, "period": period, "history": [], "error": str(e)}
+            return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")
 
     # 分钟K
     elif period in _FUTURES_FREQ_MAP:
@@ -1036,7 +1036,7 @@ async def futures_history(
             return {"symbol": clean_sym, "period": period, "history": rows}
         except Exception as e:
             logger.error(f"[Futures] minute failed {clean_sym}: {e}")
-            return {"symbol": clean_sym, "period": period, "history": [], "error": str(e)}
+            return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")
 
     else:
         return {"symbol": clean_sym, "period": period, "history": []}

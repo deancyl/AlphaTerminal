@@ -29,6 +29,10 @@ class PositionUpdate(BaseModel):
     shares: Optional[int] = None
     avg_cost: Optional[float] = None
 
+# ── 响应格式标准化（可选使用）─────────────────────────────
+def _ok(data, msg="success"):
+    return {"code": 0, "message": msg, "data": data, "timestamp": int(time.time() * 1000)}
+
 # ── 数据库工具 ────────────────────────────────────────────────
 
 from app.db.database import _get_conn, _lock
