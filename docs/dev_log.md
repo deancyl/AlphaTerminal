@@ -63,3 +63,15 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 |------|------|------|
 | uvicorn (backend) | 8002 | ✅ 运行中 |
 | vite (frontend) | 60100 | ✅ 运行中 |
+
+## v0.4.116 — 2026-04-10
+
+### 修复
+- `usePortfolioStore.js` + `PortfolioDashboard.vue`: 修复 `snapshots.map is not a function`（ref 未 .value）
+- `StockScreener.vue`: 修复全市场个股 price/chg_pct/turnover 为0（字段兼容）
+- `StockScreener.vue`: 扩大加载至30页(6000条)覆盖全市场5494只
+- `StockScreener.vue`: 股票名称列宽收紧至72px
+
+### 发布
+- GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.116
+- Git Tag: v0.4.116
