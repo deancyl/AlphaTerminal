@@ -41,3 +41,61 @@ export async function apiFetch(url, options = {}) {
   const json = await res.json()
   return extractData(json)
 }
+
+/**
+ * 字段标准化映射表
+ * 统一不同API返回的字段差异
+ */
+export const FIELD_MAP = {
+  // 价格相关
+  price: ['price', 'trade', 'index', 'current', 'close'],
+  change: ['change', 'chg', 'change_amount'],
+  change_pct: ['change_pct', 'chg_pct', 'changePercent', 'changepercent', 'pct_chg'],
+  // 成交量相关
+  volume: ['volume', 'vol'],
+  amount: ['amount', 'turnover_amount', 'money'],
+  turnover: ['turnover', 'turnoverratio'],
+  // 基本信息
+  symbol: ['symbol', 'code', 'stock_code'],
+  name: ['name', 'stock_name', 'security_name'],
+  // K线数据
+  open: ['open'],
+  high: ['high'],
+  low: ['low'],
+}
+
+/**
+ * 标准化单个数据对象
+ * @param {Object} raw - 原始数据
+ * @returns {Object} 标准化后数据
+ */
+export function normalizeFields(raw) {
+  if (!raw || typeof raw !== 'object') return raw || {}
+  
+  const result = {...raw}
+  
+  for (const [stdField, possibleKeys] of Object.entries(FIELD_MAP)) {
+    // 如果结果中已有标准化字段，跳过
+    if (stdField in result) continue
+    
+    // 否则尝试从可能字段中取值
+    for (const key of possibleKeys) {
+      if (key in raw) {
+        result[stdField] = raw[key]
+        break
+      }
+    }
+  }
+  
+  return result
+}
+
+/**
+ * 标准化数据数组
+ * @param {Array} list - 原始列表
+ * @returns {Array} 标准化列表
+ */
+export function normalizeList(list) {
+  if (!Array.isArray(list)) return []
+  return list.map(item => normalizeFields(item))
+}
