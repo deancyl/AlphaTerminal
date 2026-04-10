@@ -1422,3 +1422,114 @@ def fetch_all_china_stocks(max_pages=60):
     
     logger.info(f"[DataFetcher] 全量股票抓取完成: {len(all_rows)} 只")
     return all_rows
+
+
+# ── 实时日K线刷新（使用 Sina HQ） ─────────────────────────────────
+def fetch_today_daily_from_sina(symbol: str) -> dict:
+    """
+    从 Sina HQ 获取实时指数并构造当日K线
+    Sina返回: [名称, 当前价, 昨收, 开盘, 最高, 最低, ?, ?, 成交量, ...]
+    """
+    # 指数代码
+    sina_code = f"s_{'sh' if symbol.startswith('6') or symbol in ('000001','000300','000688') else 'sz'}{symbol}"
+    
+    url = f"https://hq.sinajs.cn/list={sina_code}"
+    
+    # 使用环境变量中的代理
+    proxies = None
+    if os.environ.get("http_proxy"):
+        proxies = {"http": os.environ["http_proxy"], "https": os.environ["https_proxy"]}
+    
+    try:
+        resp = httpx.get(url, timeout=5.0, proxies=proxies, headers={"Referer": "https://finance.sina.com.cn"})
+        raw = resp.text
+        
+        if "=" not in raw:
+            return None
+            
+        m = re.search(r'= "(.+)"', raw)
+        if not m:
+            return None
+            
+        parts = m.group(1).split(",")
+        if len(parts) < 11:
+            return None
+            
+        import time
+        return {
+            "symbol": symbol,
+            "name": parts[0],
+            "date": time.strftime("%Y-%m-%d"),
+            "open": float(parts[2]) if parts[2] else 0,   # 开盘
+            "high": float(parts[4]) if parts[4] else 0,   # 最高
+            "low": float(parts[5]) if parts[5] else 0,    # 最低
+            "close": float(parts[1]),                 # 当前价作为收盘
+            "volume": float(parts[8]) if parts[8] else 0,  # 成交量
+            "timestamp": int(time.time()),
+            "data_type": "daily",
+        }
+    except Exception as e:
+        return None
+
+
+def refresh_today_daily_all():
+    """刷新所有指数的当日K线"""
+    from app.db import buffer_insert_daily
+    
+    for symbol in ["000001", "000300", "399001", "399006", "000688"]:
+        data = fetch_today_daily_from_sina(symbol)
+        if data and data.get("close"):
+            buffer_insert_daily([data])
+            print(f"[TodayDaily] {symbol}: O={data['open']} H={data['high']} L={data['low']} C={data['close']}")
+
+
+# ── 从分时数据聚合当日日K线 ─────────────────────────────────
+def fetch_today_kline_from_minute(symbol: str) -> dict:
+    """
+    从分时数据聚合当日K线
+    """
+    try:
+        # 获取今日分时数据
+        rows = fetch_index_minute_history(symbol, limit=500, frequency=5)
+        if not rows:
+            return None
+            
+        # 找到今日数据
+        today = time.strftime("%Y-%m-%d")
+        today_rows = [r for r in rows if str(r.get("time", "")).startswith(today)]
+        
+        if not today_rows:
+            # 如果没有今日数据，使用最新的分时数据
+            today_rows = [rows[-1]]
+            
+        # 聚合OHLC
+        opens = [r.get("open", 0) for r in today_rows]
+        highs = [r.get("high", 0) for r in today_rows]
+        lows = [r.get("low", 0) for r in today_rows]
+        closes = [r.get("close", 0) for r in today_rows]
+        volumes = [r.get("volume", 0) for r in today_rows]
+        
+        return {
+            "symbol": symbol,
+            "date": today,
+            "open": opens[0] if opens else 0,
+            "high": max(highs) if highs else 0,
+            "low": min([l for l in lows if l > 0]) if lows else 0,
+            "close": closes[-1] if closes else 0,
+            "volume": sum(volumes),
+            "timestamp": int(time.time()),
+            "data_type": "daily",
+        }
+    except Exception as e:
+        return None
+
+
+def refresh_today_from_minute():
+    """从分时数据刷新当日日K"""
+    from app.db import buffer_insert_daily
+    
+    for symbol in ["000001", "000300", "399001", "399006", "000688"]:
+        data = fetch_today_kline_from_minute(symbol)
+        if data and data.get("close"):
+            buffer_insert_daily([data])
+            print(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")

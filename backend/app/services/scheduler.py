@@ -103,6 +103,24 @@ def start_scheduler():
     )
     logger.info("[Scheduler] 今日日K刷新任务已注册（每5分钟）")
 
+    # ── 实时日K线刷新（每30秒，使用Sina HQ）──────────────────────────
+    def _realtime_daily_job():
+        from app.services.data_fetcher import refresh_today_from_minute
+        try:
+            refresh_today_from_minute()
+        except Exception as e:
+            logger.warning(f"[Scheduler] 实时日K刷新失败: {e}")
+
+    scheduler.add_job(
+        _realtime_daily_job,
+        "interval", 
+        seconds=30,
+        id="realtime_daily",
+        name="RealtimeDaily",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 实时日K刷新任务已注册（每30秒）")
+
     # 全市场A股定时刷新 (每10分钟抓取全量数据)
     def _fetch_all_stocks_job():
         from app.services.data_fetcher import fetch_all_china_stocks

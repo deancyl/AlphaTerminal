@@ -75,3 +75,19 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 ### 发布
 - GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.116
 - Git Tag: v0.4.116
+
+## v0.4.117 — 2026-04-10
+
+### 修复
+- **API响应格式统一**: 消除 `{error:xxx}` 直接返回
+- `market.py`: 统一使用 success_response/error_response
+- `futures.py`: 统一响应格式
+- `news.py`: 修复语法错误
+
+### 发布
+- GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.117
+- Git Tag: v0.4.117 (创建中)
+
+### 状态
+- 后端: 运行中
+- 前端: 运行中
