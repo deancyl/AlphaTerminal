@@ -116,3 +116,13 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 ### 发布
 - GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.124
 - Git Tag: v0.4.124
+
+## v0.4.126 — 2026-04-10
+
+### 修复
+- 市场情绪涨跌家数改为全市场真实统计（5497只）
+- SpotCache 失败后自动 fallback 到 market_all_stocks
+
+### 发布
+- GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.126
+- Git Tag: v0.4.126

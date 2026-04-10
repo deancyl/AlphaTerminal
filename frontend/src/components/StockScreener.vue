@@ -124,18 +124,18 @@
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
             <td class="py-0.5 px-0.5 text-gray-200 text-[10px] max-w-[70px] truncate" :title="stock.name">{{ stock.name }}</td>
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[62px]">{{ stock.code }}</td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ stock.price }}</td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ fmtPrice(stock.price) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
                 :class="stock.chg_pct >= 0 ? 'text-red-400' : 'text-green-400'">
-              {{ stock.chg_pct >= 0 ? '+' : '' }}{{ stock.chg_pct }}%
+              {{ fmtPct(stock.chg_pct) }}
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
                 :class="stock.chg >= 0 ? 'text-red-400' : 'text-green-400'">
-              {{ stock.chg >= 0 ? '+' : '' }}{{ stock.chg }}
+              {{ fmtChg(stock.chg) }}
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
                 :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">
-              {{ stock.turnover }}%
+              {{ fmtTurnover(stock.turnover) }}
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px] text-terminal-dim">
               {{ formatAmt(stock.amount) }}
@@ -193,6 +193,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
 import { normalizeFields } from '../utils/apiCompat.js'
+import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
 
 const { setSymbol } = useMarketStore()
 
@@ -382,9 +383,9 @@ function handleClick(stock) {
 // ── 格式化成交额 ────────────────────────────────────────────────
 function formatAmt(v) {
   if (!v) return '--'
-  if (v >= 1e8) return (v / 1e8).toFixed(1) + '亿'
-  if (v >= 1e4) return (v / 1e4).toFixed(0) + '万'
-  return v.toFixed(0)
+  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿'
+  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万'
+  return Number(v).toFixed(2)
 }
 
 // ── 空操作（保留扩展）────────────────────────────────────────────

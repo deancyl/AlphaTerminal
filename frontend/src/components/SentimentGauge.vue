@@ -155,7 +155,7 @@ const allItems = computed(() => {
 
 const upPct = computed(() => {
   const t = data.value.total || 1
-  return ((data.value.advance / t) * 100).toFixed(1)
+  return ((data.value.advance / t) * 100).toFixed(2)
 })
 
 function formatPrice(v) {
