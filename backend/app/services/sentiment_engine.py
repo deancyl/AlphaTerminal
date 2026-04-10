@@ -313,6 +313,7 @@ def _do_news_fetch():
                                 all_news.append({
                                     "title":  title.strip(),
                                     "time":   time_,
+                                    "publish_time": time_,
                                     "source": source,
                                     "url":    url,
                                 })
@@ -338,7 +339,7 @@ def _do_news_fetch():
                                 time_   = str(row.get("发布时间", "") or "")[:16]
                                 source2 = str(row.get("文章来源", "东方财富") or "东方财富")
                                 if title and url and len(title) > 5:
-                                    all_news.append({"title": title.strip(), "time": time_,
+                                    all_news.append({"title": title.strip(), "time": time_, "publish_time": time_,
                                                      "source": source2, "url": url})
                             except Exception:
                                 continue

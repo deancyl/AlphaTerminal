@@ -194,6 +194,7 @@ const showRefreshed = ref(false)     // "刚刚更新" 成功提示
 const refreshMsg   = ref('')         // 动态 Toast 文案（来源 + 条数）
 const listEl       = ref(null)
 const refreshTimer  = ref(null)
+const forceRefreshCounter = ref(0)
 const lastRefreshTime = ref(null)
 
 const lastRefreshLabel = computed(() => {
@@ -295,8 +296,12 @@ function closeModal() {
 async function fetchNews(quiet = false) {
   if (!quiet) isRefreshing.value = true
   try {
-    // 穿透式强制刷新：POST 到 force_refresh（同步拉取外网最新数据）
-    const useForce = !quiet
+    // 轮询策略：静默时每3次执行一次 force_refresh（真正拉外网），其余读缓存
+    const isInterval = quiet
+    if (isInterval) {
+      forceRefreshCounter.value = (forceRefreshCounter.value || 0) + 1
+    }
+    const useForce = !quiet || (isInterval && forceRefreshCounter.value % 3 === 1)
     const url = useForce
       ? '/api/v1/news/force_refresh'
       : `/api/v1/news/flash?_t=${Date.now()}`
@@ -386,7 +391,7 @@ async function manualRefresh() {
 
 function startAutoRefresh() {
   fetchNews(true)   // 首次：静默读缓存，不弹 loading
-  refreshTimer.value = setInterval(() => fetchNews(true), 5 * 60 * 1000)   // 定时：5分钟静默读缓存
+  refreshTimer.value = setInterval(() => fetchNews(true), 2 * 60 * 1000)   // 定时：2分钟静默读缓存
 }
 
 onMounted(startAutoRefresh)

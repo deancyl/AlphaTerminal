@@ -339,7 +339,14 @@ def get_all_stocks(limit=5000, offset=0, search=None):
             """, (limit, offset)).fetchall()
             total = conn.execute("SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
         conn.close()
-        return total, [dict(r) for r in rows]
+        rows_list = [dict(r) for r in rows]
+        # 补充 change 字段（数据库只有 change_pct）
+        for r in rows_list:
+            price = float(r.get('price') or 0)
+            change_pct = float(r.get('change_pct') or 0)
+            if 'change' not in r or r.get('change') is None:
+                r['change'] = round(price * change_pct / 100, 3)
+        return total, rows_list
 
 def get_all_stocks_count():
     """返回全市场个股总数"""
