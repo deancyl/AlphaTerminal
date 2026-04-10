@@ -192,6 +192,7 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { normalizeFields } from '../utils/apiCompat.js'
 
 const { setSymbol } = useMarketStore()
 
@@ -317,19 +318,8 @@ async function fetchAllStocks() {
       if (!stocks.length) break
       
       allFetched = allFetched.concat(stocks.map((s, i) => ({
-        ...s,
+        ...normalizeFields(s),  // 使用标准化字段
         seq: allFetched.length + i + 1,
-        // 统一字段名（兼容表格渲染）
-        // 优先用 price（DB字段），trade 是 Eastmoney 原始字段
-        price: parseFloat(s.price ?? s.trade ?? 0) || 0,
-        chg_pct: parseFloat(s.change_pct ?? s.changepercent ?? 0) || 0,
-        chg: parseFloat(s.change) || 0,
-        turnover: parseFloat(s.turnover ?? s.turnoverratio ?? 0) || 0,
-        amount: parseFloat(s.amount) || 0,
-        per: s.per !== null && s.per !== undefined && s.per !== '-' ? parseFloat(s.per) : null,
-        pb:  s.pb  !== null && s.pb  !== undefined && s.pb  !== '-' ? parseFloat(s.pb)  : null,
-        volume: parseFloat(s.volume) || 0,
-        mktcap: parseFloat(s.mktcap) || 0,
       })))
       
       if (!searchQuery.value.trim() && payload.total && allFetched.length >= payload.total) {

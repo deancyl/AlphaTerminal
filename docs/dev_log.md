@@ -91,3 +91,17 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 ### 状态
 - 后端: 运行中
 - 前端: 运行中
+
+## v0.4.120 — 2026-04-10
+
+### 修复
+- API字段标准化层 - 统一price/turnover等字段兼容
+- 添加 FIELD_MAP 字段映射表
+- 添加 normalizeFields()
+
+### 发布
+- GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.120
+- Git Tag: v0.4.120
+
+### 验证
+- 日线/周线/月线/分时: 正常
