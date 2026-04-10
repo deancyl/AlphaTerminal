@@ -709,8 +709,10 @@ def fetch_index_minute_history(
                     break
             except Exception as e:
                 if attempt == 2:
-                    raise
-                logger.warning(f"[Eastmoney] fetch_index_minute_history({symbol}) 第{attempt+1}次重试: {e}")
+                    logger.debug(f"[Eastmoney] {symbol} 最终失败: {type(e).__name__}")
+                    return []  # 失败时返回空数组，不抛异常
+                logger.debug(f"[Eastmoney] {symbol} 第{attempt+1}次重试")
+                time.sleep(0.5 * (attempt + 1))  # 指数退避
         klines = obj.get("data", {}).get("klines", [])
         rows = []
         for kl in klines:
@@ -1524,15 +1526,62 @@ def fetch_today_kline_from_minute(symbol: str) -> dict:
         return None
 
 
+def _fetch_sina_realtime(symbol: str) -> dict:
+    """从Sina获取指数实时价格"""
+    sina_code = f"s_{'sh' if symbol.startswith('6') or symbol in ('000001','000300','000688') else 'sz'}{symbol}"
+    url = f"https://hq.sinajs.cn/list={sina_code}"
+    try:
+        resp = httpx.get(url, timeout=5.0, headers={"Referer": "https://finance.sina.com.cn"})
+        if "=" not in resp.text:
+            return None
+        m = re.search(r'= "(.+)"', resp.text)
+        if not m:
+            return None
+        parts = m.group(1).split(",")
+        if len(parts) < 6:
+            return None
+        return {
+            "price": float(parts[1]),
+            "change_pct": float(parts[3]) if parts[3] else 0,
+        }
+    except Exception:
+        return None
+
 def refresh_today_from_minute():
-    """从分时数据刷新当日日K"""
-    from app.db import buffer_insert_daily
+    """从分时数据刷新当日日K（分时失败时使用Sina实时价更新收盘价）"""
+    from app.db import buffer_insert_daily, get_daily_history
     
     for symbol in ["000001", "000300", "399001", "399006", "000688"]:
         data = fetch_today_kline_from_minute(symbol)
+        
+        # 方案1: 分时数据聚合成功
         if data and data.get("close"):
             buffer_insert_daily([data])
             print(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
+            continue
+        
+        # 方案2: 分时失败，但已有当日日K数据 → 用Sina最新价更新收盘
+        today = time.strftime("%Y-%m-%d")
+        today_rows = get_daily_history(symbol, limit=1, offset=0)
+        today_row = None
+        if today_rows and str(today_rows[0].get("date", "")) == today:
+            today_row = today_rows[0]
+        
+        sina = _fetch_sina_realtime(symbol)
+        if today_row and sina and sina.get("price"):
+            today_row["close"] = sina["price"]
+            # 同时更新最高价
+            if sina["price"] > today_row.get("high", 0):
+                today_row["high"] = sina["price"]
+            # 同时更新最低价
+            if sina["price"] < today_row.get("low", 999999) or today_row.get("low", 0) == 0:
+                today_row["low"] = sina["price"]
+            today_row["timestamp"] = int(time.time())
+            buffer_insert_daily([today_row])
+            print(f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}")
+            continue
+        
+        logger.debug(f"[TodayDaily] {symbol}: 无可用数据源")
 
 
 # ── 实时周期K线聚合（周线/月线）────────────────────────────
