@@ -348,6 +348,34 @@ def get_all_stocks(limit=5000, offset=0, search=None):
                 r['change'] = round(price * change_pct / 100, 3)
         return total, rows_list
 
+
+def get_all_stocks_lite():
+    """轻量全量查询：只返回 StockScreener 需要的字段，无分页"""
+    with _lock:
+        conn = _get_conn()
+        rows = conn.execute("""
+            SELECT code, name, price, change_pct, turnover, volume, amount
+            FROM market_all_stocks WHERE price > 0 ORDER BY code
+        """).fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            price = float(r['price'] or 0)
+            change_pct = float(r['change_pct'] or 0)
+            prev = price / (1 + change_pct / 100) if change_pct != -100 else price
+            change = round(price - prev, 3)
+            result.append({
+                "code": r['code'],
+                "name": r['name'],
+                "price": price,
+                "change_pct": change_pct,
+                "change": change,
+                "turnover": float(r['turnover'] or 0),
+                "volume": float(r['volume'] or 0),
+                "amount": float(r['amount'] or 0),
+            })
+        return result
+
 def get_all_stocks_count():
     """返回全市场个股总数"""
     with _lock:

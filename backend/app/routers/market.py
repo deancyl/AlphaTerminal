@@ -512,6 +512,21 @@ async def market_all_stocks(request: Request):
         logger.error(f"[market_all_stocks] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
 
+
+@router.get("/market/all_stocks_lite")
+async def market_all_stocks_lite():
+    """全市场A股轻量列表（一次性返回，无分页，StockScreener专用）"""
+    try:
+        from app.db.database import get_all_stocks_lite
+        rows = get_all_stocks_lite()
+        return success_response({
+            "stocks": rows,
+            "total": len(rows),
+        })
+    except Exception as e:
+        logger.error(f"[market_all_stocks_lite] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
+
 @router.get("/market/indices")
 async def market_indices():
     """A股四大指数列表"""

@@ -295,20 +295,32 @@ const visiblePages = computed(() => {
 async function fetchAllStocks() {
   loading.value = true
   try {
-    // 调用新的全市场个股 API (支持搜索、分页)
-    // 先尝试获取全量数据（用于前端过滤），若搜索则用 API 搜索
-    const pageSize = 200  // 每页获取量
+    // 无搜索条件时：使用一次性轻量接口（快）
+    if (!searchQuery.value.trim()) {
+      const res = await fetch('/api/v1/market/all_stocks_lite')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const d = await res.json()
+      const payload = d.data || d
+      const stocks = payload.stocks || []
+      allStocks.value = stocks.map((s, i) => ({
+        ...normalizeFields(s),
+        seq: i + 1,
+      }))
+      console.log(`[StockScreener] Lite 加载完成: ${stocks.length} 只`)
+      return
+    }
+    
+    // 有搜索条件时：使用分页接口
+    const pageSize = 200
     let page = 1
     let allFetched = []
     
     while (true) {
       const params = new URLSearchParams({
         page: String(page),
-        page_size: String(Math.min(pageSize, 200)),  // 最多200条/页
+        page_size: String(Math.min(pageSize, 200)),
+        search: searchQuery.value.trim(),
       })
-      if (searchQuery.value.trim()) {
-        params.set('search', searchQuery.value.trim())
-      }
       
       const res = await fetch(`/api/v1/market/all_stocks?${params}`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -319,23 +331,19 @@ async function fetchAllStocks() {
       if (!stocks.length) break
       
       allFetched = allFetched.concat(stocks.map((s, i) => ({
-        ...normalizeFields(s),  // 使用标准化字段
+        ...normalizeFields(s),
         seq: allFetched.length + i + 1,
       })))
       
-      if (!searchQuery.value.trim() && payload.total && allFetched.length >= payload.total) {
-        break  // 全量获取完成
-      }
-      if (stocks.length < pageSize) break  // 最后一页
-      if (page >= 30) break  // 最多获取30页（6000条），覆盖全市场
+      if (payload.total && allFetched.length >= payload.total) break
+      if (stocks.length < pageSize) break
+      if (page >= 30) break
       page++
-      
-      // 避免请求过快
       await new Promise(r => setTimeout(r, 50))
     }
     
     allStocks.value = allFetched
-    console.log(`[StockScreener] 加载完成: ${allFetched.length} 只`)
+    console.log(`[StockScreener] 搜索加载完成: ${allFetched.length} 只`)
   } catch (e) {
     console.warn('[StockScreener] fetch failed:', e.message)
   } finally {
