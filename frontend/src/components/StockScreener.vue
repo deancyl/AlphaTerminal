@@ -306,7 +306,7 @@ async function fetchAllStocks() {
         ...normalizeFields(s),
         seq: i + 1,
       }))
-      console.log(`[StockScreener] Lite 加载完成: ${stocks.length} 只`)
+      // console.log(`[StockScreener] Lite 加载完成: ${stocks.length} 只`)
       return
     }
     

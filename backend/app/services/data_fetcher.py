@@ -1482,7 +1482,7 @@ def refresh_today_daily_all():
         data = fetch_today_daily_from_sina(symbol)
         if data and data.get("close"):
             buffer_insert_daily([data])
-            print(f"[TodayDaily] {symbol}: O={data['open']} H={data['high']} L={data['low']} C={data['close']}")
+            logger.info(f"[TodayDaily] {symbol}: O={data['open']} H={data['high']} L={data['low']} C={data['close']}")
 
 
 # ── 从分时数据聚合当日日K线 ─────────────────────────────────
@@ -1557,7 +1557,7 @@ def refresh_today_from_minute():
         # 方案1: 分时数据聚合成功
         if data and data.get("close"):
             buffer_insert_daily([data])
-            print(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
+            logger.info(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
             continue
         
         # 方案2: 分时失败，但已有当日日K数据 → 用Sina最新价更新收盘
@@ -1578,7 +1578,7 @@ def refresh_today_from_minute():
                 today_row["low"] = sina["price"]
             today_row["timestamp"] = int(time.time())
             buffer_insert_daily([today_row])
-            print(f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}")
+            logger.info(f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}")
             continue
         
         logger.debug(f"[TodayDaily] {symbol}: 无可用数据源")
@@ -1652,10 +1652,10 @@ def refresh_period_klines():
         weekly = fetch_period_klines_from_daily(sym, "weekly")
         if weekly:
             buffer_insert_periodic(weekly)
-            print(f"[Period] {sym} weekly: {len(weekly)} bars")
+            logger.info(f"[Period] {sym} weekly: {len(weekly)} bars")
         
         # 月线  
         monthly = fetch_period_klines_from_daily(sym, "monthly")
         if monthly:
             buffer_insert_periodic(monthly)
-            print(f"[Period] {sym} monthly: {len(monthly)} bars")
+            logger.info(f"[Period] {sym} monthly: {len(monthly)} bars")
