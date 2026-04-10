@@ -276,8 +276,10 @@ async function openModal(item) {
   try {
     const res = await fetch(`/api/v1/news/detail?url=${encodeURIComponent(item.url)}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    modalContent.value = data.content || ''
+    const json = await res.json()
+    // 兼容标准API格式
+    const data = (json && json.code === 0) ? json.data : json
+    modalContent.value = data?.content || ''
   } catch (e) {
     console.warn('[NewsFeed] detail fetch failed:', e.message)
     modalContent.value = ''
@@ -293,15 +295,14 @@ function closeModal() {
 }
 
 // ── 数据拉取 ──────────────────────────────────────────────────────────
-async function fetchNews(quiet = false) {
+async function fetchNews(quiet = false, isTimer = false) {
   if (!quiet) isRefreshing.value = true
   try {
-    // 轮询策略：静默时每3次执行一次 force_refresh（真正拉外网），其余读缓存
-    const isInterval = quiet
-    if (isInterval) {
+    // 轮询策略：定时器每3次执行一次 force_refresh（真正拉外网），其余读缓存
+    if (isTimer) {
       forceRefreshCounter.value = (forceRefreshCounter.value || 0) + 1
     }
-    const useForce = !quiet || (isInterval && forceRefreshCounter.value % 3 === 1)
+    const useForce = !quiet || (isTimer && forceRefreshCounter.value % 3 === 1)
     const url = useForce
       ? '/api/v1/news/force_refresh'
       : `/api/v1/news/flash?_t=${Date.now()}`
@@ -390,8 +391,8 @@ async function manualRefresh() {
 }
 
 function startAutoRefresh() {
-  fetchNews(true)   // 首次：静默读缓存，不弹 loading
-  refreshTimer.value = setInterval(() => fetchNews(true), 2 * 60 * 1000)   // 定时：2分钟静默读缓存
+  fetchNews(true)   // 首次：静默读缓存，不弹 loading（不是定时器，不触发 force）
+  refreshTimer.value = setInterval(() => fetchNews(true, true), 2 * 60 * 1000)   // 定时：2分钟，定时器才计数 force
 }
 
 onMounted(startAutoRefresh)

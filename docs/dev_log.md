@@ -105,3 +105,14 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 
 ### 验证
 - 日线/周线/月线/分时: 正常
+
+## v0.4.124 — 2026-04-10
+
+### 修复
+- 全市场个股 `change` 字段自动计算
+- 快讯轮询从 5 分钟缩短到 2 分钟
+- 每 6 分钟执行一次 force_refresh 穿透刷新
+
+### 发布
+- GitHub Release: https://github.com/deancyl/AlphaTerminal/releases/tag/v0.4.124
+- Git Tag: v0.4.124

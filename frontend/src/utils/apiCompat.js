@@ -49,8 +49,8 @@ export async function apiFetch(url, options = {}) {
 export const FIELD_MAP = {
   // 价格相关
   price: ['price', 'trade', 'index', 'current', 'close'],
-  change: ['change', 'chg', 'change_amount'],
-  change_pct: ['change_pct', 'chg_pct', 'changePercent', 'changepercent', 'pct_chg'],
+  chg: ['change', 'chg', 'change_amount'],
+  chg_pct: ['change_pct', 'chg_pct', 'changePercent', 'changepercent', 'pct_chg'],
   // 成交量相关
   volume: ['volume', 'vol'],
   amount: ['amount', 'turnover_amount', 'money'],
