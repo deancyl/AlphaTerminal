@@ -188,6 +188,32 @@ class SpotCache:
     @classmethod
     def get_histogram(cls) -> dict:
         stocks = cls.get_stocks()
+        # 若缓存数据不足500只，尝试从全市场表读取真实A股数据
+        if not stocks or len(stocks) < 500:
+            try:
+                from app.db.database import get_all_stocks
+                _, db_rows = get_all_stocks(limit=6000)
+                if db_rows:
+                    stocks = []
+                    for r in db_rows:
+                        price = float(r.get('price') or 0)
+                        change_pct = float(r.get('change_pct') or 0)
+                        prev = price / (1 + change_pct / 100) if change_pct != -100 else price
+                        change = round(price - prev, 3)
+                        code = str(r.get('code', ''))
+                        stocks.append({
+                            "code": code,
+                            "name": r.get('name', ''),
+                            "price": price,
+                            "chg": change,
+                            "chg_pct": change_pct,
+                            "turnover": float(r.get('turnover') or 0),
+                            "volume": float(r.get('volume') or 0),
+                            "market": code[:2] in ('60','68','90') and "SH" or "SZ",
+                        })
+            except Exception:
+                pass
+
         if not stocks:
             return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
                     "unchanged": 0, "limit_up": 0, "limit_down": 0,
@@ -251,7 +277,7 @@ def _immediate_fill():
 
 
 def _bg_sina_refresh():
-    """后台：用 Sina HQ 抓取真实股票（Task 4: HS300 成分股最多100只）"""
+    """后台：用 Sina HQ 抓取真实股票，失败时从 market_all_stocks 兜底"""
     try:
         from app.services.sina_hq_fetcher import fetch_hq_batch, get_stock_pool
         pool = get_stock_pool()
@@ -259,10 +285,37 @@ def _bg_sina_refresh():
         if rows and len(rows) >= 5:
             SpotCache.update(rows, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             logger.info(f"[HEARTBEAT] Spot cache (Sina HQ): {len(rows)} stocks from pool of {len(pool)}")
-        else:
-            logger.warning("[SpotCache] Sina HQ 返回不足，保留现有数据")
+            return
+        logger.warning("[SpotCache] Sina HQ 返回不足，尝试从数据库兜底")
     except Exception as e:
-        logger.error(f"[SpotCache] Sina HQ 失败: {type(e).__name__}: {e}")
+        logger.warning(f"[SpotCache] Sina HQ 失败，尝试从数据库兜底: {type(e).__name__}: {e}")
+    
+    # 兜底：从 market_all_stocks 读取全市场数据
+    try:
+        from app.db.database import get_all_stocks
+        total, db_rows = get_all_stocks(limit=6000)
+        if db_rows:
+            rows = []
+            for r in db_rows:
+                price = float(r.get('price') or 0)
+                change_pct = float(r.get('change_pct') or 0)
+                # 计算 change
+                prev = price / (1 + change_pct / 100) if change_pct != -100 else price
+                change = round(price - prev, 3)
+                rows.append({
+                    "code": r.get('code', ''),
+                    "name": r.get('name', ''),
+                    "price": price,
+                    "chg": change,
+                    "chg_pct": change_pct,
+                    "turnover": float(r.get('turnover') or 0),
+                    "volume": float(r.get('volume') or 0),
+                    "market": r.get('code', '')[:2] in ('60','68','90') and "SH" or "SZ",
+                })
+            SpotCache.update(rows, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            logger.info(f"[HEARTBEAT] Spot cache (DB fallback): {len(rows)} stocks")
+    except Exception as e:
+        logger.error(f"[SpotCache] 数据库兜底也失败: {e}")
 
 
 def trigger_spot_fetch():
