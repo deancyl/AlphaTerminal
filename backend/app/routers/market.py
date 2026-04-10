@@ -428,13 +428,29 @@ async def market_overview():
         "IXIC":   ("纳斯达克",  "US",     status_us),
     }
 
-    # 修复: 直接从 Sina 实时拉取（替代 DB 的 60s 延迟）
-    wind_data = _get_cached_wind()
-    # 补充 status 字段（DB 数据无此字段）
+    # 统一从 market_data_realtime 读取（确保全系统报价一致）
+    # 仅当数据库缺失数据时，才回退到 Sina 实时拉取
+    rows = get_latest_prices(WIND_SYMBOLS)
+    wind_data = {}
+    db_symbols = {r["symbol"]: r for r in rows}
+    
     for sym, label in wind_labels.items():
-        if sym in wind_data and "status" not in wind_data[sym]:
-            wind_data[sym]["status"] = label[2]
-
+        if sym in db_symbols:
+            row = db_symbols[sym]
+            wind_data[sym] = {
+                "name": row.get("name", label[0]),
+                "price": row.get("price", 0),
+                "change_pct": row.get("change_pct", 0),
+                "volume": row.get("volume", 0),
+                "market": label[1],
+                "status": label[2],
+            }
+        else:
+            # DB 无此标的时回退 Sina（恒生/纳斯达克可能不在 A 股 DB 中）
+            sina_data = _get_cached_wind()
+            if sym in sina_data:
+                wind_data[sym] = {**sina_data[sym], "status": label[2]}
+    
     result = success_response({
         "wind": wind_data,
         "meta": {
@@ -451,21 +467,11 @@ async def market_overview():
 # ── Task 2: 国内10+核心指数（实时）─────────────────────────────────────
 @router.get("/market/china_all")
 async def market_china_all():
-    """国内10+核心指数（直接调 Sina，10秒缓存）"""
+    """国内10+核心指数（统一从 market_data_realtime 读取，不再直连Sina，保证报价一致）"""
     try:
-        import time
         is_open, status = is_market_open("A_SHARE")
-        # 实时拉取（带10秒缓存）
-        now = time.time()
-        cache_key = "china_all"
-        cached = _REALTIME_CACHE.get(cache_key)
-        if cached and (now - _REALTIME_CACHE["_ts"]) < _CACHE_TTL:
-            rows = cached
-        else:
-            from app.services.data_fetcher import fetch_china_all_indices
-            rows = fetch_china_all_indices()
-            _REALTIME_CACHE[cache_key] = rows
-            _REALTIME_CACHE["_ts"] = now
+        # 统一从数据库 market_data_realtime 读取，确保所有API报价一致
+        rows = get_latest_prices(CHINA_ALL_SYMBOLS)
         return success_response({
             "china_all": _serialize_price_rows(rows, include_status=True, status=status),
             "meta": {"market_open": is_open, "status": status}
