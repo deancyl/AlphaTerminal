@@ -211,8 +211,8 @@ class SpotCache:
                             "volume": float(r.get('volume') or 0),
                             "market": code[:2] in ('60','68','90') and "SH" or "SZ",
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[SpotCache] DB fallback failed: {e}")
 
         if not stocks:
             return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
