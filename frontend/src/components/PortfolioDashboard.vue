@@ -326,8 +326,20 @@ async function submitTrade() {
 
 async function submitCreate() {
   if (!createForm.value.name) return
-  await store.createPortfolio(createForm.value.name, createForm.value.type)
-  showCreateModal.value = false
+  try {
+    await store.createPortfolio(createForm.value.name, createForm.value.type)
+    showCreateModal.value = false
+    createForm.value = { name: '', type: 'main' }
+  } catch (e) {
+    const msg = e.message || '创建失败'
+    // 解析后端返回的具体错误信息
+    const detail = msg.includes('UNIQUE') || msg.includes('已存在')
+      ? '该账户名称已存在，请换个名字'
+      : msg.includes('HTTP 4')
+        ? msg
+        : `创建失败: ${msg}`
+    alert(detail)
+  }
 }
 
 function downloadReport() {
