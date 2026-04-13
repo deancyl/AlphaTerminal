@@ -77,28 +77,56 @@ async function switchAccount(pid) {
 }
 
 async function createPortfolio(name, type = 'main') {
-  const d = await api('/', {
+  const res = await fetch(BASE + '/', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, type }),
   })
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      msg = body?.message || body?.detail || msg
+    } catch (_) {}
+    // 清理技术性错误信息
+    if (msg.includes('UNIQUE')) msg = '该账户名称已存在，请换一个名字'
+    throw new Error(msg)
+  }
   await fetchPortfolios()
-  return d
+  return res.json()
 }
 
 async function upsertPosition(portfolio_id, symbol, shares, avg_cost) {
-  const d = await api('/positions', {
+  const res = await fetch(BASE + '/positions', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ portfolio_id, symbol, shares, avg_cost }),
   })
-  // 刷新持仓和PnL
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      msg = body?.message || body?.detail || msg
+    } catch (_) {}
+    if (msg.includes('UNIQUE')) msg = '该账户名称已存在，请换一个名字'
+    throw new Error(msg)
+  }
   await fetchPnL(portfolio_id)
-  return d
+  return res.json()
 }
 
 async function deletePosition(portfolio_id, symbol) {
-  const d = await api(`/${portfolio_id}/positions/${symbol}`, { method: 'DELETE' })
+  const res = await fetch(`${BASE}/${portfolio_id}/positions/${symbol}`, { method: 'DELETE' })
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`
+    try {
+      const body = await res.json()
+      msg = body?.message || body?.detail || msg
+    } catch (_) {}
+    throw new Error(msg)
+  }
   await fetchPnL(portfolio_id)
-  return d
+  return res.json()
 }
 
 async function saveSnapshot(pid) {
