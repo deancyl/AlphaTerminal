@@ -77,10 +77,12 @@ async function switchAccount(pid) {
 }
 
 async function createPortfolio(name, type = 'main') {
+  // 支持 body 对象形式：createPortfolio({ name, type, parent_id })
+  const body = typeof name === 'object' ? name : { name, type }
   const res = await fetch(BASE + '/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, type }),
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
     let msg = `HTTP ${res.status}`

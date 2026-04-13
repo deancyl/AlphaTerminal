@@ -11,8 +11,8 @@
         </button>
       </div>
 
-      <!-- 账户列表（树形：主账户+折叠子账户） -->
-      <template v-for="acc in (store.portfolios.value || [])" :key="acc.id">
+      <!-- 账户列表（树形：只遍历主账户，子账户嵌套在主账户下） -->
+      <template v-for="acc in mainAccounts" :key="acc.id">
         <!-- 主账户行 -->
         <div class="rounded border p-2 cursor-pointer transition-all text-xs"
              :class="acc.id === activePidValue
@@ -22,7 +22,6 @@
           <div class="flex items-center justify-between">
             <!-- 左：折叠箭头+名称 -->
             <div class="flex items-center gap-1 min-w-0">
-              <!-- 子账户数量/折叠按钮（仅主账户） -->
               <span v-if="getChildren(acc.id).length"
                     class="text-[9px] cursor-pointer select-none flex-shrink-0"
                     @click.stop="toggleCollapse(acc.id)">
@@ -31,16 +30,11 @@
               </span>
               <span v-else class="w-3 flex-shrink-0"></span>
               <span class="text-theme-primary font-medium truncate">{{ acc.name }}</span>
-              <span class="text-[9px] text-terminal-dim flex-shrink-0">
-                {{ acc.type === 'main' ? '主' : '子' }}
-              </span>
+              <span class="text-[9px] text-terminal-dim flex-shrink-0">主</span>
             </div>
             <!-- 右：删除按钮 -->
             <button class="text-[9px] text-red-400/60 hover:text-red-400 ml-1 flex-shrink-0"
-                    title="删除账户"
-                    @click.stop="confirmDelete(acc)">
-              ✕
-            </button>
+                    title="删除账户" @click.stop="confirmDelete(acc)">✕</button>
           </div>
           <!-- 实时总览（仅选中账户显示） -->
           <div v-if="acc.id === activePidValue && pnlData" class="mt-1.5 grid grid-cols-2 gap-x-1">
@@ -64,38 +58,24 @@
         </div>
 
         <!-- 子账户行（仅当主账户未折叠时显示） -->
-        <div v-for="child in getChildren(acc.id)"
-             :key="child.id"
-             class="ml-3 rounded border p-2 cursor-pointer transition-all text-xs"
-             :class="child.id === activePidValue
-               ? 'border-terminal-accent/60 bg-terminal-accent/10'
-               : 'border-theme-secondary hover:border-gray-500'"
-             @click="handleSwitch(child.id)">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-1 min-w-0">
-              <span class="text-[8px] text-terminal-dim">└</span>
-              <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
-            </div>
-            <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0"
-                    title="删除账户"
-                    @click.stop="confirmDelete(child)">
-              ✕
-            </button>
-          </div>
-          <!-- 实时总览（仅选中子账户显示） -->
-          <div v-if="child.id === activePidValue && pnlData" class="mt-1 grid grid-cols-2 gap-x-1">
-            <div>
-              <div class="text-[9px] text-terminal-dim">总资产</div>
-              <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
-            </div>
-            <div>
-              <div class="text-[9px] text-terminal-dim">盈亏率</div>
-              <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
+        <template v-if="!collapsedIds.has(acc.id)">
+          <div v-for="child in getChildren(acc.id)" :key="child.id"
+               class="ml-3 rounded border border-dashed border-theme-secondary p-2 cursor-pointer transition-all text-xs"
+               :class="child.id === activePidValue
+                 ? 'border-terminal-accent/60 bg-terminal-accent/10'
+                 : 'hover:border-gray-500'"
+               @click="handleSwitch(child.id)">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1 min-w-0">
+                <span class="text-[8px] text-terminal-dim flex-shrink-0">└</span>
+                <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
+                <span class="text-[8px] text-terminal-dim">子</span>
               </div>
+              <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0"
+                      title="删除账户" @click.stop="confirmDelete(child)">✕</button>
             </div>
           </div>
-        </div>
+        </template>
       </template>
 
       <!-- 刷新按钮 -->
@@ -359,6 +339,15 @@
             <option value="special_plan">子账户</option>
           </select>
         </div>
+        <!-- 所属主账户（仅子账户显示） -->
+        <div v-if="createForm.type === 'special_plan'" class="mb-3">
+          <label class="text-[10px] text-terminal-dim">所属主账户</label>
+          <select v-model="createForm.parent_id"
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
+            <option value="">—选择主账户—</option>
+            <option v-for="p in mainAccounts" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
         <div class="flex gap-2 justify-end">
           <button @click="showCreateModal = false"
                   class="px-3 py-1 rounded border border-theme-secondary text-xs text-theme-secondary hover:text-theme-primary transition">取消</button>
@@ -425,6 +414,10 @@ function toggleCollapse(id) {
 function getChildren(parentId) {
   return (store.portfolios.value || []).filter(p => p.parent_id === parentId)
 }
+// 只遍历主账户（parent_id 为空/0/None 的）
+const mainAccounts = computed(() =>
+  (store.portfolios.value || []).filter(p => !p.parent_id)
+)
 
 // ── 删除账户 ─────────────────────────────────────────────
 const showDeleteModal = ref(false)
@@ -467,7 +460,7 @@ const sortCols = [
 ]
 
 const tradeForm = ref({ symbol: '', shares: 0, avg_cost: 0 })
-const createForm = ref({ name: '', type: 'main' })
+const createForm = ref({ name: '', type: 'main', parent_id: null })
 
 // ── 排序 ──────────────────────────────────────────────────────
 const sortedPositions = computed(() => {
@@ -503,10 +496,14 @@ async function submitTrade() {
 
 async function submitCreate() {
   if (!createForm.value.name) return
+  const body = { name: createForm.value.name, type: createForm.value.type }
+  if (createForm.value.type === 'special_plan' && createForm.value.parent_id) {
+    body.parent_id = createForm.value.parent_id
+  }
   try {
-    await store.createPortfolio(createForm.value.name, createForm.value.type)
+    await store.createPortfolio(body)
     showCreateModal.value = false
-    createForm.value = { name: '', type: 'main' }
+    createForm.value = { name: '', type: 'main', parent_id: null }
   } catch (e) {
     const msg = e.message || '创建失败'
     // 解析后端返回的具体错误信息
