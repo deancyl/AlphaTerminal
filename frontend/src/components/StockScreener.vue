@@ -6,7 +6,7 @@
       <span class="text-terminal-accent font-bold text-sm">🔍 全市场个股</span>
       <div class="flex items-center gap-2">
         <input v-model="searchQuery" type="text" placeholder="搜索代码/名称"
-               class="w-24 bg-terminal-bg border border-gray-700 rounded px-2 py-0.5 text-[9px] text-gray-200 placeholder:text-gray-600 focus:border-terminal-accent outline-none" />
+               class="w-24 bg-terminal-bg border border-theme rounded px-2 py-0.5 text-[9px] text-theme-primary placeholder:text-theme-muted focus:border-terminal-accent outline-none" />
         <span class="text-terminal-dim text-[10px]">{{ filteredStocks.length }} 只</span>
         <span class="w-1.5 h-1.5 rounded-full"
               :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
@@ -22,11 +22,11 @@
         <div class="flex items-center gap-0.5">
           <input v-model.number="flt.change_pct.min" type="number"
                  placeholder="min" step="0.1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
           <span class="text-terminal-dim">~</span>
           <input v-model.number="flt.change_pct.max" type="number"
                  placeholder="max" step="0.1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
         </div>
       </div>
 
@@ -36,11 +36,11 @@
         <div class="flex items-center gap-0.5">
           <input v-model.number="flt.turnover.min" type="number"
                  placeholder="min" step="0.1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
           <span class="text-terminal-dim">~</span>
           <input v-model.number="flt.turnover.max" type="number"
                  placeholder="max" step="0.1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
         </div>
       </div>
 
@@ -50,11 +50,11 @@
         <div class="flex items-center gap-0.5">
           <input v-model.number="flt.amount.min" type="number"
                  placeholder="亿" step="1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
           <span class="text-terminal-dim">~</span>
           <input v-model.number="flt.amount.max" type="number"
                  placeholder="亿" step="1"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
         </div>
       </div>
 
@@ -64,11 +64,11 @@
         <div class="flex items-center gap-0.5">
           <input v-model.number="flt.price.min" type="number"
                  placeholder="min" step="0.01"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
           <span class="text-terminal-dim">~</span>
           <input v-model.number="flt.price.max" type="number"
                  placeholder="max" step="0.01"
-                 class="w-full bg-terminal-bg border border-gray-700 rounded px-1 py-0.5 text-[9px] text-gray-200 focus:border-terminal-accent outline-none placeholder:text-gray-600" />
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
         </div>
       </div>
 
@@ -76,12 +76,12 @@
       <div class="flex flex-col justify-end">
         <div class="flex gap-1">
           <button @click="resetFilter"
-                  class="px-2 py-0.5 text-[9px] rounded border border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200 transition shrink-0">
+                  class="px-2 py-0.5 text-[9px] rounded border border-theme text-theme-secondary hover:border-gray-500 hover:text-theme-primary transition shrink-0">
             重置
           </button>
           <button @click="toggleFilterPanel"
                   class="px-2 py-0.5 text-[9px] rounded border transition shrink-0"
-                  :class="filterActive ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'border-gray-700 text-gray-400 hover:border-gray-500'">
+                  :class="filterActive ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'border-theme text-theme-secondary hover:border-gray-500'">
             {{ filterActive ? '过滤中' : '筛选' }}
           </button>
         </div>
@@ -92,26 +92,26 @@
     <div class="overflow-x-auto overflow-y-auto flex-1 min-h-0">
       <table class="w-full text-xs whitespace-nowrap">
         <thead class="sticky top-0 z-10 bg-terminal-panel">
-          <tr class="text-terminal-dim border-b border-gray-700">
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-8"
+          <tr class="text-terminal-dim border-b border-theme">
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8"
                 @click="setSort('seq')">#</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-[72px] shrink-0"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-[72px] shrink-0"
                 @click="setSort('name')">名称</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
                 @click="setSort('code')">代码</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
                 @click="setSort('price')">最新价</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
                 @click="setSort('chg_pct')">
               <span :class="sortClass('chg_pct')">涨跌幅 ↕</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-14"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-14"
                 @click="setSort('chg')">涨跌</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-12"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
                 @click="setSort('turnover')">
               <span :class="sortClass('turnover')">换手率</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-gray-200 w-16"
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
                 @click="setSort('amount')">
               <span :class="sortClass('amount')">成交额</span>
             </th>
@@ -119,18 +119,18 @@
         </thead>
         <tbody class="overflow-y-auto">
           <tr v-for="stock in pageStocks" :key="stock.code"
-              class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+              class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
               @click="handleClick(stock)">
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
-            <td class="py-0.5 px-0.5 text-gray-200 text-[10px] max-w-[70px] truncate" :title="stock.name">{{ stock.name }}</td>
+            <td class="py-0.5 px-0.5 text-theme-primary text-[10px] max-w-[70px] truncate" :title="stock.name">{{ stock.name }}</td>
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[62px]">{{ stock.code }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ fmtPrice(stock.price) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
-                :class="stock.chg_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+                :class="stock.chg_pct >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ fmtPct(stock.chg_pct) }}
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
-                :class="stock.chg >= 0 ? 'text-red-400' : 'text-green-400'">
+                :class="stock.chg >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ fmtChg(stock.chg) }}
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
@@ -172,16 +172,16 @@
       </span>
       <div class="flex items-center gap-1">
         <button class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="page === 1 ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+                :class="page === 1 ? 'bg-theme-tertiary text-theme-tertiary cursor-not-allowed' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
                 :disabled="page === 1" @click="prevPage">‹</button>
 
         <button v-for="p in visiblePages" :key="p"
                 class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="p === page ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+                :class="p === page ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
                 @click="goPage(p)">{{ p }}</button>
 
         <button class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="page === pages ? 'bg-gray-700 text-gray-500 cursor-not-allowed' : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+                :class="page === pages ? 'bg-theme-tertiary text-theme-tertiary cursor-not-allowed' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
                 :disabled="page === pages" @click="nextPage">›</button>
       </div>
       <span class="text-[10px] text-terminal-dim">{{ pageSize }}条/页</span>

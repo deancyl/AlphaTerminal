@@ -6,7 +6,7 @@
       <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
         <!-- 刷新成功提示 -->
-        <span v-if="showRefreshed && refreshMsg" class="text-green-400 text-[10px] animate-pulse">
+        <span v-if="showRefreshed && refreshMsg" class="text-bearish text-[10px] animate-pulse">
           {{ refreshMsg }}
         </span>
         <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
@@ -18,7 +18,7 @@
           class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
           :class="isRefreshing
             ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10 cursor-not-allowed'
-            : 'border-gray-600 text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
+            : 'border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
           :disabled="isRefreshing"
           @click="manualRefresh"
           title="刷新快讯"
@@ -45,7 +45,7 @@
         <div
           v-for="item in pagedItems"
           :key="item.id || item.title"
-          class="bg-terminal-bg rounded border border-gray-700 p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
+          class="bg-terminal-bg rounded border border-theme p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
           @click="openModal(item)"
         >
           <div class="flex items-start gap-2">
@@ -54,10 +54,10 @@
               {{ item.tag }}
             </span>
             <!-- 时间左置（固定宽度，只显示 HH:MM） -->
-            <span class="shrink-0 text-[9px] text-gray-500 w-12 text-right">{{ formatTime(item.time) }}</span>
+            <span class="shrink-0 text-[9px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
             <!-- 标题 + 来源 -->
             <div class="flex-1 min-w-0">
-              <p class="text-xs text-gray-200 leading-snug line-clamp-2">{{ item.title }}</p>
+              <p class="text-xs text-theme-primary leading-snug line-clamp-2">{{ item.title }}</p>
               <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
             </div>
           </div>
@@ -83,8 +83,8 @@
       <button
         class="px-2 py-0.5 text-[10px] rounded border transition"
         :class="currentPage === 1
-          ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
-          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+          ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
         :disabled="currentPage === 1"
         @click="prevPage">
         ‹
@@ -96,7 +96,7 @@
         class="px-2 py-0.5 text-[10px] rounded border transition"
         :class="p === currentPage
           ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
         @click="goToPage(p)">
         {{ p }}
       </button>
@@ -104,8 +104,8 @@
       <button
         class="px-2 py-0.5 text-[10px] rounded border transition"
         :class="currentPage === totalPages
-          ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed'
-          : 'bg-terminal-bg border-gray-600 text-gray-300 hover:border-terminal-accent/50'"
+          ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
         :disabled="currentPage === totalPages"
         @click="nextPage">
         ›
@@ -123,9 +123,9 @@
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <!-- 弹窗 -->
         <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
-                    bg-[#0d1117] border border-gray-600 rounded-xl shadow-2xl overflow-hidden">
+                    bg-[#0d1117] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
           <!-- Header -->
-          <div class="flex items-start justify-between p-4 border-b border-gray-700 shrink-0">
+          <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
             <div class="flex-1 pr-4">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
                 <span class="text-[11px] px-2 py-0.5 rounded" :class="tagClass(modalItem.tag)">
@@ -134,11 +134,11 @@
                 <span class="text-terminal-dim text-[11px]">{{ modalItem.time }}</span>
                 <span class="text-terminal-dim/50 text-[11px]">{{ modalItem.source }}</span>
               </div>
-              <h2 class="text-sm font-medium text-gray-100 leading-snug">{{ modalItem.title }}</h2>
+              <h2 class="text-sm font-medium text-theme-primary leading-snug">{{ modalItem.title }}</h2>
             </div>
             <button
               class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full
-                     bg-gray-700 hover:bg-gray-600 text-gray-400 hover:text-gray-200 transition"
+                     bg-theme-tertiary hover:bg-theme-tertiary text-theme-secondary hover:text-theme-primary transition"
               @click="closeModal">
               ✕
             </button>
@@ -150,22 +150,22 @@
               正文努力提取中...
             </p>
             <!-- 正文内容 -->
-            <p v-else-if="modalContent" class="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">
+            <p v-else-if="modalContent" class="text-xs text-theme-primary leading-relaxed whitespace-pre-wrap">
               {{ modalContent }}
             </p>
             <!-- 降级 -->
-            <p v-else class="text-xs text-gray-500 leading-relaxed italic">
+            <p v-else class="text-xs text-theme-tertiary leading-relaxed italic">
               （暂无正文内容，请点击来源链接查看原文）
             </p>
           </div>
           <!-- Footer -->
-          <div class="p-3 border-t border-gray-700 shrink-0 flex justify-between items-center">
+          <div class="p-3 border-t border-theme shrink-0 flex justify-between items-center">
             <a v-if="modalItem.url"
                :href="modalItem.url" target="_blank" rel="noopener"
                class="text-xs text-blue-400 hover:text-blue-300 underline hover:no-underline transition">
               🔗 {{ modalItem.url }}
             </a>
-            <span v-else class="text-xs text-gray-500 italic">（无原文链接）</span>
+            <span v-else class="text-xs text-theme-tertiary italic">（无原文链接）</span>
             <button
               class="ml-4 px-3 py-1 text-[11px] rounded bg-blue-600 hover:bg-blue-500 text-white transition shrink-0"
               @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
@@ -256,15 +256,15 @@ function formatTime(timeStr) {
   return parts.length >= 2 ? parts[1].slice(0, 5) : (timeStr.slice(0, 5))
 }
 function tagClass(tag) {
-  if (!tag) return 'bg-gray-600/30 text-gray-400'
-  if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-red-500/20 text-red-400'
+  if (!tag) return 'bg-theme-tertiary/30 text-theme-secondary'
+  if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-red-500/20 text-bullish'
   if (tag.includes('📈') || tag.includes('上涨') || tag.includes('大涨')) return 'bg-orange-500/20 text-orange-400'
-  if (tag.includes('📉')) return 'bg-green-500/20 text-green-400'
+  if (tag.includes('📉')) return 'bg-green-500/20 text-bearish'
   if (tag.includes('🌏') || tag.includes('港股') || tag.includes('宏观')) return 'bg-blue-500/20 text-blue-400'
   if (tag.includes('💎') || tag.includes('黄金') || tag.includes('央行') || tag.includes('美联储')) return 'bg-yellow-500/20 text-yellow-400'
   if (tag.includes('🖥') || tag.includes('AI') || tag.includes('特朗普')) return 'bg-purple-500/20 text-purple-400'
   if (tag.includes('🛢') || tag.includes('原油') || tag.includes('商品')) return 'bg-amber-500/20 text-amber-400'
-  return 'bg-gray-600/30 text-gray-400'
+  return 'bg-theme-tertiary/30 text-theme-secondary'
 }
 
 // ── Modal 异步加载正文 ────────────────────────────────────────────────

@@ -657,87 +657,105 @@ def fetch_index_minute_history(
     frequency: 1=1分钟, 5=5分钟(默认), 15=15分钟, 30=30分钟, 60=60分钟
     offset:    分页偏移量（每页 limit 根）
     trade_date: 指定交易日（YYYYMMDD），用于历史分时下钻
+    
+    2026-04-13 更新: 从 Eastmoney 切换到 Sina API（Eastmoney 服务不稳定）
+    Sina 支持 5/15/30/60 分钟，不支持 1 分钟
     """
-    _INDEX_SECID_MAP = {
-        "000001": "1.000001",
-        "000300": "1.000300",
-        "399001": "0.399001",
-        "399006": "0.399006",
-        "000688": "1.000688",
-    }
-    secid = _INDEX_SECID_MAP.get(symbol.upper(), _INDEX_SECID_MAP.get(symbol, f"1.{symbol}"))
-
-    # 处理指定交易日（用于历史分时下钻）
-    if trade_date:
-        beg = str(trade_date)
-        end = str(trade_date)
+    # Sina 支持的分钟数
+    if frequency not in (1, 5, 15, 30, 60):
+        frequency = 5
+    
+    # 1 分钟数据 Sina 不支持，返回空（前端应降级处理）
+    if frequency == 1:
+        logger.warning(f"[Sina] {symbol} 1分钟数据暂不支持")
+        return []
+    
+    # 将 symbol 转换为 Sina 格式（带 sh/sz 前缀）
+    symbol_clean = symbol.upper().replace('SH', '').replace('SZ', '')
+    
+    # 指数代码前缀映射
+    if symbol_clean in ('000001', '000300', '000688', '000016', '000905'):
+        sina_symbol = f"sh{symbol_clean}"
+    elif symbol_clean in ('399001', '399006', '399005'):
+        sina_symbol = f"sz{symbol_clean}"
     else:
-        # 默认拉两年数据用于分页回溯
-        beg, end = "20200101", "20991231"
-
+        # 默认根据首位判断
+        if symbol_clean.startswith('6') or symbol_clean.startswith('0'):
+            sina_symbol = f"sh{symbol_clean}"
+        else:
+            sina_symbol = f"sz{symbol_clean}"
+    
     try:
         import httpx
+        # Sina API: scale=分钟数, datalen=数据条数
         url = (
-            f"https://push2his.eastmoney.com/api/qt/stock/kline/get"
-            f"?secid={secid}"
-            f"&fields1=f1,f2,f3,f4,f5,f6"
-            f"&fields2=f51,f52,f53,f54,f55,f56,f57"
-            f"&klt={frequency}&fqt=1&beg={beg}&end={end}"
+            f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+            f"CN_MarketData.getKLineData"
+            f"?symbol={sina_symbol}"
+            f"&scale={frequency}"
+            f"&ma=no"
+            f"&datalen={min(limit + offset, 1000)}"  # Sina 限制，最多 1000 条
         )
+        
         proxies = {
             "http://": "http://192.168.1.50:7897",
             "https://": "http://192.168.1.50:7897",
         }
-        # 重试 3 次，处理 Eastmoney 服务端不稳定导致的断连
-        obj = None
-        for attempt in range(3):
-            try:
-                with httpx.Client(
-                    proxies=proxies,
-                    timeout=15.0,
-                    follow_redirects=True,
-                    http1=True,
-                    http2=False,
-                    limits=httpx.Limits(max_keepalive_connections=1, max_connections=1),
-                ) as client:
-                    resp = client.get(url, headers={
-                        "Referer": "https://quote.eastmoney.com/",
-                        "User-Agent": "Mozilla/5.0",
-                        "Connection": "close",
-                    })
-                    obj = resp.json()
-                    break
-            except Exception as e:
-                if attempt == 2:
-                    logger.debug(f"[Eastmoney] {symbol} 最终失败: {type(e).__name__}")
-                    return []  # 失败时返回空数组，不抛异常
-                logger.debug(f"[Eastmoney] {symbol} 第{attempt+1}次重试")
-                time.sleep(0.5 * (attempt + 1))  # 指数退避
-        klines = obj.get("data", {}).get("klines", [])
+        
+        # 重试逻辑
+        data = None
+        for use_proxy in [True, False]:
+            _proxies = proxies if use_proxy else None
+            for attempt in range(2 if use_proxy else 3):
+                try:
+                    with httpx.Client(
+                        proxies=_proxies,
+                        timeout=15.0,
+                        follow_redirects=True,
+                        http1=True,
+                        http2=False,
+                    ) as client:
+                        resp = client.get(url, headers={
+                            "Referer": "https://finance.sina.com.cn/",
+                            "User-Agent": "Mozilla/5.0",
+                        })
+                        # Sina 返回的是 JSON 数组字符串，需要解析
+                        text = resp.text
+                        if text and text != 'null':
+                            data = resp.json()
+                        break
+                except Exception as e:
+                    logger.debug(f"[Sina] {symbol} {'代理' if use_proxy else '直连'}第{attempt+1}次重试: {type(e).__name__}")
+                    time.sleep(0.5 * (attempt + 1))
+            if data is not None:
+                break
+        
+        if data is None or not isinstance(data, list):
+            logger.warning(f"[Sina] {symbol} 无数据返回")
+            return []
+        
+        # 解析 Sina 数据格式
         rows = []
-        for kl in klines:
-            parts = kl.split(",")
-            if len(parts) < 6:
-                continue
+        for item in data:
             try:
                 rows.append({
-                    "time":     parts[0],
-                    "open":     float(parts[1]),
-                    "close":    float(parts[2]),
-                    "high":     float(parts[3]),
-                    "low":      float(parts[4]),
-                    "volume":   float(parts[5]),
-                    "price":    float(parts[2]),
+                    "time":     item.get("day", ""),
+                    "open":     float(item.get("open", 0)),
+                    "close":    float(item.get("close", 0)),
+                    "high":     float(item.get("high", 0)),
+                    "low":      float(item.get("low", 0)),
+                    "volume":   float(item.get("volume", 0)),
+                    "price":    float(item.get("close", 0)),
                     "timestamp": int(
                         __import__("time").mktime(
-                            __import__("time").strptime(parts[0], "%Y-%m-%d %H:%M")
-                        )
+                            __import__("time").strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
+                        ) * 1000  # 毫秒时间戳
                     ),
                 })
-            except (ValueError, IndexError, OSError):
+            except (ValueError, IndexError, OSError, TypeError):
                 continue
-
-        # 计算 change_pct：Eastmoney 已按时间升序返回，相邻 close 即为 prev_close
+        
+        # 计算 change_pct
         prev_close = None
         for r in rows:
             close = r["close"]
@@ -749,18 +767,15 @@ def fetch_index_minute_history(
             prev_close = close
 
         # 分页：Eastmoney 已按升序（ oldest → newest）返回
-        # offset=0 时取最近 limit 条（多取的 1 条已在 pct 计算后排除）
-        # offset>0 时从历史段分页
         total = len(rows)
         if offset > 0:
             rows = rows[offset:offset + limit]
         elif limit:
             rows = rows[-limit:]   # 保留最后 limit 条（最新数据）
-        rows = rows[offset:offset + limit]
-        logger.info(f"[Eastmoney] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
+        logger.info(f"[Sina] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows
     except Exception as e:
-        logger.warning(f"[Eastmoney] fetch_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
+        logger.warning(f"[Sina] fetch_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
         return []
 
 
@@ -1025,7 +1040,7 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
 
     # 指数标准化因子 - 移除所有数值标准化，仅保留字段映射转换
     # 彻底删除 normalization_factors 和相关标准化代码
-    
+
     # 获取数据源名称并标准化符号
     symbol_name = {
         "ixic": "纳斯达克", "usixic": "纳斯达克",
@@ -1071,7 +1086,7 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
                     low    = float(day["3. low"])
                     close  = float(day["4. close"])
                     vol    = float(day["5. volume"])
-                    
+
                     pct    = (close - prev_close) / prev_close * 100 if prev_close else 0.0
                     rows.append({
                         "symbol":     symbol.lower(),
@@ -1251,14 +1266,14 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
                 for i in range(1, len(all_rows)):
                     prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
                     all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
-                
+
                 try:
                     from app.db import buffer_insert_daily
                     buffer_insert_daily(all_rows)
                     logger.info(f"[AkShare HK] 恒生指数入库成功: {len(all_rows)} 条")
                 except Exception as db_err:
                     logger.warning(f"[AkShare HK] DB写入失败（不影响返回）: {db_err}")
-                
+
                 return all_rows
             else:
                 logger.warning("[AkShare HK] 无数据返回或超时")
@@ -1295,7 +1310,7 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
                 for i in range(1, len(all_rows)):
                     prev = all_rows[i-1]["close"]; curr = all_rows[i]["close"]
                     all_rows[i]["change_pct"] = round((curr - prev) / prev * 100, 4) if prev else 0.0
-                
+
                 # 直接写入 DB，不抛异常（即使 DB 锁失败也不阻断返回）
                 try:
                     from app.db import buffer_insert_daily
@@ -1303,7 +1318,7 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
                     logger.info(f"[AkShare US] {clean_sym} 入库成功: {len(all_rows)} 条")
                 except Exception as db_err:
                     logger.warning(f"[AkShare US] DB写入失败（不影响返回）: {db_err}")
-                
+
                 # 无论如何都返回数据（即使 DB 写入失败，用户仍能看到图表）
                 return all_rows
             else:
@@ -1375,7 +1390,7 @@ def fetch_all_china_stocks(max_pages=60):
     }
     all_rows = []
     page_size = 100
-    
+
     for page in range(1, max_pages + 1):
         try:
             url = (
@@ -1386,11 +1401,11 @@ def fetch_all_china_stocks(max_pages=60):
             resp = requests.get(url, headers=headers, timeout=10)
             resp.encoding = 'gbk'
             items = resp.json()
-            
+
             if not items or not isinstance(items, list):
                 logger.debug(f"[DataFetcher] 全量股票第{page}页为空，停止")
                 break
-            
+
             for item in items:
                 all_rows.append({
                     'symbol': str(item.get('symbol', '')),
@@ -1409,19 +1424,19 @@ def fetch_all_china_stocks(max_pages=60):
                     'low':     float(item.get('low') or 0),
                     'open':    float(item.get('open') or 0),
                 })
-            
+
             logger.debug(f"[DataFetcher] 全量股票第{page}页: +{len(items)} = {len(all_rows)} 总数")
-            
+
             if len(items) < page_size:
                 break  # 最后一页
-            
+
             time.sleep(0.3)  # 避免请求过快
-            
+
         except Exception as e:
             logger.warning(f"[DataFetcher] 全量股票第{page}页失败: {e}")
             time.sleep(1)
             continue
-    
+
     logger.info(f"[DataFetcher] 全量股票抓取完成: {len(all_rows)} 只")
     return all_rows
 
@@ -1434,29 +1449,29 @@ def fetch_today_daily_from_sina(symbol: str) -> dict:
     """
     # 指数代码
     sina_code = f"s_{'sh' if symbol.startswith('6') or symbol in ('000001','000300','000688') else 'sz'}{symbol}"
-    
+
     url = f"https://hq.sinajs.cn/list={sina_code}"
-    
+
     # 使用环境变量中的代理
     proxies = None
     if os.environ.get("http_proxy"):
         proxies = {"http": os.environ["http_proxy"], "https": os.environ["https_proxy"]}
-    
+
     try:
         resp = httpx.get(url, timeout=5.0, proxies=proxies, headers={"Referer": "https://finance.sina.com.cn"})
         raw = resp.text
-        
+
         if "=" not in raw:
             return None
-            
+
         m = re.search(r'= "(.+)"', raw)
         if not m:
             return None
-            
+
         parts = m.group(1).split(",")
         if len(parts) < 11:
             return None
-            
+
         import time
         return {
             "symbol": symbol,
@@ -1477,7 +1492,7 @@ def fetch_today_daily_from_sina(symbol: str) -> dict:
 def refresh_today_daily_all():
     """刷新所有指数的当日K线"""
     from app.db import buffer_insert_daily
-    
+
     for symbol in ["000001", "000300", "399001", "399006", "000688"]:
         data = fetch_today_daily_from_sina(symbol)
         if data and data.get("close"):
@@ -1495,22 +1510,22 @@ def fetch_today_kline_from_minute(symbol: str) -> dict:
         rows = fetch_index_minute_history(symbol, limit=500, frequency=5)
         if not rows:
             return None
-            
+
         # 找到今日数据
         today = time.strftime("%Y-%m-%d")
         today_rows = [r for r in rows if str(r.get("time", "")).startswith(today)]
-        
+
         if not today_rows:
-            # 如果没有今日数据，使用最新的分时数据
-            today_rows = [rows[-1]]
-            
+            # 非交易日无数据，不返回（避免把历史数据包装成当日数据写入DB）
+            return None
+
         # 聚合OHLC
         opens = [r.get("open", 0) for r in today_rows]
         highs = [r.get("high", 0) for r in today_rows]
         lows = [r.get("low", 0) for r in today_rows]
         closes = [r.get("close", 0) for r in today_rows]
         volumes = [r.get("volume", 0) for r in today_rows]
-        
+
         return {
             "symbol": symbol,
             "date": today,
@@ -1550,23 +1565,23 @@ def _fetch_sina_realtime(symbol: str) -> dict:
 def refresh_today_from_minute():
     """从分时数据刷新当日日K（分时失败时使用Sina实时价更新收盘价）"""
     from app.db import buffer_insert_daily, get_daily_history
-    
+
     for symbol in ["000001", "000300", "399001", "399006", "000688"]:
         data = fetch_today_kline_from_minute(symbol)
-        
+
         # 方案1: 分时数据聚合成功
         if data and data.get("close"):
             buffer_insert_daily([data])
             logger.info(f"[TodayMinute] {symbol}: O={data['open']:.2f} H={data['high']:.2f} L={data['low']:.2f} C={data['close']:.2f}")
             continue
-        
+
         # 方案2: 分时失败，但已有当日日K数据 → 用Sina最新价更新收盘
         today = time.strftime("%Y-%m-%d")
         today_rows = get_daily_history(symbol, limit=1, offset=0)
         today_row = None
         if today_rows and str(today_rows[0].get("date", "")) == today:
             today_row = today_rows[0]
-        
+
         sina = _fetch_sina_realtime(symbol)
         if today_row and sina and sina.get("price"):
             today_row["close"] = sina["price"]
@@ -1580,7 +1595,7 @@ def refresh_today_from_minute():
             buffer_insert_daily([today_row])
             logger.info(f"[TodaySina] {symbol}: O={today_row['open']} H={today_row['high']} L={today_row['low']} C={today_row['close']}")
             continue
-        
+
         logger.debug(f"[TodayDaily] {symbol}: 无可用数据源")
 
 
@@ -1593,13 +1608,13 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
     """
     import time as t
     from datetime import datetime, timedelta
-    
+
     try:
         # 读取最近60天日K线
         rows = get_daily_history(symbol, limit=60)
         if not rows:
             return []
-        
+
         # 按周/月分组
         grouped = {}
         for r in rows:
@@ -1610,11 +1625,11 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
                 key = week_start.strftime("%Y-%m-%d")
             else:  # monthly
                 key = f"{dt.year}-{dt.month:02d}-01"
-            
+
             if key not in grouped:
                 grouped[key] = []
             grouped[key].append(r)
-        
+
         # 聚合
         result = []
         for key in sorted(grouped.keys(), reverse=True)[:10]:
@@ -1624,7 +1639,7 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
             lows = [g.get("low", 0) for g in group if g.get("low")]
             closes = [g.get("close", 0) for g in group if g.get("close")]
             volumes = [g.get("volume", 0) for g in group if g.get("volume")]
-            
+
             if opens and closes:
                 result.append({
                     "symbol": symbol,
@@ -1637,7 +1652,7 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
                     "volume": sum(volumes),
                     "timestamp": int(t.time()),
                 })
-        
+
         return result
     except Exception as e:
         return []
@@ -1646,15 +1661,15 @@ def fetch_period_klines_from_daily(symbol: str, period: str) -> list[dict]:
 def refresh_period_klines():
     """刷新周线和月线"""
     from app.db import buffer_insert_periodic
-    
+
     for sym in ["000001", "000300", "399001", "399006", "000688"]:
         # 周线
         weekly = fetch_period_klines_from_daily(sym, "weekly")
         if weekly:
             buffer_insert_periodic(weekly)
             logger.info(f"[Period] {sym} weekly: {len(weekly)} bars")
-        
-        # 月线  
+
+        # 月线
         monthly = fetch_period_klines_from_daily(sym, "monthly")
         if monthly:
             buffer_insert_periodic(monthly)

@@ -3,7 +3,7 @@
   <Teleport to="body">
     <div
       v-if="ui.klineFullscreen"
-      class="fixed inset-0 w-screen h-screen bg-[#0a0e17] flex flex-col overflow-hidden"
+      class="fixed inset-0 w-screen h-screen bg-terminal-bg flex flex-col overflow-hidden"
       style="z-index: 99999 !important;"
     >
       <FullscreenKline
@@ -23,11 +23,11 @@
   </Teleport>
 
   <!-- 全局错误遮罩 -->
-  <div v-if="hasError" class="fixed inset-0 z-[99999] flex items-center justify-center bg-[#0a0e17]">
+  <div v-if="hasError" class="fixed inset-0 z-[99999] flex items-center justify-center bg-terminal-bg">
     <div class="text-center p-8">
       <div class="text-6xl mb-4">⚠️</div>
-      <h1 class="text-xl text-red-400 mb-2">应用出现错误</h1>
-      <p class="text-gray-400 text-sm mb-4 max-w-md">{{ errorMessage }}</p>
+      <h1 class="text-xl text-terminal-accent mb-2">应用出现错误</h1>
+      <p class="text-terminal-dim text-sm mb-4 max-w-md">{{ errorMessage }}</p>
       <button 
         class="px-6 py-2 bg-terminal-accent text-white rounded hover:bg-terminal-accent/80 transition"
         @click="clearError"
@@ -55,11 +55,11 @@
       :style="{ width: isCopilotOpen ? 'calc(100% - 340px)' : '100%' }"
     >
       <!-- 顶部状态栏 -->
-      <header class="h-12 flex items-center justify-between px-4 border-b border-gray-800 bg-terminal-panel/80 shrink-0">
+      <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
         <div class="flex items-center gap-3">
           <!-- ☰ 侧边栏展开按钮 -->
           <button
-            class="w-7 h-7 flex items-center justify-center rounded text-gray-400 hover:text-terminal-accent transition-colors text-lg"
+            class="w-7 h-7 flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
             @click="isSidebarOpen = !isSidebarOpen"
             title="切换侧边栏"
           >
@@ -103,23 +103,23 @@
         <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
           <!-- 风向标骨架 -->
           <div class="grid grid-cols-4 gap-2">
-            <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-panel border border-gray-700"></div>
+            <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-panel border border-theme"></div>
           </div>
           <!-- 新闻/板块骨架 -->
           <div class="grid grid-cols-2 gap-2">
-            <div class="h-32 rounded bg-terminal-panel border border-gray-700"></div>
-            <div class="h-32 rounded bg-terminal-panel border border-gray-700"></div>
+            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
+            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
           </div>
           <!-- K线骨架 -->
-          <div class="h-48 rounded bg-terminal-panel border border-gray-700"></div>
+          <div class="h-48 rounded bg-terminal-panel border border-theme"></div>
           <div class="text-terminal-dim text-xs text-center">正在加载市场数据...</div>
         </div>
 
         <!-- F2修复: 加载错误提示 -->
         <div v-if="loadError && !isInitialLoading" 
-             class="mb-2 px-3 py-2 rounded border border-red-800 bg-red-900/30 text-red-400 text-xs flex items-center justify-between">
+             class="mb-2 px-3 py-2 rounded border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between">
           <span>⚠️ 数据加载失败: {{ loadError }}</span>
-          <button @click="fetchMarketData" class="px-2 py-0.5 bg-red-800 rounded text-red-300 hover:bg-red-700">重试</button>
+          <button @click="fetchMarketData" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40">重试</button>
         </div>
 
         <!-- 股票行情（默认） -->
@@ -148,7 +148,7 @@
     <!-- ━━━ 右侧 Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <aside
       v-show="isCopilotOpen"
-      class="flex-shrink-0 flex flex-col bg-terminal-panel border-l border-gray-800 transition-all duration-300 ease-in-out overflow-hidden"
+      class="flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden"
       style="width: 340px; max-width: 340px;"
     >
       <CopilotSidebar
@@ -183,9 +183,13 @@ import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
+import { useTheme } from './composables/useTheme.js'
 import { fetchApiBatch } from './utils/apiClient.js'
 
 const { ui } = useUiStore()
+
+// 初始化主题系统（必须在组件挂载前调用）
+const { theme: currentTheme, isDark } = useTheme()
 
 // 全局错误处理
 const hasError = ref(false)
@@ -351,7 +355,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0a0e17;
+  background: var(--bg-primary);
 }
 .error-content {
   text-align: center;
@@ -363,19 +367,19 @@ onUnmounted(() => {
 }
 .error-title {
   font-size: 1.25rem;
-  color: #ef4444;
+  color: var(--accent-primary);
   margin-bottom: 0.5rem;
 }
 .error-message {
-  color: #9ca3af;
+  color: var(--text-secondary);
   font-size: 0.875rem;
   margin-bottom: 1.5rem;
   max-width: 400px;
 }
 .error-retry {
   padding: 0.5rem 1.5rem;
-  background: #fbbf24;
-  color: #000;
+  background: var(--accent-primary);
+  color: var(--bg-primary);
   border: none;
   border-radius: 0.375rem;
   cursor: pointer;

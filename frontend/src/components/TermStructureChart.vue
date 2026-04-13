@@ -1,14 +1,14 @@
 <template>
   <div class="w-full h-full relative flex flex-col" style="min-height: 120px">
     <!-- 顶部标签 -->
-    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700 bg-terminal-bg/60">
+    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
       <span class="text-[10px] font-mono text-terminal-dim">📐 期限结构</span>
-      <span class="text-[10px] font-mono text-gray-600">|</span>
+      <span class="text-[10px] font-mono text-theme-muted">|</span>
       <span class="text-[10px] font-mono text-terminal-dim">{{ symbolName }}</span>
-      <span class="text-[10px] font-mono text-gray-600">|</span>
+      <span class="text-[10px] font-mono text-theme-muted">|</span>
       <span
         class="text-[10px] font-mono font-medium"
-        :class="curveType === 'Contango' ? 'text-green-400' : 'text-red-400'"
+        :class="curveType === 'Contango' ? 'text-bearish' : 'text-bullish'"
       >{{ curveType }}</span>
       <span class="flex-1" />
       <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>
@@ -16,7 +16,7 @@
 
     <!-- 错误 / 加载 / 空数据 -->
     <div v-if="props.hasError" class="flex-1 flex items-center justify-center">
-      <span class="text-red-400 text-xs">{{ error || '加载失败' }}</span>
+      <span class="text-bullish text-xs">{{ error || '加载失败' }}</span>
     </div>
     <div v-else-if="props.isLoading" class="flex-1 flex items-center justify-center">
       <span class="text-terminal-dim text-xs">加载中…</span>

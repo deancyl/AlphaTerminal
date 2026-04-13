@@ -2,7 +2,7 @@
   <div class="flex h-full overflow-hidden bg-terminal-bg">
 
     <!-- ═══ 左侧边栏：账户选择 + 总览 ════════════════════════ -->
-    <div class="w-44 shrink-0 flex flex-col gap-1 p-2 border-r border-gray-700 overflow-y-auto">
+    <div class="w-44 shrink-0 flex flex-col gap-1 p-2 border-r border-theme overflow-y-auto">
 
       <!-- 标题 -->
       <div class="flex items-center justify-between mb-1">
@@ -18,27 +18,27 @@
            class="rounded border p-2 cursor-pointer transition-all text-xs"
            :class="acc.id === store.activePid
              ? 'border-terminal-accent/60 bg-terminal-accent/10'
-             : 'border-gray-700 hover:border-gray-500'"
+             : 'border-theme hover:border-gray-500'"
            @click="handleSwitch(acc.id)">
         <div class="flex items-center justify-between">
-          <span class="text-gray-200 font-medium">{{ acc.name }}</span>
+          <span class="text-theme-primary font-medium">{{ acc.name }}</span>
           <span class="text-[9px] text-terminal-dim">{{ acc.type === 'main' ? '主账户' : '子账户' }}</span>
         </div>
         <!-- 实时总览（仅选中账户显示） -->
         <div v-if="acc.id === store.activePid && store.pnl" class="mt-1.5 grid grid-cols-2 gap-x-1">
           <div>
             <div class="text-[9px] text-terminal-dim">总资产</div>
-            <div class="text-[10px] font-mono text-gray-200">{{ fmtYuan(store.totalValue) }}</div>
+            <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
           </div>
           <div>
             <div class="text-[9px] text-terminal-dim">累计盈亏</div>
-            <div class="text-[10px] font-mono" :class="store.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'">
+            <div class="text-[10px] font-mono" :class="store.totalPnl >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ store.totalPnl >= 0 ? '+' : '' }}{{ fmtYuan(store.totalPnl) }}
             </div>
           </div>
           <div class="col-span-2">
             <div class="text-[9px] text-terminal-dim">盈亏率</div>
-            <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'">
+            <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
             </div>
           </div>
@@ -47,7 +47,7 @@
 
       <!-- 刷新按钮 -->
       <button @click="handleRefresh"
-              class="mt-1 w-full py-1 rounded border border-gray-700 text-[10px] text-terminal-dim hover:border-terminal-accent/40 hover:text-gray-300 transition">
+              class="mt-1 w-full py-1 rounded border border-theme text-[10px] text-terminal-dim hover:border-terminal-accent/40 hover:text-theme-primary transition">
         🔄 刷新
       </button>
 
@@ -58,52 +58,52 @@
       </div>
 
       <!-- 风险指标面板 -->
-      <div v-if="store.pnl && riskMetrics" class="mt-2 p-2 rounded border border-gray-700 bg-terminal-panel/50">
+      <div v-if="store.pnl && riskMetrics" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
         <div class="text-[9px] text-terminal-dim mb-1">📊 风险指标</div>
         <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[9px]">
           <div>
             <span class="text-terminal-dim">波动率</span>
-            <div class="font-mono" :class="riskMetrics.volatility > 0.25 ? 'text-red-400' : riskMetrics.volatility > 0.15 ? 'text-yellow-400' : 'text-green-400'">
+            <div class="font-mono" :class="riskMetrics.volatility > 0.25 ? 'text-bullish' : riskMetrics.volatility > 0.15 ? 'text-yellow-400' : 'text-bearish'">
               {{ riskMetrics.volatility }}%
             </div>
           </div>
           <div>
             <span class="text-terminal-dim">夏普比率</span>
-            <div class="font-mono" :class="riskMetrics.sharpe >= 1 ? 'text-green-400' : riskMetrics.sharpe > 0 ? 'text-yellow-400' : 'text-red-400'">
+            <div class="font-mono" :class="riskMetrics.sharpe >= 1 ? 'text-bearish' : riskMetrics.sharpe > 0 ? 'text-yellow-400' : 'text-bullish'">
               {{ riskMetrics.sharpe }}
             </div>
           </div>
           <div>
             <span class="text-terminal-dim">最大回撤</span>
-            <div class="font-mono text-red-400">{{ riskMetrics.maxDrawdown }}%</div>
+            <div class="font-mono text-bullish">{{ riskMetrics.maxDrawdown }}%</div>
           </div>
           <div>
             <span class="text-terminal-dim">年化收益</span>
-            <div class="font-mono" :class="riskMetrics.annualReturn >= 0 ? 'text-red-400' : 'text-green-400'">
+            <div class="font-mono" :class="riskMetrics.annualReturn >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ riskMetrics.annualReturn >= 0 ? '+' : '' }}{{ riskMetrics.annualReturn }}%
             </div>
           </div>
           <div class="col-span-2 mt-0.5">
             <span class="text-terminal-dim">持仓集中度</span>
-            <div class="font-mono text-gray-300">
+            <div class="font-mono text-theme-primary">
               Top3 {{ riskMetrics.top3Concentration }}% | Top5 {{ riskMetrics.top5Concentration }}%
             </div>
           </div>
           <div class="col-span-2">
             <span class="text-terminal-dim">β (vs沪深300)</span>
-            <div class="font-mono text-gray-300">{{ riskMetrics.portfolioBeta }}</div>
+            <div class="font-mono text-theme-primary">{{ riskMetrics.portfolioBeta }}</div>
           </div>
         </div>
       </div>
 
       <!-- 行业归因 -->
-      <div v-if="sectorAttribution && sectorAttribution.length > 0" class="mt-2 p-2 rounded border border-gray-700 bg-terminal-panel/50">
+      <div v-if="sectorAttribution && sectorAttribution.length > 0" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
         <div class="text-[9px] text-terminal-dim mb-1">🏭 行业分布</div>
         <div class="space-y-0.5 max-h-24 overflow-y-auto">
           <div v-for="s in sectorAttribution" :key="s.name" class="flex items-center justify-between text-[9px]">
-            <span class="text-gray-300 truncate max-w-[60px]">{{ s.name }}</span>
+            <span class="text-theme-primary truncate max-w-[60px]">{{ s.name }}</span>
             <div class="flex items-center gap-1">
-              <div class="w-12 h-1 bg-gray-700 rounded-full overflow-hidden">
+              <div class="w-12 h-1 bg-theme-tertiary rounded-full overflow-hidden">
                 <div class="h-full rounded-full" :class="s.weight > 20 ? 'bg-red-500/60' : s.weight > 10 ? 'bg-yellow-500/60' : 'bg-green-500/60'"
                      :style="{ width: Math.min(s.weight, 100) + '%' }"></div>
               </div>
@@ -118,7 +118,7 @@
     <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       <!-- 操作栏 -->
-      <div class="flex items-center gap-2 px-3 py-1.5 border-b border-gray-700 shrink-0">
+      <div class="flex items-center gap-2 px-3 py-1.5 border-b border-theme shrink-0">
         <span class="text-xs text-terminal-dim">
           {{ store.activePortfolio?.name }} — 持仓 {{ store.positions.length }} 只
         </span>
@@ -126,7 +126,7 @@
           <span class="text-terminal-dim">排序:</span>
           <button v-for="col in sortCols" :key="col.key"
                   class="px-1.5 py-0.5 rounded border transition"
-                  :class="sortKey === col.key ? 'border-terminal-accent/50 text-terminal-accent' : 'border-gray-700 text-gray-400 hover:border-gray-500'"
+                  :class="sortKey === col.key ? 'border-terminal-accent/50 text-terminal-accent' : 'border-theme text-theme-secondary hover:border-gray-500'"
                   @click="setSort(col.key)">
             {{ col.label }}
           </button>
@@ -136,7 +136,7 @@
           + 调仓
         </button>
         <button @click="downloadReport"
-                class="px-3 py-1 rounded border border-gray-600 text-gray-400 text-[10px] hover:border-gray-500 hover:text-gray-300 transition">
+                class="px-3 py-1 rounded border border-theme-secondary text-theme-secondary text-[10px] hover:border-gray-500 hover:text-theme-primary transition">
           📥 报告
         </button>
       </div>
@@ -145,7 +145,7 @@
       <div class="flex-1 overflow-y-auto">
         <table class="w-full text-[10px]">
           <thead class="sticky top-0 z-10 bg-terminal-panel text-terminal-dim">
-            <tr class="border-b border-gray-700">
+            <tr class="border-b border-theme">
               <th class="text-left py-1 px-2">代码</th>
               <th class="text-left py-1 px-2">名称</th>
               <th class="text-right py-1 px-2">持仓(股)</th>
@@ -159,18 +159,18 @@
           </thead>
           <tbody>
             <tr v-for="pos in sortedPositions" :key="pos.symbol"
-                class="border-b border-gray-800 hover:bg-white/4 cursor-pointer transition"
+                class="border-b border-theme-secondary hover:bg-white/4 cursor-pointer transition"
                 @click="openTrade(pos)">
               <td class="py-1 px-2 text-terminal-dim font-mono">{{ pos.symbol }}</td>
-              <td class="py-1 px-2 text-gray-200">{{ pos.symbol }}</td>
+              <td class="py-1 px-2 text-theme-primary">{{ pos.symbol }}</td>
               <td class="py-1 px-2 text-right font-mono">{{ pos.shares }}</td>
-              <td class="py-1 px-2 text-right font-mono text-gray-300">{{ pos.avg_cost }}</td>
-              <td class="py-1 px-2 text-right font-mono text-gray-300">{{ pos.price }}</td>
-              <td class="py-1 px-2 text-right font-mono text-gray-200">{{ fmtYuan(pos.market_value) }}</td>
-              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl >= 0 ? 'text-red-400' : 'text-green-400'">
+              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ pos.avg_cost }}</td>
+              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ pos.price }}</td>
+              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ fmtYuan(pos.market_value) }}</td>
+              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl >= 0 ? 'text-bullish' : 'text-bearish'">
                 {{ pos.pnl >= 0 ? '+' : '' }}{{ fmtYuan(pos.pnl) }}
               </td>
-              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl_pct >= 0 ? 'text-bullish' : 'text-bearish'">
                 {{ pos.pnl_pct >= 0 ? '+' : '' }}{{ pos.pnl_pct }}%
               </td>
               <td class="py-1 px-2 text-right text-terminal-dim">
@@ -189,8 +189,8 @@
 
     <!-- ═══ 调仓弹窗 ══════════════════════════════════════════ -->
     <div v-if="showTradeModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-terminal-panel border border-gray-600 rounded-xl w-80 p-4 shadow-2xl">
-        <div class="text-sm font-bold text-gray-200 mb-3">
+      <div class="bg-terminal-panel border border-theme-secondary rounded-xl w-80 p-4 shadow-2xl">
+        <div class="text-sm font-bold text-theme-primary mb-3">
           {{ tradeTarget ? '调整持仓' : '新建仓位' }}
         </div>
 
@@ -198,26 +198,26 @@
         <div class="mb-2">
           <label class="text-[10px] text-terminal-dim">股票代码</label>
           <input v-model="tradeForm.symbol" type="text" placeholder="如 600519"
-                 class="mt-1 w-full bg-terminal-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-terminal-accent" />
+                 class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
         </div>
 
         <!-- 股数 -->
         <div class="mb-2">
           <label class="text-[10px] text-terminal-dim">持仓股数（填 0 则清仓）</label>
           <input v-model.number="tradeForm.shares" type="number" min="0" placeholder="0"
-                 class="mt-1 w-full bg-terminal-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-terminal-accent" />
+                 class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
         </div>
 
         <!-- 成本价 -->
         <div class="mb-3">
           <label class="text-[10px] text-terminal-dim">成本价（元）</label>
           <input v-model.number="tradeForm.avg_cost" type="number" min="0" step="0.001" placeholder="0.00"
-                 class="mt-1 w-full bg-terminal-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-terminal-accent" />
+                 class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
         </div>
 
         <div class="flex gap-2 justify-end">
           <button @click="showTradeModal = false"
-                  class="px-3 py-1 rounded border border-gray-600 text-xs text-gray-400 hover:text-gray-200 transition">
+                  class="px-3 py-1 rounded border border-theme-secondary text-xs text-theme-secondary hover:text-theme-primary transition">
             取消
           </button>
           <button @click="submitTrade"
@@ -230,24 +230,24 @@
 
     <!-- ═══ 新建账户弹窗 ══════════════════════════════════════ -->
     <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-terminal-panel border border-gray-600 rounded-xl w-72 p-4 shadow-2xl">
-        <div class="text-sm font-bold text-gray-200 mb-3">新建账户</div>
+      <div class="bg-terminal-panel border border-theme-secondary rounded-xl w-72 p-4 shadow-2xl">
+        <div class="text-sm font-bold text-theme-primary mb-3">新建账户</div>
         <div class="mb-2">
           <label class="text-[10px] text-terminal-dim">账户名称</label>
           <input v-model="createForm.name" type="text" placeholder="如：教育基金"
-                 class="mt-1 w-full bg-terminal-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 outline-none focus:border-terminal-accent" />
+                 class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
         </div>
         <div class="mb-3">
           <label class="text-[10px] text-terminal-dim">账户类型</label>
           <select v-model="createForm.type"
-                  class="mt-1 w-full bg-terminal-bg border border-gray-600 rounded px-2 py-1 text-xs text-gray-200 outline-none">
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
             <option value="main">主账户</option>
             <option value="special_plan">子账户</option>
           </select>
         </div>
         <div class="flex gap-2 justify-end">
           <button @click="showCreateModal = false"
-                  class="px-3 py-1 rounded border border-gray-600 text-xs text-gray-400 hover:text-gray-200 transition">取消</button>
+                  class="px-3 py-1 rounded border border-theme-secondary text-xs text-theme-secondary hover:text-theme-primary transition">取消</button>
           <button @click="submitCreate"
                   class="px-3 py-1 rounded bg-terminal-accent/20 border border-terminal-accent/50 text-xs text-terminal-accent hover:bg-terminal-accent/30 transition">创建</button>
         </div>
@@ -367,7 +367,9 @@ async function handleSwitch(pid) {
 }
 
 async function handleRefresh() {
-  if (store.activePid) await store.fetchAll(store.activePid)
+  // store.activePid 是 ref，需要取 .value
+  const pid = store.activePid?.value ?? store.activePid
+  if (pid) await store.fetchAll(pid)
 }
 
 // ── ECharts 净值曲线 ──────────────────────────────────────────
@@ -542,7 +544,9 @@ const sectorAttribution = computed(() => {
 // ── 生命周期 ─────────────────────────────────────────────────
 onMounted(async () => {
   await store.fetchPortfolios()
-  if (store.activePid) await store.fetchAll(store.activePid)
+  // store.activePid 是 ref，需要取 .value
+  const pid = store.activePid?.value ?? store.activePid
+  if (pid) await store.fetchAll(pid)
   store.startPoll(20_000)  // 每 20 秒刷新 PnL
   await nextTick()
   renderChart()

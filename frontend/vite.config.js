@@ -25,20 +25,24 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: ['gridstack'],
-    exclude: ['echarts'],   // 通过 CDN 加载，不打入 bundle
+    exclude: ['echarts'], // 通过 CDN / external 加载
   },
   build: {
     rollupOptions: {
-      external: ['echarts'], // CDN 加载，标记为 external
+      external: ['echarts'],
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('vue'))       return 'vendor-vue'
-            if (id.includes('gridstack')) return 'vendor-gridstack'
+            if (id.includes('@mlc-ai/web-llm')) return 'vendor-webllm'
+            if (id.includes('vue'))             return 'vendor-vue'
+            if (id.includes('gridstack'))       return 'vendor-gridstack'
+            if (id.includes('lightweight-charts')) return 'vendor-lwcharts'
+            if (id.includes('html2canvas'))     return 'vendor-html2canvas'
+            return 'vendor'
           }
         },
       },
     },
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 1000,
   },
 })

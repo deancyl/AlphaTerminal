@@ -1,8 +1,8 @@
 <template>
   <div class="w-full h-full relative flex flex-col" style="min-height:120px">
-    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700 bg-terminal-bg/60">
+    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
       <span class="text-[10px] font-mono text-terminal-dim">国债收益率曲线</span>
-      <span class="text-[10px] font-mono text-gray-500">|</span>
+      <span class="text-[10px] font-mono text-theme-tertiary">|</span>
       <span class="text-[10px] font-mono text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
     <div class="flex-1 relative min-h-0">

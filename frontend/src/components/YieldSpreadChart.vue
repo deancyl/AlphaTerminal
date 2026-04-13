@@ -1,16 +1,16 @@
 <template>
   <div class="w-full h-full relative flex flex-col" style="min-height: 120px">
     <!-- 顶部标签 -->
-    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-gray-700 bg-terminal-bg/60">
+    <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
       <span class="text-[10px] font-mono text-terminal-dim">📐 期限利差 (10Y-2Y)</span>
       <span
         class="text-[10px] font-mono font-medium"
-        :class="spread >= 0 ? 'text-blue-400' : 'text-red-400'"
+        :class="spread >= 0 ? 'text-blue-400' : 'text-bullish'"
       >{{ spread >= 0 ? '+' : '' }}{{ spread?.toFixed(1) ?? '--' }}bp</span>
       <span
         v-if="spread != null"
         class="text-[9px] px-1 py-0.5 rounded border text-[9px]"
-        :class="spread >= 0 ? 'border-blue-500/30 text-blue-400/70' : 'border-red-500/30 text-red-400/70'"
+        :class="spread >= 0 ? 'border-blue-500/30 text-blue-400/70' : 'border-red-500/30 text-bullish/70'"
       >{{ spread >= 0 ? '正常' : '倒挂⚠️' }}</span>
       <div class="flex-1" />
       <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>
@@ -18,7 +18,7 @@
 
     <!-- 错误 / 加载 / 空 -->
     <div v-if="hasError" class="flex-1 flex items-center justify-center">
-      <span class="text-red-400 text-xs">{{ errorMsg }}</span>
+      <span class="text-bullish text-xs">{{ errorMsg }}</span>
     </div>
     <div v-else-if="isLoading" class="flex-1 flex items-center justify-center">
       <span class="text-terminal-dim text-xs">加载中…</span>

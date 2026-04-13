@@ -2,31 +2,31 @@
   <div class="w-full h-full min-h-[120px] relative flex flex-col">
 
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
-    <div class="shrink-0 flex flex-col border-b border-gray-700/50 bg-terminal-bg/60">
+    <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
       <div class="px-2 py-1 flex items-center justify-between">
-        <span class="text-[11px] font-bold text-gray-200 tracking-wider">{{ currentName }}</span>
-        <span v-if="isLoading" class="text-[10px] font-mono text-terminal-dim animate-pulse">加载中…</span>
+        <span class="text-[11px] font-bold text-theme-primary tracking-wider">{{ currentName }}</span>
+        <span v-if="isLoading" class="text-[10px] font-mono text-theme-tertiary animate-pulse">加载中…</span>
       </div>
       <div class="flex items-center gap-3 px-2 py-1">
         <span class="text-[13px] font-mono font-medium"
-              :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+              :class="hoverBar.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
         </span>
-        <span class="text-[11px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-red-400' : 'text-green-400'">
+        <span class="text-[11px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ hoverBar.change_pct >= 0 ? '+' : '' }}{{ hoverBar.change_pct?.toFixed(2) ?? '--' }}%
         </span>
-        <span class="text-[10px] font-mono text-gray-400 ml-auto">
+        <span class="text-[10px] font-mono text-theme-secondary ml-auto">
           {{ hoverBar.time || '--' }}
         </span>
       </div>
       <template v-if="hoverBar.open != null">
         <div class="flex items-center gap-2 px-2 pb-1">
-          <span class="text-[10px] font-mono text-gray-500">开<span class="text-gray-200 ml-1">{{ hoverBar.open?.toFixed(2) }}</span></span>
-          <span class="text-[10px] font-mono text-gray-500">高<span class="text-red-300 ml-1">{{ hoverBar.high?.toFixed(2) }}</span></span>
-          <span class="text-[10px] font-mono text-gray-500">低<span class="text-green-300 ml-1">{{ hoverBar.low?.toFixed(2) }}</span></span>
-          <span class="text-[10px] font-mono text-gray-500">收<span class="text-gray-200 ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
-          <span class="text-[10px] font-mono text-gray-500 ml-auto">
-            量<span class="text-gray-200 ml-1">{{ hoverBar.volume != null ? (hoverBar.volume >= 1e8 ? (hoverBar.volume / 1e8).toFixed(2) + '亿' : (hoverBar.volume / 1e4).toFixed(2) + '万') : '--' }}</span>
+          <span class="text-[10px] font-mono text-theme-tertiary">开<span class="text-theme-primary ml-1">{{ hoverBar.open?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-theme-tertiary">高<span class="text-bullish ml-1">{{ hoverBar.high?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-theme-tertiary">低<span class="text-bearish ml-1">{{ hoverBar.low?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-theme-tertiary">收<span class="text-theme-primary ml-1">{{ hoverBar.close?.toFixed(2) }}</span></span>
+          <span class="text-[10px] font-mono text-theme-tertiary ml-auto">
+            量<span class="text-theme-primary ml-1">{{ hoverBar.volume != null ? (hoverBar.volume >= 1e8 ? (hoverBar.volume / 1e8).toFixed(2) + '亿股' : (hoverBar.volume / 1e4).toFixed(2) + '万股') : '--' }}</span>
           </span>
         </div>
       </template>
@@ -34,14 +34,14 @@
 
     <!-- ── Chart Area ─────────────────────────────────────────── -->
     <div class="flex-1 relative min-h-0">
-      <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-terminal-bg/90 rounded">
+      <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-theme/90 rounded">
         <div class="text-2xl mb-2">📊</div>
-        <div class="text-terminal-dim text-xs text-center px-4">{{ chartError }}</div>
-        <button class="mt-2 px-3 py-1 text-[10px] rounded border border-gray-600 text-terminal-dim hover:border-terminal-accent/40 transition" @click="retryChart">重试</button>
+        <div class="text-theme-tertiary text-xs text-center px-4">{{ chartError }}</div>
+        <button class="mt-2 px-3 py-1 text-[10px] rounded border border-theme text-theme-tertiary hover:border-theme-accent transition" @click="retryChart">重试</button>
       </div>
       <div v-if="isLoading" class="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
         <div class="flex gap-1 items-end opacity-40">
-          <div v-for="i in 24" :key="i" class="w-1 bg-terminal-accent rounded-t animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
+          <div v-for="i in 24" :key="i" class="w-1 bg-theme-accent rounded-t animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
         </div>
       </div>
       <div ref="chartRef" class="w-full h-full"></div>
@@ -52,6 +52,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { apiFetch } from '../utils/apiCompat.js'
+import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 
 const props = defineProps({
   symbol:     { type: String, default: '000001' },
@@ -72,9 +73,12 @@ let   resizeObserver = null
 const hoverBar      = ref({})   // Task 3: 动态 OHLCV 数据
 
 // ─────────────────────────────────────────────────────────────────
-// A股配色常量
-const UP   = '#ef232a'
-const DOWN = '#14b143'
+// A股配色常量（从主题系统中读取）
+// ─────────────────────────────────────────────────────────────────
+function getUpDown() {
+  const tc = getChartColors()
+  return { UP: tc.bullish, DOWN: tc.bearish }
+}
 
 // ─────────────────────────────────────────────────────────────────
 // 数据清洗
@@ -168,6 +172,8 @@ function calcWR(closes, highs, lows, n = 10) {
 // K线图（Task 2: 60%主图 / 20%成交量 比例）
 // ─────────────────────────────────────────────────────────────────
 function buildKLineOption(hist) {
+  const { UP, DOWN } = getUpDown()
+  const tc = getChartColors()
   // 日K: YYYY-MM-DD / 分钟K: YYYY-MM-DD HH:mm（全局统一完整日期格式）
   const times   = hist.map(h => {
     if (h.time && h.time.length >= 16) return h.time.slice(0, 16)   // YYYY-MM-DD HH:mm
@@ -207,16 +213,16 @@ function buildKLineOption(hist) {
     itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN },
     markLine: {
       silent: true, symbol: 'none',
-      lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' },
+      lineStyle: { color: tc.ma5, width: 1, type: 'dashed' },
       data: [{ yAxis: hist[hist.length - 1]?.close }],
     },
   }
 
   // ── MA 均线
   const maSeries = [
-    { name: 'MA5',  data: calcMA(closes, 5),  color: '#ffffff', width: 1 },
-    { name: 'MA10', data: calcMA(closes, 10), color: '#fbbf24', width: 1 },
-    { name: 'MA20', data: calcMA(closes, 20), color: '#c084fc', width: 1 },
+    { name: 'MA5',  data: calcMA(closes, 5),  color: tc.textPrimary, width: 1 },
+    { name: 'MA10', data: calcMA(closes, 10), color: tc.ma5, width: 1 },
+    { name: 'MA20', data: calcMA(closes, 20), color: tc.ma20, width: 1 },
   ].map(cfg => ({
     ...cfg, type: 'line', xAxisIndex: 0, yAxisIndex: 0,
     smooth: true, symbol: 'none',
@@ -227,12 +233,12 @@ function buildKLineOption(hist) {
   const bollSeries = showBOLL ? (() => {
     const { mid, upper, lower } = calcBOLL(closes)
     return [
-      { name: 'BOLL-M', data: mid,   color: '#a78bfa', width: 1.2, type: 'line', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: '#a78bfa', width: 1.2 } },
+      { name: 'BOLL-M', data: mid,   color: tc.ma20, width: 1.2, type: 'line', smooth: true, symbol: 'none',
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: tc.ma20, width: 1.2 } },
       { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: tc.ma20, width: 1, type: 'dashed' } },
       { name: 'BOLL-L', data: lower, color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
-        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: '#a78bfa', width: 1, type: 'dashed' } },
+        xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: tc.ma20, width: 1, type: 'dashed' } },
     ]
   })() : []
 
@@ -259,9 +265,9 @@ function buildKLineOption(hist) {
       const { dif, dea, macd } = calcMACD(closes)
       series.push(
         { name: 'DIF', type: 'line', data: dif, xAxisIndex: xIdx, yAxisIndex: yIdx,
-          smooth: true, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
+          smooth: true, symbol: 'none', lineStyle: { color: tc.ma10, width: 1.2 } },
         { name: 'DEA', type: 'line', data: dea, xAxisIndex: xIdx, yAxisIndex: yIdx,
-          smooth: true, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
+          smooth: true, symbol: 'none', lineStyle: { color: tc.bullishLight, width: 1.2 } },
         { name: 'MACD', type: 'bar',
           data: macd.map(v => ({ value: Math.abs(v), itemStyle: { color: v >= 0 ? UP : DOWN } })),
           xAxisIndex: xIdx, yAxisIndex: yIdx, barMaxWidth: 4 },
@@ -271,9 +277,9 @@ function buildKLineOption(hist) {
       const { k, d, j } = calcKDJ(closes, highs, lows)
       series.push(
         { name: 'K', type: 'line', data: k, xAxisIndex: xIdx, yAxisIndex: yIdx,
-          smooth: true, symbol: 'none', lineStyle: { color: '#f87171', width: 1.2 } },
+          smooth: true, symbol: 'none', lineStyle: { color: tc.bullishLight, width: 1.2 } },
         { name: 'D', type: 'line', data: d, xAxisIndex: xIdx, yAxisIndex: yIdx,
-          smooth: true, symbol: 'none', lineStyle: { color: '#60a5fa', width: 1.2 } },
+          smooth: true, symbol: 'none', lineStyle: { color: tc.ma10, width: 1.2 } },
         { name: 'J', type: 'line', data: j, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 } },
       )
@@ -285,10 +291,10 @@ function buildKLineOption(hist) {
           data: wr.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
-          lineStyle: { color: '#fb923c', width: 1.2 },
-          markLine: { silent: true, symbol: 'none', lineStyle: { color: '#4b5563', type: 'dashed', width: 1 },
+          lineStyle: { color: tc.ma5, width: 1.2 },
+          markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dashed', width: 1 },
             data: [{ yAxis: -20 }, { yAxis: -80 }],
-            label: { show: true, formatter: '{c}', fontSize: 8, color: '#6b7280' } } },
+            label: { show: true, formatter: '{c}', fontSize: 8, color: tc.chartText } } },
       )
     }
   }
@@ -296,11 +302,11 @@ function buildKLineOption(hist) {
   // ── X轴
   const xAxisBase = {
     type: 'category', data: times, boundaryGap: true,
-    axisLine: { lineStyle: { color: '#2d3748' } }, splitLine: { show: false },
+    axisLine: { lineStyle: { color: tc.borderPrimary } }, splitLine: { show: false },
   }
   const xAxis = [
     { ...xAxisBase, gridIndex: 0,
-      axisLabel: { color: '#6b7280', fontSize: 9, interval: Math.max(0, Math.floor(times.length / 5) - 1) } },
+      axisLabel: { color: tc.chartText, fontSize: 9, interval: Math.max(0, Math.floor(times.length / 5) - 1) } },
     { ...xAxisBase, gridIndex: 1, axisLabel: { show: false } },
   ]
   if (subInd) xAxis.push({ ...xAxisBase, gridIndex: 2, axisLabel: { show: false } })
@@ -310,15 +316,15 @@ function buildKLineOption(hist) {
     { type: 'value', scale: true, gridIndex: 0, position: 'left',
       min: yMin, max: yMax,
       axisLine: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 9, formatter: v => v.toFixed(0) },
-      splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } } },
+      axisLabel: { color: tc.chartText, fontSize: 9, formatter: v => v.toFixed(0) },
+      splitLine: { lineStyle: { color: tc.chartGrid, type: 'dashed' } } },
     { type: 'value', scale: true, gridIndex: 1, position: 'left',
       axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
   ]
   if (subInd) yAxis.push({ type: 'value', scale: true, gridIndex: 2, position: 'left',
     axisLine: { show: false },
-    axisLabel: { color: '#6b7280', fontSize: 9 },
-    splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } },
+    axisLabel: { color: tc.chartText, fontSize: 9 },
+    splitLine: { lineStyle: { color: tc.chartGrid, type: 'dashed' } },
     max: subInd === 'WR' ? 0 : 'auto', min: subInd === 'WR' ? -100 : 'auto',
   })
 
@@ -326,9 +332,9 @@ function buildKLineOption(hist) {
     backgroundColor: 'transparent', grid, xAxis, yAxis, series,
     tooltip: {
       trigger: 'axis', type: 'cross',
-      axisPointer: { type: 'cross', lineStyle: { color: '#9ca3af', width: 1, type: 'dashed' }, crossStyle: { color: '#9ca3af', width: 1 } },
-      backgroundColor: 'rgba(26,30,46,0.96)', borderColor: '#4b5563',
-      textStyle: { color: '#9ca3af', fontSize: 11 },
+      axisPointer: { type: 'cross', lineStyle: { color: tc.textSecondary, width: 1, type: 'dashed' }, crossStyle: { color: tc.textSecondary, width: 1 } },
+      backgroundColor: tc.tooltipBg, borderColor: tc.borderPrimary,
+      textStyle: { color: tc.textSecondary, fontSize: 11 },
       formatter(params) {
         const kp = params.find(p => p.seriesName === 'K线')
         if (!kp) return ''
@@ -337,21 +343,21 @@ function buildKLineOption(hist) {
         const chg = h.change_pct; const sign = chg >= 0 ? '+' : ''
         const col = c >= o ? UP : DOWN
         const vol = (h.volume / 1e8).toFixed(2)
-        return `<span style="color:#6b7280;font-size:10px">${kp.axisValue}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">开</span> <span style="color:#e5e7eb;font-size:11px">${o.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">高</span> <span style="color:#e5e7eb;font-size:11px">${hi.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">低</span> <span style="color:#e5e7eb;font-size:11px">${l.toFixed(2)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> <span style="color:${chg>=0?UP:DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">量</span> <span style="color:#9ca3af;font-size:11px">${vol}亿</span>`
+        return `<span style="color:${tc.chartText};font-size:10px">${kp.axisValue}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">开</span> <span style="color:${tc.textPrimary};font-size:11px">${o.toFixed(2)}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">高</span> <span style="color:${tc.textPrimary};font-size:11px">${hi.toFixed(2)}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">低</span> <span style="color:${tc.textPrimary};font-size:11px">${l.toFixed(2)}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">收</span> <span style="color:${col};font-size:11px">${c.toFixed(2)}</span> <span style="color:${chg>=0?UP:DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">量</span> <span style="color:${tc.textSecondary};font-size:11px">${vol}亿</span>`
       },
     },
     dataZoom: [
       { type: 'inside', xAxisIndex: [...Array(xAxis.length).keys()], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
-        borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)',
-        handleStyle: { color: '#60a5fa', borderColor: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-        dataBackground: { lineStyle: { color: '#374151' }, areaStyle: { color: 'rgba(59,130,246,0.06)' } } },
+        borderColor: tc.borderPrimary, fillerColor: tc.isLight ? 'rgba(24,144,255,0.15)' : 'rgba(59,130,246,0.15)',
+        handleStyle: { color: tc.accentPrimary, borderColor: tc.accentPrimary },
+        textStyle: { color: tc.chartText, fontSize: 9 },
+        dataBackground: { lineStyle: { color: tc.borderPrimary }, areaStyle: { color: tc.isLight ? 'rgba(24,144,255,0.08)' : 'rgba(59,130,246,0.08)' } } },
     ],
   }
 }
@@ -360,6 +366,8 @@ function buildKLineOption(hist) {
 // 分时图（Task 1: 动态Y轴min/max + areaStyle）
 // ─────────────────────────────────────────────────────────────────
 function buildLineOption(hist) {
+  const { UP, DOWN } = getUpDown()
+  const tc = getChartColors()
   const times   = hist.map(h => {
     if (h.time && h.time.length >= 16) return h.time.slice(0, 16)   // YYYY-MM-DD HH:mm
     if (h.date) return h.date.slice(0, 10)                           // YYYY-MM-DD
@@ -379,9 +387,15 @@ function buildLineOption(hist) {
   const yMax    = +(rawMax + pad).toFixed(2)
 
   // 均价线
+  // Task 1: 分时均价线 —— 使用累计成交额/成交量（VWAP）而非算术平均
   const avg = []
-  let sum = 0
-  for (let i = 0; i < prices.length; i++) { sum += prices[i]; avg.push(+(sum / (i + 1)).toFixed(3)) }
+  let cumPriceVol = 0
+  let cumVolume = 0
+  for (let i = 0; i < prices.length; i++) {
+    cumVolume += volumes[i]
+    cumPriceVol += prices[i] * volumes[i]
+    avg.push(cumVolume > 0 ? +(cumPriceVol / cumVolume).toFixed(3) : prices[i])
+  }
 
   const upCount  = prices.filter((p, i) => i > 0 && p > prices[i - 1]).length
   const lineColor = upCount >= prices.length / 2 ? UP : DOWN
@@ -404,7 +418,7 @@ function buildLineOption(hist) {
         },
       } },
     { name: '均价', type: 'line', data: avg, smooth: 0.3, symbol: 'none',
-      lineStyle: { color: '#fbbf24', width: 1, type: 'dashed' } },
+      lineStyle: { color: tc.ma5, width: 1, type: 'dashed' } },
   ]
 
   // 分时成交量（底部柱状）
@@ -423,27 +437,27 @@ function buildLineOption(hist) {
     ],
     xAxis: [
       { type: 'category', data: times, boundaryGap: false, gridIndex: 0,
-        axisLine: { lineStyle: { color: '#2d3748' } },
-        axisLabel: { color: '#6b7280', fontSize: 9, interval: Math.max(0, Math.floor(times.length / 6) - 1) },
+        axisLine: { lineStyle: { color: tc.borderPrimary } },
+        axisLabel: { color: tc.chartText, fontSize: 9, interval: Math.max(0, Math.floor(times.length / 6) - 1) },
         splitLine: { show: false } },
       { type: 'category', data: times, boundaryGap: false, gridIndex: 1,
-        axisLine: { lineStyle: { color: '#2d3748' } },
+        axisLine: { lineStyle: { color: tc.borderPrimary } },
         axisLabel: { show: false }, splitLine: { show: false } },
     ],
     yAxis: [
       { type: 'value', scale: true, gridIndex: 0, position: 'left',
         min: yMin, max: yMax,   // Task 1: 动态范围，不从 0 开始
         axisLine: { show: false },
-        axisLabel: { color: '#6b7280', fontSize: 9, formatter: v => v.toFixed(2) },
-        splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } } },
+        axisLabel: { color: tc.chartText, fontSize: 9, formatter: v => v.toFixed(2) },
+        splitLine: { lineStyle: { color: tc.chartGrid, type: 'dashed' } } },
       { type: 'value', scale: true, gridIndex: 1, position: 'left',
         axisLine: { show: false }, axisLabel: { show: false }, splitLine: { show: false } },
     ],
     series,
     tooltip: {
       trigger: 'axis', type: 'cross',
-      axisPointer: { lineStyle: { color: '#374151' } },
-      backgroundColor: '#1a1e2e', borderColor: '#374151', textStyle: { color: '#9ca3af', fontSize: 11 },
+      axisPointer: { lineStyle: { color: tc.borderPrimary } },
+      backgroundColor: tc.tooltipBg, borderColor: tc.borderPrimary, textStyle: { color: tc.textSecondary, fontSize: 11 },
       formatter: (params) => {
         const p = params[0]
         if (!p) return ''
@@ -451,19 +465,19 @@ function buildLineOption(hist) {
         const chg = changes[idx]; const sign = chg >= 0 ? '+' : ''
         const a = avg[idx]
         const vol = (volumes[idx] / 1e8).toFixed(2)
-        return `<span style="color:#6b7280;font-size:10px">${p.axisValue}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">价</span> <span style="color:${lineColor};font-size:11px">${(prices[idx] || 0).toFixed(3)}</span><br/>`
-          + `<span style="color:#9ca3af;font-size:10px">均</span> <span style="color:#fbbf24;font-size:11px">${a.toFixed(3)}</span><br/>`
-          + `<span style="color:${chg >= 0 ? UP : DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span> <span style="color:#6b7280;font-size:10px">量 ${vol}亿</span>`
+        return `<span style="color:${tc.chartText};font-size:10px">${p.axisValue}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">价</span> <span style="color:${lineColor};font-size:11px">${(prices[idx] || 0).toFixed(3)}</span><br/>`
+          + `<span style="color:${tc.textSecondary};font-size:10px">均</span> <span style="color:${tc.ma5};font-size:11px">${a.toFixed(3)}</span><br/>`
+          + `<span style="color:${chg >= 0 ? UP : DOWN};font-size:10px">${sign}${chg.toFixed(2)}%</span> <span style="color:${tc.chartText};font-size:10px">量 ${vol}亿</span>`
       },
     },
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100, zoomOnMouseWheel: true },
       { type: 'slider', xAxisIndex: [0], start: 90, end: 100, height: 10, bottom: 1,
-        borderColor: '#2d3748', fillerColor: 'rgba(59,130,246,0.10)',
-        handleStyle: { color: '#60a5fa', borderColor: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-        dataBackground: { lineStyle: { color: '#374151' }, areaStyle: { color: 'rgba(59,130,246,0.06)' } } },
+        borderColor: tc.borderPrimary, fillerColor: tc.isLight ? 'rgba(24,144,255,0.15)' : 'rgba(59,130,246,0.15)',
+        handleStyle: { color: tc.accentPrimary, borderColor: tc.accentPrimary },
+        textStyle: { color: tc.chartText, fontSize: 9 },
+        dataBackground: { lineStyle: { color: tc.borderPrimary }, areaStyle: { color: tc.isLight ? 'rgba(24,144,255,0.08)' : 'rgba(59,130,246,0.08)' } } },
     ],
   }
 }
@@ -594,7 +608,7 @@ function _cancelLeaveTimer() {
 async function fetchAndRender() {
   chartError.value = ''; isLoading.value = true
   try {
-    const d = await apiFetch(props.url + `&_t=${Date.now()}`)
+    const d = await apiFetch(props.url + (props.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`)
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
     // 分钟数据需要特殊处理
@@ -649,6 +663,8 @@ watch(() => props.symbol, async (sym) => {
 
 watch(() => [props.symbol, props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
 
+let unsubscribeTheme = null
+
 onMounted(async () => {
   await new Promise(r => setTimeout(r, 0))
   if (chartRef.value && window.echarts) {
@@ -658,11 +674,16 @@ onMounted(async () => {
     bindHoverEvents()
     fetchAndRender()
   }
+  unsubscribeTheme = onThemeChange(() => {
+    fetchAndRender()
+  })
 })
 
 onUnmounted(() => {
   resizeObserver?.disconnect()
   chartInstance?.dispose()
   chartInstance = null
+  unsubscribeTheme?.()
+  unsubscribeTheme = null
 })
 </script>

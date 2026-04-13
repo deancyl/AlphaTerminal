@@ -30,7 +30,7 @@
           <!-- 涨跌幅（金融红绿） -->
           <span
             class="text-[10px] font-mono font-bold leading-none mt-0.5"
-            :class="(sec.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+            :class="(sec.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
           >
             {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
           </span>
@@ -38,7 +38,7 @@
           <span
             v-if="sec.top_stock?.name"
             class="text-[8px] leading-tight mt-0.5 truncate w-full text-center"
-            :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-red-500/60' : 'text-green-500/60'"
+            :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-bullish/60' : 'text-bearish/60'"
           >
             {{ sec.top_stock.name }}
           </span>
@@ -57,10 +57,10 @@
               : 'bg-green-500/5 border-green-500/20'"
             @click="handleClick(sec)"
           >
-            <span class="text-[9px] text-gray-400 truncate w-full text-center">{{ sec.name }}</span>
+            <span class="text-[9px] text-theme-secondary truncate w-full text-center">{{ sec.name }}</span>
             <span
               class="text-[10px] font-mono font-bold"
-              :class="(sec.change_pct || 0) >= 0 ? 'text-red-400/80' : 'text-green-400/80'"
+              :class="(sec.change_pct || 0) >= 0 ? 'text-bullish/80' : 'text-bearish/80'"
             >
               {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
             </span>

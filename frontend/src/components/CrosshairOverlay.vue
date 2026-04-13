@@ -313,9 +313,9 @@ function formatTime(timestamp) {
 
 function formatVolume(vol) {
   if (vol == null) return '--'
-  if (vol >= 1e8) return (vol / 1e8).toFixed(2) + '亿'
-  if (vol >= 1e4) return (vol / 1e4).toFixed(2) + '万'
-  return vol.toString()
+  if (vol >= 1e8) return (vol / 1e8).toFixed(2) + '亿股'
+  if (vol >= 1e4) return (vol / 1e4).toFixed(2) + '万股'
+  return vol.toFixed(0) + '股'
 }
 
 function getPriceColor(price, ref) {

@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full overflow-auto gap-2 p-3">
 
     <!-- ── 顶部：收益率矩阵（利率估值表）────────────────────────── -->
-    <div class="terminal-panel border border-gray-800 rounded p-3 shrink-0">
+    <div class="terminal-panel border border-theme-secondary rounded p-3 shrink-0">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 利率估值矩阵</span>
         <div class="flex items-center gap-2">
@@ -16,14 +16,14 @@
       </div>
 
       <!-- Tab 切换：国债 / 国开 / 商A-AAA -->
-      <div class="flex border-b border-gray-700 mb-1.5">
+      <div class="flex border-b border-theme mb-1.5">
         <button
           v-for="src in SOURCES"
           :key="src.key"
           class="flex-1 py-1 text-[9px] font-medium text-center border-b-2 transition-colors"
           :class="activeSource === src.key
             ? 'border-bullish text-bullish'
-            : 'border-transparent text-terminal-dim hover:text-gray-300'"
+            : 'border-transparent text-terminal-dim hover:text-theme-primary'"
           @click="activeSource = src.key"
         >
           {{ src.label }}
@@ -33,10 +33,10 @@
       <!-- 矩阵表头 -->
       <div class="grid" :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }">
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">
           {{ SOURCES.find(s => s.key === activeSource)?.label }}
         </div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-gray-700">基点变化</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">基点变化</div>
       </div>
 
       <!-- 矩阵数据行 -->
@@ -53,11 +53,11 @@
         </div>
 
         <!-- 当前来源收益率 + 利差/隐含税率 -->
-        <div class="py-1.5 px-2 border-l border-gray-800/50 flex flex-col justify-center gap-0.5">
+        <div class="py-1.5 px-2 border-l border-theme flex flex-col justify-center gap-0.5">
           <div class="flex items-center gap-1.5">
             <span
               class="text-[11px] font-mono font-semibold leading-none"
-              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400' : 'text-green-400'"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish' : 'text-bearish'"
             >
               {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
             </span>
@@ -80,11 +80,11 @@
         </div>
 
         <!-- 基点变化 -->
-        <div class="py-1.5 px-2 border-l border-gray-800/50 flex items-center justify-between">
+        <div class="py-1.5 px-2 border-l border-theme flex items-center justify-between">
           <div class="flex flex-col items-end">
             <span
               class="text-[9px] font-mono"
-              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
             >
               {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
             </span>
@@ -110,7 +110,7 @@
       <div class="flex-1 flex flex-col gap-2">
 
         <!-- 收益率曲线 -->
-        <div class="terminal-panel border border-gray-800 rounded p-3 flex flex-col" style="flex: 2;">
+        <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col" style="flex: 2;">
           <div class="flex items-center justify-between mb-1.5 shrink-0">
             <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
             <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
@@ -130,7 +130,7 @@
         </div>
 
         <!-- 10Y-2Y 期限利差走势 -->
-        <div class="terminal-panel border border-gray-800 rounded p-3 flex flex-col" style="flex: 1; min-height: 130px;">
+        <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col" style="flex: 1; min-height: 130px;">
           <YieldSpreadChart
             :tenors10y="spreadHistory10y"
             :tenors2y="spreadHistory2y"
@@ -143,7 +143,7 @@
       </div>
 
       <!-- 右侧：活跃债券列表 -->
-      <div class="w-56 shrink-0 terminal-panel border border-gray-800 rounded p-3 flex flex-col">
+      <div class="w-56 shrink-0 terminal-panel border border-theme-secondary rounded p-3 flex flex-col">
         <div class="flex items-center justify-between mb-1.5 shrink-0">
           <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
           <span class="text-[9px] px-1 py-0.5 rounded border border-amber-500/30 text-amber-400/70">LIVE</span>
@@ -152,17 +152,17 @@
           <div
             v-for="bond in bondList"
             :key="bond.code"
-            class="flex items-center justify-between py-1 border-b border-gray-800/50 hover:bg-white/5 transition-colors cursor-pointer"
+            class="flex items-center justify-between py-1 border-b border-theme hover:bg-white/5 transition-colors cursor-pointer"
           >
             <div class="flex flex-col min-w-0">
-              <span class="text-[10px] text-gray-200 truncate">{{ bond.name }}</span>
+              <span class="text-[10px] text-theme-primary truncate">{{ bond.name }}</span>
               <span class="text-[9px] text-terminal-dim">{{ bond.code }}</span>
             </div>
             <div class="flex flex-col items-end">
-              <span class="text-[10px] font-mono text-gray-100">{{ bond.rate }}</span>
+              <span class="text-[10px] font-mono text-theme-primary">{{ bond.rate }}</span>
               <span
                 class="text-[9px] font-mono"
-                :class="bond.change_bps >= 0 ? 'text-red-400/70' : 'text-green-400/70'"
+                :class="bond.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
               >{{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}bp</span>
             </div>
           </div>

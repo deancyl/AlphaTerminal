@@ -1,13 +1,13 @@
 <template>
-  <div class="flex flex-col bg-terminal-panel border-t border-gray-700/50">
+  <div class="flex flex-col bg-terminal-panel border-t border-theme">
     <!-- Tab 栏 -->
-    <div class="relative flex items-center gap-0 px-2 py-0.5 border-b border-gray-700/30 shrink-0">
+    <div class="relative flex items-center gap-0 px-2 py-0.5 border-b border-theme/30 shrink-0">
       <button
         v-for="tab in tabs" :key="tab"
         class="relative px-2 py-0.5 text-[10px] font-medium tracking-wide transition-colors"
         :class="activeTab === tab
           ? 'text-blue-400'
-          : 'text-gray-600 hover:text-gray-300'"
+          : 'text-theme-muted hover:text-theme-primary'"
         @click="emit('tab-change', tab)"
       >
         {{ tab }}
@@ -20,34 +20,34 @@
 
       <!-- 参数设置按钮 -->
       <button
-        class="ml-2 px-1.5 py-0.5 text-[10px] text-gray-500 hover:text-gray-300 border border-transparent hover:border-gray-600 rounded transition"
+        class="ml-2 px-1.5 py-0.5 text-[10px] text-theme-tertiary hover:text-theme-primary border border-transparent hover:border-theme-secondary rounded transition"
         @click="showParams = !showParams"
         title="指标参数设置"
       >⚙️ 设置</button>
 
       <!-- 参数设置浮窗 -->
-      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded border border-gray-600 bg-terminal-panel shadow-xl z-20 w-52">
-        <div class="text-[10px] text-gray-400 mb-2 uppercase tracking-wider">指标参数</div>
+      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded border border-theme-secondary bg-terminal-panel shadow-xl z-20 w-52">
+        <div class="text-[10px] text-theme-secondary mb-2 uppercase tracking-wider">指标参数</div>
         <!-- MACD -->
         <template v-if="activeTab === 'MACD'">
           <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-[10px] text-gray-400 w-10">快线</span>
+            <span class="text-[10px] text-theme-secondary w-10">快线</span>
             <input type="number" :value="params.MACD.fast" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, fast: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-[10px] text-gray-400 w-10">慢线</span>
+            <span class="text-[10px] text-theme-secondary w-10">慢线</span>
             <input type="number" :value="params.MACD.slow" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, slow: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400 w-10">信号</span>
+            <span class="text-[10px] text-theme-secondary w-10">信号</span>
             <input type="number" :value="params.MACD.signal" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, signal: +e.target.value } })"
             />
           </div>
@@ -55,9 +55,9 @@
         <!-- KDJ -->
         <template v-else-if="activeTab === 'KDJ'">
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400 w-10">周期</span>
+            <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.KDJ.n" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { KDJ: { ...params.KDJ, n: +e.target.value } })"
             />
           </div>
@@ -65,9 +65,9 @@
         <!-- RSI -->
         <template v-else-if="activeTab === 'RSI'">
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400 w-10">周期</span>
+            <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.RSI.period" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { RSI: { ...params.RSI, period: +e.target.value } })"
             />
           </div>
@@ -75,16 +75,16 @@
         <!-- BOLL -->
         <template v-else-if="activeTab === 'BOLL'">
           <div class="flex items-center gap-2 mb-1.5">
-            <span class="text-[10px] text-gray-400 w-10">周期</span>
+            <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.BOLL.period" min="1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { BOLL: { ...params.BOLL, period: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-gray-400 w-10">倍</span>
+            <span class="text-[10px] text-theme-secondary w-10">倍</span>
             <input type="number" :value="params.BOLL.stdDev" min="0.1" step="0.1"
-              class="flex-1 bg-gray-800 border border-gray-600 rounded px-1.5 py-0.5 text-[11px] text-gray-200 outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { BOLL: { ...params.BOLL, stdDev: +e.target.value } })"
             />
           </div>
@@ -157,7 +157,7 @@ function buildOption() {
       tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (params) => {
         const p = params[0]
         const h = hist[p.dataIndex]
-        return `<b>${p.axisValue}</b><br/>VOL: ${(h.volume / 1e8).toFixed(2)}亿`
+        return `<b>${p.axisValue}</b><br/>VOL: ${(h.volume / 1e8).toFixed(2)}亿股`
       }},
     }
   }

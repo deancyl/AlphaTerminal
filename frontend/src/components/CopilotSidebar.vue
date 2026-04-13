@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full">
 
     <!-- 标题区 -->
-    <div class="p-4 border-b border-gray-800 shrink-0">
+    <div class="p-4 border-b border-theme-secondary shrink-0">
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-terminal-accent font-bold text-base flex items-center gap-2">
@@ -14,7 +14,7 @@
         <button
           class="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border transition"
           :class="llmMode === 'webllm'
-            ? 'border-green-500/50 bg-green-500/10 text-green-400'
+            ? 'border-green-500/50 bg-green-500/10 text-bearish'
             : 'border-purple-500/50 bg-purple-500/10 text-purple-400'"
           @click="toggleLlmMode"
           :disabled="isWebllmLoading"
@@ -25,20 +25,20 @@
       </div>
       <!-- WebLLM 状态提示 -->
       <div v-if="llmMode === 'webllm'" class="mt-2 text-[10px]">
-        <span v-if="webllmReady" class="text-green-400">✓ 模型已加载</span>
+        <span v-if="webllmReady" class="text-bearish">✓ 模型已加载</span>
         <span v-else-if="isWebllmLoading" class="text-yellow-400">⏳ 加载中...</span>
-        <span v-else class="text-red-400">✗ 点击切换到 WebLLM 模式</span>
+        <span v-else class="text-bullish">✗ 点击切换到 WebLLM 模式</span>
       </div>
     </div>
 
     <!-- 快捷命令按钮 -->
-    <div class="px-4 py-2 border-b border-gray-800">
+    <div class="px-4 py-2 border-b border-theme-secondary">
       <div class="text-[10px] text-terminal-dim mb-2">💡 快捷命令</div>
       <div class="flex flex-wrap gap-1.5">
         <button
           v-for="cmd in quickCommands"
           :key="cmd.cmd"
-          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-gray-700
+          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-theme
                  text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent
                  transition-colors whitespace-nowrap"
           :disabled="isLoading"
@@ -50,7 +50,7 @@
     </div>
 
     <!-- 上下文勾选框 -->
-    <div class="px-4 py-2 border-b border-gray-800 flex flex-wrap gap-3 text-xs shrink-0">
+    <div class="px-4 py-2 border-b border-theme-secondary flex flex-wrap gap-3 text-xs shrink-0">
       <label class="flex items-center gap-1.5 cursor-pointer select-none">
         <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded">
         <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">📊 大盘</span>
@@ -80,19 +80,19 @@
       <div v-for="(msg, i) in messages" :key="i"
            class="rounded-lg p-3 text-sm whitespace-pre-wrap leading-relaxed"
            :class="msg.role === 'user'
-             ? 'bg-terminal-accent/10 border border-terminal-accent/30 text-gray-100 ml-8'
+             ? 'bg-terminal-accent/10 border border-terminal-accent/30 text-theme-primary ml-8'
              : msg.isError
                ? 'bg-red-500/10 border border-red-500/30 text-red-300 mr-4'
-               : 'bg-terminal-bg border border-gray-700 mr-4'">
+               : 'bg-terminal-bg border border-theme mr-4'">
         <div class="text-[10px] mb-1.5 flex items-center gap-1"
              :class="msg.role === 'user' ? 'text-terminal-accent' : 'text-terminal-dim'">
           <span>{{ msg.role === 'user' ? '你' : '🤖 AlphaTerminal' }}</span>
-          <span v-if="msg.fromCache" class="text-[9px] text-green-400">📋 缓存</span>
+          <span v-if="msg.fromCache" class="text-[9px] text-bearish">📋 缓存</span>
         </div>
         <!-- 用户消息 -->
-        <div v-if="msg.role === 'user'" class="text-gray-100">{{ msg.content }}</div>
+        <div v-if="msg.role === 'user'" class="text-theme-primary">{{ msg.content }}</div>
         <!-- AI 消息 -->
-        <div v-else class="text-gray-200">
+        <div v-else class="text-theme-primary">
           <span>{{ msg.displayedContent }}</span>
           <span v-if="msg.streaming" class="animate-pulse text-terminal-accent">▌</span>
         </div>
@@ -100,13 +100,13 @@
     </div>
 
     <!-- 输入区 -->
-    <div class="p-4 border-t border-gray-800 shrink-0">
+    <div class="p-4 border-t border-theme-secondary shrink-0">
       <div class="relative">
         <textarea
           ref="inputEl"
           v-model="inputText"
-          class="w-full bg-terminal-bg border border-gray-700 rounded-lg px-3 py-2.5 pr-12
-                 text-sm text-gray-100 resize-none
+          class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2.5 pr-12
+                 text-sm text-theme-primary resize-none
                  focus:outline-none focus:border-terminal-accent/60
                  placeholder:text-terminal-dim/50"
           rows="3"

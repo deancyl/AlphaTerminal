@@ -120,6 +120,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { apiFetch } from '../utils/apiCompat.js'
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {
@@ -127,8 +128,8 @@ import {
   MarkLineComponent, VisualMapComponent, LegendComponent
 } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
-import { apiFetch } from '../utils/apiCompat.js'
 import { useDrawingStore } from '../stores/drawing.js'
+import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
@@ -356,6 +357,8 @@ function renderChart() {
     window.addEventListener('resize', handleResize)
   }
 
+  const tc = getChartColors()
+
   const data = histData.value
   const dates = data.map(d => d.date)
   const klineData = data.map(d => [d.open, d.close, d.low, d.high])
@@ -365,7 +368,7 @@ function renderChart() {
   const ma20 = calcMA(data, 20)
   const ma60 = calcMA(data, 60)
 
-  const subChartData = calcSubChartData(data, activeSubChart.value)
+  const subChartData = calcSubChartData(data, activeSubChart.value, tc)
 
   const option = {
     backgroundColor: 'transparent',
@@ -373,13 +376,13 @@ function renderChart() {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'cross' },
-      backgroundColor: 'rgba(10, 14, 23, 0.95)',
-      borderColor: '#374151',
-      textStyle: { color: '#e5e7eb', fontSize: 11 },
+      backgroundColor: tc.tooltipBg,
+      borderColor: tc.tooltipBorder,
+      textStyle: { color: tc.tooltipText, fontSize: 11 },
     },
     legend: {
       data: ['K线', 'MA5', 'MA10', 'MA20', 'MA60', ...subChartData.legend],
-      textStyle: { color: '#9ca3af', fontSize: 10 },
+      textStyle: { color: tc.textSecondary, fontSize: 10 },
       top: 5,
       left: 60,
     },
@@ -388,23 +391,29 @@ function renderChart() {
       { left: 60, right: 20, top: '68%', height: '24%' },
     ],
     xAxis: [
-      { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false }, axisLine: { lineStyle: { color: '#374151' } } },
-      { type: 'category', data: dates, gridIndex: 1, axisLabel: { color: '#6b7280', fontSize: 10 }, axisLine: { lineStyle: { color: '#374151' } } },
+      { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false }, axisLine: { lineStyle: { color: tc.borderPrimary } } },
+      { type: 'category', data: dates, gridIndex: 1, axisLabel: { color: tc.chartText, fontSize: 10 }, axisLine: { lineStyle: { color: tc.borderPrimary } } },
     ],
     yAxis: [
-      { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: '#1f2937' } }, axisLabel: { color: '#6b7280', fontSize: 10 } },
-      { type: 'value', gridIndex: 1, scale: subChartData.scale, splitLine: { lineStyle: { color: '#1f2937', type: 'dashed' } }, axisLabel: { color: '#6b7280', fontSize: 10 } },
+      { type: 'value', gridIndex: 0, scale: true, splitLine: { lineStyle: { color: tc.chartGrid } }, axisLabel: { color: tc.chartText, fontSize: 10 } },
+      { type: 'value', gridIndex: 1, scale: subChartData.scale, splitLine: { lineStyle: { color: tc.chartGrid, type: 'dashed' } }, axisLabel: { color: tc.chartText, fontSize: 10 } },
     ],
     dataZoom: [
       { type: 'inside', xAxisIndex: [0, 1], start: 50, end: 100 },
-      { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 8, height: 18 },
+      { type: 'slider', xAxisIndex: [0, 1], show: true, bottom: 8, height: 18,
+        borderColor: tc.borderPrimary,
+        fillerColor: tc.isLight ? 'rgba(24,144,255,0.15)' : 'rgba(59,130,246,0.15)',
+        handleStyle: { color: tc.accentPrimary, borderColor: tc.accentPrimary },
+        textStyle: { color: tc.chartText, fontSize: 9 },
+        dataBackground: { lineStyle: { color: tc.borderPrimary }, areaStyle: { color: tc.isLight ? 'rgba(24,144,255,0.08)' : 'rgba(59,130,246,0.08)' } }
+      },
     ],
     series: [
-      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, itemStyle: { color: '#ef232a', color0: '#14b143', borderColor: '#ef232a', borderColor0: '#14b143' } },
-      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
-      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
+      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, itemStyle: { color: tc.bullish, color0: tc.bearish, borderColor: tc.bullish, borderColor0: tc.bearish } },
+      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
+      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
       ...subChartData.series,
     ],
   }
@@ -413,7 +422,7 @@ function renderChart() {
 }
 
 // 计算副图指标数据
-function calcSubChartData(data, indicator) {
+function calcSubChartData(data, indicator, tc) {
   const closes = data.map(d => d.close)
   const volumes = data.map(d => d.volume)
 
@@ -424,7 +433,7 @@ function calcSubChartData(data, indicator) {
         scale: false,
         series: [{
           name: '成交量', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: volumes,
-          itemStyle: { color: (params) => data[params.dataIndex].close >= data[params.dataIndex].open ? '#ef232a' : '#14b143' },
+          itemStyle: { color: (params) => data[params.dataIndex].close >= data[params.dataIndex].open ? tc.bullish : tc.bearish },
         }]
       }
     case 'MACD':
@@ -432,9 +441,9 @@ function calcSubChartData(data, indicator) {
       return {
         legend: ['DIF', 'DEA', 'MACD'], scale: true,
         series: [
-          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-          { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? '#ef232a' : '#14b143' } },
+          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? tc.bullish : tc.bearish } },
         ]
       }
     case 'KDJ':
@@ -442,18 +451,18 @@ function calcSubChartData(data, indicator) {
       return {
         legend: ['K', 'D', 'J'], scale: true,
         series: [
-          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: '#f472b6', width: 1 }, symbol: 'none' },
+          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
         ]
       }
     case 'RSI':
       return {
         legend: ['RSI6', 'RSI12', 'RSI24'], scale: true,
         series: [
-          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
-          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), lineStyle: { color: '#c084fc', width: 1 }, symbol: 'none' },
+          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
         ]
       }
     case 'BOLL':
@@ -461,9 +470,9 @@ function calcSubChartData(data, indicator) {
       return {
         legend: ['MID', 'UP', 'LOW'], scale: true,
         series: [
-          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.up, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
-          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.low, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
+          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
+          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.up, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.low, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
         ]
       }
     case 'OBV':
@@ -471,8 +480,8 @@ function calcSubChartData(data, indicator) {
       return {
         legend: ['OBV', 'MA30'], scale: true,
         series: [
-          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv, lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' },
-          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => ({ close: v })), 30), lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => ({ close: v })), 30), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'DMI':
@@ -480,15 +489,15 @@ function calcSubChartData(data, indicator) {
       return {
         legend: ['PDI', 'MDI', 'ADX'], scale: true,
         series: [
-          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: '#ef4444', width: 1 }, symbol: 'none' },
-          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: '#22c55e', width: 1 }, symbol: 'none' },
-          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: '#60a5fa', width: 1 }, symbol: 'none' },
+          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'CCI':
       return {
         legend: ['CCI'], scale: true,
-        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(data), lineStyle: { color: '#fbbf24', width: 1 }, symbol: 'none' }]
+        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(data), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
       }
     default:
       return { legend: [], scale: false, series: [] }
@@ -628,6 +637,8 @@ function handleResize() {
   chart?.resize()
 }
 
+let unsubscribeTheme = null
+
 watch(activeSubChart, () => renderChart())
 watch(period, () => fetchData())
 watch(() => props.symbol, (newSym) => { if (newSym) { fetchData(); fetchQuote() } }, { immediate: true })
@@ -637,6 +648,11 @@ onMounted(() => {
   // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
   window.addEventListener('keydown', handleWindowKeydown)
   
+  // 主题变化自动重绘
+  unsubscribeTheme = onThemeChange(() => {
+    renderChart()
+  })
+
   // F1修复: K线数据30秒自动刷新
   refreshTimer = setInterval(() => {
     if (props.symbol) { fetchData(); fetchQuote() }
@@ -651,6 +667,8 @@ onBeforeUnmount(() => {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
   window.removeEventListener('keydown', handleWindowKeydown)
   window.removeEventListener('resize', handleResize)
+  unsubscribeTheme?.()
+  unsubscribeTheme = null
 })
 
 onUnmounted(() => { 
@@ -663,34 +681,34 @@ onUnmounted(() => {
 </script>
 
 <style>
-.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #0a0e17; display: flex; flex-direction: column; z-index: 99999; outline: none; }
+.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; z-index: 99999; outline: none; }
 
-.kline-header { height: 48px; background: #111827; border-bottom: 1px solid #374151; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
+.kline-header { height: 48px; background: var(--panel-bg); border-bottom: 1px solid var(--border-primary); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
 .header-left { display: flex; align-items: center; gap: 8px; min-width: 150px; }
-.symbol-name { font-size: 14px; font-weight: 600; color: #f3f4f6; }
-.symbol-code { font-size: 11px; color: #6b7280; font-family: monospace; }
+.symbol-name { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.symbol-code { font-size: 11px; color: var(--text-tertiary); font-family: monospace; }
 .header-center { display: flex; align-items: center; gap: 16px; flex: 1; justify-content: center; }
 .period-selector, .indicator-selector { display: flex; gap: 4px; }
-.period-btn, .indicator-btn { padding: 4px 10px; font-size: 12px; border: 1px solid #374151; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-.period-btn:hover, .indicator-btn:hover { border-color: #6b7280; color: #e5e7eb; }
-.period-btn.active, .indicator-btn.active { background: #2563eb; border-color: #2563eb; color: white; }
+.period-btn, .indicator-btn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border-primary); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.period-btn:hover, .indicator-btn:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.period-btn.active, .indicator-btn.active { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--bg-primary); }
 .header-right { display: flex; align-items: center; gap: 12px; min-width: 200px; justify-content: flex-end; }
 .latest-price { font-size: 16px; font-weight: 700; font-family: monospace; }
 .latest-change { font-size: 13px; font-family: monospace; }
-.price-up { color: #ef4444; }
-.price-down { color: #22c55e; }
-.price-flat { color: #9ca3af; }
-.close-btn { padding: 6px 14px; font-size: 12px; border: 1px solid #4b5563; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
-.close-btn:hover { border-color: #ef4444; color: #ef4444; }
+.price-up { color: var(--bullish); }
+.price-down { color: var(--bearish); }
+.price-flat { color: var(--text-tertiary); }
+.close-btn { padding: 6px 14px; font-size: 12px; border: 1px solid var(--border-hover); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.close-btn:hover { border-color: var(--status-error); color: var(--status-error); }
 
 .kline-body { flex: 1; display: flex; overflow: hidden; }
 .chart-container { flex: 1; position: relative; min-width: 0; }
 .chart-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
 
-.loading-overlay, .error-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(10, 14, 23, 0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; }
-.loading-text, .error-text { font-size: 14px; color: #9ca3af; }
-.error-close { margin-top: 12px; padding: 6px 16px; font-size: 12px; border: 1px solid #4b5563; background: transparent; color: #9ca3af; border-radius: 4px; cursor: pointer; }
-.error-close:hover { border-color: #6b7280; color: #e5e7eb; }
+.loading-overlay, .error-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; opacity: 0.95; }
+.loading-text, .error-text { font-size: 14px; color: var(--text-secondary); }
+.error-close { margin-top: 12px; padding: 6px 16px; font-size: 12px; border: 1px solid var(--border-hover); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; }
+.error-close:hover { border-color: var(--border-hover); color: var(--text-primary); }
 
 .drawing-canvas { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; z-index: 5; }
 .drawing-toolbar { position: absolute; top: 56px; left: 12px; z-index: 10; }

@@ -9,17 +9,17 @@
     @click.self="close"
   >
     <!-- 弹窗主体 -->
-    <div class="terminal-panel border border-gray-700 rounded-xl p-4 w-[540px] max-w-[95vw] flex flex-col gap-3 shadow-2xl"
+    <div class="terminal-panel border border-theme rounded-xl p-4 w-[540px] max-w-[95vw] flex flex-col gap-3 shadow-2xl"
          style="max-height: 90vh; overflow-y: auto;">
 
       <!-- 头部 -->
       <div class="flex items-center justify-between">
         <div class="flex flex-col">
-          <span class="text-[13px] font-semibold text-gray-200">{{ tenorLabel }} 国债历史走势</span>
+          <span class="text-[13px] font-semibold text-theme-primary">{{ tenorLabel }} 国债历史走势</span>
           <span class="text-[10px] text-terminal-dim mt-0.5">周期：{{ periodLabel }} &nbsp;|&nbsp; 数据来源：AkShare</span>
         </div>
         <button
-          class="text-gray-500 hover:text-gray-200 transition-colors text-lg leading-none"
+          class="text-theme-tertiary hover:text-theme-primary transition-colors text-lg leading-none"
           @click="close"
         >✕</button>
       </div>
@@ -29,7 +29,7 @@
         <span class="text-terminal-dim text-xs">加载中…</span>
       </div>
       <div v-else-if="error" class="flex items-center justify-center py-6">
-        <span class="text-red-400 text-xs">{{ error }}</span>
+        <span class="text-bullish text-xs">{{ error }}</span>
       </div>
 
       <!-- 核心数据 -->
@@ -42,7 +42,7 @@
               {{ currentYield != null ? currentYield.toFixed(4) + '%' : '--' }}
             </span>
           </div>
-          <div class="h-8 w-px bg-gray-700"></div>
+          <div class="h-8 w-px bg-theme-tertiary"></div>
           <div class="flex flex-col">
             <span class="text-[10px] text-terminal-dim">历史{{ periodLabel }}</span>
             <span
@@ -50,18 +50,18 @@
               :class="percentileColor"
             >{{ percentileDisplay }}</span>
           </div>
-          <div class="h-8 w-px bg-gray-700"></div>
+          <div class="h-8 w-px bg-theme-tertiary"></div>
           <div class="flex flex-col">
             <span class="text-[10px] text-terminal-dim">区间高点</span>
-            <span class="text-[12px] font-mono text-red-400">{{ maxYield?.toFixed(4) }}%</span>
+            <span class="text-[12px] font-mono text-bullish">{{ maxYield?.toFixed(4) }}%</span>
             <span class="text-[10px] text-terminal-dim">区间低点</span>
-            <span class="text-[12px] font-mono text-green-400">{{ minYield?.toFixed(4) }}%</span>
+            <span class="text-[12px] font-mono text-bearish">{{ minYield?.toFixed(4) }}%</span>
           </div>
         </div>
 
         <!-- 迷你柱状图（分位分布） -->
         <div class="text-[9px] text-terminal-dim px-1">历史分位分布</div>
-        <div class="relative h-4 rounded bg-gray-800 overflow-hidden mx-1">
+        <div class="relative h-4 rounded bg-theme-secondary overflow-hidden mx-1">
           <div
             class="absolute top-0 bottom-0 rounded"
             :style="{ left: Math.max(0, Math.min(98, percentile ?? 0)) + '%', width: '2px', background: '#60a5fa' }"
@@ -70,7 +70,7 @@
             <div
               v-for="(bucket, i) in percentileBuckets"
               :key="i"
-              class="flex-1 border-r border-gray-700/50 last:border-0"
+              class="flex-1 border-r border-theme last:border-0"
             ></div>
           </div>
         </div>
@@ -123,14 +123,14 @@ const percentileDisplay = computed(() => {
 
 const percentileColor = computed(() => {
   const p = percentile.value
-  if (p == null) return 'text-gray-400'
-  if (p <= 20)  return 'text-green-400'     // 极度低估
+  if (p == null) return 'text-theme-secondary'
+  if (p <= 20)  return 'text-bearish'     // 极度低估
   if (p <= 50)  return 'text-blue-400'     // 偏低
   if (p <= 80)  return 'text-amber-400'    // 偏高
-  return 'text-red-400'                     // 极度高估
+  return 'text-bullish'                     // 极度高估
 })
 
-const changeColor = computed(() => 'text-gray-100')
+const changeColor = computed(() => 'text-theme-primary')
 
 const minYield = computed(() => historyData.value.length ? Math.min(...historyData.value.map(d => d.yield)) : null)
 const maxYield = computed(() => historyData.value.length ? Math.max(...historyData.value.map(d => d.yield)) : null)

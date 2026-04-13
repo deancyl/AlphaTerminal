@@ -49,9 +49,15 @@ async function fetchSnapshots(pid) {
 }
 
 async function fetchAll(pid) {
+  // 确保 pid 是原始 id，不是对象
+  const id = typeof pid === 'object' && pid !== null ? pid.id : pid
+  if (!id) {
+    console.warn('[PortfolioStore] fetchAll: 无效的 pid', pid)
+    return
+  }
   loading.value = true
   try {
-    await Promise.all([fetchPnL(pid), fetchSnapshots(pid)])
+    await Promise.all([fetchPnL(id), fetchSnapshots(id)])
   } catch(e) {
     console.warn('[PortfolioStore] fetchAll failed:', e)
   } finally {
@@ -60,8 +66,14 @@ async function fetchAll(pid) {
 }
 
 async function switchAccount(pid) {
-  activePid.value = pid
-  await fetchAll(pid)
+  // 确保 pid 是原始 id，不是对象
+  const id = typeof pid === 'object' && pid !== null ? pid.id : pid
+  if (!id) {
+    console.warn('[PortfolioStore] switchAccount: 无效的 pid', pid)
+    return
+  }
+  activePid.value = id
+  await fetchAll(id)
 }
 
 async function createPortfolio(name, type = 'main') {

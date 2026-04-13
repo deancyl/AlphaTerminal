@@ -4,33 +4,132 @@ export default {
     "./index.html",
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
-  darkMode: 'class',
+  darkMode: ['class', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
+        // ============================================
+        // 主题感知颜色 - 使用 CSS 变量
+        // ============================================
+        theme: {
+          // 背景
+          bg: {
+            primary: 'var(--bg-primary)',
+            secondary: 'var(--bg-secondary)',
+            tertiary: 'var(--bg-tertiary)',
+            hover: 'var(--bg-hover)',
+            active: 'var(--bg-active)',
+          },
+          // 文字
+          text: {
+            primary: 'var(--text-primary)',
+            secondary: 'var(--text-secondary)',
+            tertiary: 'var(--text-tertiary)',
+            muted: 'var(--text-muted)',
+          },
+          // 边框
+          border: {
+            primary: 'var(--border-primary)',
+            secondary: 'var(--border-secondary)',
+            hover: 'var(--border-hover)',
+          },
+          // 强调色
+          accent: {
+            DEFAULT: 'var(--accent-primary)',
+            secondary: 'var(--accent-secondary)',
+            bg: 'var(--accent-bg)',
+            border: 'var(--accent-border)',
+          },
+          // 面板
+          panel: {
+            DEFAULT: 'var(--panel-bg)',
+            elevated: 'var(--panel-bg-elevated)',
+            hover: 'var(--panel-bg-hover)',
+          },
+          // 涨跌
+          bullish: {
+            DEFAULT: 'var(--bullish)',
+            light: 'var(--bullish-light)',
+            bg: 'var(--bullish-bg)',
+            border: 'var(--bullish-border)',
+          },
+          bearish: {
+            DEFAULT: 'var(--bearish)',
+            light: 'var(--bearish-light)',
+            bg: 'var(--bearish-bg)',
+            border: 'var(--bearish-border)',
+          },
+          // 状态
+          status: {
+            live: 'var(--status-live)',
+            warning: 'var(--status-warning)',
+            error: 'var(--status-error)',
+            info: 'var(--status-info)',
+            success: 'var(--status-success)',
+          },
+          // 图表
+          chart: {
+            grid: 'var(--chart-grid)',
+            text: 'var(--chart-text)',
+            line: 'var(--chart-line)',
+            area: 'var(--chart-area)',
+          },
+        },
+        
+        // ============================================
+        // 保留原有 terminal 颜色（向后兼容）
+        // ============================================
         terminal: {
-          bg: '#0a0e17',
-          panel: '#111827',
-          accent: '#00ff88',
-          dim: '#6b7280'
+          bg: 'var(--bg-primary)',
+          panel: 'var(--panel-bg)',
+          accent: 'var(--accent-primary)',
+          dim: 'var(--text-tertiary)'
         },
-        // 专业金融色调：涨跌颜色更克制、有层次
-        // 上涨：深红系（银行/债券/专业面板）
+        
+        // ============================================
+        // 专业金融色调（向后兼容）
+        // ============================================
         bullish: {
-          DEFAULT: '#ef232a',
-          light:   '#f87171',  // 浅色标签
-          dark:    '#b91c1c',  // 深色强调
-          bg:      'rgba(239,35,42,0.10)',  // 背景
-          border:  'rgba(239,35,42,0.30)',  // 边框
+          DEFAULT: 'var(--bullish)',
+          light: 'var(--bullish-light)',
+          dark: '#b91c1c',
+          bg: 'var(--bullish-bg)',
+          border: 'var(--bullish-border)',
         },
-        // 下跌：深绿系
         bearish: {
-          DEFAULT: '#14b143',
-          light:   '#4ade80',
-          dark:    '#166534',
-          bg:      'rgba(20,177,67,0.10)',
-          border:  'rgba(20,177,67,0.30)',
+          DEFAULT: 'var(--bearish)',
+          light: 'var(--bearish-light)',
+          dark: '#166534',
+          bg: 'var(--bearish-bg)',
+          border: 'var(--bearish-border)',
         },
+      },
+      
+      // 阴影
+      boxShadow: {
+        'theme-sm': 'var(--shadow-sm)',
+        'theme-md': 'var(--shadow-md)',
+        'theme-lg': 'var(--shadow-lg)',
+      },
+      
+      // 背景色快捷访问
+      backgroundColor: {
+        'theme-primary': 'var(--bg-primary)',
+        'theme-secondary': 'var(--bg-secondary)',
+        'theme-panel': 'var(--panel-bg)',
+      },
+      
+      // 文字色快捷访问
+      textColor: {
+        'theme-primary': 'var(--text-primary)',
+        'theme-secondary': 'var(--text-secondary)',
+        'theme-tertiary': 'var(--text-tertiary)',
+      },
+      
+      // 边框色快捷访问
+      borderColor: {
+        'theme': 'var(--border-primary)',
+        'theme-secondary': 'var(--border-secondary)',
       }
     },
   },

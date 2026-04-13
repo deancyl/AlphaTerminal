@@ -1,17 +1,17 @@
 <template>
   <div
-    class="quote-panel flex flex-col bg-[#0d1220] border-l border-gray-700/50 overflow-y-auto"
+    class="quote-panel flex flex-col bg-theme border-l border-theme overflow-y-auto"
     :class="isMobile ? 'panel-mobile' : 'panel-desktop'"
     :style="isMobile ? {} : { width: panelWidth + 'px' }"
   >
     <!-- ═══ Module 1: 基础行情与估值 ═════════════════════════════════ -->
-    <div class="px-3 py-2.5 border-b border-gray-700/40">
+    <div class="px-3 py-2.5 border-b border-theme">
 
       <!-- 标的标题 -->
       <div class="flex items-center justify-between mb-3">
         <div>
-          <div class="text-[13px] font-bold text-gray-100 leading-tight">{{ panelName || symbol }}</div>
-          <div class="text-[10px] text-gray-500 font-mono mt-0.5">{{ symbol }}</div>
+          <div class="text-[13px] font-bold text-theme-primary leading-tight">{{ panelName || symbol }}</div>
+          <div class="text-[10px] text-theme-tertiary font-mono mt-0.5">{{ symbol }}</div>
         </div>
         <!-- 最新价（大字醒目） -->
         <div class="text-right">
@@ -28,18 +28,18 @@
       <!-- 基础盘口（加大行间距） -->
       <div class="space-y-2 mb-2">
         <div v-for="item in basicFields" :key="item.key" class="flex justify-between items-center">
-          <span class="text-[11px] text-gray-500">{{ item.label }}</span>
-          <span class="text-[12px] font-mono font-medium text-gray-200">{{ item.formatter(item.sourceFn ? item.sourceFn() : data[item.key]) }}</span>
+          <span class="text-[11px] text-theme-tertiary">{{ item.label }}</span>
+          <span class="text-[12px] font-mono font-medium text-theme-primary">{{ item.formatter(item.sourceFn ? item.sourceFn() : data[item.key]) }}</span>
         </div>
       </div>
 
       <!-- 周期收益率 -->
-      <div class="border-t border-gray-700/30 pt-2 mt-2">
-        <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">周期收益率</div>
+      <div class="border-t border-theme pt-2 mt-2">
+        <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">周期收益率</div>
         <div class="grid grid-cols-3 gap-1">
           <div v-for="item in returnFields" :key="item.key"
-               class="flex flex-col items-center bg-black/20 rounded py-1 px-1">
-            <span class="text-[9px] text-gray-500 mb-0.5">{{ item.label }}</span>
+               class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
+            <span class="text-[9px] text-theme-tertiary mb-0.5">{{ item.label }}</span>
             <span class="text-[11px] font-mono font-medium" :class="returnColorClass(data[item.key])">
               {{ data[item.key] != null ? (data[item.key] >= 0 ? '+' : '') + data[item.key].toFixed(2) + '%' : '--' }}
             </span>
@@ -48,18 +48,18 @@
       </div>
 
       <!-- 52周高低 -->
-      <div class="border-t border-gray-700/30 pt-2 mt-2">
-        <div class="text-[10px] text-gray-500 mb-1.5 uppercase tracking-wider">52周区间</div>
+      <div class="border-t border-theme pt-2 mt-2">
+        <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">52周区间</div>
         <div class="flex items-center gap-3">
           <div class="flex-1">
-            <div class="text-[9px] text-gray-500">高</div>
-            <div class="text-[12px] font-mono text-red-400">{{ data.high_52w?.toFixed(2) ?? '--' }}</div>
-            <div class="text-[9px] text-gray-600">{{ data.high_52w_date ?? '' }}</div>
+            <div class="text-[9px] text-theme-tertiary">高</div>
+            <div class="text-[12px] font-mono text-bullish">{{ data.high_52w?.toFixed(2) ?? '--' }}</div>
+            <div class="text-[9px] text-theme-muted">{{ data.high_52w_date ?? '' }}</div>
           </div>
           <!-- 可视化区间条 -->
           <div class="flex-1 flex flex-col items-center">
             <div class="relative w-full h-4 flex items-center">
-              <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-gray-700 rounded"></div>
+              <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-theme-secondary rounded"></div>
               <div
                 class="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-white shadow"
                 :style="{ left: pricePosition + '%', backgroundColor: priceColor }"
@@ -67,75 +67,75 @@
             </div>
           </div>
           <div class="flex-1 text-right">
-            <div class="text-[9px] text-gray-500">低</div>
-            <div class="text-[12px] font-mono text-green-400">{{ data.low_52w?.toFixed(2) ?? '--' }}</div>
-            <div class="text-[9px] text-gray-600">{{ data.low_52w_date ?? '' }}</div>
+            <div class="text-[9px] text-theme-tertiary">低</div>
+            <div class="text-[12px] font-mono text-bearish">{{ data.low_52w?.toFixed(2) ?? '--' }}</div>
+            <div class="text-[9px] text-theme-muted">{{ data.low_52w_date ?? '' }}</div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- ═══ Module 2: 市场情绪（仅指数） ═════════════════════════════ -->
-    <div class="px-3 py-2.5 border-b border-gray-700/40">
-      <div class="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">涨跌统计</div>
+    <div class="px-3 py-2.5 border-b border-theme">
+      <div class="text-[10px] text-theme-tertiary mb-2 uppercase tracking-wider">涨跌统计</div>
       <template v-if="isIndex">
         <div v-if="data.advance_count != null" class="flex items-stretch gap-1 h-14">
           <!-- 跌 -->
-          <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-green-500/20">
-            <div class="text-center text-[9px] text-green-400 py-0.5">{{ data.decline_count }}家</div>
-            <div class="bg-green-500 rounded-sm" :style="{ height: (data.decline_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+          <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bearish/20">
+            <div class="text-center text-[9px] text-bearish py-0.5">{{ data.decline_count }}家</div>
+            <div class="bg-bearish rounded-sm" :style="{ height: (data.decline_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 平 -->
-          <div v-if="data.unchanged_count > 0" class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-gray-600/20">
-            <div class="text-center text-[9px] text-gray-400 py-0.5">{{ data.unchanged_count }}家</div>
-            <div class="bg-gray-500 rounded-sm" :style="{ height: (data.unchanged_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+          <div v-if="data.unchanged_count > 0" class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-theme-secondary">
+            <div class="text-center text-[9px] text-theme-secondary py-0.5">{{ data.unchanged_count }}家</div>
+            <div class="bg-theme-tertiary rounded-sm" :style="{ height: (data.unchanged_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 涨 -->
-          <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-red-500/20">
-            <div class="text-center text-[9px] text-red-400 py-0.5">{{ data.advance_count }}家</div>
-            <div class="bg-red-500 rounded-sm" :style="{ height: (data.advance_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+          <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bullish/20">
+            <div class="text-center text-[9px] text-bullish py-0.5">{{ data.advance_count }}家</div>
+            <div class="bg-bullish rounded-sm" :style="{ height: (data.advance_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
         </div>
         <div v-if="data.advance_count != null" class="mt-1.5 flex justify-between text-[10px]">
-          <span class="text-green-400">跌 {{ data.decline_count }}家</span>
-          <span class="text-gray-500">平 {{ data.unchanged_count ?? 0 }}家</span>
-          <span class="text-red-400">涨 {{ data.advance_count }}家</span>
+          <span class="text-bearish">跌 {{ data.decline_count }}家</span>
+          <span class="text-theme-secondary">平 {{ data.unchanged_count ?? 0 }}家</span>
+          <span class="text-bullish">涨 {{ data.advance_count }}家</span>
         </div>
         <!-- 涨跌家比 -->
         <div v-if="data.advance_rate != null" class="mt-1 flex items-center gap-2">
-          <div class="text-[10px] text-gray-500">上涨压力</div>
-          <div class="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-            <div class="h-full bg-gradient-to-r from-green-500 to-red-500 rounded-full"
+          <div class="text-[10px] text-theme-tertiary">上涨压力</div>
+          <div class="flex-1 h-1.5 bg-theme-secondary rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-bearish to-bullish rounded-full"
                  :style="{ width: (data.advance_rate * 100) + '%' }"></div>
           </div>
-          <div class="text-[10px] font-mono" :class="data.advance_rate >= 0.5 ? 'text-red-400' : 'text-green-400'">
+          <div class="text-[10px] font-mono" :class="data.advance_rate >= 0.5 ? 'text-bullish' : 'text-bearish'">
             {{ (data.advance_rate * 100).toFixed(0) }}%
           </div>
         </div>
       </template>
-      <div v-else class="text-[11px] text-gray-500 text-center py-3">
+      <div v-else class="text-[11px] text-theme-tertiary text-center py-3">
         个股暂无涨跌统计
       </div>
     </div>
 
     <!-- ═══ Module 3: 资金流向 ═══════════════════════════════════════ -->
-    <div class="px-3 py-2.5 border-b border-gray-700/40">
+    <div class="px-3 py-2.5 border-b border-theme">
       <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] text-gray-500 uppercase tracking-wider">资金流向</div>
-        <div v-if="fundDonutData.isMock" class="text-[9px] text-gray-600 italic">模拟数据</div>
+        <div class="text-[10px] text-theme-tertiary uppercase tracking-wider">资金流向</div>
+        <div v-if="fundDonutData.isMock" class="text-[9px] text-theme-muted italic">模拟数据</div>
       </div>
 
       <!-- 主环路：环形图 -->
       <div class="flex items-center gap-3 mb-3">
         <div ref="fundDonutRef" style="width:72px;height:72px;"></div>
         <div class="flex-1">
-          <div class="text-[11px] text-gray-300 mb-1">主力净流入</div>
-          <div class="text-[15px] font-mono font-bold" :class="fundDonutData.net >= 0 ? 'text-red-400' : 'text-green-400'">
+          <div class="text-[11px] text-theme-primary mb-1">主力净流入</div>
+          <div class="text-[15px] font-mono font-bold" :class="fundDonutData.net >= 0 ? 'text-bullish' : 'text-bearish'">
             {{ fundDonutData.net >= 0 ? '+' : '' }}{{ formatAmount(fundDonutData.net) }}
           </div>
           <div class="flex gap-2 mt-1">
-            <span class="text-[10px] text-red-400">入 {{ formatAmount(fundDonutData.inAmt) }}</span>
-            <span class="text-[10px] text-green-400">出 {{ formatAmount(fundDonutData.outAmt) }}</span>
+            <span class="text-[10px] text-bullish">入 {{ formatAmount(fundDonutData.inAmt) }}</span>
+            <span class="text-[10px] text-bearish">出 {{ formatAmount(fundDonutData.outAmt) }}</span>
           </div>
         </div>
       </div>
@@ -144,15 +144,15 @@
       <div class="space-y-2">
         <div v-for="level in fundLevels" :key="level.label"
              class="flex items-center gap-2">
-          <span class="text-[10px] text-gray-500 w-8 shrink-0">{{ level.label }}</span>
-          <div class="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <span class="text-[10px] text-theme-tertiary w-8 shrink-0">{{ level.label }}</span>
+          <div class="flex-1 h-1.5 bg-theme-secondary rounded-full overflow-hidden">
             <div class="h-full rounded-full" :style="{ width: level.width + '%', backgroundColor: level.color }"></div>
           </div>
           <div class="flex flex-col items-end">
-            <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-red-400' : 'text-green-400'">
+            <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ level.inAmt >= 0 ? '+' : '' }}{{ formatAmount(level.inAmt) }}
             </span>
-            <span class="text-[9px] font-mono" :class="level.outAmt >= 0 ? 'text-red-400' : 'text-green-400'">
+            <span class="text-[9px] font-mono" :class="level.outAmt >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ level.outAmt >= 0 ? '+' : '' }}{{ formatAmount(level.outAmt) }}
             </span>
           </div>
@@ -161,13 +161,13 @@
     </div>
 
     <!-- ═══ Module 4: 板块联动（个股） ════════════════════════════════ -->
-    <div class="px-3 py-2.5 border-b border-gray-700/40">
-      <div class="text-[10px] text-gray-500 mb-2 uppercase tracking-wider">板块联动</div>
+    <div class="px-3 py-2.5 border-b border-theme">
+      <div class="text-[10px] text-theme-tertiary mb-2 uppercase tracking-wider">板块联动</div>
 
       <template v-if="!isIndex && data.industry">
-        <div class="flex items-center justify-between py-1 border-b border-gray-800">
-          <span class="text-[11px] text-gray-300">{{ data.industry }}</span>
-          <span class="text-[11px] font-mono" :class="(data.industry_change_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+        <div class="flex items-center justify-between py-1 border-b border-theme-secondary">
+          <span class="text-[11px] text-theme-primary">{{ data.industry }}</span>
+          <span class="text-[11px] font-mono" :class="(data.industry_change_pct ?? 0) >= 0 ? 'text-bullish' : 'text-bearish'">
             {{ (data.industry_change_pct ?? 0) >= 0 ? '+' : '' }}{{ (data.industry_change_pct ?? 0).toFixed(2) }}%
           </span>
         </div>
@@ -178,26 +178,26 @@
           <span v-for="c in data.concepts" :key="c.name"
                 class="px-1.5 py-0.5 text-[10px] rounded border"
                 :class="(c.change_pct ?? 0) >= 0
-                  ? 'border-red-500/30 text-red-400 bg-red-500/10'
-                  : 'border-green-500/30 text-green-400 bg-green-500/10'">
+                  ? 'border-bullish/30 text-bullish bg-bullish/10'
+                  : 'border-bearish/30 text-bearish bg-bearish/10'">
             {{ c.name }}
             <span class="ml-0.5">{{ (c.change_pct ?? 0) >= 0 ? '+' : '' }}{{ (c.change_pct ?? 0).toFixed(2) }}%</span>
           </span>
         </div>
       </template>
 
-      <div v-if="isIndex" class="text-[11px] text-gray-500 text-center py-2">
+      <div v-if="isIndex" class="text-[11px] text-theme-tertiary text-center py-2">
         指数暂无板块归属
       </div>
       <div v-else-if="!data.industry && (!data.concepts || !data.concepts.length)"
-           class="text-[11px] text-gray-500 text-center py-2">
+           class="text-[11px] text-theme-tertiary text-center py-2">
         暂无板块数据
       </div>
     </div>
 
     <!-- ═══ 数据时间戳 ═══════════════════════════════════════════════ -->
     <div class="px-3 py-2 mt-auto">
-      <div class="text-[9px] text-gray-600 text-center">
+      <div class="text-[9px] text-theme-muted text-center">
         {{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}
       </div>
     </div>
@@ -396,15 +396,15 @@ const fundDonutData = computed(() => {
 // ── 格式化 ─────────────────────────────────────────────────────
 function formatVol(v) {
   if (v == null) return '--'
-  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿'
-  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万'
-  return v.toFixed(0)
+  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿股'
+  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万股'
+  return v.toFixed(0) + '股'
 }
 function formatAmount(v) {
   if (v == null) return '--'
-  if (Math.abs(v) >= 1e8) return (v / 1e8).toFixed(2) + '亿'
-  if (Math.abs(v) >= 1e4) return (v / 1e4).toFixed(2) + '万'
-  return (v >= 0 ? '+' : '') + v.toFixed(0)
+  if (Math.abs(v) >= 1e8) return (v / 1e8).toFixed(2) + '亿元'
+  if (Math.abs(v) >= 1e4) return (v / 1e4).toFixed(2) + '万元'
+  return (v >= 0 ? '+' : '') + v.toFixed(0) + '元'
 }
 
 // ── 资金环形图（ECharts）───────────────────────────────────────
@@ -460,11 +460,11 @@ onUnmounted(() => { donutInstance?.dispose(); donutInstance = null })
   width: 100%;
   max-height: 50vh;
   border-left: none;
-  border-top: 1px solid rgba(55, 65, 81, 0.4);
+  border-top: 1px solid var(--border-primary);
 }
 
 /* 滚动条样式 */
 .quote-panel::-webkit-scrollbar { width: 4px; }
 .quote-panel::-webkit-scrollbar-track { background: transparent; }
-.quote-panel::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+.quote-panel::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 2px; }
 </style>

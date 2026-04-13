@@ -1,26 +1,26 @@
 <template>
   <div class="flex flex-col w-full h-full overflow-hidden bg-[#0a0e17]">
     <!-- 顶部工具栏 -->
-    <div class="flex items-center gap-2 px-3 py-1 border-b border-gray-800 shrink-0">
+    <div class="flex items-center gap-2 px-3 py-1 border-b border-theme-secondary shrink-0">
       <!-- 合约代码输入 -->
       <input
         v-model="inputSymbol"
-        class="w-20 px-2 py-0.5 text-[11px] rounded bg-gray-800 border border-gray-600 text-gray-200 focus:border-terminal-accent outline-none"
+        class="w-20 px-2 py-0.5 text-[11px] rounded bg-theme-secondary border border-theme-secondary text-theme-primary focus:border-terminal-accent outline-none"
         placeholder="RB / I / SC"
         @keydown.enter="loadSymbol"
       />
       <button class="px-2 py-0.5 text-[10px] rounded bg-terminal-accent text-white hover:opacity-80" @click="loadSymbol">切换</button>
 
       <!-- 视图切换：K线 / 期限结构 -->
-      <div class="flex gap-1 ml-2 border border-gray-700 rounded">
+      <div class="flex gap-1 ml-2 border border-theme rounded">
         <button
           class="px-2 py-0.5 text-[9px] rounded transition"
-          :class="viewMode === 'kline' ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          :class="viewMode === 'kline' ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="viewMode = 'kline'"
         >K线图</button>
         <button
           class="px-2 py-0.5 text-[9px] rounded transition"
-          :class="viewMode === 'term' ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          :class="viewMode === 'term' ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="switchToTerm"
         >期限结构</button>
       </div>
@@ -30,7 +30,7 @@
         <button
           v-for="p in periods" :key="p.value"
           class="px-2 py-0.5 text-[10px] rounded transition"
-          :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-gray-500 hover:text-gray-300'"
+          :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="period = p.value"
         >{{ p.label }}</button>
       </div>
@@ -42,7 +42,7 @@
           class="px-1.5 py-0.5 text-[9px] rounded border transition"
           :class="activeSubChart === ind.key
             ? 'border-terminal-accent text-terminal-accent'
-            : 'border-gray-700 text-gray-600 hover:border-gray-500'"
+            : 'border-theme text-theme-muted hover:border-gray-500'"
           @click="activeSubChart = ind.key"
         >{{ ind.label }}</button>
       </div>
@@ -50,18 +50,18 @@
       <div class="flex-1" />
 
       <!-- 最新价 + OI -->
-      <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
+      <span class="text-[11px] font-mono" :class="latestChange >= 0 ? 'text-bullish' : 'text-bearish'">
         {{ latestPrice ?? '--' }}
       </span>
-      <span class="text-[10px] font-mono" :class="latestChange >= 0 ? 'text-red-400' : 'text-green-400'">
+      <span class="text-[10px] font-mono" :class="latestChange >= 0 ? 'text-bullish' : 'text-bearish'">
         {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
       </span>
-      <span class="text-[10px] font-mono text-gray-500">OI: {{ latestHold?.toLocaleString() ?? '--' }}</span>
+      <span class="text-[10px] font-mono text-theme-tertiary">OI: {{ latestHold?.toLocaleString() ?? '--' }}</span>
     </div>
 
     <!-- 错误状态 -->
     <div v-if="chartError" class="flex-1 flex items-center justify-center">
-      <div class="text-red-400 text-sm">{{ chartError }}</div>
+      <div class="text-bullish text-sm">{{ chartError }}</div>
     </div>
 
     <!-- K线图 -->
@@ -242,10 +242,8 @@ function loadSymbol() {
 
 // ── 监听 ──────────────────────────────────────────────────────
 watch(period, () => { fetchData() })
-watch(activeSubChart, () => {
-  if (!histData.value.length) return
-  processedChartData.value = buildChartData(histData.value, period.value, {}, [])
-})
+// 注意：不要在这里给 processedChartData 赋值！它是 computed，会自动更新
+// activeSubChart 的变化会通过 activeSubCharts computed 传递给子组件
 
 watch(() => props.symbol, (s) => {
   if (!s) return

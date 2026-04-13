@@ -1,59 +1,59 @@
 <template>
   <!-- 双层布局：上面盘口行 + 下面控制行 -->
-  <div class="flex flex-col shrink-0 border-b border-gray-700/50 bg-terminal-panel/90">
+  <div class="flex flex-col shrink-0 border-b border-theme bg-terminal-panel/90">
 
     <!-- 盘口行：标的+价格+MA+OHLCV（紧凑单行） -->
     <div class="flex items-center gap-x-2 px-2 py-0.5 overflow-x-auto text-[9px]">
       <!-- 标的+代码（固定） -->
       <div class="flex items-center gap-1 shrink-0">
-        <span class="font-bold text-gray-100 whitespace-nowrap">{{ name }}</span>
-        <span class="text-gray-500 font-mono">{{ code }}</span>
+        <span class="font-bold text-theme-primary whitespace-nowrap">{{ name }}</span>
+        <span class="text-theme-tertiary font-mono">{{ code }}</span>
       </div>
 
       <span class="text-gray-700 shrink-0">|</span>
 
       <!-- 最新价 -->
-      <span class="font-mono font-medium text-gray-100 shrink-0">{{ quote.price != null ? quote.price.toFixed(2) : '--' }}</span>
+      <span class="font-mono font-medium text-theme-primary shrink-0">{{ quote.price != null ? quote.price.toFixed(2) : '--' }}</span>
 
       <!-- 涨跌额/涨跌幅 -->
-      <span class="shrink-0" :class="(quote.change ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+      <span class="shrink-0" :class="(quote.change ?? 0) >= 0 ? 'text-bullish' : 'text-bearish'">
         {{ (quote.change ?? 0) >= 0 ? '+' : '' }}{{ quote.change != null ? quote.change.toFixed(2) : '--' }}
       </span>
       <span class="shrink-0 px-1 py-0 rounded text-[9px]"
-        :class="(quote.change_pct ?? 0) >= 0 ? 'bg-red-500/15 text-red-400' : 'bg-green-500/15 text-green-400'">
+        :class="(quote.change_pct ?? 0) >= 0 ? 'bg-red-500/15 text-bullish' : 'bg-green-500/15 text-bearish'">
         {{ (quote.change_pct ?? 0) >= 0 ? '+' : '' }}{{ quote.change_pct != null ? quote.change_pct.toFixed(2) : '--' }}%
       </span>
 
       <!-- MA 数值 -->
       <template v-for="ma in maDisplays" :key="ma.period">
         <span class="shrink-0 font-mono text-[9px]" :style="{ color: ma.color }">
-          MA{{ ma.period }}<span class="text-gray-200 ml-0.5">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
+          MA{{ ma.period }}<span class="text-theme-primary ml-0.5">{{ ma.value != null ? ma.value.toFixed(2) : '--' }}</span>
         </span>
       </template>
 
       <!-- 十字光标 OHLCV 数据（hover时显示在同一行，不遮挡图表） -->
       <template v-if="hoverData && Object.keys(hoverData).length">
         <span class="text-gray-700 shrink-0">|</span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">{{ hoverData.date || hoverData.time }}</span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">开<span class="text-gray-200 ml-0.5">{{ hoverData.open?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">高<span class="text-red-300 ml-0.5">{{ hoverData.high?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">低<span class="text-green-300 ml-0.5">{{ hoverData.low?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">收<span class="text-gray-200 ml-0.5">{{ hoverData.close?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-gray-400 font-mono text-[9px]">量<span class="text-gray-200 ml-0.5">{{ hoverData.volume != null ? (hoverData.volume / 1e8).toFixed(2)+'亿' : '' }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">{{ hoverData.date || hoverData.time }}</span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">开<span class="text-theme-primary ml-0.5">{{ hoverData.open?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">高<span class="text-red-300 ml-0.5">{{ hoverData.high?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">低<span class="text-green-300 ml-0.5">{{ hoverData.low?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">收<span class="text-theme-primary ml-0.5">{{ hoverData.close?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">量<span class="text-theme-primary ml-0.5">{{ hoverData.volume != null ? (hoverData.volume / 1e8).toFixed(2)+'亿股' : '' }}</span></span>
       </template>
 
       <!-- 基础行情（无hover时） -->
       <template v-if="!hoverData || !Object.keys(hoverData).length">
         <span class="text-gray-700 shrink-0">|</span>
-        <span class="text-gray-400 shrink-0 text-[9px]">量<span class="text-gray-200 font-mono ml-0.5">{{ fmtVol(quote.volume) }}</span></span>
-        <span class="text-gray-400 shrink-0 text-[9px]">额<span class="text-gray-200 font-mono ml-0.5">{{ fmtAmt(quote.amount) }}</span></span>
-        <span class="text-gray-400 shrink-0 text-[9px]">振<span class="text-gray-200 font-mono ml-0.5">{{ quote.amplitude != null ? quote.amplitude.toFixed(2)+'%' : '--' }}</span></span>
-        <span class="text-gray-400 shrink-0 text-[9px]">换<span class="text-gray-200 font-mono ml-0.5">{{ quote.turnover_rate != null ? quote.turnover_rate.toFixed(2)+'%' : '--' }}</span></span>
+        <span class="text-theme-secondary shrink-0 text-[9px]">量<span class="text-theme-primary font-mono ml-0.5">{{ fmtVol(quote.volume) }}</span></span>
+        <span class="text-theme-secondary shrink-0 text-[9px]">额<span class="text-theme-primary font-mono ml-0.5">{{ fmtAmt(quote.amount) }}</span></span>
+        <span class="text-theme-secondary shrink-0 text-[9px]">振<span class="text-theme-primary font-mono ml-0.5">{{ quote.amplitude != null ? quote.amplitude.toFixed(2)+'%' : '--' }}</span></span>
+        <span class="text-theme-secondary shrink-0 text-[9px]">换<span class="text-theme-primary font-mono ml-0.5">{{ quote.turnover_rate != null ? quote.turnover_rate.toFixed(2)+'%' : '--' }}</span></span>
       </template>
     </div>
 
     <!-- 控制行：周期切换 | 图标按钮（右对齐） -->
-    <div class="flex items-center gap-1 px-2 py-0.5 border-t border-gray-700/20">
+    <div class="flex items-center gap-1 px-2 py-0.5 border-t border-theme/20">
 
       <!-- 周期切换（紧凑 icon + tooltip） -->
       <div class="flex items-center gap-0.5 shrink-0">
@@ -62,7 +62,7 @@
           class="w-5 h-5 flex items-center justify-center rounded text-[9px] font-mono transition-colors"
           :class="period === p.key
             ? 'bg-blue-500/20 text-blue-400'
-            : 'text-gray-600 hover:text-gray-300'"
+            : 'text-theme-muted hover:text-theme-primary'"
           :title="p.label"
           @click="emit('period-change', p.key)"
         >{{ p.label }}</button>
@@ -79,7 +79,7 @@
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="adjustment === 'qfq'
               ? 'text-amber-400'
-              : 'text-gray-600 hover:text-gray-300'"
+              : 'text-theme-muted hover:text-theme-primary'"
             title="复权"
             @click="emit('adjustment-change', adjustment === 'qfq' ? 'none' : 'qfq')"
           >
@@ -89,8 +89,8 @@
             </svg>
           </button>
           <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
-            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
-              <span class="text-[9px] text-gray-200">{{ adjustment === 'qfq' ? '前复权 ✓' : '前复权' }}</span>
+            <div class="bg-theme-secondary border border-theme-secondary rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-theme-primary">{{ adjustment === 'qfq' ? '前复权 ✓' : '前复权' }}</span>
             </div>
           </div>
         </div>
@@ -101,7 +101,7 @@
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="yAxisType === 'log'
               ? 'text-purple-400'
-              : 'text-gray-600 hover:text-gray-300'"
+              : 'text-theme-muted hover:text-theme-primary'"
             title="Y轴坐标系"
             @click="emit('yaxis-change', yAxisType === 'linear' ? 'log' : 'linear')"
           >
@@ -111,8 +111,8 @@
             </svg>
           </button>
           <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
-            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
-              <span class="text-[9px] text-gray-200">{{ yAxisType === 'log' ? '对数坐标' : '线性坐标' }}</span>
+            <div class="bg-theme-secondary border border-theme-secondary rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-theme-primary">{{ yAxisType === 'log' ? '对数坐标' : '线性坐标' }}</span>
             </div>
           </div>
         </div>
@@ -123,7 +123,7 @@
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="overlaySymbol
               ? 'text-cyan-400'
-              : 'text-gray-600 hover:text-gray-300'"
+              : 'text-theme-muted hover:text-theme-primary'"
             title="叠加标的"
             @click="selectOverlay"
           >
@@ -133,8 +133,8 @@
             </svg>
           </button>
           <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
-            <div class="bg-gray-900 border border-gray-600 rounded px-2 py-1 shadow-xl whitespace-nowrap">
-              <span class="text-[9px] text-gray-200">{{ overlaySymbol ? overlaySymbol : '叠加标的' }}</span>
+            <div class="bg-theme-secondary border border-theme-secondary rounded px-2 py-1 shadow-xl whitespace-nowrap">
+              <span class="text-[9px] text-theme-primary">{{ overlaySymbol ? overlaySymbol : '叠加标的' }}</span>
             </div>
           </div>
         </div>
@@ -142,7 +142,7 @@
         <!-- 导出 -->
         <div class="relative" v-click-outside="() => showExport = false">
           <button
-            class="w-5 h-5 flex items-center justify-center rounded text-gray-600 hover:text-gray-300 transition-colors"
+            class="w-5 h-5 flex items-center justify-center rounded text-theme-muted hover:text-theme-primary transition-colors"
             title="导出"
             @click="showExport = !showExport"
           >
@@ -151,16 +151,16 @@
             </svg>
           </button>
           <div v-if="showExport"
-            class="absolute right-0 mt-1 w-36 rounded border border-gray-600 bg-terminal-panel shadow-xl z-50 py-1">
-            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+            class="absolute right-0 mt-1 w-36 rounded border border-theme-secondary bg-terminal-panel shadow-xl z-50 py-1">
+            <button class="w-full px-3 py-1 text-left text-theme-primary hover:bg-theme-tertiary/60 text-[10px] flex items-center gap-2"
               @click="doExport('visible'); showExport=false">
               <span class="text-[10px]">📊</span>导出可视范围
             </button>
-            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+            <button class="w-full px-3 py-1 text-left text-theme-primary hover:bg-theme-tertiary/60 text-[10px] flex items-center gap-2"
               @click="doExport('all'); showExport=false">
               <span class="text-[10px]">📋</span>导出全部数据
             </button>
-            <button class="w-full px-3 py-1 text-left text-gray-300 hover:bg-gray-700/60 text-[10px] flex items-center gap-2"
+            <button class="w-full px-3 py-1 text-left text-theme-primary hover:bg-theme-tertiary/60 text-[10px] flex items-center gap-2"
               @click="emit('export-png'); showExport=false">
               <span class="text-[10px]">🖼</span>导出 PNG
             </button>

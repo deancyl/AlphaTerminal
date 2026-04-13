@@ -12,7 +12,7 @@
           <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
-            class="px-2 py-0.5 text-[10px] rounded border border-gray-600 text-gray-400 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
+            class="px-2 py-0.5 text-[10px] rounded border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
             @click="emit('open-fullscreen', { symbol: selectedIndex, name: currentIndexName })"
             title="全屏"
           >⛶ 全屏</button>
@@ -23,7 +23,7 @@
                   class="px-2 py-0.5 text-[10px] rounded border transition"
                   :class="selectedIndex === idx.symbol
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                    : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
                   @click="switchIndex(idx)">
             {{ idx.name }}
           </button>
@@ -34,26 +34,23 @@
                   class="px-2 py-0.5 text-[10px] rounded border transition"
                   :class="selectedPeriod === p.key
                     ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
-                    : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
                   @click="switchPeriod(p.key)">
             {{ p.label }}
           </button>
           <!-- Indicator toggles -->
-          <span class="ml-2 text-terminal-dim text-[9px]">指标:</span>
+          <span class="ml-2 text-theme-tertiary text-[9px]">指标:</span>
           <button v-for="ind in indicators" :key="ind.key"
                   class="px-1.5 py-0.5 text-[9px] rounded border transition"
                   :class="activeIndicators.includes(ind.key)
                     ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
-                    : 'bg-terminal-bg border-gray-700 text-terminal-dim hover:border-gray-500'"
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
                   @click="toggleIndicator(ind.key)">
             {{ ind.label }}
           </button>
         </div>
         <div class="flex-1 min-h-0">
-          <!-- 选中的指数名称 -->
-          <div class="text-xs text-gray-400 mb-1 px-1">
-            {{ currentIndexName }}
-          </div>
+          <!-- IndexLineChart 内部已显示名称，这里不再重复显示 -->
           <IndexLineChart
             :key="`${selectedIndex}-${selectedPeriod}`"
             :symbol="selectedIndex"
@@ -89,7 +86,7 @@
          gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-2">
         <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
-        <div class="text-[10px] text-terminal-dim mb-1 flex items-center justify-between">
+        <div class="text-[10px] text-theme-tertiary mb-1 flex items-center justify-between">
           <span>🌐 市场风向标</span>
           <span class="text-[9px] opacity-60">{{ windItems.length }}标的</span>
         </div>
@@ -97,7 +94,7 @@
         <div class="grid grid-cols-2 gap-1 p-0.5">
           <div
             v-for="item in windItems" :key="item.symbol"
-            class="bg-gray-800/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-700/50 transition-colors"
+            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors"
             @click="handleWindClick(item)"
           >
             <!-- 标的名称（分类标签） -->
@@ -106,16 +103,16 @@
                 class="text-[7px] px-0.5 rounded border"
                 :class="item.category === 'macro' ? 'border-amber-500/40 text-amber-400' : 'border-cyan-500/40 text-cyan-400'"
               >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
-              <span class="text-[9px] text-gray-200 truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
+              <span class="text-[9px] text-theme-primary truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>
             <!-- 最新价（右对齐） -->
-            <div class="text-[10px] font-mono text-gray-100 text-right w-full">
+            <div class="text-[10px] font-mono text-theme-primary text-right w-full">
               {{ item.category === 'macro' ? formatMacroPrice(item) : formatPrice(item.price) }}
             </div>
             <!-- 涨跌幅（右对齐） -->
             <div
               class="text-[10px] font-mono font-bold text-right w-full"
-              :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'"
+              :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
             >
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
             </div>
@@ -138,12 +135,12 @@
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
-          <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
+          <span class="text-theme-tertiary text-[10px]">{{ tsDisplay }}</span>
         </div>
         <div class="flex-1 overflow-auto">
           <table class="w-full text-xs">
             <thead>
-              <tr class="text-terminal-dim border-b border-gray-700">
+              <tr class="text-theme-tertiary border-b border-theme">
                 <th class="text-left py-1">指数</th>
                 <th class="text-right py-1">最新价</th>
                 <th class="text-right py-1">涨跌幅</th>
@@ -151,17 +148,17 @@
             </thead>
             <tbody>
               <tr v-for="item in chinaAllItems" :key="item.symbol"
-                  class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+                  class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
                   @click="handleChinaClick(item)">
-                <td class="py-1 text-gray-300 text-[11px]">{{ item.name }}</td>
+                <td class="py-1 text-theme-primary text-[11px]">{{ item.name }}</td>
                 <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
                 <td class="py-1 text-right font-mono text-[11px]"
-                    :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+                    :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
                   {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
                 </td>
               </tr>
               <tr v-if="!chinaAllItems.length">
-                <td colspan="3" class="py-4 text-center text-terminal-dim text-xs">暂无数据</td>
+                <td colspan="3" class="py-4 text-center text-theme-tertiary text-xs">暂无数据</td>
               </tr>
             </tbody>
           </table>

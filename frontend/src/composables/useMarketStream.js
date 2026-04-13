@@ -17,7 +17,22 @@
  */
 import { ref, onUnmounted } from 'vue'
 
-const WS_BASE = import.meta.env.VITE_WS_BASE || ''
+// WebSocket 基础 URL 配置
+// 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
+// 生产环境 HTTPS：如果页面是 HTTPS 且 VITE_WS_BASE 为空，需要明确使用 wss://
+let WS_BASE = import.meta.env.VITE_WS_BASE || ''
+
+// 自动检测协议：HTTPS 页面需要 WSS，但 Vite dev server 只支持 WS
+// 在生产 HTTPS 环境中，如果 VITE_WS_BASE 为空，使用绝对路径
+if (!WS_BASE && typeof window !== 'undefined') {
+  const isHttps = window.location.protocol === 'https:'
+  if (isHttps) {
+    // 生产 HTTPS：使用 wss:// 绝对路径
+    // 注意：这需要 Nginx 或其他代理将 wss:// 转发到后端的 ws://
+    WS_BASE = `wss://${window.location.host}`
+  }
+  // HTTP 页面保持空字符串（相对路径，Vite proxy 处理）
+}
 
 // ── 模块级单例状态（所有组件共享）───────────────────────────────
 let _ws = null

@@ -2,7 +2,7 @@
   <div class="flex flex-col gap-2">
 
     <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
-    <div class="bg-terminal-bg rounded border border-gray-700 p-2">
+    <div class="bg-terminal-bg rounded border border-theme p-2">
       <div class="flex items-center justify-between mb-1">
         <span class="text-[10px] text-terminal-dim">📈 全市场多空对比（全天走势）</span>
         <span class="text-[9px] text-terminal-dim">{{ intradayUpdateTime }}</span>
@@ -12,7 +12,7 @@
     </div>
 
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
-    <div class="bg-terminal-bg rounded border border-gray-700 p-3">
+    <div class="bg-terminal-bg rounded border border-theme p-3">
       <!-- 标题栏：情绪 + 资讯面 -->
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 A股市场情绪</span>
@@ -22,10 +22,10 @@
             v-if="newsSentiment.total_count > 0"
             class="text-[10px] px-1.5 py-0.5 rounded border"
             :class="newsSentiment.bullish - newsSentiment.bearish > 0
-              ? 'border-red-500/40 bg-red-500/10 text-red-400'
+              ? 'border-red-500/40 bg-red-500/10 text-bullish'
               : newsSentiment.bullish - newsSentiment.bearish < 0
-                ? 'border-green-500/40 bg-green-500/10 text-green-400'
-                : 'border-gray-600 bg-gray-600/10 text-gray-400'"
+                ? 'border-green-500/40 bg-green-500/10 text-bearish'
+                : 'border-theme-secondary bg-theme-tertiary/10 text-theme-secondary'"
           >
             📰 资讯面: {{ newsSentiment.label }} ({{ newsSentiment.bullish_count }}:{{ newsSentiment.bearish_count }})
           </span>
@@ -34,14 +34,14 @@
       </div>
 
       <!-- Phase 4: 大字汇总行 -->
-      <div class="flex items-center justify-between mb-2 px-1 py-1.5 rounded bg-terminal-panel/60 border border-gray-700/60">
-        <span class="text-red-400 font-bold text-sm">
+      <div class="flex items-center justify-between mb-2 px-1 py-1.5 rounded bg-terminal-panel/60 border border-theme/60">
+        <span class="text-bullish font-bold text-sm">
           🚀 上涨: <span class="font-mono text-base">{{ data.advance || 0 }}</span> 家
         </span>
         <span class="text-yellow-400 font-bold text-sm">
           ➖ 平盘: <span class="font-mono text-base">{{ data.unchanged || 0 }}</span> 家
         </span>
-        <span class="text-green-400 font-bold text-sm">
+        <span class="text-bearish font-bold text-sm">
           🟩 下跌: <span class="font-mono text-base">{{ data.decline || 0 }}</span> 家
         </span>
       </div>
@@ -57,9 +57,9 @@
       </div>
 
       <!-- 底部统计 -->
-      <div class="flex justify-between mt-2 text-[9px] border-t border-gray-700 pt-2">
-        <span class="text-red-400">🔴 涨停 {{ data.limit_up || 0 }}</span>
-        <span class="text-green-400">🟢 跌停 {{ data.limit_down || 0 }}</span>
+      <div class="flex justify-between mt-2 text-[9px] border-t border-theme pt-2">
+        <span class="text-bullish">🔴 涨停 {{ data.limit_up || 0 }}</span>
+        <span class="text-bearish">🟢 跌停 {{ data.limit_down || 0 }}</span>
         <span class="text-terminal-dim">全市场 {{ data.total || 0 }} 只</span>
       </div>
     </div>
@@ -68,7 +68,7 @@
     <div class="overflow-hidden flex-1" style="max-height: 140px;">
       <table class="w-full text-xs">
         <thead>
-          <tr class="text-terminal-dim border-b border-gray-700">
+          <tr class="text-terminal-dim border-b border-theme">
             <th class="text-left py-1">指数</th>
             <th class="text-right py-1">最新价</th>
             <th class="text-right py-1">涨跌幅</th>
@@ -77,17 +77,17 @@
         </thead>
         <tbody>
           <tr v-for="(item, key) in allItems" :key="key"
-              class="border-b border-gray-800 hover:bg-white/5 cursor-pointer transition-colors"
+              class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
               @click="$emit('symbol-click', { symbol: item.key, name: item.name })">
-            <td class="py-1.5 text-gray-300">{{ item.name }}</td>
+            <td class="py-1.5 text-theme-primary">{{ item.name }}</td>
             <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index || item.price) }}</td>
             <td class="py-1.5 text-right font-mono"
-                :class="(item.change_pct || 0) >= 0 ? 'text-red-400' : 'text-green-400'">
+                :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
             </td>
             <td class="py-1.5 text-right">
               <span class="px-1 py-0.5 rounded text-[9px]"
-                    :class="item.status === '交易中' ? 'bg-green-500/20 text-green-400' : 'bg-gray-600/30 text-gray-400'">
+                    :class="item.status === '交易中' ? 'bg-green-500/20 text-bearish' : 'bg-theme-tertiary/30 text-theme-secondary'">
                 {{ item.status }}
               </span>
             </td>
