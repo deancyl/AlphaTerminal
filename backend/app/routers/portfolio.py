@@ -144,8 +144,8 @@ async def delete_position(portfolio_id: int, symbol: str):
 @router.get("/{portfolio_id}/pnl")
 async def portfolio_pnl(portfolio_id: int):
     """
-    实时浮动盈亏计算
-    返回每只持仓的当前市值、成本、盈亏额、盈亏率
+    实时浮动盈亏计算（专业增强版）
+    增加: 名称、权重%、今日涨跌幅、市场、PE/PB、换手率
     依赖 SpotCache（后台每3分钟刷新的全市场实时行情）
     """
     from app.services.sentiment_engine import SpotCache
@@ -156,47 +156,83 @@ async def portfolio_pnl(portfolio_id: int):
             "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
             (portfolio_id,)
         ).fetchall()
+        # 获取持仓股票的基本面数据（PE/PB等）
+        stock_meta = {}
+        meta_rows = conn.execute(
+            "SELECT symbol, name, per, pb, mktcap, turnover FROM market_all_stocks"
+        ).fetchall()
+        for r in meta_rows:
+            stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
+            stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
+
+        stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
         conn.close()
 
     if not rows:
         return {"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0}
 
-    spot = SpotCache.get_stocks()   # [{code, price, ...}, ...]
-    price_map = {s["code"]: s["price"] for s in spot}
+    spot = SpotCache.get_stocks()
+    price_map = {s["code"]: s for s in spot}
 
     result = []
     total_cost = 0.0
     total_value = 0.0
     for symbol, shares, avg_cost in rows:
-        current_price = price_map.get(symbol, avg_cost)   # 无行情时用成本价
+        info = price_map.get(symbol, {})
+        current_price = info.get("price", avg_cost)
+        change_pct   = info.get("change_pct", 0.0)
         market_value = shares * current_price
-        cost_total = shares * avg_cost
-        pnl = market_value - cost_total
-        pnl_pct = (pnl / cost_total * 100) if cost_total > 0 else 0.0
+        cost_total   = shares * avg_cost
+        pnl         = market_value - cost_total
+        pnl_pct    = (pnl / cost_total * 100) if cost_total > 0 else 0.0
+
+        sym_upper = symbol.upper().replace("SH", "").replace("SZ", "").replace("HK", "").replace("US", "")
+        if sym_upper.startswith("6") or sym_upper.startswith("0") or sym_upper.startswith("3"):
+            market = "A股"
+        elif "hk" in symbol.lower():
+            market = "港股"
+        elif "us" in symbol.lower():
+            market = "美股"
+        else:
+            market = "其他"
+
+        meta = stock_meta.get(symbol, {})
         result.append({
-            "symbol":    symbol,
-            "shares":    shares,
-            "avg_cost":  round(avg_cost, 3),
-            "price":     round(current_price, 3),
+            "symbol":       symbol,
+            "name":         meta.get("name", symbol),
+            "shares":       shares,
+            "avg_cost":     round(avg_cost, 3),
+            "price":        round(current_price, 3),
+            "change_pct":   round(change_pct, 2),
             "market_value": round(market_value, 2),
-            "cost_total": round(cost_total, 2),
-            "pnl":       round(pnl, 2),
-            "pnl_pct":   round(pnl_pct, 2),
+            "cost_total":   round(cost_total, 2),
+            "pnl":         round(pnl, 2),
+            "pnl_pct":    round(pnl_pct, 2),
+            "weight":       0.0,
+            "market":       market,
+            "pe":          round(meta.get("per"), 2) if meta.get("per") else None,
+            "pb":          round(meta.get("pb"), 2) if meta.get("pb") else None,
+            "turnover":    round(meta.get("turnover"), 2) if meta.get("turnover") else None,
         })
         total_cost  += cost_total
         total_value += market_value
 
+    # 第二遍：计算权重
+    for pos in result:
+        pos["weight"] = round(pos["market_value"] / total_value * 100, 2) if total_value > 0 else 0.0
+
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
     return {
-        "positions":   result,
+        "positions":    result,
         "total_cost":  round(total_cost, 2),
         "total_value": round(total_value, 2),
-        "total_pnl":  round(total_pnl, 2),
+        "total_pnl":   round(total_pnl, 2),
         "total_pnl_pct": round(total_pnl_pct, 2),
     }
 
-# ── 净值历史 ─────────────────────────────────────────────────
+
+
 
 @router.get("/{portfolio_id}/snapshots")
 async def get_snapshots(

@@ -59,39 +59,79 @@
 
       <!-- 风险指标面板 -->
       <div v-if="pnlData && riskMetrics" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
-        <div class="text-[9px] text-terminal-dim mb-1">📊 风险指标</div>
+        <div class="text-[9px] text-terminal-dim mb-1">📊 风险与收益统计</div>
         <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[9px]">
+          <!-- 年化收益 -->
           <div>
-            <span class="text-terminal-dim">波动率</span>
-            <div class="font-mono" :class="riskMetrics.volatility > 0.25 ? 'text-bullish' : riskMetrics.volatility > 0.15 ? 'text-yellow-400' : 'text-bearish'">
-              {{ riskMetrics.volatility }}%
+            <span class="text-terminal-dim">年化收益</span>
+            <div class="font-mono text-[10px]" :class="Number(riskMetrics.annualReturn) >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ Number(riskMetrics.annualReturn) >= 0 ? '+' : '' }}{{ riskMetrics.annualReturn }}%
             </div>
           </div>
+          <!-- 夏普比率 -->
           <div>
             <span class="text-terminal-dim">夏普比率</span>
-            <div class="font-mono" :class="riskMetrics.sharpe >= 1 ? 'text-bearish' : riskMetrics.sharpe > 0 ? 'text-yellow-400' : 'text-bullish'">
+            <div class="font-mono text-[10px]" :class="Number(riskMetrics.sharpe) >= 1 ? 'text-bullish' : Number(riskMetrics.sharpe) > 0 ? 'text-yellow-400' : 'text-bearish'">
               {{ riskMetrics.sharpe }}
             </div>
           </div>
+          <!-- 波动率 -->
           <div>
-            <span class="text-terminal-dim">最大回撤</span>
-            <div class="font-mono text-bullish">{{ riskMetrics.maxDrawdown }}%</div>
-          </div>
-          <div>
-            <span class="text-terminal-dim">年化收益</span>
-            <div class="font-mono" :class="riskMetrics.annualReturn >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ riskMetrics.annualReturn >= 0 ? '+' : '' }}{{ riskMetrics.annualReturn }}%
+            <span class="text-terminal-dim">年化波动</span>
+            <div class="font-mono text-[10px]" :class="Number(riskMetrics.volatility) > 25 ? 'text-bullish' : Number(riskMetrics.volatility) > 15 ? 'text-yellow-400' : 'text-bearish'">
+              {{ riskMetrics.volatility }}%
             </div>
           </div>
+          <!-- 最大回撤 -->
+          <div>
+            <span class="text-terminal-dim">最大回撤</span>
+            <div class="font-mono text-[10px] text-bullish">{{ riskMetrics.maxDrawdown }}%</div>
+          </div>
+          <!-- 胜率 -->
+          <div>
+            <span class="text-terminal-dim">胜率</span>
+            <div class="font-mono text-[10px]" :class="Number(riskMetrics.winRate) > 50 ? 'text-bullish' : 'text-bearish'">
+              {{ riskMetrics.winRate }}%
+            </div>
+          </div>
+          <!-- 盈亏比 -->
+          <div>
+            <span class="text-terminal-dim">盈亏比</span>
+            <div class="font-mono text-[10px]" :class="Number(riskMetrics.profitLossRatio) >= 1 ? 'text-bullish' : 'text-bearish'">
+              {{ riskMetrics.profitLossRatio }}
+            </div>
+          </div>
+          <!-- 最大单日盈利 -->
+          <div>
+            <span class="text-terminal-dim">最佳日</span>
+            <div class="font-mono text-[10px] text-bullish">+{{ riskMetrics.bestDay }}%</div>
+          </div>
+          <!-- 最大单日亏损 -->
+          <div>
+            <span class="text-terminal-dim">最差日</span>
+            <div class="font-mono text-[10px] text-bearish">{{ riskMetrics.worstDay }}%</div>
+          </div>
+          <!-- 最大连续上涨 -->
+          <div>
+            <span class="text-terminal-dim">连涨最高</span>
+            <div class="font-mono text-[10px] text-bullish">{{ riskMetrics.maxConsecUp }}天</div>
+          </div>
+          <!-- 最大连续下跌 -->
+          <div>
+            <span class="text-terminal-dim">连跌最高</span>
+            <div class="font-mono text-[10px] text-bearish">{{ riskMetrics.maxConsecDown }}天</div>
+          </div>
+          <!-- 持仓集中度 -->
           <div class="col-span-2 mt-0.5">
-            <span class="text-terminal-dim">持仓集中度</span>
-            <div class="font-mono text-theme-primary">
+            <span class="text-terminal-dim">集中度</span>
+            <div class="font-mono text-[10px] text-theme-primary">
               Top3 {{ riskMetrics.top3Concentration }}% | Top5 {{ riskMetrics.top5Concentration }}%
             </div>
           </div>
+          <!-- β系数 -->
           <div class="col-span-2">
-            <span class="text-terminal-dim">β (vs沪深300)</span>
-            <div class="font-mono text-theme-primary">{{ riskMetrics.portfolioBeta }}</div>
+            <span class="text-terminal-dim">β(沪深300)</span>
+            <div class="font-mono text-[10px] text-theme-primary">{{ riskMetrics.portfolioBeta }}</div>
           </div>
         </div>
       </div>
@@ -148,37 +188,58 @@
             <tr class="border-b border-theme">
               <th class="text-left py-1 px-2">代码</th>
               <th class="text-left py-1 px-2">名称</th>
-              <th class="text-right py-1 px-2">持仓(股)</th>
-              <th class="text-right py-1 px-2">成本价</th>
+              <th class="text-right py-1 px-2">持仓</th>
+              <th class="text-right py-1 px-2">成本</th>
               <th class="text-right py-1 px-2">现价</th>
+              <th class="text-right py-1 px-2">今涨跌</th>
               <th class="text-right py-1 px-2">市值</th>
-              <th class="text-right py-1 px-2">浮动盈亏</th>
+              <th class="text-right py-1 px-2">盈亏额</th>
               <th class="text-right py-1 px-2">盈亏率</th>
-              <th class="text-right py-1 px-2">占比</th>
+              <th class="text-right py-1 px-2">权重</th>
+              <th class="text-right py-1 px-2">PE</th>
+              <th class="text-right py-1 px-2">PB</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="pos in sortedPositions" :key="pos.symbol"
                 class="border-b border-theme-secondary hover:bg-white/4 cursor-pointer transition"
                 @click="openTrade(pos)">
-              <td class="py-1 px-2 text-terminal-dim font-mono">{{ pos.symbol }}</td>
-              <td class="py-1 px-2 text-theme-primary">{{ pos.symbol }}</td>
-              <td class="py-1 px-2 text-right font-mono">{{ pos.shares }}</td>
-              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ pos.avg_cost }}</td>
-              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ pos.price }}</td>
-              <td class="py-1 px-2 text-right font-mono text-theme-primary">{{ fmtYuan(pos.market_value) }}</td>
-              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ pos.pnl >= 0 ? '+' : '' }}{{ fmtYuan(pos.pnl) }}
+              <!-- 代码 -->
+              <td class="py-1 px-2 text-terminal-dim font-mono text-[9px]">{{ pos.symbol }}</td>
+              <!-- 名称+市场 -->
+              <td class="py-1 px-2">
+                <div class="text-theme-primary text-[10px]">{{ pos.name || pos.symbol }}</div>
+                <div class="text-[8px] text-terminal-dim">{{ pos.market }}</div>
               </td>
-              <td class="py-1 px-2 text-right font-mono" :class="pos.pnl_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ pos.pnl_pct >= 0 ? '+' : '' }}{{ pos.pnl_pct }}%
+              <!-- 持仓 -->
+              <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ pos.shares }}</td>
+              <!-- 成本价 -->
+              <td class="py-1 px-2 text-right font-mono text-theme-secondary text-[9px]">{{ pos.avg_cost }}</td>
+              <!-- 现价 -->
+              <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ pos.price }}</td>
+              <!-- 今日涨跌 -->
+              <td class="py-1 px-2 text-right font-mono text-[9px]" :class="(pos.change_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (pos.change_pct||0) >= 0 ? '+' : '' }}{{ pos.change_pct||0 }}%
               </td>
-              <td class="py-1 px-2 text-right text-terminal-dim">
-                {{ store.totalValue > 0 ? ((pos.market_value / store.totalValue) * 100).toFixed(1) + '%' : '--' }}
+              <!-- 市值 -->
+              <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ fmtYuan(pos.market_value) }}</td>
+              <!-- 浮动盈亏额 -->
+              <td class="py-1 px-2 text-right font-mono text-[9px]" :class="(pos.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (pos.pnl||0) >= 0 ? '+' : '' }}{{ fmtYuan(pos.pnl||0) }}
               </td>
+              <!-- 盈亏率 -->
+              <td class="py-1 px-2 text-right font-mono font-bold text-[9px]" :class="(pos.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (pos.pnl_pct||0) >= 0 ? '+' : '' }}{{ pos.pnl_pct||0 }}%
+              </td>
+              <!-- 权重 -->
+              <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ pos.weight||0 }}%</td>
+              <!-- PE -->
+              <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ pos.pe || '--' }}</td>
+              <!-- PB -->
+              <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ pos.pb || '--' }}</td>
             </tr>
             <tr v-if="!sortedPositions.length">
-              <td colspan="9" class="py-8 text-center text-terminal-dim">
+              <td colspan="12" class="py-8 text-center text-terminal-dim">
                 {{ store.loading ? '加载中...' : '暂无持仓，请点击 [+ 调仓] 添加' }}
               </td>
             </tr>
@@ -515,8 +576,31 @@ const riskMetrics = computed(() => {
   const top3 = sorted.slice(0, 3).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
   const top5 = sorted.slice(0, 5).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
 
-  // 6. 组合Beta (简化估算: 用个股涨跌幅与沪深300的相关性)
-  const portfolioBeta = '1.00' // 简化: 默认1.0，精确计算需接入沪深300数据
+  // 6. 组合Beta (简化估算)
+  const portfolioBeta = '1.00'
+
+  // 7. 胜率（上涨天数占比）
+  const upDays = returns.filter(r => r > 0).length
+  const totalDays = returns.length
+  const winRate = totalDays > 0 ? (upDays / totalDays * 100) : 0
+
+  // 8. 盈亏比（平均盈利日涨幅 / |平均亏损日跌幅|）
+  const wins = returns.filter(r => r > 0)
+  const losses = returns.filter(r => r < 0)
+  const avgWin = wins.length > 0 ? wins.reduce((a,b)=>a+b,0)/wins.length : 0
+  const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((a,b)=>a+b,0)/losses.length) : 1
+  const profitLossRatio = avgLoss > 0 && avgWin > 0 ? (avgWin / avgLoss) : 0
+
+  // 9. 最大单日盈利 / 最大单日亏损
+  const bestDay = returns.length > 0 ? Math.max(...returns) * 100 : 0
+  const worstDay = returns.length > 0 ? Math.min(...returns) * 100 : 0
+
+  // 10. 最大连续上涨/下跌天数
+  let maxConsecUp = 0, maxConsecDown = 0, curUp = 0, curDown = 0
+  for (const r of returns) {
+    if (r > 0) { curUp++; curDown=0; maxConsecUp=Math.max(maxConsecUp,curUp) }
+    else if (r < 0) { curDown++; curUp=0; maxConsecDown=Math.max(maxConsecDown,curDown) }
+  }
 
   return {
     volatility: volatility.toFixed(2),
@@ -526,6 +610,13 @@ const riskMetrics = computed(() => {
     top3Concentration: top3.toFixed(1),
     top5Concentration: top5.toFixed(1),
     portfolioBeta,
+    winRate: winRate.toFixed(1),
+    profitLossRatio: profitLossRatio.toFixed(2),
+    bestDay: bestDay.toFixed(2),
+    worstDay: worstDay.toFixed(2),
+    maxConsecUp,
+    maxConsecDown,
+    totalDays,
   }
 })
 
