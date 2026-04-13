@@ -370,7 +370,7 @@
                   class="px-3 py-1 rounded border border-theme text-theme-secondary text-xs hover:bg-white/5">
             取消
           </button>
-          <button @click="doDelete"
+          <button @click="doDelete(deleteTarget)"
                   class="px-3 py-1 rounded bg-red-500/20 border border-red-500 text-red-400 text-xs hover:bg-red-500/30">
             确认删除
           </button>
@@ -426,26 +426,25 @@ function confirmDelete(acc) {
   deleteTarget.value = acc
   showDeleteModal.value = true
 }
-async function doDelete() {
-  if (!deleteTarget.value) return
+async function doDelete(acc) {
+  if (!acc || !acc.id) {
+    alert('删除目标无效，请重试')
+    showDeleteModal.value = false
+    return
+  }
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/v1/portfolio/${deleteTarget.value.id}`, {
-      method: 'DELETE',
-    })
+    const res = await fetch('/api/v1/portfolio/' + acc.id, { method: 'DELETE' })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      alert('删除失败: ' + (body.message || body.detail || `HTTP ${res.status}`))
+      alert('删除失败: ' + (body?.message || body?.detail || `HTTP ${res.status}`))
       return
     }
     showDeleteModal.value = false
     deleteTarget.value = null
     await store.fetchPortfolios()
-    // 如果删的是当前选中账户，切换到第一个
-    if (activePidValue.value === deleteTarget.value.id) {
-      const remaining = store.portfolios.value || []
-      if (remaining.length > 0) {
-        await store.switchAccount(remaining[0].id)
-      }
+    const remaining = (store.portfolios.value || []).filter(p => p.id !== acc.id)
+    if (remaining.length > 0) {
+      await store.switchAccount(remaining[0].id)
     }
   } catch(e) {
     alert('删除失败: ' + e.message)
