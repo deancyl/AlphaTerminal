@@ -11,37 +11,92 @@
         </button>
       </div>
 
-      <!-- 账户列表 -->
-      <div v-for="acc in store.portfolios.value" :key="acc.id"
-           class="rounded border p-2 cursor-pointer transition-all text-xs"
-           :class="acc.id === activePidValue
-             ? 'border-terminal-accent/60 bg-terminal-accent/10'
-             : 'border-theme hover:border-gray-500'"
-           @click="handleSwitch(acc.id)">
-        <div class="flex items-center justify-between">
-          <span class="text-theme-primary font-medium">{{ acc.name }}</span>
-          <span class="text-[9px] text-terminal-dim">{{ acc.type === 'main' ? '主账户' : '子账户' }}</span>
-        </div>
-        <!-- 实时总览（仅选中账户显示） -->
-        <div v-if="acc.id === activePidValue && pnlData" class="mt-1.5 grid grid-cols-2 gap-x-1">
-          <div>
-            <div class="text-[9px] text-terminal-dim">总资产</div>
-            <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
+      <!-- 账户列表（树形：主账户+折叠子账户） -->
+      <template v-for="acc in (store.portfolios.value || [])" :key="acc.id">
+        <!-- 主账户行 -->
+        <div class="rounded border p-2 cursor-pointer transition-all text-xs"
+             :class="acc.id === activePidValue
+               ? 'border-terminal-accent/60 bg-terminal-accent/10'
+               : 'border-theme hover:border-gray-500'"
+             @click="handleSwitch(acc.id)">
+          <div class="flex items-center justify-between">
+            <!-- 左：折叠箭头+名称 -->
+            <div class="flex items-center gap-1 min-w-0">
+              <!-- 子账户数量/折叠按钮（仅主账户） -->
+              <span v-if="getChildren(acc.id).length"
+                    class="text-[9px] cursor-pointer select-none flex-shrink-0"
+                    @click.stop="toggleCollapse(acc.id)">
+                {{ collapsedIds.has(acc.id) ? '▶' : '▼' }}
+                ({{ getChildren(acc.id).length }})
+              </span>
+              <span v-else class="w-3 flex-shrink-0"></span>
+              <span class="text-theme-primary font-medium truncate">{{ acc.name }}</span>
+              <span class="text-[9px] text-terminal-dim flex-shrink-0">
+                {{ acc.type === 'main' ? '主' : '子' }}
+              </span>
+            </div>
+            <!-- 右：删除按钮 -->
+            <button class="text-[9px] text-red-400/60 hover:text-red-400 ml-1 flex-shrink-0"
+                    title="删除账户"
+                    @click.stop="confirmDelete(acc)">
+              ✕
+            </button>
           </div>
-          <div>
-            <div class="text-[9px] text-terminal-dim">累计盈亏</div>
-            <div class="text-[10px] font-mono" :class="store.totalPnl >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ store.totalPnl >= 0 ? '+' : '' }}{{ fmtYuan(store.totalPnl) }}
+          <!-- 实时总览（仅选中账户显示） -->
+          <div v-if="acc.id === activePidValue && pnlData" class="mt-1.5 grid grid-cols-2 gap-x-1">
+            <div>
+              <div class="text-[9px] text-terminal-dim">总资产</div>
+              <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
+            </div>
+            <div>
+              <div class="text-[9px] text-terminal-dim">累计盈亏</div>
+              <div class="text-[10px] font-mono" :class="store.totalPnl >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ store.totalPnl >= 0 ? '+' : '' }}{{ fmtYuan(store.totalPnl) }}
+              </div>
+            </div>
+            <div class="col-span-2">
+              <div class="text-[9px] text-terminal-dim">盈亏率</div>
+              <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
+              </div>
             </div>
           </div>
-          <div class="col-span-2">
-            <div class="text-[9px] text-terminal-dim">盈亏率</div>
-            <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
+        </div>
+
+        <!-- 子账户行（仅当主账户未折叠时显示） -->
+        <div v-for="child in getChildren(acc.id)"
+             :key="child.id"
+             class="ml-3 rounded border p-2 cursor-pointer transition-all text-xs"
+             :class="child.id === activePidValue
+               ? 'border-terminal-accent/60 bg-terminal-accent/10'
+               : 'border-theme-secondary hover:border-gray-500'"
+             @click="handleSwitch(child.id)">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1 min-w-0">
+              <span class="text-[8px] text-terminal-dim">└</span>
+              <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
+            </div>
+            <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0"
+                    title="删除账户"
+                    @click.stop="confirmDelete(child)">
+              ✕
+            </button>
+          </div>
+          <!-- 实时总览（仅选中子账户显示） -->
+          <div v-if="child.id === activePidValue && pnlData" class="mt-1 grid grid-cols-2 gap-x-1">
+            <div>
+              <div class="text-[9px] text-terminal-dim">总资产</div>
+              <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
+            </div>
+            <div>
+              <div class="text-[9px] text-terminal-dim">盈亏率</div>
+              <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </template>
 
       <!-- 刷新按钮 -->
       <button @click="handleRefresh"
@@ -313,6 +368,26 @@
       </div>
     </div>
 
+    <!-- ═══ 删除账户确认弹窗 ══════════════════════════════════ -->
+    <div v-if="showDeleteModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+      <div class="bg-terminal-panel border border-red-500/50 rounded-xl w-72 p-4 shadow-2xl">
+        <div class="text-sm font-bold text-red-400 mb-2">确认删除账户</div>
+        <div class="text-xs text-theme-secondary mb-4">
+          确定要删除账户 <span class="text-theme-primary font-bold">{{ deleteTarget?.name }}</span> 吗？
+          <br>该账户下的所有持仓记录将被永久删除。
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button @click="showDeleteModal = false"
+                  class="px-3 py-1 rounded border border-theme text-theme-secondary text-xs hover:bg-white/5">
+            取消
+          </button>
+          <button @click="doDelete"
+                  class="px-3 py-1 rounded bg-red-500/20 border border-red-500 text-red-400 text-xs hover:bg-red-500/30">
+            确认删除
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -340,6 +415,49 @@ const activePidValue = computed(() => {
   return v ?? null
 })
 const pnlData = computed(() => store.pnl?.value ?? store.pnl ?? null)
+
+// ── 树形折叠 ─────────────────────────────────────────────
+const collapsedIds = ref(new Set())
+function toggleCollapse(id) {
+  if (collapsedIds.value.has(id)) collapsedIds.value.delete(id)
+  else collapsedIds.value.add(id)
+}
+function getChildren(parentId) {
+  return (store.portfolios.value || []).filter(p => p.parent_id === parentId)
+}
+
+// ── 删除账户 ─────────────────────────────────────────────
+const showDeleteModal = ref(false)
+const deleteTarget = ref(null)
+function confirmDelete(acc) {
+  deleteTarget.value = acc
+  showDeleteModal.value = true
+}
+async function doDelete() {
+  if (!deleteTarget.value) return
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_BASE || ''}/api/v1/portfolio/${deleteTarget.value.id}`, {
+      method: 'DELETE',
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      alert('删除失败: ' + (body.message || body.detail || `HTTP ${res.status}`))
+      return
+    }
+    showDeleteModal.value = false
+    deleteTarget.value = null
+    await store.fetchPortfolios()
+    // 如果删的是当前选中账户，切换到第一个
+    if (activePidValue.value === deleteTarget.value.id) {
+      const remaining = store.portfolios.value || []
+      if (remaining.length > 0) {
+        await store.switchAccount(remaining[0].id)
+      }
+    }
+  } catch(e) {
+    alert('删除失败: ' + e.message)
+  }
+}
 
 const sortCols = [
   { key: 'symbol',     label: '代码' },

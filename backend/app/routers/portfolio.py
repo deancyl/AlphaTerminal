@@ -48,10 +48,10 @@ async def list_portfolios():
     with _lock:
         conn = _get_conn()
         rows = conn.execute(
-            "SELECT id, name, type, created_at, total_cost FROM portfolios ORDER BY id"
+            "SELECT id, name, type, parent_id, created_at, total_cost FROM portfolios ORDER BY id"
         ).fetchall()
         conn.close()
-    return {"portfolios": _row2dict(rows, ["id", "name", "type", "created_at", "total_cost"])}
+    return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost"])}
 
 @router.post("/")
 async def create_portfolio(body: PortfolioIn):
@@ -61,8 +61,8 @@ async def create_portfolio(body: PortfolioIn):
         conn = _get_conn()
         try:
             cur = conn.execute(
-                "INSERT INTO portfolios (name, type, created_at, total_cost) VALUES (?,?,?,0)",
-                (body.name, body.type, now)
+                "INSERT INTO portfolios (name, type, parent_id, created_at, total_cost) VALUES (?,?,?,?,0)",
+                (body.name, body.type, getattr(body, "parent_id", None), now)
             )
             conn.commit()
             pid = cur.lastrowid
@@ -70,7 +70,7 @@ async def create_portfolio(body: PortfolioIn):
             conn.close()
             raise HTTPException(400, f"创建账户失败: {e}")
         conn.close()
-    return {"id": pid, "name": body.name, "type": body.type, "created_at": now, "total_cost": 0.0}
+    return {"id": pid, "name": body.name, "type": body.type, "parent_id": getattr(body, "parent_id", None), "created_at": now, "total_cost": 0.0}
 
 @router.delete("/{portfolio_id}")
 async def delete_portfolio(portfolio_id: int):
