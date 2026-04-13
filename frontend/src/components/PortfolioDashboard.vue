@@ -14,7 +14,7 @@
       </div>
 
       <!-- 账户列表 -->
-      <div v-for="acc in store.portfolios" :key="acc.id"
+      <div v-for="acc in store.portfolios.value" :key="acc.id"
            class="rounded border p-2 cursor-pointer transition-all text-xs"
            :class="acc.id === activePidValue
              ? 'border-terminal-accent/60 bg-terminal-accent/10'

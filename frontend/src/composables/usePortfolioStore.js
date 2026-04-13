@@ -152,16 +152,16 @@ function stopPoll() {
 }
 
 // ── 导出 ────────────────────────────────────────────────────
+// 必须用 reactive() 包裹，这样 Vue 模板访问 store.portfolios 时会
+// 自动解包 ref，不用在 v-for 中写 store.portfolios.value
 export function usePortfolioStore() {
   return {
-    // state (导出 .value 使其在 JS 中为实际数组/对象，而非 ref 本身)
-    portfolios:       portfolios,
-    activePid:        activePid,
-    positions:        positions,
-    pnl:              pnl,
-    snapshots:        snapshots,       // ref([])，组件内用 store.snapshots.value
-    loading:          loading,
-    // computed
+    portfolios,
+    activePid,
+    positions,
+    pnl,
+    snapshots,
+    loading,
     activePortfolio: computed(() =>
       portfolios.value.find(p => p.id === activePid.value) || null
     ),
@@ -169,7 +169,6 @@ export function usePortfolioStore() {
     totalCost:   computed(() => pnl.value?.total_cost  ?? 0),
     totalPnl:   computed(() => pnl.value?.total_pnl  ?? 0),
     totalPnlPct: computed(() => pnl.value?.total_pnl_pct ?? 0),
-    // actions
     fetchPortfolios,
     fetchPnL,
     fetchSnapshots,
