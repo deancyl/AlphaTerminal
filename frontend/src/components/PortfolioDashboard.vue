@@ -1,7 +1,5 @@
 <template>
   <div class="flex h-full overflow-hidden bg-terminal-bg">
-
-    <!-- ═══ 左侧边栏：账户选择 + 总览 ════════════════════════ -->
     <div class="w-44 shrink-0 flex flex-col gap-1 p-2 border-r border-theme overflow-y-auto">
 
       <!-- 标题 -->
@@ -484,7 +482,7 @@ function renderChart() {
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#6b7280', fontSize: 8, formatter: v => (v/1e4).toFixed(0)+'w' },
+      axisLabel: { color: '#6b7280', fontSize: 8, formatter: v => { const n = Number(v)||0; return (n/1e4).toFixed(0)+'w' } },
       splitLine: { lineStyle: { color: '#1f2937' } },
       axisLine: { show: false },
     },
@@ -515,10 +513,12 @@ function renderChart() {
 
 // ── 工具函数 ─────────────────────────────────────────────────
 function fmtYuan(v) {
-  if (!v && v !== 0) return '--'
-  if (Math.abs(v) >= 1e8) return (v/1e8).toFixed(2) + '亿'
-  if (Math.abs(v) >= 1e4) return (v/1e4).toFixed(2) + '万'
-  return v.toFixed(2)
+  if (v == null || v === '--' || (typeof v !== 'number' && isNaN(Number(v)))) return '--'
+  const n = Number(v)
+  if (isNaN(n)) return '--'
+  if (Math.abs(n) >= 1e8) return (n/1e8).toFixed(2) + '亿'
+  if (Math.abs(n) >= 1e4) return (n/1e4).toFixed(2) + '万'
+  return n.toFixed(2)
 }
 
 // ── 风险指标计算 ─────────────────────────────────────────────
@@ -649,11 +649,14 @@ const sectorAttribution = computed(() => {
 
 // ── 生命周期 ─────────────────────────────────────────────────
 onMounted(async () => {
+  console.log('[PortfolioDashboard] mounted, fetching portfolios...')
   await store.fetchPortfolios()
-  // store.activePid 是 ref，需要取 .value
+  console.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.value?.length)
+  console.log('[PortfolioDashboard] activePid:', store.activePid?.value)
   const pid = store.activePid?.value ?? store.activePid
+  console.log('[PortfolioDashboard] pid for fetchAll:', pid)
   if (pid) await store.fetchAll(pid)
-  store.startPoll(20_000)  // 每 20 秒刷新 PnL
+  store.startPoll(20_000)
   await nextTick()
   renderChart()
 })
