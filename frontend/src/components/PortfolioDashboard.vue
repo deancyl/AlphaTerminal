@@ -16,7 +16,7 @@
       <!-- 账户列表 -->
       <div v-for="acc in store.portfolios" :key="acc.id"
            class="rounded border p-2 cursor-pointer transition-all text-xs"
-           :class="acc.id === store.activePid
+           :class="acc.id === activePidValue
              ? 'border-terminal-accent/60 bg-terminal-accent/10'
              : 'border-theme hover:border-gray-500'"
            @click="handleSwitch(acc.id)">
@@ -25,7 +25,7 @@
           <span class="text-[9px] text-terminal-dim">{{ acc.type === 'main' ? '主账户' : '子账户' }}</span>
         </div>
         <!-- 实时总览（仅选中账户显示） -->
-        <div v-if="acc.id === store.activePid && store.pnl" class="mt-1.5 grid grid-cols-2 gap-x-1">
+        <div v-if="acc.id === activePidValue && pnlData" class="mt-1.5 grid grid-cols-2 gap-x-1">
           <div>
             <div class="text-[9px] text-terminal-dim">总资产</div>
             <div class="text-[10px] font-mono text-theme-primary">{{ fmtYuan(store.totalValue) }}</div>
@@ -58,7 +58,7 @@
       </div>
 
       <!-- 风险指标面板 -->
-      <div v-if="store.pnl && riskMetrics" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
+      <div v-if="pnlData && riskMetrics" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
         <div class="text-[9px] text-terminal-dim mb-1">📊 风险指标</div>
         <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[9px]">
           <div>
@@ -120,7 +120,7 @@
       <!-- 操作栏 -->
       <div class="flex items-center gap-2 px-3 py-1.5 border-b border-theme shrink-0">
         <span class="text-xs text-terminal-dim">
-          {{ store.activePortfolio?.name }} — 持仓 {{ store.positions.length }} 只
+          {{ store.activePortfolio?.name }} — 持仓 {{ positionsCount }} 只
         </span>
         <div class="flex items-center gap-1 ml-auto text-[10px]">
           <span class="text-terminal-dim">排序:</span>
@@ -273,6 +273,15 @@ const showCreateModal = ref(false)
 const tradeTarget  = ref(null)
 const chart        = ref(null)
 
+// ── 安全解包 store refs（Vue 不会自动解包嵌套在普通对象中的 ref）───
+const positionsArray = computed(() => store.positions.value ?? [])
+const positionsCount = computed(() => positionsArray.value.length)
+const activePidValue = computed(() => {
+  const v = store.activePid?.value ?? store.activePid
+  return v ?? null
+})
+const pnlData = computed(() => store.pnl?.value ?? store.pnl ?? null)
+
 const sortCols = [
   { key: 'symbol',     label: '代码' },
   { key: 'pnl_pct',   label: '盈亏率' },
@@ -285,10 +294,11 @@ const createForm = ref({ name: '', type: 'main' })
 
 // ── 排序 ──────────────────────────────────────────────────────
 const sortedPositions = computed(() => {
-  if (!store.positions.length) return []
+  const arr = positionsArray.value
+  if (!arr.length) return []
   const key = sortKey.value
   const dir = sortAsc.value ? 1 : -1
-  return [...store.positions].sort((a, b) => {
+  return [...arr].sort((a, b) => {
     const av = a[key] ?? 0
     const bv = b[key] ?? 0
     return (av < bv ? -1 : av > bv ? 1 : 0) * dir
@@ -309,12 +319,8 @@ function openTrade(pos) {
 
 async function submitTrade() {
   if (!tradeForm.value.symbol) return
-  await store.upsertPosition(
-    store.activePid,
-    tradeForm.value.symbol,
-    tradeForm.value.shares,
-    tradeForm.value.avg_cost,
-  )
+  const pid = store.activePid?.value ?? store.activePid
+  await store.upsertPosition(pid, tradeForm.value.symbol, tradeForm.value.shares, tradeForm.value.avg_cost)
   showTradeModal.value = false
 }
 
@@ -325,10 +331,11 @@ async function submitCreate() {
 }
 
 function downloadReport() {
-  if (!store.positions.length) return
-  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
-  const totalCost  = store.positions.reduce((s, p) => s + (p.shares || 0) * (p.avg_cost || 0), 0)
-  const totalPnl  = store.positions.reduce((s, p) => s + (p.pnl || 0), 0)
+  const positions = positionsArray.value
+  if (!positions.length) return
+  const totalValue = positions.reduce((s, p) => s + (p.market_value || 0), 0)
+  const totalCost  = positions.reduce((s, p) => s + (p.shares || 0) * (p.avg_cost || 0), 0)
+  const totalPnl  = positions.reduce((s, p) => s + (p.pnl || 0), 0)
   
   const lines = [
     `AlphaTerminal 投资组合报告 - ${new Date().toLocaleString('zh-CN')}`,
@@ -339,7 +346,7 @@ function downloadReport() {
     '',
     '--- 持仓明细 ---',
     '代码,名称,持仓,成本价,现价,市值,盈亏,盈亏率,占比',
-    ...store.positions.map(p =>
+    ...positions.map(p =>
       `${p.symbol},${p.symbol},${p.shares},${p.avg_cost},${p.price},${fmtYuan(p.market_value)},${fmtYuan(p.pnl)},${p.pnl_pct}%,${((p.market_value / (totalValue || 1)) * 100).toFixed(1)}%`
     ),
     '',
@@ -491,8 +498,8 @@ const riskMetrics = computed(() => {
   const maxDrawdownPct = (maxDrawdown * 100).toFixed(2)
 
   // 5. 持仓集中度
-  const totalValue = store.positions.reduce((s, p) => s + (p.market_value || 0), 0)
-  const sorted = [...store.positions].sort((a, b) => (b.market_value || 0) - (a.market_value || 0))
+  const totalValue = positionsArray.value.reduce((s, p) => s + (p.market_value || 0), 0)
+  const sorted = [...positionsArray.value].sort((a, b) => (b.market_value || 0) - (a.market_value || 0))
   const top3 = sorted.slice(0, 3).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
   const top5 = sorted.slice(0, 5).reduce((s, p) => s + (p.market_value || 0), 0) / (totalValue || 1) * 100
 
@@ -511,15 +518,12 @@ const riskMetrics = computed(() => {
 })
 
 // 行业归因 (从持仓推断行业分布，需接入行业数据)
-// 防御性检查: 确保 positions 是数组
 const sectorAttribution = computed(() => {
-  const positions = Array.isArray(store.positions) ? store.positions : []
+  const positions = positionsArray.value
   if (!positions.length) return []
   const totalValue = positions.reduce((s, p) => s + (p.market_value || 0), 0)
   if (totalValue === 0) return []
   
-  // 按 symbol 分组汇总 (实际应接行业数据，这里用估算)
-  // 已知持仓的行业映射 (可扩展)
   const SECTOR_MAP = {
     '600519': '白酒', '000858': '白酒', '000568': '白酒',
     '601318': '金融', '600036': '银行', '601398': '银行',
@@ -527,9 +531,8 @@ const sectorAttribution = computed(() => {
     '600900': '电力', '600028': '石油', '601857': '石油',
   }
   
-  // 简单按持仓市值分组
   const sectors = {}
-  for (const pos of store.positions) {
+  for (const pos of positions) {
     const sec = SECTOR_MAP[pos.symbol] || '其他'
     if (!sectors[sec]) sectors[sec] = 0
     sectors[sec] += (pos.market_value || 0)
