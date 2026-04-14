@@ -30,7 +30,10 @@
               </span>
               <span v-else class="w-3 flex-shrink-0"></span>
               <span class="text-theme-primary font-medium truncate">{{ acc.name }}</span>
-              <span class="text-[9px] text-terminal-dim flex-shrink-0">主</span>
+              <!-- 类型标签 -->
+              <span :class="['text-[8px] px-1 rounded flex-shrink-0', typeTagClasses[acc.type] || 'bg-gray-500/20 text-gray-400']">
+                {{ acc.type === 'portfolio' ? '组合' : acc.type === 'account' ? '账户' : acc.type === 'strategy' ? '策略' : '分组' }}
+              </span>
               <!-- 币种标签 -->
               <span v-if="acc.currency && acc.currency !== 'CNY'" class="text-[8px] px-1 rounded bg-blue-500/20 text-blue-400">{{ acc.currency }}</span>
               <!-- 策略标签 -->
@@ -61,35 +64,71 @@
           </div>
         </div>
 
-        <!-- 子账户行（仅当主账户未折叠时显示） -->
+        <!-- 子账户树（递归支持多级） -->
         <template v-if="!collapsedIds.has(acc.id)">
-          <div v-for="child in getChildren(acc.id)" :key="child.id"
-               class="ml-3 rounded border border-dashed border-theme-secondary p-2 cursor-pointer transition-all text-xs"
-               :class="child.id === activePidValue
-                 ? 'border-terminal-accent/60 bg-terminal-accent/10'
-                 : 'hover:border-gray-500'"
-               @click="handleSwitch(child.id)">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-1 min-w-0">
-                <span class="text-[8px] text-terminal-dim flex-shrink-0">└</span>
-                <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
-                <span class="text-[8px] text-terminal-dim">子</span>
-                <!-- 子账户币种和策略 -->
-                <span v-if="child.currency && child.currency !== 'CNY'" class="text-[8px] px-1 rounded bg-blue-500/20 text-blue-400">{{ child.currency }}</span>
-                <span v-if="child.strategy" class="text-[8px] px-1 rounded bg-green-500/20 text-green-400">{{ strategyLabels[child.strategy] || child.strategy }}</span>
+          <template v-for="child in getChildren(acc.id)" :key="child.id">
+            <!-- 一级子账户 -->
+            <div :class="['rounded border border-dashed p-2 cursor-pointer transition-all text-xs', 
+                          child.id === activePidValue ? 'border-terminal-accent/60 bg-terminal-accent/10' : 'border-theme-secondary hover:border-gray-500']"
+                 :style="{ marginLeft: '12px' }"
+                 @click="handleSwitch(child.id)">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1 min-w-0">
+                  <!-- 如果有孙账户，显示折叠箭头 -->
+                  <span v-if="getChildren(child.id).length"
+                        class="text-[9px] cursor-pointer select-none flex-shrink-0"
+                        @click.stop="toggleCollapse(child.id)">
+                    {{ collapsedIds.has(child.id) ? '▶' : '▼' }}
+                  </span>
+                  <span v-else class="w-3 flex-shrink-0"></span>
+                  <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
+                  <!-- 类型标签 -->
+                  <span :class="['text-[8px] px-1 rounded flex-shrink-0', typeTagClasses[child.type] || 'bg-gray-500/20 text-gray-400']">
+                    {{ child.type === 'portfolio' ? '组合' : child.type === 'account' ? '账户' : child.type === 'strategy' ? '策略' : '分组' }}
+                  </span>
+                  <!-- 币种和策略标签 -->
+                  <span v-if="child.currency && child.currency !== 'CNY'" class="text-[8px] px-1 rounded bg-blue-500/20 text-blue-400">{{ child.currency }}</span>
+                  <span v-if="child.strategy" class="text-[8px] px-1 rounded bg-green-500/20 text-green-400">{{ strategyLabels[child.strategy] || child.strategy }}</span>
+                </div>
+                <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0" @click.stop="confirmDelete(child)">✕</button>
               </div>
-              <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0"
-                      title="删除账户" @click.stop="confirmDelete(child)">✕</button>
             </div>
-          </div>
+            <!-- 二级及以下子账户（递归） -->
+            <template v-if="!collapsedIds.has(child.id)">
+              <div v-for="grandchild in getChildren(child.id)" :key="grandchild.id"
+                   :class="['rounded border border-dashed p-2 cursor-pointer transition-all text-xs',
+                            grandchild.id === activePidValue ? 'border-terminal-accent/60 bg-terminal-accent/10' : 'border-theme-secondary hover:border-gray-500']"
+                   :style="{ marginLeft: '24px' }"
+                   @click="handleSwitch(grandchild.id)">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-1 min-w-0">
+                    <span class="text-[8px] text-terminal-dim flex-shrink-0">└</span>
+                    <span class="text-theme-secondary font-medium truncate text-[10px]">{{ grandchild.name }}</span>
+                    <span :class="['text-[7px] px-1 rounded flex-shrink-0', typeTagClasses[grandchild.type] || 'bg-gray-500/20 text-gray-400']">
+                      {{ grandchild.type === 'portfolio' ? '组合' : grandchild.type === 'account' ? '账户' : grandchild.type === 'strategy' ? '策略' : '分组' }}
+                    </span>
+                    <span v-if="grandchild.currency && grandchild.currency !== 'CNY'" class="text-[7px] px-1 rounded bg-blue-500/20 text-blue-400">{{ grandchild.currency }}</span>
+                  </div>
+                  <button class="text-[8px] text-red-400/60 hover:text-red-400 flex-shrink-0" @click.stop="confirmDelete(grandchild)">✕</button>
+                </div>
+              </div>
+            </template>
+          </template>
         </template>
       </template>
 
-      <!-- 刷新按钮 -->
-      <button @click="handleRefresh"
-              class="mt-1 w-full py-1 rounded border border-theme text-[10px] text-terminal-dim hover:border-terminal-accent/40 hover:text-theme-primary transition">
-        🔄 刷新
-      </button>
+      <!-- 操作按钮 -->
+      <div class="flex gap-1 mt-1">
+        <button @click="handleRefresh"
+                class="flex-1 py-1 rounded border border-theme text-[10px] text-terminal-dim hover:border-terminal-accent/40 hover:text-theme-primary transition">
+          🔄 刷新
+        </button>
+        <button @click="mergedView = !mergedView"
+                :class="['px-2 py-1 rounded border text-[10px] transition', mergedView ? 'bg-terminal-accent/20 border-terminal-accent text-terminal-accent' : 'border-theme text-terminal-dim hover:text-theme-primary']"
+                title="合并视图：显示选中账户及其所有子账户的汇总数据">
+          📊 {{ mergedView ? '合并中' : '合并' }}
+        </button>
+      </div>
 
       <!-- 净值曲线图 -->
       <div class="mt-2">
@@ -344,9 +383,14 @@
           <label class="text-[10px] text-terminal-dim">账户类型</label>
           <select v-model="createForm.type"
                   class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
-            <option value="main">主账户</option>
-            <option value="special_plan">子账户</option>
+            <option value="portfolio">投资组合</option>
+            <option value="account">资金账户</option>
+            <option value="strategy">策略组合</option>
+            <option value="group">分组文件夹</option>
           </select>
+          <div class="text-[8px] text-terminal-dim mt-1">
+            {{ typeDescriptions[createForm.type] }}
+          </div>
         </div>
         <!-- 所属主账户（仅子账户显示） -->
         <div v-if="createForm.type === 'special_plan'" class="mb-2">
@@ -478,6 +522,35 @@ const strategyLabels = {
   'dividend': '股息'
 }
 
+// 账户类型描述
+const typeDescriptions = {
+  'portfolio': '顶级容器，可包含多个资金账户和策略组合',
+  'account': '实际交易账户，包含具体持仓',
+  'strategy': '策略组合，按策略归集持仓',
+  'group': '纯分组文件夹，用于组织管理'
+}
+
+// 账户类型标签样式
+const typeTagClasses = {
+  'portfolio': 'bg-purple-500/20 text-purple-400',
+  'account': 'bg-blue-500/20 text-blue-400',
+  'strategy': 'bg-green-500/20 text-green-400',
+  'group': 'bg-gray-500/20 text-gray-400'
+}
+
+// 是否启用合并视图
+const mergedView = ref(false)
+
+// 递归获取账户的所有后代（用于多级树）
+function getDescendants(parentId) {
+  const children = (store.portfolios.value || []).filter(p => p.parent_id === parentId)
+  let result = [...children]
+  for (const child of children) {
+    result = result.concat(getDescendants(child.id))
+  }
+  return result
+}
+
 // ── 安全解包 store refs（Vue 不会自动解包嵌套在普通对象中的 ref）───
 const positionsArray = computed(() => store.positions.value ?? [])
 const positionsCount = computed(() => positionsArray.value.length)
@@ -543,10 +616,10 @@ const sortCols = [
 const tradeForm = ref({ symbol: '', shares: 0, avg_cost: 0 })
 const createForm = ref({
   name: '',
-  type: 'main',
+  type: 'portfolio',
   parent_id: null,
   currency: 'CNY',
-  asset_class: 'stock',
+  asset_class: 'mixed',
   strategy: null,
   benchmark: null,
   status: 'active',
@@ -606,8 +679,8 @@ async function submitCreate() {
     await store.createPortfolio(body)
     showCreateModal.value = false
     createForm.value = {
-      name: '', type: 'main', parent_id: null,
-      currency: 'CNY', asset_class: 'stock', strategy: null,
+      name: '', type: 'portfolio', parent_id: null,
+      currency: 'CNY', asset_class: 'mixed', strategy: null,
       benchmark: null, status: 'active', initial_capital: 0, description: ''
     }
   } catch (e) {
@@ -659,7 +732,7 @@ function downloadReport() {
 }
 
 async function handleSwitch(pid) {
-  await store.switchAccount(pid)
+  await store.switchAccount(pid, mergedView.value)
   await nextTick()
   renderChart()
 }
@@ -667,8 +740,18 @@ async function handleSwitch(pid) {
 async function handleRefresh() {
   // store.activePid 是 ref，需要取 .value
   const pid = store.activePid?.value ?? store.activePid
-  if (pid) await store.fetchAll(pid)
+  if (pid) await store.fetchAll(pid, mergedView.value)
 }
+
+// 监听合并视图变化，自动刷新
+watch(mergedView, async (newVal) => {
+  const pid = store.activePid?.value ?? store.activePid
+  if (pid) {
+    await store.fetchAll(pid, newVal)
+    await nextTick()
+    renderChart()
+  }
+})
 
 // ── ECharts 净值曲线 ──────────────────────────────────────────
 function renderChart() {

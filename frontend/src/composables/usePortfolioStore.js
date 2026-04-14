@@ -37,10 +37,12 @@ async function fetchPortfolios() {
   return portfolios.value
 }
 
-async function fetchPnL(pid) {
-  const d = await api(`/${pid}/pnl`)
+async function fetchPnL(pid, includeChildren = false) {
+  const query = includeChildren ? '?include_children=true' : ''
+  const d = await api(`/${pid}/pnl${query}`)
   pnl.value = d
   positions.value = d.positions || []
+  return d
 }
 
 async function fetchSnapshots(pid) {
@@ -48,7 +50,7 @@ async function fetchSnapshots(pid) {
   snapshots.value = d.snapshots || []
 }
 
-async function fetchAll(pid) {
+async function fetchAll(pid, includeChildren = false) {
   // 确保 pid 是原始 id，不是对象
   const id = typeof pid === 'object' && pid !== null ? pid.id : pid
   if (!id) {
@@ -57,7 +59,7 @@ async function fetchAll(pid) {
   }
   loading.value = true
   try {
-    await Promise.all([fetchPnL(id), fetchSnapshots(id)])
+    await Promise.all([fetchPnL(id, includeChildren), fetchSnapshots(id)])
   } catch(e) {
     console.warn('[PortfolioStore] fetchAll failed:', e)
   } finally {
@@ -65,7 +67,7 @@ async function fetchAll(pid) {
   }
 }
 
-async function switchAccount(pid) {
+async function switchAccount(pid, includeChildren = false) {
   // 确保 pid 是原始 id，不是对象
   const id = typeof pid === 'object' && pid !== null ? pid.id : pid
   if (!id) {
@@ -73,7 +75,7 @@ async function switchAccount(pid) {
     return
   }
   activePid.value = id
-  await fetchAll(id)
+  await fetchAll(id, includeChildren)
 }
 
 async function createPortfolio(name, type = 'main') {

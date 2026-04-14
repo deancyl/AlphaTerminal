@@ -17,14 +17,26 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 class PortfolioIn(BaseModel):
     name: str
-    type: str = "main"   # 'main' | 'special_plan'
+    type: str = "portfolio"   # portfolio | account | strategy | group
     parent_id: Optional[int] = None
     currency: str = "CNY"  # CNY | USD | HKD
-    asset_class: str = "stock"  # stock | bond | fund | futures | options | mixed
+    asset_class: str = "mixed"  # stock | bond | fund | futures | options | mixed
     strategy: Optional[str] = None  # value | growth | balanced | index | quant
     benchmark: Optional[str] = None  # 000001 | 000300 | 399001 | 399006
     status: str = "active"  # active | frozen | closed
     initial_capital: float = 0.0
+    description: Optional[str] = None
+    
+class PortfolioUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    parent_id: Optional[int] = None
+    currency: Optional[str] = None
+    asset_class: Optional[str] = None
+    strategy: Optional[str] = None
+    benchmark: Optional[str] = None
+    status: Optional[str] = None
+    initial_capital: Optional[float] = None
     description: Optional[str] = None
 
 class PositionIn(BaseModel):
@@ -107,18 +119,46 @@ async def delete_portfolio(portfolio_id: int):
 
 # ── 持仓 CRUD ─────────────────────────────────────────────────
 
+def _get_all_descendants(conn, portfolio_id: int) -> list:
+    """递归获取所有后代账户ID（包括子账户、孙账户等）"""
+    result = [portfolio_id]
+    cursor = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,))
+    children = [row[0] for row in cursor.fetchall()]
+    for child_id in children:
+        result.extend(_get_all_descendants(conn, child_id))
+    return result
+
 @router.get("/{portfolio_id}/positions")
-async def list_positions(portfolio_id: int):
-    """账户当前持仓"""
+async def list_positions(portfolio_id: int, include_children: bool = Query(False, description="是否包含子账户持仓")):
+    """账户当前持仓，可选包含所有子账户持仓"""
     with _lock:
         conn = _get_conn()
-        rows = conn.execute(
-            "SELECT id, symbol, shares, avg_cost, updated_at FROM positions WHERE portfolio_id=?",
-            (portfolio_id,)
-        ).fetchall()
-        conn.close()
-    return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
-                            "avg_cost": r[3], "updated_at": r[4]} for r in rows]}
+        if include_children:
+            # 获取所有后代账户ID
+            all_ids = _get_all_descendants(conn, portfolio_id)
+            placeholders = ','.join(['?' for _ in all_ids])
+            rows = conn.execute(
+                f"""SELECT p.id, p.symbol, p.shares, p.avg_cost, p.updated_at, 
+                           po.name as portfolio_name, po.id as portfolio_id
+                    FROM positions p 
+                    JOIN portfolios po ON p.portfolio_id = po.id 
+                    WHERE p.portfolio_id IN ({placeholders})""",
+                tuple(all_ids)
+            ).fetchall()
+            conn.close()
+            return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
+                                    "avg_cost": r[3], "updated_at": r[4],
+                                    "portfolio_name": r[5], "portfolio_id": r[6]} for r in rows],
+                    "includes_children": True,
+                    "portfolio_ids": all_ids}
+        else:
+            rows = conn.execute(
+                "SELECT id, symbol, shares, avg_cost, updated_at FROM positions WHERE portfolio_id=?",
+                (portfolio_id,)
+            ).fetchall()
+            conn.close()
+            return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
+                                    "avg_cost": r[3], "updated_at": r[4]} for r in rows]}
 
 @router.post("/positions")
 async def upsert_position(body: PositionIn):
@@ -162,34 +202,50 @@ async def delete_position(portfolio_id: int, symbol: str):
 # ── 实时浮动盈亏（依赖 SpotCache） ─────────────────────────────
 
 @router.get("/{portfolio_id}/pnl")
-async def portfolio_pnl(portfolio_id: int):
+async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False, description="是否包含子账户盈亏")):
     """
     实时浮动盈亏计算（专业增强版）
     增加: 名称、权重%、今日涨跌幅、市场、PE/PB、换手率
+    支持: 包含所有子账户的聚合视图
     依赖 SpotCache（后台每3分钟刷新的全市场实时行情）
     """
     from app.services.sentiment_engine import SpotCache
 
     with _lock:
         conn = _get_conn()
-        rows = conn.execute(
-            "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
-            (portfolio_id,)
-        ).fetchall()
+        
+        if include_children:
+            # 获取所有后代账户ID
+            all_ids = _get_all_descendants(conn, portfolio_id)
+            placeholders = ','.join(['?' for _ in all_ids])
+            rows = conn.execute(
+                f"""SELECT p.symbol, p.shares, p.avg_cost, po.name as portfolio_name, po.id as portfolio_id
+                    FROM positions p 
+                    JOIN portfolios po ON p.portfolio_id = po.id 
+                    WHERE p.portfolio_id IN ({placeholders})""",
+                tuple(all_ids)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+                (portfolio_id,)
+            ).fetchall()
+        
         # 获取持仓股票的基本面数据（PE/PB等）
         stock_meta = {}
-        meta_rows = conn.execute(
-            "SELECT symbol, name, per, pb, mktcap, turnover FROM market_all_stocks"
-        ).fetchall()
-        for r in meta_rows:
-            stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
-            stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
-
-        stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
+        try:
+            meta_rows = conn.execute(
+                "SELECT symbol, name, per, pb, mktcap, turnover FROM market_all_stocks"
+            ).fetchall()
+            for r in meta_rows:
+                stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
+                stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
+        except:
+            pass
         conn.close()
 
     if not rows:
-        return {"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0}
+        return {"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0, "includes_children": include_children}
 
     spot = SpotCache.get_stocks()
     price_map = {s["code"]: s for s in spot}
@@ -197,7 +253,18 @@ async def portfolio_pnl(portfolio_id: int):
     result = []
     total_cost = 0.0
     total_value = 0.0
-    for symbol, shares, avg_cost in rows:
+    
+    # 处理不同结构的rows
+    for row in rows:
+        if include_children:
+            # row: (symbol, shares, avg_cost, portfolio_name, portfolio_id)
+            symbol, shares, avg_cost, portfolio_name, portfolio_id_from_row = row
+        else:
+            # row: (symbol, shares, avg_cost)
+            symbol, shares, avg_cost = row
+            portfolio_name = None
+            portfolio_id_from_row = None
+            
         info = price_map.get(symbol, {})
         current_price = info.get("price", avg_cost)
         change_pct   = info.get("change_pct", 0.0)
@@ -217,7 +284,7 @@ async def portfolio_pnl(portfolio_id: int):
             market = "其他"
 
         meta = stock_meta.get(symbol, {})
-        result.append({
+        pos_data = {
             "symbol":       symbol,
             "name":         meta.get("name", symbol),
             "shares":       shares,
@@ -233,7 +300,13 @@ async def portfolio_pnl(portfolio_id: int):
             "pe":          round(meta.get("per"), 2) if meta.get("per") else None,
             "pb":          round(meta.get("pb"), 2) if meta.get("pb") else None,
             "turnover":    round(meta.get("turnover"), 2) if meta.get("turnover") else None,
-        })
+        }
+        
+        if include_children:
+            pos_data["portfolio_name"] = portfolio_name
+            pos_data["portfolio_id"] = portfolio_id_from_row
+            
+        result.append(pos_data)
         total_cost  += cost_total
         total_value += market_value
 
@@ -243,13 +316,20 @@ async def portfolio_pnl(portfolio_id: int):
 
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
-    return {
+    
+    response = {
         "positions":    result,
         "total_cost":  round(total_cost, 2),
         "total_value": round(total_value, 2),
         "total_pnl":   round(total_pnl, 2),
         "total_pnl_pct": round(total_pnl_pct, 2),
     }
+    
+    if include_children:
+        response["includes_children"] = True
+        response["portfolio_count"] = len(set(r.get("portfolio_id") for r in result if r.get("portfolio_id")))
+    
+    return response
 
 
 
