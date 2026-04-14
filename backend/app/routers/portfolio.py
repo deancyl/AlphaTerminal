@@ -1,5 +1,5 @@
 """
-P3 多账户模拟组合 — 路由层
+P3 多账户模拟组合 - 路由层
 CRUD: 账户 / 持仓 / 净值历史
 """
 import time
@@ -26,7 +26,7 @@ class PortfolioIn(BaseModel):
     status: str = "active"  # active | frozen | closed
     initial_capital: float = 0.0
     description: Optional[str] = None
-    
+
 class PortfolioUpdate(BaseModel):
     name: Optional[str] = None
     type: Optional[str] = None
@@ -138,10 +138,10 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
             all_ids = _get_all_descendants(conn, portfolio_id)
             placeholders = ','.join(['?' for _ in all_ids])
             rows = conn.execute(
-                f"""SELECT p.id, p.symbol, p.shares, p.avg_cost, p.updated_at, 
+                f"""SELECT p.id, p.symbol, p.shares, p.avg_cost, p.updated_at,
                            po.name as portfolio_name, po.id as portfolio_id
-                    FROM positions p 
-                    JOIN portfolios po ON p.portfolio_id = po.id 
+                    FROM positions p
+                    JOIN portfolios po ON p.portfolio_id = po.id
                     WHERE p.portfolio_id IN ({placeholders})""",
                 tuple(all_ids)
             ).fetchall()
@@ -213,15 +213,15 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
 
     with _lock:
         conn = _get_conn()
-        
+
         if include_children:
             # 获取所有后代账户ID
             all_ids = _get_all_descendants(conn, portfolio_id)
             placeholders = ','.join(['?' for _ in all_ids])
             rows = conn.execute(
                 f"""SELECT p.symbol, p.shares, p.avg_cost, po.name as portfolio_name, po.id as portfolio_id
-                    FROM positions p 
-                    JOIN portfolios po ON p.portfolio_id = po.id 
+                    FROM positions p
+                    JOIN portfolios po ON p.portfolio_id = po.id
                     WHERE p.portfolio_id IN ({placeholders})""",
                 tuple(all_ids)
             ).fetchall()
@@ -230,7 +230,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
                 (portfolio_id,)
             ).fetchall()
-        
+
         # 获取持仓股票的基本面数据（PE/PB等）
         stock_meta = {}
         try:
@@ -248,11 +248,48 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         return {"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0, "includes_children": include_children}
 
     spot = SpotCache.get_stocks()
-    price_map = {s["code"]: s for s in spot}
-
+    # 构建价格映射表，同时支持带前缀和不带前缀的代码
+    price_map = {}
+    for s in spot:
+        code = s.get("code", "")
+        price_map[code] = s  # 带前缀格式: sz300391
+        # 同时添加不带前缀格式: 300391
+        if len(code) > 2:
+            price_map[code[2:]] = s  # 去掉前2位前缀
+            price_map[code.lower()] = s
+            price_map[code.upper()] = s
+    
+    # 如果 SpotCache 为空，从数据库兜底获取实时价格
+    db_price_loaded = False
+    if not spot or len(spot) < 10:
+        logger.info("[Portfolio PnL] SpotCache 为空，从数据库兜底获取价格")
+        try:
+            conn = _get_conn()
+            db_rows = conn.execute(
+                "SELECT symbol, name, price, change_pct FROM market_all_stocks WHERE price > 0"
+            ).fetchall()
+            conn.close()
+            for r in db_rows:
+                sym = r[0]
+                name = r[1] or ""
+                price = float(r[2] or 0)
+                chg_pct = float(r[3] or 0) if r[3] else 0.0
+                # 归一化代码格式：同时支持 sh600519 和 600519
+                price_map[sym] = {"code": sym, "name": name, "price": price, "chg_pct": chg_pct}
+                if len(sym) > 2:
+                    # 去掉前缀的版本
+                    price_map[sym[2:]] = price_map[sym]
+                    price_map[sym.lower()] = price_map[sym]
+                    price_map[sym.upper()] = price_map[sym]
+            db_price_loaded = True
+            logger.info(f"[Portfolio PnL] 从数据库加载 {len(db_rows)} 只股票价格")
+        except Exception as e:
+            logger.warning(f"[Portfolio PnL] 数据库兜底失败: {e}")
+    
     result = []
     total_cost = 0.0
     total_value = 0.0
+    missing_prices = []  # 记录未找到价格的股票
     
     # 处理不同结构的rows
     for row in rows:
@@ -265,7 +302,19 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             portfolio_name = None
             portfolio_id_from_row = None
             
+        # 尝试多种格式的代码匹配
         info = price_map.get(symbol, {})
+        if not info and len(symbol) == 6:
+            # 尝试添加前缀
+            if symbol.startswith("6"):
+                info = price_map.get(f"sh{symbol}", {})
+            elif symbol.startswith("0") or symbol.startswith("3"):
+                info = price_map.get(f"sz{symbol}", {})
+            elif symbol.startswith("4") or symbol.startswith("8"):
+                info = price_map.get(f"bj{symbol}", {})
+        
+        if not info:
+            missing_prices.append(symbol)
         current_price = info.get("price", avg_cost)
         change_pct   = info.get("change_pct", 0.0)
         market_value = shares * current_price
@@ -284,12 +333,15 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             market = "其他"
 
         meta = stock_meta.get(symbol, {})
+        # 判断价格来源：如果找到实时数据，使用实时价格；否则使用成本价
+        has_realtime_price = bool(info and info.get("price"))
         pos_data = {
             "symbol":       symbol,
-            "name":         meta.get("name", symbol),
+            "name":         meta.get("name", symbol) if meta else (info.get("name") if info else symbol),
             "shares":       shares,
             "avg_cost":     round(avg_cost, 3),
             "price":        round(current_price, 3),
+            "price_source": "realtime" if has_realtime_price else "fallback",
             "change_pct":   round(change_pct, 2),
             "market_value": round(market_value, 2),
             "cost_total":   round(cost_total, 2),
@@ -297,15 +349,15 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             "pnl_pct":    round(pnl_pct, 2),
             "weight":       0.0,
             "market":       market,
-            "pe":          round(meta.get("per"), 2) if meta.get("per") else None,
-            "pb":          round(meta.get("pb"), 2) if meta.get("pb") else None,
-            "turnover":    round(meta.get("turnover"), 2) if meta.get("turnover") else None,
+            "pe":          round(meta.get("per"), 2) if meta and meta.get("per") else (round(info.get("pe"), 2) if info and info.get("pe") else None),
+            "pb":          round(meta.get("pb"), 2) if meta and meta.get("pb") else (round(info.get("pb"), 2) if info and info.get("pb") else None),
+            "turnover":    round(meta.get("turnover"), 2) if meta and meta.get("turnover") else (round(info.get("turnover"), 2) if info and info.get("turnover") else None),
         }
-        
+
         if include_children:
             pos_data["portfolio_name"] = portfolio_name
             pos_data["portfolio_id"] = portfolio_id_from_row
-            
+
         result.append(pos_data)
         total_cost  += cost_total
         total_value += market_value
@@ -316,7 +368,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
 
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
-    
+
     response = {
         "positions":    result,
         "total_cost":  round(total_cost, 2),
@@ -324,11 +376,23 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         "total_pnl":   round(total_pnl, 2),
         "total_pnl_pct": round(total_pnl_pct, 2),
     }
-    
+
     if include_children:
         response["includes_children"] = True
         response["portfolio_count"] = len(set(r.get("portfolio_id") for r in result if r.get("portfolio_id")))
     
+    # 添加调试信息
+    if missing_prices:
+        response["missing_price_count"] = len(missing_prices)
+        response["missing_price_symbols"] = missing_prices[:10]  # 最多显示10个
+    
+    # 添加价格数据源信息
+    if db_price_loaded:
+        response["price_data_source"] = "DatabaseFallback"
+    elif spot:
+        response["price_data_source"] = "SpotCache"
+    response["price_data_count"] = len(spot) if spot else 0
+
     return response
 
 
