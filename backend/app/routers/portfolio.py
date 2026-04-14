@@ -18,6 +18,14 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 class PortfolioIn(BaseModel):
     name: str
     type: str = "main"   # 'main' | 'special_plan'
+    parent_id: Optional[int] = None
+    currency: str = "CNY"  # CNY | USD | HKD
+    asset_class: str = "stock"  # stock | bond | fund | futures | options | mixed
+    strategy: Optional[str] = None  # value | growth | balanced | index | quant
+    benchmark: Optional[str] = None  # 000001 | 000300 | 399001 | 399006
+    status: str = "active"  # active | frozen | closed
+    initial_capital: float = 0.0
+    description: Optional[str] = None
 
 class PositionIn(BaseModel):
     portfolio_id: int
@@ -48,10 +56,14 @@ async def list_portfolios():
     with _lock:
         conn = _get_conn()
         rows = conn.execute(
-            "SELECT id, name, type, parent_id, created_at, total_cost FROM portfolios ORDER BY id"
+            """SELECT id, name, type, parent_id, created_at, total_cost,
+                      currency, asset_class, strategy, benchmark, status, initial_capital, description
+               FROM portfolios ORDER BY id"""
         ).fetchall()
         conn.close()
-    return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost"])}
+    return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
+                                            "currency", "asset_class", "strategy", "benchmark", "status",
+                                            "initial_capital", "description"])}
 
 @router.post("/")
 async def create_portfolio(body: PortfolioIn):
@@ -61,8 +73,12 @@ async def create_portfolio(body: PortfolioIn):
         conn = _get_conn()
         try:
             cur = conn.execute(
-                "INSERT INTO portfolios (name, type, parent_id, created_at, total_cost) VALUES (?,?,?,?,0)",
-                (body.name, body.type, getattr(body, "parent_id", None), now)
+                """INSERT INTO portfolios (name, type, parent_id, created_at, total_cost,
+                        currency, asset_class, strategy, benchmark, status, initial_capital, description)
+                 VALUES (?,?,?,?,0,?,?,?,?,?,?,?)""",
+                (body.name, body.type, body.parent_id, now,
+                 body.currency, body.asset_class, body.strategy, body.benchmark,
+                 body.status, body.initial_capital, body.description)
             )
             conn.commit()
             pid = cur.lastrowid
@@ -70,7 +86,11 @@ async def create_portfolio(body: PortfolioIn):
             conn.close()
             raise HTTPException(400, f"创建账户失败: {e}")
         conn.close()
-    return {"id": pid, "name": body.name, "type": body.type, "parent_id": getattr(body, "parent_id", None), "created_at": now, "total_cost": 0.0}
+    return {"id": pid, "name": body.name, "type": body.type, "parent_id": body.parent_id,
+            "created_at": now, "total_cost": 0.0, "currency": body.currency,
+            "asset_class": body.asset_class, "strategy": body.strategy,
+            "benchmark": body.benchmark, "status": body.status,
+            "initial_capital": body.initial_capital, "description": body.description}
 
 @router.delete("/{portfolio_id}")
 async def delete_portfolio(portfolio_id: int):

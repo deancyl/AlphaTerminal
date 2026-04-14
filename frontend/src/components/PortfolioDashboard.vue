@@ -31,6 +31,10 @@
               <span v-else class="w-3 flex-shrink-0"></span>
               <span class="text-theme-primary font-medium truncate">{{ acc.name }}</span>
               <span class="text-[9px] text-terminal-dim flex-shrink-0">主</span>
+              <!-- 币种标签 -->
+              <span v-if="acc.currency && acc.currency !== 'CNY'" class="text-[8px] px-1 rounded bg-blue-500/20 text-blue-400">{{ acc.currency }}</span>
+              <!-- 策略标签 -->
+              <span v-if="acc.strategy" class="text-[8px] px-1 rounded bg-green-500/20 text-green-400">{{ strategyLabels[acc.strategy] || acc.strategy }}</span>
             </div>
             <!-- 右：删除按钮 -->
             <button class="text-[9px] text-red-400/60 hover:text-red-400 ml-1 flex-shrink-0"
@@ -70,6 +74,9 @@
                 <span class="text-[8px] text-terminal-dim flex-shrink-0">└</span>
                 <span class="text-theme-secondary font-medium truncate">{{ child.name }}</span>
                 <span class="text-[8px] text-terminal-dim">子</span>
+                <!-- 子账户币种和策略 -->
+                <span v-if="child.currency && child.currency !== 'CNY'" class="text-[8px] px-1 rounded bg-blue-500/20 text-blue-400">{{ child.currency }}</span>
+                <span v-if="child.strategy" class="text-[8px] px-1 rounded bg-green-500/20 text-green-400">{{ strategyLabels[child.strategy] || child.strategy }}</span>
               </div>
               <button class="text-[9px] text-red-400/60 hover:text-red-400 flex-shrink-0"
                       title="删除账户" @click.stop="confirmDelete(child)">✕</button>
@@ -324,14 +331,16 @@
 
     <!-- ═══ 新建账户弹窗 ══════════════════════════════════════ -->
     <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-terminal-panel border border-theme-secondary rounded-xl w-72 p-4 shadow-2xl">
+      <div class="bg-terminal-panel border border-theme-secondary rounded-xl w-80 p-4 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div class="text-sm font-bold text-theme-primary mb-3">新建账户</div>
+        <!-- 账户名称 -->
         <div class="mb-2">
-          <label class="text-[10px] text-terminal-dim">账户名称</label>
+          <label class="text-[10px] text-terminal-dim">账户名称 <span class="text-red-400">*</span></label>
           <input v-model="createForm.name" type="text" placeholder="如：教育基金"
                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
         </div>
-        <div class="mb-3">
+        <!-- 账户类型 -->
+        <div class="mb-2">
           <label class="text-[10px] text-terminal-dim">账户类型</label>
           <select v-model="createForm.type"
                   class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
@@ -340,13 +349,76 @@
           </select>
         </div>
         <!-- 所属主账户（仅子账户显示） -->
-        <div v-if="createForm.type === 'special_plan'" class="mb-3">
+        <div v-if="createForm.type === 'special_plan'" class="mb-2">
           <label class="text-[10px] text-terminal-dim">所属主账户</label>
           <select v-model="createForm.parent_id"
                   class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
             <option value="">—选择主账户—</option>
             <option v-for="p in mainAccounts" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
+        </div>
+        <!-- 币种 -->
+        <div class="mb-2">
+          <label class="text-[10px] text-terminal-dim">币种</label>
+          <select v-model="createForm.currency"
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
+            <option value="CNY">人民币 (CNY)</option>
+            <option value="USD">美元 (USD)</option>
+            <option value="HKD">港币 (HKD)</option>
+          </select>
+        </div>
+        <!-- 资产类别 -->
+        <div class="mb-2">
+          <label class="text-[10px] text-terminal-dim">资产类别</label>
+          <select v-model="createForm.asset_class"
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
+            <option value="stock">股票</option>
+            <option value="bond">债券</option>
+            <option value="fund">基金</option>
+            <option value="futures">期货</option>
+            <option value="options">期权</option>
+            <option value="mixed">混合</option>
+          </select>
+        </div>
+        <!-- 投资策略 -->
+        <div class="mb-2">
+          <label class="text-[10px] text-terminal-dim">投资策略</label>
+          <select v-model="createForm.strategy"
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
+            <option value="">—选择策略—</option>
+            <option value="value">价值投资</option>
+            <option value="growth">成长投资</option>
+            <option value="balanced">平衡配置</option>
+            <option value="index">指数跟踪</option>
+            <option value="quant">量化策略</option>
+            <option value="dividend">高股息</option>
+          </select>
+        </div>
+        <!-- 业绩基准 -->
+        <div class="mb-2">
+          <label class="text-[10px] text-terminal-dim">业绩基准</label>
+          <select v-model="createForm.benchmark"
+                  class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none">
+            <option value="">—选择基准—</option>
+            <option value="000001">上证指数</option>
+            <option value="000300">沪深300</option>
+            <option value="399001">深证成指</option>
+            <option value="399006">创业板指</option>
+            <option value="000905">中证500</option>
+            <option value="HSI">恒生指数</option>
+          </select>
+        </div>
+        <!-- 初始资金 -->
+        <div class="mb-2">
+          <label class="text-[10px] text-terminal-dim">初始资金 (元)</label>
+          <input v-model.number="createForm.initial_capital" type="number" min="0" step="10000" placeholder="0"
+                 class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent" />
+        </div>
+        <!-- 账户说明 -->
+        <div class="mb-3">
+          <label class="text-[10px] text-terminal-dim">账户说明</label>
+          <textarea v-model="createForm.description" rows="2" placeholder="可选：输入账户描述..."
+                    class="mt-1 w-full bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent resize-none"></textarea>
         </div>
         <div class="flex gap-2 justify-end">
           <button @click="showCreateModal = false"
@@ -395,6 +467,16 @@ const showTradeModal = ref(false)
 const showCreateModal = ref(false)
 const tradeTarget  = ref(null)
 const chart        = ref(null)
+
+// 策略标签映射
+const strategyLabels = {
+  'value': '价值',
+  'growth': '成长',
+  'balanced': '平衡',
+  'index': '指数',
+  'quant': '量化',
+  'dividend': '股息'
+}
 
 // ── 安全解包 store refs（Vue 不会自动解包嵌套在普通对象中的 ref）───
 const positionsArray = computed(() => store.positions.value ?? [])
@@ -459,7 +541,18 @@ const sortCols = [
 ]
 
 const tradeForm = ref({ symbol: '', shares: 0, avg_cost: 0 })
-const createForm = ref({ name: '', type: 'main', parent_id: null })
+const createForm = ref({
+  name: '',
+  type: 'main',
+  parent_id: null,
+  currency: 'CNY',
+  asset_class: 'stock',
+  strategy: null,
+  benchmark: null,
+  status: 'active',
+  initial_capital: 0,
+  description: ''
+})
 
 // ── 排序 ──────────────────────────────────────────────────────
 const sortedPositions = computed(() => {
@@ -495,17 +588,30 @@ async function submitTrade() {
 
 async function submitCreate() {
   if (!createForm.value.name) return
-  const body = { name: createForm.value.name, type: createForm.value.type }
+  const body = {
+    name: createForm.value.name,
+    type: createForm.value.type,
+    currency: createForm.value.currency,
+    asset_class: createForm.value.asset_class,
+    strategy: createForm.value.strategy,
+    benchmark: createForm.value.benchmark,
+    status: createForm.value.status,
+    initial_capital: Number(createForm.value.initial_capital) || 0,
+    description: createForm.value.description
+  }
   if (createForm.value.type === 'special_plan' && createForm.value.parent_id) {
     body.parent_id = createForm.value.parent_id
   }
   try {
     await store.createPortfolio(body)
     showCreateModal.value = false
-    createForm.value = { name: '', type: 'main', parent_id: null }
+    createForm.value = {
+      name: '', type: 'main', parent_id: null,
+      currency: 'CNY', asset_class: 'stock', strategy: null,
+      benchmark: null, status: 'active', initial_capital: 0, description: ''
+    }
   } catch (e) {
     const msg = e.message || '创建失败'
-    // 解析后端返回的具体错误信息
     const detail = msg.includes('UNIQUE') || msg.includes('已存在')
       ? '该账户名称已存在，请换个名字'
       : msg.includes('HTTP 4')
