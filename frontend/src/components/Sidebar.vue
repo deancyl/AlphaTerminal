@@ -38,22 +38,6 @@
 
     </nav>
 
-    <!-- ━━━ 系统管理（侧边栏最下方，特殊样式）━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="px-3 py-2 border-t border-theme shrink-0">
-      <button
-        v-for="item in adminNavItems"
-        :key="item.id"
-        class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2 rounded"
-        :class="activeId === item.id
-          ? 'bg-red-500/20 text-red-400 border-r-2 border-red-400'
-          : 'text-theme-secondary hover:bg-red-500/10 hover:text-red-400 border-r-transparent'"
-        @click="handleClick(item)"
-      >
-        <span class="text-base">{{ item.icon }}</span>
-        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
-      </button>
-    </div>
-
     <!-- ━━━ 主题切换区域 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="px-3 py-3 border-t border-theme shrink-0">
       <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2">🎨 主题切换</div>
@@ -72,6 +56,22 @@
           <span class="scale-90">{{ t.shortName }}</span>
         </button>
       </div>
+    </div>
+
+    <!-- ━━━ 系统管理（侧边栏最下方，特殊样式）━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="px-3 py-2 border-t border-theme shrink-0">
+      <button
+        v-for="item in adminNavItems"
+        :key="item.id"
+        class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2 rounded"
+        :class="activeId === item.id
+          ? 'bg-red-500/20 text-red-400 border-r-2 border-red-400'
+          : 'text-theme-secondary hover:bg-red-500/10 hover:text-red-400 border-r-transparent'"
+        @click="handleClick(item)"
+      >
+        <span class="text-base">{{ item.icon }}</span>
+        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
+      </button>
     </div>
 
     <!-- 底部版本信息 -->
