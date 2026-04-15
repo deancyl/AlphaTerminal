@@ -279,7 +279,7 @@
           </div>
           <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
             <div class="text-xs text-theme-muted mb-1">后端版本</div>
-            <div class="text-xl font-bold text-terminal-accent">{{ systemInfo.backendVersion || 'v0.4.132' }}</div>
+            <div class="text-xl font-bold text-terminal-accent">{{ systemInfo.backendVersion || 'v0.4.137' }}</div>
           </div>
           <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
             <div class="text-xs text-theme-muted mb-1">当前数据源</div>
@@ -443,7 +443,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 
-const version = ref('0.4.133') // 默认值，实际从后端获取
+const version = ref('0.4.137') // 默认值，实际从后端获取
 const activeAdminTab = ref('source')
 
 // 导航项
@@ -472,7 +472,7 @@ const loadingSystem = ref(false)
 // 系统信息
 const systemInfo = reactive({
   frontendVersion: version,
-  backendVersion: 'v0.4.132',
+  backendVersion: 'v0.4.137',
   schedulerStatus: 'running',
   sectorsCache: 'ready',
   newsCache: 'ready',
@@ -646,8 +646,8 @@ onMounted(async () => {
     const verData = await apiFetch('/api/v1/system/version', { timeoutMs: 5000 })
     if (verData) {
       version.value = verData.backend || verData.frontend || '0.4.133'
-      systemInfo.backendVersion = verData.backend ? `v${verData.backend}` : 'v0.4.133'
-      systemInfo.frontendVersion = verData.frontend || '0.4.133'
+      systemInfo.backendVersion = verData.backend ? `v${verData.backend}` : 'v0.4.137'
+      systemInfo.frontendVersion = verData.frontend || '0.4.137'
     }
   } catch (e) {}
   
