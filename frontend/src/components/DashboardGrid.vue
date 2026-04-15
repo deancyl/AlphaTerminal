@@ -124,8 +124,9 @@
     <!-- ━━━ Widget 5：行业与资金风口（右侧4列，中间）━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-2">
-        <HotSectors @sector-click="handleSectorClick" />
+      <div class="grid-stack-item-content terminal-panel p-2 flex flex-col">
+        <FundFlowPanel class="h-1/2 mb-1" />
+        <HotSectors @sector-click="handleSectorClick" class="h-1/2" />
       </div>
     </div>
 
@@ -183,6 +184,7 @@ import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
 import HotSectors from './HotSectors.vue'
+import FundFlowPanel from './FundFlowPanel.vue'
 import StockScreener from './StockScreener.vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
 
