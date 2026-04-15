@@ -238,9 +238,13 @@ async def get_database_status():
         "path": _db_path
     }
 
+class DatabaseMaintenanceRequest(BaseModel):
+    action: str  # "vacuum" | "analyze" | "wal_checkpoint"
+
 @router.post("/database/maintenance")
-async def database_maintenance(action: str):
+async def database_maintenance(request: DatabaseMaintenanceRequest):
     """数据库维护操作"""
+    action = request.action
     conn = _get_conn()
     
     if action == "vacuum":
