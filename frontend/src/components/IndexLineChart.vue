@@ -60,6 +60,9 @@ const props = defineProps({
   color:      { type: String, default: '#00ff88' },
   url:        { type: String, default: '/api/v1/market/history/000001' },
   indicators: { type: Array,  default: () => [] },
+  // 叠加标的
+  overlaySymbol: { type: String, default: '' },
+  overlayName:   { type: String, default: '' },
 })
 
 const chartRef     = ref(null)

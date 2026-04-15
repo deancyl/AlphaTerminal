@@ -131,6 +131,35 @@ function buildOption(cData) {
         lineStyle: { color: '#c084fc', width: 1 },
       }
     )
+
+    // 叠加标的系列
+    if (overlaySeriesData && overlaySeriesData.length > 0) {
+      const overlayYAxis = {
+        type: 'value',
+        gridIndex: 0,
+        position: 'right',
+        axisLine: { show: true, lineStyle: { color: '#6b7280' } },
+        axisLabel: { 
+          show: true,
+          formatter: (val) => val?.toFixed(2) || '',
+          fontSize: 9,
+          color: '#9ca3af'
+        },
+        splitLine: { show: false }
+      }
+      yAxes.push(overlayYAxis)
+      
+      series.push({
+        name: '叠加',
+        type: 'line',
+        data: overlaySeriesData,
+        xAxisIndex: 0,
+        yAxisIndex: yAxes.length - 1,  // 新增的右侧Y轴
+        symbol: 'none',
+        lineStyle: { color: '#60a5fa', width: 1.5, type: 'solid' },
+        tooltip: { formatter: '{b}: {c}' }
+      })
+    }
   }
 
   // 副图 Series 分配
