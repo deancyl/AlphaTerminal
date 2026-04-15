@@ -948,7 +948,9 @@ async function sendToLLM(text) {
                 setCachedResponse(text, fullContent)
               }
             }
-          } catch {}
+          } catch (e) {
+            // ignore parse errors
+          }
         }
       }
     }
