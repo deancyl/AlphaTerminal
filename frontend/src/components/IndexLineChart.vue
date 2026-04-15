@@ -188,7 +188,7 @@ function buildKLineOption(hist) {
   const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
   const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
 
-  const subInd = ['MACD', 'KDJ', 'WR'].find(i => (props.indicators || []).includes(i)) || null
+  const subInd = ['MACD', 'KDJ', 'WR', 'RSI'].find(i => (props.indicators || []).includes(i)) || null
   const showBOLL = (props.indicators || []).includes('BOLL')
 
   // Task 2: 主图 60% + 成交量 20% + 副图 20%（精确像素比例）
@@ -294,6 +294,19 @@ function buildKLineOption(hist) {
           lineStyle: { color: tc.ma5, width: 1.2 },
           markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dashed', width: 1 },
             data: [{ yAxis: -20 }, { yAxis: -80 }],
+            label: { show: true, formatter: '{c}', fontSize: 8, color: tc.chartText } } },
+      )
+    }
+    if (subInd === 'RSI') {
+      const rsi = calcRSI(closes)
+      series.push(
+        { name: 'RSI', type: 'line',
+          data: rsi.map(v => v == null ? '-' : v),
+          xAxisIndex: xIdx, yAxisIndex: yIdx,
+          smooth: true, symbol: 'none',
+          lineStyle: { color: '#f472b6', width: 1.2 },
+          markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dashed', width: 1 },
+            data: [{ yAxis: 70 }, { yAxis: 30 }],
             label: { show: true, formatter: '{c}', fontSize: 8, color: tc.chartText } } },
       )
     }
