@@ -1592,3 +1592,102 @@ async def get_system_info():
         "news_cache_ready": news_ready() if 'news_ready' in dir() else True,
         "uptime_seconds": int(time.time() - psutil.Process().create_time()),
     })
+
+
+# ═══════════════════════════════════════════════════════════════
+# Level 2 10档买卖盘口
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/market/order_book/{symbol}")
+async def get_order_book(symbol: str):
+    """Level 2 10档买卖盘口数据（实时）"""
+    norm = _normalize_symbol(symbol)
+    
+    # 转换为新浪格式
+    # 判断是否为指数（上证sh000001, 深证sz399001等）
+    code_digits = norm[2:]  # 去掉sh/sz后的数字部分
+    
+    # 简单判断: 000001-009999 通常是指数, 600000以上是股票
+    is_index = False
+    try:
+        code_num = int(code_digits)
+        if code_num < 100000:  # 0-99999 可能是指数
+            # 常见指数: 000001, 000300, 399001, 399006, 000688
+            is_index = True
+    except:
+        pass
+    
+    if is_index:
+        # 指数没有Level 2数据，返回说明
+        return success_response({
+            "symbol": symbol,
+            "note": "指数暂无Level 2数据",
+            "asks": [],
+            "bids": [],
+            "source": "N/A"
+        })
+    
+    # 个股: 正常获取Level 2数据
+    if norm.startswith('sh'):
+        sina_code = f'sh{norm[2:]}'
+    elif norm.startswith('sz'):
+        sina_code = f'sz{norm[2:]}'
+    else:
+        sina_code = norm
+    
+    url = f"https://hq.sinajs.cn/list={sina_code}"
+    headers = {"Referer": "https://finance.sina.com.cn"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(url, headers=headers)
+            text = resp.text
+            
+            # DEBUG
+            logger.info(f"[order_book] symbol={symbol}, norm={norm}, sina_code={sina_code}, text_len={len(text)}")
+            
+            # 解析数据
+            import re
+            match = re.search(r'="(.+)"', text)
+            if not match:
+                return {"code": 1, "message": "无数据", "data": None}
+            
+            fields = match.group(1).split(',')
+            if len(fields) < 30:
+                return {"code": 1, "message": "数据不足", "data": None}
+            
+            # 解析10档数据
+            # 字段10-19是卖盘(5档): [卖5量,卖5价,卖4量,卖4价,卖3量,卖3价,卖2量,卖2价,卖1量,卖1价]
+            # 字段20-29是买盘(5档): [买1量,买1价,买2量,买2价,买3量,买3价,买4量,买4价,买5量,买5价]
+            
+            asks = []
+            # 卖盘: 字段10-19 (卖5到卖1)
+            for i in range(10, 20, 2):
+                vol = int(fields[i]) if fields[i] and fields[i].isdigit() else 0
+                price = float(fields[i+1]) if fields[i+1] else 0
+                asks.append({
+                    "position": (20 - i) // 2,  # 10→5,12→4,14→3,16→2,18→1
+                    "price": price,
+                    "volume": vol
+                })
+            
+            bids = []
+            for i in range(20, 30, 2):
+                vol = int(fields[i]) if fields[i] and fields[i].isdigit() else 0
+                price = float(fields[i+1]) if fields[i+1] else 0
+                bids.append({
+                    "position": (i - 20) // 2 + 1,  # 1,2,3,4,5
+                    "price": price,
+                    "volume": vol
+                })
+            
+            return success_response({
+                "symbol": symbol,
+                "timestamp": int(time.time() * 1000),
+                "asks": asks,
+                "bids": bids,
+                "source": "Sina HQ Level2"
+            })
+    except Exception as e:
+        logger.error(f"order_book error: {e}")
+        return error_response(500, str(e))
