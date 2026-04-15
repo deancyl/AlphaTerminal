@@ -1,12 +1,14 @@
 """
 Admin 系统控制路由 - 数据源、调度器、缓存、数据库、网络控制
 """
+import asyncio
 import logging
 import time
+import os
 import psutil
 import sqlite3
 from datetime import datetime
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 
@@ -16,7 +18,35 @@ from app.services.sectors_cache import is_ready as sectors_cache_ready
 from app.db.database import _get_conn, _db_path
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(
+    prefix="/admin", 
+    tags=["admin"],
+    dependencies=[]
+)
+
+# ═══════════════════════════════════════════════════════════════
+# 认证机制
+# ═══════════════════════════════════════════════════════════════
+
+def verify_admin_key(api_key: str = None):
+    """Admin API 密钥校验"""
+    configured_key = os.environ.get("ADMIN_API_KEY", "")
+    
+    # 未配置 key 时跳过认证（本机开发环境）
+    if not configured_key:
+        return True
+    
+    if api_key != configured_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return True
+
+def admin_read_auth(api_key: str = None):
+    """读操作认证 - GET 类接口"""
+    return verify_admin_key(api_key)
+
+def admin_write_auth(api_key: str = None):
+    """写操作认证 - POST/PUT/DELETE 类接口"""
+    return verify_admin_key(api_key)
 
 # ═══════════════════════════════════════════════════════════════
 # 数据源控制
@@ -91,8 +121,12 @@ async def get_sources_status():
     }
 
 @router.post("/sources/circuit_breaker")
-async def set_circuit_breaker(control: CircuitBreakerControl):
+async def set_circuit_breaker(
+    control: CircuitBreakerControl,
+    x_api_key: str = Header(None)
+):
     """手动控制数据源熔断状态"""
+    verify_admin_key(x_api_key)
     # 实际实现需要修改 quote_source 模块
     logger.info(f"[Admin] Circuit breaker: {control.source} -> {control.action}")
     return {
@@ -103,8 +137,12 @@ async def set_circuit_breaker(control: CircuitBreakerControl):
     }
 
 @router.post("/sources/balance")
-async def set_source_balance(config: SourceBalanceConfig):
+async def set_source_balance(
+    config: SourceBalanceConfig,
+    x_api_key: str = Header(None)
+):
     """配置数据源负载均衡策略"""
+    verify_admin_key(x_api_key)
     logger.info(f"[Admin] Source balance config updated: {config.strategy}")
     return {
         "success": True,
@@ -156,8 +194,13 @@ class JobControl(BaseModel):
     action: str  # "pause" | "resume" | "trigger_now"
 
 @router.post("/scheduler/jobs/{job_id}/control")
-async def control_job(job_id: str, control: JobControl):
+async def control_job(
+    job_id: str, 
+    control: JobControl,
+    x_api_key: str = Header(None)
+):
     """控制定时任务"""
+    verify_admin_key(x_api_key)
     job = scheduler.get_job(job_id)
     if not job:
         return {"success": False, "error": "Job not found"}
@@ -205,8 +248,12 @@ class CacheWarmupRequest(BaseModel):
     data_type: str
 
 @router.post("/cache/invalidate")
-async def invalidate_cache(request: CacheInvalidateRequest):
+async def invalidate_cache(
+    request: CacheInvalidateRequest,
+    x_api_key: str = Header(None)
+):
     """清空指定缓存"""
+    verify_admin_key(x_api_key)
     cache_type = request.cache_type
     key = request.key
     
@@ -223,8 +270,12 @@ async def invalidate_cache(request: CacheInvalidateRequest):
     return {"success": True, "cache_type": cache_type, "key": key}
 
 @router.post("/cache/warmup")
-async def warmup_cache(request: CacheWarmupRequest):
+async def warmup_cache(
+    request: CacheWarmupRequest,
+    x_api_key: str = Header(None)
+):
     """缓存预热"""
+    verify_admin_key(x_api_key)
     data_type = request.data_type
     
     if data_type == "sectors":
@@ -264,8 +315,12 @@ class DatabaseMaintenanceRequest(BaseModel):
     action: str  # "vacuum" | "analyze" | "wal_checkpoint"
 
 @router.post("/database/maintenance")
-async def database_maintenance(request: DatabaseMaintenanceRequest):
+async def database_maintenance(
+    request: DatabaseMaintenanceRequest,
+    x_api_key: str = Header(None)
+):
     """数据库维护操作"""
+    verify_admin_key(x_api_key)
     action = request.action
     conn = _get_conn()
     
@@ -339,15 +394,13 @@ async def get_recent_logs(lines: int = 100, level: str = None):
         return {"logs": [], "total": 0, "source": "not found"}
     
     try:
-        # 读取日志文件
-        import subprocess
-        result = subprocess.run(
-            ["tail", "-n", str(lines * 2), log_file],  # 读取更多行用于过滤
-            capture_output=True, text=True
-        )
+        # 使用 Python 原生方式读取日志文件（安全、跨平台）
+        raw_lines = []
         
-        if result.returncode == 0:
-            raw_lines = result.stdout.strip().split("\n")
+        with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+            all_lines = f.readlines()
+            # 取最后 lines*2 行
+            raw_lines = all_lines[-(lines * 2):] if len(all_lines) > lines * 2 else all_lines
             
             for line in raw_lines:
                 if not line or not line.strip():
@@ -424,8 +477,13 @@ async def get_recent_logs(lines: int = 100, level: str = None):
     }
 
 @router.post("/logs/level")
-async def set_log_level(logger_name: str, level: str):
+async def set_log_level(
+    logger_name: str, 
+    level: str,
+    x_api_key: str = Header(None)
+):
     """动态调整日志级别"""
+    verify_admin_key(x_api_key)
     import logging
     
     if logger_name == "root":
@@ -443,16 +501,39 @@ async def set_log_level(logger_name: str, level: str):
 async def log_stream_ws(websocket: WebSocket):
     """WebSocket实时日志流"""
     await websocket.accept()
+    
+    # 如果日志队列不存在，创建一个
+    if not hasattr(log_stream_ws, '_log_queue'):
+        log_stream_ws._log_queue = asyncio.Queue(maxsize=100)
+    
+    queue = log_stream_ws._log_queue
+    
+    async def log_writer():
+        """日志写入队列的 handler（供外部调用）"""
+        pass  # 实际实现在 services/logging_queue.py
+    
+    # 发送欢迎消息
+    await websocket.send_json({
+        "timestamp": int(time.time()),
+        "level": "INFO",
+        "message": "Log stream connected. Waiting for logs..."
+    })
+    
     try:
         while True:
-            # 模拟发送日志数据
-            await websocket.send_json({
-                "timestamp": int(time.time()),
-                "level": "INFO",
-                "message": "System running normally"
-            })
-            await asyncio.sleep(5)
+            try:
+                # 从队列获取日志（5秒超时）
+                log_msg = await asyncio.wait_for(queue.get(), timeout=5.0)
+                await websocket.send_json(log_msg)
+            except asyncio.TimeoutError:
+                # 超时发送心跳
+                await websocket.send_json({
+                    "timestamp": int(time.time()),
+                    "level": "HEARTBEAT",
+                    "message": "heartbeat"
+                })
     except WebSocketDisconnect:
         pass
 
-import asyncio
+# 预先创建日志队列供外部导入使用
+_log_queue = asyncio.Queue(maxsize=100)

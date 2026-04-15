@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio, stocks, websocket as ws_router, admin
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.services.logging_queue import init_logging_queue
 
 
 @asynccontextmanager
@@ -37,6 +38,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# 初始化日志队列（WebSocket 实时日志流）
+init_logging_queue()
 
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
 app.add_middleware(

@@ -66,7 +66,6 @@
             ☰
           </button>
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
-          <span class="text-terminal-dim text-xs">Phase 7 · 全球市场 · K线</span>
         </div>
         <div class="flex items-center gap-3 text-xs text-terminal-dim">
           <span id="clock" class="font-mono">{{ currentTime }}</span>
@@ -142,6 +141,10 @@
         <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
+        <!-- 买卖盘口 -->
+        <OrderBookPanel v-else-if="currentView === 'orderbook'" :symbol="currentSymbol || 'sh600519'" />
+        <!-- 回测实验室 -->
+        <BacktestDashboard v-else-if="currentView === 'backtest'" />
         <!-- 系统管理 -->
         <AdminDashboard v-else-if="currentView === 'admin'" />
       </div>
@@ -182,15 +185,19 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
 import PortfolioDashboard from './components/PortfolioDashboard.vue'
+import OrderBookPanel from './components/OrderBookPanel.vue'
+import BacktestDashboard from './components/BacktestDashboard.vue'
 import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
 import AdminDashboard  from './components/AdminDashboard.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
+import { useMarketStore } from './composables/useMarketStore.js'
 import { useTheme } from './composables/useTheme.js'
 import { fetchApiBatch } from './utils/api.js'
 
 const { ui } = useUiStore()
+const { currentSymbol } = useMarketStore()
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark } = useTheme()
@@ -222,7 +229,7 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Phase 5: 侧边栏与视图切换状态
-const isSidebarOpen = ref(false)   // 侧边栏默认收起
+const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面+手机）
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')

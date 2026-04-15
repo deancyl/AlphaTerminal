@@ -1,5 +1,5 @@
 <template>
-  <!-- 侧边栏：展开时 w-56，收起时 w-0，DOM 保留（状态不丢） -->
+  <!-- 侧边栏：固定宽度，显示/隐藏 -->
   <aside
     class="flex-shrink-0 flex flex-col bg-theme-panel border-r border-theme transition-all duration-300 ease-in-out overflow-hidden"
     :style="{ width: isOpen ? '224px' : '0px' }"
@@ -74,11 +74,7 @@
       </button>
     </div>
 
-    <!-- 底部版本信息 -->
-    <div class="px-3 py-2 border-t border-theme shrink-0">
-      <span class="text-[9px] text-theme-tertiary">Beta 0.4.131 · Phase 7</span>
-    </div>
-  </aside>
+    </aside>
 </template>
 
 <script setup>
@@ -97,6 +93,8 @@ const mainNavItems = [
   { id: 'portfolio', label: '投资组合',   icon: '💰' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
+  { id: 'orderbook', label: '买卖盘口',   icon: '📈' },
+  { id: 'backtest',  label: '回测实验室', icon: '🔬' },
 ]
 
 const adminNavItems = [
