@@ -121,6 +121,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useMarketStream } from '../composables/useMarketStream.js'
 // echarts 从 CDN 加载 via window.echarts
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
@@ -630,10 +631,22 @@ let unsubscribeTheme = null
 
 watch(activeSubChart, () => renderChart())
 watch(period, () => fetchData())
-watch(() => props.symbol, (newSym) => { if (newSym) { fetchData(); fetchQuote() } }, { immediate: true })
+// 使用 WebSocket 实时行情
+const { tick, connect: connectStream, disconnect: disconnectStream } = useMarketStream()
+
+// 监听 WebSocket tick
+watch(tick, (t) => {
+  if (t && t.price) {
+    liveTick.value = { price: t.price, volume: t.volume, time: t.time || Date.now() }
+  }
+})
+
+watch(() => props.symbol, (newSym) => { 
+  if (newSym) { fetchData(); fetchQuote(); connectStream(newSym) } 
+}, { immediate: true })
 
 onMounted(() => { 
-  if (props.symbol) { fetchData(); fetchQuote() }
+  if (props.symbol) { fetchData(); fetchQuote(); connectStream(props.symbol) }
   // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
   window.addEventListener('keydown', handleWindowKeydown)
   
@@ -654,6 +667,7 @@ onBeforeUnmount(() => {
   chart = null
   // F1修复: 清理自动刷新定时器
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+  disconnectStream()
   window.removeEventListener('keydown', handleWindowKeydown)
   window.removeEventListener('resize', handleResize)
   unsubscribeTheme?.()
