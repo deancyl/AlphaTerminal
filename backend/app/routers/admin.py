@@ -38,33 +38,55 @@ class CircuitBreakerControl(BaseModel):
 @router.get("/sources/status")
 async def get_sources_status():
     """获取所有数据源实时状态"""
+    from app.services import quote_source
+    
+    # 获取实时状态
+    source_info = quote_source.get_source_status()
+    source_status = source_info.get('sources', {})
+    
+    # 获取调度器信息
+    try:
+        from app.services.scheduler import scheduler
+        jobs_count = len(scheduler.get_jobs())
+    except:
+        jobs_count = 0
+    
     return {
         "sources": {
             "tencent": {
-                "state": "closed",
-                "fail_count": 0,
-                "last_success": "09:15:32",
-                "latency_ms": 85,
-                "health": "healthy"
+                "state": "closed" if source_status.get('tencent',{}).get('status') != 'ok' else "closed",
+                "fail_count": source_status.get('tencent',{}).get('fail_count', 0),
+                "latency_ms": source_status.get('tencent',{}).get('latency') or 0,
+                "health": "healthy" if source_status.get('tencent',{}).get('status') == 'ok' else "unhealthy",
+                "status": source_status.get('tencent',{}).get('status', 'unknown'),
+                "description": "腾讯财经 - 主数据源"
             },
             "sina": {
-                "state": "closed",
-                "fail_count": 1,
-                "last_success": "09:15:28",
-                "latency_ms": 120,
-                "health": "healthy"
+                "state": "closed" if source_status.get('sina',{}).get('status') != 'ok' else "closed",
+                "fail_count": source_status.get('sina',{}).get('fail_count', 0),
+                "latency_ms": source_status.get('sina',{}).get('latency') or 0,
+                "health": "healthy" if source_status.get('sina',{}).get('status') == 'ok' else "unhealthy",
+                "status": source_status.get('sina',{}).get('status', 'unknown'),
+                "description": "新浪财经 - 备用源"
             },
             "eastmoney": {
-                "state": "open",
-                "fail_count": 5,
-                "last_failure": "09:14:18",
-                "recovery_in": 45,
-                "health": "unhealthy"
+                "state": "open" if source_status.get('eastmoney',{}).get('status') != 'ok' else "closed",
+                "fail_count": source_status.get('eastmoney',{}).get('fail_count', 0),
+                "latency_ms": source_status.get('eastmoney',{}).get('latency') or 0,
+                "health": "healthy" if source_status.get('eastmoney',{}).get('status') == 'ok' else "unhealthy",
+                "status": source_status.get('eastmoney',{}).get('status', 'unknown'),
+                "description": "东方财富 - 备用源"
             }
         },
         "balance_config": {
             "strategy": "weighted_round_robin",
-            "weights": {"tencent": 50, "sina": 30, "eastmoney": 20}
+            "weights": {"tencent": 50, "sina": 30, "eastmoney": 20},
+            "current_primary": source_info.get('current', 'tencent'),
+            "last_update": int(time.time())
+        },
+        "scheduler": {
+            "jobs_count": jobs_count,
+            "status": "running"
         }
     }
 
