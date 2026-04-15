@@ -279,40 +279,99 @@ async def get_system_metrics():
 @router.get("/logs/recent")
 async def get_recent_logs(lines: int = 100, level: str = None):
     """获取最近的日志内容"""
-    log_file = "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app.log"
+    import os
+    import re
+    from datetime import datetime
+    
+    log_files = [
+        "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app.log",
+        "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/backend.log",
+    ]
+    
+    # 找到存在的日志文件
+    log_file = None
+    for f in log_files:
+        if os.path.exists(f):
+            log_file = f
+            break
+    
     logs = []
     
+    if not log_file:
+        return {"logs": [], "total": 0, "source": "not found"}
+    
     try:
-        # 尝试读取日志文件
+        # 读取日志文件
         import subprocess
         result = subprocess.run(
-            ["tail", "-n", str(lines), log_file],
+            ["tail", "-n", str(lines * 2), log_file],  # 读取更多行用于过滤
             capture_output=True, text=True
         )
         
         if result.returncode == 0:
-            for line in result.stdout.strip().split("\n"):
-                if not line:
+            raw_lines = result.stdout.strip().split("\n")
+            
+            for line in raw_lines:
+                if not line or not line.strip():
                     continue
-                    
-                # 解析日志级别
+                
+                # 跳过 tqdm 进度条行
+                if "%|" in line or "it/s" in line or line.strip().startswith("|"):
+                    continue
+                
+                # 解析日志级别 - 支持多种格式
                 log_level = "INFO"
-                if "ERROR" in line or "CRITICAL" in line:
+                upper_line = line.upper()
+                
+                if "ERROR" in upper_line or "CRITICAL" in upper_line or "EXCEPTION" in upper_line:
                     log_level = "ERROR"
-                elif "WARNING" in line or "WARN" in line:
+                elif "WARNING" in upper_line or "WARN" in upper_line:
                     log_level = "WARNING"
-                elif "DEBUG" in line:
+                elif "DEBUG" in upper_line:
                     log_level = "DEBUG"
                 
                 # 级别过滤
                 if level and level != "ALL" and log_level != level:
                     continue
                 
+                # 尝试提取时间戳
+                timestamp = int(time.time())
+                
+                # 格式1: 2026-04-15 13:08:45,123
+                time_match = re.search(r'(\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2})', line)
+                if time_match:
+                    try:
+                        dt = datetime.strptime(time_match.group(1), "%Y-%m-%d %H:%M:%S")
+                        timestamp = int(dt.timestamp())
+                    except:
+                        pass
+                else:
+                    # 格式2: 13:08:45 (只有时间，使用今天日期)
+                    time_match2 = re.search(r'(\d{2}:\d{2}:\d{2})', line)
+                    if time_match2:
+                        try:
+                            today = datetime.now().strftime("%Y-%m-%d")
+                            dt = datetime.strptime(f"{today} {time_match2.group(1)}", "%Y-%m-%d %H:%M:%S")
+                            timestamp = int(dt.timestamp())
+                        except:
+                            pass
+                
+                # 清理消息内容
+                message = line.strip()
+                # 移除常见的日志前缀
+                message = re.sub(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(,\d+)?\s*', '', message)
+                message = re.sub(r'^\d{2}:\d{2}:\d{2}\s*', '', message)
+                message = re.sub(r'^(INFO|DEBUG|WARNING|ERROR|CRITICAL)\s*[:\-]?\s*', '', message, flags=re.IGNORECASE)
+                
                 logs.append({
-                    "timestamp": int(time.time()),
+                    "timestamp": timestamp,
                     "level": log_level,
-                    "message": line[:500]  # 限制长度
+                    "message": message[:300]  # 限制长度
                 })
+                
+                if len(logs) >= lines:
+                    break
+                    
     except Exception as e:
         logs.append({
             "timestamp": int(time.time()),
@@ -321,7 +380,7 @@ async def get_recent_logs(lines: int = 100, level: str = None):
         })
     
     return {
-        "logs": logs[-lines:],  # 返回最后N条
+        "logs": logs,
         "total": len(logs),
         "source": log_file
     }
