@@ -135,13 +135,17 @@ def buffer_insert_daily(data_list):
                      float(i.get('amplitude', 0.0)),
                      int(i.get('timestamp',0)), str(i.get('data_type','daily'))))
                 ok += 1
-            except (sqlite3.IntegrityError, sqlite3.OperationalError, ValueError, TypeError) as e:
+            except Exception as e:
+                # 记录具体失败信息，便于排查
                 fail += 1
+                logger.error(f"[DB] buffer_insert_daily failed: symbol={i.get('symbol')}, date={i.get('date')}, error={e}")
                 continue
         conn.commit()
         conn.close()
         if fail:
             logger.warning(f"[DB] buffer_insert_daily: {ok} ok, {fail} failed")
+        else:
+            logger.debug(f"[DB] buffer_insert_daily: {ok} rows inserted")
 
 def buffer_insert_periodic(data_list, period=None):
     if not data_list: return
@@ -185,20 +189,22 @@ def flush_buffer_to_realtime():
             logger.warning(f"[DB] flush: {len(processed_keys)} ok, {error_count} failed（保留buffer）")
 
 def get_latest_prices(symbols=None, data_type='realtime'):
-    with _lock:
-        conn = _get_conn()
-        # 极致防御：防止空列表导致 SQL 语法错误
+    # WAL模式下读操作无需全局锁（SQLite支持并发读）
+    conn = _get_conn()
+    try:
         if symbols is not None and len(symbols) > 0:
             qs = ",".join(["?"] * len(symbols))
             rows = conn.execute(f"SELECT * FROM market_data_realtime WHERE symbol IN ({qs})", symbols).fetchall()
         else:
             rows = conn.execute("SELECT * FROM market_data_realtime WHERE data_type=?", (data_type,)).fetchall()
-        conn.close()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 def get_daily_history(symbol, limit=300, offset=0):
-    with _lock:
-        conn = _get_conn()
+    # WAL模式下读操作无需全局锁
+    conn = _get_conn()
+    try:
         if offset > 0:
             rows = conn.execute(
                 "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ? OFFSET ?",
@@ -209,35 +215,41 @@ def get_daily_history(symbol, limit=300, offset=0):
                 "SELECT * FROM market_data_daily WHERE symbol=? ORDER BY date DESC LIMIT ?",
                 (symbol, limit)
             ).fetchall()
-        conn.close()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 def get_daily_count(symbol):
     """返回某标的日K总数（用于 has_more 判断）"""
-    with _lock:
-        conn = _get_conn()
+    # WAL模式下读操作无需全局锁
+    conn = _get_conn()
+    try:
         row = conn.execute(
             "SELECT COUNT(*) as cnt FROM market_data_daily WHERE symbol=?",
             (symbol,)
         ).fetchone()
-        conn.close()
         return row["cnt"] if row else 0
+    finally:
+        conn.close()
 
 def get_periodic_count(symbol, period):
     """返回某标的某周期K线总数"""
-    with _lock:
-        conn = _get_conn()
+    # WAL模式下读操作无需全局锁
+    conn = _get_conn()
+    try:
         row = conn.execute(
             "SELECT COUNT(*) as cnt FROM market_data_periodic WHERE symbol=? AND period=?",
             (symbol, period)
         ).fetchone()
-        conn.close()
         return row["cnt"] if row else 0
+    finally:
+        conn.close()
 
 def get_periodic_history(symbol, period, limit=200, offset=0):
     """获取周期K线（周线/月线），支持分页"""
-    with _lock:
-        conn = _get_conn()
+    # WAL模式下读操作无需全局锁
+    conn = _get_conn()
+    try:
         if offset > 0:
             rows = conn.execute("""
                 SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
@@ -248,8 +260,9 @@ def get_periodic_history(symbol, period, limit=200, offset=0):
                 SELECT * FROM market_data_periodic WHERE symbol=? AND period=?
                 ORDER BY date DESC LIMIT ?
             """, (symbol, period, limit)).fetchall()
-        conn.close()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 get_price_history = get_daily_history
 

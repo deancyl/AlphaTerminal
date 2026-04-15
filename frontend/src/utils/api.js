@@ -102,7 +102,20 @@ export async function apiFetch(url, options = {}) {
       }
       const res = await fetch(url, fetchOptions)
       clearTimeout(timer)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      
+      // 仅对5xx服务器错误和超时应试重试，4xx客户端错误立即失败
+      if (!res.ok) {
+        if (res.status >= 500 || res.status === 429) {
+          // 服务器错误，可以重试
+          if (attempt < retries) {
+            console.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries})...`)
+            await sleep(500 * (attempt + 1))
+            continue
+          }
+        }
+        // 4xx错误或已达到重试上限，抛出异常
+        throw new Error(`HTTP ${res.status}`)
+      }
       
       const d = await res.json()
       return extractData(d)
@@ -110,7 +123,7 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
-      if (attempt < retries) {
+      if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5'))) {
         console.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}), retrying...`)
         await sleep(500 * (attempt + 1))
         continue

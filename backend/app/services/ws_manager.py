@@ -1,6 +1,6 @@
 """
-WebSocket 连接管理器 — 动态多路复用版本
-每个连接独立订阅 symbol 集合，广播时按需过滤
+WebSocket 连接管理器 — 优化版本
+使用 Dict[symbol, Set[WSConnection]] 实现 O(1) 广播查找
 """
 import asyncio
 import json
@@ -26,14 +26,14 @@ class WSConnection:
         async with self._lock:
             for s in symbols:
                 self._symbols.add(s.strip().lower())
-            logger.info(f"[WS] subs updated: {self._symbols}")
+            logger.debug(f"[WS] subs updated: {self._symbols}")
 
     async def unsubscribe(self, symbols: list[str]):
         """取消订阅 symbols"""
         async with self._lock:
             for s in symbols:
                 self._symbols.discard(s.strip().lower())
-            logger.info(f"[WS] subs updated: {self._symbols}")
+            logger.debug(f"[WS] subs updated: {self._symbols}")
 
     async def get_symbols(self) -> set:
         async with self._lock:
@@ -41,50 +41,104 @@ class WSConnection:
 
 
 class ConnectionManager:
+    """
+    优化后的连接管理器：
+    - 使用 _symbol_map: Dict[symbol, Set[WSConnection]] 实现 O(1) 查找
+    - 广播时直接通过 symbol 获取订阅者，避免遍历所有连接
+    """
     def __init__(self):
-        self._conns: list[WSConnection] = []   # 所有活跃连接（注册后端推送时会遍历全部）
-        self._lock   = asyncio.Lock()
+        self._conns: list[WSConnection] = []   # 所有活跃连接
+        self._symbol_map: dict[str, set] = {}  # symbol -> 订阅该symbol的连接集合（O(1)查找）
+        self._conn_lock  = asyncio.Lock()       # 保护 _conns
+        self._map_lock   = asyncio.Lock()       # 保护 _symbol_map
 
     async def connect(self, ws: WebSocket) -> WSConnection:
         """注册新连接，返回 WSConnection 对象"""
         conn = WSConnection(ws)
-        async with self._lock:
+        async with self._conn_lock:
             self._conns.append(conn)
         logger.info(f"[WS] client connected, total={len(self._conns)}")
         return conn
 
     async def disconnect(self, conn: WSConnection):
         """注销连接"""
-        async with self._lock:
+        # 先获取连接的订阅列表
+        symbols = await conn.get_symbols()
+        
+        async with self._conn_lock:
             if conn in self._conns:
                 self._conns.remove(conn)
+        
+        # 从 symbol_map 中移除
+        async with self._map_lock:
+            for sym in symbols:
+                if sym in self._symbol_map:
+                    self._symbol_map[sym].discard(conn)
+                    if not self._symbol_map[sym]:
+                        del self._symbol_map[sym]
+        
         logger.info(f"[WS] client disconnected, total={len(self._conns)}")
+
+    async def _update_symbol_map(self, conn: WSConnection, symbols: set, is_add: bool):
+        """更新 symbol_map（内部方法，需持有 _map_lock）"""
+        for sym in symbols:
+            if is_add:
+                if sym not in self._symbol_map:
+                    self._symbol_map[sym] = set()
+                self._symbol_map[sym].add(conn)
+            else:
+                if sym in self._symbol_map:
+                    self._symbol_map[sym].discard(conn)
+                    if not self._symbol_map[sym]:
+                        del self._symbol_map[sym]
+
+    async def subscribe(self, conn: WSConnection, symbols: list[str]):
+        """连接订阅 symbols"""
+        sym_set = set(s.strip().lower() for s in symbols)
+        async with self._map_lock:
+            await self._update_symbol_map(conn, sym_set, is_add=True)
+
+    async def unsubscribe(self, conn: WSConnection, symbols: list[str]):
+        """连接取消订阅 symbols"""
+        sym_set = set(s.strip().lower() for s in symbols)
+        async with self._map_lock:
+            await self._update_symbol_map(conn, sym_set, is_add=False)
 
     async def broadcast_tick(self, symbol: str, tick: dict):
         """
         广播 tick 给所有订阅了该 symbol 的连接
+        使用 O(1) 查找：直接从 _symbol_map 获取订阅者
         """
-        async with self._lock:
-            active = list(self._conns)
+        sym_lower = symbol.strip().lower()
+        data = json.dumps(tick, ensure_ascii=False)
+        
+        # O(1) 获取订阅者
+        async with self._map_lock:
+            subscribers = self._symbol_map.get(sym_lower, set()).copy()
+
+        if not subscribers:
+            return
 
         dead = []
-        data = json.dumps(tick, ensure_ascii=False)
-        sym_lower = symbol.strip().lower()
-
-        for conn in active:
-            subs = await conn.get_symbols()
-            if sym_lower not in subs:
-                continue
+        for conn in subscribers:
             try:
                 await conn.ws.send_text(data)
             except Exception:
                 dead.append(conn)
 
+        # 清理死连接
         if dead:
-            async with self._lock:
+            async with self._map_lock:
+                for conn in dead:
+                    if conn in self._symbol_map.get(sym_lower, set()):
+                        self._symbol_map[sym_lower].discard(conn)
+            
+            async with self._conn_lock:
                 for conn in dead:
                     if conn in self._conns:
                         self._conns.remove(conn)
+            
+            logger.warning(f"[WS] removed {len(dead)} dead connections")
 
     async def broadcast_to_subscribers(self, symbol: str, tick: dict):
         """broadcast_tick 的别名，保持 API 兼容"""
