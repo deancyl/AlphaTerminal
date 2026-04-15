@@ -175,10 +175,20 @@ async def get_cache_status():
         }
     }
 
+class CacheInvalidateRequest(BaseModel):
+    cache_type: str
+    key: Optional[str] = None
+
+class CacheWarmupRequest(BaseModel):
+    data_type: str
+
 @router.post("/cache/invalidate")
-async def invalidate_cache(cache_type: str, key: Optional[str] = None):
+async def invalidate_cache(request: CacheInvalidateRequest):
     """清空指定缓存"""
-    if cache_type == "memory":
+    cache_type = request.cache_type
+    key = request.key
+    
+    if cache_type == "memory" or cache_type == "market":
         # 清空内存缓存
         from app.routers.market import _REALTIME_CACHE
         _REALTIME_CACHE.clear()
@@ -191,8 +201,10 @@ async def invalidate_cache(cache_type: str, key: Optional[str] = None):
     return {"success": True, "cache_type": cache_type, "key": key}
 
 @router.post("/cache/warmup")
-async def warmup_cache(data_type: str):
+async def warmup_cache(request: CacheWarmupRequest):
     """缓存预热"""
+    data_type = request.data_type
+    
     if data_type == "sectors":
         from app.services.sectors_cache import fetch_and_cache_sectors
         fetch_and_cache_sectors()
