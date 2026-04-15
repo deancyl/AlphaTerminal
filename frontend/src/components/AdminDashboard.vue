@@ -483,12 +483,12 @@ async function dbMaintenance(action) {
   } catch (e) { alert('操作失败: ' + e.message) }
 }
 
+
 async function refreshSystemMetrics() {
   try {
     const data = await apiFetch('/api/v1/admin/system/metrics')
     if (data) Object.assign(systemMetrics, data)
-  } catch (e) { console.error('刷新失败
-  } catch (e) { console.error('刷新失败:', e) }
+  } catch (e) { console.error('Refresh failed:', e) }
 }
 
 onMounted(() => {
