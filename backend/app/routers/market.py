@@ -802,6 +802,20 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
     return result
 
 
+@router.get("/market/fund_flow")
+async def get_fund_flow():
+    """
+    资金流向接口（占位/待开发）
+    """
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "items": []
+        }
+    }
+
+
 @router.get("/market/history/{symbol}")
 async def market_history(
     symbol: str,

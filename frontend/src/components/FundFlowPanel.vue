@@ -116,6 +116,9 @@ async function fetchFundFlow() {
     }
   } catch (e) {
     console.error('fetchFundFlow error:', e)
+  } finally {
+    // 确保无论成功或失败都释放加载状态
+    isLoading.value = false
   }
 }
 

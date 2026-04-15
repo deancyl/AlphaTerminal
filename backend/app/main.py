@@ -113,8 +113,8 @@ async def generic_exception_handler(request: Request, exc: Exception):
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
-app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # ← 必须在 sentiment 之前（/{symbol} 拦截一切）
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
+app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # 放在最后兜底
 app.include_router(bond.router, prefix="/api/v1", tags=["bond"])
 app.include_router(futures.router, prefix="/api/v1", tags=["futures"])
 app.include_router(portfolio.router, prefix="/api/v1", tags=["portfolio"])
