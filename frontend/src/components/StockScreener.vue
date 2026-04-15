@@ -72,6 +72,34 @@
         </div>
       </div>
 
+      <!-- 市盈率 PE -->
+      <div class="flex flex-col">
+        <span class="text-terminal-dim mb-0.5">市盈率</span>
+        <div class="flex items-center gap-0.5">
+          <input v-model.number="flt.pe.min" type="number"
+                 placeholder="min" step="0.1"
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
+          <span class="text-terminal-dim">~</span>
+          <input v-model.number="flt.pe.max" type="number"
+                 placeholder="max" step="0.1"
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
+        </div>
+      </div>
+
+      <!-- 市净率 PB -->
+      <div class="flex flex-col">
+        <span class="text-terminal-dim mb-0.5">市净率</span>
+        <div class="flex items-center gap-0.5">
+          <input v-model.number="flt.pb.min" type="number"
+                 placeholder="min" step="0.01"
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
+          <span class="text-terminal-dim">~</span>
+          <input v-model.number="flt.pb.max" type="number"
+                 placeholder="max" step="0.01"
+                 class="w-full bg-terminal-bg border border-theme rounded px-1 py-0.5 text-[9px] text-theme-primary focus:border-terminal-accent outline-none placeholder:text-theme-muted" />
+        </div>
+      </div>
+
       <!-- 操作按钮 -->
       <div class="flex flex-col justify-end">
         <div class="flex gap-1">
@@ -115,6 +143,14 @@
                 @click="setSort('amount')">
               <span :class="sortClass('amount')">成交额</span>
             </th>
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
+                @click="setSort('pe')">
+              <span :class="sortClass('pe')">PE</span>
+            </th>
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
+                @click="setSort('pb')">
+              <span :class="sortClass('pb')">PB</span>
+            </th>
           </tr>
         </thead>
         <tbody class="overflow-y-auto">
@@ -139,6 +175,14 @@
             </td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px] text-terminal-dim">
               {{ formatAmt(stock.amount) }}
+            </td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
+                :class="(stock.pe || 0) <= 0 ? 'text-terminal-dim' : ((stock.pe || 0) < 15 ? 'text-bullish' : ((stock.pe || 0) > 60 ? 'text-bearish' : 'text-theme-primary'))">
+              {{ stock.pe ? stock.pe.toFixed(1) : '-' }}
+            </td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
+                :class="(stock.pb || 0) <= 0 ? 'text-terminal-dim' : ((stock.pb || 0) < 1 ? 'text-bullish' : ((stock.pb || 0) > 5 ? 'text-bearish' : 'text-theme-primary'))">
+              {{ stock.pb ? stock.pb.toFixed(2) : '-' }}
             </td>
           </tr>
           <!-- F1修复: 股票列表骨架屏 -->
@@ -212,6 +256,8 @@ const flt = ref({
   turnover:    { min: null, max: null },
   amount:     { min: null, max: null },   // 单位：亿元（前端输入），转元后比较
   price:      { min: null, max: null },
+  pe:         { min: null, max: null },   // 市盈率
+  pb:         { min: null, max: null },   // 市净率
 })
 
 const filterActive = computed(() =>
@@ -245,6 +291,18 @@ const filteredStocks = computed(() => {
     list = list.filter(s => s.amount >= flt.value.amount.min * 1e8)
   if (flt.value.amount.max !== null && flt.value.amount.max !== '')
     list = list.filter(s => s.amount <= flt.value.amount.max * 1e8)
+
+  // 市盈率 PE 过滤
+  if (flt.value.pe.min !== null && flt.value.pe.min !== '')
+    list = list.filter(s => (s.pe || 0) >= flt.value.pe.min)
+  if (flt.value.pe.max !== null && flt.value.pe.max !== '')
+    list = list.filter(s => (s.pe || 0) <= flt.value.pe.max)
+
+  // 市净率 PB 过滤
+  if (flt.value.pb.min !== null && flt.value.pb.min !== '')
+    list = list.filter(s => (s.pb || 0) >= flt.value.pb.min)
+  if (flt.value.pb.max !== null && flt.value.pb.max !== '')
+    list = list.filter(s => (s.pb || 0) <= flt.value.pb.max)
 
   // 排序
   const key = sortBy.value

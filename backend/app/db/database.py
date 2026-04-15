@@ -364,13 +364,13 @@ def get_all_stocks(limit=5000, offset=0, search=None):
 
 def get_all_stocks_lite():
     """轻量全量查询：只返回 StockScreener 需要的字段，无分页"""
-    with _lock:
-        conn = _get_conn()
+    # WAL模式下读操作无需锁
+    conn = _get_conn()
+    try:
         rows = conn.execute("""
-            SELECT code, name, price, change_pct, turnover, volume, amount
+            SELECT code, name, price, change_pct, turnover, volume, amount, per, pb, mktcap
             FROM market_all_stocks WHERE price > 0 ORDER BY code
         """).fetchall()
-        conn.close()
         result = []
         for r in rows:
             price = float(r['price'] or 0)
@@ -386,8 +386,13 @@ def get_all_stocks_lite():
                 "turnover": float(r['turnover'] or 0),
                 "volume": float(r['volume'] or 0),
                 "amount": float(r['amount'] or 0),
+                "pe": float(r['per'] or 0) if r['per'] else 0,  # PE
+                "pb": float(r['pb'] or 0) if r['pb'] else 0,    # PB
+                "mktcap": float(r['mktcap'] or 0) / 100000000,  # 市值(亿)
             })
         return result
+    finally:
+        conn.close()
 
 def get_all_stocks_count():
     """返回全市场个股总数"""
