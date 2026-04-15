@@ -103,7 +103,7 @@ async function fetchFundFlow() {
   isLoading.value = fundFlowData.value.length === 0
   try {
     const d = await apiFetch('/api/v1/market/fund_flow', { timeoutMs: 15000 })
-    if (!d || d.status === 'error') return
+    if (!d || d.code !== 0) return
     
     fundFlowData.value = d.data?.items || []
     
