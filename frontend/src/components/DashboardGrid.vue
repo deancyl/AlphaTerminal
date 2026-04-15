@@ -313,10 +313,12 @@ const periods = [
 
 const indicators = [
   { key: 'MACD',  label: 'MACD' },
-  { key: 'BOLL', label: 'BOLL' },
+  { key: 'BOLL',  label: 'BOLL' },
   { key: 'KDJ',  label: 'KDJ' },
   { key: 'RSI',  label: 'RSI' },
   { key: 'WR',   label: 'WR' },
+  { key: 'OBV',  label: 'OBV' },
+  { key: 'DMI',  label: 'DMI' },
 ]
 
 function switchIndex(idx) {

@@ -149,3 +149,134 @@ export function calcOBV(closes, volumes) {
     return obv
   })
 }
+
+
+/**
+ * 计算动向指标 DMI (Directional Movement Index)
+ * 包括: PDI(+DI), MDI(-DI), ADX, ADXR
+ */
+export function calcDMI(highs, lows, closes, period = 14) {
+  const len = highs.length
+  const pdi = []
+  const mdi = []
+  const adx = []
+  const dx = []
+  
+  // 计算真实波幅 TR
+  const tr = []
+  for (let i = 1; i < len; i++) {
+    const hl = highs[i] - lows[i]
+    const hc = Math.abs(highs[i] - closes[i - 1])
+    const lc = Math.abs(lows[i] - closes[i - 1])
+    tr.push(Math.max(hl, hc, lc))
+  }
+  
+  // 计算+DM和-DM
+  const plusDM = []
+  const minusDM = []
+  for (let i = 1; i < len; i++) {
+    const up = highs[i] - highs[i - 1]
+    const down = lows[i - 1] - lows[i]
+    plusDM.push(up > down && up > 0 ? up : 0)
+    minusDM.push(down > up && down > 0 ? down : 0)
+  }
+  
+  // 计算平滑值
+  const smooth = (arr, start, end) => {
+    let sum = 0
+    for (let i = start; i < end; i++) sum += arr[i]
+    return sum
+  }
+  
+  // 计算+DI和-DI
+  for (let i = period; i < len; i++) {
+    const trSum = smooth(tr, i - period, i)
+    const plusDMSum = smooth(plusDM, i - period, i)
+    const minusDMSum = smooth(minusDM, i - period, i)
+    
+    const pdiVal = trSum > 0 ? (plusDMSum / trSum) * 100 : 0
+    const mdiVal = trSum > 0 ? (minusDMSum / trSum) * 100 : 0
+    
+    pdi.push(pdiVal)
+    mdi.push(mdiVal)
+    
+    // 计算DX
+    const dxVal = Math.abs(pdiVal - mdiVal) / (pdiVal + mdiVal) * 100
+    dx.push(dxVal)
+  }
+  
+  // 计算ADX
+  for (let i = period; i < dx.length; i++) {
+    const adxVal = dx.slice(i - period, i).reduce((a, b) => a + b, 0) / period
+    adx.push(adxVal)
+  }
+  
+  // 填充前面的null
+  const pad = period * 2
+  while (pdi.length < len) { pdi.unshift(null); mdi.unshift(null); adx.unshift(null) }
+  
+  return { pdi: pdi.slice(1), mdi: mdi.slice(1), adx: adx.slice(1) }
+}
+
+
+/**
+ * 计算抛物线转向指标 SAR (Stop and Reverse)
+ */
+export function calcSAR(highs, lows, afStep = 0.02, afMax = 0.2) {
+  const len = highs.length
+  const sar = new Array(len).fill(null)
+  
+  if (len < 2) return sar
+  
+  // 初始化
+  let trend = highs[1] > highs[0] ? 1 : -1  // 1=上涨, -1=下跌
+  let af = afStep
+  let ep = trend > 0 ? highs[0] : lows[0]  // 极值点
+  sar[0] = trend > 0 ? lows[0] : highs[0]
+  
+  for (let i = 1; i < len; i++) {
+    const prevSar = sar[i - 1]
+    const prevEp = ep
+    
+    // 计算SAR
+    let newSar = prevSar + af * (prevEp - prevSar)
+    
+    // 验证SAR是否在昨日价格范围内
+    if (trend > 0) {
+      if (newSar > lows[i - 1]) newSar = lows[i - 1]
+      if (newSar > lows[i]) newSar = lows[i]
+    } else {
+      if (newSar < highs[i - 1]) newSar = highs[i - 1]
+      if (newSar < highs[i]) newSar = highs[i]
+    }
+    
+    sar[i] = newSar
+    
+    // 检查是否反转
+    if (trend > 0) {
+      if (lows[i] < newSar) {
+        // 反转信号
+        trend = -1
+        sar[i] = ep
+        ep = lows[i]
+        af = afStep
+      } else if (highs[i] > ep) {
+        ep = highs[i]
+        af = Math.min(af + afStep, afMax)
+      }
+    } else {
+      if (highs[i] > newSar) {
+        // 反转信号
+        trend = 1
+        sar[i] = ep
+        ep = highs[i]
+        af = afStep
+      } else if (lows[i] < ep) {
+        ep = lows[i]
+        af = Math.min(af + afStep, afMax)
+      }
+    }
+  }
+  
+  return sar
+}

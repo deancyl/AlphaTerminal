@@ -191,7 +191,7 @@ function buildKLineOption(hist) {
   const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
   const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
 
-  const subInd = ['MACD', 'KDJ', 'WR', 'RSI'].find(i => (props.indicators || []).includes(i)) || null
+  const subInd = ['MACD', 'KDJ', 'WR', 'RSI', 'OBV', 'DMI'].find(i => (props.indicators || []).includes(i)) || null
   const showBOLL = (props.indicators || []).includes('BOLL')
 
   // Task 2: 主图 60% + 成交量 20% + 副图 20%（精确像素比例）
@@ -311,6 +311,47 @@ function buildKLineOption(hist) {
           markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dashed', width: 1 },
             data: [{ yAxis: 70 }, { yAxis: 30 }],
             label: { show: true, formatter: '{c}', fontSize: 8, color: tc.chartText } } },
+      )
+    }
+    if (subInd === 'OBV') {
+      const obv = calcOBV(closes, volumes)
+      series.push(
+        { name: 'OBV', type: 'line',
+          data: obv.map(v => v == null ? '-' : v),
+          xAxisIndex: xIdx, yAxisIndex: yIdx,
+          smooth: true, symbol: 'none',
+          lineStyle: { color: '#22d3ee', width: 1.2 },
+          markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dashed', width: 1 },
+            data: [{ yAxis: 0 }], label: { show: true, formatter: '{c}', fontSize: 8, color: tc.chartText } } },
+      )
+    }
+    if (subInd === 'DMI') {
+      const { pdi, mdi, adx } = calcDMI(highs, lows, closes)
+      // PDI (+DI)
+      series.push(
+        { name: 'DMI+', type: 'line',
+          data: pdi.map(v => v == null ? '-' : v),
+          xAxisIndex: xIdx, yAxisIndex: yIdx,
+          smooth: true, symbol: 'none',
+          lineStyle: { color: '#22c55e', width: 1.2 } },
+      )
+      // MDI (-DI)
+      series.push(
+        { name: 'DMI-', type: 'line',
+          data: mdi.map(v => v == null ? '-' : v),
+          xAxisIndex: xIdx, yAxisIndex: yIdx,
+          smooth: true, symbol: 'none',
+          lineStyle: { color: '#ef4444', width: 1.2 } },
+      )
+      // ADX
+      series.push(
+        { name: 'ADX', type: 'line',
+          data: adx.map(v => v == null ? '-' : v),
+          xAxisIndex: xIdx, yAxisIndex: yIdx,
+          smooth: true, symbol: 'none',
+          lineStyle: { color: '#f59e0b', width: 1, type: 'dashed' },
+          markLine: { silent: true, symbol: 'none', lineStyle: { color: tc.borderPrimary, type: 'dotted', width: 1 },
+            data: [{ yAxis: 25 }], label: { show: true, formatter: 'ADX=25', fontSize: 8, color: tc.chartText } } },
       )
     }
   }
