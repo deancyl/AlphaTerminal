@@ -321,7 +321,9 @@ async function fetchNews(quiet = false, isTimer = false) {
             refreshMsg.value = `🔴 ${errMsg}`
           }
         }
-      } catch {}
+      } catch (e) {
+        console.error('[NewsFeed] parse error:', e.message)
+      }
       if (!useForce || !refreshMsg.value) {
         refreshMsg.value = `⚠️ ${errMsg}`
       }

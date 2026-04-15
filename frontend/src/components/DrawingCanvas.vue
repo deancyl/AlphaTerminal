@@ -164,7 +164,9 @@ function getTimestampByIndex(idx) {
     const option = props.chartInstance.getOption()
     const times = option.xAxis?.[0]?.data
     if (times && times[idx]) return new Date(times[idx]).getTime()
-  } catch (e) {}
+  } catch (e) {
+    // ignore parsing errors
+  }
   return null
 }
 
@@ -257,7 +259,9 @@ function snapToKLine(x, y) {
         idx: roundedIdx, magnetTo: closest.label
       }
     }
-  } catch (e) {}
+  } catch (e) {
+    // ignore calculation errors
+  }
   
   return { x, y }
 }
@@ -1012,7 +1016,9 @@ async function loadFromOtherPeriods() {
       seen.add(s.id)
       return true
     })
-  } catch (e) {}
+  } catch (e) {
+    console.error('[DrawingCanvas] filter error:', e.message)
+  }
 }
 
 function resizeCanvas() {
