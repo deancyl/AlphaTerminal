@@ -139,6 +139,7 @@
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { useMarketStream } from '../composables/useMarketStream.js'
 import { apiFetch } from '../utils/api.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { calcMA } from '../utils/indicators.js'
@@ -512,13 +513,41 @@ watch(currentSymbol, () => {
 })
 
 // ── 生命周期 ────────────────────────────────────────────────────
+// 使用 WebSocket 实时行情
+const { tick, connect: connectStream, disconnect: disconnectStream, connected } = useMarketStream()
+
+// 监听 WebSocket tick 更新
+watch(tick, (t) => {
+  if (t && t.price) {
+    liveTick.value = { price: t.price, volume: t.volume, time: t.time || Date.now() }
+    currentQuote.value = {
+      price: t.price, change: t.chg, change_pct: t.chg_pct,
+      volume: t.volume, amount: t.amount,
+    }
+  }
+})
+
+// 切换 symbol 时重新订阅
+watch(currentSymbol, (sym) => {
+  if (sym) {
+    connectStream(sym)
+  }
+})
+
 onMounted(() => {
   fetchHistory()
+  // 优先使用 WebSocket，回退到 HTTP 轮询
+  const sym = currentSymbol.value
+  if (sym) {
+    connectStream(sym)
+  }
+  // WebSocket 失败时使用 HTTP 回退
   startQuotePolling(30_000)
 })
 
 onUnmounted(() => {
   stopQuotePolling()
+  disconnectStream()
   baseChartRef.value?.getChartInstance?.()?.dispose()
 })
 </script>
