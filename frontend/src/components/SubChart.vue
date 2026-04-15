@@ -99,15 +99,12 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts/core'
-import { LineChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+// echarts 从 CDN 加载 via window.echarts
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { buildXAxisLabels } from '../utils/symbols.js'
 import { UP, DOWN } from '../utils/indicators.js'
 
-echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, CanvasRenderer])
+
 
 const props = defineProps({
   hist:          { type: Array,  default: () => [] },
@@ -234,7 +231,7 @@ function render() {
 }
 
 onMounted(() => {
-  chartInstance = echarts.init(chartRef.value, null, { renderer: 'canvas' })
+  chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
   render()
 })
 

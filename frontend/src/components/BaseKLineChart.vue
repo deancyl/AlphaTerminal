@@ -4,20 +4,10 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import * as echarts from 'echarts/core'
-import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, DataZoomComponent,
-  MarkLineComponent, VisualMapComponent
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+// echarts 从 CDN 加载 via window.echarts
 import { UP, DOWN } from '../utils/indicators.js'
 
-echarts.use([
-  CandlestickChart, LineChart, BarChart,
-  GridComponent, TooltipComponent, DataZoomComponent,
-  MarkLineComponent, VisualMapComponent, CanvasRenderer,
-])
+
 
 const emit = defineEmits(['datazoom'])
 
@@ -314,7 +304,7 @@ onMounted(() => {
     if (width <= 0 || height <= 0) return
     if (!chart) {
       // 第一次拿到实际尺寸，初始化图表
-      chart = echarts.init(chartEl.value, 'dark')
+      chart = window.echarts.init(chartEl.value, 'dark')
       _lastChartData = props.chartData
       chart.setOption(buildOption(props.chartData))
       chart.on('datazoom', () => {

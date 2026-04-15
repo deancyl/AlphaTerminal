@@ -121,13 +121,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api.js'
-import * as echarts from 'echarts/core'
-import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
-import {
-  GridComponent, TooltipComponent, DataZoomComponent,
-  MarkLineComponent, VisualMapComponent, LegendComponent
-} from 'echarts/components'
-import { CanvasRenderer } from 'echarts/renderers'
+// echarts 从 CDN 加载 via window.echarts
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import QuotePanel from './QuotePanel.vue'
@@ -135,12 +129,7 @@ import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import CrosshairOverlay from './CrosshairOverlay.vue'
 
-echarts.use([
-  CandlestickChart, LineChart, BarChart,
-  GridComponent, TooltipComponent, DataZoomComponent,
-  MarkLineComponent, VisualMapComponent, LegendComponent,
-  CanvasRenderer,
-])
+
 
 const props = defineProps({
   symbol: { type: String, required: true },
@@ -353,7 +342,7 @@ function renderChart() {
   if (!chartEl.value || histData.value.length === 0) return
 
   if (!chart) {
-    chart = echarts.init(chartEl.value)
+    chart = window.echarts.init(chartEl.value)
     window.addEventListener('resize', handleResize)
   }
 

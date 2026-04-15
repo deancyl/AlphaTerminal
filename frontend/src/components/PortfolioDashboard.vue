@@ -498,7 +498,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import * as echarts from 'echarts'
+// echarts 从 CDN 加载 via window.echarts
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 
 const store = usePortfolioStore()
@@ -757,7 +757,7 @@ watch(mergedView, async (newVal) => {
 function renderChart() {
   if (!chartEl.value || !store.snapshots.value?.length) return
   if (!chart.value) {
-    chart.value = echarts.init(chartEl.value, 'dark')
+    chart.value = window.echarts.init(chartEl.value, 'dark')
   }
   const snaps = store.snapshots.value
   const dates = snaps.map(s => s.date)
@@ -796,7 +796,7 @@ function renderChart() {
         smooth: true,
         lineStyle: { color: '#60a5fa', width: 1.5 },
         itemStyle: { color: '#60a5fa' },
-        areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[
+        areaStyle: { color: new window.echarts.graphic.LinearGradient(0,0,0,1,[
           { offset: 0, color: 'rgba(96,165,250,0.3)' },
           { offset: 1, color: 'rgba(96,165,250,0)' },
         ])},
