@@ -295,37 +295,7 @@
       </div>
 
       <!-- 日志管理 -->
-      <div v-else-if="activeTab === 'logs'" class="space-y-6">
-        <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>
-        <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>
-
-        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
-          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>
-          <p class="text-xs text-theme-secondary leading-relaxed">
-            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。
-          </p>
-        </div>
-
-        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs">
-          <div class="text-theme-muted text-center py-8">
-            <div class="text-2xl mb-2">🚧</div>
-            <div>实时日志流功能开发中...</div>
-            <div class="mt-2 text-[10px]">预计支持：日志级别筛选、关键字搜索、错误高亮</div>
-          </div>
-        </div>
-
-        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">
-          <strong class="text-yellow-400">日志级别说明：</strong>
-          <ul class="mt-1 space-y-1 list-disc list-inside">
-            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>
-            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>
-            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>
-            <li><strong>ERROR</strong>：错误信息，需要关注</li>
-          </ul>
-        </div>
-      </div>
-
-    </main>
+<!-- ═══ 日志管理 ══════════════════════════════════════════ -->      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-theme-panel border border-theme rounded text-sm" @change="refreshLogs">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in logs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">          <strong class="text-yellow-400">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
     <!-- 确认对话框 -->
     <div v-if="showConfirm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -419,6 +389,27 @@ const systemMetrics = reactive({
   network: { connections: 471, io_counters: { bytes_sent: 74188244056, bytes_recv: 82540093634 } }
 })
 
+// 日志数据
+const logs = ref([])
+const logLevel = ref('ALL')
+
+function getLogLevelClass(level) {
+  const classes = {
+    'ERROR': 'bg-red-500/20 text-red-400',
+    'WARNING': 'bg-yellow-500/20 text-yellow-400',
+    'INFO': 'bg-blue-500/20 text-blue-400',
+    'DEBUG': 'bg-gray-500/20 text-gray-400'
+  }
+  return classes[level] || classes['INFO']
+}
+
+async function refreshLogs() {
+  try {
+    const data = await apiFetch(`/api/v1/admin/logs/recent?lines=100&level=${logLevel.value}`)
+    if (data?.logs) logs.value = data.logs
+  } catch (e) { console.error('Refresh logs failed:', e) }
+}
+
 async function refreshSourceStatus() {
   try {
     const data = await apiFetch('/api/v1/admin/sources/status')
@@ -495,5 +486,6 @@ onMounted(() => {
   refreshSourceStatus()
   refreshScheduler()
   refreshSystemMetrics()
+  refreshLogs()
 })
 </script>

@@ -276,6 +276,56 @@ async def get_system_metrics():
 # 日志管理
 # ═══════════════════════════════════════════════════════════════
 
+@router.get("/logs/recent")
+async def get_recent_logs(lines: int = 100, level: str = None):
+    """获取最近的日志内容"""
+    log_file = "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app.log"
+    logs = []
+    
+    try:
+        # 尝试读取日志文件
+        import subprocess
+        result = subprocess.run(
+            ["tail", "-n", str(lines), log_file],
+            capture_output=True, text=True
+        )
+        
+        if result.returncode == 0:
+            for line in result.stdout.strip().split("\n"):
+                if not line:
+                    continue
+                    
+                # 解析日志级别
+                log_level = "INFO"
+                if "ERROR" in line or "CRITICAL" in line:
+                    log_level = "ERROR"
+                elif "WARNING" in line or "WARN" in line:
+                    log_level = "WARNING"
+                elif "DEBUG" in line:
+                    log_level = "DEBUG"
+                
+                # 级别过滤
+                if level and level != "ALL" and log_level != level:
+                    continue
+                
+                logs.append({
+                    "timestamp": int(time.time()),
+                    "level": log_level,
+                    "message": line[:500]  # 限制长度
+                })
+    except Exception as e:
+        logs.append({
+            "timestamp": int(time.time()),
+            "level": "ERROR",
+            "message": f"Failed to read logs: {str(e)}"
+        })
+    
+    return {
+        "logs": logs[-lines:],  # 返回最后N条
+        "total": len(logs),
+        "source": log_file
+    }
+
 @router.post("/logs/level")
 async def set_log_level(logger_name: str, level: str):
     """动态调整日志级别"""
