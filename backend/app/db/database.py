@@ -17,13 +17,16 @@ _lock = threading.RLock()
 def _get_conn():
     conn = sqlite3.connect(_db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    # 优先 WAL，目录无写权限时自动降级为 DELETE 模式
-    try:
-        cur = conn.execute("PRAGMA journal_mode=WAL")
-        if cur.fetchone()[0] != "wal":
-            conn.execute("PRAGMA journal_mode=DELETE")
-    except sqlite3.OperationalError:
+    # 检测网络挂载路径，禁用 WAL 模式（SSHFS/FUSE 不支持 mmap）
+    if "/vol3/" in _db_path or "/tmp/" in _db_path or "/nas/" in _db_path:
         conn.execute("PRAGMA journal_mode=DELETE")
+    else:
+        try:
+            cur = conn.execute("PRAGMA journal_mode=WAL")
+            if cur.fetchone()[0] != "wal":
+                conn.execute("PRAGMA journal_mode=DELETE")
+        except sqlite3.OperationalError:
+            conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 

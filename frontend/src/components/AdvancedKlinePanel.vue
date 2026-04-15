@@ -248,30 +248,28 @@ async function fetchLatestQuote() {
   const sym = currentSymbol.value
   if (!sym || drillDownDate.value) return
   try {
-    const res = await fetch(`/api/v1/market/quote/${sym}`)
-    if (!res.ok) return
-    const data = await res.json()
-    if (data.error) return
+    const data = await apiFetch(`/api/v1/market/quote/${sym}`)
+    if (!data) return
+    const quote = data.data || data
+    if (quote.error) return
     currentQuote.value = {
-      price:        data.price,
-      change:       data.change,
-      change_pct:   data.change_pct,
-      volume:       data.volume,
-      amount:       data.amount,
-      amplitude:    data.amplitude,
-      turnover_rate: data.turnover_rate,
+      price:        quote.price,
+      change:       quote.change,
+      change_pct:   quote.change_pct,
+      volume:       quote.volume,
+      amount:      quote.amount,
+      amplitude:    quote.amplitude,
+      turnover_rate: quote.turnover_rate,
     }
-    // 触发 BaseKLineChart 的 tick 闪烁
     liveTick.value = {
-      price:  data.price,
-      volume: data.volume,
+      price:  quote.price,
+      volume: quote.volume,
       time:   Date.now(),
     }
-  } catch (_) {}
+  } catch (e) {
+    console.error('[AdvancedKlinePanel] fetchLatestQuote error:', e.message)
+  }
 }
-
-function startQuotePolling(intervalMs = 30_000) {
-  stopQuotePolling()
   fetchLatestQuote()
   quotePollingTimer = setInterval(fetchLatestQuote, intervalMs)
 }
@@ -389,16 +387,15 @@ async function fetchOverlayHistory(sym) {
   if (!sym) { overlayData.value = []; return }
   try {
     const params = new URLSearchParams({ period: 'daily', limit: '3000', offset: '0' })
-    const res = await fetch(`/api/v1/market/history/${sym}?${params}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    const raw = (data.history || []).map(r => ({
+    const data = await apiFetch(`/api/v1/market/history/${sym}?${params}`)
+    const raw = (data?.history || data?.data || []).map(r => ({
       date:  r.date || r.time || '',
       close: Number(r.close) || 0,
     })).reverse()
     overlayData.value = raw
     rebuildChartData()
-  } catch (_) {
+  } catch (e) {
+    console.error('[AdvancedKlinePanel] fetchOverlayHistory error:', e.message)
     overlayData.value = []
   }
 }
