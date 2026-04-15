@@ -24,7 +24,7 @@
 
       <!-- 股票行情：默认选中 -->
       <button
-        v-for="item in navItems"
+        v-for="item in mainNavItems"
         :key="item.id"
         class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2"
         :class="activeId === item.id
@@ -37,6 +37,23 @@
       </button>
 
     </nav>
+
+    <!-- ━━━ 系统管理（侧边栏最下方，特殊样式）━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="px-3 py-3 border-t border-theme shrink-0 bg-red-500/5">
+      <div class="text-[10px] text-red-400/70 uppercase tracking-wider mb-2">⚠️ 系统管理</div>
+      <button
+        v-for="item in adminNavItems"
+        :key="item.id"
+        class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2 rounded"
+        :class="activeId === item.id
+          ? 'bg-red-500/20 text-red-400 border-r-2 border-red-400'
+          : 'text-theme-secondary hover:bg-red-500/10 hover:text-red-400 border-r-transparent'"
+        @click="handleClick(item)"
+      >
+        <span class="text-base">{{ item.icon }}</span>
+        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
+      </button>
+    </div>
 
     <!-- ━━━ 主题切换区域（侧边栏最下方）━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="px-3 py-3 border-t border-theme shrink-0">
@@ -76,11 +93,14 @@ const emit = defineEmits(['navigate', 'close'])
 
 const { theme: currentTheme, setTheme } = useTheme()
 
-const navItems = [
+const mainNavItems = [
   { id: 'stock',     label: '股票行情',   icon: '📊' },
   { id: 'portfolio', label: '投资组合',   icon: '💰' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
+]
+
+const adminNavItems = [
   { id: 'admin',     label: '系统管理',   icon: '⚙️' },
 ]
 
