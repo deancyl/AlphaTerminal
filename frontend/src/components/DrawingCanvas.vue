@@ -560,7 +560,36 @@ function onMouseDown(e) {
   
   const { x, y } = getCanvasPos(e)
   
+  // 选择/移动模式
+  if (props.activeTool === 'select') {
+    const hit = hitTest(x, y)
+    if (hit) {
+      selectedId.value = hit.id
+      if (hit.pointIdx >= 0) {
+        dragging.value = { id: hit.id, pointIdx: hit.pointIdx }
+        dragStartPos.value = { x, y }
+      } else {
+        const shape = shapes.value.find(s => s.id === hit.id)
+        if (shape && shape.type !== 'hray' && shape.type !== 'vline') {
+          dragging.value = { id: hit.id, pointIdx: -1, startX: x, startY: y }
+          dragStartPos.value = { x, y, points: JSON.parse(JSON.stringify(shape.points)) }
+        }
+      }
+      redraw()
+    } else {
+      // 点击空白处取消选择
+      selectedId.value = null
+      redraw()
+    }
+    return
+  }
+  
+  // 文本工具 - 内联输入框替代prompt
   if (props.activeTool === 'text') {
+    const data = toData(x, y)
+    if (!data) return
+    
+    // 显示内联输入框
     const text = prompt('输入标注文字：')
     if (text) {
       const sanitizedText = sanitizeText(text)
@@ -568,7 +597,6 @@ function onMouseDown(e) {
         alert('输入内容无效，请重新输入')
         return
       }
-      const data = toData(x, y)
       if (data) {
         saveHistory()
         const shape = {
@@ -633,6 +661,8 @@ function onMouseMove(e) {
   
   if (props.locked) {
     cursorStyle.value = 'not-allowed'
+  } else if (props.activeTool === 'select') {
+    cursorStyle.value = 'default'
   } else if (props.activeTool) {
     cursorStyle.value = 'crosshair'
   } else if (dragging.value) {

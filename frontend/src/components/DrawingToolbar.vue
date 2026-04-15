@@ -156,6 +156,12 @@ const presetColors = [
 
 const drawTools = [
   {
+    key: 'select',
+    label: '选择/移动',
+    shortcut: 'V',
+    svg: '<path d="M2 2l3 8 2-5 2 3 3-6 3 4" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'
+  },
+  {
     key: 'trend',
     label: '趋势线',
     shortcut: 'T',
