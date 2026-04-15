@@ -60,7 +60,7 @@
 
     <!-- 底部版本信息 -->
     <div class="px-3 py-2 border-t border-theme shrink-0">
-      <span class="text-[9px] text-theme-tertiary">Beta 0.4.128 · Phase 7</span>
+      <span class="text-[9px] text-theme-tertiary">Beta 0.4.131 · Phase 7</span>
     </div>
   </aside>
 </template>
@@ -81,6 +81,7 @@ const navItems = [
   { id: 'portfolio', label: '投资组合',   icon: '💰' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
+  { id: 'admin',     label: '系统管理',   icon: '⚙️' },
 ]
 
 // 主题列表

@@ -142,6 +142,8 @@
         <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
+        <!-- 系统管理 -->
+        <AdminDashboard v-else-if="currentView === 'admin'" />
       </div>
     </main>
 
@@ -181,10 +183,11 @@ import FuturesDashboard from './components/FuturesDashboard.vue'
 import PortfolioDashboard from './components/PortfolioDashboard.vue'
 import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
+import AdminDashboard  from './components/AdminDashboard.vue'
 import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
 import { useTheme } from './composables/useTheme.js'
-import { fetchApiBatch } from './utils/apiClient.js'
+import { fetchApiBatch } from './utils/api.js'
 
 const { ui } = useUiStore()
 

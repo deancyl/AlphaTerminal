@@ -268,8 +268,16 @@ function handleChinaClick(item) {
 
 function handleSectorClick(sec) {
   // 板块无独立K线，使用板块的领涨股代码替代
-  const code = sec.top_stock?.code || '000001'
+  // 领涨股code可能是纯数字如300750，需要添加交易所前缀
+  let code = sec.top_stock?.code || '000001'
   const topName = sec.top_stock?.name || ''
+  
+  // 尝试添加前缀：如果code是纯数字，根据规则添加sh/sz
+  if (!isNaN(code) && code.length >= 6) {
+    // 6开头是上海，0/3开头是深圳
+    code = code.startsWith('6') ? 'sh' + code : 'sz' + code
+  }
+  
   const displayName = topName ? `${sec.name}-${topName}` : sec.name
   setSymbol(code, displayName, '#fbbf24')
   queueMicrotask(() => {

@@ -5,31 +5,33 @@
       <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
     </div>
 
-    <!-- 矩阵卡片流：一屏 Top 20，5列×4行紧凑网格 -->
-    <!-- 替代 flex-wrap 瀑布流，充分利用 GridStack 固定格宽度 -->
-    <div class="flex-1" style="max-height: 360px; overflow-y: auto;">
-      <!-- 5列矩阵网格 -->
-      <div class="grid gap-1" style="grid-template-columns: repeat(5, 1fr);">
+    <!-- 响应式网格：自适应列数 -->
+    <div class="flex-1 overflow-y-auto" style="max-height: 360px;">
+      <!-- 响应式网格：根据容器宽度自动调整列数 -->
+      <div 
+        class="grid gap-1"
+        :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }"
+      >
         <div
-          v-for="sec in topSectors"
+          v-for="sec in displaySectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-1 py-1 rounded border cursor-pointer transition-all hover:opacity-80"
+          class="flex flex-col items-center justify-center px-2 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 hover:scale-105"
           :class="(sec.change_pct || 0) >= 0
             ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
             : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"
           @click="handleClick(sec)"
+          :title="`${sec.name} (点击查看领涨股 ${sec.top_stock?.name || '无'})`"
         >
-          <!-- 板块名称（超长截断） -->
+          <!-- 板块名称 -->
           <span
-            class="text-[9px] font-medium leading-tight text-center w-full truncate"
+            class="text-[10px] font-medium leading-tight text-center w-full truncate"
             :class="(sec.change_pct || 0) >= 0 ? 'text-red-300' : 'text-green-300'"
-            :title="sec.name"
           >
             {{ sec.name }}
           </span>
-          <!-- 涨跌幅（金融红绿） -->
+          <!-- 涨跌幅 -->
           <span
-            class="text-[10px] font-mono font-bold leading-none mt-0.5"
+            class="text-[11px] font-mono font-bold leading-none mt-0.5"
             :class="(sec.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
           >
             {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
@@ -37,39 +39,21 @@
           <!-- 领涨股 -->
           <span
             v-if="sec.top_stock?.name"
-            class="text-[8px] leading-tight mt-0.5 truncate w-full text-center"
-            :class="(sec.top_stock.change_pct || 0) >= 0 ? 'text-bullish/60' : 'text-bearish/60'"
+            class="text-[9px] leading-tight mt-0.5 truncate w-full text-center text-theme-tertiary"
           >
             {{ sec.top_stock.name }}
           </span>
         </div>
       </div>
 
-      <!-- 剩余板块（如果有超过20个） -->
-      <div v-if="sectors.length > 20" class="mt-1">
-        <div class="grid gap-1" style="grid-template-columns: repeat(5, 1fr);">
-          <div
-            v-for="sec in sectors.slice(20)"
-            :key="sec.name"
-            class="flex flex-col items-center justify-center px-1 py-1 rounded border cursor-pointer transition-all hover:opacity-80"
-            :class="(sec.change_pct || 0) >= 0
-              ? 'bg-red-500/5 border-red-500/20'
-              : 'bg-green-500/5 border-green-500/20'"
-            @click="handleClick(sec)"
-          >
-            <span class="text-[9px] text-theme-secondary truncate w-full text-center">{{ sec.name }}</span>
-            <span
-              class="text-[10px] font-mono font-bold"
-              :class="(sec.change_pct || 0) >= 0 ? 'text-bullish/80' : 'text-bearish/80'"
-            >
-              {{ (sec.change_pct || 0) >= 0 ? '+' : '' }}{{ (sec.change_pct || 0).toFixed(2) }}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="!sectors.length" class="flex-1 flex items-center justify-center mt-3">
+      <!-- 无数据提示 -->
+      <div v-if="!sectors.length && !isLoading" class="flex items-center justify-center h-32">
         <span class="text-terminal-dim text-xs">暂无板块数据</span>
+      </div>
+      
+      <!-- 加载中骨架屏 -->
+      <div v-if="isLoading" class="grid gap-1" :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }">
+        <div v-for="i in 10" :key="i" class="h-12 rounded border bg-terminal-panel animate-pulse"></div>
       </div>
     </div>
   </div>
@@ -84,29 +68,38 @@ const emit = defineEmits(['sector-click'])
 
 const { setSymbol } = useMarketStore()
 const sectors = ref([])
-const topSectors = computed(() => sectors.value.slice(0, 20))
+const isLoading = ref(false)
 const tsDisplay = ref('')
 let refreshTimer = null
 
+// 响应式列数（根据容器宽度估算）
+const gridCols = computed(() => {
+  // 默认5列，响应式调整
+  return 5
+})
+
+// 最多显示20个板块
+const displaySectors = computed(() => sectors.value.slice(0, 20))
+
 async function fetchSectors() {
+  isLoading.value = sectors.value.length === 0 // 首次加载显示骨架屏
   try {
-    // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
-    const d = await apiFetch('/api/v1/market/sectors')
+    const d = await apiFetch('/api/v1/market/sectors', { timeoutMs: 10000 })
     if (!d) return
-    // d 已经是解包后的对象，直接访问 sectors
     const sectorsList = d.sectors || []
     sectors.value = sectorsList
-    // 更新时间戳显示
+    // 更新时间戳
     if (d.timestamp) {
-      if (typeof d.timestamp === 'number') {
-        tsDisplay.value = `更新 ${new Date(d.timestamp).toLocaleTimeString('zh-CN', { hour12: false })}`
-      } else if (typeof d.timestamp === 'string') {
-        const t = d.timestamp.includes('T') ? d.timestamp.slice(11, 19) : ''
-        tsDisplay.value = t ? `更新 ${t}` : ''
-      }
+      const ts = typeof d.timestamp === 'number' 
+        ? new Date(d.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
+        : (typeof d.timestamp === 'string' && d.timestamp.includes('T') 
+          ? d.timestamp.slice(11, 19) : '')
+      tsDisplay.value = ts ? `更新 ${ts}` : ''
     }
   } catch (e) {
     console.warn('[HotSectors] fetch failed:', e.message)
+  } finally {
+    isLoading.value = false
   }
 }
 
@@ -116,7 +109,7 @@ function handleClick(sec) {
 
 onMounted(() => {
   fetchSectors()
-  refreshTimer = setInterval(fetchSectors, 5 * 60 * 1000)
+  refreshTimer = setInterval(fetchSectors, 5 * 60 * 1000) // 5分钟刷新
 })
 
 onUnmounted(() => {

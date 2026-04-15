@@ -120,7 +120,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
-import { apiFetch } from '../utils/apiCompat.js'
+import { apiFetch } from '../utils/api.js'
 import * as echarts from 'echarts/core'
 import { CandlestickChart, LineChart, BarChart } from 'echarts/charts'
 import {

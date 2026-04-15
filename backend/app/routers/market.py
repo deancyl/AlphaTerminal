@@ -13,11 +13,13 @@ import re
 import threading
 import time
 from datetime import datetime
+from pathlib import Path
 from fastapi import APIRouter, Request
 import httpx
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
 from app.services.sentiment_engine import SpotCache
+from app.services.quote_source import get_quote_with_fallback, get_source_status
 
 
 logger = logging.getLogger(__name__)
@@ -1340,6 +1342,12 @@ async def market_quote_detail(symbol: str):
     industry_change_pct = None
     concepts        = []
 
+    # ── 估值 ── 调用多源fallback获取PE/PB
+    quote_data = get_quote_with_fallback(norm)
+    pe_static = quote_data.get("pe_static")
+    pe_ttm_val = quote_data.get("pe_ttm")
+    pb_val = quote_data.get("pb")
+
     result = {
         # ── Module 1: 基础行情 ──
         "name":             w.get('name') or norm,
@@ -1358,8 +1366,8 @@ async def market_quote_detail(symbol: str):
         "status":           status,
         "market":           market,
         # ── 估值 ──
-        "pe_ttm":           None,   # 需财务数据源
-        "pb":               None,   # 需财务数据源
+        "pe_ttm":           pe_ttm_val,   # 从腾讯/东财/新浪获取
+        "pb":               pb_val,       # 从腾讯/东财/新浪获取
         # ── 周期收益 ──
         "returns_5d":       ret_5d,
         "returns_20d":      ret_20d,
@@ -1389,3 +1397,198 @@ async def market_quote_detail(symbol: str):
         "concepts":              concepts,
     }
     return success_response(result)
+
+
+# ── 数据源状态管理 ───────────────────────────────────────────────────────
+@router.get("/source/status")
+async def source_status():
+    """获取数据源状态"""
+    return success_response(get_source_status())
+
+
+@router.post("/source/switch")
+async def switch_source(source: str):
+    """手动切换主源"""
+    from app.services.quote_source import set_primary_source
+    ok = set_primary_source(source)
+    if ok:
+        return success_response({"message": f"主源已切换为: {source}"})
+    return {"code": 1, "message": f"无效的数据源: {source}"}
+
+
+@router.get("/source/test")
+async def test_all_sources_api(symbol: str = "sh000001"):
+    """测试所有数据源连通性"""
+    from app.services.quote_source import test_all_sources
+    results = test_all_sources(symbol)
+    return success_response(results)
+
+
+@router.get("/source/config")
+async def source_config():
+    """获取数据源完整配置"""
+    from app.services.quote_source import DATA_SOURCES
+    return success_response({
+        k: {
+            "name": v["name"],
+            "name_cn": v.get("name_cn"),
+            "type": v["type"],
+            "proxy": v.get("proxy"),
+            "has_pepb": v.get("has_pepb"),
+            "has_realtime": v.get("has_realtime"),
+            "api_key": "***" if v.get("api_key") else None,
+        } for k, v in DATA_SOURCES.items()
+    })
+
+
+# ── 代理设置 ───────────────────────────────────────────────────────────
+_proxy_config = {"proxy_url": "", "enabled": False}
+
+@router.get("/source/proxy")
+async def get_proxy():
+    """获取当前代理设置"""
+    return success_response(_proxy_config)
+
+
+@router.post("/source/proxy")
+async def set_proxy(config: dict):
+    """设置代理"""
+    global _proxy_config
+    proxy = config.get("proxy", "")
+    _proxy_config = {
+        "proxy_url": proxy,
+        "enabled": bool(proxy)
+    }
+    # 更新所有需要代理的数据源
+    from app.services import quote_source
+    if proxy:
+        for k, v in quote_source.DATA_SOURCES.items():
+            if v.get("proxy"):
+                v["proxy_url"] = proxy
+    return success_response({"message": "代理设置已更新", "proxy": proxy})
+
+
+# ── 探测所有源状态 ───────────────────────────────────────────────────
+@router.get("/source/ping")
+async def ping_all_sources():
+    """主动探测所有数据源状态"""
+    from app.services import quote_source
+    import time
+    
+    results = {}
+    test_symbol = "sh000001"
+    test_hk = "hk00700"
+    test_us = "AAPL"
+    
+    # 解析器映射
+    parsers = {
+        # A股
+        "tencent": (quote_source._parse_tencent_quote, test_symbol),
+        "sina": (quote_source._parse_sina_quote, test_symbol),
+        "eastmoney": (quote_source._parse_eastmoney_quote, test_symbol),
+        "sina_kline": (quote_source._parse_sina_kline_60min, test_symbol),
+        # 港股
+        "tencent_hk": (quote_source._parse_tencent_hk_quote, test_hk),
+        # 美股
+        "alpha_vantage": (quote_source._parse_alpha_vantage_quote, test_us),
+    }
+    
+    # 遍历所有配置的源
+    for source_name in quote_source.DATA_SOURCES.keys():
+        try:
+            if source_name in parsers:
+                parse_func, test_sym = parsers[source_name]
+            else:
+                results[source_name] = {"status": "unknown", "latency": None}
+                continue
+            
+            start = time.time()
+            result = parse_func(test_sym)
+            latency = (time.time() - start) * 1000
+            
+            if result and result.get('latency_ms'):
+                results[source_name] = {"status": "ok", "latency": round(latency, 1)}
+            else:
+                results[source_name] = {"status": "fail", "latency": None}
+        except Exception as e:
+            print(f"[Ping Error] {source_name}: {type(e).__name__}: {str(e)[:50]}")
+            results[source_name] = {"status": "error", "latency": None}
+    
+    return success_response(results)
+
+
+
+
+
+
+
+
+
+
+# ── AlphaVantage API Key 设置 ─────────────────────────────────────────
+@router.get("/source/alpha_vantage_key")
+async def get_alpha_vantage_key():
+    """获取AlphaVantage API Key"""
+    from app.services.quote_source import DATA_SOURCES
+    key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "")
+    return success_response({"api_key": key})
+
+
+@router.post("/source/alpha_vantage_key")
+async def set_alpha_vantage_key(config: dict):
+    """设置AlphaVantage API Key"""
+    from app.services.quote_source import DATA_SOURCES
+    new_key = config.get("api_key", "").strip()
+    if new_key:
+        DATA_SOURCES["alpha_vantage"]["api_key"] = new_key
+        return success_response({"message": "API Key已更新", "api_key": new_key})
+    return {"code": 1, "message": "API Key不能为空"}
+
+
+# ── 版本与系统信息 ─────────────────────────────────────────────────────
+@router.get("/system/version")
+async def get_version():
+    """获取前后端版本信息"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    try:
+        from version import __version__
+        backend_version = __version__
+    except ImportError:
+        backend_version = "0.4.133"
+    
+    return success_response({
+        "backend": backend_version,
+        "frontend": "0.4.133",
+        "app_name": "AlphaTerminal",
+        "description": "A股/港股/美股投研终端",
+        "scheduler": "running",
+    })
+
+
+@router.get("/system/info")
+async def get_system_info():
+    """获取系统详细信息"""
+    import platform
+    import psutil
+    from app.services.sectors_cache import is_ready as sectors_ready
+    from app.services.news_engine import is_cache_ready as news_ready
+    
+    try:
+        from version import __version__
+        backend_version = __version__
+    except ImportError:
+        backend_version = "0.4.133"
+    
+    return success_response({
+        "backend_version": backend_version,
+        "frontend_version": "0.4.133",
+        "python_version": platform.python_version(),
+        "platform": platform.platform(),
+        "cpu_percent": psutil.cpu_percent(interval=0.1),
+        "memory_percent": psutil.virtual_memory().percent,
+        "scheduler_status": "running",
+        "sectors_cache_ready": sectors_ready(),
+        "news_cache_ready": news_ready() if 'news_ready' in dir() else True,
+        "uptime_seconds": int(time.time() - psutil.Process().create_time()),
+    })

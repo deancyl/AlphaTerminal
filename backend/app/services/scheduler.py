@@ -70,17 +70,17 @@ def start_scheduler():
         logger.info("[Scheduler] 启动初始化完成")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
-    # 每 60 秒拉取一次实时数据（akshare 有频率限制）
+    # 每 30 秒拉取一次实时数据（akshare 有频率限制）
     from app.services.data_fetcher import fetch_all_and_buffer
     scheduler.add_job(
         fetch_all_and_buffer,
         "interval",
-        seconds=60,
+        seconds=30,
         id="data_fetch",
         name="AkShareDataFetch",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 数据拉取任务已注册（每60秒，实时行情）")
+    logger.info("[Scheduler] 数据拉取任务已注册（每30秒，实时行情）")
 
     # 每 5 分钟刷新今日日K线（确保当日K线入库）
     def _refresh_today_daily():
@@ -103,7 +103,7 @@ def start_scheduler():
     )
     logger.info("[Scheduler] 今日日K刷新任务已注册（每5分钟）")
 
-    # ── 实时日K线刷新（每30秒，使用Sina HQ）──────────────────────────
+    # ── 实时日K线刷新（每10秒，使用Sina HQ）──────────────────────────
     def _realtime_daily_job():
         from app.services.data_fetcher import refresh_today_from_minute, refresh_period_klines
         try:
@@ -115,12 +115,12 @@ def start_scheduler():
     scheduler.add_job(
         _realtime_daily_job,
         "interval", 
-        seconds=30,
+        seconds=10,
         id="realtime_daily",
         name="RealtimeDaily",
         replace_existing=True,
     )
-    logger.info("[Scheduler] 实时日K刷新任务已注册（每30秒）")
+    logger.info("[Scheduler] 实时日K刷新任务已注册（每10秒）")
 
     # 全市场A股定时刷新 (每10分钟抓取全量数据)
     def _fetch_all_stocks_job():

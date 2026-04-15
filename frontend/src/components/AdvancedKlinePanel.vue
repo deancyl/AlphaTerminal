@@ -139,7 +139,7 @@
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
-import { apiFetch } from '../utils/apiCompat.js'
+import { apiFetch } from '../utils/api.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { calcMA } from '../utils/indicators.js'
 

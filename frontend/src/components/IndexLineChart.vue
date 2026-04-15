@@ -51,7 +51,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { apiFetch } from '../utils/apiCompat.js'
+import { apiFetch } from '../utils/api.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 
 const props = defineProps({
