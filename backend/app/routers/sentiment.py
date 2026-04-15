@@ -179,3 +179,74 @@ async def debug_trigger():
     trigger_spot_fetch()
     trigger_news_fetch()
     return success_response({"status": "triggered", "message": "已触发后台刷新，请稍后查看 /debug/scheduler"})
+
+# ═══════════════════════════════════════════════════════════════
+# 资金流向数据
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/market/fund_flow")
+async def market_fund_flow():
+    """市场资金流向 - 超大单/大单/中单/小单"""
+    import akshare as ak
+    
+    try:
+        df = ak.stock_market_fund_flow()
+        # 获取最近30天数据
+        df = df.tail(30)
+        
+        result = []
+        for _, row in df.iterrows():
+            result.append({
+                "date": str(row.get("日期", "")),
+                "sh_close": float(row.get("上证-收盘价", 0) or 0),
+                "sh_chg": float(row.get("上证-涨跌幅", 0) or 0),
+                "sz_close": float(row.get("深证-收盘价", 0) or 0),
+                "sz_chg": float(row.get("深证-涨跌幅", 0) or 0),
+                "main_net": int(row.get("主力净流入-净额", 0) or 0),
+                "main_pct": float(row.get("主力净流入-净占比", 0) or 0),
+                "large_net": int(row.get("大单净流入-净额", 0) or 0),
+                "large_pct": float(row.get("大单净流入-净占比", 0) or 0),
+                "medium_net": int(row.get("中单净流入-净额", 0) or 0),
+                "medium_pct": float(row.get("中单净流入-净占比", 0) or 0),
+                "small_net": int(row.get("小单净流入-净额", 0) or 0),
+                "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
+            })
+        
+        return success_response({
+            "items": result,
+            "total": len(result),
+            "source": "akshare - stock_market_fund_flow"
+        })
+    except Exception as e:
+        logger.error(f"market_fund_flow error: {e}")
+        return error_response(500, f"获取资金流数据失败: {str(e)}")
+
+@router.get("/market/fund_flow/industry")
+async def industry_fund_flow():
+    """行业资金流向"""
+    import akshare as ak
+    
+    try:
+        df = ak.stock_sector_fund_flow_summary(indicator="今日")
+        
+        result = []
+        for _, row in df.iterrows():
+            # 尝试获取主力净流入字段
+            try:
+                main_net = int(row.get("今日主力净流入-净额", 0) or 0)
+            except:
+                main_net = 0
+            result.append({
+                "name": str(row.get("名称", "")),
+                "change_pct": float(row.get("今日涨跌幅", 0) or 0),
+                "main_net": main_net,
+            })
+        
+        return success_response({
+            "items": result[:20],  # 前20个行业
+            "total": len(result),
+            "source": "akshare - stock_sector_fund_flow_summary"
+        })
+    except Exception as e:
+        logger.error(f"industry_fund_flow error: {e}")
+        return error_response(500, f"获取行业资金流失败: {str(e)}")
