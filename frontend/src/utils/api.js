@@ -89,10 +89,16 @@ export async function apiFetch(url, options = {}) {
       const fetchOptions = { 
         signal: controller.signal,
         method,
-        headers,
+        headers: {
+          ...headers,
+        },
       }
       if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
         fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body)
+        // 自动设置 Content-Type 为 application/json
+        if (!fetchOptions.headers['Content-Type'] && !fetchOptions.headers['content-type']) {
+          fetchOptions.headers['Content-Type'] = 'application/json'
+        }
       }
       const res = await fetch(url, fetchOptions)
       clearTimeout(timer)
