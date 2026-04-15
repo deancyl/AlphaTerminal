@@ -39,8 +39,7 @@
     </nav>
 
     <!-- ━━━ 系统管理（侧边栏最下方，特殊样式）━━━━━━━━━━━━━━━━━━━━━ -->
-    <div class="px-3 py-3 border-t border-theme shrink-0 bg-red-500/5">
-      <div class="text-[10px] text-red-400/70 uppercase tracking-wider mb-2">⚠️ 系统管理</div>
+    <div class="px-3 py-2 border-t border-theme shrink-0">
       <button
         v-for="item in adminNavItems"
         :key="item.id"
@@ -55,7 +54,7 @@
       </button>
     </div>
 
-    <!-- ━━━ 主题切换区域（侧边栏最下方）━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ 主题切换区域 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="px-3 py-3 border-t border-theme shrink-0">
       <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2">🎨 主题切换</div>
       <div class="grid grid-cols-4 gap-1">
