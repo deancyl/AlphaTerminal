@@ -13,7 +13,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio, stocks, websocket as ws_router
+from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio, stocks, websocket as ws_router, admin
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -107,7 +107,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
-app.include_router(copilot.router, prefix="/api/v1", tags=["copilot"])
+app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
 app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # ← 必须在 sentiment 之前（/{symbol} 拦截一切）
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
