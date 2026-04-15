@@ -175,7 +175,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, onErrorCaptured } from 'vue'
+import { ref, onMounted, onUnmounted, onErrorCaptured, watch } from 'vue'
+import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
 import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
@@ -203,15 +204,20 @@ const loadError = ref(null)          // 加载错误信息
 function clearError() {
   hasError.value = false
   errorMessage.value = ''
-  window.location.reload()
+  // 避免window.location.reload()丢失所有内存状态
+  // 通过重置组件key来重建有问题的组件
+  errorComponentKey.value++
 }
+
+const errorComponentKey = ref(0)
 
 onErrorCaptured((err, instance, info) => {
   console.error('[App] 捕获到错误:', err)
-  console.error('[App] 组件:', instance)
+  console.error('[App] 组件:', instance?.type?.name || instance)
   console.error('[App] 信息:', info)
   hasError.value = true
-  errorMessage.value = err.message || '未知错误'
+  errorMessage.value = err.message || err.toString() || '未知错误'
+  // 仅标记错误，不刷新整个页面，保持其他组件状态
   return false // 阻止错误继续传播
 })
 
@@ -336,11 +342,35 @@ async function fetchMarketData() {
 
 let refreshTimer = null
 
+// 页面可见性控制 - 页面隐藏时暂停轮询，节省资源
+const visibility = useDocumentVisibility()
+
+// 监听可见性变化，页面隐藏时暂停轮询
+watch(visibility, (v) => {
+  if (v === 'visible') {
+    console.log('[App] 页面可见，恢复轮询')
+    fetchMarketData()  // 立即刷新一次
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = setInterval(fetchMarketData, 30000)
+    }
+  } else {
+    console.log('[App] 页面隐藏，暂停轮询')
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+    }
+  }
+})
+
 onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
-  fetchMarketData()
-  refreshTimer = setInterval(fetchMarketData, 30000)
+  // 仅在页面可见时启动轮询
+  if (visibility.value === 'visible') {
+    fetchMarketData()
+    refreshTimer = setInterval(fetchMarketData, 30000)
+  }
 })
 
 onUnmounted(() => {
