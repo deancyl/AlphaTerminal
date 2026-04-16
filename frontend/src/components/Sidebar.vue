@@ -93,7 +93,7 @@ const mainNavItems = [
   { id: 'portfolio', label: '投资组合',   icon: '💰' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
-  { id: 'orderbook', label: '买卖盘口',   icon: '📈' },
+  { id: 'simplequote', label: '实时报价',   icon: '📈' },
   { id: 'backtest',  label: '回测实验室', icon: '🔬' },
 ]
 

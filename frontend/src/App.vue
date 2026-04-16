@@ -159,7 +159,7 @@
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
         <!-- 买卖盘口 -->
-        <OrderBookPanel v-else-if="currentView === 'orderbook'" :symbol="currentSymbol || 'sh600519'" />
+        <SimpleQuotePanel v-else-if="currentView === 'simplequote'" :symbol="currentSymbol || 'sh600519'" />
         <!-- 回测实验室 -->
         <BacktestDashboard v-else-if="currentView === 'backtest'" />
         <!-- 系统管理 -->
@@ -205,7 +205,7 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
 import PortfolioDashboard from './components/PortfolioDashboard.vue'
-import OrderBookPanel from './components/OrderBookPanel.vue'
+import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
 import BacktestDashboard from './components/BacktestDashboard.vue'
 import FuturesPanel       from './components/FuturesPanel.vue'
 import CopilotSidebar from './components/CopilotSidebar.vue'
