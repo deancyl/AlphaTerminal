@@ -549,6 +549,10 @@ onMounted(() => {
 onUnmounted(() => {
   stopQuotePolling()
   disconnectStream()
-  baseChartRef.value?.getChartInstance?.()?.dispose()
+  const inst = baseChartRef.value?.getChartInstance?.()
+  if (inst) {
+    console.debug('[ECharts] 🗑️  disposed instance for AdvancedKlinePanel')
+    inst.dispose()
+  }
 })
 </script>

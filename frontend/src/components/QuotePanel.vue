@@ -445,8 +445,29 @@ function renderDonut() {
 }
 
 watch(() => fundDonutData.value, () => { nextTick(renderDonut) }, { deep: true, immediate: true })
-onMounted(() => { nextTick(renderDonut) })
-onUnmounted(() => { donutInstance?.dispose(); donutInstance = null })
+
+let _donutRO = null
+onMounted(() => {
+  nextTick(renderDonut)
+  if (fundDonutRef.value) {
+    _donutRO = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      if (width > 0 && height > 0) {
+        console.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+        donutInstance?.resize()
+      }
+    })
+    _donutRO.observe(fundDonutRef.value)
+  }
+})
+onUnmounted(() => {
+  _donutRO?.disconnect()
+  if (donutInstance) {
+    console.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
+    donutInstance.dispose()
+    donutInstance = null
+  }
+})
 </script>
 
 <style scoped>

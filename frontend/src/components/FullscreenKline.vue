@@ -345,7 +345,19 @@ function renderChart() {
 
   if (!chart) {
     chart = window.echarts.init(chartEl.value)
-    window.addEventListener('resize', handleResize)
+    // 初始化 ResizeObserver（替换全局 window.resize）
+    if (chartEl.value) {
+      const ro = new ResizeObserver((entries) => {
+        const { width, height } = entries[0].contentRect
+        if (width > 0 && height > 0) {
+          console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+          chart?.resize()
+        }
+      })
+      ro.observe(chartEl.value)
+      // 清理时通过 onBeforeUnmount 处理
+      _fullscreenRO = ro
+    }
   }
 
   const tc = getChartColors()
@@ -628,6 +640,7 @@ function handleResize() {
   chart?.resize()
 }
 
+let _fullscreenRO = null
 let unsubscribeTheme = null
 
 watch(activeSubChart, () => renderChart())
@@ -664,15 +677,19 @@ onMounted(() => {
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
 onBeforeUnmount(() => {
-  chart?.dispose()
-  chart = null
+  if (chart) {
+    console.debug(`[ECharts] 🗑️  disposed instance for fullscreenKline: ${props.symbol}`)
+    chart.dispose()
+    chart = null
+  }
   // F1修复: 清理自动刷新定时器
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
   disconnectStream()
   window.removeEventListener('keydown', handleWindowKeydown)
-  window.removeEventListener('resize', handleResize)
   unsubscribeTheme?.()
   unsubscribeTheme = null
+  _fullscreenRO?.disconnect()
+  _fullscreenRO = null
 })
 
 onUnmounted(() => { 
