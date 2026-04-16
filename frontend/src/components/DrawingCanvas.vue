@@ -69,7 +69,9 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import localforage from 'localforage'
+import { logger } from '../utils/logger.js'
 
 defineOptions({ inheritAttrs: false })
 
@@ -977,7 +979,7 @@ async function saveToStorage() {
   try {
     const key = `${props.symbol}_${props.period}`
     await storage.setItem(key, JSON.stringify(shapes.value))
-  } catch (e) { console.error('保存画线失败:', e) }
+  } catch (e) { logger.error('保存画线失败:', e) }
 }
 
 async function loadFromStorage() {
@@ -1017,7 +1019,7 @@ async function loadFromOtherPeriods() {
       return true
     })
   } catch (e) {
-    console.error('[DrawingCanvas] filter error:', e.message)
+    logger.error('[DrawingCanvas] filter error:', e.message)
   }
 }
 

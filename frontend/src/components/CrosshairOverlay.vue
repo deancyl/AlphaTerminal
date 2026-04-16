@@ -64,6 +64,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   chartInstance: { type: Object, default: null },
@@ -224,7 +225,7 @@ function updateCrosshair(x, y) {
     
     drawCrosshair()
   } catch (e) {
-    console.error('Crosshair update error:', e)
+    logger.error('Crosshair update error:', e)
   }
 }
 

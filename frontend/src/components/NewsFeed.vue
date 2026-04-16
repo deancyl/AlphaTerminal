@@ -180,6 +180,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
 
 const props = defineProps({
@@ -281,7 +282,7 @@ async function openModal(item) {
     const data = (json && json.code === 0) ? json.data : json
     modalContent.value = data?.content || ''
   } catch (e) {
-    console.warn('[NewsFeed] detail fetch failed:', e.message)
+    logger.warn('[NewsFeed] detail fetch failed:', e.message)
     modalContent.value = ''
   } finally {
     modalLoading.value = false
@@ -322,7 +323,7 @@ async function fetchNews(quiet = false, isTimer = false) {
           }
         }
       } catch (e) {
-        console.error('[NewsFeed] parse error:', e.message)
+        logger.error('[NewsFeed] parse error:', e.message)
       }
       if (!useForce || !refreshMsg.value) {
         refreshMsg.value = `⚠️ ${errMsg}`
@@ -379,7 +380,7 @@ async function fetchNews(quiet = false, isTimer = false) {
       if (!quiet) busEmit('news-refreshed', { count: newItems.length, sources: [...new Set(newItems.map(it => it.source))] })
     }
   } catch (e) {
-    console.warn('[NewsFeed] fetch failed:', e.message)
+    logger.warn('[NewsFeed] fetch failed:', e.message)
     if (!quiet) refreshMsg.value = `⚠️ 抓取失败: ${e.message}`
   } finally {
     if (!quiet) isRefreshing.value = false
@@ -387,7 +388,7 @@ async function fetchNews(quiet = false, isTimer = false) {
 }
 
 async function manualRefresh() {
-  console.log('[NewsFeed] 点击刷新，发起 POST /api/v1/news/force_refresh ...')
+  logger.log('[NewsFeed] 点击刷新，发起 POST /api/v1/news/force_refresh ...')
   if (isRefreshing.value) return
   await fetchNews(false)
 }

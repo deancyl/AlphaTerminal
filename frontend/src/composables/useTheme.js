@@ -10,6 +10,7 @@
  * 使用 CSS 变量实现，localStorage 持久化
  */
 import { ref, watch, onMounted, readonly } from 'vue'
+import { logger } from '../utils/logger.js'
 
 // 主题类型
 export const THEMES = {
@@ -397,7 +398,7 @@ function applyTheme(theme) {
   const config = THEME_CONFIG[theme]
 
   if (!config) {
-    console.warn(`[Theme] 未知主题: ${theme}`)
+    logger.warn(`[Theme] 未知主题: ${theme}`)
     return
   }
 
@@ -414,10 +415,10 @@ function applyTheme(theme) {
 
   // 通知监听者
   themeChangeCallbacks.forEach(cb => {
-    try { cb(theme) } catch (e) { console.error('[Theme] callback error:', e) }
+    try { cb(theme) } catch (e) { logger.error('[Theme] callback error:', e) }
   })
 
-  console.log(`[Theme] 已切换至: ${THEME_NAMES[theme]}`)
+  logger.log(`[Theme] 已切换至: ${THEME_NAMES[theme]}`)
 }
 
 /**

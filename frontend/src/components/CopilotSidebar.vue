@@ -140,6 +140,7 @@
 
 <script setup>
 import { ref, nextTick, onMounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import {
   getMarketOverview,
   getSectors,
@@ -233,7 +234,7 @@ async function initWebllm() {
         webllmReady.value = true
         break
       } catch (err) {
-        console.warn(`[WebLLM] ${model} failed:`, err.message)
+        logger.warn(`[WebLLM] ${model} failed:`, err.message)
         addAssistantMessage(`❌ ${model} 加载失败: ${err.message}`)
       }
     }
@@ -249,7 +250,7 @@ async function initWebllm() {
     }
     
   } catch (err) {
-    console.error('[WebLLM] Init error:', err)
+    logger.error('[WebLLM] Init error:', err)
     isWebllmLoading.value = false
     addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n您的设备可能不支持本地 LLM。\n\n可尝试：\n1. 更新浏览器和显卡驱动\n2. 使用其他设备（Mac/高端 PC）\n3. 继续使用云端模式`)
   }

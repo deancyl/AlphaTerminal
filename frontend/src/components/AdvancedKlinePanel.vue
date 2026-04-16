@@ -137,20 +137,33 @@
 
 <script setup>
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
+import { logger } from '../utils/logger.js'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
+import { logger } from '../utils/logger.js'
 import { calcMA } from '../utils/indicators.js'
+import { logger } from '../utils/logger.js'
 
 import QuoteHeader    from './QuoteHeader.vue'
+import { logger } from '../utils/logger.js'
 import CommandCenter  from './CommandCenter.vue'
+import { logger } from '../utils/logger.js'
 import SubChart       from './SubChart.vue'
+import { logger } from '../utils/logger.js'
 import IntervalStats  from './IntervalStats.vue'
+import { logger } from '../utils/logger.js'
 import DrawingToolbar from './DrawingToolbar.vue'
+import { logger } from '../utils/logger.js'
 import DrawingCanvas  from './DrawingCanvas.vue'
+import { logger } from '../utils/logger.js'
 import BaseKLineChart from './BaseKLineChart.vue'
+import { logger } from '../utils/logger.js'
 
 const {
   currentSymbol, currentSymbolName,
@@ -268,7 +281,7 @@ async function fetchLatestQuote() {
       time:   Date.now(),
     }
   } catch (e) {
-    console.error('[AdvancedKlinePanel] fetchLatestQuote error:', e.message)
+    logger.error('[AdvancedKlinePanel] fetchLatestQuote error:', e.message)
   }
 }
   fetchLatestQuote()
@@ -332,7 +345,7 @@ async function fetchHistory(append = false) {
 
     rebuildChartData()
   } catch (e) {
-    console.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
+    logger.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
   } finally {
     isLoading.value = false
   }
@@ -396,7 +409,7 @@ async function fetchOverlayHistory(sym) {
     overlayData.value = raw
     rebuildChartData()
   } catch (e) {
-    console.error('[AdvancedKlinePanel] fetchOverlayHistory error:', e.message)
+    logger.error('[AdvancedKlinePanel] fetchOverlayHistory error:', e.message)
     overlayData.value = []
   }
 }
@@ -432,7 +445,7 @@ async function exportPNG() {
     a.href = canvas.toDataURL('image/png')
     a.download = `${symbolName.value}_${period.value}_${Date.now()}.png`
     a.click()
-  } catch (e) { console.error('PNG导出失败:', e) }
+  } catch (e) { logger.error('PNG导出失败:', e) }
 }
 
 // ── 区间统计 ────────────────────────────────────────────────────

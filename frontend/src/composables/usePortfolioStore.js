@@ -4,6 +4,7 @@
  * 自动轮询PnL，每 20 秒刷新一次
  */
 import { ref, computed } from 'vue'
+import { logger } from '../utils/logger.js'
 
 const BASE = '/api/v1/portfolio'
 
@@ -54,14 +55,14 @@ async function fetchAll(pid, includeChildren = false) {
   // 确保 pid 是原始 id，不是对象
   const id = typeof pid === 'object' && pid !== null ? pid.id : pid
   if (!id) {
-    console.warn('[PortfolioStore] fetchAll: 无效的 pid', pid)
+    logger.warn('[PortfolioStore] fetchAll: 无效的 pid', pid)
     return
   }
   loading.value = true
   try {
     await Promise.all([fetchPnL(id, includeChildren), fetchSnapshots(id)])
   } catch(e) {
-    console.warn('[PortfolioStore] fetchAll failed:', e)
+    logger.warn('[PortfolioStore] fetchAll failed:', e)
   } finally {
     loading.value = false
   }
@@ -71,7 +72,7 @@ async function switchAccount(pid, includeChildren = false) {
   // 确保 pid 是原始 id，不是对象
   const id = typeof pid === 'object' && pid !== null ? pid.id : pid
   if (!id) {
-    console.warn('[PortfolioStore] switchAccount: 无效的 pid', pid)
+    logger.warn('[PortfolioStore] switchAccount: 无效的 pid', pid)
     return
   }
   activePid.value = id

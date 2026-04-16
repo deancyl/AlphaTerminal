@@ -71,7 +71,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const fundFlowData = ref([])
 const isLoading = ref(false)
@@ -115,7 +117,7 @@ async function fetchFundFlow() {
       }
     }
   } catch (e) {
-    console.error('fetchFundFlow error:', e)
+    logger.error('fetchFundFlow error:', e)
   } finally {
     // 确保无论成功或失败都释放加载状态
     isLoading.value = false

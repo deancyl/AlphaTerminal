@@ -105,8 +105,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import FuturesMainChart from './FuturesMainChart.vue'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const emit = defineEmits(['open-futures'])
 
@@ -151,7 +154,7 @@ async function fetchFuturesData() {
       commodityUpdateTime.value = mc.update_time || ''
     }
   } catch (e) {
-    console.warn('[FuturesDashboard] fetch failed:', e)
+    logger.warn('[FuturesDashboard] fetch failed:', e)
   }
 }
 

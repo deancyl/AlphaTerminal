@@ -186,10 +186,15 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import YieldCurveChart from './YieldCurveChart.vue'
+import { logger } from '../utils/logger.js'
 import YieldSpreadChart from './YieldSpreadChart.vue'
+import { logger } from '../utils/logger.js'
 import BondHistoryModal from './BondHistoryModal.vue'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [
@@ -310,7 +315,7 @@ async function fetchBondData() {
       bondList.value = bonds.slice(0, 12)
     }
   } catch (e) {
-    console.warn('[BondDashboard] fetch failed:', e)
+    logger.warn('[BondDashboard] fetch failed:', e)
   }
 }
 

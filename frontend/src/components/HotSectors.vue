@@ -61,8 +61,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const emit = defineEmits(['sector-click'])
 
@@ -97,7 +100,7 @@ async function fetchSectors() {
       tsDisplay.value = ts ? `更新 ${ts}` : ''
     }
   } catch (e) {
-    console.warn('[HotSectors] fetch failed:', e.message)
+    logger.warn('[HotSectors] fetch failed:', e.message)
   } finally {
     isLoading.value = false
   }

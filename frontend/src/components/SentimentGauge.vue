@@ -103,8 +103,11 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -268,7 +271,7 @@ async function fetchIntraday() {
       }
     }
   } catch (e) {
-    console.warn('[SentimentGauge] intraday fetch failed:', e.message)
+    logger.warn('[SentimentGauge] intraday fetch failed:', e.message)
   }
 }
 
@@ -358,7 +361,7 @@ async function fetchHistogram() {
       chartInst.setOption(buildHistogramOption(payload.buckets), true)
     }
   } catch (e) {
-    console.warn('[SentimentGauge] fetch failed:', e.message)
+    logger.warn('[SentimentGauge] fetch failed:', e.message)
   }
 }
 
@@ -386,7 +389,7 @@ onMounted(async () => {
 
   // Phase 4: 监听 NewsFeed 刷新事件，联动拉取最新情绪数据
   busOn('news-refreshed', (payload) => {
-    console.log('[SentimentGauge] news-refreshed event, re-fetching...', payload)
+    logger.log('[SentimentGauge] news-refreshed event, re-fetching...', payload)
     fetchHistogram()
   })
 })

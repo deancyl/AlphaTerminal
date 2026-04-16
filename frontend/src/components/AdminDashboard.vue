@@ -315,7 +315,9 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const version = '0.4.138'
 const activeTab = ref('sources')
@@ -409,14 +411,14 @@ async function refreshLogs() {
   try {
     const data = await apiFetch(`/api/v1/admin/logs/recent?lines=100&level=${logLevel.value}`)
     if (data?.logs) logs.value = data.logs
-  } catch (e) { console.error('Refresh logs failed:', e) }
+  } catch (e) { logger.error('Refresh logs failed:', e) }
 }
 
 async function refreshSourceStatus() {
   try {
     const data = await apiFetch('/api/v1/admin/sources/status')
     if (data) Object.assign(sourceStatus, data)
-  } catch (e) { console.error('刷新失败:', e) }
+  } catch (e) { logger.error('刷新失败:', e) }
 }
 
 async function controlCircuit(source, action) {
@@ -433,7 +435,7 @@ async function refreshScheduler() {
   try {
     const data = await apiFetch('/api/v1/admin/scheduler/jobs')
     if (data?.jobs) schedulerJobs.value = data.jobs
-  } catch (e) { console.error('刷新失败:', e) }
+  } catch (e) { logger.error('刷新失败:', e) }
 }
 
 async function controlJob(jobId, action) {
@@ -481,7 +483,7 @@ async function refreshSystemMetrics() {
   try {
     const data = await apiFetch('/api/v1/admin/system/metrics')
     if (data) Object.assign(systemMetrics, data)
-  } catch (e) { console.error('Refresh failed:', e) }
+  } catch (e) { logger.error('Refresh failed:', e) }
 }
 
 onMounted(() => {

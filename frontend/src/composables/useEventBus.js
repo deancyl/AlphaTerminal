@@ -3,6 +3,7 @@
  * Phase 4: NewsFeed 刷新完成后 → 通知 SentimentGauge 联动重拉
  */
 import { ref } from 'vue'
+import { logger } from '../utils/logger.js'
 
 const listeners = {}
 
@@ -23,7 +24,7 @@ export function on(event, cb) {
 export function emit(event, payload) {
   if (listeners[event]) {
     listeners[event].forEach(cb => {
-      try { cb(payload) } catch (e) { console.warn('[EventBus]', event, e) }
+      try { cb(payload) } catch (e) { logger.warn('[EventBus]', event, e) }
     })
   }
 }
