@@ -18,6 +18,7 @@ from fastapi import APIRouter, Request
 import httpx
 from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
+from app.services.fetchers import FetcherFactory, fetch_with_fallback, get_market_fetcher
 from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback, get_source_status
 
@@ -1759,19 +1760,17 @@ async def market_quote_v2(symbol: str):
     V2 实时行情接口 - 使用 FetcherFactory 数据源抽象层。
     
     直接从数据源获取实时报价，不依赖本地数据库。
-    支持切换不同数据源（Sina/Tencent/Eastmoney）。
+    支持熔断器自动降级（失败3次自动切换到备用数据源）。
     """
     try:
-        from app.services.fetcher_factory import get_market_fetcher, FetcherFactory
+        async def fetch_quote(fetcher, sym):
+            return await fetcher.get_quote(sym)
         
-        fetcher = get_market_fetcher()
-        if not fetcher:
-            return error_response(404, "无可用数据源")
-        
-        data = await fetcher.get_quote(symbol)
+        # 使用 fetch_with_fallback 自动降级
+        data = await fetch_with_fallback(fetch_quote, symbol)
         
         if not data:
-            return error_response(404, f"获取 {symbol} 数据失败")
+            return error_response(404, f"获取 {symbol} 数据失败，所有数据源均不可用")
         
         return success_response({
             "symbol": data.get("symbol", symbol),
