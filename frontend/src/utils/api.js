@@ -1,13 +1,37 @@
 /**
  * API 请求工具 - 统一处理响应格式
- * 
+ *
  * 功能:
  * - 超时控制 + 自动重试
  * - 标准 API 格式解包 (兼容新旧格式)
  * - 字段标准化映射
+ * - 数据源熔断广播（通过 useDataSourceStatus）
  */
 
 import { logger } from './logger.js'
+import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
+
+// ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
+const _consecutiveFailures = { count: 0 }
+const _DEGRADE_THRESHOLD   = 3
+const _CIRCUIT_THRESHOLD   = 6
+
+function _onFailure(url, status) {
+  _consecutiveFailures.count++
+  const n = _consecutiveFailures.count
+  if (n >= _CIRCUIT_THRESHOLD) {
+    broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
+  } else if (n >= _DEGRADE_THRESHOLD) {
+    broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
+  }
+}
+
+function _onSuccess() {
+  if (_consecutiveFailures.count > 0) {
+    _consecutiveFailures.count = 0
+    broadcastDataSourceStatus('ok', '数据源已恢复正常')
+  }
+}
 
 /**
  * 从 API 响应中提取 data 字段
@@ -118,7 +142,8 @@ export async function apiFetch(url, options = {}) {
         // 4xx错误或已达到重试上限，抛出异常
         throw new Error(`HTTP ${res.status}`)
       }
-      
+
+      _onSuccess()
       const d = await res.json()
       return extractData(d)
       
@@ -132,11 +157,13 @@ export async function apiFetch(url, options = {}) {
         await sleep(500 * (attempt + 1))
         continue
       }
+      // 记录失败（用于熔断计数）
+      _onFailure(url, e.message)
     } finally {
       clearTimeout(timer)
     }
   }
-  
+
   if (lastError) {
     if (lastError.name === 'AbortError') {
       throw new Error(`请求超时（${timeoutMs / 1000}s）`)
@@ -145,6 +172,8 @@ export async function apiFetch(url, options = {}) {
   }
   throw new Error('请求失败')
 }
+
+export { broadcastDataSourceStatus }
 
 /**
  * 批量获取 API 数据

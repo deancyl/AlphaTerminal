@@ -92,13 +92,41 @@
         </div>
 
         <!-- 底部状态栏 -->
-        <div class="flex items-center gap-3 px-4 py-2 border-t border-theme text-[10px] text-theme-tertiary shrink-0">
-          <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">↑↓</kbd> 导航</span>
-          <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Enter</kbd> 选中</span>
-          <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Esc</kbd> 关闭</span>
+        <div class="flex items-center justify-between gap-3 px-4 py-2 border-t border-theme text-[10px] text-theme-tertiary shrink-0">
+          <div class="flex items-center gap-3">
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">↑↓</kbd> 导航</span>
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Enter</kbd> 选中</span>
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Esc</kbd> 关闭</span>
+          </div>
+          <!-- 数据源健康度指示灯 -->
+          <div class="flex items-center gap-1.5 cursor-default" :title="message || statusText[status]">
+            <span class="text-[11px]">{{ statusIcon[status] ?? '🟢' }}</span>
+            <span
+              class="text-[10px] transition-colors"
+              :class="{
+                'text-green-400':   status === 'ok',
+                'text-yellow-400':  status === 'degraded',
+                'text-red-400':     status === 'down',
+              }"
+            >{{ statusText[status] ?? '数据源正常' }}</span>
+          </div>
         </div>
       </div>
     </div>
+
+    <!-- 降级 Toast（非侵入提示） -->
+    <Transition name="toast">
+      <div
+        v-if="toastVisible && status !== 'ok'"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-4 py-2 rounded-lg border text-xs shadow-xl"
+        :class="{
+          'bg-yellow-950/90 border-yellow-600/50 text-yellow-300': status === 'degraded',
+          'bg-red-950/90 border-red-600/50 text-red-300': status === 'down',
+        }"
+      >
+        <span>{{ statusIcon[status] }} {{ toastMsg || statusText[status] }}</span>
+      </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -106,6 +134,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import Fuse from 'fuse.js'
 import { useMarketStore } from '../composables/useMarketStore.js'
+import { useDataSourceStatus, onDataSourceStatusChange } from '../composables/useDataSourceStatus.js'
 import { normalizeSymbol } from '../utils/symbols.js'
 
 const emit = defineEmits(['select'])
@@ -117,6 +146,26 @@ const query     = ref('')
 const inputRef  = ref(null)
 const listRef   = ref(null)
 const activeIndex = ref(0)
+
+// ── 数据源健康状态（由 api.js 拦截器驱动）──────────────────────
+const { status, message } = useDataSourceStatus()
+const toastMsg    = ref('')
+const toastVisible = ref(false)
+let   _toastTimer = null
+
+const statusIcon = { ok: '🟢', degraded: '🟡', down: '🔴' }
+const statusText  = { ok: '数据源正常', degraded: '备用线路', down: '全线熔断' }
+
+function showToast(msg) {
+  toastMsg.value = msg
+  toastVisible.value = true
+  clearTimeout(_toastTimer)
+  _toastTimer = setTimeout(() => { toastVisible.value = false }, 4000)
+}
+
+onDataSourceStatusChange((s, msg) => {
+  if (s !== 'ok' && msg) showToast(msg)
+})
 
 // ── Fuse.js 搜索实例 ───────────────────────────────────────────
 let fuse = null
@@ -269,3 +318,10 @@ onUnmounted(() => {
 // 重置 activeIndex 当搜索词变化时
 watch(query, () => { activeIndex.value = 0 })
 </script>
+
+<style scoped>
+/* Toast 淡入淡出动画 */
+.toast-enter-active, .toast-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.toast-enter-from  { opacity: 0; transform: translate(-50%, 8px); }
+.toast-leave-to    { opacity: 0; transform: translate(-50%, -4px); }
+</style>
