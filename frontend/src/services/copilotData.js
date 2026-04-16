@@ -13,6 +13,7 @@
  */
 
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const API_BASE = ''
 
@@ -107,7 +108,7 @@ export async function getLimitUpStocks() {
       const data = res?.limit_up || res || []
       return data
     } catch (e) {
-      console.warn('[CopilotData] limit_up failed:', e.message)
+      logger.warn('[CopilotData] limit_up failed:', e.message)
       return []
     }
   }, 60000) // 1分钟缓存
@@ -123,7 +124,7 @@ export async function getLimitDownStocks() {
       const data = res?.limit_down || res || []
       return data
     } catch (e) {
-      console.warn('[CopilotData] limit_down failed:', e.message)
+      logger.warn('[CopilotData] limit_down failed:', e.message)
       return []
     }
   }, 60000)
@@ -139,7 +140,7 @@ export async function getUnusualStocks() {
       const data = res?.unusual || res || []
       return data
     } catch (e) {
-      console.warn('[CopilotData] unusual failed:', e.message)
+      logger.warn('[CopilotData] unusual failed:', e.message)
       return []
     }
   }, 60000)
@@ -154,7 +155,7 @@ export async function getLimitSummary() {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_summary`, { timeoutMs: 15000 })
       return res || {}
     } catch (e) {
-      console.warn('[CopilotData] limit_summary failed:', e.message)
+      logger.warn('[CopilotData] limit_summary failed:', e.message)
       return {}
     }
   }, 60000)
@@ -201,7 +202,7 @@ export async function searchStock(keyword) {
       }
     }
   } catch (e) {
-    console.warn('[CopilotData] search failed:', e.message)
+    logger.warn('[CopilotData] search failed:', e.message)
   }
   
   return dbResults.slice(0, 15)
@@ -224,7 +225,7 @@ export async function getStockQuote(symbol) {
       return res
     }
   } catch (e) {
-    console.warn('[CopilotData] quote failed for', symbol, e.message)
+    logger.warn('[CopilotData] quote failed for', symbol, e.message)
   }
   return null
 }
