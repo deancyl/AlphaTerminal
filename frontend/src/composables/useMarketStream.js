@@ -15,7 +15,7 @@
  *   connect('600519')
  *   watch(tick, t => { if (t) applyTick(t) })
  */
-import { ref, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -43,8 +43,8 @@ const _MAX_RETRIES = 10  // 最大重试次数
 let _retryCount = 0      // 当前重试计数
 const _connectedCount = ref(0)
 
-// 全局 tick 和状态
-const globalTick = ref(null)
+// 全局 tick 字典（按 symbol 索引，避免不必要更新）
+const globalTicks = ref({})
 const globalConnected = ref(false)
 const globalError = ref(null)
 const globalReconnecting = ref(false)
@@ -86,13 +86,18 @@ function _newConnection() {
       const data = JSON.parse(event.data)
       if (data.type === 'pong' || data.type === 'subscribed') return
       
-      // 数据淘汰机制
-      tickHistory.push(data)
-      if (tickHistory.length > MAX_TICK_HISTORY) {
-        tickHistory.shift()
+      const sym = data.symbol
+      if (!sym) return
+      
+      // 数据淘汰机制（按 symbol 分开）
+      if (!tickHistory[sym]) tickHistory[sym] = []
+      tickHistory[sym].push(data)
+      if (tickHistory[sym].length > MAX_TICK_HISTORY) {
+        tickHistory[sym].shift()
       }
       
-      globalTick.value = data
+      // 按 symbol 更新（而不是单一 globalTick）
+      globalTicks.value[sym] = data
     } catch (e) {
       console.warn('[MarketStream] parse error:', e)
     }
@@ -167,6 +172,9 @@ export function useMarketStream(initialSymbol = '') {
   }
 
   function connect(symOrList) {
+    // 取消待执行的断开，避免闪断
+    cancelPendingDisconnect()
+    
     const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
     syms.forEach(s => {
       if (s) {
@@ -181,22 +189,35 @@ export function useMarketStream(initialSymbol = '') {
     }
   }
 
-  function disconnect() {
+  let _disconnectTimer = null
+
+function disconnect() {
     _connectedCount.value = Math.max(0, _connectedCount.value - 1)
     if (_connectedCount.value <= 0) {
-      clearTimeout(_retryTimer)
-      if (_ws) {
-        _ws.onclose = null
-        _ws.onerror = null
-        _ws.close(1000, 'all_disconnected')
-        _ws = null
-      }
-      globalConnected.value = false
-      globalReconnecting.value = false
-      subscribedSyms.clear()
-      tickHistory.length = 0
-      _retryCount = 0
-      _retryDelay = 2000
+      // 延迟 200ms 关闭，避免路由切换时的闪断
+      if (_disconnectTimer) clearTimeout(_disconnectTimer)
+      _disconnectTimer = setTimeout(() => {
+        if (_connectedCount.value <= 0 && _ws) {
+          clearTimeout(_retryTimer)
+          _ws.onclose = null
+          _ws.onerror = null
+          _ws.close(1000, 'all_disconnected')
+          _ws = null
+          globalConnected.value = false
+          globalReconnecting.value = false
+          subscribedSyms.clear()
+          tickHistory.length = 0
+          _retryCount = 0
+          _retryDelay = 2000
+        }
+      }, 200)
+    }
+  }
+
+function cancelPendingDisconnect() {
+    if (_disconnectTimer) {
+      clearTimeout(_disconnectTimer)
+      _disconnectTimer = null
     }
   }
 
@@ -216,7 +237,10 @@ export function useMarketStream(initialSymbol = '') {
   onUnmounted(disconnect)
 
   return {
-    tick: globalTick,
+    // 直接返回当前 symbol 的 tick（推荐用法）
+    tick: computed(() => localSymbol.value ? globalTicks.value[localSymbol.value] : null),
+    // 保留全局 tick 字典（高级用法）
+    ticks: globalTicks,
     connected: globalConnected,
     reconnecting: globalReconnecting,
     error: globalError,
@@ -226,7 +250,7 @@ export function useMarketStream(initialSymbol = '') {
     // 获取连接统计
     getStats: () => ({
       subscribedCount: subscribedSyms.size,
-      historyCount: tickHistory.length,
+      historyCount: tickHistory[localSymbol.value]?.length || 0,
       retryCount: _retryCount,
       connectionCount: _connectedCount.value
     })

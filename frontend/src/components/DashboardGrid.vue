@@ -1,6 +1,30 @@
 <template>
-  <!-- ━━━ 正常网格模式 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-  <div class="grid-stack" ref="gridRef">
+  <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
+  <div v-if="isMobile" class="flex flex-col gap-3 p-2 overflow-y-auto h-full">
+    <!-- K线图 -->
+    <div class="terminal-panel p-3 min-h-[280px]">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
+      </div>
+      <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full h-[200px]" />
+    </div>
+    <!-- A股监测 -->
+    <div class="terminal-panel p-3 min-h-[180px]">
+      <div class="text-terminal-accent font-bold text-sm mb-2">📊 A股监测</div>
+      <StockScreener :data="globalItems" class="w-full h-[120px]" />
+    </div>
+    <!-- 板块热度 -->
+    <div class="terminal-panel p-3 min-h-[160px]">
+      <HotSectors :data="sectors" class="w-full h-[100px]" />
+    </div>
+    <!-- 新闻快讯 -->
+    <div class="terminal-panel p-3 min-h-[200px]">
+      <NewsFeed :news="newsData" class="w-full h-[160px]" />
+    </div>
+  </div>
+
+  <!-- ━━━ 桌面端：GridStack 网格布局 (≥ 768px) ━━━━━━━━━━━━ -->
+  <div v-else class="grid-stack" ref="gridRef">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
@@ -180,6 +204,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed from './NewsFeed.vue'
 import SentimentGauge from './SentimentGauge.vue'
@@ -187,6 +212,9 @@ import HotSectors from './HotSectors.vue'
 import FundFlowPanel from './FundFlowPanel.vue'
 import StockScreener from './StockScreener.vue'
 import { useMarketStore } from '../composables/useMarketStore.js'
+
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
 const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol } = useMarketStore()
 const currentIndexName = ref('上证指数')

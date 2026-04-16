@@ -144,23 +144,38 @@ export async function apiFetch(url, options = {}) {
 
 /**
  * 批量获取 API 数据
- * @param {Array<{url: string, key: string, default?: any}>} requests 
+ * @param {Array<{url: string, key: string, default?: any, required?: boolean}>} requests 
+ * @param {boolean} silent - 如果为true，则返回defaultValue而非抛出（不推荐）
  * @returns {Promise<Object>}
+ * @throws {Error} 当required=true的请求失败时抛出
  */
-export async function fetchApiBatch(requests) {
+export async function fetchApiBatch(requests, silent = false) {
   const results = await Promise.all(
-    requests.map(async ({ url, key, default: defaultValue = null }) => {
+    requests.map(async ({ url, key, default: defaultValue = null, required = true }) => {
       try {
         const data = await apiFetch(url)
-        return { key, data: data ?? defaultValue }
+        return { key, data, error: null }
       } catch (e) {
-        console.warn(`[fetchApiBatch] ${url} failed:`, e.message)
-        return { key, data: defaultValue }
+        console.error(`[fetchApiBatch] ${url} failed:`, e.message)
+        if (!silent && required) {
+          throw new Error(`API请求失败 [${key}]: ${e.message}`)
+        }
+        return { key, data: defaultValue, error: e.message }
       }
     })
   )
-  return results.reduce((acc, { key, data }) => {
+  
+  // 构建结果对象，收集错误信息
+  const errors = results.filter(r => r.error).map(r => ({ key: r.key, error: r.error }))
+  const data = results.reduce((acc, { key, data }) => {
     acc[key] = data
     return acc
   }, {})
+  
+  // 如果有错误且不是silent模式，在结果中标记
+  if (errors.length > 0) {
+    data._errors = errors
+    data._stale = true  // 标记数据可能过期
+  }
+  return data
 }
