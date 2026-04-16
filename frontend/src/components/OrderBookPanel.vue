@@ -56,6 +56,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({
   symbol: { type: String, required: true }
@@ -67,8 +68,6 @@ const error = ref(null)
 const lastPrice = ref(0)
 const priceDirection = ref('') // 'up', 'down', ''
 let prevPrice = 0
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8002/api/v1'
 
 // 倒序显示（靠近当前价的在前）
 const reversedAsks = computed(() => {
@@ -94,8 +93,7 @@ async function fetchOrderBook() {
   error.value = null
   
   try {
-    const resp = await fetch(`${API_BASE}/market/order_book/${props.symbol}`)
-    const json = await resp.json()
+    const json = await apiFetch(`/api/v1/market/order_book/${props.symbol}`)
     
     if (json.code === 0) {
       data.value = json.data

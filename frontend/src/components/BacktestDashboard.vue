@@ -130,8 +130,7 @@
 
 <script setup>
 import { ref, onMounted, watch, nextTick } from 'vue'
-
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8002/api/v1'
+import { apiFetch } from '../utils/api.js'
 
 const strategies = ref([])
 const selectedStrategy = ref(null)
@@ -146,8 +145,7 @@ const error = ref(null)
 
 async function loadStrategies() {
   try {
-    const resp = await fetch(`${API_BASE}/backtest/strategies`)
-    const json = await resp.json()
+    const json = await apiFetch('/api/v1/backtest/strategies')
     if (json.code === 0) {
       strategies.value = json.data.strategies
       if (strategies.value.length) {
@@ -174,10 +172,9 @@ async function runBacktest() {
   result.value = null
   
   try {
-    const resp = await fetch(`${API_BASE}/backtest/run`, {
+    const json = await apiFetch('/api/v1/backtest/run', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: {
         symbol: symbol.value,
         period: 'daily',
         start_date: startDate.value,
@@ -185,9 +182,8 @@ async function runBacktest() {
         initial_capital: initialCapital.value,
         strategy_type: selectedStrategy.value.type,
         params: runParams.value
-      })
+      }
     })
-    const json = await resp.json()
     
     if (json.code === 0) {
       result.value = json.data
