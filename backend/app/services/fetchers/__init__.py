@@ -12,10 +12,12 @@ from .fetcher_factory import FetcherFactory, get_market_fetcher, fetch_with_fall
 # Import and register fetchers
 from .sina import SinaFetcher
 from .tencent import TencentFetcher
+from .eastmoney import EastmoneyFetcher
 
 # Register all fetchers (Sina as default)
 FetcherFactory.register("sina", SinaFetcher, as_default=True)
 FetcherFactory.register("tencent", TencentFetcher)
+FetcherFactory.register("eastmoney", EastmoneyFetcher)
 
 __all__ = [
     # Base classes
