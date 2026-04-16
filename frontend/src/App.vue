@@ -44,8 +44,17 @@
     <div v-if="isMobile && isSidebarOpen" class="fixed inset-0 bg-black/50 z-[9999]" @click="isSidebarOpen = false" />
 
     <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 桌面端：内联 sidebar | 移动端：固定定位 overlay -->
-    <div :class="isMobile ? 'fixed left-0 top-0 h-full z-[10000] transition-transform' : 'relative'" :style="isMobile ? { transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}">
+    <!-- 桌面端：直接渲染 | 移动端：固定定位 overlay -->
+    <div v-if="!isMobile" class="flex-shrink-0">
+      <Sidebar
+        :is-open="isSidebarOpen"
+        :active-id="currentView"
+        @navigate="handleSidebarNavigate"
+        @close="isSidebarOpen = false"
+      />
+    </div>
+    <!-- 移动端：固定定位 sidebar -->
+    <div v-else class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-theme-panel" :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px' }">
       <Sidebar
         :is-open="isSidebarOpen"
         :active-id="currentView"
