@@ -804,16 +804,44 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
 
 @router.get("/market/fund_flow")
 async def get_fund_flow():
-    """
-    资金流向接口（占位/待开发）
-    """
-    return {
-        "code": 0,
-        "message": "success",
-        "data": {
-            "items": []
+    """市场资金流向（超大单/大单/中单/小单主力净流入）"""
+    import akshare as ak
+    
+    try:
+        df = ak.stock_market_fund_flow()
+        # 获取最近30天数据
+        df = df.tail(30)
+        
+        result = []
+        for _, row in df.iterrows():
+            result.append({
+                "date": str(row.get("日期", "")),
+                "sh_close": float(row.get("上证-收盘价", 0) or 0),
+                "sh_chg": float(row.get("上证-涨跌幅", 0) or 0),
+                "sz_close": float(row.get("深证-收盘价", 0) or 0),
+                "sz_chg": float(row.get("深证-涨跌幅", 0) or 0),
+                "main_net": int(float(row.get("主力净流入-净额", 0) or 0)),
+                "main_pct": float(row.get("主力净流入-净占比", 0) or 0),
+                "large_net": int(float(row.get("大单净流入-净额", 0) or 0)),
+                "large_pct": float(row.get("大单净流入-净占比", 0) or 0),
+                "medium_net": int(float(row.get("中单净流入-净额", 0) or 0)),
+                "medium_pct": float(row.get("中单净流入-净占比", 0) or 0),
+                "small_net": int(float(row.get("小单净流入-净额", 0) or 0)),
+                "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
+            })
+        
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "items": result,
+                "total": len(result),
+                "source": "akshare - stock_market_fund_flow"
+            }
         }
-    }
+    except Exception as e:
+        logger.error(f"market_fund_flow error: {e}")
+        return {"code": 500, "message": f"获取资金流数据失败: {str(e)}", "data": {"items": []}}
 
 
 @router.get("/market/history/{symbol}")

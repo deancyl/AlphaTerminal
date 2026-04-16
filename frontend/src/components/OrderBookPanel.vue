@@ -100,6 +100,12 @@ async function fetchOrderBook() {
     if (json.code === 0) {
       data.value = json.data
       
+      // 指数暂无Level 2数据时显示提示
+      if (json.data.note && !json.data.asks?.length && !json.data.bids?.length) {
+        error.value = json.data.note
+        data.value = null
+      }
+      
       // 计算价格方向
       const prices = [
         ...(json.data.asks || []).map(a => a.price),
