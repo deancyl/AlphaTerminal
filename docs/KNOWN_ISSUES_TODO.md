@@ -160,13 +160,17 @@
 ---
 
 ### Issue #17：画线工具状态机重构
-**严重程度**：🟠 低 — 工具栏无状态隔离，事件监听器互相污染
-**涉及文件**：`frontend/src/components/DrawingCanvas.vue`
-
-**修复方案**：
-1. 建立 `IDLE / DRAWING / EDITING` 三状态机
-2. 右键菜单改为状态转换触发器
-3. 文字标注支持内联输入（contenteditable 或 popup input）
+**状态**：✅ 已完成（v0.5.51，commit d946510）
+- `DrawingCanvas.vue`：建立 DrawState 三状态枚举
+  - `IDLE`：空闲/选择/拖拽（ctx menu, style editor）
+  - `DRAWING`：工具激活时（activeTool watcher → setState）
+  - `EDITING`：内联文本编辑（拦截所有鼠标事件）
+- `onMouseDown/Move`：进入 EDITING 时 return，物理隔离事件
+- 双击文本 → `startInlineEdit()`（替换 `prompt()`）
+- 文本工具 → 创建空标注 → 立即弹出内联编辑
+- 右键菜单新增"编辑文字" → `startEditText()`
+- cursor 样式：EDITING 时显示 `text` 光标
+- 构建验证：✓ 82 modules
 
 ---
 
@@ -195,4 +199,5 @@
 | #14 虚拟滚动 | v0.5.48 | StockScreener useVirtualList |
 | #15 ECharts ResizeObserver | v0.5.47 | ResizeObserver + dispose |
 | #16 熔断 UI | v0.5.49 | useDataSourceStatus + Toast |
+| #17 画线工具状态机 | v0.5.51 | DrawState 三状态机 + 内联文本编辑 |
 | #18 DB写入队列化 | v0.5.50 | DBWriterThread |
