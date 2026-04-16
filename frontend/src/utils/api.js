@@ -123,8 +123,10 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
-      if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5'))) {
-        console.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}), retrying...`)
+      // 修复: 增加网络错误 (TypeError) 和 Fetch 失败的重试
+      const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
+      if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
+        console.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying...`)
         await sleep(500 * (attempt + 1))
         continue
       }

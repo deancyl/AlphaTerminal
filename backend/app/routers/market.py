@@ -412,7 +412,7 @@ def _get_cached_wind(force=False):
 
 # ── Task 2: 修复后的 market/overview ─────────────────────────────────────
 @router.get("/market/overview")
-async def market_overview():
+def market_overview():
     """
     市场概览 — 风向标视图（实时调 Sina，10秒缓存）
     包含：上证、沪深300、恒生、纳斯达克（动态交易状态）
@@ -471,7 +471,7 @@ async def market_overview():
 
 # ── Task 2: 国内10+核心指数（实时）─────────────────────────────────────
 @router.get("/market/china_all")
-async def market_china_all():
+def market_china_all():
     """国内10+核心指数（统一从 market_data_realtime 读取，不再直连Sina，保证报价一致）"""
     try:
         is_open, status = is_market_open("A_SHARE")
@@ -498,7 +498,7 @@ async def market_china_all():
 
 
 @router.get("/market/all_stocks")
-async def market_all_stocks(request: Request):
+def market_all_stocks(request: Request):
     """
     全市场A股列表（来自 market_all_stocks 缓存表）
     支持搜索: ?search=茅台
@@ -544,7 +544,7 @@ async def market_all_stocks_lite():
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
 
 @router.get("/market/indices")
-async def market_indices():
+def market_indices():
     """A股四大指数列表"""
     try:
         rows = get_latest_prices(INDEX_SYMBOLS)
