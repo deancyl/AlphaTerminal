@@ -1747,3 +1747,46 @@ async def get_order_book(symbol: str):
     except Exception as e:
         logger.error(f"order_book error: {e}")
         return error_response(500, str(e))
+
+
+# ══════════════════════════════════════════════════════════════
+# V2 API: 使用数据源抽象层 (FetcherFactory)
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/market/quote_v2/{symbol}")
+async def market_quote_v2(symbol: str):
+    """
+    V2 实时行情接口 - 使用 FetcherFactory 数据源抽象层。
+    
+    直接从数据源获取实时报价，不依赖本地数据库。
+    支持切换不同数据源（Sina/Tencent/Eastmoney）。
+    """
+    try:
+        from app.services.fetcher_factory import get_market_fetcher, FetcherFactory
+        
+        fetcher = get_market_fetcher()
+        if not fetcher:
+            return error_response(404, "无可用数据源")
+        
+        data = await fetcher.get_quote(symbol)
+        
+        if not data:
+            return error_response(404, f"获取 {symbol} 数据失败")
+        
+        return success_response({
+            "symbol": data.get("symbol", symbol),
+            "name": data.get("name", symbol),
+            "price": data.get("price", 0),
+            "change": round(data.get("price", 0) - data.get("prev_close", 0), 3),
+            "change_pct": data.get("change_pct", 0),
+            "open": data.get("open", 0),
+            "high": data.get("high", 0),
+            "low": data.get("low", 0),
+            "prev_close": data.get("prev_close", 0),
+            "volume": data.get("volume", 0),
+            "source": data.get("source", FetcherFactory.get_current_name()),
+            "timestamp": int(time.time() * 1000),
+        })
+    except Exception as e:
+        logger.error(f"quote_v2 error: {e}")
+        return error_response(500, str(e))
