@@ -10,7 +10,9 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ── YouTube 走代理（墙外资源）──────────────────────────────────────────
-PROXY_YOUTUBE = "http://192.168.1.50:7897"
+# YouTube 必须走代理，从环境变量读取，永不硬编码
+from app.services.proxy_config import get_proxy_url
+PROXY_YOUTUBE = get_proxy_url() or ""
 
 FALLBACK_TRANSCRIPT = {
     "title": "【降级内容】美联储降息周期对全球流动性的影响分析",

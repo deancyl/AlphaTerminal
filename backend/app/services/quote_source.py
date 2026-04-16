@@ -45,7 +45,7 @@ DATA_SOURCES = {
         "name_cn": "东财",
         "type": "backup",
         "proxy": True,
-        "proxy_url": "http://192.168.1.50:7897",
+        "proxy_url": None,   # 从 proxy_config.py 动态读取，永不硬编码
         "timeout": 10,
         "weight": 50,
         "has_pepb": True,
@@ -79,9 +79,11 @@ _source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0} for
 
 
 def _get_proxy(source_name: str) -> dict | None:
+    from app.services.proxy_config import get_proxy_url, build_httpx_proxies
     source = DATA_SOURCES.get(source_name, {})
     if source.get("proxy"):
-        return {"http://": source.get("proxy_url"), "https://": source.get("proxy_url")}
+        proxy_url = source.get("proxy_url") or get_proxy_url()
+        return build_httpx_proxies(proxy_url)
     return None
 
 

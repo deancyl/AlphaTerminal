@@ -697,10 +697,8 @@ def fetch_index_minute_history(
             f"&datalen={min(limit + offset, 1000)}"  # Sina 限制，最多 1000 条
         )
         
-        proxies = {
-            "http://": "http://192.168.1.50:7897",
-            "https://": "http://192.168.1.50:7897",
-        }
+        from app.services.proxy_config import get_proxies
+        proxies = get_proxies()
         
         # 重试逻辑
         data = None
