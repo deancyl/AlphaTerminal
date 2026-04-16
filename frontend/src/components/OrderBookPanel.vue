@@ -2,7 +2,12 @@
   <div class="order-book-panel">
     <div class="panel-header">
       <span class="title">买卖盘口</span>
-      <span class="symbol">{{ symbol }}</span>
+      <input 
+        v-model="localSymbol" 
+        @keyup.enter="changeSymbol"
+        placeholder="输入股票代码如 sh600519"
+        class="symbol-input"
+      />
     </div>
     
     <div v-if="loading" class="loading">加载中...</div>
@@ -68,6 +73,16 @@ const error = ref(null)
 const lastPrice = ref(0)
 const priceDirection = ref('') // 'up', 'down', ''
 let prevPrice = 0
+
+const localSymbol = ref(props.symbol)
+const emit = defineEmits(['update:symbol'])
+
+function changeSymbol() {
+  const s = localSymbol.value.trim()
+  if (s) {
+    emit('update:symbol', s)
+  }
+}
 
 // 倒序显示（靠近当前价的在前）
 const reversedAsks = computed(() => {
@@ -189,6 +204,15 @@ onUnmounted(() => {
 .symbol {
   color: var(--text-secondary, #888);
   font-size: 11px;
+}
+.symbol-input {
+  background: var(--bg-secondary, #222);
+  border: 1px solid var(--border-color, #444);
+  color: var(--text-primary, #fff);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  width: 120px;
 }
 
 .loading, .error {
