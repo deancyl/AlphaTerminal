@@ -63,9 +63,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../composables/useMarketStore.js'
-import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 
 const emit = defineEmits(['sector-click'])
 

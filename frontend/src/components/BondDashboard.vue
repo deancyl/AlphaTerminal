@@ -188,13 +188,9 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import YieldCurveChart from './YieldCurveChart.vue'
-import { logger } from '../utils/logger.js'
 import YieldSpreadChart from './YieldSpreadChart.vue'
-import { logger } from '../utils/logger.js'
 import BondHistoryModal from './BondHistoryModal.vue'
-import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [

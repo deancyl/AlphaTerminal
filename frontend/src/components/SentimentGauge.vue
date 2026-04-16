@@ -105,9 +105,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
-import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },

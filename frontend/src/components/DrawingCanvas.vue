@@ -71,7 +71,6 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import localforage from 'localforage'
-import { logger } from '../utils/logger.js'
 
 defineOptions({ inheritAttrs: false })
 

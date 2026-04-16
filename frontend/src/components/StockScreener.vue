@@ -237,11 +237,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../composables/useMarketStore.js'
-import { logger } from '../utils/logger.js'
 import { normalizeFields } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
-import { logger } from '../utils/logger.js'
 
 const { setSymbol } = useMarketStore()
 

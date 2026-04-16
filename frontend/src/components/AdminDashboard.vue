@@ -317,7 +317,6 @@
 import { ref, reactive, onMounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 
 const version = '0.4.138'
 const activeTab = ref('sources')

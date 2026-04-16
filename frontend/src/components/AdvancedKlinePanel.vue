@@ -140,30 +140,18 @@ import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, n
 import { logger } from '../utils/logger.js'
 
 import { useMarketStore } from '../composables/useMarketStore.js'
-import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
-import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
-import { logger } from '../utils/logger.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
-import { logger } from '../utils/logger.js'
 import { calcMA } from '../utils/indicators.js'
-import { logger } from '../utils/logger.js'
 
 import QuoteHeader    from './QuoteHeader.vue'
-import { logger } from '../utils/logger.js'
 import CommandCenter  from './CommandCenter.vue'
-import { logger } from '../utils/logger.js'
 import SubChart       from './SubChart.vue'
-import { logger } from '../utils/logger.js'
 import IntervalStats  from './IntervalStats.vue'
-import { logger } from '../utils/logger.js'
 import DrawingToolbar from './DrawingToolbar.vue'
-import { logger } from '../utils/logger.js'
 import DrawingCanvas  from './DrawingCanvas.vue'
-import { logger } from '../utils/logger.js'
 import BaseKLineChart from './BaseKLineChart.vue'
-import { logger } from '../utils/logger.js'
 
 const {
   currentSymbol, currentSymbolName,
