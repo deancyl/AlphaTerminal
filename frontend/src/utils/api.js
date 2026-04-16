@@ -7,6 +7,8 @@
  * - 字段标准化映射
  */
 
+import { logger } from './logger.js'
+
 /**
  * 从 API 响应中提取 data 字段
  * 兼容：新格式 {code:0, data: {...}} → 返回 data
@@ -15,7 +17,7 @@
 export function extractData(response) {
   if (response && typeof response.code === 'number' && 'data' in response) {
     if (response.code !== 0) {
-      console.warn('[API] 非0响应码:', response.code, response.message)
+      logger.warn('[API] 非0响应码:', response.code, response.message)
     }
     return response.data
   }
@@ -108,7 +110,7 @@ export async function apiFetch(url, options = {}) {
         if (res.status >= 500 || res.status === 429) {
           // 服务器错误，可以重试
           if (attempt < retries) {
-            console.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries})...`)
+            logger.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries})...`)
             await sleep(500 * (attempt + 1))
             continue
           }
@@ -126,7 +128,7 @@ export async function apiFetch(url, options = {}) {
       // 修复: 增加网络错误 (TypeError) 和 Fetch 失败的重试
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
       if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
-        console.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying...`)
+        logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying...`)
         await sleep(500 * (attempt + 1))
         continue
       }
@@ -158,7 +160,7 @@ export async function fetchApiBatch(requests, silent = false) {
         const data = await apiFetch(url)
         return { key, data, error: null }
       } catch (e) {
-        console.error(`[fetchApiBatch] ${url} failed:`, e.message)
+        logger.error(`[fetchApiBatch] ${url} failed:`, e.message)
         if (!silent && required) {
           throw new Error(`API请求失败 [${key}]: ${e.message}`)
         }
