@@ -17,10 +17,31 @@
       {{ hoverInfo.text }}
     </div>
 
+    <!-- 内联文本编辑覆盖层（替代原生 prompt） -->
+    <div
+      v-if="inlineEdit.visible"
+      class="inline-text-overlay"
+      :style="{ left: inlineEdit.x + 'px', top: inlineEdit.y + 'px' }"
+    >
+      <input
+        ref="inlineInputRef"
+        v-model="inlineEdit.text"
+        class="inline-text-input"
+        placeholder="输入文字..."
+        maxlength="100"
+        @keydown.enter="commitInlineEdit"
+        @keydown.escape="cancelInlineEdit"
+        @blur="commitInlineEdit"
+      />
+    </div>
+
     <!-- 右键菜单 -->
     <div v-if="ctxMenu.show" class="context-menu" :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }">
       <div class="menu-item" @click="editSelected">
         <span class="icon">✏️</span> 编辑样式
+      </div>
+      <div class="menu-item" @click="startEditText">
+        <span class="icon">📝</span> 编辑文字
       </div>
       <div class="menu-item" @click="duplicateSelected">
         <span class="icon">📋</span> 复制
@@ -86,7 +107,56 @@ const props = defineProps({
 
 const emit = defineEmits(['drawn', 'deleted', 'cleared', 'undo', 'redo'])
 
-// 状态
+// ═══════════════════════════════════════════════════════════════
+// 状态机：三种互斥状态，统一入口分发
+// ═══════════════════════════════════════════════════════════════
+const DrawState = {
+  IDLE:    'IDLE',    // 空闲/选择模式（可点击选中、拖拽）
+  DRAWING: 'DRAWING', // 正在绘制新图形
+  EDITING: 'EDITING', // 正在编辑文字（内联输入激活）
+}
+
+const currentState = ref(DrawState.IDLE)
+
+function setState(newState) {
+  if (currentState.value === newState) return
+  console.debug(`[DrawingCanvas] state: ${currentState.value} → ${newState}`)
+  currentState.value = newState
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 内联文本编辑
+// ═══════════════════════════════════════════════════════════════
+const inlineEdit     = ref({ visible: false, x: 0, y: 0, text: '', shapeId: null })
+const inlineInputRef = ref(null)
+
+function startInlineEdit(shape, screenX, screenY) {
+  inlineEdit.value = { visible: true, x: screenX, y: screenY, text: shape.text || '', shapeId: shape.id }
+  setState(DrawState.EDITING)
+  nextTick(() => inlineInputRef.value?.focus())
+}
+
+function commitInlineEdit() {
+  const { text, shapeId } = inlineEdit.value
+  if (text && shapeId) {
+    saveHistory()
+    const shape = shapes.value.find(s => s.id === shapeId)
+    if (shape) {
+      shape.text = sanitizeText(text)
+      emit('drawn', shape)
+      saveToStorage()
+    }
+  }
+  inlineEdit.value.visible = false
+  setState(DrawState.IDLE)
+}
+
+function cancelInlineEdit() {
+  inlineEdit.value.visible = false
+  setState(DrawState.IDLE)
+}
+
+// 通用状态
 const canvasRef = ref(null)
 let ctx = null
 let animationFrame = null
@@ -560,6 +630,8 @@ function getCanvasPos(e) {
 }
 
 function onMouseDown(e) {
+  // EDITING 状态：内联输入激活，拦截所有鼠标事件
+  if (currentState.value === DrawState.EDITING) return
   if (e.button !== 0) return
   if (props.locked) return
   
@@ -589,36 +661,28 @@ function onMouseDown(e) {
     return
   }
   
-  // 文本工具 - 内联输入框替代prompt
+  // 文本工具 — 创建新文字标注
   if (props.activeTool === 'text') {
     const data = toData(x, y)
     if (!data) return
-    
-    // 显示内联输入框
-    const text = prompt('输入标注文字：')
-    if (text) {
-      const sanitizedText = sanitizeText(text)
-      if (!sanitizedText) {
-        alert('输入内容无效，请重新输入')
-        return
-      }
-      if (data) {
-        saveHistory()
-        const shape = {
-          id: genId(),
-          type: 'text',
-          points: [{ price: data.price, timestamp: data.timestamp }],
-          color: props.activeColor,
-          text: sanitizedText,
-          fontSize: 12,
-          lineWidth: 1.5,
-          createdAt: Date.now()
-        }
-        shapes.value.push(shape)
-        emit('drawn', shape)
-        saveToStorage()
-      }
+    saveHistory()
+    const shape = {
+      id: genId(),
+      type: 'text',
+      points: [{ price: data.price, timestamp: data.timestamp }],
+      color: props.activeColor,
+      text: '',          // 先创建空文本，触发内联编辑
+      fontSize: 12,
+      lineWidth: 1.5,
+      createdAt: Date.now(),
     }
+    shapes.value.push(shape)
+    const rect = canvasRef.value?.getBoundingClientRect()
+    const pixel = toPixel(data.price, data.timestamp)
+    // 立即弹出内联编辑
+    startInlineEdit(shape, (pixel?.x ?? x) + (rect?.left ?? 0), (pixel?.y ?? y) + (rect?.top ?? 0) - 24)
+    emit('drawn', shape)
+    saveToStorage()
     return
   }
   
@@ -660,12 +724,16 @@ function onMouseDown(e) {
 }
 
 function onMouseMove(e) {
+  // EDITING 状态：不处理绘制/拖拽逻辑
+  if (currentState.value === DrawState.EDITING) return
   const { x, y } = getCanvasPos(e)
   mouseX.value = x
   mouseY.value = y
   
   if (props.locked) {
     cursorStyle.value = 'not-allowed'
+  } else if (currentState.value === DrawState.EDITING) {
+    cursorStyle.value = 'text'
   } else if (props.activeTool === 'select') {
     cursorStyle.value = 'default'
   } else if (props.activeTool) {
@@ -776,12 +844,21 @@ function onMouseUp(e) {
 }
 
 function onDblClick(e) {
+  if (currentState.value === DrawState.EDITING) return
   const { x, y } = getCanvasPos(e)
   const hit = hitTest(x, y)
   if (hit) {
     selectedId.value = hit.id
-    editSelected()
-    redraw()
+    const shape = shapes.value.find(s => s.id === hit.id)
+    if (shape?.type === 'text') {
+      // 双击文本 → 进入内联编辑
+      const pixel = shape.points?.[0] ? toPixel(shape.points[0].price, shape.points[0].timestamp) : null
+      const rect = canvasRef.value?.getBoundingClientRect()
+      startInlineEdit(shape, (pixel?.x ?? x) + (rect?.left ?? 0), (pixel?.y ?? y) + (rect?.top ?? 0) - 24)
+    } else {
+      editSelected()
+      redraw()
+    }
   }
 }
 
@@ -799,6 +876,15 @@ function onMouseLeave() {
 }
 
 // 菜单操作
+function startEditText() {
+  const shape = shapes.value.find(s => s.id === selectedId.value)
+  if (!shape || shape.type !== 'text') return
+  ctxMenu.value.show = false
+  const pixel = shape.points?.[0] ? toPixel(shape.points[0].price, shape.points[0].timestamp) : null
+  const rect = canvasRef.value?.getBoundingClientRect()
+  startInlineEdit(shape, (pixel?.x ?? 100) + (rect?.left ?? 0), (pixel?.y ?? 100) + (rect?.top ?? 0) - 24)
+}
+
 function editSelected() {
   const shape = shapes.value.find(s => s.id === selectedId.value)
   if (!shape) return
@@ -1055,6 +1141,17 @@ onUnmounted(() => {
 })
 
 watch(() => [props.symbol, props.period], () => loadFromStorage(), { immediate: true })
+
+// activeTool 变化 → 同步状态机
+watch(() => props.activeTool, (tool) => {
+  if (tool && tool !== 'select') {
+    setState(DrawState.DRAWING)
+  } else {
+    setState(DrawState.IDLE)
+  }
+  redraw()
+})
+
 watch([() => props.activeTool, () => props.activeColor, () => props.magnetMode], () => redraw())
 watch(shapes, () => redraw(), { deep: true })
 
@@ -1234,5 +1331,30 @@ defineExpose({
 
 .editor-actions button:hover {
   background: rgba(59, 130, 246, 0.3);
+}
+
+/* 内联文本编辑覆盖层 */
+.inline-text-overlay {
+  position: fixed;
+  z-index: 2000;
+  transform: translate(-50%, -100%);
+}
+
+.inline-text-input {
+  background: rgba(10, 14, 23, 0.95);
+  border: 1.5px solid #60a5fa;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #f3f4f6;
+  font-family: monospace;
+  outline: none;
+  min-width: 120px;
+  max-width: 280px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.inline-text-input::placeholder {
+  color: #6b7280;
 }
 </style>
