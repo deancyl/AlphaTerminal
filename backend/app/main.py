@@ -16,20 +16,19 @@ logger = logging.getLogger(__name__)
 from app.routers import market, copilot, news, sentiment, debug, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.logging_queue import init_logging_queue
+from app.db.db_writer import start_writer, stop_writer
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭时执行"""
     # 启动时
+    start_writer()         # DB 异步写入线程
     start_scheduler()
 
-    # 启动时不触发新闻预热（scheduler 的 NewsRefresh 任务每 20 分钟自动运行，
-    # 由它统一管理 _NEWS_CACHE，避免两个线程同时写缓存造成竞态）
-    # sentiment_engine._do_news_fetch（scheduler 触发）现已修复为 stock_news_em（真实时间戳）
-
     yield
-    # 关闭时
+    # 关闭时：优雅退出 — 等待队列排空
+    stop_writer()          # DB 写入队列 graceful shutdown（最多30s）
     stop_scheduler()
 
 

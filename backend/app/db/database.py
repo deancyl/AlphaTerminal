@@ -6,13 +6,11 @@ import os
 
 logger = logging.getLogger(__name__)
 # 使用工作区根目录的 database.db（包含示例数据）
-# __file__ is /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app/db/database.py
-# dirname(__file__) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app/db
-# dirname(dirname(__file__)) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app
-# dirname(dirname(dirname(__file__))) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend
-# dirname(dirname(dirname(dirname(__file__)))) = /vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal
 _db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'database.db')
 _lock = threading.RLock()
+
+# 延迟导入，避免循环依赖
+from app.db.db_writer import enqueue, T_DAILY, T_PERIODIC, T_REALTIME, T_ALLSTOCKS, T_BUFFER
 
 def _get_conn():
     conn = sqlite3.connect(_db_path, timeout=30)
@@ -107,89 +105,26 @@ def init_tables():
     print(f"✅ DB Ready: {_db_path}")
 
 def buffer_insert(data_list):
+    """写入 write_buffer（生产者：立即入队，不持有锁）"""
     if not data_list: return
-    with _lock:
-        conn = _get_conn()
-        for item in data_list:
-            conn.execute("INSERT INTO write_buffer VALUES (?,?,?)", 
-                        (item.get('symbol',''), item.get('name',''), json.dumps(item)))
-        conn.commit(); conn.close()
+    enqueue({"type": T_BUFFER, "rows": data_list})
 
 def buffer_insert_daily(data_list):
     """
-    写入 market_data_daily
+    写入 market_data_daily（生产者：立即入队，不持有锁）
     表列: id, symbol, date, open, high, low, close, volume, amount, turnover_rate, amplitude, timestamp, data_type
     """
     if not data_list: return
-    with _lock:
-        conn = _get_conn()
-        ok = fail = 0
-        for i in data_list:
-            try:
-                conn.execute(
-                    "INSERT OR REPLACE INTO market_data_daily "
-                    "(symbol, date, open, high, low, close, volume, amount, turnover_rate, amplitude, timestamp, data_type) "
-                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-                    (str(i.get('symbol','')), str(i.get('date','')),
-                     float(i.get('open',0)), float(i.get('high',0)), float(i.get('low',0)),
-                     float(i.get('close',0)), int(i.get('volume',0)),
-                     float(i.get('amount', 0.0)),
-                     float(i.get('turnover_rate', 0.0)),
-                     float(i.get('amplitude', 0.0)),
-                     int(i.get('timestamp',0)), str(i.get('data_type','daily'))))
-                ok += 1
-            except Exception as e:
-                # 记录具体失败信息，便于排查
-                fail += 1
-                logger.error(f"[DB] buffer_insert_daily failed: symbol={i.get('symbol')}, date={i.get('date')}, error={e}")
-                continue
-        conn.commit()
-        conn.close()
-        if fail:
-            logger.warning(f"[DB] buffer_insert_daily: {ok} ok, {fail} failed")
-        else:
-            logger.debug(f"[DB] buffer_insert_daily: {ok} rows inserted")
+    enqueue({"type": T_DAILY, "rows": data_list})
 
 def buffer_insert_periodic(data_list, period=None):
+    """写入 market_data_periodic（生产者：立即入队，不持有锁）"""
     if not data_list: return
-    with _lock:
-        conn = _get_conn()
-        for i in data_list:
-            p = period or i.get('period', 'weekly')
-            conn.execute("INSERT OR REPLACE INTO market_data_periodic VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (i.get('symbol',''), i.get('date',''), p, i.get('open',0), i.get('high',0), i.get('low',0), 
-                 i.get('close',0), i.get('volume',0), i.get('change_pct',0), i.get('timestamp',0)))
-        conn.commit(); conn.close()
+    enqueue({"type": T_PERIODIC, "rows": data_list, "period": period})
 
 def flush_buffer_to_realtime():
-    with _lock:
-        conn = _get_conn()
-        rows = conn.execute("SELECT * FROM write_buffer").fetchall()
-        # 先批量处理，只记录成功的行键；失败的保留在 buffer 中下次重试
-        processed_keys = []   # [(symbol, name), ...]
-        error_count = 0
-        for r in rows:
-            try:
-                d = json.loads(r["data"])
-                conn.execute("""
-                    INSERT OR REPLACE INTO market_data_realtime
-                    (symbol, name, price, change_pct, volume, market, data_type, timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """, (r["symbol"], r["name"], d.get("price",0), d.get("change_pct",0),
-                      d.get("volume",0), d.get("market",""), d.get("data_type",""), d.get("timestamp",0)))
-                processed_keys.append((r["symbol"], r["name"]))
-            except Exception:
-                error_count += 1
-                continue
-        # 只删除成功写入的记录；失败的留在 buffer，下次重试
-        if processed_keys:
-            placeholders = ",".join(["(?,?)"] * len(processed_keys))
-            flat = [item for pair in processed_keys for item in pair]
-            conn.execute(f"DELETE FROM write_buffer WHERE (symbol, name) IN (VALUES {placeholders})", flat)
-        conn.commit()
-        conn.close()
-        if error_count:
-            logger.warning(f"[DB] flush: {len(processed_keys)} ok, {error_count} failed（保留buffer）")
+    """将 write_buffer 刷新到 market_data_realtime（生产者：立即入队，不持有锁）"""
+    enqueue({"type": T_REALTIME, "rows": []})
 
 def get_latest_prices(symbols=None, data_type='realtime'):
     # WAL模式下读操作无需全局锁（SQLite支持并发读）
@@ -301,36 +236,10 @@ def init_all_stocks_table():
         conn.close()
 
 def upsert_all_stocks(rows):
-    """批量写入全市场个股数据"""
+    """批量写入全市场个股数据（生产者：立即入队，不持有锁）"""
     if not rows:
         return
-    with _lock:
-        conn = _get_conn()
-        conn.executemany("""
-            INSERT OR REPLACE INTO market_all_stocks
-            (symbol, code, name, price, change_pct, per, pb, mktcap, nmc, volume, amount, turnover, price_high, price_low, open_price, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            (
-                r['symbol'], r['code'], r['name'],
-                float(r.get('trade') or 0),
-                float(r.get('changepercent') or 0),
-                float(r.get('per') or 0) if r.get('per') not in (None, '') else None,
-                float(r.get('pb') or 0) if r.get('pb') not in (None, '') else None,
-                float(r.get('mktcap') or 0),
-                float(r.get('nmc') or 0),
-                float(r.get('volume') or 0),
-                float(r.get('amount') or 0),
-                float(r.get('turnoverratio') or 0),
-                float(r.get('high') or 0),
-                float(r.get('low') or 0),
-                float(r.get('open') or 0),
-                __import__('time').time()
-            )
-            for r in rows
-        ])
-        conn.commit()
-        conn.close()
+    enqueue({"type": T_ALLSTOCKS, "rows": rows})
 
 def get_all_stocks(limit=5000, offset=0, search=None):
     """获取全市场个股列表，支持搜索"""
