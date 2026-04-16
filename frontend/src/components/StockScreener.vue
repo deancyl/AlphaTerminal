@@ -117,9 +117,9 @@
     </div>
 
     <!-- ── 表头（可排序列）────────────────────────────────── -->
-    <div class="overflow-x-auto overflow-y-auto flex-1 min-h-0">
+    <div class="overflow-x-auto flex-none">
       <table class="w-full text-xs whitespace-nowrap">
-        <thead class="sticky top-0 z-10 bg-terminal-panel">
+        <thead class="bg-terminal-panel">
           <tr class="text-terminal-dim border-b border-theme">
             <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8"
                 @click="setSort('seq')">#</th>
@@ -153,88 +153,81 @@
             </th>
           </tr>
         </thead>
-        <tbody class="overflow-y-auto">
-          <tr v-for="stock in pageStocks" :key="stock.code"
-              class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
-              @click="handleClick(stock)">
-            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px]">{{ stock.seq }}</td>
-            <td class="py-0.5 px-0.5 text-theme-primary text-[10px] max-w-[70px] truncate" :title="stock.name">{{ stock.name }}</td>
-            <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-[62px]">{{ stock.code }}</td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]">{{ fmtPrice(stock.price) }}</td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[10px]"
-                :class="stock.chg_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ fmtPct(stock.chg_pct) }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
-                :class="stock.chg >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ fmtChg(stock.chg) }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
-                :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">
-              {{ fmtTurnover(stock.turnover) }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px] text-terminal-dim">
-              {{ formatAmt(stock.amount) }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
-                :class="(stock.pe || 0) <= 0 ? 'text-terminal-dim' : ((stock.pe || 0) < 15 ? 'text-bullish' : ((stock.pe || 0) > 60 ? 'text-bearish' : 'text-theme-primary'))">
-              {{ stock.pe ? stock.pe.toFixed(1) : '-' }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px]"
-                :class="(stock.pb || 0) <= 0 ? 'text-terminal-dim' : ((stock.pb || 0) < 1 ? 'text-bullish' : ((stock.pb || 0) > 5 ? 'text-bearish' : 'text-theme-primary'))">
-              {{ stock.pb ? stock.pb.toFixed(2) : '-' }}
-            </td>
-          </tr>
-          <!-- F1修复: 股票列表骨架屏 -->
-          <tr v-if="loading && !pageStocks.length">
-            <td colspan="8" class="py-1">
-              <div class="space-y-1 animate-pulse">
-                <div v-for="i in 8" :key="i" class="flex gap-1">
-                  <div class="h-3 rounded bg-terminal-panel w-10"></div>
-                  <div class="h-3 rounded bg-terminal-panel w-16"></div>
-                  <div class="flex-1 h-3 rounded bg-terminal-panel"></div>
-                  <div class="h-3 rounded bg-terminal-panel w-14"></div>
-                  <div class="h-3 rounded bg-terminal-panel w-14"></div>
-                  <div class="h-3 rounded bg-terminal-panel w-10"></div>
-                </div>
-              </div>
-            </td>
-          </tr>
-          <tr v-else-if="!pageStocks.length">
-            <td colspan="8" class="py-8 text-center text-terminal-dim text-xs">
-              {{ allStocks.length === 0 ? '数据加载中...' : '无符合条件的数据' }}
-            </td>
-          </tr>
-        </tbody>
       </table>
     </div>
 
-    <!-- ── 分页控制器 ─────────────────────────────────────── -->
-    <div v-if="pages > 1" class="flex items-center justify-between mt-1 shrink-0">
-      <span class="text-[10px] text-terminal-dim">
-        第 {{ page }} / {{ pages }} 页
-      </span>
-      <div class="flex items-center gap-1">
-        <button class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="page === 1 ? 'bg-theme-tertiary text-theme-tertiary cursor-not-allowed' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
-                :disabled="page === 1" @click="prevPage">‹</button>
-
-        <button v-for="p in visiblePages" :key="p"
-                class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="p === page ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
-                @click="goPage(p)">{{ p }}</button>
-
-        <button class="px-2 py-0.5 text-[10px] rounded border transition"
-                :class="page === pages ? 'bg-theme-tertiary text-theme-tertiary cursor-not-allowed' : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
-                :disabled="page === pages" @click="nextPage">›</button>
+    <!-- ── 虚拟滚动列表（仅渲染可见行）────────────────── -->
+    <div v-bind="containerProps" class="flex-1 min-h-0 overflow-y-auto">
+      <div v-bind="wrapperProps">
+        <table class="w-full text-xs whitespace-nowrap">
+          <tbody>
+            <!-- 骨架屏（加载中） -->
+            <tr v-if="loading && !virtualRows.length">
+              <td colspan="10" class="py-1">
+                <div class="space-y-1 animate-pulse">
+                  <div v-for="i in 8" :key="i" class="flex gap-1">
+                    <div class="h-3 rounded bg-terminal-panel w-8"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-16 shrink-0"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-14"></div>
+                    <div class="flex-1 h-3 rounded bg-terminal-panel"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-14"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-12"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-12"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-14"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-10"></div>
+                    <div class="h-3 rounded bg-terminal-panel w-10"></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <!-- 空状态 -->
+            <tr v-else-if="!virtualRows.length">
+              <td colspan="10" class="py-8 text-center text-terminal-dim text-xs">
+                {{ allStocks.length === 0 ? '数据加载中...' : '无符合条件的数据' }}
+              </td>
+            </tr>
+            <!-- 虚拟行 -->
+            <tr v-for="{ data: stock, index } in virtualRows" :key="stock.code + '-' + index"
+                class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
+                @click="handleClick(stock)">
+              <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-8">{{ stock.seq }}</td>
+              <td class="py-0.5 px-0.5 text-theme-primary text-[10px] max-w-[70px] truncate w-[72px] shrink-0" :title="stock.name">{{ stock.name }}</td>
+              <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-14">{{ stock.code }}</td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16">{{ fmtPrice(stock.price) }}</td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16"
+                  :class="stock.chg_pct >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ fmtPct(stock.chg_pct) }}
+              </td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-14"
+                  :class="stock.chg >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ fmtChg(stock.chg) }}
+              </td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
+                  :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">
+                {{ fmtTurnover(stock.turnover) }}
+              </td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-16 text-terminal-dim">
+                {{ formatAmt(stock.amount) }}
+              </td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
+                  :class="(stock.pe || 0) <= 0 ? 'text-terminal-dim' : ((stock.pe || 0) < 15 ? 'text-bullish' : ((stock.pe || 0) > 60 ? 'text-bearish' : 'text-theme-primary'))">
+                {{ stock.pe ? stock.pe.toFixed(1) : '-' }}
+              </td>
+              <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
+                  :class="(stock.pb || 0) <= 0 ? 'text-terminal-dim' : ((stock.pb || 0) < 1 ? 'text-bullish' : ((stock.pb || 0) > 5 ? 'text-bearish' : 'text-theme-primary'))">
+                {{ stock.pb ? stock.pb.toFixed(2) : '-' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <span class="text-[10px] text-terminal-dim">{{ pageSize }}条/页</span>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useVirtualList } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../composables/useMarketStore.js'
 import { normalizeFields } from '../utils/api.js'
@@ -243,10 +236,8 @@ import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
 const { setSymbol } = useMarketStore()
 
 // ── 数据状态 ─────────────────────────────────────────────────────
-const allStocks = ref([])   // 全量股票（一次加载，分页在前端）
+const allStocks = ref([])   // 全量股票（一次加载）
 const loading    = ref(false)
-const page       = ref(1)
-const pageSize   = ref(50)   // 前端分页粒度
 const searchQuery = ref('')   // 全市场搜索
 const sortBy     = ref('chg_pct')
 const asc        = ref(false)
@@ -265,7 +256,7 @@ const filterActive = computed(() =>
   Object.values(flt.value).some(v => v.min !== null || v.max !== null)
 )
 
-// ── 过滤 + 排序（computed，filters 变化自动重算）────────────────
+// ── 过滤（排序职责已剥离到 filteredWithSeq）──────────────────────
 const filteredStocks = computed(() => {
   let list = allStocks.value
 
@@ -305,31 +296,38 @@ const filteredStocks = computed(() => {
   if (flt.value.pb.max !== null && flt.value.pb.max !== '')
     list = list.filter(s => (s.pb || 0) <= flt.value.pb.max)
 
-  // 排序
+  return list
+})
+
+// ── 过滤结果排序后附加 seq（不污染原始数据）────────────────────
+const filteredWithSeq = computed(() => {
   const key = sortBy.value
   const dir = asc.value ? 1 : -1
-  list = [...list].sort((a, b) => {
+  const list = [...filteredStocks.value].sort((a, b) => {
     const av = a[key] ?? 0
     const bv = b[key] ?? 0
     return (av < bv ? -1 : av > bv ? 1 : 0) * dir
   })
-
-  // 重排序号
   list.forEach((s, i) => { s.seq = i + 1 })
   return list
 })
 
-// ── 前端分页 ─────────────────────────────────────────────────────
-const pages = computed(() =>
-  Math.max(1, Math.ceil(filteredStocks.value.length / pageSize.value))
-)
-const pageStocks = computed(() => {
-  const start = (page.value - 1) * pageSize.value
-  return filteredStocks.value.slice(start, start + pageSize.value)
-})
+// ── 虚拟滚动（替代前端分页，只渲染可见行）────────────────────────
+const ROW_HEIGHT = 32   // 每行固定高度（px）
+const LIST_HEIGHT = 400  // 虚拟列表可视区高度
 
-// 过滤条件变化时自动归位第1页
-watch(filteredStocks, () => { page.value = 1 })
+const { list: virtualRows, containerProps, wrapperProps } =
+  useVirtualList(filteredWithSeq, {
+    itemHeight: ROW_HEIGHT,
+    overshoot: 8,
+  })
+
+// 过滤条件变化时自动滚动到顶部
+watch(filteredWithSeq, () => {
+  if (containerProps?.ref?.value) {
+    containerProps.ref.value.scrollTop = 0
+  }
+})
 
 // 搜索防抖（300ms后触发API搜索）
 let searchTimer = null
@@ -339,16 +337,6 @@ watch(searchQuery, () => {
     fetchAllStocks()  // 新API支持服务端搜索
   }, 300)
 })
-
-// ── 可见页码 ─────────────────────────────────────────────────────
-const visiblePages = computed(() => {
-  const p = pages.value
-  if (p <= 5) return Array.from({ length: p }, (_, i) => i + 1)
-  const cur = page.value
-  if (cur <= 3) return [1, 2, 3, 4, 5]
-  if (cur >= p - 2) return [p - 4, p - 3, p - 2, p - 1, p]
-  return [cur - 2, cur - 1, cur, cur + 1, cur + 2]
-});
 
 // ── 加载数据（从全市场缓存 API 加载，支持搜索）────────────────
 async function fetchAllStocks() {
@@ -421,16 +409,7 @@ function setSort(col) {
     sortBy.value = col
     asc.value = false
   }
-  page.value = 1
 }
-
-// ── 分页 ─────────────────────────────────────────────────────────
-function goPage(p) {
-  if (p < 1 || p > pages.value || p === page.value) return
-  page.value = p
-}
-function prevPage() { goPage(page.value - 1) }
-function nextPage() { goPage(page.value + 1) }
 
 // ── 重置过滤 ─────────────────────────────────────────────────────
 function resetFilter() {

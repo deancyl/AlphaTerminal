@@ -952,6 +952,7 @@ const sectorAttribution = computed(() => {
 })
 
 // ── 生命周期 ─────────────────────────────────────────────────
+let _chartRO = null
 onMounted(async () => {
   logger.log('[PortfolioDashboard] mounted, fetching portfolios...')
   await store.fetchPortfolios()
@@ -963,11 +964,29 @@ onMounted(async () => {
   store.startPoll(20_000)
   await nextTick()
   renderChart()
+  // ResizeObserver：只监听自己的容器，不影响其他图表
+  if (chartEl.value) {
+    _chartRO = new ResizeObserver(() => {
+      const w = chartEl.value.offsetWidth
+      const h = chartEl.value.offsetHeight
+      if (w > 0 && h > 0) {
+        console.debug(`[ECharts] 📐 resize PortfolioDashboard @ ${w}×${h}`)
+        chart.value?.resize()
+      }
+    })
+    _chartRO.observe(chartEl.value)
+  }
 })
 
 onUnmounted(() => {
   store.stopPoll()
-  chart.value?.dispose()
+  if (chart.value) {
+    console.debug('[ECharts] 🗑️  disposed instance for PortfolioDashboard')
+    chart.value.dispose()
+    chart.value = null
+  }
+  _chartRO?.disconnect()
+  _chartRO = null
 })
 
 // snapshots 变化时重绘图表
