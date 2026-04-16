@@ -59,7 +59,7 @@
 
     <!-- 无数据 -->
     <div v-if="!latestData && !isLoading" class="flex-1 flex items-center justify-center">
-      <span class="text-terminal-dim text-xs">暂无资金数据</span>
+      <span class="text-terminal-dim text-xs">非交易时段，暂无最新数据</span>
     </div>
 
     <!-- 加载中 -->

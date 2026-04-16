@@ -131,7 +131,7 @@ async function fetchOrderBook() {
 }
 
 function formatPrice(p) {
-  if (!p) return '--'
+  if (!p || p === 0) return '休市中'  // 市场休市时显示
   return p.toFixed(2)
 }
 
