@@ -16,6 +16,7 @@
  *   watch(tick, t => { if (t) applyTick(t) })
  */
 import { ref, computed, onUnmounted } from 'vue'
+import { logger } from '../utils/logger.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -67,7 +68,7 @@ function _newConnection() {
   try {
     _ws = new WebSocket(url)
   } catch (e) {
-    console.error('[MarketStream] WebSocket 创建失败:', e)
+    logger.error('[MarketStream] WebSocket 创建失败:', e)
     _scheduleRetry()
     return
   }
@@ -99,18 +100,18 @@ function _newConnection() {
       // 按 symbol 更新（而不是单一 globalTick）
       globalTicks.value[sym] = data
     } catch (e) {
-      console.warn('[MarketStream] parse error:', e)
+      logger.warn('[MarketStream] parse error:', e)
     }
   }
 
   _ws.onerror = (e) => {
-    console.error('[MarketStream] WS 错误:', e)
+    logger.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
     globalConnected.value = false
   }
 
   _ws.onclose = (e) => {
-    console.log('[MarketStream] 连接关闭:', e.code, e.reason)
+    logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
     globalConnected.value = false
     globalReconnecting.value = false
     _ws = null
@@ -122,7 +123,7 @@ function _newConnection() {
         _scheduleRetry()
       } else {
         globalError.value = '连接失败次数过多，请刷新页面重试'
-        console.error('[MarketStream] 达到最大重试次数，停止重连')
+        logger.error('[MarketStream] 达到最大重试次数，停止重连')
       }
     }
   }
@@ -135,7 +136,7 @@ function _doSubscribe() {
   try {
     _ws.send(JSON.stringify({ action: 'subscribe', symbols: syms }))
   } catch (e) {
-    console.warn('[MarketStream] subscribe failed:', e)
+    logger.warn('[MarketStream] subscribe failed:', e)
   }
 }
 
@@ -146,7 +147,7 @@ function _scheduleRetry() {
   globalReconnecting.value = true
   _retryCount++
   
-  console.log(`[MarketStream] ${(_retryDelay/1000).toFixed(1)}秒后第${_retryCount}次重连...`)
+  logger.log(`[MarketStream] ${(_retryDelay/1000).toFixed(1)}秒后第${_retryCount}次重连...`)
   
   _retryTimer = setTimeout(() => {
     if (subscribedSyms.size > 0) _newConnection()
