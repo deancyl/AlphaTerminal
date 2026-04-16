@@ -52,6 +52,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 
 const props = defineProps({
@@ -697,7 +698,7 @@ async function fetchAndRender() {
     fillHoverBarLatest(_sanitize(lastHistRaw, isMinute))
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
-    console.error('[KLine]', e)
+    logger.error('[KLine]', e)
   } finally {
     isLoading.value = false
   }
@@ -707,15 +708,15 @@ function retryChart() { chartError.value = ''; fetchAndRender() }
 
 // props.symbol 变化时立即重置名称（不等数据加载）
 watch(() => props.symbol, async (sym) => {
-  console.log('[KLine] watch: props.symbol changed', { sym, props: { name: props.name, symbol: props.symbol } })
+  logger.log('[KLine] watch: props.symbol changed', { sym, props: { name: props.name, symbol: props.symbol } })
   // symbol 变化时：先清空旧名称显示（立即响应），等数据回来再显示新名称
   currentName.value = props.name || '指标图表'
-  console.log('[KLine] watch: currentName set to', currentName.value)
+  logger.log('[KLine] watch: currentName set to', currentName.value)
   await fetchAndRender()
-  console.log('[KLine] watch: fetchAndRender completed')
+  logger.log('[KLine] watch: fetchAndRender completed')
   // fetchAndRender 之后用正确的 props.name 更新一次
   currentName.value = props.name || '指标图表'
-  console.log('[KLine] watch: currentName updated to', currentName.value)
+  logger.log('[KLine] watch: currentName updated to', currentName.value)
 })
 
 watch(() => [props.symbol, props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
