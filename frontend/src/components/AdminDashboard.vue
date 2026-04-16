@@ -318,7 +318,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 
-const version = '0.4.138'
+const version = __APP_VERSION__
 const activeTab = ref('sources')
 
 const navItems = [
