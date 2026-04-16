@@ -120,6 +120,9 @@ async def get_source_status():
         proxy = FetcherFactory.get_proxy()
         available = FetcherFactory.list_fetchers()
         
+        # Get circuit breaker stats for all sources
+        all_stats = FetcherFactory.get_all_stats()
+        
         return {
             "code": 0,
             "message": "success",
@@ -127,8 +130,23 @@ async def get_source_status():
                 "current": current,
                 "available": available,
                 "proxy": proxy,
+                "circuit_breakers": all_stats,
             }
         }
     except Exception as e:
         logger.error(f"get_source_status error: {e}")
+        return {"code": 500, "message": str(e)}
+
+
+@router.post("/api/v1/admin/data-sources/reset/{name}")
+async def reset_circuit_breaker(name: str):
+    """重置指定数据源的熔断器"""
+    try:
+        FetcherFactory.reset_circuit_breaker(name)
+        return {
+            "code": 0,
+            "message": f"熔断器 {name} 已重置",
+        }
+    except Exception as e:
+        logger.error(f"reset_circuit_breaker error: {e}")
         return {"code": 500, "message": str(e)}
