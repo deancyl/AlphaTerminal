@@ -11,11 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter
 import httpx
 
-# 设置代理（ akshare 需访问国内服务器）
-os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
-os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
-os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
-os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
+# 代理由 proxy_config.py 统一管理，从环境变量读取
+# 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

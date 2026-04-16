@@ -9,11 +9,7 @@ import threading
 import time
 from datetime import datetime
 
-# ── 确保代理环境变量生效（外网请求必须走代理）────────────────────────
-os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
-os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
-os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
-os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
+# ── 代理由 proxy_config.py 统一管理，从环境变量读取 ──────────────
 
 import akshare as ak
 

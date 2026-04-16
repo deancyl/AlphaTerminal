@@ -54,10 +54,8 @@ class ErrorCode:
     THIRD_PARTY_ERROR = 302
 
 # ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
-os.environ.setdefault("HTTP_PROXY",  "http://192.168.1.50:7897")
-os.environ.setdefault("HTTPS_PROXY", "http://192.168.1.50:7897")
-os.environ.setdefault("http_proxy",  "http://192.168.1.50:7897")
-os.environ.setdefault("https_proxy", "http://192.168.1.50:7897")
+# 代理由 proxy_config.py 统一管理，从环境变量读取
+# 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
 
 _MACRO_CACHE       = {}   # {symbol: {price, change_pct, name, unit, timestamp}}
 _MACRO_CACHE_TTL  = 600  # 10 分钟（Phase 7 延长 TTL）
