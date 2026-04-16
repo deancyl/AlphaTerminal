@@ -215,6 +215,7 @@ import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './composables/useMarketStore.js'
 import { useTheme } from './composables/useTheme.js'
 import { fetchApiBatch } from './utils/api.js'
+import { logger } from './utils/logger.js'
 
 const { ui } = useUiStore()
 const { currentSymbol } = useMarketStore()
@@ -239,9 +240,9 @@ function clearError() {
 const errorComponentKey = ref(0)
 
 onErrorCaptured((err, instance, info) => {
-  console.error('[App] 捕获到错误:', err)
-  console.error('[App] 组件:', instance?.type?.name || instance)
-  console.error('[App] 信息:', info)
+  logger.error('[App] 捕获到错误:', err)
+  logger.error('[App] 组件:', instance?.type?.name || instance)
+  logger.error('[App] 信息:', info)
   hasError.value = true
   errorMessage.value = err.message || err.toString() || '未知错误'
   // 仅标记错误，不刷新整个页面，保持其他组件状态
@@ -274,11 +275,11 @@ const fullscreenSymbol = ref('sh000001')
 const fullscreenName   = ref('上证指数')
 
 function openFullscreenKline({ symbol, name }) {
-  console.log('[DEBUG] openFullscreenKline called', { symbol, name, klineFullscreenBefore: ui.klineFullscreen })
+  logger.log('[DEBUG] openFullscreenKline called', { symbol, name, klineFullscreenBefore: ui.klineFullscreen })
   fullscreenSymbol.value = symbol || 'sh000001'
   fullscreenName.value  = name  || '上证指数'
   ui.klineFullscreen = true
-  console.log('[DEBUG] ui.klineFullscreen set to', ui.klineFullscreen, '| fullscreenSymbol:', fullscreenSymbol.value)
+  logger.log('[DEBUG] ui.klineFullscreen set to', ui.klineFullscreen, '| fullscreenSymbol:', fullscreenSymbol.value)
 }
 
 function toggleLock() {
@@ -291,22 +292,22 @@ function toggleCopilot() {
 
 // Copilot 事件处理
 function showNorthFlow() {
-  console.log('[Copilot] 北向资金')
+  logger.log('[Copilot] 北向资金')
   // 可以在此打开北向资金面板
 }
 
 function showLimitUp() {
-  console.log('[Copilot] 涨停板')
+  logger.log('[Copilot] 涨停板')
   // 可以在此打开涨停板面板
 }
 
 function showLimitDown() {
-  console.log('[Copilot] 跌停板')
+  logger.log('[Copilot] 跌停板')
   // 可以在此打开跌停板面板
 }
 
 function showUnusual() {
-  console.log('[Copilot] 盘中异动')
+  logger.log('[Copilot] 盘中异动')
   // 可以在此打开异动面板
 }
 
@@ -362,7 +363,7 @@ async function fetchMarketData() {
     isInitialLoading.value = false
     loadError.value = null
   } catch (e) {
-    console.error('[App] fetchMarketData error:', e)
+    logger.error('[App] fetchMarketData error:', e)
     // 加载失败，显示错误提示
     loadError.value = e.message || '数据加载失败'
     isInitialLoading.value = false
@@ -377,14 +378,14 @@ const visibility = useDocumentVisibility()
 // 监听可见性变化，页面隐藏时暂停轮询
 watch(visibility, (v) => {
   if (v === 'visible') {
-    console.log('[App] 页面可见，恢复轮询')
+    logger.log('[App] 页面可见，恢复轮询')
     fetchMarketData()  // 立即刷新一次
     if (refreshTimer) {
       clearInterval(refreshTimer)
       refreshTimer = setInterval(fetchMarketData, 30000)
     }
   } else {
-    console.log('[App] 页面隐藏，暂停轮询')
+    logger.log('[App] 页面隐藏，暂停轮询')
     if (refreshTimer) {
       clearInterval(refreshTimer)
       refreshTimer = null
