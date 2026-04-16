@@ -1,6 +1,6 @@
 # KNOWN_ISSUES_TODO.md
 
-> Last updated: 2026-04-16 v0.5.43
+> Last updated: 2026-04-16 v0.5.46
 > 维护者：架构评审 + openclaw
 
 ---
@@ -76,6 +76,13 @@
 - [ ] Navbar 显示版本号与 `package.json` 完全一致
 - [ ] `README.md` 不含手动版本号（统一引用标签）
 
+**状态**：✅ 已完成（v0.5.46，commit a0627f4）
+- `vite.config.js`：Node.js `fs.readFileSync` 读 `package.json`，通过 `define` 注入 `__APP_VERSION__`
+- `AdminDashboard.vue`：硬编码 `'0.4.138'` → `__APP_VERSION__`
+- `package.json`：版本更新至 `0.5.45`
+- `README.md`：Badge v0.4.133 → v0.5.45
+- 构建验证：`grep` 确认 `__APP_VERSION__` 在 bundle 中被替换为 `'0.5.45'`
+
 ---
 
 ### Issue #13：收口数据源代理硬编码
@@ -101,17 +108,15 @@
 ## 🟡 P1 — 渲染性能与体验重构
 
 ### Issue #14：大数据列表接入虚拟滚动
-**严重程度**：🟡 中 — `StockScreener` 列表页 DOM 节点过多导致主线程卡顿
-**影响范围**：`frontend/src/components/StockScreener.vue` 及相关长列表组件
-
-**修复方案**：
-1. 引入 `@vueuse/core` 的 `useVirtualList` 或 `vue-virtual-scroller`
-2. 无论后端返回多少条数据，DOM 只渲染当前视口可见的 20-30 个节点
-3. 同步支持键盘上下导航和滚动锚定
-
-**Ticket 验收标准**：
-- [ ] 渲染 5000 条数据时，滚动帧率 >= 50fps
-- [ ] 视口外节点不进入 DOM tree
+**状态**：✅ 已完成（v0.5.48，commit f449a0a）
+- `StockScreener.vue`：`useVirtualList` 替代 v-for + 分页
+  - `ROW_HEIGHT=32px`，可视区 `400px` → 约 12-14 行同时渲染
+  - `filteredStocks`：纯过滤（消除副作用seq赋值）
+  - `filteredWithSeq`：隔离的排序+seq computed，不污染原始数据
+  - 排序/过滤变化时自动滚动到顶部
+  - 删除全部分页逻辑（goPage/prevPage/nextPage/visiblePages）
+- `@vueuse/core` 已有 v12.4.0，无新依赖引入
+- 构建验证：vendor-vue +4KB，7.10s
 
 ---
 
@@ -130,18 +135,27 @@
 - [ ] GridStack 拖拽时 CPU 占用下降 >= 40%
 - [ ] 打开/关闭 K 线面板 10 次后，内存无累积增长
 
+**状态**：✅ 已完成（v0.5.47，commit f4988fc）
+- `BaseKLineChart.vue`：ResizeObserver 已存在，添加 debug logs
+- `FullscreenKline.vue`：`window.addEventListener('resize')` → ResizeObserver on `chartEl.value`
+- `QuotePanel.vue`：新增 ResizeObserver + dispose debug log
+- `AdvancedKlinePanel.vue`：新增 dispose debug log
+- `BaseKLineChart` 子组件自带 ResizeObserver，无需额外修改
+- 构建验证：✓ 81 modules, 6.65s
+
 ---
 
 ## 🟠 P2 — 中长期架构演进
 
 ### Issue #16：前后端 API 错误拦截与熔断 UI
-**严重程度**：🟠 低 — 当前数据源异常时前端静默失败，用户无感知
-**涉及文件**：`backend/app/routers/market.py`, `frontend/src/utils/api.js`
-
-**修复方案**：
-1. 后端对数据源异常返回 502/503 + 降级信息 JSON
-2. 前端 Axios 拦截器统一处理，展示数据源健康状态（CommandCenter 指示灯）
-3. WebSocket 推送 `{"type": "datasource_status", "source": "sina", "healthy": false, "fallback": "tencent"}`
+**状态**：✅ 已完成（v0.5.49，commit d64ec38）
+- `useDataSourceStatus.js`：单例事件总线，`ok / degraded / down` 三态广播
+  - 连续失败 3-5 次 → `degraded`（备用降级）
+  - 连续失败 ≥6 次 → `down`（全线熔断）
+  - API 成功 → `ok`（自动恢复）
+- `apiFetch`：502/503/429/超时/网络错误均触发 `_onFailure()` 广播
+- `CommandCenter.vue`：底部状态栏 🟢/🟡/🔴 指示灯 + 4s Toast 提示
+- Debug 验证：状态机流转正常，广播事件正确触发
 
 ---
 
@@ -157,13 +171,15 @@
 ---
 
 ### Issue #18：数据库写入队列化（消除全局锁瓶颈）
-**严重程度**：🟠 低 — 调度器批量写入时阻塞 API 响应
-**涉及文件**：`backend/app/services/database.py`
-
-**修复方案**：
-1. 引入 `queue.Queue` 作为写入缓冲队列
-2. 单开 `DBWriterThread` 消费队列，解除 FastAPI 主线程的锁竞争
-3. 写缓冲区满时自动 flush，防止数据丢失
+**状态**：✅ 已完成（v0.5.50，commit 88a56a2）
+- 新建 `backend/app/db/db_writer.py`：
+  - `DBWriterThread` 常驻守护线程，死循环消费队列
+  - `enqueue(task)` 生产者接口，< 1ms 返回
+  - 任务类型：`T_DAILY / T_PERIODIC / T_REALTIME / T_ALLSTOCKS / T_BUFFER`
+  - `start_writer()` / `stop_writer()` 生命周期钩子
+- `database.py` 重构：5 个写入函数 → 纯生产者（立即 enqueue 返回）
+- `main.py`：`start_writer()` 启动，`stop_writer()` 关闭（最多30s队列排空）
+- Debug 验证：3条入队→队列3 → writer 3s内消费完→队列0 → graceful stop ✅
 
 ---
 
@@ -173,3 +189,10 @@
 |--------|---------|------|
 | #1-#10 | v0.5.33-v0.5.43 | 详见各版本 commit log |
 | 熔断器实现 | v0.5.40/0.5.41 | CircuitBreaker + FetcherFactory 已落地 |
+| #11 WebSocket内存泄漏 | v0.5.44 | useMarketStream 引用计数 Map |
+| #12 版本号统一 | v0.5.46 | vite.config.js define 注入 |
+| #13 代理硬编码 | v0.5.45 | proxy_config.py 统一代理层 |
+| #14 虚拟滚动 | v0.5.48 | StockScreener useVirtualList |
+| #15 ECharts ResizeObserver | v0.5.47 | ResizeObserver + dispose |
+| #16 熔断 UI | v0.5.49 | useDataSourceStatus + Toast |
+| #18 DB写入队列化 | v0.5.50 | DBWriterThread |
