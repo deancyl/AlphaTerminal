@@ -31,6 +31,26 @@
 - [ ] 内存 profile 确认无持续增长
 - [ ] 后端 ws.py 正确响应 unsubscribe 指令
 
+**状态**：✅ 已完成（v0.5.44，commit a964471）
+- `subscribedSyms Set` → `subscribedSymRefCount Map`（引用计数）
+- 新增 `unsubscribe(symOrList)`：refcount 归零时精准清理 globalTicks + tickHistory + 后端通知
+- `watch(localSymbol)` 自动 unsubscribe 切换前的旧股票
+- `onUnmounted` 同时触发 unsubscribe(本地symbol) + disconnect(refcount -1)
+- 后端 ws_manager.py 已有 unsubscribe 逻辑，无需修改
+
+---
+
+### Issue #13：收口数据源代理硬编码
+**状态**：✅ 已完成（v0.5.45，commit e3b5fd3）
+- 新增 `backend/app/services/proxy_config.py`：统一配置层
+  - `get_proxy_url()` — 读环境变量 `HTTP_PROXY/http_proxy`，无硬编码
+  - `build_httpx_proxies()` — 构造 httpx proxies dict，为空返回 None（直连）
+  - `setup_environ()` — 同步代理到 os.environ（供 akshare 等库）
+- `data_fetcher.py:701` — 硬编码 proxies → `get_proxies()`
+- `news_fetcher.py:13` — `PROXY_YOUTUBE` → `get_proxy_url()`
+- `quote_source.py` — `proxy_url` 置 null，`_get_proxy()` 走 `build_httpx_proxies()`
+- Debug 测试：带代理 / 无代理 两种 Case 均通过
+
 ---
 
 ### Issue #12：全局版本号统一（Single Source of Truth）
