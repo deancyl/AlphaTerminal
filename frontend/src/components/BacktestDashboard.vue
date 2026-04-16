@@ -145,13 +145,12 @@ const error = ref(null)
 
 async function loadStrategies() {
   try {
+    // apiFetch returns data directly (not wrapped in {code, data})
     const json = await apiFetch('/api/v1/backtest/strategies')
-    if (json.code === 0) {
-      strategies.value = json.data.strategies
-      if (strategies.value.length) {
-        selectedStrategy.value = strategies.value[0]
-        loadStrategy()
-      }
+    strategies.value = json.strategies || []
+    if (strategies.value.length) {
+      selectedStrategy.value = strategies.value[0]
+      loadStrategy()
     }
   } catch (e) {
     error.value = e.message
@@ -185,11 +184,8 @@ async function runBacktest() {
       }
     })
     
-    if (json.code === 0) {
-      result.value = json.data
-    } else {
-      error.value = json.message
-    }
+    // apiFetch returns data directly
+    result.value = json
   } catch (e) {
     error.value = e.message
   } finally {

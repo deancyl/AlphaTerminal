@@ -113,9 +113,9 @@ const props = defineProps({
 defineEmits(['symbol-click'])
 
 const chartEl        = ref(null)
-const chartHeight     = 100  // 缩小给折线图留空间
+const chartHeight     = 150
 const intradayEl      = ref(null)
-const intradayHeight  = 90
+const intradayHeight  = 120
 let   chartInst       = null
 let   intradayInst    = null
 let   refreshTimer    = null
