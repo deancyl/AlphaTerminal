@@ -49,9 +49,15 @@ def update_sectors(sectors: list[dict]):
     """后台 Job 调用此函数更新板块缓存"""
     global _SECTORS_CACHE, _CACHE_READY
     with _LOCK:
-        _SECTORS_CACHE = sectors
+        # 检查是否所有数据都是0，如果是则使用兜底数据
+        non_zero = [s for s in sectors if s.get('change_pct', 0) != 0]
+        if not non_zero:
+            logger.warning("[SectorsCache] All data is 0, using fallback")
+            _SECTORS_CACHE = list(_FALLBACK_SECTORS)
+        else:
+            _SECTORS_CACHE = sectors
         _CACHE_READY = True
-    logger.info(f"[SectorsCache] {len(sectors)} 个板块已缓存")
+    logger.info(f"[SectorsCache] {len(_SECTORS_CACHE)} 个板块已缓存")
 
 
 def get_sectors() -> list[dict]:

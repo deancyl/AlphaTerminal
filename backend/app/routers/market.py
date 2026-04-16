@@ -437,21 +437,24 @@ async def market_overview():
     db_symbols = {r["symbol"]: r for r in rows}
     
     for sym, label in wind_labels.items():
-        if sym in db_symbols:
-            row = db_symbols[sym]
-            wind_data[sym] = {
-                "name": row.get("name", label[0]),
-                "price": row.get("price", 0),
-                "change_pct": row.get("change_pct", 0),
-                "volume": row.get("volume", 0),
-                "market": label[1],
-                "status": label[2],
-            }
-        else:
-            # DB 无此标的时回退 Sina（恒生/纳斯达克可能不在 A 股 DB 中）
-            sina_data = _get_cached_wind()
-            if sym in sina_data:
-                wind_data[sym] = {**sina_data[sym], "status": label[2]}
+        row = db_symbols.get(sym)
+        price = row.get('price', 0) if row else 0
+        
+        # 修复：如果价格为0，使用昨日收盘价作为兜底
+        if price == 0:
+            from app.db.database import get_daily_history
+            daily = get_daily_history(sym, limit=1)
+            if daily:
+                price = daily[0].get('close', 0)
+        
+        wind_data[sym] = {
+            "name": (row.get("name", label[0]) if row else label[0]),
+            "price": price,
+            "change_pct": (row.get("change_pct", 0) if row and price else 0),
+            "volume": (row.get("volume", 0) if row else 0),
+            "market": label[1],
+            "status": label[2],
+        }
     
     result = success_response({
         "wind": wind_data,
@@ -474,6 +477,17 @@ async def market_china_all():
         is_open, status = is_market_open("A_SHARE")
         # 统一从数据库 market_data_realtime 读取，确保所有API报价一致
         rows = get_latest_prices(CHINA_ALL_SYMBOLS)
+        
+        # 修复：如果价格为0，使用昨日收盘价（从daily表获取）
+        for row in rows:
+            if row.get('price', 0) == 0 or row.get('price') is None:
+                from app.db.database import get_daily_history
+                sym = row.get('symbol')
+                daily = get_daily_history(sym, limit=1)
+                if daily:
+                    row['price'] = daily[0].get('close', 0)
+                    row['change_pct'] = daily[0].get('change_pct', 0)
+        
         return success_response({
             "china_all": _serialize_price_rows(rows, include_status=True, status=status),
             "meta": {"market_open": is_open, "status": status}
