@@ -88,6 +88,9 @@ async def run_backtest(req: BacktestRequest):
     """执行回测"""
     import sqlite3
     
+    # 标准化 symbol：移除 sh/sz 前缀（数据库存储无前缀）
+    db_symbol = req.symbol.replace("sh", "").replace("sz", "")
+    
     # 获取历史数据
     conn = _get_conn()
     try:
@@ -96,7 +99,7 @@ async def run_backtest(req: BacktestRequest):
             FROM market_data_daily
             WHERE symbol = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
-        """, (req.symbol, req.start_date, req.end_date)).fetchall()
+        """, (db_symbol, req.start_date, req.end_date)).fetchall()
         
         if len(rows) < 30:
             return {"code": 1, "message": f"数据不足，需至少30条，实际{len(rows)}条"}
