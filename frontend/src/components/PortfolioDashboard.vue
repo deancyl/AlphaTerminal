@@ -498,6 +498,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { logger } from '../utils/logger.js'
 // echarts 从 CDN 加载 via window.echarts
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 
@@ -952,12 +953,12 @@ const sectorAttribution = computed(() => {
 
 // ── 生命周期 ─────────────────────────────────────────────────
 onMounted(async () => {
-  console.log('[PortfolioDashboard] mounted, fetching portfolios...')
+  logger.log('[PortfolioDashboard] mounted, fetching portfolios...')
   await store.fetchPortfolios()
-  console.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.value?.length)
-  console.log('[PortfolioDashboard] activePid:', store.activePid?.value)
+  logger.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.value?.length)
+  logger.log('[PortfolioDashboard] activePid:', store.activePid?.value)
   const pid = store.activePid?.value ?? store.activePid
-  console.log('[PortfolioDashboard] pid for fetchAll:', pid)
+  logger.log('[PortfolioDashboard] pid for fetchAll:', pid)
   if (pid) await store.fetchAll(pid)
   store.startPoll(20_000)
   await nextTick()
