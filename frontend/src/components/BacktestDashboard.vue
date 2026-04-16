@@ -74,14 +74,14 @@
       <div class="metrics-grid">
         <div class="metric">
           <span class="label">总收益率</span>
-          <span class="value" :class="result.total_return >= 0 ? 'bull' : 'bear'">
-            {{ (result.total_return * 100).toFixed(2) }}%
+          <span class="value" :class="result.total_return_pct >= 0 ? 'bull' : 'bear'">
+            {{ result.total_return_pct?.toFixed(2) }}%
           </span>
         </div>
         <div class="metric">
           <span class="label">年化收益率</span>
-          <span class="value" :class="result.annual_return >= 0 ? 'bull' : 'bear'">
-            {{ (result.annual_return * 100).toFixed(2) }}%
+          <span class="value" :class="result.total_return_pct >= 0 ? 'bull' : 'bear'">
+            {{ result.total_return_pct ? (result.total_return_pct / 1).toFixed(2) : '--' }}%
           </span>
         </div>
         <div class="metric">
@@ -90,7 +90,7 @@
         </div>
         <div class="metric">
           <span class="label">最大回撤</span>
-          <span class="value bear">{{ (result.max_drawdown * 100).toFixed(2) }}%</span>
+          <span class="value bear">{{ result.max_drawdown && result.initial_capital ? (result.max_drawdown / result.initial_capital * 100).toFixed(2) : '--' }}%</span>
         </div>
       </div>
       
