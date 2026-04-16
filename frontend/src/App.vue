@@ -40,19 +40,25 @@
   <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
+    <!-- ━━━ 移动端 Sidebar 遮罩层 ━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div v-if="isMobile && isSidebarOpen" class="fixed inset-0 bg-black/50 z-[9999]" @click="isSidebarOpen = false" />
+
     <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
-    <Sidebar
-      :is-open="isSidebarOpen"
-      :active-id="currentView"
-      @navigate="handleSidebarNavigate"
-      @close="isSidebarOpen = false"
-    />
+    <!-- 桌面端：内联 sidebar | 移动端：固定定位 overlay -->
+    <div :class="isMobile ? 'fixed left-0 top-0 h-full z-[10000] transition-transform' : 'relative'" :style="isMobile ? { transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)' } : {}">
+      <Sidebar
+        :is-open="isSidebarOpen"
+        :active-id="currentView"
+        @navigate="handleSidebarNavigate; isSidebarOpen = false"
+        @close="isSidebarOpen = false"
+      />
+    </div>
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
     <main
       class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
       style="overflow-y:auto;overflow-x:hidden"
-      :style="{ width: isCopilotOpen ? 'calc(100% - 340px)' : '100%' }"
+      :style="{ width: isMobile ? '100%' : (isCopilotOpen ? 'calc(100% - 340px)' : '100%') }"
     >
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
@@ -68,12 +74,14 @@
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
         </div>
         <div class="flex items-center gap-3 text-xs text-terminal-dim">
-          <span id="clock" class="font-mono">{{ currentTime }}</span>
+          <!-- 仅桌面端显示时钟 -->
+          <span v-if="!isMobile" id="clock" class="font-mono">{{ currentTime }}</span>
           <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
             ● LIVE
           </span>
-          <!-- 🔒 锁定/解锁按钮 -->
+          <!-- 仅桌面端显示锁定按钮（手机端不需要拖拽） -->
           <button
+            v-if="!isMobile"
             class="flex items-center gap-1 px-2.5 py-1 rounded border text-xs transition"
             :class="isLocked
               ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
@@ -150,11 +158,14 @@
       </div>
     </main>
 
-    <!-- ━━━ 右侧 Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- 桌面端：右侧 sidebar | 移动端：底部抽屉 (bottom sheet) -->
     <aside
       v-show="isCopilotOpen"
-      class="flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden"
-      style="width: 340px; max-width: 340px;"
+      :class="isMobile 
+        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[80vh] rounded-t-2xl border-t-2 border-theme' 
+        : 'flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden'"
+      :style="isMobile ? { width: '100%', maxWidth: '100%' } : { width: '340px', maxWidth: '340px' }"
     >
       <CopilotSidebar
         :market-overview="marketOverview"
@@ -178,8 +189,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, onErrorCaptured, watch } from 'vue'
-import { useDocumentVisibility, useIntervalFn } from '@vueuse/core'
+import { ref, onMounted, onUnmounted, onErrorCaptured, watch, computed } from 'vue'
+import { useDocumentVisibility, useIntervalFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
@@ -246,6 +257,8 @@ function openFuturesFullscreen({ symbol }) {
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const isLocked = ref(true)     // 网格默认锁定
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
 const fullscreenSymbol = ref('sh000001')
