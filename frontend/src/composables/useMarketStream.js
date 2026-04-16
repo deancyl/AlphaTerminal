@@ -15,7 +15,7 @@
  *   connect('600519')
  *   watch(tick, t => { if (t) applyTick(t) })
  */
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 
 // WebSocket 基础 URL 配置
@@ -50,12 +50,13 @@ const globalConnected = ref(false)
 const globalError = ref(null)
 const globalReconnecting = ref(false)
 
-// 当前已订阅的符号集合（去重）
-const subscribedSyms = new Set()
+// 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
+// 同一 symbol 被多个组件关注时，计数 > 1；计数归零才真正清理
+const subscribedSymRefCount = new Map()
 
-// 数据历史限制（防止内存泄漏）
+// 数据历史限制（防止内存泄漏），按 symbol 分开统计
 const MAX_TICK_HISTORY = 1000
-const tickHistory = []
+const tickHistory = {}
 
 // ── 内部函数 ──────────────────────────────────────────────────
 
@@ -79,7 +80,9 @@ function _newConnection() {
     globalReconnecting.value = false
     _retryDelay = 2000
     _retryCount = 0
-    _doSubscribe()
+    // 重连时重新订阅所有仍有引用的 symbol
+    const activeSyms = [...subscribedSymRefCount.keys()]
+    if (activeSyms.length) _doSubscribe(activeSyms)
   }
 
   _ws.onmessage = (event) => {
@@ -118,7 +121,7 @@ function _newConnection() {
     
     // 1000 = 正常关闭，不重连
     // 1006 = abnormal closure，需要重连
-    if (e.code !== 1000 && subscribedSyms.size > 0) {
+    if (e.code !== 1000 && subscribedSymRefCount.size > 0) {
       if (_retryCount < _MAX_RETRIES) {
         _scheduleRetry()
       } else {
@@ -129,14 +132,23 @@ function _newConnection() {
   }
 }
 
-function _doSubscribe() {
+function _doSubscribe(syms) {
   if (!_ws || _ws.readyState !== WebSocket.OPEN) return
-  const syms = [...subscribedSyms]
-  if (!syms.length) return
+  if (!syms || !syms.length) return
   try {
     _ws.send(JSON.stringify({ action: 'subscribe', symbols: syms }))
   } catch (e) {
     logger.warn('[MarketStream] subscribe failed:', e)
+  }
+}
+
+function _doUnsubscribe(syms) {
+  if (!_ws || _ws.readyState !== WebSocket.OPEN) return
+  if (!syms || !syms.length) return
+  try {
+    _ws.send(JSON.stringify({ action: 'unsubscribe', symbols: syms }))
+  } catch (e) {
+    logger.warn('[MarketStream] unsubscribe failed:', e)
   }
 }
 
@@ -150,7 +162,7 @@ function _scheduleRetry() {
   logger.log(`[MarketStream] ${(_retryDelay/1000).toFixed(1)}秒后第${_retryCount}次重连...`)
   
   _retryTimer = setTimeout(() => {
-    if (subscribedSyms.size > 0) _newConnection()
+    if (subscribedSymRefCount.size > 0) _newConnection()
   }, _retryDelay)
   
   _retryDelay = Math.min(_retryDelay * 1.5, _MAX_DELAY)
@@ -161,38 +173,75 @@ function _scheduleRetry() {
 export function useMarketStream(initialSymbol = '') {
   const localSymbol = ref(initialSymbol)
 
-  // 组件 mount 时注册
+  // 组件 mount 时注册（使用引用计数）
   _connectedCount.value++
   if (initialSymbol) {
-    subscribedSyms.add(initialSymbol)
+    subscribedSymRefCount.set(initialSymbol, (subscribedSymRefCount.get(initialSymbol) || 0) + 1)
     if (!_ws && globalConnected.value === false) {
       _newConnection()
     } else if (_ws && _ws.readyState === WebSocket.OPEN) {
-      _doSubscribe()
+      _doSubscribe([initialSymbol])
     }
   }
 
   function connect(symOrList) {
     // 取消待执行的断开，避免闪断
     cancelPendingDisconnect()
-    
+
     const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
+    const newSyms = []   // 本次 connect 新增的 symbol（引用从 0→1）
     syms.forEach(s => {
-      if (s) {
-        subscribedSyms.add(s)
-        localSymbol.value = s
+      if (!s) return
+      const currentCount = subscribedSymRefCount.get(s) || 0
+      subscribedSymRefCount.set(s, currentCount + 1)
+      localSymbol.value = s
+      if (currentCount === 0) {
+        // 该 symbol 之前无有效订阅，本次是新增
+        newSyms.push(s)
       }
     })
+
     if (!_ws) {
       _newConnection()
     } else if (_ws.readyState === WebSocket.OPEN) {
-      _doSubscribe()
+      // 只向服务端订阅本次新增的 symbol（已在活跃列表的不重复订阅）
+      if (newSyms.length) _doSubscribe(newSyms)
+    }
+  }
+
+  /**
+   * 精准取消订阅（引用计数版本）
+   * - 减少 refcount，不归零不清理
+   * - refcount 归零时：移除订阅、清理 globalTicks、清理 tickHistory、通知后端
+   */
+  function unsubscribe(symOrList) {
+    const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
+    const symsToDrop = []  // refcount 归零，需要彻底清理的
+
+    syms.forEach(sym => {
+      if (!sym) return
+      const count = subscribedSymRefCount.get(sym) || 0
+      if (count > 1) {
+        subscribedSymRefCount.set(sym, count - 1)
+      } else if (count === 1) {
+        subscribedSymRefCount.delete(sym)
+        symsToDrop.push(sym)
+        // 三重清理：globalTicks + tickHistory
+        delete globalTicks.value[sym]
+        delete tickHistory[sym]
+      }
+      // count === 0：本来就没订阅，跳过
+    })
+
+    // 通知后端停止推送已彻底取消订阅的 symbol
+    if (symsToDrop.length && _ws && _ws.readyState === WebSocket.OPEN) {
+      _doUnsubscribe(symsToDrop)
     }
   }
 
   let _disconnectTimer = null
 
-function disconnect() {
+  function disconnect() {
     _connectedCount.value = Math.max(0, _connectedCount.value - 1)
     if (_connectedCount.value <= 0) {
       // 延迟 200ms 关闭，避免路由切换时的闪断
@@ -206,8 +255,10 @@ function disconnect() {
           _ws = null
           globalConnected.value = false
           globalReconnecting.value = false
-          subscribedSyms.clear()
-          tickHistory.length = 0
+          subscribedSymRefCount.clear()
+          // 清理所有 tickHistory
+          Object.keys(tickHistory).forEach(k => delete tickHistory[k])
+          Object.keys(globalTicks.value).forEach(k => delete globalTicks.value[k])
           _retryCount = 0
           _retryDelay = 2000
         }
@@ -235,7 +286,22 @@ function cancelPendingDisconnect() {
   }
   _startHeartbeat()
 
-  onUnmounted(disconnect)
+  // 自动 unsubscribe 旧 symbol（组件切换股票时）
+  let _prevSymbol = initialSymbol
+  watch(localSymbol, (newSym, oldSym) => {
+    if (oldSym && oldSym !== newSym && oldSym === _prevSymbol) {
+      unsubscribe(oldSym)
+    }
+    _prevSymbol = newSym
+  })
+
+  // 组件卸载时：清理该组件关注的 symbol（引用计数 -1）
+  onUnmounted(() => {
+    if (localSymbol.value) {
+      unsubscribe(localSymbol.value)
+    }
+    disconnect()
+  })
 
   return {
     // 直接返回当前 symbol 的 tick（推荐用法）
@@ -248,9 +314,10 @@ function cancelPendingDisconnect() {
     symbol: localSymbol,
     connect,
     disconnect,
+    unsubscribe,
     // 获取连接统计
     getStats: () => ({
-      subscribedCount: subscribedSyms.size,
+      subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
       retryCount: _retryCount,
       connectionCount: _connectedCount.value
