@@ -335,12 +335,12 @@ async def market_macro():
 def _serialize_price_row(row: dict, include_status: bool = False, status: str = None) -> dict:
     """
     统一序列化价格数据行
-    
+
     Args:
         row: 数据库原始行数据
         include_status: 是否包含市场状态字段
         status: 市场状态值（仅当 include_status=True 时有效）
-    
+
     Returns:
         标准化后的数据字典
     """
@@ -413,7 +413,7 @@ def _get_cached_wind(force=False):
 @router.get("/market/overview")
 def market_overview():
     """
-    市场概览 — 风向标视图（实时调 Sina，10秒缓存）
+    市场概览 - 风向标视图（实时调 Sina，10秒缓存）
     包含：上证、沪深300、恒生、纳斯达克（动态交易状态）
     """
     is_open_cn, status_cn = is_market_open("A_SHARE")
@@ -434,18 +434,18 @@ def market_overview():
     rows = get_latest_prices(WIND_SYMBOLS)
     wind_data = {}
     db_symbols = {r["symbol"]: r for r in rows}
-    
+
     for sym, label in wind_labels.items():
         row = db_symbols.get(sym)
         price = row.get('price', 0) if row else 0
-        
+
         # 修复：如果价格为0，使用昨日收盘价作为兜底
         if price == 0:
             from app.db.database import get_daily_history
             daily = get_daily_history(sym, limit=1)
             if daily:
                 price = daily[0].get('close', 0)
-        
+
         wind_data[sym] = {
             "name": (row.get("name", label[0]) if row else label[0]),
             "price": price,
@@ -454,7 +454,7 @@ def market_overview():
             "market": label[1],
             "status": label[2],
         }
-    
+
     result = success_response({
         "wind": wind_data,
         "meta": {
@@ -476,7 +476,7 @@ def market_china_all():
         is_open, status = is_market_open("A_SHARE")
         # 统一从数据库 market_data_realtime 读取，确保所有API报价一致
         rows = get_latest_prices(CHINA_ALL_SYMBOLS)
-        
+
         # 修复：如果价格为0，使用昨日收盘价（从daily表获取）
         for row in rows:
             if row.get('price', 0) == 0 or row.get('price') is None:
@@ -486,7 +486,7 @@ def market_china_all():
                 if daily:
                     row['price'] = daily[0].get('close', 0)
                     row['change_pct'] = daily[0].get('change_pct', 0)
-        
+
         return success_response({
             "china_all": _serialize_price_rows(rows, include_status=True, status=status),
             "meta": {"market_open": is_open, "status": status}
@@ -506,16 +506,16 @@ def market_all_stocks(request: Request):
     try:
         from app.db.database import get_all_stocks, get_all_stocks_count
         from fastapi import Query
-        
+
         # 获取参数 (从 Request 中提取)
         params = dict(request.query_params)
         search = params.get('search', '').strip()
         page = max(1, int(params.get('page', 1)))
         page_size = min(200, max(1, int(params.get('page_size', 50))))
         offset = (page - 1) * page_size
-        
+
         total, rows = get_all_stocks(limit=page_size, offset=offset, search=search if search else None)
-        
+
         return success_response({
             "stocks": rows,
             "total": total,
@@ -819,12 +819,12 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
 async def get_fund_flow():
     """市场资金流向（超大单/大单/中单/小单主力净流入）"""
     import akshare as ak
-    
+
     try:
         df = ak.stock_market_fund_flow()
         # 获取最近30天数据
         df = df.tail(30)
-        
+
         result = []
         for _, row in df.iterrows():
             result.append({
@@ -842,7 +842,7 @@ async def get_fund_flow():
                 "small_net": int(float(row.get("小单净流入-净额", 0) or 0)),
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
-        
+
         return success_response({
             "items": result,
             "total": len(result),
@@ -1039,7 +1039,7 @@ async def futures_history(
     limit: int = 2000,
 ):
     """
-    期货历史行情 — 直连 AkShare Sina，无数据库层。
+    期货历史行情 - 直连 AkShare Sina，无数据库层。
 
     周期：
       daily   日K（主力连续合约，symbol=IF0/RB0/...）
@@ -1221,7 +1221,7 @@ async def market_global():
 @router.get("/market/sectors")
 async def market_sectors():
     """
-    真实行业板块数据 — Task 1: 毫秒级响应
+    真实行业板块数据 - Task 1: 毫秒级响应
     所有 akshare 调用全部移到后台 Job，API 只读 _SECTORS_CACHE
     """
     try:
@@ -1525,12 +1525,12 @@ async def ping_all_sources():
     """主动探测所有数据源状态"""
     from app.services import quote_source
     import time
-    
+
     results = {}
     test_symbol = "sh000001"
     test_hk = "hk00700"
     test_us = "AAPL"
-    
+
     # 解析器映射
     parsers = {
         # A股
@@ -1543,7 +1543,7 @@ async def ping_all_sources():
         # 美股
         "alpha_vantage": (quote_source._parse_alpha_vantage_quote, test_us),
     }
-    
+
     # 遍历所有配置的源
     for source_name in quote_source.DATA_SOURCES.keys():
         try:
@@ -1552,11 +1552,11 @@ async def ping_all_sources():
             else:
                 results[source_name] = {"status": "unknown", "latency": None}
                 continue
-            
+
             start = time.time()
             result = parse_func(test_sym)
             latency = (time.time() - start) * 1000
-            
+
             if result and result.get('latency_ms'):
                 results[source_name] = {"status": "ok", "latency": round(latency, 1)}
             else:
@@ -1564,7 +1564,7 @@ async def ping_all_sources():
         except Exception as e:
             print(f"[Ping Error] {source_name}: {type(e).__name__}: {str(e)[:50]}")
             results[source_name] = {"status": "error", "latency": None}
-    
+
     return success_response(results)
 
 
@@ -1643,15 +1643,15 @@ async def get_system_info():
     import psutil
     from app.services.sectors_cache import is_ready as sectors_ready
     from app.services.news_engine import is_cache_ready as news_ready
-    
+
     try:
         from version import __version__
         backend_version = __version__
     except ImportError:
         backend_version = "0.5.51"
-    
+
     frontend_version = _read_frontend_version()
-    
+
     return success_response({
         "backend_version": backend_version,
         "frontend_version": frontend_version,
@@ -1674,11 +1674,11 @@ async def get_system_info():
 async def get_order_book(symbol: str):
     """Level 2 10档买卖盘口数据（实时）"""
     norm = _normalize_symbol(symbol)
-    
+
     # 转换为新浪格式
     # 判断是否为指数（上证sh000001, 深证sz399001等）
     code_digits = norm[2:]  # 去掉sh/sz后的数字部分
-    
+
     # 简单判断: 000001-009999 通常是指数, 600000以上是股票
     is_index = False
     try:
@@ -1688,7 +1688,7 @@ async def get_order_book(symbol: str):
             is_index = True
     except:
         pass
-    
+
     if is_index:
         # 指数没有Level 2数据，返回说明
         return success_response({
@@ -1698,7 +1698,7 @@ async def get_order_book(symbol: str):
             "bids": [],
             "source": "N/A"
         })
-    
+
     # 个股: 正常获取Level 2数据
     if norm.startswith('sh'):
         sina_code = f'sh{norm[2:]}'
@@ -1706,32 +1706,32 @@ async def get_order_book(symbol: str):
         sina_code = f'sz{norm[2:]}'
     else:
         sina_code = norm
-    
+
     url = f"https://hq.sinajs.cn/list={sina_code}"
     headers = {"Referer": "https://finance.sina.com.cn"}
-    
+
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url, headers=headers)
             text = resp.text
-            
+
             # DEBUG
             logger.info(f"[order_book] symbol={symbol}, norm={norm}, sina_code={sina_code}, text_len={len(text)}")
-            
+
             # 解析数据
             import re
             match = re.search(r'="(.+)"', text)
             if not match:
                 return error_response(ErrorCode.NOT_FOUND, "无数据")
-            
+
             fields = match.group(1).split(',')
             if len(fields) < 30:
                 return error_response(ErrorCode.NOT_FOUND, "数据不足")
-            
+
             # 解析10档数据
             # 字段10-19是卖盘(5档): [卖5量,卖5价,卖4量,卖4价,卖3量,卖3价,卖2量,卖2价,卖1量,卖1价]
             # 字段20-29是买盘(5档): [买1量,买1价,买2量,买2价,买3量,买3价,买4量,买4价,买5量,买5价]
-            
+
             asks = []
             # 卖盘: 字段10-19 (卖5到卖1)
             for i in range(10, 20, 2):
@@ -1742,7 +1742,7 @@ async def get_order_book(symbol: str):
                     "price": price,
                     "volume": vol
                 })
-            
+
             bids = []
             for i in range(20, 30, 2):
                 vol = int(fields[i]) if fields[i] and fields[i].isdigit() else 0
@@ -1752,7 +1752,7 @@ async def get_order_book(symbol: str):
                     "price": price,
                     "volume": vol
                 })
-            
+
             return success_response({
                 "symbol": symbol,
                 "timestamp": int(time.time() * 1000),
@@ -1773,20 +1773,20 @@ async def get_order_book(symbol: str):
 async def market_quote_v2(symbol: str):
     """
     V2 实时行情接口 - 使用 FetcherFactory 数据源抽象层。
-    
+
     直接从数据源获取实时报价，不依赖本地数据库。
     支持熔断器自动降级（失败3次自动切换到备用数据源）。
     """
     try:
-        async def fetch_quote(fetcher, sym):
-            return await fetcher.get_quote(sym)
-        
-        # 使用 fetch_with_fallback 自动降级
-        data = await fetch_with_fallback(fetch_quote, symbol)
-        
+        fetcher = FetcherFactory.get_fetcher()
+        if not fetcher:
+            return error_response(404, "无可用数据源")
+
+        data = await fetcher.get_quote(symbol)
+
         if not data:
-            return error_response(404, f"获取 {symbol} 数据失败，所有数据源均不可用")
-        
+            return error_response(404, f"获取 {symbol} 数据失败")
+
         return success_response({
             "symbol": data.get("symbol", symbol),
             "name": data.get("name", symbol),
@@ -1798,7 +1798,7 @@ async def market_quote_v2(symbol: str):
             "low": data.get("low", 0),
             "prev_close": data.get("prev_close", 0),
             "volume": data.get("volume", 0),
-            "source": data.get("source", FetcherFactory.get_current_name()),
+            "source": data.get("source", "sina"),
             "timestamp": int(time.time() * 1000),
         })
     except Exception as e:
