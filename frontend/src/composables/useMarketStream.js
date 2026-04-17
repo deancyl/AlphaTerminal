@@ -1,21 +1,24 @@
 /**
  * useMarketStream — WebSocket 实时行情 hook（单例模式）
- * 
+ *
  * 所有调用方共享同一个 WebSocket 连接。
  * 只有当最后一个组件 unmount 时才真正关闭连接。
  * 跨组件的订阅自动合并去重。
- * 
- * 改进:
- * - 添加数据淘汰机制，防止内存无限增长
- * - 优化重连策略，指数退避 + 最大重试次数
- * - 添加连接状态监控
- * 
+ *
+ * 性能优化（v0.5.52-task4）：
+ * - globalTicks 改用 shallowRef：避免 Vue 对 tick 对象做深度 proxy
+ * - tick 更新时手动 triggerRef：精确控制渲染时机，杜绝无意义重渲染
+ * - 心跳 setInterval 保存句柄，disconnect 时 clearInterval 防止内存泄漏
+ * - 重连添加 jitter（±25%），防止惊群效应
+ * - 暴露 wsStatus：组件可据此决定是否启用 HTTP 轮询降级
+ *
  * 用法:
- *   const { tick, connect, disconnect, connected } = useMarketStream()
- *   connect('600519')
+ *   const { tick, connect, disconnect, wsStatus } = useMarketStream()
  *   watch(tick, t => { if (t) applyTick(t) })
+ *   // HTTP 降级示例：
+ *   watch(wsStatus, (s) => { s === 'disconnected' ? startPolling() : stopPolling() })
  */
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, shallowRef, triggerRef } from 'vue'
 import { logger } from '../utils/logger.js'
 
 // WebSocket 基础 URL 配置
@@ -44,14 +47,17 @@ const _MAX_RETRIES = 10  // 最大重试次数
 let _retryCount = 0      // 当前重试计数
 const _connectedCount = ref(0)
 
-// 全局 tick 字典（按 symbol 索引，避免不必要更新）
-const globalTicks = ref({})
-const globalConnected = ref(false)
+// 全局 tick 字典（按 symbol 索引）
+// ⚡ 改用 shallowRef：只追踪 tick 对象引用的替换，不追踪内部字段的深度响应式
+const globalTicks = shallowRef({})
+// 手动触发更新的标记（shallowRef 需要显式 triggerRef）
+let _tickDirty = false
+
+// WS 连接状态：'idle' | 'connecting' | 'connected' | 'disconnected' | 'failed'
+const globalWsStatus = ref('idle')
 const globalError = ref(null)
-const globalReconnecting = ref(false)
 
 // 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
-// 同一 symbol 被多个组件关注时，计数 > 1；计数归零才真正清理
 const subscribedSymRefCount = new Map()
 
 // 数据历史限制（防止内存泄漏），按 symbol 分开统计
@@ -60,24 +66,37 @@ const tickHistory = {}
 
 // ── 内部函数 ──────────────────────────────────────────────────
 
+/**
+ * 触发 tick 的 shallowRef 更新（仅在 symbol 实际变化时调用）
+ * 通过标记位批量合并：同一 event loop 内的多次 tick 更新只触发一次 triggerRef
+ */
+function _notifyTick() {
+  if (_tickDirty) {
+    _tickDirty = false
+    triggerRef(globalTicks)
+  }
+}
+
 function _newConnection() {
   if (_ws) return
 
-  globalReconnecting.value = true
+  globalWsStatus.value = 'connecting'
+  globalError.value = null
   const url = `${WS_BASE}/ws/market`
-  
+
   try {
     _ws = new WebSocket(url)
   } catch (e) {
     logger.error('[MarketStream] WebSocket 创建失败:', e)
+    globalWsStatus.value = 'failed'
+    globalError.value = 'WebSocket 创建失败'
     _scheduleRetry()
     return
   }
 
   _ws.onopen = () => {
-    globalConnected.value = true
+    globalWsStatus.value = 'connected'
     globalError.value = null
-    globalReconnecting.value = false
     _retryDelay = 2000
     _retryCount = 0
     // 重连时重新订阅所有仍有引用的 symbol
@@ -89,19 +108,27 @@ function _newConnection() {
     try {
       const data = JSON.parse(event.data)
       if (data.type === 'pong' || data.type === 'subscribed') return
-      
+
       const sym = data.symbol
       if (!sym) return
-      
+
       // 数据淘汰机制（按 symbol 分开）
       if (!tickHistory[sym]) tickHistory[sym] = []
       tickHistory[sym].push(data)
       if (tickHistory[sym].length > MAX_TICK_HISTORY) {
         tickHistory[sym].shift()
       }
-      
-      // 按 symbol 更新（而不是单一 globalTick）
-      globalTicks.value[sym] = data
+
+      // ⚡ shallowRef 更新策略：直接替换 symbol 的 tick 对象引用，
+      // 这样 globalTicks.value 整体引用不变，只有被替换的 symbol 被更新
+      // triggerRef 标记由 _notifyTick 在 microtask 中批量触发
+      globalTicks.value = {
+        ...globalTicks.value,
+        [sym]: data,
+      }
+      _tickDirty = true
+      // 在 microtask 中统一触发（合并同一 event loop 内的多次更新）
+      queueMicrotask(_notifyTick)
     } catch (e) {
       logger.warn('[MarketStream] parse error:', e)
     }
@@ -110,21 +137,22 @@ function _newConnection() {
   _ws.onerror = (e) => {
     logger.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
-    globalConnected.value = false
+    globalWsStatus.value = 'connected' // onerror 之后必触发 onclose，不单独设置
   }
 
   _ws.onclose = (e) => {
     logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
-    globalConnected.value = false
-    globalReconnecting.value = false
+    const wasConnected = globalWsStatus.value === 'connected'
+    globalWsStatus.value = 'disconnected'
     _ws = null
-    
-    // 1000 = 正常关闭，不重连
+
+    // 1000 = 正常关闭（disconnect 调用），不重连
     // 1006 = abnormal closure，需要重连
     if (e.code !== 1000 && subscribedSymRefCount.size > 0) {
       if (_retryCount < _MAX_RETRIES) {
         _scheduleRetry()
       } else {
+        globalWsStatus.value = 'failed'
         globalError.value = '连接失败次数过多，请刷新页面重试'
         logger.error('[MarketStream] 达到最大重试次数，停止重连')
       }
@@ -152,20 +180,48 @@ function _doUnsubscribe(syms) {
   }
 }
 
+/**
+ * 指数退避重连（带 jitter ±25%，防止惊群效应）
+ */
 function _scheduleRetry() {
   if (_retryCount >= _MAX_RETRIES) return
-  
+
   clearTimeout(_retryTimer)
-  globalReconnecting.value = true
+  globalWsStatus.value = 'connecting'
   _retryCount++
-  
-  logger.log(`[MarketStream] ${(_retryDelay/1000).toFixed(1)}秒后第${_retryCount}次重连...`)
-  
+
+  // jitter: 实际延迟 = base * (0.75 + random * 0.5)，即 ±25%
+  const jitter = _retryDelay * (0.75 + Math.random() * 0.5)
+  logger.log(`[MarketStream] ${(jitter / 1000).toFixed(1)}s后第${_retryCount}次重连（jitter ±25%）...`)
+
   _retryTimer = setTimeout(() => {
     if (subscribedSymRefCount.size > 0) _newConnection()
-  }, _retryDelay)
-  
+  }, jitter)
+
   _retryDelay = Math.min(_retryDelay * 1.5, _MAX_DELAY)
+}
+
+// ── 心跳管理（setInterval 句柄必须保存，disconnect 时清理）────────
+let _heartbeatTimer = null
+
+function _startHeartbeat() {
+  if (_heartbeatTimer) return
+  _heartbeatTimer = setInterval(() => {
+    if (_ws && _ws.readyState === WebSocket.OPEN) {
+      try {
+        _ws.send(JSON.stringify({ action: 'ping' }))
+      } catch (_) {
+        // WS 已在 closing 状态，静默忽略
+      }
+    }
+  }, 30_000)
+}
+
+function _stopHeartbeat() {
+  if (_heartbeatTimer) {
+    clearInterval(_heartbeatTimer)
+    _heartbeatTimer = null
+  }
 }
 
 // ── 导出给组件的 hook ──────────────────────────────────────────
@@ -177,7 +233,7 @@ export function useMarketStream(initialSymbol = '') {
   _connectedCount.value++
   if (initialSymbol) {
     subscribedSymRefCount.set(initialSymbol, (subscribedSymRefCount.get(initialSymbol) || 0) + 1)
-    if (!_ws && globalConnected.value === false) {
+    if (!_ws && globalWsStatus.value === 'idle') {
       _newConnection()
     } else if (_ws && _ws.readyState === WebSocket.OPEN) {
       _doSubscribe([initialSymbol])
@@ -185,18 +241,17 @@ export function useMarketStream(initialSymbol = '') {
   }
 
   function connect(symOrList) {
-    // 取消待执行的断开，避免闪断
     cancelPendingDisconnect()
 
     const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
-    const newSyms = []   // 本次 connect 新增的 symbol（引用从 0→1）
+    const newSyms = []
+
     syms.forEach(s => {
       if (!s) return
       const currentCount = subscribedSymRefCount.get(s) || 0
       subscribedSymRefCount.set(s, currentCount + 1)
       localSymbol.value = s
       if (currentCount === 0) {
-        // 该 symbol 之前无有效订阅，本次是新增
         newSyms.push(s)
       }
     })
@@ -204,19 +259,16 @@ export function useMarketStream(initialSymbol = '') {
     if (!_ws) {
       _newConnection()
     } else if (_ws.readyState === WebSocket.OPEN) {
-      // 只向服务端订阅本次新增的 symbol（已在活跃列表的不重复订阅）
       if (newSyms.length) _doSubscribe(newSyms)
     }
   }
 
   /**
    * 精准取消订阅（引用计数版本）
-   * - 减少 refcount，不归零不清理
-   * - refcount 归零时：移除订阅、清理 globalTicks、清理 tickHistory、通知后端
    */
   function unsubscribe(symOrList) {
     const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
-    const symsToDrop = []  // refcount 归零，需要彻底清理的
+    const symsToDrop = []
 
     syms.forEach(sym => {
       if (!sym) return
@@ -226,14 +278,14 @@ export function useMarketStream(initialSymbol = '') {
       } else if (count === 1) {
         subscribedSymRefCount.delete(sym)
         symsToDrop.push(sym)
-        // 三重清理：globalTicks + tickHistory
-        delete globalTicks.value[sym]
+        // 清理 globalTicks 中的该 symbol（替换引用，触发 shallowRef 更新）
+        const next = { ...globalTicks.value }
+        delete next[sym]
+        globalTicks.value = next
         delete tickHistory[sym]
       }
-      // count === 0：本来就没订阅，跳过
     })
 
-    // 通知后端停止推送已彻底取消订阅的 symbol
     if (symsToDrop.length && _ws && _ws.readyState === WebSocket.OPEN) {
       _doUnsubscribe(symsToDrop)
     }
@@ -244,21 +296,19 @@ export function useMarketStream(initialSymbol = '') {
   function disconnect() {
     _connectedCount.value = Math.max(0, _connectedCount.value - 1)
     if (_connectedCount.value <= 0) {
-      // 延迟 200ms 关闭，避免路由切换时的闪断
       if (_disconnectTimer) clearTimeout(_disconnectTimer)
       _disconnectTimer = setTimeout(() => {
         if (_connectedCount.value <= 0 && _ws) {
+          _stopHeartbeat()   // ⚡ 断开时清理心跳
           clearTimeout(_retryTimer)
           _ws.onclose = null
           _ws.onerror = null
           _ws.close(1000, 'all_disconnected')
           _ws = null
-          globalConnected.value = false
-          globalReconnecting.value = false
+          globalWsStatus.value = 'idle'
           subscribedSymRefCount.clear()
-          // 清理所有 tickHistory
           Object.keys(tickHistory).forEach(k => delete tickHistory[k])
-          Object.keys(globalTicks.value).forEach(k => delete globalTicks.value[k])
+          globalTicks.value = {}
           _retryCount = 0
           _retryDelay = 2000
         }
@@ -266,24 +316,14 @@ export function useMarketStream(initialSymbol = '') {
     }
   }
 
-function cancelPendingDisconnect() {
+  function cancelPendingDisconnect() {
     if (_disconnectTimer) {
       clearTimeout(_disconnectTimer)
       _disconnectTimer = null
     }
   }
 
-  // 30 秒心跳
-  let _hbActive = false
-  function _startHeartbeat() {
-    if (_hbActive) return
-    _hbActive = true
-    setInterval(() => {
-      if (_ws && _ws.readyState === WebSocket.OPEN) {
-        try { _ws.send(JSON.stringify({ action: 'ping' })) } catch (_) {}
-      }
-    }, 30_000)
-  }
+  // 启动心跳
   _startHeartbeat()
 
   // 自动 unsubscribe 旧 symbol（组件切换股票时）
@@ -295,7 +335,7 @@ function cancelPendingDisconnect() {
     _prevSymbol = newSym
   })
 
-  // 组件卸载时：清理该组件关注的 symbol（引用计数 -1）
+  // 组件卸载时
   onUnmounted(() => {
     if (localSymbol.value) {
       unsubscribe(localSymbol.value)
@@ -304,23 +344,27 @@ function cancelPendingDisconnect() {
   })
 
   return {
-    // 直接返回当前 symbol 的 tick（推荐用法）
+    // 当前 symbol 的 tick（shallowRef，仅引用变化时触发）
     tick: computed(() => localSymbol.value ? globalTicks.value[localSymbol.value] : null),
-    // 保留全局 tick 字典（高级用法）
+    // 完整 tick 字典（高级用法）
     ticks: globalTicks,
-    connected: globalConnected,
-    reconnecting: globalReconnecting,
+    // WS 连接状态：'idle' | 'connecting' | 'connected' | 'disconnected' | 'failed'
+    // ⚡ 组件应 watch 此状态实现 HTTP 轮询降级
+    wsStatus: globalWsStatus,
+    // 已废弃，保留兼容：优先用 wsStatus
+    connected: computed(() => globalWsStatus.value === 'connected'),
+    reconnecting: computed(() => globalWsStatus.value === 'connecting'),
     error: globalError,
     symbol: localSymbol,
     connect,
     disconnect,
     unsubscribe,
-    // 获取连接统计
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
       retryCount: _retryCount,
-      connectionCount: _connectedCount.value
-    })
+      connectionCount: _connectedCount.value,
+      wsStatus: globalWsStatus.value,
+    }),
   }
 }

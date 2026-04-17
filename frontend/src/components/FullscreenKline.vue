@@ -646,13 +646,29 @@ let unsubscribeTheme = null
 watch(activeSubChart, () => renderChart())
 watch(period, () => fetchData())
 // 使用 WebSocket 实时行情
-const { tick, connect: connectStream, disconnect: disconnectStream } = useMarketStream()
+const { tick, connect: connectStream, disconnect: disconnectStream, wsStatus } = useMarketStream()
 
 // 监听 WebSocket tick（直接使用 tick computed，不需要中间变量）
 watch(tick, (t) => {
   if (t && t.price) {
     // 更新最新价格（供右侧面板实时显示）
     latestPrice.value = t.price
+  }
+})
+
+// ⚡ WS 断开时自动启用 HTTP 轮询降级；WS 恢复时静默停止轮询
+// 防止双重数据总线：WS 工作时 HTTP 轮询不运行
+watch(wsStatus, (status) => {
+  if (status === 'connected') {
+    // WS 已恢复，停止 HTTP 轮询
+    if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+  } else if (status === 'disconnected' || status === 'failed') {
+    // WS 断开且仍有订阅对象，启动 HTTP 降级轮询
+    if (!refreshTimer && props.symbol) {
+      refreshTimer = setInterval(() => {
+        if (props.symbol) { fetchData(); fetchQuote() }
+      }, 30_000)
+    }
   }
 })
 
@@ -670,10 +686,7 @@ onMounted(() => {
     renderChart()
   })
 
-  // F1修复: K线数据30秒自动刷新
-  refreshTimer = setInterval(() => {
-    if (props.symbol) { fetchData(); fetchQuote() }
-  }, 30000)
+  // ⚡ HTTP 轮询已移至 wsStatus watch：WS connected 时不运行，仅作降级方案
 })
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）

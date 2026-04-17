@@ -494,7 +494,10 @@ function exitDrillDown() {
   histData.value = []
   processedChartData.value = { isEmpty: true }
   fetchHistory()
-  startQuotePolling(30_000)
+  // ⚡ WS 断开时显式重启 HTTP 降级；WS 连接时不需要
+  if (wsStatus.value !== 'connected' && !quotePollingTimer) {
+    startQuotePolling(30_000)
+  }
 }
 
 // ── 画线事件（IndexedDB 持久化在 DrawingCanvas 内部处理）──────────
@@ -510,12 +513,12 @@ watch([period, yAxisType, subChartTab, indicatorParams], () => {
 
 watch(currentSymbol, () => {
   fetchHistory()
-  startQuotePolling(30_000)
+  // ⚡ WS 状态由独立的 wsStatus watch 控制，symbol 切换本身不需要重启轮询
 })
 
 // ── 生命周期 ────────────────────────────────────────────────────
 // 使用 WebSocket 实时行情
-const { tick, connect: connectStream, disconnect: disconnectStream, connected } = useMarketStream()
+const { tick, connect: connectStream, disconnect: disconnectStream, connected, wsStatus } = useMarketStream()
 
 // 监听 WebSocket tick 更新
 watch(tick, (t) => {
@@ -535,15 +538,25 @@ watch(currentSymbol, (sym) => {
   }
 })
 
+// ⚡ WS 断开时自动启用 HTTP 轮询降级；WS 恢复时静默停止
+// 防止双重数据总线：WS 工作时 HTTP 轮询不运行
+watch(wsStatus, (status) => {
+  if (status === 'connected') {
+    stopQuotePolling()
+  } else if (status === 'disconnected' || status === 'failed') {
+    if (!quotePollingTimer) {
+      startQuotePolling(30_000)
+    }
+  }
+})
+
 onMounted(() => {
   fetchHistory()
-  // 优先使用 WebSocket，回退到 HTTP 轮询
+  // 优先使用 WebSocket，回退到 HTTP 轮询（由 wsStatus watch 控制）
   const sym = currentSymbol.value
   if (sym) {
     connectStream(sym)
   }
-  // WebSocket 失败时使用 HTTP 回退
-  startQuotePolling(30_000)
 })
 
 onUnmounted(() => {
