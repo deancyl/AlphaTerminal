@@ -4,7 +4,7 @@
 """
 import logging
 from typing import Optional, Dict, Type, List, Callable
-from .base import BaseMarketFetcher
+from app.services.fetchers.base import BaseMarketFetcher
 from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
 
 logger = logging.getLogger(__name__)

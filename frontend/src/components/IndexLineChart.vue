@@ -172,6 +172,61 @@ function calcWR(closes, highs, lows, n = 10) {
   })
 }
 
+function calcRSI(closes, period = 14) {
+  const result = []
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { result.push('-'); continue }
+    let gain = 0, loss = 0
+    for (let j = 1; j <= period; j++) {
+      const change = closes[i - j + 1] - closes[i - j]
+      if (change > 0) gain += change
+      else loss -= change
+    }
+    const rs = loss === 0 ? 100 : gain / loss
+    result.push((100 - 100 / (1 + rs)).toFixed(2))
+  }
+  return result
+}
+
+function calcOBV(closes, volumes) {
+  const result = [0]
+  for (let i = 1; i < closes.length; i++) {
+    const change = closes[i] - closes[i - 1]
+    const vol = change > 0 ? Number(volumes[i]) : change < 0 ? -Number(volumes[i]) : 0
+    result.push(result[i - 1] + vol)
+  }
+  return result
+}
+
+function calcDMI(highs, lows, closes, period = 14) {
+  const pdi = [], mdi = [], adx = []
+  const tr = [], plusDM = [], minusDM = []
+  for (let i = 1; i < closes.length; i++) {
+    const highDiff = highs[i] - highs[i - 1]
+    const lowDiff = lows[i - 1] - lows[i]
+    plusDM.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0)
+    minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0)
+    tr.push(Math.max(highs[i] - lows[i], Math.abs(highs[i] - closes[i - 1]), Math.abs(lows[i] - closes[i - 1])))
+  }
+  for (let i = 0; i < closes.length; i++) {
+    if (i < period) { pdi.push('-'); mdi.push('-'); adx.push('-'); continue }
+    let trSum = 0, plusDMSum = 0, minusDMSum = 0
+    for (let j = 0; j < period; j++) {
+      trSum += tr[i - j - 1] || 0
+      plusDMSum += plusDM[i - j - 1] || 0
+      minusDMSum += minusDM[i - j - 1] || 0
+    }
+    const pdiVal = trSum > 0 ? (plusDMSum / trSum * 100).toFixed(2) : '0'
+    const mdiVal = trSum > 0 ? (minusDMSum / trSum * 100).toFixed(2) : '0'
+    pdi.push(pdiVal); mdi.push(mdiVal)
+    const dx = Math.abs(parseFloat(pdiVal) - parseFloat(mdiVal)) / (parseFloat(pdiVal) + parseFloat(mdiVal)) * 100
+    const dxVal = isNaN(dx) ? 0 : dx.toFixed(2)
+    if (i === period) adx.push(dxVal)
+    else adx.push(((parseFloat(adx[i - 1]) * (period - 1) + parseFloat(dxVal)) / period).toFixed(2))
+  }
+  return { pdi, mdi, adx }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // K线图（Task 2: 60%主图 / 20%成交量 比例）
 // ─────────────────────────────────────────────────────────────────
@@ -711,15 +766,13 @@ watch(() => props.symbol, async (sym) => {
   logger.log('[KLine] watch: props.symbol changed', { sym, props: { name: props.name, symbol: props.symbol } })
   // symbol 变化时：先清空旧名称显示（立即响应），等数据回来再显示新名称
   currentName.value = props.name || '指标图表'
-  logger.log('[KLine] watch: currentName set to', currentName.value)
   await fetchAndRender()
-  logger.log('[KLine] watch: fetchAndRender completed')
   // fetchAndRender 之后用正确的 props.name 更新一次
   currentName.value = props.name || '指标图表'
-  logger.log('[KLine] watch: currentName updated to', currentName.value)
 })
 
-watch(() => [props.symbol, props.url, props.indicators], () => { fetchAndRender() }, { deep: true })
+// indicators 独立 watch（避免 symbol+url 同时变化时的重复请求）
+watch(() => props.indicators, () => { fetchAndRender() }, { deep: true })
 
 let unsubscribeTheme = null
 

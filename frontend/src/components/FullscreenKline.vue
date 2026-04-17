@@ -648,10 +648,11 @@ watch(period, () => fetchData())
 // 使用 WebSocket 实时行情
 const { tick, connect: connectStream, disconnect: disconnectStream } = useMarketStream()
 
-// 监听 WebSocket tick
+// 监听 WebSocket tick（直接使用 tick computed，不需要中间变量）
 watch(tick, (t) => {
   if (t && t.price) {
-    liveTick.value = { price: t.price, volume: t.volume, time: t.time || Date.now() }
+    // 更新最新价格（供右侧面板实时显示）
+    latestPrice.value = t.price
   }
 })
 

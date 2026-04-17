@@ -1601,6 +1601,23 @@ async def set_alpha_vantage_key(config: dict):
 
 
 # ── 版本与系统信息 ─────────────────────────────────────────────────────
+def _read_frontend_version():
+    """从 frontend/package.json 动态读取版本号"""
+    import json, os
+    # __file__ = AlphaTerminal/backend/app/routers/market.py
+    # parent.parent.parent = AlphaTerminal/backend/ -> AlphaTerminal/ -> workspace/
+    # 需要再加一层 parent = AlphaTerminal/ 然后 /frontend/package.json
+    root = Path(__file__).resolve().parent.parent.parent.parent
+    pkg_path = root / "frontend" / "package.json"
+    try:
+        if pkg_path.exists():
+            with open(pkg_path, "r", encoding="utf-8") as f:
+                return json.load(f).get("version", "unknown")
+    except Exception:
+        pass
+    return "unknown"
+
+
 @router.get("/system/version")
 async def get_version():
     """获取前后端版本信息"""
@@ -1610,11 +1627,13 @@ async def get_version():
         from version import __version__
         backend_version = __version__
     except ImportError:
-        backend_version = "0.4.133"
-    
+        backend_version = "0.5.51"
+
+    frontend_version = _read_frontend_version()
+
     return success_response({
         "backend": backend_version,
-        "frontend": "0.4.133",
+        "frontend": frontend_version,
         "app_name": "AlphaTerminal",
         "description": "A股/港股/美股投研终端",
         "scheduler": "running",
@@ -1633,11 +1652,13 @@ async def get_system_info():
         from version import __version__
         backend_version = __version__
     except ImportError:
-        backend_version = "0.4.133"
+        backend_version = "0.5.51"
+    
+    frontend_version = _read_frontend_version()
     
     return success_response({
         "backend_version": backend_version,
-        "frontend_version": "0.4.133",
+        "frontend_version": frontend_version,
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "cpu_percent": psutil.cpu_percent(interval=0.1),
