@@ -207,6 +207,12 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
+import IndexLineChart    from './IndexLineChart.vue'
+import NewsFeed          from './NewsFeed.vue'
+import SentimentGauge    from './SentimentGauge.vue'
+import HotSectors        from './HotSectors.vue'
+import FundFlowPanel     from './FundFlowPanel.vue'
+import StockScreener     from './StockScreener.vue'
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
