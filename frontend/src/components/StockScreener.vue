@@ -116,91 +116,35 @@
       </div>
     </div>
 
-    <!-- ── 表头（可排序列）────────────────────────────────── -->
-    <div class="overflow-x-auto flex-none">
+    <div class="flex-1 min-h-0 overflow-y-auto relative">
       <table class="w-full text-xs whitespace-nowrap">
-        <thead class="bg-terminal-panel">
+        <!-- ── Sticky 表头（合并，无重复）───────────────────────────── -->
+        <thead class="bg-terminal-panel sticky top-0 z-10 shadow-sm">
           <tr class="text-terminal-dim border-b border-theme">
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8"
-                @click="setSort('seq')">#</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-[72px] shrink-0"
-                @click="setSort('name')">名称</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('code')">代码</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('price')">最新价</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('chg_pct')">
-              <span :class="sortClass('chg_pct')">涨跌幅 ↕</span>
-            </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-14"
-                @click="setSort('chg')">涨跌</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('turnover')">
-              <span :class="sortClass('turnover')">换手率</span>
-            </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('amount')">
-              <span :class="sortClass('amount')">成交额</span>
-            </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('pe')">
-              <span :class="sortClass('pe')">PE</span>
-            </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('pb')">
-              <span :class="sortClass('pb')">PB</span>
-            </th>
-          </tr>
-        </thead>
-      </table>
-    </div>
-
-    <!-- ── 虚拟滚动列表（仅渲染可见行）────────────────── -->
-    <div class="overflow-x-auto flex-none">
-      <table class="w-full text-xs whitespace-nowrap">
-        <thead class="bg-terminal-panel">
-          <tr class="text-terminal-dim border-b border-theme">
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8"
-                @click="setSort('seq')">#</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-[72px] shrink-0"
-                @click="setSort('name')">名称</th>
-            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('code')">代码</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('price')">最新价</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('change_pct')">
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8" @click="setSort('seq')">#</th>
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-[72px] shrink-0" @click="setSort('name')">名称</th>
+            <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16" @click="setSort('code')">代码</th>
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16" @click="setSort('price')">最新价</th>
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16" @click="setSort('change_pct')">
               <span :class="sortClass('change_pct')">涨跌幅 ↕</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-14"
-                @click="setSort('change')">涨跌</th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('turnover')">
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-14" @click="setSort('change')">涨跌</th>
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12" @click="setSort('turnover')">
               <span :class="sortClass('turnover')">换手率</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16"
-                @click="setSort('amount')">
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-16" @click="setSort('amount')">
               <span :class="sortClass('amount')">成交额</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('pe')">
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12" @click="setSort('pe')">
               <span :class="sortClass('pe')">PE</span>
             </th>
-            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12"
-                @click="setSort('pb')">
+            <th class="text-right py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-12" @click="setSort('pb')">
               <span :class="sortClass('pb')">PB</span>
             </th>
           </tr>
         </thead>
-      </table>
-    </div>
-
-    <!-- ── 表格体（自然滚动，分页栏固定在底部）────────────────── -->
-    <div class="flex-1 min-h-0 overflow-y-auto">
-      <table class="w-full text-xs whitespace-nowrap">
         <tbody>
-          <!-- 骨架屏（加载中） -->
+          <!-- 骨架屏 -->
           <tr v-if="loading && !stocks.length">
             <td colspan="10" class="py-1">
               <div class="space-y-1 animate-pulse">
@@ -225,7 +169,7 @@
               {{ !loading && total === 0 ? '无符合条件的数据' : '数据加载中...' }}
             </td>
           </tr>
-          <!-- 真实数据行（直接遍历 stocks，无虚拟滚动） -->
+          <!-- 真实数据行 -->
           <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
               class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
               @click="handleClick(stock)">
@@ -234,20 +178,12 @@
             <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-14">{{ stock.code }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16">{{ fmtPrice(stock.price) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16"
-                :class="stock.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ fmtPct(stock.change_pct) }}
-            </td>
+                :class="stock.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">{{ fmtPct(stock.change_pct) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-14"
-                :class="stock.change >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ fmtChg(stock.change) }}
-            </td>
+                :class="stock.change >= 0 ? 'text-bullish' : 'text-bearish'">{{ fmtChg(stock.change) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
-                :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">
-              {{ fmtTurnover(stock.turnover) }}
-            </td>
-            <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-16 text-terminal-dim">
-              {{ formatAmt(stock.amount) }}
-            </td>
+                :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">{{ fmtTurnover(stock.turnover) }}</td>
+            <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-16 text-terminal-dim">{{ formatAmt(stock.amount) }}</td>
             <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
                 :class="(stock.pe || 0) <= 0 ? 'text-terminal-dim' : ((stock.pe || 0) < 15 ? 'text-bullish' : ((stock.pe || 0) > 60 ? 'text-bearish' : 'text-theme-primary'))">
               {{ stock.pe ? stock.pe.toFixed(1) : '-' }}
@@ -261,19 +197,13 @@
       </table>
     </div>
 
-    <!-- ── 分页控制栏（永远固定在底部，不随滚动）───────────────── -->
+    <!-- ── 分页控制栏（固定在底部，不随滚动）───────────────────── -->
     <div class="flex items-center justify-between px-2 py-1.5 text-xs border-t border-theme-secondary text-theme-secondary shrink-0">
-      <button
-        :disabled="currentPage === 1"
-        @click="goPage(currentPage - 1)"
-        class="px-3 py-0.5 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors"
-      >上一页</button>
+      <button :disabled="currentPage === 1" @click="goPage(currentPage - 1)"
+              class="px-3 py-0.5 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors">上一页</button>
       <span class="text-[10px] text-terminal-dim">第 {{ currentPage }} / {{ totalPages }} 页 · 共 {{ total }} 条</span>
-      <button
-        :disabled="currentPage >= totalPages"
-        @click="goPage(currentPage + 1)"
-        class="px-3 py-0.5 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors"
-      >下一页</button>
+      <button :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)"
+              class="px-3 py-0.5 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors">下一页</button>
     </div>
   </div>
 </template>
