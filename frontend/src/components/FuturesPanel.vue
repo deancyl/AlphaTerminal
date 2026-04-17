@@ -137,10 +137,13 @@ async function fetchTermStructure() {
     const res = await fetch(`/api/v1/futures/term_structure?symbol=${prefix}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
-    if (data.error) { termError.value = data.error; return }
-    termSymbol.value = data.symbol
-    termName.value   = data.name
-    termStructureData.value = data.term_structure || []
+    if (data.code !== 0 && data.code !== undefined) {
+      termError.value = data.message || '加载失败'
+      return
+    }
+    termSymbol.value = data.data?.symbol || ''
+    termName.value   = data.data?.name || ''
+    termStructureData.value = data.data?.term_structure || []
   } catch (e) {
     termError.value = `加载失败: ${e.message}`
   } finally {

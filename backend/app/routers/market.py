@@ -804,7 +804,7 @@ async def market_quote(symbol: str):
         'change_pct':   round(chg_pct, 2),
         'volume':       float(latest.get('volume') or 0),
         'amount':       float(latest.get('amount') or 0),
-        'amplitude':    round((float(latest.get('high') or 0) / float(latest.get('low') or 1) - 1) * 100, 2) if latest.get('high') and latest.get('low') else 0,
+        'amplitude':    round((float(latest.get('high') or 0) - float(latest.get('low') or 0)) / prev_c * 100, 2) if latest.get('high') and latest.get('low') and prev_c else 0,
         'turnover_rate': float(latest.get('turnover_rate') or 0),
         'timestamp':     datetime.now().isoformat(),
     })
@@ -846,6 +846,7 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
     """
     对 ASC 排列的历史 K 线内联注入 change_pct（利用相邻 close 计算）。
     market_data_daily 表无 change_pct 列，需在此层内联计算。
+    同时注入 amplitude（历史旧数据可能缺失）。
     """
     if not rows:
         return rows
@@ -853,11 +854,21 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
     prev_close = None
     for r in rows:
         close = float(r.get("close") or 0)
+        high  = float(r.get("high") or 0)
+        low   = float(r.get("low") or 0)
         if prev_close is not None and prev_close != 0:
-            pct = (close - prev_close) / prev_close * 100
+            pct       = (close - prev_close) / prev_close * 100
+            amplitude = round((high - low) / prev_close * 100, 4)
         else:
-            pct = 0.0
-        result.append({**r, "change_pct": round(pct, 4)})
+            pct       = 0.0
+            amplitude = 0.0
+        # 只注入缺失的字段，保留已有值
+        item = {**r}
+        if item.get("change_pct") is None:
+            item["change_pct"] = round(pct, 4)
+        if item.get("amplitude") is None:
+            item["amplitude"] = amplitude
+        result.append(item)
         prev_close = close
     return result
 

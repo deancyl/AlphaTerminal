@@ -552,7 +552,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
 
         rows = []
         now_ts = int(time.time())
-        prev_close = None  # 前一行收盘价，用于计算 change_pct
+        prev_close = None  # 前一行收盘价，用于计算 change_pct 和 amplitude
         for i in range(len(df)):
             try:
                 dt     = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
@@ -563,22 +563,27 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 volume = int(df.iloc[i]["volume"]) if "volume" in df.columns else 0
                 # AkShare stock_zh_index_daily 不含涨跌幅列，自己用相邻 close 计算
                 if prev_close is not None and prev_close != 0:
-                    pct = (close - prev_close) / prev_close * 100
+                    pct       = (close - prev_close) / prev_close * 100
+                    amplitude = round((high - low) / prev_close * 100, 4)
                 else:
-                    pct = 0.0
-                prev_close = close
+                    pct       = 0.0
+                    amplitude = 0.0
                 rows.append({
-                    "symbol":    symbol,
-                    "date":      str(df.iloc[i][date_col])[:10],
-                    "open":      open_,
-                    "high":      high,
-                    "low":       low,
-                    "close":     close,
-                    "volume":    volume,
-                    "change_pct": pct,
-                    "timestamp": dt,
-                    "data_type": "daily",
+                    "symbol":       symbol,
+                    "date":         str(df.iloc[i][date_col])[:10],
+                    "open":         open_,
+                    "high":         high,
+                    "low":          low,
+                    "close":        close,
+                    "volume":       volume,
+                    "amount":       0.0,          # 指数无成交额字段
+                    "turnover_rate": 0.0,         # 指数无换手率字段
+                    "amplitude":    amplitude,
+                    "change_pct":   pct,
+                    "timestamp":    dt,
+                    "data_type":    "daily",
                 })
+                prev_close = close
             except Exception as e:
                 logger.warning(f"[AkShare] 解析第{i}行失败: {e}")
                 continue
@@ -597,41 +602,53 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 # Weekly
                 df_d["year_wk"] = df_d["date"].dt.isocalendar().year.astype(str) + "_" + df_d["date"].dt.isocalendar().week.astype(str).str.zfill(2)
                 periodic_rows = []
+                prev_period_close = None
                 for yw, grp in df_d.groupby("year_wk", sort=True):
-                    open_   = float(grp.iloc[0]["open"])
-                    close_  = float(grp.iloc[-1]["close"])
+                    grp_sorted = grp.sort_values("date")
+                    open_   = float(grp_sorted.iloc[0]["open"])
+                    close_  = float(grp_sorted.iloc[-1]["close"])
                     high_   = float(grp["high"].max())
                     low_    = float(grp["low"].min())
                     pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
-                    dt_str  = str(grp.iloc[0]["date"])[:10]
+                    dt_str  = str(grp_sorted.iloc[0]["date"])[:10]
+                    amplitude = round((high_ - low_) / prev_period_close * 100, 4) if prev_period_close else 0.0
                     periodic_rows.append({
                         "symbol": symbol, "date": dt_str,
                         "period": "weekly",
                         "open": open_, "high": high_, "low": low_,
                         "close": close_,
                         "volume": float(grp["volume"].sum()),
+                        "amount": 0.0, "turnover_rate": 0.0,
+                        "amplitude": amplitude,
                         "change_pct": round(pct, 4),
                         "timestamp": int(pd.Timestamp(dt_str).timestamp()),
                     })
+                    prev_period_close = close_
 
                 # Monthly
                 df_d["ym"] = df_d["date"].dt.to_period("M").astype(str)
+                prev_period_close = None
                 for ym, grp in df_d.groupby("ym", sort=True):
-                    open_   = float(grp.iloc[0]["open"])
-                    close_  = float(grp.iloc[-1]["close"])
+                    grp_sorted = grp.sort_values("date")
+                    open_   = float(grp_sorted.iloc[0]["open"])
+                    close_  = float(grp_sorted.iloc[-1]["close"])
                     high_   = float(grp["high"].max())
                     low_    = float(grp["low"].min())
                     pct     = (close_ - open_) / open_ * 100 if open_ else 0.0
-                    dt_str  = str(grp.iloc[0]["date"])[:10]
+                    dt_str  = str(grp_sorted.iloc[0]["date"])[:10]
+                    amplitude = round((high_ - low_) / prev_period_close * 100, 4) if prev_period_close else 0.0
                     periodic_rows.append({
                         "symbol": symbol, "date": dt_str,
                         "period": "monthly",
                         "open": open_, "high": high_, "low": low_,
                         "close": close_,
                         "volume": float(grp["volume"].sum()),
+                        "amount": 0.0, "turnover_rate": 0.0,
+                        "amplitude": amplitude,
                         "change_pct": round(pct, 4),
                         "timestamp": int(pd.Timestamp(dt_str).timestamp()),
                     })
+                    prev_period_close = close_
 
                 if periodic_rows:
                     buffer_insert_periodic(periodic_rows)

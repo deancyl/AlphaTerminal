@@ -12,6 +12,14 @@
             隐含税率
           </span>
           <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
+          <!-- 数据源警告（Mock 数据） -->
+          <span
+            v-if="bondDataSource === 'mock'"
+            class="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 border border-yellow-500/40 text-yellow-400"
+            title="AkShare 债券数据已停更，数据截至 2021-01-22"
+          >
+            ⚠️ 数据截至 2021
+          </span>
         </div>
       </div>
 
@@ -212,6 +220,7 @@ const SOURCES = [
 // ── 状态 ──────────────────────────────────────────────────────────
 const yieldMatrix     = ref({})
 const matrixUpdateTime = ref('')
+const bondDataSource  = ref('')  // 'akshare' | 'mock'
 const yieldCurve    = ref({})
 const yieldCurve1m  = ref({})
 const yieldCurve1y  = ref({})
@@ -273,6 +282,7 @@ async function fetchBondData() {
       const commCurve = bc.comm_yield   || {}
       const spreadsBps = bc.spreads_bps || {}
       const updateTime = bc.update_time  || ''
+      bondDataSource.value   = bc.source   || ''
 
       yieldCurve.value       = govCurve
       yieldCurve1m.value    = bc.yield_curve_1m || {}
