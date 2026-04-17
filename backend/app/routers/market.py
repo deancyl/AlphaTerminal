@@ -887,30 +887,30 @@ async def get_fund_flow():
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
 
+        # 【防御】：如果 akshare 静默返回空 DataFrame，主动抛异常触发 Mock fallback
+        if not result:
+            raise ValueError("akshare returned empty dataframe, triggering fallback")
+
         return success_response({
             "items": result,
             "total": len(result),
             "source": "akshare - stock_market_fund_flow"
         })
     except Exception as e:
-        logger.warning(f"market_fund_flow akshare error, using fallback: {e}")
+        logger.warning(f"market_fund_flow error/empty, using fallback: {e}")
         import datetime, random
         result = []
         for i in range(30):
             d = (datetime.datetime.now() - datetime.timedelta(days=29 - i)).strftime("%m-%d")
-            main_net = random.randint(-5000000000, 5000000000)
+            main_net = random.randint(-500000000, 500000000)
             result.append({
                 "date": d,
-                "sh_close": round(random.uniform(2800, 3500), 2),
-                "sh_chg": round(random.uniform(-3, 3), 2),
-                "sz_close": round(random.uniform(8000, 9500), 2),
-                "sz_chg": round(random.uniform(-3, 3), 2),
                 "main_net": main_net,
                 "main_pct": round(random.uniform(-5, 5), 2),
                 "large_net": int(main_net * random.uniform(0.6, 0.9)),
-                "large_pct": round(random.uniform(-4, 4), 2),
+                "large_pct": round(random.uniform(-2, 2), 2),
                 "medium_net": int(main_net * random.uniform(0.2, 0.4)),
-                "medium_pct": round(random.uniform(-2, 2), 2),
+                "medium_pct": round(random.uniform(-1, 1), 2),
                 "small_net": int(-main_net * random.uniform(0.5, 0.8)),
                 "small_pct": round(random.uniform(-3, 3), 2),
             })
