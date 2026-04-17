@@ -600,11 +600,7 @@ function buildLineOption(hist) {
 // ─────────────────────────────────────────────────────────────────
 function buildOption(raw, type) {
   const hist = _sanitize(raw)
-  if (!hist || !hist.length) {
-    chartError.value = '暂无历史数据'
-    return { backgroundColor: 'transparent', title: { text: '暂无历史数据', left: 'center', top: 'center', textStyle: { color: '#6b7280', fontSize: 12 } } }
-  }
-  chartError.value = ''
+  if (!hist || !hist.length) return null
   if (type === 'line') return buildLineOption(hist)
   return buildKLineOption(hist)
 }
@@ -734,6 +730,15 @@ async function fetchAndRender() {
     const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
     const sortedHist = isDesc ? [...hist].reverse() : hist
     const opt = buildOption(sortedHist, type)
+
+    // 空数据：设置错误提示，不渲染空图表
+    if (!opt) {
+      chartError.value = '暂无历史数据'
+      if (chartInstance) chartInstance.clear()
+      return
+    }
+
+    chartError.value = ''
     opt._rawHist = d?.history || d || []
 
     currentName.value = props.name || '指标图表'
