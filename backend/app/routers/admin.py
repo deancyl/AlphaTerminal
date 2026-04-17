@@ -85,7 +85,8 @@ async def get_sources_status():
     try:
         from app.services.scheduler import scheduler
         jobs_count = len(scheduler.get_jobs())
-    except:
+    except Exception as e:
+        logger.exception("[Admin] 获取调度器 jobs 失败，使用默认值兜底")
         jobs_count = 0
     
     return {
@@ -308,7 +309,8 @@ async def get_database_status():
         try:
             row = conn.execute(f"SELECT COUNT(*) as cnt FROM {table}").fetchone()
             tables[table] = {"rows": row["cnt"]}
-        except:
+        except Exception as e:
+            logger.exception(f"[Admin] 统计表 {table} 行数失败，使用默认值兜底: {e}")
             tables[table] = {"rows": 0}
     conn.close()
     
@@ -443,7 +445,8 @@ async def get_recent_logs(lines: int = 100, level: str = None):
                     try:
                         dt = datetime.strptime(time_match.group(1), "%Y-%m-%d %H:%M:%S")
                         timestamp = int(dt.timestamp())
-                    except:
+                    except Exception as e:
+                        logger.debug(f"[Admin] 时间戳解析失败（格式1）: {e}")
                         pass
                 else:
                     # 格式2: 13:08:45 (只有时间，使用今天日期)
@@ -453,7 +456,8 @@ async def get_recent_logs(lines: int = 100, level: str = None):
                             today = datetime.now().strftime("%Y-%m-%d")
                             dt = datetime.strptime(f"{today} {time_match2.group(1)}", "%Y-%m-%d %H:%M:%S")
                             timestamp = int(dt.timestamp())
-                        except:
+                        except Exception as e:
+                            logger.debug(f"[Admin] 时间戳解析失败（格式2）: {e}")
                             pass
                 
                 # 清理消息内容
