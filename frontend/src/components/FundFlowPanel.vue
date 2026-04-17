@@ -64,10 +64,16 @@
       </div>
     </div>
 
-    <!-- ECharts 柱状图：近10日主力净流入 -->
-    <div class="flex-1 min-h-[150px] w-full" ref="chartEl"></div>
+    <!-- ECharts 柱状图：近10日主力净流入（min-h 300px 避免 0 高） -->
+    <div class="flex-1 w-full min-h-[300px]" ref="chartEl"></div>
 
-    <!-- 无数据 / 加载（始终显示数据，无时间硬拦截） -->
+    <!-- 空状态占位（区分"没数据"vs"没渲染出来"） -->
+    <div v-if="!fundFlowData.length && !isLoading" class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px]">
+      <span class="text-amber-400 text-xs mb-1">📡 正在从服务端同步资金流数据...</span>
+      <span class="text-[9px]">若长时间停留请检查后端 /api/v1/market/fund_flow</span>
+    </div>
+
+    <!-- 加载中（首屏骨架屏） -->
     <div v-if="isLoading && !fundFlowData.length" class="flex-1 flex flex-col items-center justify-center">
       <span class="text-theme-muted text-[10px] animate-pulse">⏳ 加载资金流...</span>
     </div>
@@ -210,7 +216,17 @@ onBeforeUnmount(() => {
   chartInstance = null
 })
 
-watch(fundFlowData, () => {
-  nextTick(renderChart)
+// ── 数据驱动渲染：latestData 到来时确保 DOM 宽高已计算 ──────────
+watch(latestData, async (data) => {
+  if (!data) return
+  await nextTick()
+  renderChart()
+})
+
+// fundFlowData 整体变化时也重新渲染（hist 数据更新）
+watch(fundFlowData, async () => {
+  if (!fundFlowData.value.length) return
+  await nextTick()
+  renderChart()
 })
 </script>

@@ -89,17 +89,17 @@
     </div>
 
     <!-- ━━━ Widget 2：市场情绪直方图（K线正下方，左侧8列）━━━━━━━━━━━━━ -->
-    <!-- 情绪面板扩展至 9 单位高度（720px），容纳三大图表无滚动条 -->
+    <!-- 情绪面板扩展至 10 单位高度（800px），彻底消除滚动条 -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="6" gs-w="8" gs-h="9" gs-min-w="4" gs-min-h="7">
+         gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8">
       <div class="grid-stack-item-content terminal-panel p-3">
         <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
       </div>
     </div>
 
-    <!-- ━━━ Widget 3：快讯新闻（情绪图下方，15起）━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="15" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+         gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
       </div>
@@ -161,9 +161,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起）━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 6：国内市场指数（右侧4列，17起）━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="17" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
@@ -198,9 +198,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，22起）━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+         gs-x="0" gs-y="22" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener />
       </div>
