@@ -215,6 +215,19 @@
         </div>
       </div>
 
+      <!-- 底层资产归因面板 (Task 9) -->
+      <div v-if="store.activePid" class="mt-2 rounded border border-cyan-500/30 bg-terminal-panel/50 overflow-hidden" style="height: 340px;">
+        <div class="text-[9px] text-cyan-400/80 px-2 pt-1.5 pb-1 border-b border-cyan-500/20 flex items-center gap-1">
+          <span>🎯</span>
+          <span>底层资产归因与风险</span>
+        </div>
+        <AttributionPanel
+          :portfolioId="store.activePid"
+          class="w-full"
+          style="height: calc(100% - 24px);"
+        />
+      </div>
+
       <!-- 行业归因 -->
       <div v-if="sectorAttribution && sectorAttribution.length > 0" class="mt-2 p-2 rounded border border-theme bg-terminal-panel/50">
         <div class="text-[9px] text-terminal-dim mb-1">🏭 行业分布</div>
@@ -499,6 +512,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { logger } from '../utils/logger.js'
+import AttributionPanel from './AttributionPanel.vue'
 // echarts 从 CDN 加载 via window.echarts
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 

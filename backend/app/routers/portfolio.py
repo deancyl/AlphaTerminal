@@ -491,3 +491,262 @@ def _save_snapshot_impl(portfolio_id: int):
         "total_cost": round(total_cost, 2),
         "pnl_pct": round((total_asset-total_cost)/total_cost*100, 2) if total_cost else 0.0
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Task 9: 底层资产归因与风险分析
+# ═══════════════════════════════════════════════════════════════
+
+def _classify_asset(symbol: str, name: str = "") -> dict:
+    """
+    根据 symbol + name 推断底层资产类型与细分板块。
+    返回: { category, sub_category, is_index }
+    """
+    sym = symbol.strip().lower()
+    name_lower = name.lower()
+    raw_code = sym.removeprefix("sh").removeprefix("sz").removeprefix("hk").removeprefix("us").removeprefix("jp").removeprefix("bj")
+
+    # ── 固收：国债/国开债/地方债 ────────────────────────────────
+    if any(kw in name_lower for kw in ["国债", "国开", "地方债", "政金债", "债券", "债"]):
+        return {"category": "bond", "sub_category": "利率债", "is_index": False}
+
+    # ── 商品期货 ────────────────────────────────────────────────
+    if raw_code.upper() in ("AU", "AG", "CU", "AL", "ZN", "PB", "NI", "SN",
+                             "RU", "RB", "HC", "I", "J", "JM", "焦煤",
+                             "原油", "燃油", "沥青", "棕榈", "豆油", "菜油",
+                             "棉花", "白糖", "苹果", "红枣"):
+        return {"category": "futures", "sub_category": "商品期货", "is_index": False}
+    if any(kw in name_lower for kw in ["黄金", "白银", "铜", "铝", "锌", "镍", "螺纹", "铁矿石", "焦炭", "原油"]):
+        return {"category": "futures", "sub_category": "商品期货", "is_index": False}
+
+    # ── 货币基金 / 现金管理 ────────────────────────────────────
+    if raw_code.startswith("51") and len(raw_code) == 6:
+        return {"category": "money_fund", "sub_category": "货币基金", "is_index": False}
+
+    # ── 宽基指数 ETF（代码特征）─────────────────────────────────
+    if raw_code.startswith("51") or raw_code.startswith("15") or raw_code.startswith("56"):
+        return {"category": "etf", "sub_category": "宽基ETF", "is_index": True}
+    if raw_code in ("000001", "000300", "000016", "000688", "000905", "000852",
+                    "399001", "399006", "399100", "399005", "399673"):
+        return {"category": "index", "sub_category": "A股指数", "is_index": True}
+
+    # ── 港股 ────────────────────────────────────────────────────
+    if sym.startswith("hk"):
+        return {"category": "hk_stock", "sub_category": "港股", "is_index": False}
+
+    # ── A股（sh6 / sz0,3 开头个股）───────────────────────────────
+    if raw_code.startswith("6") or raw_code.startswith("0") or raw_code.startswith("3"):
+        return {"category": "a_stock", "sub_category": "A股个股", "is_index": False}
+
+    return {"category": "other", "sub_category": "其他", "is_index": False}
+
+
+@router.get("/{portfolio_id}/attribution")
+async def get_attribution(portfolio_id: int, include_children: bool = Query(False)):
+    """
+    底层资产归因 + 组合风险（VaR / 波动率估算）。
+
+    分类规则：
+      - sh510xxx / sz159xxx → 宽基ETF
+      - sh000xxx / sz399xxx → A股指数
+      - 国债/国开/债券关键词 → 利率债
+      - AU/AG/黄金/白银 等 → 商品期货
+      - sh6xxxxx / sz0/3xxxx → A股个股
+      - hkxxxxx → 港股
+
+    返回:
+      - attribution[]   各底层资产组的权重、收益贡献
+      - risk_metrics     日VaR(95%)、年化波动率、夏普比率
+      - total_exposure   各 category 的总仓位占比
+    """
+    from app.db.database import _get_conn
+    from app.services.sentiment_engine import SpotCache
+
+    # ── 1. 获取持仓 ────────────────────────────────────────────
+    with _lock:
+        conn = _get_conn()
+        try:
+            if include_children:
+                all_ids = [portfolio_id]
+                cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
+                all_ids += [r[0] for r in cur]
+                ph = ','.join(['?'] * len(all_ids))
+                rows = conn.execute(
+                    f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
+                    tuple(all_ids)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+                    (portfolio_id,)
+                ).fetchall()
+        finally:
+            conn.close()
+
+    if not rows:
+        return _ok({"attribution": [], "risk_metrics": None, "total_exposure": []})
+
+    # ── 2. 获取最新价格 ────────────────────────────────────────
+    spot = SpotCache.get_stocks()
+    price_map = {}
+    for s in spot:
+        code = s.get("code", "")
+        price_map[code] = s
+        if len(code) > 2:
+            price_map[code[2:]] = s
+            price_map[code.lower()] = s
+            price_map[code.upper()] = s
+
+    if len(price_map) < 10:
+        conn2 = _get_conn()
+        try:
+            db_rows = conn2.execute(
+                "SELECT symbol, name, price, change_pct FROM market_all_stocks WHERE price > 0"
+            ).fetchall()
+            for r in db_rows:
+                sym, name, price, chg_pct = r
+                price_map[sym] = {"code": sym, "name": name, "price": float(price or 0), "chg_pct": float(chg_pct or 0)}
+                if len(sym) > 2:
+                    price_map[sym[2:]] = price_map[sym]
+        finally:
+            conn2.close()
+
+    # ── 3. 逐条计算持仓盈亏并分类 ──────────────────────────────
+    groups = {}
+
+    for symbol, shares, avg_cost in rows:
+        info = price_map.get(symbol, {})
+        if not info and len(symbol) == 6:
+            info = price_map.get(f"sh{symbol}", {})
+            if not info:
+                info = price_map.get(f"sz{symbol}", {})
+        if not info:
+            info = price_map.get(symbol[2:]) if len(symbol) > 2 else {}
+
+        price        = info.get("price", avg_cost)
+        name         = info.get("name", symbol)
+        market_value = shares * price
+        cost         = shares * avg_cost
+        pnl          = market_value - cost
+        pnl_pct      = (pnl / cost * 100) if cost > 0 else 0.0
+
+        cls = _classify_asset(symbol, name)
+        cat = cls["category"]
+
+        if cat not in groups:
+            groups[cat] = {
+                "category":     cat,
+                "sub_category": cls["sub_category"],
+                "is_index":     cls["is_index"],
+                "market_value": 0.0,
+                "cost":         0.0,
+                "pnl":          0.0,
+                "positions":    [],
+            }
+        groups[cat]["market_value"] += market_value
+        groups[cat]["cost"]         += cost
+        groups[cat]["pnl"]          += pnl
+        groups[cat]["positions"].append({
+            "symbol":       symbol,
+            "name":         name,
+            "shares":       shares,
+            "avg_cost":     avg_cost,
+            "price":        price,
+            "market_value": round(market_value, 2),
+            "cost":         round(cost, 2),
+            "pnl":          round(pnl, 2),
+            "pnl_pct":      round(pnl_pct, 2),
+        })
+
+    # ── 4. 汇总计算 ────────────────────────────────────────────
+    total_mv    = sum(g["market_value"] for g in groups.values())
+    total_cost  = sum(g["cost"]        for g in groups.values())
+    total_pnl   = sum(g["pnl"]         for g in groups.values())
+
+    attribution = []
+    for g in groups.values():
+        w  = g["market_value"] / total_mv if total_mv > 0 else 0
+        pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
+        attribution.append({
+            "category":        g["category"],
+            "sub_category":    g["sub_category"],
+            "is_index":        g["is_index"],
+            "market_value":    round(g["market_value"], 2),
+            "cost":            round(g["cost"], 2),
+            "pnl":             round(g["pnl"], 2),
+            "weight":          round(w * 100, 2),
+            "pnl_contrib_pct": round(pc, 2),
+            "position_count":  len(g["positions"]),
+            "positions":       g["positions"][:5],
+        })
+
+    attribution.sort(key=lambda x: x["market_value"], reverse=True)
+
+    # ── 5. 底层资产配置 ────────────────────────────────────────
+    total_exposure = [
+        {"name": g["sub_category"], "category": g["category"],
+         "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
+        for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
+    ]
+
+    # ── 6. 风险指标 ────────────────────────────────────────────
+    risk_metrics = None
+    try:
+        with _lock:
+            conn3 = _get_conn()
+            snap_rows = conn3.execute(
+                "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
+                (portfolio_id,)
+            ).fetchall()
+            conn3.close()
+
+        if snap_rows and len(snap_rows) >= 5:
+            assets  = [float(r[1]) for r in snap_rows]
+            returns = [(assets[i] - assets[i-1]) / assets[i-1]
+                       for i in range(1, len(assets)) if assets[i-1] > 0]
+
+            if returns:
+                import math
+                mean_ret  = sum(returns) / len(returns)
+                variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+                daily_vol = math.sqrt(variance)
+                ann_vol   = daily_vol * math.sqrt(252)
+
+                try:
+                    from statistics import NormalDist
+                    z_95 = NormalDist().inv_cdf(0.95)
+                except Exception:
+                    z_95 = 1.645
+
+                latest_asset  = assets[-1]
+                var_daily_95  = latest_asset * z_95 * daily_vol
+
+                risk_free     = 0.03
+                years         = max(len(assets) / 252, 0.01)
+                total_ret     = (assets[-1] - assets[0]) / assets[0]
+                ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
+                sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
+
+                risk_metrics = {
+                    "var_daily_95":      round(var_daily_95, 2),
+                    "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
+                    "annual_volatility": round(ann_vol * 100, 2),
+                    "sharpe_ratio":      round(sharpe, 2),
+                    "total_return_pct":  round(total_ret * 100, 2),
+                    "annual_return_pct": round(ann_ret * 100, 2),
+                    "days":              len(assets),
+                }
+    except Exception as e:
+        logger.warning(f"[Attribution] risk_metrics error: {e}")
+
+    return _ok({
+        "attribution":    attribution,
+        "total_exposure":  total_exposure,
+        "risk_metrics":    risk_metrics,
+        "summary": {
+            "total_market_value": round(total_mv, 2),
+            "total_cost":        round(total_cost, 2),
+            "total_pnl":         round(total_pnl, 2),
+            "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
+        },
+    })
