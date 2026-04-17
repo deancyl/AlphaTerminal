@@ -709,12 +709,12 @@ async def market_symbols():
     merged = list(_SYMBOL_REGISTRY) + [
         s for s in all_stocks if s['symbol'] not in static_symbols
     ]
-    return {
+    return success_response({
         'symbols': merged,
         'count': len(merged),
         'loaded': _STOCK_NAMES_LOADED,
         'timestamp': datetime.now().isoformat(),
-    }
+    })
 
 
 @router.get("/market/lookup/{symbol}")
@@ -750,7 +750,7 @@ async def market_quote(symbol: str):
     prev_c = float(prev.get('close') or close)
     chg    = close - prev_c
     chg_pct = (chg / prev_c * 100) if prev_c else 0
-    return {
+    return success_response({
         'symbol':       norm,
         'price':        close,
         'change':       round(chg, 3),
@@ -760,7 +760,7 @@ async def market_quote(symbol: str):
         'amplitude':    round((float(latest.get('high') or 0) / float(latest.get('low') or 1) - 1) * 100, 2) if latest.get('high') and latest.get('low') else 0,
         'turnover_rate': float(latest.get('turnover_rate') or 0),
         'timestamp':     datetime.now().isoformat(),
-    }
+    })
 
 
 # ── Phase 9: 历史K线（多周期路由）────────────────────────────────────────
@@ -843,18 +843,14 @@ async def get_fund_flow():
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
         
-        return {
-            "code": 0,
-            "message": "success",
-            "data": {
-                "items": result,
-                "total": len(result),
-                "source": "akshare - stock_market_fund_flow"
-            }
-        }
+        return success_response({
+            "items": result,
+            "total": len(result),
+            "source": "akshare - stock_market_fund_flow"
+        })
     except Exception as e:
         logger.error(f"market_fund_flow error: {e}")
-        return {"code": 500, "message": f"获取资金流数据失败: {str(e)}", "data": {"items": []}}
+        return error_response(ErrorCode.THIRD_PARTY_ERROR, f"获取资金流数据失败: {str(e)}")
 
 
 @router.get("/market/history/{symbol}")
@@ -1468,7 +1464,7 @@ async def switch_source(source: str):
     ok = set_primary_source(source)
     if ok:
         return success_response({"message": f"主源已切换为: {source}"})
-    return {"code": 1, "message": f"无效的数据源: {source}"}
+    return error_response(ErrorCode.BAD_REQUEST, f"无效的数据源: {source}")
 
 
 @router.get("/source/test")
@@ -1597,7 +1593,7 @@ async def set_alpha_vantage_key(config: dict):
     if new_key:
         DATA_SOURCES["alpha_vantage"]["api_key"] = new_key
         return success_response({"message": "API Key已更新", "api_key": new_key})
-    return {"code": 1, "message": "API Key不能为空"}
+    return error_response(ErrorCode.BAD_REQUEST, "API Key不能为空")
 
 
 # ── 版本与系统信息 ─────────────────────────────────────────────────────
@@ -1726,11 +1722,11 @@ async def get_order_book(symbol: str):
             import re
             match = re.search(r'="(.+)"', text)
             if not match:
-                return {"code": 1, "message": "无数据", "data": None}
+                return error_response(ErrorCode.NOT_FOUND, "无数据")
             
             fields = match.group(1).split(',')
             if len(fields) < 30:
-                return {"code": 1, "message": "数据不足", "data": None}
+                return error_response(ErrorCode.NOT_FOUND, "数据不足")
             
             # 解析10档数据
             # 字段10-19是卖盘(5档): [卖5量,卖5价,卖4量,卖4价,卖3量,卖3价,卖2量,卖2价,卖1量,卖1价]
