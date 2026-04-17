@@ -8,6 +8,7 @@ import os
 import psutil
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
@@ -16,6 +17,12 @@ from app.services import quote_source
 from app.services.scheduler import scheduler
 from app.services.sectors_cache import is_ready as sectors_cache_ready
 from app.db.database import _get_conn, _db_path
+
+# ── 动态路径配置（解决硬编码路径问题）────────────────────────────────────────
+# BASE_DIR = AlphaTerminal 项目根目录
+BASE_DIR = Path(__file__).resolve().parent.parent.parent   # app/routers/admin.py → app/ → backend/ → AlphaTerminal/
+# 默认日志目录
+_DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -376,9 +383,11 @@ async def get_recent_logs(lines: int = 100, level: str = None):
     import re
     from datetime import datetime
     
+    # 动态构建日志文件路径（支持环境变量覆盖）
+    log_dir = os.environ.get("LOG_DIR", str(_DEFAULT_LOG_DIR))
     log_files = [
-        "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/app.log",
-        "/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal/backend/backend.log",
+        os.path.join(log_dir, "app.log"),
+        os.path.join(log_dir, "backend.log"),
     ]
     
     # 找到存在的日志文件
