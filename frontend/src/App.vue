@@ -150,9 +150,6 @@
         <DashboardGrid
           v-if="currentView === 'stock'"
           :market-data="marketOverview"
-          :macro-data="macroData"
-          :rates-data="ratesData"
-          :global-data="globalData"
           :china-all-data="chinaAllData"
           :sectors-data="sectorsData"
           :derivatives-data="derivativesData"
@@ -186,12 +183,9 @@
     >
       <CopilotSidebar
         :market-overview="marketOverview"
-        :global-data="globalData"
         :china-all-data="chinaAllData"
         :sectors-data="sectorsData"
         :derivatives-data="derivativesData"
-        :rates-data="ratesData"
-        :news-data="newsData"
         :watch-list="watchList"
         @open-chart="openFullscreenKline"
         @show-north-flow="showNorthFlow"
@@ -320,10 +314,6 @@ function showUnusual() {
 }
 
 const marketOverview  = ref(null)
-const macroData      = ref([])   // Phase 5: USD/CNH · 黄金 · WTI · VIX
-const ratesData       = ref([])
-const newsData        = ref([])
-const globalData      = ref([])
 const chinaAllData    = ref([])
 const sectorsData     = ref([])
 const derivativesData = ref([])
@@ -361,27 +351,13 @@ async function fetchMedFreq() {
   } catch { /* apiErrorState 已记录 */ }
 }
 
-// ── 低频组：宏观/利率/海外/新闻（5分钟）───────────────────────────────────
-async function fetchLowFreq() {
-  try {
-    const d = await fetchApiBatch([
-      { url: '/api/v1/market/macro', key: 'macro', default: [] },
-      { url: '/api/v1/market/rates', key: 'rates', default: [] },
-      { url: '/api/v1/market/global', key: 'global', default: [] },
-      { url: '/api/v1/news/flash', key: 'news', default: [] },
-    ])
-    macroData.value   = d.macro?.macro || d.macro?.data?.macro || d.macro || []
-    ratesData.value   = d.rates?.rates || d.rates?.data?.rates || d.rates || []
-    globalData.value  = d.global?.global || d.global?.data?.global || d.global || []
-    newsData.value    = d.news?.news || d.news?.data?.news || (Array.isArray(d.news) ? d.news : [])
-  } catch { /* apiErrorState 已记录 */ }
-}
+// low-freq data (macro/rates/global/news) 已下放到各组件内部自持
 
-// ── 计数：三个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
+// ── 计数：两个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
 let _loadedCount = 0
 function _checkInitDone() {
   _loadedCount++
-  if (_loadedCount >= 3) {
+  if (_loadedCount >= 2) {
     isInitialLoading.value = false
     _loadedCount = 0
   }
@@ -390,17 +366,16 @@ function _checkInitDone() {
 // ── 错峰轮询（useIntervalFn 自动处理组件卸载清理）───────────────────────
 const { pause: pauseHigh, resume: resumeHigh } = useIntervalFn(fetchHighFreq, 10_000, { immediate: false })
 const { pause: pauseMed, resume: resumeMed } = useIntervalFn(fetchMedFreq, 60_000, { immediate: false })
-const { pause: pauseLow, resume: resumeLow } = useIntervalFn(fetchLowFreq, 300_000, { immediate: false })
 
 // ── 页面可见性控制 ─────────────────────────────────────────────────────
 const visibility = useDocumentVisibility()
 
 watch(visibility, (v) => {
   if (v === 'visible') {
-    resumeHigh(); resumeMed(); resumeLow()
+    resumeHigh(); resumeMed()
     fetchHighFreq()  // 可见时立即拉一次高频
   } else {
-    pauseHigh(); pauseMed(); pauseLow()
+    pauseHigh(); pauseMed()
   }
 })
 
@@ -408,20 +383,19 @@ onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
 
-  // 首屏：三个梯队并发启动（浏览器自动调度，无 Stalled）
+  // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）
   fetchHighFreq().then(_checkInitDone)
   fetchMedFreq().then(_checkInitDone)
-  fetchLowFreq().then(_checkInitDone)
 
   // 启动错峰轮询（仅在页面可见时）
   if (visibility.value === 'visible') {
-    resumeHigh(); resumeMed(); resumeLow()
+    resumeHigh(); resumeMed()
   }
 })
 
 onUnmounted(() => {
   clearInterval(clockTimer)
-  pauseHigh(); pauseMed(); pauseLow()
+  pauseHigh(); pauseMed()
 })
 </script>
 

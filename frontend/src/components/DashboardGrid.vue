@@ -19,7 +19,7 @@
     </div>
     <!-- 新闻快讯 -->
     <div class="terminal-panel p-3 min-h-[200px]">
-      <NewsFeed :news="newsData" class="w-full h-[160px]" />
+      <NewsFeed class="w-full h-[160px]" />
     </div>
   </div>
 
@@ -204,13 +204,8 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
-import IndexLineChart    from './IndexLineChart.vue'
-import NewsFeed from './NewsFeed.vue'
-import SentimentGauge from './SentimentGauge.vue'
-import HotSectors from './HotSectors.vue'
-import FundFlowPanel from './FundFlowPanel.vue'
-import StockScreener from './StockScreener.vue'
+import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility } from '@vueuse/core'
+import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
@@ -221,9 +216,6 @@ const currentIndexName = ref('上证指数')
 
 const props = defineProps({
   marketData:     { type: Object, default: null },
-  macroData:      { type: Array,  default: () => [] },
-  ratesData:      { type: Array,  default: () => [] },
-  globalData:     { type: Array,  default: () => [] },
   chinaAllData:   { type: Array,  default: () => [] },
   sectorsData:    { type: Array,  default: () => [] },
   derivativesData:{ type: Array,  default: () => [] },
@@ -374,7 +366,7 @@ const tsDisplay  = computed(() => timestamp.value.slice(11, 19) || '')
 const windItems = computed(() => {
   // 修复: marketData 从 App.vue 传来时已经是 wind 对象本身（不是 {wind: {...}}）
   const indices = props.marketData || {}
-  const macros  = props.macroData  || []
+  const macros  = macroData.value || []
 
   // 指数行（实时 Sina 数据：item.price 是当前价）
   const indexRows = Object.entries(indices).map(([sym, item]) => ({
@@ -399,8 +391,50 @@ const windItems = computed(() => {
 
   return [...indexRows, ...macroRows]
 })
-const globalItems = computed(() => props.globalData || [])
+const globalItems = computed(() => globalData.value || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
+
+// ── 低频数据自持（宏观/利率/海外，5分钟轮询）────────────────────────
+const macroData  = ref([])
+const ratesData  = ref([])
+const globalData = ref([])
+
+async function fetchLowFreq() {
+  try {
+    const d = await apiFetch('/api/v1/market/macro')
+    macroData.value = d?.macro || d?.data?.macro || d || []
+  } catch { /* silent */ }
+  try {
+    const d = await apiFetch('/api/v1/market/rates')
+    ratesData.value = d?.rates || d?.data?.rates || d || []
+  } catch { /* silent */ }
+  try {
+    const d = await apiFetch('/api/v1/market/global')
+    globalData.value = d?.global || d?.data?.global || d || []
+  } catch { /* silent */ }
+}
+
+const { pause: pauseLow, resume: resumeLow } = useIntervalFn(fetchLowFreq, 300_000, { immediate: false })
+const visibility = useDocumentVisibility()
+
+watch(visibility, (v) => {
+  if (v === 'visible') { resumeLow(); fetchLowFreq() }
+  else { pauseLow() }
+})
+
+onMounted(async () => {
+  fetchLowFreq()
+  await nextTick()
+  if (typeof window !== 'undefined' && window.GridStack) {
+    grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
+    grid.setStatic(props.isLocked)
+  }
+})
+
+onUnmounted(() => {
+  grid?.destroy(false)
+  pauseLow()
+})
 
 function formatPrice(v) {
   if (v == null || isNaN(v)) return '--'

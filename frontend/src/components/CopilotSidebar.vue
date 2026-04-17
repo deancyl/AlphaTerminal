@@ -368,8 +368,6 @@ const quickCommands = [
 // Props
 const props = defineProps({
   marketOverview: { type: Object, default: null },
-  ratesData:     { type: Array,  default: () => [] },
-  newsData:      { type: Array,  default: () => [] },
   watchList:     { type: Array,  default: () => [] },
 })
 
@@ -883,9 +881,7 @@ async function sendToLLM(text) {
     if (ctxMarket.value && props.marketOverview) {
       context += formatMarketOverview(props.marketOverview) + '\n'
     }
-    if (ctxNews.value && props.newsData?.length > 0) {
-      context += '\n📰 最新快讯：\n' + props.newsData.slice(0, 3).map(n => `- ${n.title}`).join('\n')
-    }
+    
     
     // 根据模式选择不同的生成方式
     if (llmMode.value === 'webllm' && webllmReady.value && webllmEngine) {
