@@ -305,8 +305,21 @@
         <h3 class="text-lg font-bold text-theme-primary mb-2">⚠️ 确认操作</h3>
         <p class="text-sm text-theme-secondary mb-4">{{ confirmMessage }}</p>
         <div class="flex gap-3 justify-end">
-          <button class="px-4 py-2 bg-theme-secondary/50 text-theme-secondary rounded text-sm" @click="showConfirm = false">取消</button>
-          <button class="px-4 py-2 bg-red-500/20 text-red-400 rounded text-sm" @click="executeConfirm">确定执行</button>
+          <button
+            class="px-4 py-2 bg-theme-secondary/50 text-theme-secondary rounded text-sm cursor-not-allowed"
+            :class="{ 'opacity-50': isSubmitting }"
+            :disabled="isSubmitting"
+            @click="showConfirm = false"
+          >取消</button>
+          <button
+            class="px-4 py-2 bg-red-500/20 text-red-400 rounded text-sm"
+            :class="{ 'opacity-50 cursor-not-allowed': isSubmitting }"
+            :disabled="isSubmitting"
+            @click="executeConfirm"
+          >
+            <span v-if="isSubmitting">执行中...</span>
+            <span v-else>确定执行</span>
+          </button>
         </div>
       </div>
     </div>
@@ -334,6 +347,7 @@ const navItems = [
 const showConfirm = ref(false)
 const confirmMessage = ref('')
 const confirmCallback = ref(null)
+const isSubmitting = ref(false)
 
 function confirmAction(title, message, callback) {
   confirmMessage.value = message
@@ -341,9 +355,16 @@ function confirmAction(title, message, callback) {
   showConfirm.value = true
 }
 
-function executeConfirm() {
-  if (confirmCallback.value) confirmCallback.value()
-  showConfirm.value = false
+async function executeConfirm() {
+  if (!confirmCallback.value) return
+  if (isSubmitting.value) return  // 防止重复提交
+  isSubmitting.value = true
+  try {
+    await confirmCallback.value()
+  } finally {
+    isSubmitting.value = false
+    showConfirm.value = false
+  }
 }
 
 function formatTime(isoTime) {
