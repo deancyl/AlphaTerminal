@@ -6,6 +6,7 @@
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { UP, DOWN } from '../utils/indicators.js'
 import { logger } from '../utils/logger.js'
+import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 
 
 
@@ -122,48 +123,21 @@ function buildOption(cData) {
       }
     )
 
-    // 叠加标的系列
-    if (overlaySeriesData && overlaySeriesData.length > 0) {
-      let ovSeriesData = overlaySeriesData
+    // 叠加标的系列（使用 buildOverlaySeries 规范化注入 + 右侧双轴）
+    const { series: ovSeries, hasOverlay } = buildOverlaySeries(
+      props.chartData,
+      overlaySeriesData ?? [],
+      '#f97316'   // 亮橙色高辨识度
+    )
 
-      if (overlayYAxis?.type === 'normalized') {
-        // 量级差异大（沪深300≈4000 vs 10年国债≈2.5%）：min-max 归一化到 0~100
-        const { min: ovMin, max: ovMax } = overlayYAxis
-        const ovRange = ovMax - ovMin
-        ovSeriesData = overlaySeriesData.map(([i, v]) =>
-          v == null ? [i, null] : [i, ovRange > 0 ? +((v - ovMin) / ovRange * 100).toFixed(4) : 50]
-        )
-      }
-
+    if (hasOverlay && ovSeries.length > 0) {
       yAxes.push({
         type: 'value', gridIndex: 0, position: 'right',
-        ...(overlayYAxis?.type === 'normalized'
-          ? { min: 0, max: 100, axisLabel: { show: true, fontSize: 9, color: '#9ca3af', formatter: (v) => v != null ? v.toFixed(1) + '%' : '' } }
-          : { axisLabel: { show: true, fontSize: 9, color: '#9ca3af', formatter: (val) => val != null ? val.toFixed(2) : '' } }
-        ),
+        splitLine: { show: false },          // 防止副轴网格干扰主图
         axisLine: { show: true, lineStyle: { color: '#6b7280' } },
-        splitLine: { show: false },
+        axisLabel: { show: true, fontSize: 9, color: '#f97316' },
       })
-
-      series.push({
-        name: '叠加',
-        type: 'line',
-        data: ovSeriesData,
-        xAxisIndex: 0,
-        yAxisIndex: yAxes.length - 1,
-        symbol: 'none',
-        lineStyle: { color: '#60a5fa', width: 1.5, type: 'solid' },
-        tooltip: {
-          formatter: (p) => {
-            if (overlayYAxis?.type === 'normalized') {
-              const { min: ovMin, max: ovMax } = overlayYAxis
-              const rawVal = overlaySeriesData[p.dataIndex]?.[1]
-              return rawVal != null ? `叠加: ${rawVal.toFixed(4)} (${ovMin.toFixed(4)}~${ovMax.toFixed(4)})` : '叠加: N/A'
-            }
-            return `叠加: ${p.value?.[1] ?? '-'}`
-          }
-        },
-      })
+      series.push(...ovSeries)
     }
   }
 
@@ -276,6 +250,35 @@ function buildOption(cData) {
       axisPointer: { type: 'cross', crossStyle: { color: '#555' } },
       backgroundColor: '#1e2130', borderColor: '#374151',
       textStyle: { color: '#d1d5db', fontSize: 11 },
+      // 高阶混排 formatter：同时展示 K 线 OHLCV + 对比线数值
+      formatter(params) {
+        if (!Array.isArray(params) || !params.length) return ''
+        const kp = params.find(p => p.seriesType === 'candlestick')
+        if (!kp) return ''
+        const vals = kp.data
+        if (!vals) return ''
+        const [o, c, l, hi] = vals
+        const isUp  = c >= o
+        const color = isUp ? UP : DOWN
+        const sign  = isUp ? '+' : ''
+        const chgPct = o > 0 ? ((c - o) / o * 100).toFixed(2) : '0.00'
+        const chgAbs = (c - o).toFixed(2)
+        let html = `<span style="color:#94a3b8;font-size:10px">${kp.axisValue}</span><br/>`
+        html += `<span style="color:${color}">开 ${o?.toFixed(2)}</span> &nbsp; `
+        html += `<span style="color:${color}">收 ${c?.toFixed(2)}</span> &nbsp; `
+        html += `<span style="color:${color}">涨跌 ${sign}${chgAbs} (${sign}${chgPct}%)</span><br/>`
+        html += `<span style="color:#6b7280">低 ${l?.toFixed(2)}</span> &nbsp; `
+        html += `<span style="color:#6b7280">高 ${hi?.toFixed(2)}</span>`
+        const OV_COLOR = '#f97316'
+        const ovParams = params.filter(p => p.seriesType === 'line' && p.seriesName === '对比')
+        ovParams.forEach(p => {
+          const rawVal = p.value?.[1]
+          if (rawVal != null) {
+            html += `<br/><span style="color:${OV_COLOR}">➟ 对比 ${p.value[1]?.toFixed(4)}</span>`
+          }
+        })
+        return html
+      },
     },
     legend: { show: false },
     grid: grids,
