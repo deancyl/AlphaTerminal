@@ -211,7 +211,7 @@ import SentimentGauge from './SentimentGauge.vue'
 import HotSectors from './HotSectors.vue'
 import FundFlowPanel from './FundFlowPanel.vue'
 import StockScreener from './StockScreener.vue'
-import { useMarketStore } from '../composables/useMarketStore.js'
+import { useMarketStore } from '../stores/market.js'
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile

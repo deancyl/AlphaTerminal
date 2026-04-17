@@ -771,7 +771,7 @@ watch(() => props.symbol, async (sym) => {
   currentName.value = props.name || '指标图表'
 })
 
-// indicators 独立 watch（避免 symbol+url 同时变化时的重复请求）
+// 指标 watch（独立，不与 symbol watch 联动，防止 symbol+indicators 同时变化触发两次）
 watch(() => props.indicators, () => { fetchAndRender() }, { deep: true })
 
 let unsubscribeTheme = null

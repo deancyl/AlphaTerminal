@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -9,12 +9,51 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css" />
     <!-- ECharts CDN -->
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+
+    <!-- ══ FOUC 修复：同步应用主题 CSS 变量（在 Vue 渲染前执行）══ -->
     <script>
-      // 主题初始化脚本（在 Vue 加载前执行，防止闪烁）
-      (function() {
-        const savedTheme = localStorage.getItem('alphaterminal-theme') || 'dark'
-        document.documentElement.setAttribute('data-theme', savedTheme)
-      })()
+    (function () {
+      var THEMES = {
+        dark: {
+          '--bg-primary':'#0a0e17','--bg-secondary':'#111827','--bg-tertiary':'#1f2937',
+          '--text-primary':'#f3f4f6','--text-secondary':'#9ca3af','--text-tertiary':'#6b7280',
+          '--border-primary':'#374151','--border-secondary':'#1f2937',
+          '--accent-primary':'#00ff88','--accent-bg':'rgba(0,255,136,0.10)',
+          '--bullish':'#ef232a','--bearish':'#14b143',
+          '--panel-bg':'#111827',
+        },
+        black: {
+          '--bg-primary':'#000000','--bg-secondary':'#0a0a0a','--bg-tertiary':'#141414',
+          '--text-primary':'#ffffff','--text-secondary':'#b0b0b0','--text-tertiary':'#808080',
+          '--border-primary':'#2a2a2a','--border-secondary':'#1a1a1a',
+          '--accent-primary':'#00ff88','--accent-bg':'rgba(0,255,136,0.15)',
+          '--bullish':'#ff3333','--bearish':'#33ff66',
+          '--panel-bg':'#0a0a0a',
+        },
+        wind: {
+          '--bg-primary':'#1a1f2e','--bg-secondary':'#232838','--bg-tertiary':'#2d3447',
+          '--text-primary':'#e8eaed','--text-secondary':'#a8adb5','--text-tertiary':'#7a8194',
+          '--border-primary':'#3d4559','--border-secondary':'#2a3142',
+          '--accent-primary':'#ffc107','--accent-bg':'rgba(255,193,7,0.15)',
+          '--bullish':'#ff4d4f','--bearish':'#52c41a',
+          '--panel-bg':'#232838',
+        },
+        light: {
+          '--bg-primary':'#f5f6f8','--bg-secondary':'#ffffff','--bg-tertiary':'#f0f1f3',
+          '--text-primary':'#1a1a1a','--text-secondary':'#4a4a4a','--text-tertiary':'#7a7a7a',
+          '--border-primary':'#d9d9d9','--border-secondary':'#e8e8e8',
+          '--accent-primary':'#1890ff','--accent-bg':'rgba(24,144,255,0.10)',
+          '--bullish':'#cf1322','--bearish':'#389e0d',
+          '--panel-bg':'#ffffff',
+        },
+      };
+      var saved = localStorage.getItem('alphaterminal-theme') || 'dark';
+      var cfg = THEMES[saved] || THEMES.dark;
+      var root = document.documentElement;
+      for (var k in cfg) root.style.setProperty(k, cfg[k]);
+      root.setAttribute('data-theme', saved);
+      root.className = 'theme-' + saved;
+    })();
     </script>
   </head>
   <body>

@@ -229,7 +229,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useVirtualList } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
-import { useMarketStore } from '../composables/useMarketStore.js'
+import { useMarketStore } from '../stores/market.js'
 import { normalizeFields } from '../utils/api.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
 

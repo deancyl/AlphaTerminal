@@ -133,7 +133,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import Fuse from 'fuse.js'
-import { useMarketStore } from '../composables/useMarketStore.js'
+import { useMarketStore } from '../stores/market.js'
 import { useDataSourceStatus, onDataSourceStatusChange } from '../composables/useDataSourceStatus.js'
 import { normalizeSymbol } from '../utils/symbols.js'
 

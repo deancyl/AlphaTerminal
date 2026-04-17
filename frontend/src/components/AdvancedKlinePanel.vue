@@ -139,7 +139,7 @@
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
 import { logger } from '../utils/logger.js'
 
-import { useMarketStore } from '../composables/useMarketStore.js'
+import { useMarketStore } from '../stores/market.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { apiFetch } from '../utils/api.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
