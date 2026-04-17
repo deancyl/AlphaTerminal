@@ -7,7 +7,7 @@
       <div class="flex items-center gap-2">
         <input v-model="searchQuery" type="text" placeholder="搜索代码/名称"
                class="w-24 bg-terminal-bg border border-theme rounded px-2 py-0.5 text-[9px] text-theme-primary placeholder:text-theme-muted focus:border-terminal-accent outline-none" />
-        <span class="text-terminal-dim text-[10px]">{{ filteredStocks.length }} 只</span>
+        <span class="text-terminal-dim text-[10px]">{{ total }} 只</span>
         <span class="w-1.5 h-1.5 rounded-full"
               :class="loading ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
       </div>
@@ -183,7 +183,7 @@
             <!-- 空状态 -->
             <tr v-else-if="!virtualRows.length">
               <td colspan="10" class="py-8 text-center text-terminal-dim text-xs">
-                {{ allStocks.length === 0 ? '数据加载中...' : '无符合条件的数据' }}
+                {{ stocks.length === 0 && !loading ? '无符合条件的数据' : '数据加载中...' }}
               </td>
             </tr>
             <!-- 虚拟行 -->
@@ -195,12 +195,12 @@
               <td class="py-0.5 px-0.5 text-terminal-dim text-[9px] w-14">{{ stock.code }}</td>
               <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16">{{ fmtPrice(stock.price) }}</td>
               <td class="py-0.5 px-0.5 text-right font-mono text-[10px] w-16"
-                  :class="stock.chg_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ fmtPct(stock.chg_pct) }}
+                  :class="stock.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ fmtPct(stock.change_pct) }}
               </td>
               <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-14"
-                  :class="stock.chg >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ fmtChg(stock.chg) }}
+                  :class="stock.change >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ fmtChg(stock.change) }}
               </td>
               <td class="py-0.5 px-0.5 text-right font-mono text-[9px] w-12"
                   :class="stock.turnover > 5 ? 'text-yellow-400' : 'text-terminal-dim'">
@@ -227,215 +227,128 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useVirtualList } from '@vueuse/core'
+import { useVirtualList, useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
-import { normalizeFields } from '../utils/api.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
+import { apiFetch } from '../utils/api.js'
 
-const { setSymbol } = useMarketStore()
+// ── 服务端分页数据状态（替代全量 allStocks）────────────────────
+const stocks       = ref([])      // 当前页数据
+const total        = ref(0)       // 符合条件总数
+const currentPage  = ref(1)
+const pageSize      = ref(50)
+const totalPages   = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
-// ── 数据状态 ─────────────────────────────────────────────────────
-const allStocks = ref([])   // 全量股票（一次加载）
-const loading    = ref(false)
-const searchQuery = ref('')   // 全市场搜索
-const sortBy     = ref('chg_pct')
-const asc        = ref(false)
+// ── 本地 UI 状态 ─────────────────────────────────────────────────
+const loading      = ref(false)
+const searchQuery   = ref('')
+const sortBy        = ref('change_pct')
+const sortDir       = ref('desc')
 
 // ── 过滤条件 ─────────────────────────────────────────────────────
 const flt = ref({
   change_pct: { min: null, max: null },
   turnover:    { min: null, max: null },
-  amount:     { min: null, max: null },   // 单位：亿元（前端输入），转元后比较
+  amount:     { min: null, max: null },
   price:      { min: null, max: null },
-  pe:         { min: null, max: null },   // 市盈率
-  pb:         { min: null, max: null },   // 市净率
+  pe:         { min: null, max: null },
+  pb:         { min: null, max: null },
 })
 
 const filterActive = computed(() =>
   Object.values(flt.value).some(v => v.min !== null || v.max !== null)
 )
 
-// ── 过滤（排序职责已剥离到 filteredWithSeq）──────────────────────
-const filteredStocks = computed(() => {
-  let list = allStocks.value
-
-  // 价格过滤
-  if (flt.value.price.min !== null && flt.value.price.min !== '')
-    list = list.filter(s => s.price >= flt.value.price.min)
-  if (flt.value.price.max !== null && flt.value.price.max !== '')
-    list = list.filter(s => s.price <= flt.value.price.max)
-
-  // 涨跌幅过滤
-  if (flt.value.change_pct.min !== null && flt.value.change_pct.min !== '')
-    list = list.filter(s => s.chg_pct >= flt.value.change_pct.min)
-  if (flt.value.change_pct.max !== null && flt.value.change_pct.max !== '')
-    list = list.filter(s => s.chg_pct <= flt.value.change_pct.max)
-
-  // 换手率过滤（%）
-  if (flt.value.turnover.min !== null && flt.value.turnover.min !== '')
-    list = list.filter(s => s.turnover >= flt.value.turnover.min)
-  if (flt.value.turnover.max !== null && flt.value.turnover.max !== '')
-    list = list.filter(s => s.turnover <= flt.value.turnover.max)
-
-  // 成交额过滤（输入为亿元，转元比较）
-  if (flt.value.amount.min !== null && flt.value.amount.min !== '')
-    list = list.filter(s => s.amount >= flt.value.amount.min * 1e8)
-  if (flt.value.amount.max !== null && flt.value.amount.max !== '')
-    list = list.filter(s => s.amount <= flt.value.amount.max * 1e8)
-
-  // 市盈率 PE 过滤
-  if (flt.value.pe.min !== null && flt.value.pe.min !== '')
-    list = list.filter(s => (s.pe || 0) >= flt.value.pe.min)
-  if (flt.value.pe.max !== null && flt.value.pe.max !== '')
-    list = list.filter(s => (s.pe || 0) <= flt.value.pe.max)
-
-  // 市净率 PB 过滤
-  if (flt.value.pb.min !== null && flt.value.pb.min !== '')
-    list = list.filter(s => (s.pb || 0) >= flt.value.pb.min)
-  if (flt.value.pb.max !== null && flt.value.pb.max !== '')
-    list = list.filter(s => (s.pb || 0) <= flt.value.pb.max)
-
-  return list
-})
-
-// ── 过滤结果排序后附加 seq（不污染原始数据）────────────────────
-const filteredWithSeq = computed(() => {
-  const key = sortBy.value
-  const dir = asc.value ? 1 : -1
-  const list = [...filteredStocks.value].sort((a, b) => {
-    const av = a[key] ?? 0
-    const bv = b[key] ?? 0
-    return (av < bv ? -1 : av > bv ? 1 : 0) * dir
-  })
-  list.forEach((s, i) => { s.seq = i + 1 })
-  return list
-})
-
-// ── 虚拟滚动（替代前端分页，只渲染可见行）────────────────────────
-const ROW_HEIGHT = 32   // 每行固定高度（px）
-const LIST_HEIGHT = 400  // 虚拟列表可视区高度
+// ── 虚拟滚动（渲染当前页数据，行高固定）────────────────────────
+const ROW_HEIGHT = 32
 
 const { list: virtualRows, containerProps, wrapperProps } =
-  useVirtualList(filteredWithSeq, {
+  useVirtualList(computed(() => stocks.value), {
     itemHeight: ROW_HEIGHT,
     overshoot: 8,
   })
 
-// 过滤条件变化时自动滚动到顶部
-watch(filteredWithSeq, () => {
-  if (containerProps?.ref?.value) {
-    containerProps.ref.value.scrollTop = 0
-  }
-})
-
-// 搜索防抖（300ms后触发API搜索）
-let searchTimer = null
-watch(searchQuery, () => {
-  clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    fetchAllStocks()  // 新API支持服务端搜索
-  }, 300)
-})
-
-// ── 加载数据（从全市场缓存 API 加载，支持搜索）────────────────
-async function fetchAllStocks() {
+// ── 核心：服务端搜索（防抖 300ms）───────────────────────────────
+async function fetchStocks() {
   loading.value = true
   try {
-    // 无搜索条件时：使用一次性轻量接口（快）
-    if (!searchQuery.value.trim()) {
-      const res = await fetch('/api/v1/market/all_stocks_lite')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const d = await res.json()
-      const payload = d.data || d
-      const stocks = payload.stocks || []
-      allStocks.value = stocks.map((s, i) => ({
-        ...normalizeFields(s),
-        seq: i + 1,
-      }))
-      // logger.log(`[StockScreener] Lite 加载完成: ${stocks.length} 只`)
-      return
-    }
-    
-    // 有搜索条件时：使用分页接口
-    const pageSize = 200
-    let page = 1
-    let allFetched = []
-    
-    while (true) {
-      const params = new URLSearchParams({
-        page: String(page),
-        page_size: String(Math.min(pageSize, 200)),
-        search: searchQuery.value.trim(),
-      })
-      
-      const res = await fetch(`/api/v1/market/all_stocks?${params}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const d = await res.json()
-      const payload = d.data || d
-      const stocks = payload.stocks || []
-      
-      if (!stocks.length) break
-      
-      allFetched = allFetched.concat(stocks.map((s, i) => ({
-        ...normalizeFields(s),
-        seq: allFetched.length + i + 1,
-      })))
-      
-      if (payload.total && allFetched.length >= payload.total) break
-      if (stocks.length < pageSize) break
-      if (page >= 30) break
-      page++
-      await new Promise(r => setTimeout(r, 50))
-    }
-    
-    allStocks.value = allFetched
-    logger.log(`[StockScreener] 搜索加载完成: ${allFetched.length} 只`)
+    const params = new URLSearchParams()
+
+    if (searchQuery.value.trim()) params.set('keyword', searchQuery.value.trim())
+    if (flt.value.change_pct.min != null) params.set('min_pct_chg', flt.value.change_pct.min)
+    if (flt.value.change_pct.max != null) params.set('max_pct_chg', flt.value.change_pct.max)
+    if (flt.value.turnover.min   != null) params.set('min_turnover', flt.value.turnover.min)
+    if (flt.value.turnover.max   != null) params.set('max_turnover', flt.value.turnover.max)
+    if (flt.value.amount.min     != null) params.set('min_amount',   flt.value.amount.min * 1e8)
+    if (flt.value.amount.max     != null) params.set('max_amount',   flt.value.amount.max * 1e8)
+    if (flt.value.pe.min         != null) params.set('min_pe',       flt.value.pe.min)
+    if (flt.value.pe.max         != null) params.set('max_pe',       flt.value.pe.max)
+    if (flt.value.pb.min         != null) params.set('min_pb',       flt.value.pb.min)
+    if (flt.value.pb.max         != null) params.set('max_pb',       flt.value.pb.max)
+
+    params.set('sort_by',   sortBy.value)
+    params.set('sort_dir',  sortDir.value)
+    params.set('page',      String(currentPage.value))
+    params.set('page_size', String(pageSize.value))
+
+    const d = await apiFetch(`/api/v1/market/stocks/search?${params}`)
+    const payload = d?.data || d || {}
+    stocks.value = (payload.stocks || []).map((s, i) => ({ ...s, seq: i + 1 }))
+    total.value  = payload.total || 0
   } catch (e) {
-    logger.warn('[StockScreener] fetch failed:', e.message)
+    logger.warn('[StockScreener] fetchStocks failed:', e.message)
   } finally {
     loading.value = false
   }
 }
 
-// ── 排序 ─────────────────────────────────────────────────────────
+// 防抖包装（搜索框/滑块/排序触发）
+const debouncedFetch = useDebounceFn(fetchStocks, 300)
+
+// ── 排序控制 ─────────────────────────────────────────────────────
 function sortClass(col) {
   return sortBy.value === col ? 'text-terminal-accent' : ''
 }
 function setSort(col) {
   if (sortBy.value === col) {
-    asc.value = !asc.value
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
   } else {
     sortBy.value = col
-    asc.value = false
+    sortDir.value = 'desc'
   }
+  currentPage.value = 1
+  debouncedFetch()
 }
+
+// ── 分页控制 ─────────────────────────────────────────────────────
+function goPage(p) {
+  currentPage.value = Math.max(1, Math.min(p, totalPages.value))
+  debouncedFetch()
+}
+
+// ── 搜索/过滤变化 → 重置到第1页并触发搜索 ───────────────────
+watch(searchQuery, () => { currentPage.value = 1; debouncedFetch() })
 
 // ── 重置过滤 ─────────────────────────────────────────────────────
 function resetFilter() {
-  flt.value = {
-    change_pct: { min: null, max: null },
-    turnover:    { min: null, max: null },
-    amount:     { min: null, max: null },
-    price:      { min: null, max: null },
-  }
+  flt.value = { change_pct: { min: null, max: null }, turnover: { min: null, max: null },
+                amount: { min: null, max: null }, price: { min: null, max: null },
+                pe: { min: null, max: null }, pb: { min: null, max: null } }
+  currentPage.value = 1
+  debouncedFetch()
 }
 
 // ── 点击个股 ─────────────────────────────────────────────────────
 function handleClick(stock) {
-  setSymbol(stock.code, stock.name, stock.chg_pct >= 0 ? '#ef232a' : '#14b143')
+  setSymbol(stock.code, stock.name, stock.change_pct >= 0 ? '#ef232a' : '#14b143')
 }
 
 // ── 格式化成交额 ────────────────────────────────────────────────
-function formatAmt(v) {
-  if (!v) return '--'
-  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿'
-  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万'
-  return Number(v).toFixed(2)
-}
+function formatAmt(v) { return fmtTurnover(v) }
 
-// ── 空操作（保留扩展）────────────────────────────────────────────
+// ── 空操作 ──────────────────────────────────────────────────────
 function toggleFilterPanel() {}
 
-onMounted(fetchAllStocks)
+onMounted(debouncedFetch)
 </script>
