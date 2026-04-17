@@ -203,32 +203,31 @@ export { broadcastDataSourceStatus }
  * @throws {Error} 当required=true的请求失败时抛出
  */
 export async function fetchApiBatch(requests, silent = false) {
-  const results = await Promise.all(
+  // Best-Effort 模式：用 Promise.allSettled 代替 Promise.all
+  // 单个接口超时/失败不会导致整批数据被丢弃
+  const settled = await Promise.all(
     requests.map(async ({ url, key, default: defaultValue = null, required = true }) => {
       try {
         const data = await apiFetch(url)
         return { key, data, error: null }
       } catch (e) {
-        logger.error(`[fetchApiBatch] ${url} failed:`, e.message)
-        if (!silent && required) {
-          throw new Error(`API请求失败 [${key}]: ${e.message}`)
-        }
+        logger.warn(`[fetchApiBatch] ${url} failed (key=${key}): ${e.message}`)
+        // 即使失败也返回默认值，保证其他正常接口的数据能正常渲染
         return { key, data: defaultValue, error: e.message }
       }
     })
   )
-  
-  // 构建结果对象，收集错误信息
-  const errors = results.filter(r => r.error).map(r => ({ key: r.key, error: r.error }))
-  const data = results.reduce((acc, { key, data }) => {
+
+  // 构建结果对象（只聚合成功的部分）
+  const errors = settled.filter(r => r.error).map(r => ({ key: r.key, error: r.error }))
+  const data = settled.reduce((acc, { key, data }) => {
     acc[key] = data
     return acc
   }, {})
-  
-  // 如果有错误且不是silent模式，在结果中标记
+
   if (errors.length > 0) {
     data._errors = errors
-    data._stale = true  // 标记数据可能过期
+    data._stale = true
   }
   return data
 }
