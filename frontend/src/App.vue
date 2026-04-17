@@ -141,7 +141,7 @@
             </span>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button @click="fetchMarketData" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
+            <button @click="Promise.all([fetchHighFreq(), fetchMedFreq(), fetchLowFreq()])" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
             <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-panel rounded text-theme-secondary hover:text-theme-primary text-[10px]">忽略</button>
           </div>
         </div>
@@ -222,7 +222,7 @@ import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
-import { fetchApiBatch, apiErrorState } from './utils/api.js'
+import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 
 const { ui } = useUiStore()
@@ -337,83 +337,91 @@ function updateClock() {
   currentTime.value = now.toLocaleTimeString('zh-CN', { hour12: false }) + ' CST'
 }
 
-async function fetchMarketData() {
+// fetchMarketData 已拆分为三个错峰梯队：fetchHighFreq(10s) / fetchMedFreq(60s) / fetchLowFreq(300s)
+// ── 高频组：大盘实时行情（10秒）──────────────────────────────────────────
+async function fetchHighFreq() {
   try {
-    const results = await fetchApiBatch([
-      { url: '/api/v1/market/overview', key: 'overview', default: null },
-      { url: '/api/v1/market/macro', key: 'macro', default: [] },
-      { url: '/api/v1/market/rates', key: 'rates', default: [] },
-      { url: '/api/v1/news/flash', key: 'news', default: [] },
-      { url: '/api/v1/market/global', key: 'global', default: [] },
-      { url: '/api/v1/market/china_all', key: 'china_all', default: [] },
+    const d = await apiFetch('/api/v1/market/overview')
+    marketOverview.value = d?.wind || d || null
+    loadError.value = null
+  } catch { /* apiErrorState 已记录 */ }
+}
+
+// ── 中频组：板块/期货/情绪（60秒）───────────────────────────────────────
+async function fetchMedFreq() {
+  try {
+    const d = await fetchApiBatch([
       { url: '/api/v1/market/sectors', key: 'sectors', default: [] },
+      { url: '/api/v1/market/china_all', key: 'china_all', default: [] },
       { url: '/api/v1/market/derivatives', key: 'derivatives', default: [] },
     ])
-    
-    // 修复: market_overview 现在直接返回 Sina 实时数据（无 data.wind 包装）
-    // 兼容: results.overview={wind:{...}} 和 results.overview={...}（扁平）
-    marketOverview.value  = results.overview?.wind || results.overview || null
-    macroData.value       = results.macro?.macro || results.macro?.data?.macro || results.macro || []
-    ratesData.value       = results.rates?.rates || results.rates?.data?.rates || results.rates || []
-    // 修复: news/flash 新格式 {code, data: {news:[...]}} → results.news = {news:[...]}
-    // 兼容旧格式 news:[...] 直接返回（Array.isArray 判断）
-    newsData.value        = results.news?.news || results.news?.data?.news || (Array.isArray(results.news) ? results.news : [])
-    globalData.value      = results.global?.global || results.global?.data?.global || results.global || []
-    // 修复: china_all 新格式 {code, data: {china_all:[...]}} → results.china_all = {china_all:[...]}
-    // 兼容旧格式 china_all:[...] 直接返回
-    // 注意: 必须用括号包裹三元运算，避免优先级问题
-    chinaAllData.value    = results.china_all?.china_all || results.china_all?.data?.china_all || (Array.isArray(results.china_all) ? results.china_all : [])
-    // 修复: sectors 新格式 {code, data: {sectors:[...]}} → results.sectors = {sectors:[...]}
-    sectorsData.value     = results.sectors?.sectors || results.sectors?.data?.sectors || (Array.isArray(results.sectors) ? results.sectors : [])
-    derivativesData.value = results.derivatives?.derivatives || results.derivatives?.data?.derivatives || results.derivatives || []
-    
-    // 数据加载完成，关闭骨架屏
+    sectorsData.value     = d.sectors?.sectors || d.sectors?.data?.sectors || d.sectors || []
+    chinaAllData.value    = d.china_all?.china_all || d.china_all?.data?.china_all || d.china_all || []
+    derivativesData.value = d.derivatives?.derivatives || d.derivatives?.data?.derivatives || d.derivatives || []
+  } catch { /* apiErrorState 已记录 */ }
+}
+
+// ── 低频组：宏观/利率/海外/新闻（5分钟）───────────────────────────────────
+async function fetchLowFreq() {
+  try {
+    const d = await fetchApiBatch([
+      { url: '/api/v1/market/macro', key: 'macro', default: [] },
+      { url: '/api/v1/market/rates', key: 'rates', default: [] },
+      { url: '/api/v1/market/global', key: 'global', default: [] },
+      { url: '/api/v1/news/flash', key: 'news', default: [] },
+    ])
+    macroData.value   = d.macro?.macro || d.macro?.data?.macro || d.macro || []
+    ratesData.value   = d.rates?.rates || d.rates?.data?.rates || d.rates || []
+    globalData.value  = d.global?.global || d.global?.data?.global || d.global || []
+    newsData.value    = d.news?.news || d.news?.data?.news || (Array.isArray(d.news) ? d.news : [])
+  } catch { /* apiErrorState 已记录 */ }
+}
+
+// ── 计数：三个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
+let _loadedCount = 0
+function _checkInitDone() {
+  _loadedCount++
+  if (_loadedCount >= 3) {
     isInitialLoading.value = false
-    loadError.value = null
-  } catch (e) {
-    logger.error('[App] fetchMarketData error:', e)
-    // 加载失败，显示错误提示
-    loadError.value = e.message || '数据加载失败'
-    isInitialLoading.value = false
+    _loadedCount = 0
   }
 }
 
-let refreshTimer = null
+// ── 错峰轮询（useIntervalFn 自动处理组件卸载清理）───────────────────────
+const { pause: pauseHigh, resume: resumeHigh } = useIntervalFn(fetchHighFreq, 10_000, { immediate: false })
+const { pause: pauseMed, resume: resumeMed } = useIntervalFn(fetchMedFreq, 60_000, { immediate: false })
+const { pause: pauseLow, resume: resumeLow } = useIntervalFn(fetchLowFreq, 300_000, { immediate: false })
 
-// 页面可见性控制 - 页面隐藏时暂停轮询，节省资源
+// ── 页面可见性控制 ─────────────────────────────────────────────────────
 const visibility = useDocumentVisibility()
 
-// 监听可见性变化，页面隐藏时暂停轮询
 watch(visibility, (v) => {
   if (v === 'visible') {
-    logger.log('[App] 页面可见，恢复轮询')
-    fetchMarketData()  // 立即刷新一次
-    if (refreshTimer) {
-      clearInterval(refreshTimer)
-      refreshTimer = setInterval(fetchMarketData, 30000)
-    }
+    resumeHigh(); resumeMed(); resumeLow()
+    fetchHighFreq()  // 可见时立即拉一次高频
   } else {
-    logger.log('[App] 页面隐藏，暂停轮询')
-    if (refreshTimer) {
-      clearInterval(refreshTimer)
-      refreshTimer = null
-    }
+    pauseHigh(); pauseMed(); pauseLow()
   }
 })
 
 onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
-  // 仅在页面可见时启动轮询
+
+  // 首屏：三个梯队并发启动（浏览器自动调度，无 Stalled）
+  fetchHighFreq().then(_checkInitDone)
+  fetchMedFreq().then(_checkInitDone)
+  fetchLowFreq().then(_checkInitDone)
+
+  // 启动错峰轮询（仅在页面可见时）
   if (visibility.value === 'visible') {
-    fetchMarketData()
-    refreshTimer = setInterval(fetchMarketData, 30000)
+    resumeHigh(); resumeMed(); resumeLow()
   }
 })
 
 onUnmounted(() => {
   clearInterval(clockTimer)
-  clearInterval(refreshTimer)
+  pauseHigh(); pauseMed(); pauseLow()
 })
 </script>
 
