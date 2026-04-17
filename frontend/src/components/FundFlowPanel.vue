@@ -1,135 +1,209 @@
 <template>
-  <div class="flex flex-col h-full">
-    <div class="flex items-center justify-between mb-2 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">💰 资金流向</span>
-      <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
+  <div class="flex flex-col w-full h-full overflow-hidden">
+
+    <!-- 顶部栏 -->
+    <div class="shrink-0 flex items-center justify-between px-2 py-1 border-b border-theme bg-terminal-panel/80">
+      <span class="text-[10px] text-amber-400 font-bold">💰 资金流向</span>
+      <span class="text-[8px] text-theme-muted">{{ tsDisplay }}</span>
     </div>
 
-    <!-- 主力净流入趋势 -->
-    <div v-if="latestData" class="mb-2 p-2 rounded border"
-         :class="latestData.main_net >= 0 ? 'bg-red-500/10 border-red-500/30' : 'bg-green-500/10 border-green-500/30'">
-      <div class="flex items-center justify-between">
-        <span class="text-[10px] text-theme-tertiary">主力净流入</span>
-        <span class="text-[12px] font-mono font-bold"
-              :class="latestData.main_net >= 0 ? 'text-bullish' : 'text-bearish'">
-          {{ formatYuan(latestData.main_net) }}
-        </span>
+    <!-- 核心指标行 -->
+    <div v-if="latestData" class="shrink-0 grid grid-cols-3 gap-px p-1 bg-theme border-y border-theme">
+      <div class="flex flex-col items-center bg-terminal-panel/60 px-1 py-0.5 rounded">
+        <span class="text-[8px] text-theme-muted">主力净流入</span>
+        <span
+          class="text-[10px] font-mono font-bold"
+          :class="(latestData.main_net || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ formatYuan(latestData.main_net) }}</span>
       </div>
-      <div class="flex items-center justify-between mt-1">
-        <span class="text-[10px] text-theme-tertiary">净占比</span>
-        <span class="text-[11px] font-mono"
-              :class="latestData.main_pct >= 0 ? 'text-bullish' : 'text-bearish'">
-          {{ latestData.main_pct >= 0 ? '+' : '' }}{{ latestData.main_pct.toFixed(2) }}%
-        </span>
+      <div class="flex flex-col items-center bg-terminal-panel/60 px-1 py-0.5 rounded">
+        <span class="text-[8px] text-theme-muted">净占比</span>
+        <span
+          class="text-[10px] font-mono"
+          :class="(latestData.main_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ (latestData.main_pct || 0) >= 0 ? '+' : '' }}{{ (latestData.main_pct || 0).toFixed(2) }}%</span>
       </div>
-    </div>
-
-    <!-- 大单/小单对比 -->
-    <div v-if="latestData" class="grid grid-cols-2 gap-1 mb-2">
-      <div class="p-1.5 rounded border border-theme bg-terminal-panel/50">
-        <div class="text-[9px] text-theme-tertiary">大单</div>
-        <div class="text-[10px] font-mono" :class="latestData.large_net >= 0 ? 'text-bullish' : 'text-bearish'">
-          {{ formatYuan(latestData.large_net) }}
-        </div>
-      </div>
-      <div class="p-1.5 rounded border border-theme bg-terminal-panel/50">
-        <div class="text-[9px] text-theme-tertiary">小单</div>
-        <div class="text-[10px] font-mono" :class="latestData.small_net >= 0 ? 'text-bullish' : 'text-bearish'">
-          {{ formatYuan(latestData.small_net) }}
-        </div>
+      <div class="flex flex-col items-center bg-terminal-panel/60 px-1 py-0.5 rounded">
+        <span class="text-[8px] text-theme-muted">趋势</span>
+        <span
+          class="text-[10px] font-mono font-bold"
+          :class="mainTrend >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ mainTrend >= 0 ? '↑吸筹' : '↓出逃' }}</span>
       </div>
     </div>
 
-    <!-- 7天趋势图（简易版） -->
-    <div class="flex-1 min-h-0">
-      <div class="text-[9px] text-theme-tertiary mb-1">近7日主力净流入(亿)</div>
-      <div class="h-16 flex items-end gap-0.5">
-        <div v-for="(item, idx) in weekData" :key="idx"
-             class="flex-1 flex flex-col items-center"
-             :title="`${item.date}: ${(item.main_net/1e8).toFixed(1)}亿`">
-          <!-- 柱子 -->
-          <div class="w-full rounded-sm transition-all hover:opacity-80"
-               :class="item.main_net >= 0 ? 'bg-red-500/60' : 'bg-green-500/60'"
-               :style="{ height: getBarHeight(item.main_net) + '%' }"></div>
-          <!-- 数值 -->
-          <span class="text-[8px] text-theme-tertiary mt-0.5">{{ (item.main_net/1e8).toFixed(0) }}</span>
-        </div>
+    <!-- 大单/小单对比网格 -->
+    <div v-if="latestData" class="shrink-0 grid grid-cols-4 gap-px p-1">
+      <div class="flex flex-col items-center bg-terminal-panel/40 px-1 py-0.5 rounded">
+        <span class="text-[7px] text-theme-muted">超大单</span>
+        <span
+          class="text-[9px] font-mono"
+          :class="(latestData.super_net || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ formatYuan(latestData.super_net) }}</span>
+      </div>
+      <div class="flex flex-col items-center bg-terminal-panel/40 px-1 py-0.5 rounded">
+        <span class="text-[7px] text-theme-muted">大单</span>
+        <span
+          class="text-[9px] font-mono"
+          :class="(latestData.large_net || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ formatYuan(latestData.large_net) }}</span>
+      </div>
+      <div class="flex flex-col items-center bg-terminal-panel/40 px-1 py-0.5 rounded">
+        <span class="text-[7px] text-theme-muted">中单</span>
+        <span
+          class="text-[9px] font-mono"
+          :class="(latestData.medium_net || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ formatYuan(latestData.medium_net) }}</span>
+      </div>
+      <div class="flex flex-col items-center bg-terminal-panel/40 px-1 py-0.5 rounded">
+        <span class="text-[7px] text-theme-muted">小单</span>
+        <span
+          class="text-[9px] font-mono"
+          :class="(latestData.small_net || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+        >{{ formatYuan(latestData.small_net) }}</span>
       </div>
     </div>
 
-    <!-- 无数据 -->
-    <div v-if="!latestData && !isLoading" class="flex-1 flex items-center justify-center">
-      <span class="text-terminal-dim text-xs">非交易时段，暂无最新数据</span>
-    </div>
+    <!-- ECharts 柱状图：近10日主力净流入 -->
+    <div class="flex-1 min-h-0" ref="chartEl"></div>
 
-    <!-- 加载中 -->
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center">
-      <span class="text-terminal-dim text-xs animate-pulse">加载中...</span>
+    <!-- 无数据 / 加载 -->
+    <div v-if="!latestData && !isLoading" class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px] gap-1">
+      <span>📭 非交易时段</span>
+    </div>
+    <div v-if="isLoading && !latestData" class="flex-1 flex flex-col items-center justify-center">
+      <span class="text-theme-muted text-[10px] animate-pulse">⏳ 加载资金流...</span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { logger } from '../utils/logger.js'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 
+const chartEl    = ref(null)
 const fundFlowData = ref([])
-const isLoading = ref(false)
-const tsDisplay = ref('')
-let refreshTimer = null
+const isLoading   = ref(false)
+const tsDisplay   = ref('')
+let refreshTimer  = null
+let chartInstance = null
 
-// 最新一天数据
+// ── 最新一天数据 ──────────────────────────────────────────────
 const latestData = computed(() => fundFlowData.value[0] || null)
 
-// 最近7天数据
-const weekData = computed(() => fundFlowData.value.slice(0, 7))
+// 近10日数据（用于图表）
+const chartData = computed(() => fundFlowData.value.slice(0, 10).reverse())
 
-// 格式化金额
+// 过去N日净流入趋势（决定"吸筹/出逃"标签）
+const mainTrend = computed(() => {
+  const items = chartData.value
+  if (!items.length) return 0
+  const pos = items.filter(i => (i.main_net || 0) > 0).length
+  return pos >= items.length / 2 ? 1 : -1
+})
+
+// ── 工具函数 ───────────────────────────────────────────────────
 function formatYuan(val) {
-  if (!val) return '0'
+  if (val == null) return '0'
   const abs = Math.abs(val)
-  if (abs >= 1e8) return (val / 1e8).toFixed(1) + '亿'
-  if (abs >= 1e4) return (val / 1e4).toFixed(0) + '万'
-  return val.toFixed(0)
+  if (abs >= 1e8) return `${val < 0 ? '-' : '+'}${((abs) / 1e8).toFixed(2)}亿`
+  if (abs >= 1e4) return `${val < 0 ? '-' : '+'}${((abs) / 1e4).toFixed(0)}万`
+  return `${val < 0 ? '-' : '+'}${abs.toFixed(0)}`
 }
 
-// 计算柱子高度（相对于最大绝对值）
-function getBarHeight(val) {
-  const maxAbs = Math.max(...weekData.value.map(d => Math.abs(d.main_net || 0)), 1)
-  return Math.max(5, (Math.abs(val) / maxAbs) * 80)
+// ── ECharts 渲染 ──────────────────────────────────────────────
+function renderChart() {
+  if (!chartEl.value) return
+  if (chartInstance) { chartInstance.dispose(); chartInstance = null }
+
+  const items = chartData.value
+  if (!items.length) return
+
+  const dates = items.map(i => (i.date || '').slice(5))  // MM-DD
+  const mainNets = items.map(i => i.main_net || 0)
+  const maxAbs = Math.max(...mainNets.map(Math.abs), 1)
+
+  chartInstance = window.echarts.init(chartEl.value, 'dark')
+  chartInstance.setOption({
+    backgroundColor: 'transparent',
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: '#1e2130', borderColor: '#374151',
+      textStyle: { color: '#d1d5db', fontSize: 9 },
+      formatter: (p) => {
+        const v = p[0].value
+        return `${p[0].name}<br/><b style="color:${v >= 0 ? '#14b143' : '#ef232a'}">${formatYuan(v)}</b>`
+      },
+    },
+    grid: { top: 4, bottom: 2, left: 4, right: 8, containLabel: true },
+    xAxis: {
+      type: 'category', data: dates,
+      axisLabel: { show: true, fontSize: 8, color: '#6b7280', interval: 0, rotate: 30 },
+      axisLine: { lineStyle: { color: '#374151' } },
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: {
+        show: true, fontSize: 8, color: '#6b7280',
+        formatter: (v) => Math.abs(v) >= 1e8 ? (v / 1e8).toFixed(0) + '亿' : (v / 1e4).toFixed(0) + 'w',
+      },
+      splitLine: { lineStyle: { color: '#1f2937' } },
+    },
+    series: [{
+      type: 'bar',
+      data: mainNets.map(v => ({
+        value: v,
+        itemStyle: { color: v >= 0 ? '#14b143' : '#ef232a' },
+      })),
+      barMaxWidth: 20,
+      label: {
+        show: true,
+        position: 'top',
+        color: '#9ca3af',
+        fontSize: 7,
+        formatter: (p) => `${(p.value / 1e4).toFixed(0)}w`,
+      },
+    }],
+  })
 }
 
+// ── 数据获取 ───────────────────────────────────────────────────
 async function fetchFundFlow() {
   isLoading.value = fundFlowData.value.length === 0
   try {
     const d = await apiFetch('/api/v1/market/fund_flow', { timeoutMs: 15000 })
     if (!d || d.code !== 0) return
-    
-    fundFlowData.value = d.data?.items || []
-    
-    // 更新时间戳
+
+    fundFlowData.value = d.data?.items || d.data || []
+
     if (fundFlowData.value.length > 0) {
       const latest = fundFlowData.value[0]
-      if (latest.date) {
-        tsDisplay.value = latest.date
-      }
+      tsDisplay.value = latest.date || new Date().toLocaleDateString('zh-CN')
     }
+
+    await nextTick()
+    renderChart()
   } catch (e) {
-    logger.error('fetchFundFlow error:', e)
+    console.error('[FundFlowPanel] fetchFundFlow error:', e)
   } finally {
-    // 确保无论成功或失败都释放加载状态
     isLoading.value = false
   }
 }
 
+// ── 生命周期 ───────────────────────────────────────────────────
 onMounted(() => {
   fetchFundFlow()
-  // 每5分钟刷新
-  refreshTimer = setInterval(fetchFundFlow, 5 * 60 * 1000)
+  refreshTimer = setInterval(fetchFundFlow, 5 * 60 * 1000)  // 5 分钟轮询
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+  if (chartInstance) chartInstance.dispose()
+  chartInstance = null
+})
+
+watch(fundFlowData, () => {
+  nextTick(renderChart)
 })
 </script>
