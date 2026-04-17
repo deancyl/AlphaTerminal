@@ -45,6 +45,10 @@
         </div>
       </div>
       <div ref="chartRef" class="w-full h-full"></div>
+      <!-- DEBUG: show the url being called -->
+      <div class="absolute bottom-0 right-0 z-50 bg-black/80 text-[9px] text-yellow-400 px-1 font-mono truncate max-w-full">
+        URL: {{ url }}
+      </div>
     </div>
   </div>
 </template>
@@ -68,6 +72,9 @@ const props = defineProps({
 
 const chartRef     = ref(null)
 const chartError   = ref('')
+const debugUrl      = ref('')
+const debugHistLen  = ref(-1)
+const debugOptOk    = ref(false)
 const isLoading    = ref(false)
 const chartType    = ref('candlestick')
 const currentName  = ref('指标图表')
@@ -717,12 +724,16 @@ function _cancelLeaveTimer() {
 async function fetchAndRender() {
   chartError.value = ''; isLoading.value = true
   try {
-    const d = await apiFetch(props.url + (props.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`)
+    const fullUrl = props.url + (props.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+    console.log('[KLine DEBUG] url:', fullUrl)
+    const d = await apiFetch(fullUrl)
+    console.log('[KLine DEBUG] response d keys:', d ? Object.keys(d) : 'null', '| history len:', d?.history?.length, '| chart_type:', d?.chart_type)
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
     // 分钟数据需要特殊处理
     const isMinute = type === 'line' || props.url.includes('minutely') || props.url.includes('period=1m') || props.url.includes('period=5m')
     const hist = _sanitize(d?.history || d || [], isMinute)
+    console.log('[KLine] hist length after sanitize:', hist.length)
 
     // 将 raw hist 塞给 option，方便 hover 时访问
     // 确保数据按时间正序（左边=最旧，右边=最新）
