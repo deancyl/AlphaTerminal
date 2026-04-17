@@ -547,6 +547,7 @@ def search_stocks_api(
     keyword: str = None,
     min_pct_chg: float = None, max_pct_chg: float = None,
     min_turnover: float = None, max_turnover: float = None,
+    min_price: float = None, max_price: float = None,
     min_pe: float = None, max_pe: float = None,
     min_pb: float = None, max_pb: float = None,
     min_mktcap: float = None, max_mktcap: float = None,
@@ -555,12 +556,11 @@ def search_stocks_api(
 ):
     """
     全市场个股服务端搜索+过滤+排序+分页
-    取代前端全量拉取 + computed 过滤的低效模式
-
     支持的过滤字段:
       keyword: 模糊搜索代码/名称
       min_pct_chg / max_pct_chg: 涨跌幅区间 (%)
       min_turnover / max_turnover: 换手率区间 (%)
+      min_price / max_price: 价格区间（元）
       min_pe / max_pe: PE区间
       min_pb / max_pb: PB区间
       min_mktcap / max_mktcap: 市值区间（亿元）
@@ -570,9 +570,12 @@ def search_stocks_api(
     try:
         from app.db.database import search_stocks as _search
         total, rows, page, page_size = _search(
-            keyword=keyword, min_pct_chg=min_pct_chg, max_pct_chg=max_pct_chg,
+            keyword=keyword,
+            min_pct_chg=min_pct_chg, max_pct_chg=max_pct_chg,
             min_turnover=min_turnover, max_turnover=max_turnover,
-            min_pe=min_pe, max_pe=max_pe, min_pb=min_pb, max_pb=max_pb,
+            min_price=min_price, max_price=max_price,
+            min_pe=min_pe, max_pe=max_pe,
+            min_pb=min_pb, max_pb=max_pb,
             min_mktcap=min_mktcap, max_mktcap=max_mktcap,
             sort_by=sort_by, sort_dir=sort_dir,
             page=page, page_size=page_size,

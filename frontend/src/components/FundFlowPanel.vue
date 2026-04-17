@@ -1,24 +1,9 @@
-<template>
-  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono">
-    <div class="px-2 py-1 text-xs font-bold text-theme-accent border-b border-theme-secondary shrink-0">
-      资金流向 (近30日主力净额)
-    </div>
-
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">
-      📡 加载中...
-    </div>
-    <div v-else-if="!hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">
-      ⚠️ 暂无资金流向数据
-    </div>
-    <div v-else ref="chartRef" class="flex-1 w-full min-h-[200px]"></div>
-  </div>
-</template>
-
 <script setup>
 import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const chartRef = ref(null)
 const chartInstance = shallowRef(null)
@@ -27,26 +12,23 @@ const hasData = ref(false)
 let timer = null
 
 const renderChart = (dataList) => {
-  if (!chartRef.value) return
+  if (!chartRef.value || !dataList.length) return
   if (!chartInstance.value) {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }
-
   const dates = dataList.map(item => item.date)
-  const values = dataList.map(item => item.main_net / 100000000) // 转换为亿元
-
+  const values = dataList.map(item => (item.main_net || 0) / 100000000)
   const option = {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', formatter: '{b}<br/>主力净额: {c} 亿元' },
-    grid: { top: 30, right: 10, bottom: 20, left: 50 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { top: '15%', right: '5%', bottom: '15%', left: '15%' },
     xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: '#94a3b8' } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: '#334155', type: 'dashed' } }, axisLabel: { fontSize: 9, color: '#94a3b8' } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 9, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#334155' } } },
     series: [{
+      name: '主力净额(亿)',
       type: 'bar',
       data: values,
-      itemStyle: {
-        color: (params) => params.value > 0 ? '#ef4444' : '#22c55e' // A股红涨绿跌
-      }
+      itemStyle: { color: (p) => p.value > 0 ? '#ef4444' : '#22c55e' }
     }]
   }
   chartInstance.value.setOption(option)
@@ -55,9 +37,8 @@ const renderChart = (dataList) => {
 const loadData = async () => {
   try {
     const res = await apiFetch('/api/v1/market/fund_flow')
-    // 兼容不同的返回包裹层
-    const items = res?.items || res?.data?.items || res || []
-    if (Array.isArray(items) && items.length > 0) {
+    const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : [])
+    if (items.length > 0) {
       hasData.value = true
       await nextTick()
       renderChart(items)
@@ -65,7 +46,7 @@ const loadData = async () => {
       hasData.value = false
     }
   } catch (e) {
-    console.error('FundFlow fetch error:', e)
+    logger.error('[FundFlow] Fetch failed', e)
     hasData.value = false
   } finally {
     isLoading.value = false
@@ -74,13 +55,9 @@ const loadData = async () => {
 
 onMounted(() => {
   loadData()
-  timer = setInterval(loadData, 5 * 60 * 1000)
-
+  timer = setInterval(loadData, 300000)
   useResizeObserver(chartRef, (entries) => {
-    const { width, height } = entries[0].contentRect
-    if (width > 0 && height > 0 && chartInstance.value) {
-      chartInstance.value.resize()
-    }
+    if (chartInstance.value && entries[0].contentRect.width > 0) chartInstance.value.resize()
   })
 })
 
@@ -89,3 +66,12 @@ onUnmounted(() => {
   if (chartInstance.value) chartInstance.value.dispose()
 })
 </script>
+
+<template>
+  <div class="flex flex-col h-full bg-terminal-panel">
+    <div class="p-2 text-xs font-bold text-theme-accent border-b border-theme-secondary shrink-0">资金流向 (近30日)</div>
+    <div v-if="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">📡 数据加载中...</div>
+    <div v-else-if="!hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">⚠️ 接口数据为空</div>
+    <div v-else ref="chartRef" class="flex-1 w-full min-h-0"></div>
+  </div>
+</template>

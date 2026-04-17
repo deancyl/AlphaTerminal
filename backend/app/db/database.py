@@ -245,6 +245,7 @@ def search_stocks(
     keyword=None,
     min_pct_chg=None, max_pct_chg=None,
     min_turnover=None, max_turnover=None,
+    min_price=None, max_price=None,
     min_pe=None, max_pe=None,
     min_pb=None, max_pb=None,
     min_mktcap=None, max_mktcap=None,
@@ -278,6 +279,13 @@ def search_stocks(
         if max_turnover is not None:
             conditions.append("turnover <= ?")
             args.append(float(max_turnover))
+
+        if min_price is not None:
+            conditions.append("price >= ?")
+            args.append(float(min_price))
+        if max_price is not None:
+            conditions.append("price <= ?")
+            args.append(float(max_price))
 
         if min_pe is not None:
             conditions.append("per >= ?")

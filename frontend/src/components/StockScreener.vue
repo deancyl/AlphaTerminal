@@ -27,6 +27,18 @@
           <span class="text-terminal-dim">PB <</span>
           <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
         </div>
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-terminal-dim">价格区间</span>
+          <input type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <span class="text-terminal-dim">~</span>
+          <input type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+        </div>
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-terminal-dim">市值(亿)</span>
+          <input type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <span class="text-terminal-dim">~</span>
+          <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+        </div>
       </div>
     </div>
 
@@ -124,6 +136,7 @@ const flt = ref({
   price:      { min: null, max: null },
   pe:         { min: null, max: null },
   pb:         { min: null, max: null },
+  mktcap:     { min: null, max: null },  // 市值（亿元）
 })
 
 // ── 核心：服务端搜索（防抖 300ms）────────────────────────────────────
@@ -144,6 +157,11 @@ async function fetchStocks() {
     params.set('sort_dir',  sortDir.value)
     params.set('page',      String(currentPage.value))
     params.set('page_size', String(pageSize.value))
+
+    if (flt.value.price.min != null) params.set('min_price', flt.value.price.min)
+    if (flt.value.price.max != null) params.set('max_price', flt.value.price.max)
+    if (flt.value.mktcap.min != null) params.set('min_mktcap', flt.value.mktcap.min)
+    if (flt.value.mktcap.max != null) params.set('max_mktcap', flt.value.mktcap.max)
 
     const d = await apiFetch(`/api/v1/market/stocks/search?${params}`)
     const payload = d?.data || d || {}
@@ -193,8 +211,8 @@ function goPage(p) {
   debouncedFetch()
 }
 
-// ── 搜索/过滤变化 → 重置到第1页 ──────────────────────────────────────
-watch(searchQuery, () => { currentPage.value = 1; debouncedFetch() })
+// ── 搜索/过滤变化 → 重置到第1页，深度监听所有筛框 ─────────────────────
+watch(flt, () => { currentPage.value = 1; debouncedFetch() }, { deep: true })
 
 // ── 点击个股 ──────────────────────────────────────────────────────────
 function handleClick(stock) {
