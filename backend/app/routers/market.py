@@ -542,7 +542,51 @@ async def market_all_stocks_lite():
         logger.error(f"[market_all_stocks_lite] 错误: {e}")
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
 
-@router.get("/market/indices")
+@router.get("/market/stocks/search")
+def search_stocks_api(
+    keyword: str = None,
+    min_pct_chg: float = None, max_pct_chg: float = None,
+    min_turnover: float = None, max_turnover: float = None,
+    min_pe: float = None, max_pe: float = None,
+    min_pb: float = None, max_pb: float = None,
+    min_mktcap: float = None, max_mktcap: float = None,
+    sort_by: str = 'change_pct', sort_dir: str = 'desc',
+    page: int = 1, page_size: int = 50,
+):
+    """
+    全市场个股服务端搜索+过滤+排序+分页
+    取代前端全量拉取 + computed 过滤的低效模式
+
+    支持的过滤字段:
+      keyword: 模糊搜索代码/名称
+      min_pct_chg / max_pct_chg: 涨跌幅区间 (%)
+      min_turnover / max_turnover: 换手率区间 (%)
+      min_pe / max_pe: PE区间
+      min_pb / max_pb: PB区间
+      min_mktcap / max_mktcap: 市值区间（亿元）
+    排序: sort_by=change_pct|turnover|volume|pe|pb|mktcap|code|name
+    分页: page + page_size（每页最多200）
+    """
+    try:
+        from app.db.database import search_stocks as _search
+        total, rows, page, page_size = _search(
+            keyword=keyword, min_pct_chg=min_pct_chg, max_pct_chg=max_pct_chg,
+            min_turnover=min_turnover, max_turnover=max_turnover,
+            min_pe=min_pe, max_pe=max_pe, min_pb=min_pb, max_pb=max_pb,
+            min_mktcap=min_mktcap, max_mktcap=max_mktcap,
+            sort_by=sort_by, sort_dir=sort_dir,
+            page=page, page_size=page_size,
+        )
+        return success_response({
+            "stocks": rows,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "pages": (total + page_size - 1) // page_size if total > 0 else 0,
+        })
+    except Exception as e:
+        logger.exception("[search_stocks] 服务端搜索失败")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"搜索失败: {str(e)}")
 def market_indices():
     """A股四大指数列表"""
     try:

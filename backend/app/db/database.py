@@ -241,6 +241,123 @@ def upsert_all_stocks(rows):
         return
     enqueue({"type": T_ALLSTOCKS, "rows": rows})
 
+def search_stocks(
+    keyword=None,
+    min_pct_chg=None, max_pct_chg=None,
+    min_turnover=None, max_turnover=None,
+    min_pe=None, max_pe=None,
+    min_pb=None, max_pb=None,
+    min_mktcap=None, max_mktcap=None,
+    sort_by='change_pct', sort_dir='desc',
+    page=1, page_size=50
+):
+    """
+    全市场个股服务端过滤+排序+分页
+    解决 StockScreener 前端全量拉取 + computed 阻塞浏览器的性能瓶颈
+    """
+    conn = _get_conn()
+    try:
+        conditions = ["price > 0"]
+        args = []
+
+        if keyword:
+            pattern = f"%{keyword}%"
+            conditions.append("(code LIKE ? OR name LIKE ?)")
+            args.extend([pattern, pattern])
+
+        if min_pct_chg is not None:
+            conditions.append("change_pct >= ?")
+            args.append(float(min_pct_chg))
+        if max_pct_chg is not None:
+            conditions.append("change_pct <= ?")
+            args.append(float(max_pct_chg))
+
+        if min_turnover is not None:
+            conditions.append("turnover >= ?")
+            args.append(float(min_turnover))
+        if max_turnover is not None:
+            conditions.append("turnover <= ?")
+            args.append(float(max_turnover))
+
+        if min_pe is not None:
+            conditions.append("per >= ?")
+            args.append(float(min_pe))
+        if max_pe is not None:
+            conditions.append("per <= ?")
+            args.append(float(max_pe))
+
+        if min_pb is not None:
+            conditions.append("pb >= ?")
+            args.append(float(min_pb))
+        if max_pb is not None:
+            conditions.append("pb <= ?")
+            args.append(float(max_pb))
+
+        if min_mktcap is not None:
+            conditions.append("mktcap >= ?")
+            args.append(float(min_mktcap) * 1e8)  # 亿 → 元
+        if max_mktcap is not None:
+            conditions.append("mktcap <= ?")
+            args.append(float(max_mktcap) * 1e8)
+
+        # 排序字段白名单
+        ORDER_FIELDS = {
+            'code': 'code', 'name': 'name', 'price': 'price',
+            'change_pct': 'change_pct', 'turnover': 'turnover',
+            'volume': 'volume', 'amount': 'amount',
+            'per': 'per', 'pb': 'pb', 'mktcap': 'mktcap',
+        }
+        order_col = ORDER_FIELDS.get(sort_by, 'change_pct')
+        order_dir = 'DESC' if sort_dir.lower() == 'desc' else 'ASC'
+
+        where_clause = " AND ".join(conditions)
+
+        # 统计总数
+        count_sql = f"SELECT COUNT(*) as cnt FROM market_all_stocks WHERE {where_clause}"
+        total = conn.execute(count_sql, args).fetchone()['cnt']
+
+        # 分页
+        offset = max(0, (max(1, page) - 1) * min(200, max(1, page_size)))
+        limit = min(200, max(1, page_size))
+
+        query_sql = f"""
+            SELECT code, name, price, change_pct, per, pb, mktcap, nmc,
+                   turnover, volume, amount, price_high, price_low, open_price, updated_at
+            FROM market_all_stocks
+            WHERE {where_clause}
+            ORDER BY {order_col} {order_dir}
+            LIMIT ? OFFSET ?
+        """
+        rows = conn.execute(query_sql, [*args, limit, offset]).fetchall()
+
+        # 序列化（补充 computed 字段）
+        result = []
+        for r in rows:
+            price = float(r['price'] or 0)
+            change_pct = float(r['change_pct'] or 0)
+            prev = price / (1 + change_pct / 100) if change_pct != -100 else price
+            result.append({
+                "code": r['code'],
+                "name": r['name'],
+                "price": price,
+                "change_pct": change_pct,
+                "change": round(price - prev, 3),
+                "turnover": float(r['turnover'] or 0),
+                "volume": float(r['volume'] or 0),
+                "amount": float(r['amount'] or 0),
+                "pe": float(r['per'] or 0) if r['per'] else 0,
+                "pb": float(r['pb'] or 0) if r['pb'] else 0,
+                "mktcap": round(float(r['mktcap'] or 0) / 1e8, 2),
+                "price_high": float(r['price_high'] or 0),
+                "price_low": float(r['price_low'] or 0),
+                "open_price": float(r['open_price'] or 0),
+            })
+
+        return total, result, page, page_size
+
+    finally:
+        conn.close()
+
 def get_all_stocks(limit=5000, offset=0, search=None):
     """获取全市场个股列表，支持搜索"""
     with _lock:
