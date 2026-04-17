@@ -117,6 +117,21 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     }
   }
 
+  // overlayYAxis 返回 ECharts 原生 yAxis 配置对象，供调用方直接注入到 grid + yAxis 数组
+  // 右侧双轴：主轴在 left='55'，对比轴在 right='8'，关闭网格线防止视觉干扰
+  const _rawOverlayYAxis = overlayYAxis ? {
+    scale: true,
+    splitLine: { show: false },
+    axisLine: { show: false },
+    axisTick: { show: false },
+    axisLabel: {
+      color: '#94a3b8',
+      fontSize: 10,
+      formatter: (v) => v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(2),
+    },
+    position: 'right',
+  } : null
+
   return {
     isEmpty: false,
     times,
@@ -125,9 +140,54 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     maData,
     bollData,
     subChartData,
-    overlaySeriesData,
-    overlayYAxis,
+    overlaySeriesData,   // [[index, price], ...] 按主图时间轴对齐
+    overlayYAxis: _rawOverlayYAxis,  // ECharts yAxis 配置对象（可注入）
     yMin,
     yMax,
+  }
+}
+
+/**
+ * 构建对比标的的 ECharts series 片段（用于注入到主图 Option）
+ * 返回结构：{ series: [{ name, type:'line', data, yAxisIndex:1, ... }], hasOverlay: bool }
+ * 调用方只需将 series 数组 spread 到主图 series 中，并将 overlayYAxis push 到 yAxis 数组即可
+ *
+ * @param {Array}  rawHist     - 主图历史数据
+ * @param {Array}  overlayData - 对比标的原始数据 [{date, close, name?}, ...]
+ * @param {String} color       - 对比线颜色（默认亮橙色 #f97316）
+ * @returns {{ series: Array, hasOverlay: boolean }}
+ */
+export function buildOverlaySeries(rawHist, overlayData, color = '#f97316') {
+  if (!rawHist?.length || !overlayData?.length) return { series: [], hasOverlay: false }
+
+  // 构建 {date -> close} 快速查找表
+  const ovMap = {}
+  for (const d of overlayData) {
+    if (d.date && d.close != null) ovMap[d.date] = d.close
+  }
+
+  // 按主图时间轴对齐，index 对应主图数据下标（用于 xAxis index 对齐）
+  const compareData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
+
+  // 过滤掉全 null 的头尾段（避免对比线在无数据区域突兀延伸）
+  const firstValid = compareData.findIndex(d => d[1] !== null)
+  const lastValid = compareData.length - 1 - [...compareData].reverse().findIndex(d => d[1] !== null)
+  const trimmed = firstValid >= 0 ? compareData.slice(firstValid, lastValid + 1) : []
+
+  return {
+    hasOverlay: true,
+    series: [{
+      name: '对比',
+      type: 'line',
+      data: trimmed,
+      yAxisIndex: 1,           // 绑定右侧 Y 轴
+      symbol: 'none',         // 关闭小圆点，保持图表清爽
+      lineStyle: { color, width: 1.5, type: 'solid' },
+      itemStyle: { color },
+      tooltip: { show: true },
+      z: 3,                   // 渲染在 K 线（z=2）之上
+      smooth: false,
+      sampling: 'lttb',       // 大数据下采样
+    }],
   }
 }
