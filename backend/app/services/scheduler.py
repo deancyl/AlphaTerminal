@@ -22,6 +22,72 @@ def flush_write_buffer():
         logger.error(f"[Scheduler] flush 失败: {e}", exc_info=True)
 
 
+def _broadcast_realtime_ticks():
+    """
+    读取 market_data_realtime 最新数据，通过 ws_manager 广播 tick。
+    使用 run_in_executor 桥接同步 → 异步，不阻塞调度器主循环。
+    """
+    try:
+        from app.db import get_latest_prices
+        from app.services.ws_manager import ws_manager
+        import asyncio
+
+        rows = get_latest_prices(limit=200)
+        if not rows:
+            return
+
+        def _sync_broadcast():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                for r in rows:
+                    sym = str(r.get("symbol", ""))
+                    price      = float(r.get("price") or 0)
+                    change_pct = float(r.get("change_pct") or 0)
+                    prev       = price / (1 + change_pct / 100) if change_pct != -100 else price
+                    chg        = round(price - prev, 3)
+                    tick = {
+                        "symbol":    sym,
+                        "name":      r.get("name", ""),
+                        "price":     price,
+                        "chg":       chg,
+                        "chg_pct":   change_pct,
+                        "volume":    float(r.get("volume") or 0),
+                        "amount":    float(r.get("amount") or 0),
+                        "turnover":  float(r.get("turnover") or 0),
+                        "market":    r.get("market", ""),
+                        "data_type": r.get("data_type", ""),
+                        "timestamp": int(r.get("timestamp") or 0),
+                    }
+                    loop.run_until_complete(ws_manager.broadcast_tick(sym, tick))
+                logger.debug(f"[WS-Broadcast] 推送 {len(rows)} 条 tick 到 {ws_manager.total()} 个连接")
+            finally:
+                loop.close()
+
+        import concurrent.futures
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="ws_broadcast")
+        executor.submit(_sync_broadcast)
+        executor.shutdown(wait=False)
+    except Exception as e:
+        logger.warning(f"[Scheduler] WS 广播异常（不阻塞主循环）: {e}")
+
+
+def flush_write_buffer_and_broadcast():
+    """
+    Task 5: 将 write_buffer 刷入 market_data_realtime，
+    然后立即通过 ws_manager 广播 tick（后台线程，不阻塞调度器）。
+    """
+    try:
+        flush_buffer_to_realtime()
+        logger.debug("[Scheduler] write_buffer 已刷入 market_data_realtime")
+    except Exception as e:
+        logger.error(f"[Scheduler] flush 失败: {e}", exc_info=True)
+        return
+
+    # 广播放在后台，不阻塞调度器
+    _broadcast_realtime_ticks()
+
+
 def backfill_daily_history():
     """每日一次：回填A股指数日K线历史（写入 market_data_daily）"""
     from app.services.data_fetcher import fetch_china_index_history
@@ -237,9 +303,9 @@ def start_scheduler():
         logger.info("[Scheduler] 启动时账户快照已触发")
     threading.Thread(target=_startup_snapshot, daemon=True).start()
 
-    # 每 10 秒将缓冲写入主表
+    # 每 10 秒将缓冲写入主表 + WS 广播
     scheduler.add_job(
-        flush_write_buffer,
+        flush_write_buffer_and_broadcast,
         "interval",
         seconds=10,
         id="flush_write_buffer",
