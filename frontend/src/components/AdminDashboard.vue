@@ -295,7 +295,7 @@
       </div>
 
       <!-- 日志管理 -->
-<!-- ═══ 日志管理 ══════════════════════════════════════════ -->      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-theme-panel border border-theme rounded text-sm" @change="refreshLogs">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in logs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">          <strong class="text-yellow-400">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
+<!-- ═══ 日志管理 ══════════════════════════════════════════ -->      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-theme-panel border border-theme rounded text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">          <strong class="text-yellow-400">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
     </main>
 
@@ -314,12 +314,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, onUnmounted, computed } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 
 const version = __APP_VERSION__
 const activeTab = ref('sources')
+const logContainer = ref(null)
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-green-400' },
@@ -392,9 +393,77 @@ const systemMetrics = reactive({
   network: { connections: 471, io_counters: { bytes_sent: 74188244056, bytes_recv: 82540093634 } }
 })
 
-// 日志数据
+// ── 日志数据 + WebSocket 实时流（替代 HTTP 轮询）────────────────────────────
+const MAX_LOGS = 300
 const logs = ref([])
-const logLevel = ref('ALL')
+
+let ws = null
+let wsConnected = false
+
+// 动态构建 WS URL（从当前页面 location 推断后端地址）
+function buildWsUrl() {
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  // 假设后端与前端同源，WS 路径直接挂在同一 host 上
+  return `${proto}//${window.location.host}/api/v1/admin/logs/stream`
+}
+
+function pushLog(log) {
+  logs.value.push(log)
+  if (logs.value.length > MAX_LOGS) logs.value.shift()
+}
+
+function scrollToBottom() {
+  if (!logContainer.value) return
+  const el = logContainer.value
+  el.scrollTop = el.scrollHeight
+}
+
+function connectLogWs() {
+  if (ws) {
+    ws.close()
+    ws = null
+  }
+  try {
+    ws = new WebSocket(buildWsUrl())
+    ws.onopen = () => {
+      wsConnected = true
+      logger.info('[WS] Log stream connected')
+    }
+    ws.onmessage = (evt) => {
+      try {
+        const log = JSON.parse(evt.data)
+        if (log.level === 'HEARTBEAT') return  // 忽略心跳
+        pushLog(log)
+        // 延迟滚动：等 DOM 更新完成后再滚
+        setTimeout(scrollToBottom, 50)
+      } catch { /* ignore parse errors */ }
+    }
+    ws.onerror = (e) => { logger.warn('[WS] Log stream error', e) }
+    ws.onclose = () => {
+      wsConnected = false
+      ws = null
+    }
+  } catch (e) { logger.warn('[WS] Log stream connect failed', e) }
+}
+
+function disconnectLogWs() {
+  if (ws) { ws.close(); ws = null; wsConnected = false }
+}
+
+// 切换到 logs tab 时建立 WS；离开时断开
+watch(activeTab, (tab) => {
+  if (tab === 'logs' && !wsConnected) connectLogWs()
+  else if (tab !== 'logs') disconnectLogWs()
+})
+
+// 组件销毁时清理
+onUnmounted(() => { disconnectLogWs() })
+
+// 前端纯过滤（WS 接收所有日志，computed 按级别筛选显示）
+const filteredLogs = computed(() => {
+  if (logLevel.value === 'ALL') return logs.value
+  return logs.value.filter(l => l.level === logLevel.value)
+})
 
 function getLogLevelClass(level) {
   const classes = {
@@ -406,10 +475,13 @@ function getLogLevelClass(level) {
   return classes[level] || classes['INFO']
 }
 
+// 保留手动刷新（作为 WS 断开时的 fallback）
 async function refreshLogs() {
   try {
-    const data = await apiFetch(`/api/v1/admin/logs/recent?lines=100&level=${logLevel.value}`)
-    if (data?.logs) logs.value = data.logs
+    const data = await apiFetch('/api/v1/admin/logs/recent?lines=100')
+    if (data?.logs) {
+      logs.value = data.logs.slice(0, MAX_LOGS)  // fallback 用 HTTP 时不追加只覆盖
+    }
   } catch (e) { logger.error('Refresh logs failed:', e) }
 }
 
