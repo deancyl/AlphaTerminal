@@ -206,6 +206,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   symbol:       { type: String,  default: '' },
@@ -453,7 +454,7 @@ onMounted(() => {
     _donutRO = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        console.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+        logger.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
         donutInstance?.resize()
       }
     })
@@ -463,7 +464,7 @@ onMounted(() => {
 onUnmounted(() => {
   _donutRO?.disconnect()
   if (donutInstance) {
-    console.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
+    logger.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
     donutInstance.dispose()
     donutInstance = null
   }

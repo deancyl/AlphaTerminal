@@ -120,7 +120,7 @@ const currentState = ref(DrawState.IDLE)
 
 function setState(newState) {
   if (currentState.value === newState) return
-  console.debug(`[DrawingCanvas] state: ${currentState.value} → ${newState}`)
+  logger.debug(`[DrawingCanvas] state: ${currentState.value} → ${newState}`)
   currentState.value = newState
 }
 

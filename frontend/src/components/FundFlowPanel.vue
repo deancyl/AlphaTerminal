@@ -80,6 +80,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const chartEl    = ref(null)
 const fundFlowData = ref([])
@@ -185,7 +186,7 @@ async function fetchFundFlow() {
     await nextTick()
     renderChart()
   } catch (e) {
-    console.error('[FundFlowPanel] fetchFundFlow error:', e)
+    logger.error('[FundFlowPanel] fetchFundFlow error:', e)
   } finally {
     isLoading.value = false
   }

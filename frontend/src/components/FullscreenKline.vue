@@ -360,7 +360,7 @@ function renderChart() {
       const ro = new ResizeObserver((entries) => {
         const { width, height } = entries[0].contentRect
         if (width > 0 && height > 0) {
-          console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+          logger.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
           chart?.resize()
         }
       })
@@ -702,7 +702,7 @@ onMounted(() => {
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
 onBeforeUnmount(() => {
   if (chart) {
-    console.debug(`[ECharts] 🗑️  disposed instance for fullscreenKline: ${props.symbol}`)
+    logger.debug(`[ECharts] 🗑️  disposed instance for fullscreenKline: ${props.symbol}`)
     chart.dispose()
     chart = null
   }

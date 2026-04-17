@@ -136,6 +136,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   portfolioId: { type: Number, required: true },
@@ -173,7 +174,7 @@ async function loadAttribution() {
     await nextTick()
     renderCharts()
   } catch (e) {
-    console.error('[AttributionPanel] loadAttribution error:', e)
+    logger.error('[AttributionPanel] loadAttribution error:', e)
   } finally {
     loading.value = false
   }

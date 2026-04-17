@@ -984,7 +984,7 @@ onMounted(async () => {
       const w = chartEl.value.offsetWidth
       const h = chartEl.value.offsetHeight
       if (w > 0 && h > 0) {
-        console.debug(`[ECharts] 📐 resize PortfolioDashboard @ ${w}×${h}`)
+        logger.debug(`[ECharts] 📐 resize PortfolioDashboard @ ${w}×${h}`)
         chart.value?.resize()
       }
     })
@@ -995,7 +995,7 @@ onMounted(async () => {
 onUnmounted(() => {
   store.stopPoll()
   if (chart.value) {
-    console.debug('[ECharts] 🗑️  disposed instance for PortfolioDashboard')
+    logger.debug('[ECharts] 🗑️  disposed instance for PortfolioDashboard')
     chart.value.dispose()
     chart.value = null
   }
