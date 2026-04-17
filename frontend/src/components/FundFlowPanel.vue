@@ -65,7 +65,7 @@
     </div>
 
     <!-- ECharts 柱状图：近10日主力净流入 -->
-    <div class="flex-1 min-h-0" ref="chartEl"></div>
+    <div class="flex-1 min-h-[250px]" ref="chartEl"></div>
 
     <!-- 无数据 / 加载（始终显示数据，无时间硬拦截） -->
     <div v-if="isLoading && !fundFlowData.length" class="flex-1 flex flex-col items-center justify-center">
@@ -78,8 +78,10 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { useResizeObserver } from '@vueuse/core'
 
 const chartEl    = ref(null)
+const chartRef   = ref(null)   // 图表 DOM 引用（ECharts 挂载点）
 const fundFlowData = ref([])
 const isLoading   = ref(false)
 const tsDisplay   = ref('')
@@ -193,6 +195,13 @@ async function fetchFundFlow() {
 onMounted(() => {
   fetchFundFlow()
   refreshTimer = setInterval(fetchFundFlow, 5 * 60 * 1000)  // 5 分钟轮询
+
+  // Tab 切换后容器尺寸变化 → 强制 ECharts resize
+  useResizeObserver(chartEl, ([entry]) => {
+    if (!chartInstance) return
+    const { width, height } = entry.contentRect
+    if (width > 0 && height > 0) chartInstance.resize()
+  })
 })
 
 onBeforeUnmount(() => {

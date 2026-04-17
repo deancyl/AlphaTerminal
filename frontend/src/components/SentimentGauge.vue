@@ -65,7 +65,7 @@
     </div>
 
     <!-- ── 简版行情列表（从 props.marketData.wind）──────────────── -->
-    <div class="overflow-hidden flex-1" style="max-height: 140px;">
+    <div class="overflow-hidden flex-1" style="max-height: 220px;">
       <table class="w-full text-xs">
         <thead>
           <tr class="text-terminal-dim border-b border-theme">

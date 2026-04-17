@@ -220,8 +220,20 @@
             </tr>
           </tbody>
         </table>
-        <!-- 触底无限滚动触发器 -->
-        <div ref="loadMoreTrigger" class="h-1 w-full" />
+        <!-- 显式分页控制栏 -->
+        <div class="flex items-center justify-between p-2 text-xs border-t border-theme-secondary text-theme-secondary">
+          <button
+            :disabled="currentPage === 1"
+            @click="goPage(currentPage - 1)"
+            class="px-3 py-1 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors"
+          >上一页</button>
+          <span class="text-[10px] text-terminal-dim">第 {{ currentPage }} / {{ totalPages }} 页 · 共 {{ total }} 条</span>
+          <button
+            :disabled="currentPage >= totalPages"
+            @click="goPage(currentPage + 1)"
+            class="px-3 py-1 rounded text-[10px] disabled:opacity-30 enabled:hover:bg-terminal-panel transition-colors"
+          >下一页</button>
+        </div>
       </div>
     </div>
   </div>
@@ -229,7 +241,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useVirtualList, useDebounceFn, useIntersectionObserver } from '@vueuse/core'
+import { useVirtualList, useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
@@ -243,11 +255,10 @@ const pageSize      = ref(50)
 const totalPages   = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 // ── 本地 UI 状态 ─────────────────────────────────────────────────
-const loading      = ref(false)
-const searchQuery   = ref('')
-const sortBy        = ref('change_pct')
-const sortDir       = ref('desc')
-const loadMoreTrigger = ref(null)   // 触底无限滚动触发器
+const loading    = ref(false)
+const searchQuery = ref('')
+const sortBy      = ref('change_pct')
+const sortDir     = ref('desc')
 
 // ── 过滤条件 ─────────────────────────────────────────────────────
 const flt = ref({
@@ -302,12 +313,8 @@ async function fetchStocks() {
       seq: (currentPage.value - 1) * pageSize.value + i + 1,
     }))
 
-    // 第一页替换，后续页追加（支持无限滚动）
-    if (currentPage.value === 1) {
-      stocks.value = newData
-    } else {
-      stocks.value.push(...newData)
-    }
+    // 每次直接替换（显式分页，无追加）
+    stocks.value = newData
     total.value  = payload.total || 0
   } catch (e) {
     logger.warn('[StockScreener] fetchStocks failed:', e.message)
@@ -318,22 +325,6 @@ async function fetchStocks() {
 
 // 防抖包装（搜索框/滑块/排序触发）
 const debouncedFetch = useDebounceFn(fetchStocks, 300)
-
-// ── 触底无限滚动（useIntersectionObserver）──────────────────────
-function onLoadMoreVisible() {
-  if (loading.value) return
-  if (currentPage.value >= totalPages.value) return
-  currentPage.value++
-  fetchStocks()   // 无防抖，直接拉下一页
-}
-
-const { stop: stopObserver } = useIntersectionObserver(
-  loadMoreTrigger,
-  ([{ isIntersecting }]) => {
-    if (isIntersecting) onLoadMoreVisible()
-  },
-  { threshold: 0.1 }
-)
 
 // ── 排序控制 ─────────────────────────────────────────────────────
 function sortClass(col) {
