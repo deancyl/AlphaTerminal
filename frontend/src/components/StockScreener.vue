@@ -8,11 +8,24 @@
             class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-theme-accent outline-none w-32" />
         </div>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">涨跌幅 ></span>
-          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1" />
+          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">%</span>
+        </div>
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-terminal-dim">换手率 ></span>
+          <input type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <span class="text-terminal-dim">%</span>
+        </div>
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-terminal-dim">PE <</span>
+          <input type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+        </div>
+        <div class="flex items-center gap-1 text-xs">
+          <span class="text-terminal-dim">PB <</span>
+          <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
         </div>
       </div>
     </div>
