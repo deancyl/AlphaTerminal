@@ -118,6 +118,7 @@ app.include_router(debug.router, prefix="/api/v1", tags=["debug"])   # 放在最
 app.include_router(bond.router, prefix="/api/v1", tags=["bond"])
 app.include_router(futures.router, prefix="/api/v1", tags=["futures"])
 app.include_router(portfolio.router, prefix="/api/v1", tags=["portfolio"])
+app.include_router(copilot.router, prefix="/api/v1", tags=["copilot"])
 app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 
