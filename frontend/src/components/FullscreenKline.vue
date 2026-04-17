@@ -74,7 +74,7 @@
 
         <!-- 画线 Canvas 覆盖层 -->
         <DrawingCanvas
-          v-if="drawingStore.visible"
+          v-if="!isMobile && drawingStore.visible"
           ref="drawingCanvasRef"
           :chart-instance="chart"
           :active-tool="drawingStore.activeTool"
@@ -91,7 +91,7 @@
 
         <!-- 画线工具栏 -->
         <DrawingToolbar
-          :active-tool="drawingStore.activeTool"
+          v-if="!isMobile"
           :active-color="drawingStore.activeColor"
           :magnet-mode="drawingStore.magnetMode"
           :visible="drawingStore.visible"
@@ -120,6 +120,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
+import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
@@ -139,6 +140,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'symbol-change'])
+
+// ── 移动端断点侦听（sprint 2-2 性能降级）────────────────────────────────────
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = computed(() => breakpoints.value.smaller('md').value)  // < 768px
 
 // Pinia Store
 const drawingStore = useDrawingStore()
@@ -192,6 +197,11 @@ const subChartOptions = [
   { key: 'CCI', label: 'CCI' },
 ]
 const activeSubChart = ref('VOL')
+
+// 移动端降维：强制只保留 VOL，避免多重指标导致 Canvas 重绘卡顿
+watch(isMobile, (mobile) => {
+  if (mobile) activeSubChart.value = 'VOL'
+})
 
 // 计算属性
 const priceColor = computed(() => {
