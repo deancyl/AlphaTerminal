@@ -220,6 +220,8 @@
             </tr>
           </tbody>
         </table>
+        <!-- 触底无限滚动触发器 -->
+        <div ref="loadMoreTrigger" class="h-1 w-full" />
       </div>
     </div>
   </div>
@@ -227,7 +229,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { useVirtualList, useDebounceFn } from '@vueuse/core'
+import { useVirtualList, useDebounceFn, useIntersectionObserver } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
@@ -245,6 +247,7 @@ const loading      = ref(false)
 const searchQuery   = ref('')
 const sortBy        = ref('change_pct')
 const sortDir       = ref('desc')
+const loadMoreTrigger = ref(null)   // 触底无限滚动触发器
 
 // ── 过滤条件 ─────────────────────────────────────────────────────
 const flt = ref({
@@ -294,7 +297,17 @@ async function fetchStocks() {
 
     const d = await apiFetch(`/api/v1/market/stocks/search?${params}`)
     const payload = d?.data || d || {}
-    stocks.value = (payload.stocks || []).map((s, i) => ({ ...s, seq: i + 1 }))
+    const newData = (payload.stocks || []).map((s, i) => ({
+      ...s,
+      seq: (currentPage.value - 1) * pageSize.value + i + 1,
+    }))
+
+    // 第一页替换，后续页追加（支持无限滚动）
+    if (currentPage.value === 1) {
+      stocks.value = newData
+    } else {
+      stocks.value.push(...newData)
+    }
     total.value  = payload.total || 0
   } catch (e) {
     logger.warn('[StockScreener] fetchStocks failed:', e.message)
@@ -305,6 +318,22 @@ async function fetchStocks() {
 
 // 防抖包装（搜索框/滑块/排序触发）
 const debouncedFetch = useDebounceFn(fetchStocks, 300)
+
+// ── 触底无限滚动（useIntersectionObserver）──────────────────────
+function onLoadMoreVisible() {
+  if (loading.value) return
+  if (currentPage.value >= totalPages.value) return
+  currentPage.value++
+  fetchStocks()   // 无防抖，直接拉下一页
+}
+
+const { stop: stopObserver } = useIntersectionObserver(
+  loadMoreTrigger,
+  ([{ isIntersecting }]) => {
+    if (isIntersecting) onLoadMoreVisible()
+  },
+  { threshold: 0.1 }
+)
 
 // ── 排序控制 ─────────────────────────────────────────────────────
 function sortClass(col) {

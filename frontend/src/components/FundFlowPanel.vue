@@ -67,11 +67,8 @@
     <!-- ECharts 柱状图：近10日主力净流入 -->
     <div class="flex-1 min-h-0" ref="chartEl"></div>
 
-    <!-- 无数据 / 加载 -->
-    <div v-if="!latestData && !isLoading" class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px] gap-1">
-      <span>📭 非交易时段</span>
-    </div>
-    <div v-if="isLoading && !latestData" class="flex-1 flex flex-col items-center justify-center">
+    <!-- 无数据 / 加载（始终显示数据，无时间硬拦截） -->
+    <div v-if="isLoading && !fundFlowData.length" class="flex-1 flex flex-col items-center justify-center">
       <span class="text-theme-muted text-[10px] animate-pulse">⏳ 加载资金流...</span>
     </div>
   </div>
