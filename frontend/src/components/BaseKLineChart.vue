@@ -36,7 +36,7 @@ function buildOption(cData) {
   const {
     times, klineData, volumes,
     maData, bollData, subChartData,
-    overlaySeriesData, yMin, yMax
+    overlaySeriesData, overlayYAxis, yMin, yMax
   } = cData
 
   const subCount = props.subCharts.length  // 1(只有VOL) 或 2(VOL+指标)
@@ -124,30 +124,45 @@ function buildOption(cData) {
 
     // 叠加标的系列
     if (overlaySeriesData && overlaySeriesData.length > 0) {
-      const overlayYAxis = {
-        type: 'value',
-        gridIndex: 0,
-        position: 'right',
-        axisLine: { show: true, lineStyle: { color: '#6b7280' } },
-        axisLabel: { 
-          show: true,
-          formatter: (val) => val?.toFixed(2) || '',
-          fontSize: 9,
-          color: '#9ca3af'
-        },
-        splitLine: { show: false }
+      let ovSeriesData = overlaySeriesData
+
+      if (overlayYAxis?.type === 'normalized') {
+        // 量级差异大（沪深300≈4000 vs 10年国债≈2.5%）：min-max 归一化到 0~100
+        const { min: ovMin, max: ovMax } = overlayYAxis
+        const ovRange = ovMax - ovMin
+        ovSeriesData = overlaySeriesData.map(([i, v]) =>
+          v == null ? [i, null] : [i, ovRange > 0 ? +((v - ovMin) / ovRange * 100).toFixed(4) : 50]
+        )
       }
-      yAxes.push(overlayYAxis)
-      
+
+      yAxes.push({
+        type: 'value', gridIndex: 0, position: 'right',
+        ...(overlayYAxis?.type === 'normalized'
+          ? { min: 0, max: 100, axisLabel: { show: true, fontSize: 9, color: '#9ca3af', formatter: (v) => v != null ? v.toFixed(1) + '%' : '' } }
+          : { axisLabel: { show: true, fontSize: 9, color: '#9ca3af', formatter: (val) => val != null ? val.toFixed(2) : '' } }
+        ),
+        axisLine: { show: true, lineStyle: { color: '#6b7280' } },
+        splitLine: { show: false },
+      })
+
       series.push({
         name: '叠加',
         type: 'line',
-        data: overlaySeriesData,
+        data: ovSeriesData,
         xAxisIndex: 0,
-        yAxisIndex: yAxes.length - 1,  // 新增的右侧Y轴
+        yAxisIndex: yAxes.length - 1,
         symbol: 'none',
         lineStyle: { color: '#60a5fa', width: 1.5, type: 'solid' },
-        tooltip: { formatter: '{b}: {c}' }
+        tooltip: {
+          formatter: (p) => {
+            if (overlayYAxis?.type === 'normalized') {
+              const { min: ovMin, max: ovMax } = overlayYAxis
+              const rawVal = overlaySeriesData[p.dataIndex]?.[1]
+              return rawVal != null ? `叠加: ${rawVal.toFixed(4)} (${ovMin.toFixed(4)}~${ovMax.toFixed(4)})` : '叠加: N/A'
+            }
+            return `叠加: ${p.value?.[1] ?? '-'}`
+          }
+        },
       })
     }
   }

@@ -117,7 +117,6 @@
           </div>
         </div>
 
-        <!-- 叠加 -->
         <div class="relative group">
           <button
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
@@ -125,19 +124,44 @@
               ? 'text-cyan-400'
               : 'text-theme-muted hover:text-theme-primary'"
             title="叠加标的"
-            @click="selectOverlay"
+            @click.stop="showOverlayPanel = !showOverlayPanel"
           >
-            <!-- Plus/overlay icon -->
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
               <path d="M6 2v8M2 6h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
             </svg>
           </button>
-          <div class="absolute right-0 top-full mt-1 hidden group-hover:flex z-50 pointer-events-none">
-            <div class="bg-theme-secondary border border-theme-secondary rounded px-2 py-1 shadow-xl whitespace-nowrap">
-              <span class="text-[9px] text-theme-primary">{{ overlaySymbol ? overlaySymbol : '叠加标的' }}</span>
+
+          <!-- 叠加搜索面板 -->
+          <div
+            v-if="showOverlayPanel"
+            class="absolute right-0 top-full mt-1 z-50 w-64 rounded border border-theme-secondary bg-terminal-panel shadow-xl"
+            @click.stop
+          >
+            <div class="p-2 border-b border-theme/30">
+              <input
+                ref="overlaySearchInput"
+                v-model="overlaySearchQuery"
+                type="text"
+                placeholder="搜索股票代码/名称..."
+                class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary placeholder-theme-muted focus:outline-none focus:border-cyan-400/60"
+                @keydown.enter="applyOverlaySearch"
+                @keydown.esc="showOverlayPanel = false; overlaySearchQuery = ''"
+              />
             </div>
-          </div>
-        </div>
+            <div v-if="overlaySearchResults.length > 0" class="max-h-40 overflow-y-auto">
+              <button
+                v-for="item in overlaySearchResults"
+                :key="item.symbol"
+                class="w-full px-3 py-1.5 text-left text-[10px] hover:bg-theme-tertiary/50 flex items-center gap-2"
+                @click="selectOverlayItem(item)"
+              >
+                <span class="font-mono text-cyan-400 w-16 shrink-0">{{ item.symbol.toUpperCase() }}</span>
+                <span class="text-theme-primary truncate">{{ item.name }}</span>
+              </button>
+            </div>
+            <div v-else-if="overlaySearchQuery.length > 0" class="px-3 py-2 text-[9px] text-theme-muted">
+              无结果，请尝试输入如 sh000300
+            </div>
 
         <!-- 导出 -->
         <div class="relative" v-click-outside="() => showExport = false">
@@ -198,6 +222,10 @@ const emit = defineEmits([
 ])
 
 const showExport = ref(false)
+const showOverlayPanel = ref(false)
+const overlaySearchQuery = ref('')
+const overlaySearchResults = ref([])
+const overlaySearchCache = ref({})
 
 const periods = [
   { key: 'minutely', label: 'T' },
@@ -227,14 +255,57 @@ function fmtAmt(a) {
   return a.toFixed(0)
 }
 
-function selectOverlay() {
-  if (props.overlaySymbol) {
-    emit('overlay-change', '')
-    return
-  }
-  const input = prompt('输入叠加标的 Symbol（如 sh000300）：', 'sh000300')
-  if (input?.trim()) emit('overlay-change', { symbol: input.trim(), name: '' })
+function selectOverlayItem(item) {
+  showOverlayPanel.value = false
+  overlaySearchQuery.value = ''
+  overlaySearchResults.value = []
+  emit('overlay-change', { symbol: item.symbol, name: item.name || item.symbol })
 }
+
+async function applyOverlaySearch() {
+  const q = overlaySearchQuery.value.trim()
+  if (!q) return
+  // 优先从本地缓存搜索（全市场A股）
+  if (overlaySearchCache.value._symbols) {
+    const lower = q.toLowerCase()
+    overlaySearchResults.value = overlaySearchCache.value._symbols
+      .filter(s => s.symbol.toLowerCase().includes(lower) || (s.name || '').toLowerCase().includes(lower))
+      .slice(0, 20)
+    if (overlaySearchResults.value.length > 0) return
+  }
+  // 兜底：直接使用输入的 symbol（兼容用户直接输入 sh000300 格式）
+  overlaySearchResults.value = [{ symbol: q, name: q }]
+}
+
+// 点击外部关闭面板
+const vClickOutsideOverlay = {
+  mounted(el, binding) {
+    el._ovClickOutside = (e) => {
+      if (!el.closest('.relative')?.contains(e.target) && !el.querySelector('.absolute')?.contains(e.target)) {
+        binding.value(e)
+      }
+    }
+    setTimeout(() => document.addEventListener('click', el._ovClickOutside), 0)
+  },
+  unmounted(el) { document.removeEventListener('click', el._ovClickOutside) },
+}
+
+// 加载全市场A股符号缓存（搜索用）
+async function loadOverlaySymbolCache() {
+  if (overlaySearchCache.value._symbols) return
+  try {
+    const resp = await fetch('/api/v1/market/symbols')
+    const json = await resp.json()
+    if (json?.data?.symbols) {
+      overlaySearchCache.value._symbols = json.data.symbols
+    }
+  } catch { /* silent */ }
+}
+
+// 面板打开时加载缓存
+watch(showOverlayPanel, (v) => {
+  if (v) loadOverlaySymbolCache()
+})
 
 function doExport(mode) {
   const hist = mode === 'visible' ? props.visibleHist : props.fullHist

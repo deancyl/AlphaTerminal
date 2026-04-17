@@ -72,15 +72,37 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   if (overlayData.length > 0) {
     const ovMap = {}
     for (const d of overlayData) {
-      ovMap[d.date] = d.close
+      if (d.date && d.close != null) ovMap[d.date] = d.close
     }
-    // 按主图时间对齐
+    // 按主图时间对齐，未找到的日期填充 null
     overlaySeriesData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
   }
 
   // 5. Y 轴极值计算 (用于自适应优化)
   const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
   const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
+
+  // 6. 叠加标的 Y 轴自适应（双 Y 轴核心）
+  //    策略：若叠加数据与主图量级差异 > 10x，切换为 min-max 归一化显示（0~100 范围）
+  //    用途：股债跷跷板（沪深300≈4000点 vs 10年国债收益率≈2.5%）
+  let overlayYAxis = null
+  if (overlayData.length > 0) {
+    const ovCloses = overlayData.map(d => d.close).filter(v => v != null)
+    if (ovCloses.length > 0) {
+      const ovMin = Math.min(...ovCloses)
+      const ovMax = Math.max(...ovCloses)
+      const mainRange = yMax - yMin
+      const ovRange = ovMax - ovMin
+
+      if (mainRange > 0 && ovRange > 0 && (mainRange / ovRange > 10 || ovRange / mainRange > 10)) {
+        // 量级差异过大：使用归一化右侧 Y 轴（0~100 范围）
+        overlayYAxis = { type: 'normalized', min: ovMin, max: ovMax }
+      } else {
+        // 量级相近：使用原始值右侧 Y 轴（双轴各自用真实值）
+        overlayYAxis = { type: 'original' }
+      }
+    }
+  }
 
   return {
     isEmpty: false,
@@ -91,7 +113,8 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     bollData,
     subChartData,
     overlaySeriesData,
+    overlayYAxis,
     yMin,
-    yMax
+    yMax,
   }
 }
