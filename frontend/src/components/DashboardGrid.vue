@@ -417,7 +417,8 @@ function formatMacroPrice(item) {
 // ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
 // ── 标的切换时自动回退不支持的周期 ────────────────────────────────
 // ── StockScreener / Copilot 等外部改变了 currentSymbol 时同步 selectedIndex ──
-watch(currentSymbol, (sym) => {
+// Use getter () => currentSymbol.value to safely watch Pinia refs
+watch(() => currentSymbol.value, (sym) => {
   if (sym && sym !== selectedIndex.value) {
     selectedIndex.value = sym
   }

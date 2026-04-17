@@ -724,7 +724,10 @@ function _cancelLeaveTimer() {
 async function fetchAndRender() {
   chartError.value = ''; isLoading.value = true
   try {
-    const fullUrl = props.url + (props.url.includes('?') ? '&' : '?') + `_t=${Date.now()}`
+    // Guard: if symbol prop is undefined/null, use a fallback URL
+    const safeSymbol = (props.symbol && props.symbol !== 'undefined') ? props.symbol : 'sh000001'
+    const fullUrl = `/api/v1/market/history/${safeSymbol}?period=${props.period || 'daily'}&_t=${Date.now()}`
+    debugUrl.value = fullUrl
     console.log('[KLine DEBUG] url:', fullUrl)
     const d = await apiFetch(fullUrl)
     console.log('[KLine DEBUG] response d keys:', d ? Object.keys(d) : 'null', '| history len:', d?.history?.length, '| chart_type:', d?.chart_type)
