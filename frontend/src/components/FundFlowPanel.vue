@@ -65,7 +65,7 @@
     </div>
 
     <!-- ECharts 柱状图：近10日主力净流入 -->
-    <div class="flex-1 min-h-[250px]" ref="chartEl"></div>
+    <div class="flex-1 min-h-[150px] w-full" ref="chartEl"></div>
 
     <!-- 无数据 / 加载（始终显示数据，无时间硬拦截） -->
     <div v-if="isLoading && !fundFlowData.length" class="flex-1 flex flex-col items-center justify-center">

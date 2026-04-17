@@ -89,17 +89,17 @@
     </div>
 
     <!-- ━━━ Widget 2：市场情绪直方图（K线正下方，左侧8列）━━━━━━━━━━━━━ -->
-    <!-- 移到K线下方，占据完整8列宽度，让11个柱状图舒展显示 -->
+    <!-- 情绪面板扩展至 9 单位高度（720px），容纳三大图表无滚动条 -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="6" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="5">
+         gs-x="0" gs-y="6" gs-w="8" gs-h="9" gs-min-w="4" gs-min-h="7">
       <div class="grid-stack-item-content terminal-panel p-3">
         <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
       </div>
     </div>
 
-    <!-- ━━━ Widget 3：快讯新闻（情绪图下方，左侧8列）━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 3：快讯新闻（情绪图下方，15起）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="11" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+         gs-x="0" gs-y="15" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
       </div>
@@ -145,18 +145,25 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 5：行业与资金风口（右侧4列，中间）━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 5：资金流向（独立，右侧4列，6起）━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="6" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-2 flex flex-col">
-        <FundFlowPanel class="h-1/2 mb-1" />
-        <HotSectors @sector-click="handleSectorClick" class="h-1/2" />
+         gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-2">
+        <FundFlowPanel />
       </div>
     </div>
 
-    <!-- ━━━ Widget 6：国内市场指数（右侧4列，下方）━━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="12" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-2">
+        <HotSectors @sector-click="handleSectorClick" />
+      </div>
+    </div>
+
+    <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起）━━━━━━━━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
@@ -191,9 +198,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列）━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="17" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+         gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener />
       </div>
