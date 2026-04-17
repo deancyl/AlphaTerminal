@@ -203,6 +203,28 @@ async def run_backtest(req: BacktestRequest):
                 if drawdown < max_drawdown:
                     max_drawdown = abs(drawdown)
         
+        # 计算最大回撤 (正确版：按时间顺序扫描)
+        peak = req.initial_capital
+        max_drawdown = 0
+        equity = req.initial_capital
+        equity_curve = []
+        for t in trades:
+            if 'pnl' in t:
+                equity += t['pnl']
+                equity_curve.append({ "date": t.get("exit_date", t.get("entry_date")), "value": round(equity, 2) })
+                if equity > peak:
+                    peak = equity
+                drawdown = peak - equity
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+
+        # 简化夏普比率（年化收益/最大回撤）
+        trading_days = len(rows)
+        years = trading_days / 252
+        annualized_return = (capital / req.initial_capital) ** (1 / years) - 1 if years > 0 else 0
+        sharpe_ratio = round(annualized_return / (max_drawdown / req.initial_capital), 2) if max_drawdown > 0 else 0
+
+        # 返回完整交易列表（不截断）
         return {
             "code": 0,
             "data": {
@@ -214,11 +236,15 @@ async def run_backtest(req: BacktestRequest):
                 "total_return": round(total_return, 2),
                 "total_return_pct": round(total_return_pct, 2),
                 "max_drawdown": round(max_drawdown, 2),
+                "max_drawdown_pct": round((max_drawdown / req.initial_capital) * 100, 2),
                 "wins": wins,
                 "losses": losses,
                 "win_rate": round(win_rate, 2),
                 "trades_count": total_trades,
-                "trades": trades[-10:]  # 返回最近10笔交易
+                "sharpe_ratio": sharpe_ratio,
+                "annualized_return_pct": round(annualized_return * 100, 2),
+                "trades": trades,  # 完整交易列表
+                "equity_curve": equity_curve,  # 资金曲线 [{date, value}, ...]
             }
         }
     finally:
