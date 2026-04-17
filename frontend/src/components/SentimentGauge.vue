@@ -65,7 +65,7 @@
     </div>
 
     <!-- ── 简版行情列表（h-full 响应式填充，移除硬编码 max-height）────── -->
-    <div class="overflow-visible flex-1 min-h-0">
+    <div class="overflow-y-auto flex-1 min-h-[250px]">
       <table class="w-full text-xs">
         <thead>
           <tr class="text-terminal-dim border-b border-theme">

@@ -118,7 +118,6 @@
 
     <div class="flex-1 min-h-0 overflow-y-auto relative">
       <table class="w-full text-xs whitespace-nowrap">
-        <!-- ── Sticky 表头（合并，无重复）───────────────────────────── -->
         <thead class="bg-terminal-panel sticky top-0 z-10 shadow-sm">
           <tr class="text-terminal-dim border-b border-theme">
             <th class="text-left py-0.5 px-0.5 cursor-pointer hover:text-theme-primary w-8" @click="setSort('seq')">#</th>

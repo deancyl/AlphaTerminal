@@ -861,12 +861,16 @@ def _inject_change_pct(rows: list[dict]) -> list[dict]:
 
 @router.get("/market/fund_flow")
 async def get_fund_flow():
-    """市场资金流向（超大单/大单/中单/小单主力净流入）"""
+    """市场资金流向（超大单/大单/中单/小单主力净流入）- 5秒超时防前端断开"""
     import akshare as ak
+    import asyncio, datetime, random
 
     try:
-        df = ak.stock_market_fund_flow()
-        # 获取最近30天数据
+        # 【核心修复】：线程池执行 + 5秒绝对超时，防止 akshare 阻塞事件循环和前端超时断开
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.stock_market_fund_flow),
+            timeout=5.0
+        )
         df = df.tail(30)
 
         result = []
@@ -887,34 +891,32 @@ async def get_fund_flow():
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
 
-        # 【防御】：如果 akshare 静默返回空 DataFrame，主动抛异常触发 Mock fallback
         if not result:
-            raise ValueError("akshare returned empty dataframe, triggering fallback")
+            raise ValueError("Empty data from akshare")
 
         return success_response({
-            "items": result,
-            "total": len(result),
-            "source": "akshare - stock_market_fund_flow"
+            "items": result, "total": len(result), "source": "akshare"
         })
+
+    except asyncio.TimeoutError:
+        logger.warning(f"[FundFlow] akshare timed out after 5s, triggering fallback")
+    except ValueError:
+        logger.warning(f"[FundFlow] empty result, triggering fallback")
     except Exception as e:
-        logger.warning(f"market_fund_flow error/empty, using fallback: {e}")
-        import datetime, random
-        result = []
-        for i in range(30):
-            d = (datetime.datetime.now() - datetime.timedelta(days=29 - i)).strftime("%m-%d")
-            main_net = random.randint(-500000000, 500000000)
-            result.append({
-                "date": d,
-                "main_net": main_net,
-                "main_pct": round(random.uniform(-5, 5), 2),
-                "large_net": int(main_net * random.uniform(0.6, 0.9)),
-                "large_pct": round(random.uniform(-2, 2), 2),
-                "medium_net": int(main_net * random.uniform(0.2, 0.4)),
-                "medium_pct": round(random.uniform(-1, 1), 2),
-                "small_net": int(-main_net * random.uniform(0.5, 0.8)),
-                "small_pct": round(random.uniform(-3, 3), 2),
-            })
-        return success_response({"items": result, "total": 30, "source": "fallback_mock"})
+        logger.warning(f"[FundFlow] fetch error, triggered fallback: {e}")
+
+    # Fallback（akshare 超时或空数据时）
+    mock_result = []
+    for i in range(30):
+        d = (datetime.datetime.now() - datetime.timedelta(days=29 - i)).strftime("%m-%d")
+        main_net = random.randint(-500000000, 500000000)
+        mock_result.append({
+            "date": d, "main_net": main_net, "main_pct": round(random.uniform(-5, 5), 2),
+            "large_net": int(main_net * random.uniform(0.6, 0.9)), "large_pct": round(random.uniform(-2, 2), 2),
+            "medium_net": int(main_net * random.uniform(0.2, 0.4)), "medium_pct": round(random.uniform(-1, 1), 2),
+            "small_net": int(-main_net * random.uniform(0.5, 0.8)), "small_pct": round(random.uniform(-3, 3), 2),
+        })
+    return success_response({"items": mock_result, "total": 30, "source": "fallback_mock"})
 
 
 @router.get("/market/history/{symbol}")
