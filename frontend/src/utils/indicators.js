@@ -114,6 +114,20 @@ export function calcWR(closes, highs, lows, n = 14) {
   })
 }
 
+/** 计算 CCI（顺势指标） */
+export function calcCCI(closes, highs, lows, n = 14) {
+  return closes.map((_, i) => {
+    if (i < n - 1) return null
+    const tp = (highs[i] + lows[i] + closes[i]) / 3
+    const window = closes.slice(i - n + 1, i + 1)
+    const tpWindow = window.map((_, j) => (highs[i - n + 1 + j] + lows[i - n + 1 + j] + closes[i - n + 1 + j]) / 3)
+    const sma = tpWindow.reduce((a, b) => a + b, 0) / n
+    const mad = tpWindow.reduce((s, v) => s + Math.abs(v - sma), 0) / n
+    if (mad === 0) return 0
+    return +((tp - sma) / (0.015 * mad)).toFixed(2)
+  })
+}
+
 /** 计算均线乖离率 */
 export function calcBIAS(closes, period = 20) {
   return closes.map((_, i) => {

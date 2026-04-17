@@ -1,5 +1,5 @@
 // frontend/src/utils/chartDataBuilder.js
-import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from './indicators.js'
+import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI, calcOBV, calcDMI, calcCCI } from './indicators.js'
 import { buildXAxisLabels } from './symbols.js'
 import { UP, DOWN } from './indicators.js'
 
@@ -66,6 +66,19 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   // RSI
   const rsiParams = indicatorParams.RSI || { period: 14 }
   subChartData.RSI = calcRSI(closes, rsiParams.period)
+
+  // OBV（能量潮）
+  const obvParams = indicatorParams.OBV || {}
+  subChartData.OBV = calcOBV(closes, volumes)
+
+  // DMI（趋向指标）
+  const dmiParams = indicatorParams.DMI || { period: 14 }
+  subChartData.DMI = calcDMI(highs, lows, closes, dmiParams.period)
+
+  // CCI（顺势指标）
+  const cciParams = indicatorParams.CCI || { period: 14 }
+  const cciRaw = calcCCI ? calcCCI(closes, highs, lows, cciParams.period) : null
+  if (cciRaw) subChartData.CCI = cciRaw
 
   // 4. 叠加标的处理 (对比图)
   let overlaySeriesData = []
