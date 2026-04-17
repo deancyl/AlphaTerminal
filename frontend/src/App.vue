@@ -131,11 +131,19 @@
           <div class="text-terminal-dim text-xs text-center">正在加载市场数据...</div>
         </div>
 
-        <!-- F2修复: 加载错误提示 -->
-        <div v-if="loadError && !isInitialLoading" 
-             class="mb-2 px-3 py-2 rounded border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between">
-          <span>⚠️ 数据加载失败: {{ loadError }}</span>
-          <button @click="fetchMarketData" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40">重试</button>
+        <!-- F2修复: 加载错误提示（增强：显示重试次数 + apiErrorState） -->
+        <div v-if="loadError && !isInitialLoading"
+             class="mb-2 px-3 py-2 rounded border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <span>⚠️ {{ loadError }}</span>
+            <span v-if="apiErrorState.failedCount > 1" class="text-bullish/70 text-[10px]">
+              （第 {{ apiErrorState.failedCount }} 次失败，自动重试中...）
+            </span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button @click="fetchMarketData" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
+            <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-panel rounded text-theme-secondary hover:text-theme-primary text-[10px]">忽略</button>
+          </div>
         </div>
 
         <!-- 股票行情（默认） -->
@@ -214,7 +222,7 @@ import FullscreenKline from './components/FullscreenKline.vue'
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
-import { fetchApiBatch } from './utils/api.js'
+import { fetchApiBatch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 
 const { ui } = useUiStore()

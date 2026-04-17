@@ -9,6 +9,7 @@
  */
 
 import { logger } from './logger.js'
+import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
 
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
@@ -16,12 +17,25 @@ const _consecutiveFailures = { count: 0 }
 const _DEGRADE_THRESHOLD   = 3
 const _CIRCUIT_THRESHOLD   = 6
 
+// ── 全局错误感知状态（供 UI 层消费）──────────────────────────────
+export const apiErrorState = reactive({
+  failedCount: 0,     // 连续失败次数
+  lastError: null,    // 最近错误信息
+  lastFailedAt: null, // 最近失败时间戳
+  isDegraded: false, // 是否已触发降级提示
+})
+
 function _onFailure(url, status) {
   _consecutiveFailures.count++
   const n = _consecutiveFailures.count
+  apiErrorState.failedCount = n
+  apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
+  apiErrorState.lastFailedAt = Date.now()
   if (n >= _CIRCUIT_THRESHOLD) {
+    apiErrorState.isDegraded = true
     broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
   } else if (n >= _DEGRADE_THRESHOLD) {
+    apiErrorState.isDegraded = true
     broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
   }
 }
@@ -29,7 +43,12 @@ function _onFailure(url, status) {
 function _onSuccess() {
   if (_consecutiveFailures.count > 0) {
     _consecutiveFailures.count = 0
-    broadcastDataSourceStatus('ok', '数据源已恢复正常')
+    apiErrorState.failedCount = 0
+    apiErrorState.lastError = null
+    if (apiErrorState.isDegraded) {
+      apiErrorState.isDegraded = false
+      broadcastDataSourceStatus('ok', '数据源已恢复正常')
+    }
   }
 }
 
@@ -132,10 +151,11 @@ export async function apiFetch(url, options = {}) {
       // 仅对5xx服务器错误和超时应试重试，4xx客户端错误立即失败
       if (!res.ok) {
         if (res.status >= 500 || res.status === 429) {
-          // 服务器错误，可以重试
+          // 服务器错误，可以重试（指数退避：delay = 500 * 2^attempt）
           if (attempt < retries) {
-            logger.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries})...`)
-            await sleep(500 * (attempt + 1))
+            const backoffMs = Math.min(500 * Math.pow(2, attempt), 8000)
+            logger.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries}) in ${backoffMs}ms...`)
+            await sleep(backoffMs)
             continue
           }
         }
