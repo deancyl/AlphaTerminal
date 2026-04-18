@@ -57,8 +57,8 @@
             </div>
             <div class="col-span-2">
               <div class="text-[9px] text-terminal-dim">盈亏率</div>
-              <div class="text-[10px] font-mono" :class="store.totalPnlPct >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ store.totalPnlPct >= 0 ? '+' : '' }}{{ store.totalPnlPct }}%
+              <div class="text-[10px] font-mono" :class="Number(store.totalPnlPct) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ Number(store.totalPnlPct) >= 0 ? '+' : '' }}{{ Number(store.totalPnlPct).toFixed(2) }}%
               </div>
             </div>
           </div>
@@ -306,12 +306,12 @@
               <!-- 持仓 -->
               <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ pos.shares }}</td>
               <!-- 成本价 -->
-              <td class="py-1 px-2 text-right font-mono text-theme-secondary text-[9px]">{{ pos.avg_cost }}</td>
+              <td class="py-1 px-2 text-right font-mono text-theme-secondary text-[9px]">{{ Number(pos.avg_cost||0).toFixed(2) }}</td>
               <!-- 现价 -->
-              <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ pos.price }}</td>
+              <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ Number(pos.price||0).toFixed(2) }}</td>
               <!-- 今日涨跌 -->
               <td class="py-1 px-2 text-right font-mono text-[9px]" :class="(pos.change_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ (pos.change_pct||0) >= 0 ? '+' : '' }}{{ pos.change_pct||0 }}%
+                {{ (pos.change_pct||0) >= 0 ? '+' : '' }}{{ (pos.change_pct||0).toFixed(2) }}%
               </td>
               <!-- 市值 -->
               <td class="py-1 px-2 text-right font-mono text-theme-primary text-[9px]">{{ fmtYuan(pos.market_value) }}</td>
@@ -321,10 +321,10 @@
               </td>
               <!-- 盈亏率 -->
               <td class="py-1 px-2 text-right font-mono font-bold text-[9px]" :class="(pos.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                {{ (pos.pnl_pct||0) >= 0 ? '+' : '' }}{{ pos.pnl_pct||0 }}%
+                {{ (pos.pnl_pct||0) >= 0 ? '+' : '' }}{{ (pos.pnl_pct||0).toFixed(2) }}%
               </td>
               <!-- 权重 -->
-              <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ pos.weight||0 }}%</td>
+              <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ Number(pos.weight||0).toFixed(2) }}%</td>
               <!-- PE -->
               <td class="py-1 px-2 text-right text-terminal-dim text-[9px]">{{ pos.pe || '--' }}</td>
               <!-- PB -->
@@ -726,7 +726,7 @@ function downloadReport() {
     '--- 持仓明细 ---',
     '代码,名称,持仓,成本价,现价,市值,盈亏,盈亏率,占比',
     ...positions.map(p =>
-      `${p.symbol},${p.symbol},${p.shares},${p.avg_cost},${p.price},${fmtYuan(p.market_value)},${fmtYuan(p.pnl)},${p.pnl_pct}%,${((p.market_value / (totalValue || 1)) * 100).toFixed(1)}%`
+      `${p.symbol},${p.symbol},${p.shares},${Number(p.avg_cost||0).toFixed(2)},${Number(p.price||0).toFixed(2)},${fmtYuan(p.market_value)},${fmtYuan(p.pnl)},${Number(p.pnl_pct||0).toFixed(2)}%,${((p.market_value / (totalValue || 1)) * 100).toFixed(1)}%`
     ),
     '',
     '--- 风险指标 ---',
