@@ -3,7 +3,7 @@
  * API 基础路径: /api/v1/portfolio
  * 自动轮询PnL，每 20 秒刷新一次
  */
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { logger } from '../utils/logger.js'
 
 const BASE = '/api/v1/portfolio'
@@ -160,7 +160,7 @@ function stopPoll() {
 // 必须用 reactive() 包裹，这样 Vue 模板访问 store.portfolios 时会
 // 自动解包 ref，不用在 v-for 中写 store.portfolios.value
 export function usePortfolioStore() {
-  return {
+  return reactive({
     portfolios,
     activePid,
     positions,
@@ -185,5 +185,5 @@ export function usePortfolioStore() {
     saveSnapshot,
     startPoll,
     stopPoll,
-  }
+  })
 }

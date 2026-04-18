@@ -233,7 +233,7 @@ import BacktestChart from './BacktestChart.vue'
 // ── 组合数据 ────────────────────────────────────────────────────
 const portfolioStore = usePortfolioStore()
 const portfolioOptions = computed(() =>
-  (portfolioStore.portfolios || []).filter(p => !p.parent_id)
+  (portfolioStore.portfolios.value || []).filter(p => !p.parent_id)
 )
 const selectedPortfolioId = ref('')
 const positionTags = ref([])
