@@ -110,123 +110,134 @@ async def run_backtest(req: BacktestRequest):
         fast_ma = (req.params or {}).get('fast_ma', 5)
         slow_ma = (req.params or {}).get('slow_ma', 20)
         
-        # 计算均线
-        closes = [r[4] for r in rows]
-        
+        # ── 基准收益率（Buy & Hold同期）────────────────────────────────────────
+        first_close = float(rows[0][4])
+        last_close  = float(rows[-1][4])
+        benchmark_return_pct = round((last_close - first_close) / first_close * 100, 2)
+
+        # ── 技术指标计算 ──────────────────────────────────────────────────────
+        closes = [float(r[4]) for r in rows]
+        highs  = [float(r[2]) for r in rows]
+        lows   = [float(r[3]) for r in rows]
+        volumes= [float(r[5]) for r in rows]
+
         def calc_ma(data, period):
-            result = []
-            for i in range(len(data)):
-                if i < period - 1:
-                    result.append(None)
-                else:
-                    avg = sum(data[i-period+1:i+1]) / period
-                    result.append(round(avg, 2))
-            return result
-        
-        fast_ma_values = calc_ma(closes, fast_ma)
-        slow_ma_values = calc_ma(closes, slow_ma)
-        
-        # 模拟交易
-        capital = req.initial_capital
-        position = 0  # 持仓股数
-        entry_price = 0
-        trades = []
-        pnl_total = 0
-        wins = 0
-        losses = 0
-        
-        for i in range(slow_ma, len(closes)):
-            if fast_ma_values[i] is None or slow_ma_values[i] is None:
-                continue
-                
-            # 金叉买入
-            if fast_ma_values[i] > slow_ma_values[i] and fast_ma_values[i-1] <= slow_ma_values[i-1]:
-                if position == 0 and capital > 0:
-                    shares = int(capital * 0.9 / closes[i])  # 90%仓位
-                    if shares > 0:
-                        position = shares
-                        entry_price = closes[i]
-                        capital -= shares * entry_price
-                        trades.append({
-                            "entry_date": rows[i][0],
-                            "entry_price": entry_price,
-                            "shares": shares,
-                            "type": "long"
-                        })
-            
-            # 死叉卖出
-            elif fast_ma_values[i] < slow_ma_values[i] and fast_ma_values[i-1] >= slow_ma_values[i-1]:
-                if position > 0:
-                    exit_price = closes[i]
-                    pnl = (exit_price - entry_price) * position
-                    pnl_total += pnl
-                    if pnl > 0:
-                        wins += 1
-                    else:
-                        losses += 1
-                    capital += position * exit_price
-                    trades[-1].update({
-                        "exit_date": rows[i][0],
-                        "exit_price": exit_price,
-                        "pnl": round(pnl, 2),
-                        "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
-                    })
-                    position = 0
-        
-        # 计算最终收益
+            return [None] * (period - 1) + [
+                round(sum(data[i-period+1:i+1]) / period, 2) for i in range(period - 1, len(data))
+            ]
+
+        def calc_rsi(closes, period=14):
+            gains, losses = [], []
+            for i in range(1, len(closes)):
+                d = closes[i] - closes[i-1]
+                gains.append(max(d, 0)); losses.append(max(-d, 0))
+            avg_gain = [None] * period; avg_loss = [None] * period
+            if sum(losses[:period]) == 0:
+                return [50.0] * len(closes)
+            ag = sum(gains[:period]) / period; al = sum(losses[:period]) / period
+            rs = ag / al if al != 0 else 0
+            avg_gain.append(100 - 100/(1+rs)); avg_loss.append(0)
+            for i in range(period+1, len(gains)):
+                ag = (ag*(period-1) + gains[i-1]) / period
+                al = (al*(period-1) + losses[i-1]) / period
+                rs = ag / al if al != 0 else 0
+                avg_gain.append(100 - 100/(1+rs) if al != 0 else 50.0); avg_loss.append(0)
+            return avg_gain + [None] * (len(closes) - len(avg_gain))
+
+        def calc_bollinger(closes, period=20, multiplier=2):
+            mid = calc_ma(closes, period)
+            upper, lower = [None] * len(closes), [None] * len(closes)
+            for i in range(period - 1, len(closes)):
+                if mid[i] is not None:
+                    std = (sum((closes[j] - mid[i])**2 for j in range(i-period+1, i+1)) / period) ** 0.5
+                    upper[i] = round(mid[i] + multiplier * std, 2)
+                    lower[i] = round(mid[i] - multiplier * std, 2)
+            return mid, upper, lower
+
+        # ── 策略信号生成 ──────────────────────────────────────────────────────
+        strategy_type = req.strategy_type or 'ma_crossover'
+        signals = [0] * len(closes)  # 1=买入, -1=卖出, 0=持仓
+
+        if strategy_type == 'ma_crossover':
+            fast_ma_vals = calc_ma(closes, fast_ma)
+            slow_ma_vals = calc_ma(closes, slow_ma)
+            for i in range(slow_ma, len(closes)):
+                if fast_ma_vals[i] is None: continue
+                if fast_ma_vals[i] > slow_ma_vals[i] and fast_ma_vals[i-1] <= slow_ma_vals[i-1]:
+                    signals[i] = 1
+                elif fast_ma_vals[i] < slow_ma_vals[i] and fast_ma_vals[i-1] >= slow_ma_vals[i-1]:
+                    signals[i] = -1
+
+        elif strategy_type == 'rsi_oversold':
+            rsi_period = (req.params or {}).get('rsi_period', 14)
+            rsi_buy    = (req.params or {}).get('rsi_buy', 30)
+            rsi_sell   = (req.params or {}).get('rsi_sell', 70)
+            rsi_vals   = calc_rsi(closes, rsi_period)
+            in_position = False
+            for i in range(1, len(closes)):
+                if rsi_vals[i] is None: continue
+                if not in_position and rsi_vals[i] < rsi_buy:
+                    signals[i] = 1; in_position = True
+                elif in_position and rsi_vals[i] > rsi_sell:
+                    signals[i] = -1; in_position = False
+
+        elif strategy_type == 'bollinger_bands':
+            mid, upper, lower = calc_bollinger(closes, 20, 2)
+            for i in range(1, len(closes)):
+                if lower[i] is None: continue
+                if closes[i-1] <= lower[i-1] and closes[i] > lower[i]:
+                    signals[i] = 1
+                elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
+                    signals[i] = -1
+
+        # ── 模拟交易（按信号执行）────────────────────────────────────────────
+        capital = float(req.initial_capital)
+        position = 0; entry_price = 0.0
+        trades = []; wins = 0; losses = 0
+
+        for i in range(1, len(closes)):
+            if signals[i] == 1 and position == 0 and capital > 0:
+                shares = int(capital * 0.9 / closes[i])
+                if shares > 0:
+                    position = shares; entry_price = closes[i]
+                    capital -= shares * entry_price
+                    trades.append({"entry_date": rows[i][0], "entry_price": round(entry_price, 2), "shares": shares, "type": "long"})
+            elif signals[i] == -1 and position > 0:
+                exit_price = closes[i]
+                pnl = (exit_price - entry_price) * position
+                if pnl > 0: wins += 1
+                else: losses += 1
+                capital += position * exit_price
+                trades[-1].update({"exit_date": rows[i][0], "exit_price": round(exit_price, 2), "pnl": round(pnl, 2), "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)})
+                position = 0
+
         if position > 0:
-            final_price = closes[-1]
-            pnl = (final_price - entry_price) * position
-            pnl_total += pnl
-            if pnl > 0:
-                wins += 1
-            else:
-                losses += 1
-            capital += position * final_price
-            trades[-1].update({
-                "exit_date": rows[-1][0],
-                "exit_price": final_price,
-                "pnl": round(pnl, 2),
-                "pnl_pct": round((final_price - entry_price) / entry_price * 100, 2)
-            })
-        
-        total_return = capital - req.initial_capital
-        total_return_pct = (total_return / req.initial_capital) * 100
-        total_trades = wins + losses
-        win_rate = (wins / total_trades * 100) if total_trades > 0 else 0
-        
-        # 计算最大回撤 (简化版)
-        max_capital = req.initial_capital
-        max_drawdown = 0
-        for t in trades:
-            if 'pnl' in t:
-                max_capital += t['pnl']
-                drawdown = (max_capital - req.initial_capital - max_drawdown)
-                if drawdown < max_drawdown:
-                    max_drawdown = abs(drawdown)
-        
-        # 计算最大回撤 (正确版：按时间顺序扫描)
-        peak = req.initial_capital
-        max_drawdown = 0
-        equity = req.initial_capital
-        equity_curve = []
-        for t in trades:
-            if 'pnl' in t:
-                equity += t['pnl']
-                equity_curve.append({ "date": t.get("exit_date", t.get("entry_date")), "value": round(equity, 2) })
-                if equity > peak:
-                    peak = equity
-                drawdown = peak - equity
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
+            exit_price = closes[-1]
+            pnl = (exit_price - entry_price) * position
+            if pnl > 0: wins += 1
+            else: losses += 1
+            capital += position * exit_price
+            trades[-1].update({"exit_date": rows[-1][0], "exit_price": round(exit_price, 2), "pnl": round(pnl, 2), "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)})
 
-        # 简化夏普比率（年化收益/最大回撤）
-        trading_days = len(rows)
-        years = trading_days / 252
-        annualized_return = (capital / req.initial_capital) ** (1 / years) - 1 if years > 0 else 0
-        sharpe_ratio = round(annualized_return / (max_drawdown / req.initial_capital), 2) if max_drawdown > 0 else 0
+        # ── 统计指标 ─────────────────────────────────────────────────────────
+        total_return     = capital - float(req.initial_capital)
+        total_return_pct= round(total_return / float(req.initial_capital) * 100, 2)
+        total_trades     = wins + losses
+        win_rate         = round(wins / total_trades * 100, 2) if total_trades > 0 else 0
 
-        # 返回完整交易列表（不截断）
+        equity = float(req.initial_capital); peak = equity; max_drawdown = 0.0; equity_curve = []
+        for t in trades:
+            equity += t['pnl']
+            equity_curve.append({"date": t.get("exit_date", t.get("entry_date")), "value": round(equity, 2)})
+            if equity > peak: peak = equity
+            dd = peak - equity
+            if dd > max_drawdown: max_drawdown = dd
+
+        years            = len(rows) / 252
+        annualized_return= (capital / float(req.initial_capital)) ** (1 / years) - 1 if years > 0 else 0
+        sharpe_ratio     = round(annualized_return / (max_drawdown / float(req.initial_capital)), 2) if max_drawdown > 0 else 0
+
+        # ── 返回完整交易列表 ──────────────────────────────────────────────────
         return {
             "code": 0,
             "data": {
@@ -245,8 +256,10 @@ async def run_backtest(req: BacktestRequest):
                 "trades_count": total_trades,
                 "sharpe_ratio": sharpe_ratio,
                 "annualized_return_pct": round(annualized_return * 100, 2),
-                "trades": trades,  # 完整交易列表
-                "equity_curve": equity_curve,  # 资金曲线 [{date, value}, ...]
+                "benchmark_return_pct": benchmark_return_pct,
+                "strategy_type": strategy_type,
+                "trades": trades,
+                "equity_curve": equity_curve,
             }
         }
     finally:

@@ -9,27 +9,74 @@
         <div class="text-[10px] text-theme-accent font-bold mb-2">⚙️ 策略参数</div>
 
         <div class="space-y-1.5">
-          <!-- 快线 -->
+          <!-- 策略选择 -->
           <div class="flex items-center justify-between">
-            <span class="text-[9px] text-theme-muted w-8">快线</span>
-            <input v-model.number="fastMa" type="number" min="2" max="60"
-              class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            <span class="text-[9px] text-theme-muted w-8">策略</span>
+            <select v-model="strategyType"
+              class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 focus:outline-none">
+              <option value="ma_crossover">双均线</option>
+              <option value="rsi_oversold">RSI超卖</option>
+              <option value="bollinger_bands">布林带</option>
+            </select>
           </div>
-          <div class="text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
 
-          <!-- 慢线 -->
-          <div class="flex items-center justify-between">
-            <span class="text-[9px] text-theme-muted w-8">慢线</span>
-            <input v-model.number="slowMa" type="number" min="5" max="250"
-              class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary w-14 text-center focus:outline-none focus:border-cyan-400/60" />
-          </div>
-          <div class="text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
+          <!-- 双均线参数 -->
+          <template v-if="strategyType === 'ma_crossover'">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">快线</span>
+              <input v-model.number="fastMa" type="number" min="2" max="60"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">慢线</span>
+              <input v-model.number="slowMa" type="number" min="5" max="250"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
+          </template>
+
+          <!-- RSI 参数 -->
+          <template v-if="strategyType === 'rsi_oversold'">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">周期</span>
+              <input v-model.number="rsiPeriod" type="number" min="7" max="30"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">买入</span>
+              <input v-model.number="rsiBuy" type="number" min="10" max="50"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="text-[9px] text-theme-muted leading-tight">RSI &lt; 此值买入（默认30超卖）</div>
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">卖出</span>
+              <input v-model.number="rsiSell" type="number" min="50" max="90"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="text-[9px] text-theme-muted leading-tight">RSI &gt; 此值卖出（默认70超买）</div>
+          </template>
+
+          <!-- 布林带参数 -->
+          <template v-if="strategyType === 'bollinger_bands'">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">周期</span>
+              <input v-model.number="bbPeriod" type="number" min="10" max="60"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] text-theme-muted w-8">倍数</span>
+              <input v-model.number="bbStd" type="number" min="1" max="4" step="0.5"
+                class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            </div>
+            <div class="text-[9px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
+          </template>
 
           <!-- 窗口 -->
           <div class="flex items-center justify-between">
             <span class="text-[9px] text-theme-muted w-8">窗口</span>
             <select v-model="windowPreset"
-              class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary focus:outline-none">
+              class="bg-slate-900 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-100 focus:outline-none">
               <option value="1m">近1月</option>
               <option value="3m">近3月</option>
               <option value="6m">近6月</option>
@@ -58,7 +105,7 @@
         <div class="text-[10px] text-theme-accent font-bold mb-2">🎯 标的</div>
         <div class="flex items-center gap-1.5">
           <input v-model="symbol"
-            class="flex-1 bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary focus:outline-none focus:border-cyan-400/60"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[10px] text-cyan-100 focus:outline-none focus:border-cyan-400"
             placeholder="输入代码 (例: sh600519)"
             @keyup.enter="runBacktest" />
           <!-- 格式校验通过图标 -->
@@ -82,7 +129,7 @@
         <template v-if="portfolioOptions.length > 0">
           <select v-model="selectedPortfolioId"
             @change="onPortfolioChange"
-            class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary mb-2 focus:outline-none">
+            class="w-full bg-slate-900 border border-slate-600 rounded px-2 py-1 text-[10px] text-cyan-100 mb-2 focus:outline-none">
             <option value="">— 选择组合 —</option>
             <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
               {{ p.name }}
@@ -210,6 +257,34 @@
           </button>
         </div>
 
+        <!-- ═══ 策略体检报告 ═══ -->
+        <div class="border-t border-theme/30 px-3 py-1.5">
+          <div class="flex items-center gap-4 text-[9px]">
+            <!-- 策略 vs 基准对比 -->
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-theme-muted">策略</span>
+              <span class="font-mono font-bold" :class="(backtestResult.total_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (backtestResult.total_return_pct||0) >= 0 ? '+' : '' }}{{ (backtestResult.total_return_pct||0).toFixed(2) }}%
+              </span>
+            </div>
+            <div class="text-theme-muted shrink-0">|</div>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="text-theme-muted">基准</span>
+              <span class="font-mono text-yellow-400">
+                +{{ (backtestResult.benchmark_return_pct||0).toFixed(2) }}%
+              </span>
+            </div>
+            <div class="text-theme-muted shrink-0">|</div>
+            <div class="flex items-center gap-1 shrink-0">
+              <span class="text-theme-muted">评级</span>
+              <span :class="strategyGradeClass">{{ strategyGradeText }}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0 text-cyan-300">
+              {{ strategyVerdict }}
+            </div>
+          </div>
+        </div>
+
         <!-- 交易记录表格 -->
         <div v-if="showTrades && backtestResult.trades?.length"
           class="border-t border-theme/30">
@@ -305,8 +380,14 @@ async function onPortfolioChange() {
 
 // ── 回测参数 ────────────────────────────────────────────────────
 const symbol        = ref('sh600519')
+const strategyType  = ref('ma_crossover')
 const fastMa        = ref(5)
 const slowMa        = ref(20)
+const rsiPeriod     = ref(14)
+const rsiBuy        = ref(30)
+const rsiSell       = ref(70)
+const bbPeriod      = ref(20)
+const bbStd         = ref(2)
 const windowPreset  = ref('1y')
 const initialCapital = 100000
 
@@ -380,8 +461,15 @@ async function runBacktest() {
         start_date,
         end_date,
         initial_capital: initialCapital,
-        strategy_type:  'ma_crossover',
-        params:         { fast_ma: fastMa.value, slow_ma: slowMa.value },
+        strategy_type:  strategyType.value,
+        params: (() => {
+          switch (strategyType.value) {
+            case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
+            case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
+            case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
+            default:                return {}
+          }
+        })(),
       },
     })
 
@@ -412,5 +500,38 @@ const profitFactor = computed(() => {
   const avgLoss = losses.length ? Math.abs(losses.reduce((s, x) => s + x.pnl, 0) / losses.length) : 0
   if (!avgLoss) return avgWin ? '∞' : '—'
   return (avgWin / avgLoss).toFixed(2)
+})
+
+// ── 策略体检报告 ─────────────────────────────────────────────────
+const strategyGradeText = computed(() => {
+  const r = backtestResult.value
+  if (!r) return '—'
+  const ret = r.total_return_pct || 0
+  const bm  = r.benchmark_return_pct || 0
+  const sh  = r.sharpe_ratio || 0
+  const dd  = r.max_drawdown_pct || 100
+  const excess = ret - bm
+  if (excess > 10 && sh >= 1.5) return '🏆 优秀'
+  if (excess > 0  && sh >= 1.0) return '✅ 良好'
+  if (excess > 0)               return '🆗 及格'
+  return '⚠️ 需优化'
+})
+
+const strategyGradeClass = computed(() => {
+  const g = strategyGradeText.value
+  if (g.startsWith('🏆')) return 'font-bold text-yellow-300'
+  if (g.startsWith('✅')) return 'font-bold text-green-400'
+  if (g.startsWith('🆗')) return 'font-medium text-blue-400'
+  return 'font-medium text-red-400'
+})
+
+const strategyVerdict = computed(() => {
+  const ret = backtestResult.value?.total_return_pct || 0
+  const bm  = backtestResult.value?.benchmark_return_pct || 0
+  const excess = ret - bm
+  if (excess > 5)  return `🌟 跑赢基准 ${excess.toFixed(1)}%，策略超额收益显著`
+  if (excess > 0)  return `📈 跑赢基准 ${excess.toFixed(1)}%`
+  if (excess > -5)  return `⚠️ 略输持股不动 ${Math.abs(excess).toFixed(1)}%，可适当调整参数`
+  return `🔻 显著弱于持股不动 ${Math.abs(excess).toFixed(1)}%，建议换策略或扩大回测窗口`
 })
 </script>
