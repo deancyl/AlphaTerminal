@@ -37,7 +37,7 @@
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-            @click="emit('open-fullscreen', { symbol: selectedIndex.value, name: currentIndexName })"
+            @click="selectedIndex && emit('open-fullscreen', { symbol: selectedIndex, name: currentIndexName })"
             title="全屏"
           >⛶ 全屏</button>
         </div>

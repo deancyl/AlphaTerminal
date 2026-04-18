@@ -168,7 +168,7 @@ function _doSubscribe(syms) {
   if (!cleanSyms.length) return
   try {
     const payload = { action: 'subscribe', symbols: cleanSyms }
-    console.debug('[MarketStream] 发送订阅:', JSON.stringify(payload))
+    if (import.meta.env.DEV) console.debug('[MarketStream] 发送订阅:', JSON.stringify(payload))
     _ws.send(JSON.stringify(payload))
   } catch (e) {
     logger.warn('[MarketStream] subscribe failed:', e)

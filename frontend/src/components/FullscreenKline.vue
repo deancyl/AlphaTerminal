@@ -713,7 +713,12 @@ watch(() => props.symbol, (newSym) => {
 }, { immediate: true })
 
 onMounted(async () => { 
-  if (props.symbol) { fetchData(); fetchQuote(); connectStream(props.symbol) }
+  // ── 防空：symbol 为空时打印警告，不触发任何网络请求 ──
+  if (!props.symbol) {
+    console.warn('[FullscreenKline] 收到空的 symbol，取消加载')
+    return
+  }
+  fetchData(); fetchQuote(); connectStream(props.symbol)
   // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
   window.addEventListener('keydown', handleWindowKeydown)
   
