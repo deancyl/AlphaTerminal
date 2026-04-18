@@ -143,6 +143,19 @@ function _newConnection() {
   _ws.onclose = (e) => {
     logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
     const wasConnected = globalWsStatus.value === 'connected'
+
+    // ── 1006 专项诊断：HTTPS 反向代理 WebSocket 握手失败 ─────────────────────────
+    if (e.code === 1006 && location.protocol === 'https:') {
+      console.error(
+        '%c[MarketStream] ⚠️ 1006 异常关闭（疑似反向代理拦截 WS 握手）',
+        'color:#f59e0b;font-weight:bold',
+        '\n排查建议：',
+        '\n  1. Lucky666 (Web服务) → 子规则目标地址填 http://内网IP:端口，勿覆盖 Connection/Upgrade 头',
+        '\n  2. Cloudflare → Network → WebSockets 必须打开',
+        '\n  3. 确认代理层配置了: proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";',
+        '\n  4. 或在前端 .env 中设 VITE_WS_BASE=http://内网IP:端口（绕过代理直连，仅限内网）'
+      )
+    }
     globalWsStatus.value = 'disconnected'
     _ws = null
 
