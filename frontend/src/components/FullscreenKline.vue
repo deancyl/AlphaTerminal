@@ -145,6 +145,15 @@ const emit = defineEmits(['close', 'symbol-change'])
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = computed(() => breakpoints.value.smaller('md').value)  // < 768px
 
+// ── 全屏黑屏修复：确保 DOM 有真实像素尺寸后再 init ECharts ──────────────────
+async function waitForDimensions(el, timeout = 1000) {
+  const start = performance.now()
+  while (el && (el.clientWidth === 0 || el.clientHeight === 0)) {
+    if (performance.now() - start > timeout) break
+    await new Promise(r => requestAnimationFrame(r))
+  }
+}
+
 // Pinia Store
 const drawingStore = useDrawingStore()
 
@@ -327,6 +336,9 @@ async function fetchData() {
     latestPrice.value = last.close ?? last.price
     latestChange.value = last.change_pct ?? 0
 
+    // ── 全屏黑屏修复：nextTick 确保 DOM 已挂载，再等物理尺寸，再渲染 ──
+    await nextTick()
+    await waitForDimensions(chartEl.value)
     renderChart()
 
   } catch (e) {
@@ -350,8 +362,13 @@ async function fetchQuote() {
 }
 
 // 渲染图表
-function renderChart() {
+async function renderChart() {
   if (!chartEl.value || histData.value.length === 0) return
+
+  // ── 全屏黑屏修复：等 DOM 拿到真实尺寸后再 init ──────────────────────
+  await nextTick()
+  await waitForDimensions(chartEl.value)
+  if (!chartEl.value) return
 
   if (!chart) {
     chart = window.echarts.init(chartEl.value)
@@ -686,7 +703,7 @@ watch(() => props.symbol, (newSym) => {
   if (newSym) { fetchData(); fetchQuote(); connectStream(newSym) } 
 }, { immediate: true })
 
-onMounted(() => { 
+onMounted(async () => { 
   if (props.symbol) { fetchData(); fetchQuote(); connectStream(props.symbol) }
   // 修复F5: 注册 window 级别键盘事件（Esc 关闭全屏 / 快捷键切换画线工具）
   window.addEventListener('keydown', handleWindowKeydown)
@@ -697,6 +714,11 @@ onMounted(() => {
   })
 
   // ⚡ HTTP 轮询已移至 wsStatus watch：WS connected 时不运行，仅作降级方案
+
+  // ── 全屏黑屏修复：全屏进入 Teleport 到 body 后，强制等待布局稳定再 resize ──
+  await nextTick()
+  await new Promise(r => requestAnimationFrame(r))   // 等 CSS paint 完成
+  chart?.resize()
 })
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）

@@ -11,11 +11,25 @@ const isLoading = ref(true)
 const hasData = ref(false)
 let timer = null
 
-const renderChart = (dataList) => {
-  if (!chartRef.value || !dataList.length) return
+// ── 渲染入口：永远在 nextTick + DOM 尺寸已就绪后执行 ──────────────────────
+const renderChart = async (dataList) => {
+  if (!chartRef.value || !dataList?.length) return
+
+  // 等待 DOM 尺寸计算完成（GridStack 拖拽后 / 首次挂载时必须）
+  await nextTick()
+
+  // 双重保险：DOM 若仍无物理尺寸，等下一帧
+  await new Promise(resolve => requestAnimationFrame(resolve))
+
+  if (!chartRef.value || !chartRef.value.clientWidth) {
+    logger.warn('[FundFlow] DOM has zero dimensions, retrying...')
+    await new Promise(resolve => requestAnimationFrame(resolve))
+  }
+
   if (!chartInstance.value) {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }
+
   const dates = dataList.map(item => item.date)
   const values = dataList.map(item => (item.main_net || 0) / 100000000)
   const option = {
@@ -35,13 +49,14 @@ const renderChart = (dataList) => {
   chartInstance.value.resize()
 }
 
+// ── 数据获取 ────────────────────────────────────────────────────────────
 const loadData = async () => {
   try {
     const res = await apiFetch('/api/v1/market/fund_flow')
     const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : [])
     if (items.length > 0) {
       hasData.value = true
-      await nextTick()
+      // 数据就绪后调用渲染，此时 DOM 条件渲染刚切换完毕
       renderChart(items)
     } else {
       hasData.value = false
@@ -54,25 +69,37 @@ const loadData = async () => {
   }
 }
 
+// ── 专属 ResizeObserver：监听 chartRef DOM 节点尺寸变化 ─────────────────
+useResizeObserver(chartRef, (entries) => {
+  if (!chartInstance.value) return
+  const { width, height } = entries[0].contentRect
+  if (width > 0 && height > 0) {
+    chartInstance.value.resize()
+  }
+})
+
 onMounted(() => {
   loadData()
   timer = setInterval(loadData, 300000)
-  useResizeObserver(chartRef, (entries) => {
-    if (chartInstance.value && entries[0].contentRect.width > 0) chartInstance.value.resize()
-  })
 })
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
-  if (chartInstance.value) chartInstance.value.dispose()
+  if (chartInstance.value) {
+    chartInstance.value.dispose()
+    chartInstance.value = null
+  }
 })
 </script>
 
 <template>
   <div class="flex flex-col h-full bg-terminal-panel">
     <div class="p-2 text-xs font-bold text-theme-accent border-b border-theme-secondary shrink-0">资金流向 (近30日)</div>
-    <div v-if="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">📡 数据加载中...</div>
-    <div v-else-if="!hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">⚠️ 接口数据为空</div>
-    <div v-else ref="chartRef" class="flex-1 w-full min-h-[150px]"></div>
+    <!-- Loading 骨架：v-show 保持 DOM 存在 -->
+    <div v-show="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">📡 数据加载中...</div>
+    <!-- 空状态：也用 v-show，不销毁图表宿主 DOM -->
+    <div v-show="!isLoading && !hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">⚠️ 接口数据为空</div>
+    <!-- 图表容器：始终存在于文档树（v-show 控制显隐），不被 v-if 销毁 -->
+    <div v-show="hasData" ref="chartRef" class="flex-1 w-full" style="min-height: 150px;"></div>
   </div>
 </template>
