@@ -385,7 +385,7 @@ const KNOWN_SYMBOLS = [
 // ── 组合数据 ────────────────────────────────────────────────────
 const portfolioStore = usePortfolioStore()
 const portfolioOptions = computed(() =>
-  (portfolioStore.portfolios.value || []).filter(p => !p.parent_id)
+  (portfolioStore.portfolios || []).filter(p => !p.parent_id)
 )
 const selectedPortfolioId = ref('')
 const positionTags = ref([])
