@@ -454,7 +454,7 @@ onMounted(() => {
     _donutRO = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        logger.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+        console.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
         donutInstance?.resize()
       }
     })
@@ -464,7 +464,7 @@ onMounted(() => {
 onUnmounted(() => {
   _donutRO?.disconnect()
   if (donutInstance) {
-    logger.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
+    console.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
     donutInstance.dispose()
     donutInstance = null
   }
