@@ -710,12 +710,14 @@ watch(wsStatus, (status) => {
 
 watch(() => props.symbol, (newSym) => { 
   if (newSym) { fetchData(); fetchQuote(); connectStream(newSym) } 
+  else { console.warn('[FullscreenKline] symbol 变空，关闭全屏'); emit('close') }
 }, { immediate: true })
 
 onMounted(async () => { 
-  // ── 防空：symbol 为空时打印警告，不触发任何网络请求 ──
+  // ── 防空：symbol 为空时打印警告，emit close 关闭全屏容器 ──
   if (!props.symbol) {
-    console.warn('[FullscreenKline] 收到空的 symbol，取消加载')
+    console.warn('[FullscreenKline] 收到空的 symbol，取消加载并关闭全屏')
+    emit('close')
     return
   }
   fetchData(); fetchQuote(); connectStream(props.symbol)

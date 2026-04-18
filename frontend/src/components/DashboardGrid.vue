@@ -37,7 +37,7 @@
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
             class="px-2 py-0.5 text-[10px] rounded border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
-            @click="selectedIndex && emit('open-fullscreen', { symbol: selectedIndex, name: currentIndexName })"
+            @click="handleFullscreenClick()"
             title="全屏"
           >⛶ 全屏</button>
         </div>
@@ -363,6 +363,15 @@ function switchIndex(idx) {
 }
 function onFullscreenSymbolChange({ symbol, name }) {
   switchIndex({ symbol, name })
+}
+
+function handleFullscreenClick() {
+  // selectedIndex 是 Vue ref，模板中需加 .value 才能取到字符串值；
+  // 使用 indexOptions[0].symbol 作为兜底，确保永远有有效 symbol
+  const sym = selectedIndex.value || indexOptions[0]?.symbol || 'sh000001'
+  const name = currentIndexName.value || indexOptions[0]?.name || '上证指数'
+  console.log('[DashboardGrid] 点击全屏，参数:', { symbol: sym, name })
+  emit('open-fullscreen', { symbol: sym, name })
 }
 function switchPeriod(p)   { selectedPeriod.value = p }
 function toggleIndicator(k) {
