@@ -368,12 +368,21 @@ function onFullscreenSymbolChange({ symbol, name }) {
 function handleFullscreenClick() {
   // selectedIndex 是 Vue ref，模板中需加 .value 才能取到字符串值；
   // 使用 indexOptions[0].symbol 作为兜底，确保永远有有效 symbol
-  // ⚠️ 必须调用 normalizeSymbol()：后端 WS 要求带市场前缀（sh/sz），否则 1006
-  const raw = selectedIndex.value || indexOptions[0]?.symbol || 'sh000001'
-  const sym = normalizeSymbol(raw)   // 强制规范化，确保带 sh/sz 前缀
+  let raw = selectedIndex.value || indexOptions[0]?.symbol || 'sh000001'
+  let finalSymbol = String(raw)
+
+  // ── 硬编码前缀修复（v0.5.106）：后端 WS 要求带 sh/sz 前缀，纯数字码直接硬塞 ──
+  if (/^\d{6}$/.test(finalSymbol)) {
+    if (finalSymbol.startsWith('6') || finalSymbol.startsWith('0000')) {
+      finalSymbol = 'sh' + finalSymbol
+    } else {
+      finalSymbol = 'sz' + finalSymbol
+    }
+  }
+
   const name = currentIndexName.value || indexOptions[0]?.name || '上证指数'
-  console.log('[DashboardGrid] 点击全屏，参数:', { symbol: sym, name, raw })
-  emit('open-fullscreen', { symbol: sym, name })
+  console.log('[DashboardGrid] 最终修正并发送的参数:', { symbol: finalSymbol, name, raw })
+  emit('open-fullscreen', { symbol: finalSymbol, name })
 }
 function switchPeriod(p)   { selectedPeriod.value = p }
 function toggleIndicator(k) {
