@@ -363,7 +363,7 @@ async function fetchQuote() {
   if (!props.symbol) return
   try {
     // 修复: 使用正确的实时行情端点
-    const d = await apiFetch(`/api/v1/market/quote/${props.symbol}?_t=${Date.now()}`)
+    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
     if (d) quoteData.value = d.data || d
   } catch (e) {
     logger.warn('[FullscreenKline] fetchQuote error:', e.message)

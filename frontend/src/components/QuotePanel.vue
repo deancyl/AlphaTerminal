@@ -79,27 +79,27 @@
     <div class="px-3 py-2.5 border-b border-theme">
       <div class="text-[10px] text-theme-tertiary mb-2 uppercase tracking-wider">涨跌统计</div>
       <template v-if="isIndex">
-        <div v-if="data.advance_count != null" class="flex items-stretch gap-1 h-14">
+        <div v-if="(data.advance_count ?? data.advance) != null" class="flex items-stretch gap-1 h-14">
           <!-- 跌 -->
           <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bearish/20">
-            <div class="text-center text-[9px] text-bearish py-0.5">{{ data.decline_count }}家</div>
-            <div class="bg-bearish rounded-sm" :style="{ height: (data.decline_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+            <div class="text-center text-[9px] text-bearish py-0.5">{{ (data.decline_count ?? data.decline) }}家</div>
+            <div class="bg-bearish rounded-sm" :style="{ height: ((data.decline_count ?? data.decline) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 平 -->
-          <div v-if="data.unchanged_count > 0" class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-theme-secondary">
-            <div class="text-center text-[9px] text-theme-secondary py-0.5">{{ data.unchanged_count }}家</div>
-            <div class="bg-theme-tertiary rounded-sm" :style="{ height: (data.unchanged_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+          <div v-if="(data.unchanged_count ?? data.unchanged) > 0" class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-theme-secondary">
+            <div class="text-center text-[9px] text-theme-secondary py-0.5">{{ (data.unchanged_count ?? data.unchanged) }}家</div>
+            <div class="bg-theme-tertiary rounded-sm" :style="{ height: ((data.unchanged_count ?? data.unchanged) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 涨 -->
           <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bullish/20">
-            <div class="text-center text-[9px] text-bullish py-0.5">{{ data.advance_count }}家</div>
-            <div class="bg-bullish rounded-sm" :style="{ height: (data.advance_count / totalStocks * 100) + '%', minHeight: '2px' }"></div>
+            <div class="text-center text-[9px] text-bullish py-0.5">{{ (data.advance_count ?? data.advance) }}家</div>
+            <div class="bg-bullish rounded-sm" :style="{ height: ((data.advance_count ?? data.advance) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
         </div>
-        <div v-if="data.advance_count != null" class="mt-1.5 flex justify-between text-[10px]">
-          <span class="text-bearish">跌 {{ data.decline_count }}家</span>
-          <span class="text-theme-secondary">平 {{ data.unchanged_count ?? 0 }}家</span>
-          <span class="text-bullish">涨 {{ data.advance_count }}家</span>
+        <div v-if="(data.advance_count ?? data.advance) != null" class="mt-1.5 flex justify-between text-[10px]">
+          <span class="text-bearish">跌 {{ data.decline_count ?? data.decline }}家</span>
+          <span class="text-theme-secondary">平 {{ data.unchanged_count ?? data.unchanged ?? 0 }}家</span>
+          <span class="text-bullish">涨 {{ data.advance_count ?? data.advance }}家</span>
         </div>
         <!-- 涨跌家比 -->
         <div v-if="data.advance_rate != null" class="mt-1 flex items-center gap-2">
@@ -294,9 +294,10 @@ const isIndex = computed(() => INDEX_SET.has(props.symbol) || (data.value.market
 
 // ── 涨跌家数 ───────────────────────────────────────────────────
 const totalStocks = computed(() => {
-  const { advance_count, decline_count, unchanged_count } = data.value
-  if (advance_count == null) return 1
-  return (advance_count || 0) + (decline_count || 0) + (unchanged_count || 0) || 1
+  const { advance_count, decline_count, unchanged_count, advance, decline, unchanged } = data.value
+  const a = advance_count ?? advance
+  if (a == null) return 1
+  return (a || 0) + (decline_count ?? decline ?? 0) + (unchanged_count ?? unchanged ?? 0) || 1
 })
 
 // ── 基础字段（优先取最新K线数据，降级到API数据）─────────────────
@@ -312,11 +313,11 @@ const basicFields = [
   { key: 'low',    label: '最低',   sourceFn: () => candleOr('low',    null), formatter: v => v != null ? v.toFixed(3) : '--' },
   { key: 'volume', label: '成交量', sourceFn: () => candleOr('volume', null), formatter: v => (v == null || v === 0) ? '--' : formatVol(v) },
   { key: 'amount', label: '成交额', sourceFn: () => candleOr('amount', null), formatter: v => (v == null || v === 0) ? '--' : formatAmount(v) },
-  { key: 'turnover_rate', label: '换手率', sourceFn: () => data.value.turnover_rate ?? null,
+  { key: 'turnover_rate', label: '换手率', sourceFn: () => data.value.turnover_rate ?? data.value.turnover ?? null,
     formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) + '%' },
   { key: 'amplitude',     label: '振幅',   sourceFn: () => data.value.amplitude ?? null,
     formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) + '%' },
-  { key: 'pe_ttm', label: '市盈率TTM', sourceFn: () => data.value.pe_ttm ?? null,
+  { key: 'pe_ttm', label: '市盈率TTM', sourceFn: () => data.value.pe_ttm ?? data.value.pe ?? null,
     formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) },
 ]
 
