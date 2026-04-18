@@ -163,8 +163,13 @@ function _newConnection() {
 function _doSubscribe(syms) {
   if (!_ws || _ws.readyState !== WebSocket.OPEN) return
   if (!syms || !syms.length) return
+  // ── 防空：过滤掉 undefined / 空字符串 / 'undefined' 字符串 ──
+  const cleanSyms = syms.filter(s => s && String(s) !== 'undefined' && String(s).trim() !== '')
+  if (!cleanSyms.length) return
   try {
-    _ws.send(JSON.stringify({ action: 'subscribe', symbols: syms }))
+    const payload = { action: 'subscribe', symbols: cleanSyms }
+    console.debug('[MarketStream] 发送订阅:', JSON.stringify(payload))
+    _ws.send(JSON.stringify(payload))
   } catch (e) {
     logger.warn('[MarketStream] subscribe failed:', e)
   }
@@ -241,6 +246,9 @@ export function useMarketStream(initialSymbol = '') {
   }
 
   function connect(symOrList) {
+    // ── 防空：空值/undefined 直接忽略 ──
+    if (!symOrList || String(symOrList) === 'undefined') return
+
     cancelPendingDisconnect()
 
     const syms = Array.isArray(symOrList) ? symOrList : [symOrList]
