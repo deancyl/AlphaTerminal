@@ -15,12 +15,16 @@
             <input v-model.number="fastMa" type="number" min="2" max="60"
               class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary w-14 text-center focus:outline-none focus:border-cyan-400/60" />
           </div>
+          <div class="text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
+
           <!-- 慢线 -->
           <div class="flex items-center justify-between">
             <span class="text-[9px] text-theme-muted w-8">慢线</span>
             <input v-model.number="slowMa" type="number" min="5" max="250"
               class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary w-14 text-center focus:outline-none focus:border-cyan-400/60" />
           </div>
+          <div class="text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
+
           <!-- 窗口 -->
           <div class="flex items-center justify-between">
             <span class="text-[9px] text-theme-muted w-8">窗口</span>
@@ -39,51 +43,79 @@
             <span class="text-[9px] text-theme-muted w-8">资金</span>
             <span class="text-[10px] font-mono text-theme-secondary">{{ (initialCapital / 10000).toFixed(0) }}万</span>
           </div>
+
+          <!-- 策略规则提示 -->
+          <div class="mt-2 px-2 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] leading-snug">
+            💡 <span class="text-blue-300 font-medium">双均线策略规则：</span>
+            <span class="text-blue-200/70">快线向上穿越慢线时<span class="text-green-400">金叉→全仓买入</span>；</span>
+            <span class="text-blue-200/70">快线向下穿越慢线时<span class="text-red-400">死叉→全仓清仓</span>。</span>
+          </div>
         </div>
       </div>
 
       <!-- 标的输入 -->
       <div class="px-3 py-2.5 border-b border-theme">
         <div class="text-[10px] text-theme-accent font-bold mb-2">🎯 标的</div>
-        <input v-model="symbol"
-          class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary focus:outline-none focus:border-cyan-400/60"
-          placeholder="sh600519" />
+        <div class="flex items-center gap-1.5">
+          <input v-model="symbol"
+            class="flex-1 bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary focus:outline-none focus:border-cyan-400/60"
+            placeholder="输入代码 (例: sh600519)"
+            @keyup.enter="runBacktest" />
+          <!-- 格式校验通过图标 -->
+          <span v-if="symbolValid"
+            class="shrink-0 text-[12px] leading-none text-green-400 select-none" title="格式正确">✅</span>
+          <span v-else-if="symbol.length > 0"
+            class="shrink-0 text-[12px] leading-none text-red-400 select-none" title="格式有误">❌</span>
+        </div>
+        <!-- 自动补全名称（若匹配到 indexOptions） -->
+        <div v-if="symbolMatchedName"
+          class="mt-1 text-[9px] text-cyan-400 truncate">{{ symbolMatchedName }}</div>
+        <div v-else-if="symbolValid"
+          class="mt-1 text-[9px] text-theme-muted italic">回车直接执行回测</div>
       </div>
 
       <!-- 投资组合联动 -->
       <div class="px-3 py-2.5 border-b border-theme">
         <div class="text-[10px] text-theme-accent font-bold mb-2">📦 从投资组合导入</div>
 
-        <!-- 主账户下拉 -->
-        <select v-model="selectedPortfolioId"
-          @change="onPortfolioChange"
-          class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary mb-2 focus:outline-none">
-          <option value="">— 选择组合 —</option>
-          <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
-            {{ p.name }}
-          </option>
-        </select>
+        <!-- 有组合时：下拉 + 持仓标签 -->
+        <template v-if="portfolioOptions.length > 0">
+          <select v-model="selectedPortfolioId"
+            @change="onPortfolioChange"
+            class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary mb-2 focus:outline-none">
+            <option value="">— 选择组合 —</option>
+            <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
+              {{ p.name }}
+            </option>
+          </select>
 
-        <!-- 持仓标签（点击即执行回测） -->
-        <div v-if="positionTags.length" class="flex flex-wrap gap-1">
-          <button
-            v-for="pos in positionTags"
-            :key="pos.symbol"
-            @click="symbol = pos.symbol; runBacktest()"
-            :disabled="running"
-            class="px-1.5 py-0.5 text-[9px] rounded border transition-colors"
-            :class="running
-              ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
-              : 'border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20 cursor-pointer'"
-          >
-            {{ pos.name }}<span class="opacity-60 ml-0.5">{{ pos.symbol }}</span>
-          </button>
+          <!-- 持仓标签（点击即执行回测） -->
+          <div v-if="positionTags.length" class="flex flex-wrap gap-1">
+            <button
+              v-for="pos in positionTags"
+              :key="pos.symbol"
+              @click="symbol = pos.symbol; runBacktest()"
+              :disabled="running"
+              class="px-1.5 py-0.5 text-[9px] rounded border transition-colors"
+              :class="running
+                ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
+                : 'border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20 cursor-pointer'"
+            >
+              {{ pos.name }}<span class="opacity-60 ml-0.5">{{ pos.symbol }}</span>
+            </button>
+          </div>
+          <div v-else-if="selectedPortfolioId && positionTagsLoading"
+            class="text-[9px] text-theme-muted italic">加载中...</div>
+          <div v-else-if="selectedPortfolioId"
+            class="text-[9px] text-theme-muted italic">该组合暂无持仓</div>
+          <div v-else class="text-[9px] text-theme-muted italic">选择组合后可快速回测持仓</div>
+        </template>
+
+        <!-- 无组合时：空状态引导 -->
+        <div v-if="portfolioOptions.length === 0"
+          class="text-[9px] text-theme-muted leading-relaxed">
+          暂无投资组合。请先在<span class="text-cyan-400">投资组合</span>面板中创建并添加持仓，即可在此一键导入回测。
         </div>
-        <div v-else-if="selectedPortfolioId && positionTagsLoading"
-          class="text-[9px] text-theme-muted italic">加载中...</div>
-        <div v-else-if="selectedPortfolioId"
-          class="text-[9px] text-theme-muted italic">该组合暂无持仓</div>
-        <div v-else class="text-[9px] text-theme-muted italic">选择组合后可快速回测持仓</div>
       </div>
 
       <!-- 执行按钮（底部撑满） -->
@@ -230,6 +262,15 @@ import { apiFetch } from '../utils/api.js'
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 import BacktestChart from './BacktestChart.vue'
 
+// ── 已知指数选项（用于标的自动补全，不依赖外部 store）────────────
+const KNOWN_INDEXES = [
+  { symbol: 'sh000001', name: '上证指数' },
+  { symbol: 'sh000300', name: '沪深300' },
+  { symbol: 'sz399001', name: '深证成指' },
+  { symbol: 'sz399006', name: '创业板指' },
+  { symbol: 'sh000688', name: '科创50' },
+]
+
 // ── 组合数据 ────────────────────────────────────────────────────
 const portfolioStore = usePortfolioStore()
 const portfolioOptions = computed(() =>
@@ -268,6 +309,14 @@ const fastMa        = ref(5)
 const slowMa        = ref(20)
 const windowPreset  = ref('1y')
 const initialCapital = 100000
+
+// ── 标的格式校验（8位 = 市场前缀 + 6位代码）─────────────────────
+const symbolValid = computed(() => /^(sh|sz)[0-9]{6}$/.test(symbol.value.trim()))
+const symbolMatchedName = computed(() => {
+  const norm = symbol.value.trim()
+  const known = KNOWN_INDEXES.find(o => o.symbol === norm)
+  return known?.name || null
+})
 
 const running        = ref(false)
 const statusMsg     = ref('')
