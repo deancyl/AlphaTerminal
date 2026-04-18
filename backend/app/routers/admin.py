@@ -74,12 +74,16 @@ class CircuitBreakerControl(BaseModel):
 
 @router.get("/sources/status")
 async def get_sources_status():
-    """获取所有数据源实时状态"""
+    """获取所有数据源实时状态（合并 SQLite 持久化的熔断状态）"""
     from app.services import quote_source
+    from app.db.database import get_admin_config
     
     # 获取实时状态
     source_info = quote_source.get_source_status()
     source_status = source_info.get('sources', {})
+    
+    # 合并持久化的熔断状态（用户手动操作优先于自动状态）
+    persisted_circuits = get_admin_config("circuit_breakers", {})
     
     # 获取调度器信息
     try:
@@ -92,7 +96,7 @@ async def get_sources_status():
     return {
         "sources": {
             "tencent": {
-                "state": "closed" if source_status.get('tencent',{}).get('status') != 'ok' else "closed",
+                "state": persisted_circuits.get("tencent") or ("closed" if source_status.get('tencent',{}).get('status') != 'ok' else "closed"),
                 "fail_count": source_status.get('tencent',{}).get('fail_count', 0),
                 "latency_ms": source_status.get('tencent',{}).get('latency') or 0,
                 "health": "healthy" if source_status.get('tencent',{}).get('status') == 'ok' else "unhealthy",
@@ -100,7 +104,7 @@ async def get_sources_status():
                 "description": "腾讯财经 - 主数据源"
             },
             "sina": {
-                "state": "closed" if source_status.get('sina',{}).get('status') != 'ok' else "closed",
+                "state": persisted_circuits.get("sina") or ("closed" if source_status.get('sina',{}).get('status') != 'ok' else "closed"),
                 "fail_count": source_status.get('sina',{}).get('fail_count', 0),
                 "latency_ms": source_status.get('sina',{}).get('latency') or 0,
                 "health": "healthy" if source_status.get('sina',{}).get('status') == 'ok' else "unhealthy",
@@ -108,7 +112,7 @@ async def get_sources_status():
                 "description": "新浪财经 - 备用源"
             },
             "eastmoney": {
-                "state": "open" if source_status.get('eastmoney',{}).get('status') != 'ok' else "closed",
+                "state": persisted_circuits.get("eastmoney") or ("open" if source_status.get('eastmoney',{}).get('status') != 'ok' else "closed"),
                 "fail_count": source_status.get('eastmoney',{}).get('fail_count', 0),
                 "latency_ms": source_status.get('eastmoney',{}).get('latency') or 0,
                 "health": "healthy" if source_status.get('eastmoney',{}).get('status') == 'ok' else "unhealthy",
@@ -133,10 +137,14 @@ async def set_circuit_breaker(
     control: CircuitBreakerControl,
     x_api_key: str = Header(None)
 ):
-    """手动控制数据源熔断状态"""
+    """手动控制数据源熔断状态（写入 SQLite 持久化）"""
     verify_admin_key(x_api_key)
-    # 实际实现需要修改 quote_source 模块
-    logger.info(f"[Admin] Circuit breaker: {control.source} -> {control.action}")
+    from app.db.database import set_admin_config
+    # 持久化到 admin_config 表
+    circuit_state = get_admin_config("circuit_breakers", {})
+    circuit_state[control.source] = control.action  # "open" | "close"
+    set_admin_config("circuit_breakers", circuit_state)
+    logger.info(f"[Admin] Circuit breaker persisted: {control.source} -> {control.action}")
     return {
         "success": True,
         "source": control.source,
@@ -186,15 +194,26 @@ async def get_data_quality_metrics():
 
 @router.get("/scheduler/jobs")
 async def list_scheduler_jobs():
-    """列出所有定时任务状态"""
+    """列出所有定时任务状态（合并 SQLite 持久化的暂停状态）"""
+    from app.db.database import get_admin_config
+    persisted_overrides = get_admin_config("scheduler_overrides", {})
     jobs = []
     for job in scheduler.get_jobs():
+        # 持久化的暂停状态优先于内存状态
+        override = persisted_overrides.get(job.id)
+        state = "running"
+        if override == "pause":
+            state = "paused"
+        elif override == "resume":
+            state = "running"
+        elif not job.next_run_time:
+            state = "paused"
         jobs.append({
             "id": job.id,
             "name": job.name,
             "trigger": str(job.trigger),
             "next_run": job.next_run_time.isoformat() if job.next_run_time else None,
-            "state": "running" if job.next_run_time else "paused",
+            "state": state,
         })
     return {"jobs": jobs}
 
@@ -207,8 +226,9 @@ async def control_job(
     control: JobControl,
     x_api_key: str = Header(None)
 ):
-    """控制定时任务"""
+    """控制定时任务（写 SQLite 持久化暂停状态）"""
     verify_admin_key(x_api_key)
+    from app.db.database import set_admin_config, get_admin_config
     job = scheduler.get_job(job_id)
     if not job:
         return {"success": False, "error": "Job not found"}
@@ -219,6 +239,11 @@ async def control_job(
         job.resume()
     elif control.action == "trigger_now":
         job.modify(next_run_time=datetime.now())
+    
+    # 持久化调度器状态
+    scheduler_state = get_admin_config("scheduler_overrides", {})
+    scheduler_state[job_id] = control.action  # "pause" | "resume"
+    set_admin_config("scheduler_overrides", scheduler_state)
     
     return {"success": True, "job_id": job_id, "action": control.action}
 
@@ -319,6 +344,40 @@ async def get_database_status():
         "tables": tables,
         "path": _db_path
     }
+
+# ═══════════════════════════════════════════════════════════════
+# Admin 配置持久化（SQLite）
+# ═══════════════════════════════════════════════════════════════
+
+class AdminConfigItem(BaseModel):
+    key: str
+    value: Any
+
+@router.get("/config")
+async def get_admin_config_all():
+    """读取所有持久化的 Admin 配置（数据源熔断状态、调度器开关等）"""
+    from app.db.database import get_all_admin_configs
+    return {"configs": get_all_admin_configs()}
+
+@router.post("/config/{config_key}")
+async def save_admin_config(config_key: str, body: dict, x_api_key: str = Header(None)):
+    """保存单个 Admin 配置项到 SQLite"""
+    verify_admin_key(x_api_key)
+    from app.db.database import set_admin_config
+    set_admin_config(config_key, body.get("value"))
+    return {"success": True, "key": config_key, "value": body.get("value")}
+
+class BulkConfigRequest(BaseModel):
+    configs: Dict[str, Any]
+
+@router.post("/config/bulk")
+async def save_admin_config_bulk(body: BulkConfigRequest, x_api_key: str = Header(None)):
+    """批量保存 Admin 配置项"""
+    verify_admin_key(x_api_key)
+    from app.db.database import set_admin_config
+    for key, value in body.configs.items():
+        set_admin_config(key, value)
+    return {"success": True, "saved": list(body.configs.keys())}
 
 class DatabaseMaintenanceRequest(BaseModel):
     action: str  # "vacuum" | "analyze" | "wal_checkpoint"

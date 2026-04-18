@@ -98,6 +98,14 @@ def init_tables():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_p ON market_data_periodic(symbol, period)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pos_port ON positions(portfolio_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)")
+        # ── Admin 系统配置持久化 ────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────
@@ -438,3 +446,50 @@ def get_all_stocks_count():
         cnt = conn.execute("SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
         conn.close()
         return cnt
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Admin 系统配置持久化
+# ═══════════════════════════════════════════════════════════════════════════
+
+def get_admin_config(key: str, default=None):
+    """读取 admin 配置项（JSON 字符串），不存在则返回 default"""
+    with _lock:
+        conn = _get_conn()
+        row = conn.execute(
+            "SELECT value FROM admin_config WHERE key = ?", (key,)
+        ).fetchone()
+        conn.close()
+        if row is None:
+            return default
+        try:
+            import json as _json
+            return _json.loads(row['value'])
+        except Exception:
+            return row['value']
+
+def set_admin_config(key: str, value):
+    """写入 admin 配置项（自动 JSON 序列化）"""
+    import json as _json
+    with _lock:
+        conn = _get_conn()
+        conn.execute(
+            "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
+            (key, _json.dumps(value), __import__('datetime').datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+
+def get_all_admin_configs():
+    """读取所有 admin 配置项"""
+    with _lock:
+        conn = _get_conn()
+        rows = conn.execute("SELECT key, value FROM admin_config").fetchall()
+        conn.close()
+        import json as _json
+        result = {}
+        for r in rows:
+            try:
+                result[r['key']] = _json.loads(r['value'])
+            except Exception:
+                result[r['key']] = r['value']
+        return result

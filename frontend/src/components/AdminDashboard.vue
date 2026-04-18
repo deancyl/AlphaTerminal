@@ -391,17 +391,13 @@ function getDiskColor(p) { return !p ? 'text-theme-muted' : p < 70 ? 'text-green
 
 const sourceStatus = reactive({
   sources: {
-    tencent: { state: 'closed', fail_count: 0, last_success: '09:15:32', latency_ms: 85, health: 'healthy' },
-    sina: { state: 'closed', fail_count: 1, last_success: '09:15:28', latency_ms: 120, health: 'healthy' },
-    eastmoney: { state: 'open', fail_count: 5, last_failure: '09:14:18', health: 'unhealthy' }
+    tencent: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '腾讯财经 - 主数据源' },
+    sina: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '新浪财经 - 备用源' },
+    eastmoney: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '东方财富 - 备用源' }
   }
 })
 
-const schedulerJobs = ref([
-  { id: 'data_fetch', name: '行情数据拉取', trigger: 'interval (30s)', state: 'running' },
-  { id: 'sectors_update', name: '板块数据更新', trigger: 'interval (300s)', state: 'running' },
-  { id: 'news_refresh', name: '新闻快讯刷新', trigger: 'interval (600s)', state: 'running' }
-])
+const schedulerJobs = ref([])  // 启动后从后端加载（支持 SQLite 持久化）
 
 const cacheStatus = reactive({ market: 5497, sectors: 20, news: 150, db: 22 })
 const dbStatus = reactive({ size: '12.5', realtime: 22, daily: 12500, stocks: 5497 })
@@ -509,7 +505,13 @@ async function refreshLogs() {
 async function refreshSourceStatus() {
   try {
     const data = await apiFetch('/api/v1/admin/sources/status')
-    if (data) Object.assign(sourceStatus, data)
+    if (data?.sources) {
+      // 深度合并：保留内存默认值，只更新后端返回的字段
+      for (const [key, src] of Object.entries(data.sources)) {
+        if (!sourceStatus.sources[key]) sourceStatus.sources[key] = {}
+        Object.assign(sourceStatus.sources[key], src)
+      }
+    }
   } catch (e) { logger.error('刷新失败:', e) }
 }
 
