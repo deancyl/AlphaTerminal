@@ -82,6 +82,9 @@
         </tbody>
       </table>
 
+      <!-- Sentinel for infinite scroll trigger -->
+      <div ref="sentinelEl" class="h-px w-full"></div>
+
       <!-- 加载中遮罩 -->
       <div v-if="loading" class="absolute inset-0 bg-terminal-bg/50 backdrop-blur-sm flex items-center justify-center z-20">
         <span class="text-theme-accent">检索中...</span>
@@ -106,7 +109,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
@@ -124,6 +127,7 @@ const totalPages  = computed(() => Math.max(1, Math.ceil(total.value / pageSize.
 
 // ── 本地 UI 状态 ─────────────────────────────────────────────────────
 const loading     = ref(false)
+const sentinelEl  = ref(null)
 const searchQuery = ref('')
 const sortBy      = ref('change_pct')
 const sortDir     = ref('desc')
@@ -232,4 +236,70 @@ function resetFilter() {
 function toggleFilterPanel() {}
 
 onMounted(debouncedFetch)
+
+// ── 无限滚动触底触发（双重保险：IntersectionObserver + scroll 兜底）────────
+let _observer = null
+let _scrollHandler = null
+
+function tryAutoNextPage() {
+  if (loading.value) return
+  if (currentPage.value >= totalPages.value) return
+  goPage(currentPage.value + 1)
+}
+
+function setupSentinel(scrollContainer) {
+  // 防御：sentinelEl 尚未挂载时等待下一帧
+  if (!sentinelEl.value) {
+    const ro = new ResizeObserver(() => {
+      if (sentinelEl.value) {
+        ro.disconnect()
+        setupSentinel(scrollContainer)
+      }
+    })
+    ro.observe(scrollContainer)
+    return
+  }
+
+  // IntersectionObserver：sentinel 进入视口 → 自动加载下一页
+  _observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting) tryAutoNextPage()
+    },
+    { root: scrollContainer, threshold: 0 }
+  )
+  _observer.observe(sentinelEl.value)
+
+  // Scroll 兜底：滚动速度过快时 IntersectionObserver 可能漏触发
+  _scrollHandler = () => {
+    const el = scrollContainer
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200) {
+      tryAutoNextPage()
+    }
+  }
+  scrollContainer.addEventListener('scroll', _scrollHandler, { passive: true })
+}
+
+onMounted(() => {
+  debouncedFetch()
+  // 等待表格渲染后以 .closest() 找最近的滚动父容器
+  const tableWrapper = sentinelEl.value?.closest('.overflow-y-auto')
+  if (tableWrapper) {
+    // 表格高度可能为 0（数据未加载），等数据渲染后再初始化
+    const ro = new ResizeObserver(() => {
+      if (tableWrapper.clientHeight > 0) {
+        ro.disconnect()
+        setupSentinel(tableWrapper)
+      }
+    })
+    ro.observe(tableWrapper)
+  }
+})
+
+onUnmounted(() => {
+  _observer?.disconnect()
+  const tableWrapper = sentinelEl.value?.closest('.overflow-y-auto')
+  if (tableWrapper && _scrollHandler) {
+    tableWrapper.removeEventListener('scroll', _scrollHandler)
+  }
+})
 </script>
