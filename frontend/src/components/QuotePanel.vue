@@ -310,23 +310,23 @@ const basicFields = [
   { key: 'open',   label: '开盘',   sourceFn: () => candleOr('open',   null), formatter: v => v != null ? v.toFixed(3) : '--' },
   { key: 'high',   label: '最高',   sourceFn: () => candleOr('high',   null), formatter: v => v != null ? v.toFixed(3) : '--' },
   { key: 'low',    label: '最低',   sourceFn: () => candleOr('low',    null), formatter: v => v != null ? v.toFixed(3) : '--' },
-  { key: 'volume', label: '成交量', sourceFn: () => candleOr('volume', null), formatter: v => v != null ? formatVol(v) : '--' },
-  { key: 'amount', label: '成交额', sourceFn: () => candleOr('amount', null), formatter: v => v != null ? formatAmount(v) : '--' },
+  { key: 'volume', label: '成交量', sourceFn: () => candleOr('volume', null), formatter: v => (v == null || v === 0) ? '--' : formatVol(v) },
+  { key: 'amount', label: '成交额', sourceFn: () => candleOr('amount', null), formatter: v => (v == null || v === 0) ? '--' : formatAmount(v) },
   { key: 'turnover_rate', label: '换手率', sourceFn: () => data.value.turnover_rate ?? null,
-    formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
+    formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) + '%' },
   { key: 'amplitude',     label: '振幅',   sourceFn: () => data.value.amplitude ?? null,
-    formatter: v => v != null ? v.toFixed(2) + '%' : '--' },
+    formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) + '%' },
   { key: 'pe_ttm', label: '市盈率TTM', sourceFn: () => data.value.pe_ttm ?? null,
-    formatter: v => v != null ? v.toFixed(2) : '--' },
+    formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) },
 ]
 
 // ── 估值字段 ───────────────────────────────────────────────────
 const valuationFields = [
-  { key: 'pe_ttm', label: '市盈率TTM', formatter: v => v != null ? v.toFixed(2) : '--' },
-  { key: 'pb',     label: '市净率',   formatter: v => v != null ? v.toFixed(2) : '--' },
+  { key: 'pe_ttm', label: '市盈率TTM', formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) },
+  { key: 'pb',     label: '市净率',   formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) },
 ]
 
-// ── 周期收益字段 ───────────────────────────────────────────────
+// ── 周期收益字段（后端未返回这些字段，始终显示 --）───────────────────
 const returnFields = [
   { key: 'returns_5d',  label: '5日' },
   { key: 'returns_20d', label: '20日' },
