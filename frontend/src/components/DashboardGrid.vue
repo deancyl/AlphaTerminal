@@ -161,9 +161,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 6：国内市场指数（右侧4列，17起）━━━━━━━━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="8" gs-y="17" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
@@ -198,9 +198,9 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，22起）━━━━━━━━━━━ -->
+    <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="22" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+         gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener />
       </div>
