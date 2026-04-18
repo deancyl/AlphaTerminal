@@ -206,7 +206,6 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { logger } from '../utils/logger.js'
 
 const props = defineProps({
   symbol:       { type: String,  default: '' },

@@ -5,7 +5,6 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { UP, DOWN } from '../utils/indicators.js'
-import { logger } from '../utils/logger.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 
 
@@ -322,7 +321,7 @@ onMounted(() => {
     if (width <= 0 || height <= 0) return
     if (!chart) {
       // 第一次拿到实际尺寸，初始化图表
-      logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+      console.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
       chart = window.echarts.init(chartEl.value, 'dark')
       _lastChartData = props.chartData
       chart.setOption(buildOption(props.chartData))
@@ -331,7 +330,7 @@ onMounted(() => {
         if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
       })
     } else {
-      logger.debug(`[ECharts] 📐 resize ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+      console.debug(`[ECharts] 📐 resize ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
       chart.resize()
     }
   })
@@ -341,7 +340,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   _ro?.disconnect()
   if (chart) {
-    logger.debug(`[ECharts] 🗑️  disposed instance for: ${props.symbol}`)
+    console.debug(`[ECharts] 🗑️  disposed instance for: ${props.symbol}`)
     chart.dispose()
     chart = null
   }

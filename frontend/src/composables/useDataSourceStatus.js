@@ -12,7 +12,6 @@
  *   onMounted(init)
  */
 import { ref, readonly } from 'vue'
-import { logger } from '../utils/logger.js'
 
 // ── 模块级单例状态（跨组件共享）────────────────────────────────
 const _status  = ref('ok')       // 'ok' | 'degraded' | 'down'
@@ -34,7 +33,7 @@ export function broadcastDataSourceStatus(newStatus, msg = '') {
   _message.value = msg
   _since.value = Date.now()
   _notifyListeners()
-  logger.debug(`[DataSourceStatus] 🖥️  → ${newStatus}${msg ? ': ' + msg : ''}`)
+  console.debug(`[DataSourceStatus] 🖥️  → ${newStatus}${msg ? ': ' + msg : ''}`)
 }
 
 /** 监听状态变化（返回 unlisten fn） */

@@ -564,7 +564,7 @@ onUnmounted(() => {
   disconnectStream()
   const inst = baseChartRef.value?.getChartInstance?.()
   if (inst) {
-    logger.debug('[ECharts] 🗑️  disposed instance for AdvancedKlinePanel')
+    console.debug('[ECharts] 🗑️  disposed instance for AdvancedKlinePanel')
     inst.dispose()
   }
 })
