@@ -101,8 +101,10 @@ async def run_backtest(req: BacktestRequest):
             ORDER BY date ASC
         """, (db_symbol, req.start_date, req.end_date)).fetchall()
         
-        if len(rows) < 30:
-            return {"code": 1, "message": f"数据不足，需至少30条，实际{len(rows)}条"}
+        if len(rows) == 0:
+            return {"code": 1, "message": f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。"}
+        if len(rows) < slow_ma:
+            return {"code": 1, "message": f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。"}
         
         # 解析参数
         fast_ma = (req.params or {}).get('fast_ma', 5)
