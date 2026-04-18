@@ -32,6 +32,7 @@ const renderChart = (dataList) => {
     }]
   }
   chartInstance.value.setOption(option)
+  chartInstance.value.resize()
 }
 
 const loadData = async () => {
@@ -72,6 +73,6 @@ onUnmounted(() => {
     <div class="p-2 text-xs font-bold text-theme-accent border-b border-theme-secondary shrink-0">资金流向 (近30日)</div>
     <div v-if="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">📡 数据加载中...</div>
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">⚠️ 接口数据为空</div>
-    <div v-else ref="chartRef" class="flex-1 w-full min-h-0"></div>
+    <div v-else ref="chartRef" class="flex-1 w-full min-h-[150px]"></div>
   </div>
 </template>
