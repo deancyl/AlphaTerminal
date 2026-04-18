@@ -3,8 +3,8 @@
     <!-- 顶部工具栏 -->
     <header class="kline-header">
       <div class="header-left">
-        <span class="symbol-name">{{ props.name || props.symbol }}</span>
-        <span class="symbol-code">{{ props.symbol }}</span>
+        <span class="symbol-name">{{ props.name || props.symbol || '--' }}</span>
+        <span class="symbol-code">{{ props.symbol ?? '--' }}</span>
       </div>
 
       <div class="header-center">
@@ -137,13 +137,22 @@ import CrosshairOverlay from './CrosshairOverlay.vue'
 const props = defineProps({
   symbol: { type: String, required: true },
   name:   { type: String, default: '' },
+  type:   { type: String, default: '' },   // 补充缺失的 type prop，修复 Vue warn
 })
 
 const emit = defineEmits(['close', 'symbol-change'])
 
 // ── 移动端断点侦听（sprint 2-2 性能降级）────────────────────────────────────
+// useBreakpoints(breakpointsTailwind) 返回 Breakpoints 对象，直接调用 .smaller() 方法
+// 不需要也不应该加 .value（该对象本身已是响应式的）
 const breakpoints = useBreakpoints(breakpointsTailwind)
-const isMobile = computed(() => breakpoints.value.smaller('md').value)  // < 768px
+const isMobile = computed(() => {
+  try {
+    return breakpoints.smaller('md').value
+  } catch (_) {
+    return false  // 防御：初始化阶段 breakpoints 未就绪时返回 false
+  }
+})
 
 // ── 全屏黑屏修复：确保 DOM 有真实像素尺寸后再 init ECharts ──────────────────
 async function waitForDimensions(el, timeout = 1000) {
