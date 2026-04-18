@@ -106,9 +106,20 @@ async def run_backtest(req: BacktestRequest):
         if len(rows) < slow_ma:
             return {"code": 1, "message": f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。"}
         
-        # 解析参数
-        fast_ma = (req.params or {}).get('fast_ma', 5)
-        slow_ma = (req.params or {}).get('slow_ma', 20)
+        # 解析参数（根据策略类型过滤无关字段，防止冗余参数干扰）
+        raw_params = req.params or {}
+        if strategy_type == 'ma_crossover':
+            fast_ma = raw_params.get('fast_ma', 5)
+            slow_ma = raw_params.get('slow_ma', 20)
+        elif strategy_type == 'rsi_oversold':
+            fast_ma = raw_params.get('rsi_period', 14)
+            slow_ma = raw_params.get('rsi_buy', 30)
+        elif strategy_type == 'bollinger_bands':
+            fast_ma = raw_params.get('bb_period', 20)
+            slow_ma = raw_params.get('bb_std', 2)
+        else:
+            fast_ma = raw_params.get('fast_ma', 5)
+            slow_ma = raw_params.get('slow_ma', 20)
         
         # ── 基准收益率（Buy & Hold同期）────────────────────────────────────────
         first_close = float(rows[0][4])

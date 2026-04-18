@@ -207,5 +207,19 @@ watch([() => props.hist, () => props.trades], () => {
   chart.setOption(buildOption(), true)
 }, { deep: false })
 
-defineExpose({ getChartInstance: () => chart })
+defineExpose({ getChartInstance: () => chart, focusDate })
+
+// ── 联动方法：表格行点击 → 图表定位到指定日期 ─────────────────────
+function focusDate(date) {
+  if (!chart || !date) return
+  const hist = props.hist
+  const idx = hist.findIndex(h => (h.date || h.time) === date)
+  if (idx < 0) return
+  // 计算该日期在数据中的百分比位置，用于 dataZoom 定位
+  const total = hist.length
+  const startPct = Math.max(0, Math.round((idx / total) * 100) - 5)
+  chart.dispatchAction({ type: 'dataZoom', start: startPct, end: startPct + 40 })
+  // 高亮标记点 tooltip
+  chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: idx })
+}
 </script>
