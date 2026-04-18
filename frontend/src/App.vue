@@ -278,6 +278,7 @@ const fullscreenName   = ref('上证指数')
 
 function openFullscreenKline({ symbol, name }) {
   logger.log('[DEBUG] openFullscreenKline called', { symbol, name, klineFullscreenBefore: ui.klineFullscreen })
+  console.log('[App] 准备全屏订阅代码:', symbol)
   fullscreenSymbol.value = symbol || 'sh000001'
   fullscreenName.value  = name  || '上证指数'
   ui.klineFullscreen = true
