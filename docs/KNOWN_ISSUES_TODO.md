@@ -1,6 +1,6 @@
 # KNOWN_ISSUES_TODO.md
 
-> Last updated: 2026-04-16 v0.5.46
+> Last updated: 2026-04-19 v0.5.117
 > 维护者：架构评审 + openclaw
 
 ---
@@ -201,3 +201,53 @@
 | #16 熔断 UI | v0.5.49 | useDataSourceStatus + Toast |
 | #17 画线工具状态机 | v0.5.51 | DrawState 三状态机 + 内联文本编辑 |
 | #18 DB写入队列化 | v0.5.50 | DBWriterThread |
+
+---
+
+## 🟢 P2/P3 — v0.5.52+ 新完成功能（Epic 3–6）
+
+### Epic 3：数据源抽象层 Phase 3（v0.5.52）
+**状态**：✅ 已完成
+
+- `quote_v2` 端点完整实现，三大 Fetcher 自动降级
+- Circuit Breaker 熔断统计 API（`/admin/circuit_status`）
+
+### Epic 4：投资组合 & 回测引擎（v0.5.53 ~ v0.5.68）
+**状态**：✅ 已完成
+
+- Task 7：股债双轴叠加对比（v0.5.53）
+- Task 8：回测引擎 + 信号可视化（v0.5.54）
+- Task 9：组合归因 + 风险分析 VaR/波动率/夏普（v0.5.55）
+- Task 11：AI Copilot 真实 LLM 集成（v0.5.57）
+
+### Epic 5：UI/UX 深化 & Sprint 7–9 重构（v0.5.69 ~ v0.5.94）
+**状态**：✅ 已完成
+
+- StockScreener 服务端搜索 API（v0.5.72）
+- 全局 logger 统一替换（v0.5.78）
+- BaseKLineChart 双 Y 轴 + buildOverlaySeries()（v0.5.81）
+- FundFlowPanel 硬核重写（v0.5.91）
+- 指数 amplitude 计算修复 + BondDashboard Mock 警告（v0.5.92）
+
+### Epic 6：回测看板重构 & PortfolioStore 修复（v0.5.109 ~ v0.5.117）
+**状态**：✅ 已完成
+
+**本次修复汇总（v0.5.117）**：
+- ✅ 回测看板子账户进不了下拉框（`!p.parent_id` 过滤移除）
+- ✅ 持仓标签 symbol 格式断裂（后端返回 `"600519"` → 回测要求 `"sh600519"`）
+- ✅ `normalizeSymbol()` 自动推断 A 股前缀
+- ✅ `store.positions.value` / `store.activePid.value` 多加 `.value`（reactive 已自动解包）
+- ✅ `fetchPortfolios` 未 await，导致首次渲染时数据未就位
+- ✅ 新增「股票 | 组合」双模式切换，明确交互入口
+
+---
+
+## ⚠️ 已知限制（v0.5.117）
+
+| 限制项 | 影响范围 | 状态 |
+|:---|:---|:---:|
+| AkShare 债券数据停更至 2021-01-22 | BondDashboard | ⚠️ Mock 数据，需切换数据源 |
+| IF/IC/IM 期货期限结构不支持 | FuturesPanel | ⚠️ 仅支持商品期货 |
+| 指数 realtime volume = 0 | 指数 K 线 | ⚠️ Sina 不提供 |
+| Copilot 无 API Key | AI Copilot | ⚠️ Mock 模式运行 |
+| SQLite 禁止放 SSHFS/FUSE | 数据库 | ⚠️ 已在文档注明 |

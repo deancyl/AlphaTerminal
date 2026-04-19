@@ -10,7 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-Beta%20v0.5.45-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Release](https://img.shields.io/badge/Release-Beta%20v0.5.117-orange.svg)](https://github.com/deancyl/AlphaTerminal/releases)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
@@ -59,10 +59,12 @@ cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
 - **全市场覆盖**：A股（沪深 300 + 重点蓝筹）/ 港股 / 美股指数
 - **实时刷新**：后台每 3 分钟增量拉取，API 响应 < 5ms
 
-### 债券分析（Phase 8）
+### 债券分析（Phase 8–9）
 - **真实信用利差**：接入 `/bond/curve` API，商业银行 AAA vs 国债实时利差（bp）
 - **历史曲线对比**：今日实线 + 1个月前虚线（dashed）+ 1年前点线（dotted）
 - **期限利差矩阵**：7 期限 × 3 品种（国债/国开/商A-AAA）利率估值表
+- **隐含税率**：国开-国债利差百分比，机构买债免税溢价
+- **10Y-2Y 期限利差图**：每日利差 bp 柱状图，红绿区分正常/倒挂
 
 ### 期货分析（Phase 8）
 - **量价仓联动（ΔOI）**：持仓变化红绿柱（涨增仓红/跌增仓绿/减仓灰）
@@ -83,8 +85,15 @@ cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
 ### 交互界面
 - **GridStack 响应式网格**：拖拽布局，锁定/解锁切换
 - **全屏 K 线**：F 按键进入，Esc 退出，鼠标滚轮缩放
-- **画线工具**：趋势线 / 水平线 / 斐波那契
+- **画线工具**：趋势线 / 水平线 / 斐波那契 / 内联文本标注
 - **AI Copilot 侧边栏（Phase 6 增强）**：真实市场数据 + 新闻上下文分析 + 智能意图识别 + LLM扩展接口
+
+### 回测实验室（v0.5.54+）
+- **三大策略**：双均线交叉 / RSI 超卖 / 布林带回归
+- **股票/组合双模式**：直接输入股票代码，或从投资组合导入持仓一键回测
+- **持仓自动前缀补全**：投资组合中的 `"600519"` 自动转为 `"sh600519"`
+- **策略体检报告**：收益率、年化、夏普比率、最大回撤、胜率、盈亏比
+- **基准对比**：策略 vs 持股不动，超额收益一目了然
 
 ---
 
@@ -104,6 +113,8 @@ cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
 │   /api/v1/market/overview    /api/v1/news/flash           │
 │   /api/v1/bond/curve          /api/v1/futures/term_structure │
 │   /api/v1/news/force_refresh  /api/v1/market/sectors      │
+│   /api/v1/portfolio/          /api/v1/backtest/run         │
+│   /api/v1/copilot/status      /api/v1/market/stocks/search │
 │                                                             │
 │   APScheduler 调度任务（后台线程）                          │
 │   ├── NewsRefresh (每 5 分钟) ←─ 东方财富实时新闻        │
@@ -132,7 +143,10 @@ AlphaTerminal/
 │   │   │   ├── news.py         # 快讯 / force_refresh
 │   │   │   ├── bond.py         # 债券收益率曲线 / 信用利差
 │   │   │   ├── futures.py      # 期货行情 / 期限结构
-│   │   │   └── sentiment.py    # 市场情绪
+│   │   │   ├── sentiment.py    # 市场情绪
+│   │   │   ├── portfolio.py    # 投资组合 CRUD / PnL / 快照
+│   │   │   ├── backtest.py     # 回测引擎
+│   │   │   └── copilot.py     # AI Copilot
 │   │   └── services/
 │   │       ├── data_fetcher.py  # AkShare / httpx 数据获取
 │   │       ├── news_engine.py    # 新闻缓存引擎
@@ -159,7 +173,12 @@ AlphaTerminal/
 │           ├── FuturesPanel.vue     # 期货面板（K线+ΔOI+期限结构）
 │           ├── TermStructureChart.vue # 期限结构图（Forward Curve）
 │           ├── BondDashboard.vue   # 债券看板（利率矩阵+历史曲线对比）
-│           └── YieldCurveChart.vue  # 收益率曲线（含历史截面对比）
+│           ├── YieldCurveChart.vue  # 收益率曲线（含历史截面对比）
+│           ├── BacktestDashboard.vue # 回测实验室
+│           ├── PortfolioDashboard.vue # 投资组合面板
+│           ├── StockScreener.vue     # 条件选股
+│           ├── SentimentGauge.vue    # 市场情绪仪表
+│           └── FundFlowPanel.vue     # 资金流向面板
 ├── scripts/
 │   ├── init_env.sh              # ✅ 环境初始化脚本（克隆后运行）
 │   ├── init_database.py         # 数据库初始化
