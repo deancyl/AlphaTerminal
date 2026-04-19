@@ -558,7 +558,7 @@ const mergedView = ref(false)
 
 // 递归获取账户的所有后代（用于多级树）
 function getDescendants(parentId) {
-  const children = (store.portfolios.value || []).filter(p => p.parent_id === parentId)
+  const children = (store.portfolios || []).filter(p => p.parent_id === parentId)
   let result = [...children]
   for (const child of children) {
     result = result.concat(getDescendants(child.id))
@@ -582,11 +582,11 @@ function toggleCollapse(id) {
   else collapsedIds.value.add(id)
 }
 function getChildren(parentId) {
-  return (store.portfolios.value || []).filter(p => p.parent_id === parentId)
+  return (store.portfolios || []).filter(p => p.parent_id === parentId)
 }
 // 只遍历主账户（parent_id 为空/0/None 的）
 const mainAccounts = computed(() =>
-  (store.portfolios.value || []).filter(p => !p.parent_id)
+  (store.portfolios || []).filter(p => !p.parent_id)
 )
 
 // ── 删除账户 ─────────────────────────────────────────────
@@ -612,7 +612,7 @@ async function doDelete(acc) {
     showDeleteModal.value = false
     deleteTarget.value = null
     await store.fetchPortfolios()
-    const remaining = (store.portfolios.value || []).filter(p => p.id !== acc.id)
+    const remaining = (store.portfolios || []).filter(p => p.id !== acc.id)
     if (remaining.length > 0) {
       await store.switchAccount(remaining[0].id)
     }
@@ -970,7 +970,7 @@ let _chartRO = null
 onMounted(async () => {
   logger.log('[PortfolioDashboard] mounted, fetching portfolios...')
   await store.fetchPortfolios()
-  logger.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.value?.length)
+  logger.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.length)
   logger.log('[PortfolioDashboard] activePid:', store.activePid?.value)
   const pid = store.activePid?.value ?? store.activePid
   logger.log('[PortfolioDashboard] pid for fetchAll:', pid)
