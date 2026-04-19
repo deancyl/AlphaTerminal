@@ -567,13 +567,13 @@ function getDescendants(parentId) {
 }
 
 // ── 安全解包 store refs（Vue 不会自动解包嵌套在普通对象中的 ref）───
-const positionsArray = computed(() => store.positions.value ?? [])
+const positionsArray = computed(() => store.positions ?? [])
 const positionsCount = computed(() => positionsArray.value.length)
 const activePidValue = computed(() => {
-  const v = store.activePid?.value ?? store.activePid
+  const v = store.activePid
   return v ?? null
 })
-const pnlData = computed(() => store.pnl?.value ?? store.pnl ?? null)
+const pnlData = computed(() => store.pnl ?? null)
 
 // ── 树形折叠 ─────────────────────────────────────────────
 const collapsedIds = ref(new Set())
@@ -669,7 +669,7 @@ function openTrade(pos) {
 
 async function submitTrade() {
   if (!tradeForm.value.symbol) return
-  const pid = store.activePid?.value ?? store.activePid
+  const pid = store.activePid
   await store.upsertPosition(pid, tradeForm.value.symbol, tradeForm.value.shares, tradeForm.value.avg_cost)
   showTradeModal.value = false
 }
@@ -754,13 +754,13 @@ async function handleSwitch(pid) {
 
 async function handleRefresh() {
   // store.activePid 是 ref，需要取 .value
-  const pid = store.activePid?.value ?? store.activePid
+  const pid = store.activePid
   if (pid) await store.fetchAll(pid, mergedView.value)
 }
 
 // 监听合并视图变化，自动刷新
 watch(mergedView, async (newVal) => {
-  const pid = store.activePid?.value ?? store.activePid
+  const pid = store.activePid
   if (pid) {
     await store.fetchAll(pid, newVal)
     await nextTick()
@@ -770,11 +770,11 @@ watch(mergedView, async (newVal) => {
 
 // ── ECharts 净值曲线 ──────────────────────────────────────────
 function renderChart() {
-  if (!chartEl.value || !store.snapshots.value?.length) return
+  if (!chartEl.value || !store.snapshots?.length) return
   if (!chart.value) {
     chart.value = window.echarts.init(chartEl.value, 'dark')
   }
-  const snaps = store.snapshots.value
+  const snaps = store.snapshots
   const dates = snaps.map(s => s.date)
   const assets = snaps.map(s => s.total_asset)
   const costs  = snaps.map(s => s.total_cost)
@@ -843,7 +843,7 @@ function fmtYuan(v) {
 
 // 从 store.snapshots 计算风险指标
 const riskMetrics = computed(() => {
-  const snaps = store.snapshots.value
+  const snaps = store.snapshots
   if (!snaps || snaps.length < 2) {
     return null
   }
@@ -971,8 +971,8 @@ onMounted(async () => {
   logger.log('[PortfolioDashboard] mounted, fetching portfolios...')
   await store.fetchPortfolios()
   logger.log('[PortfolioDashboard] portfolios after fetch:', store.portfolios?.length)
-  logger.log('[PortfolioDashboard] activePid:', store.activePid?.value)
-  const pid = store.activePid?.value ?? store.activePid
+  logger.log('[PortfolioDashboard] activePid:', store.activePid)
+  const pid = store.activePid
   logger.log('[PortfolioDashboard] pid for fetchAll:', pid)
   if (pid) await store.fetchAll(pid)
   store.startPoll(20_000)
@@ -1004,7 +1004,7 @@ onUnmounted(() => {
 })
 
 // snapshots 变化时重绘图表
-watch(() => store.snapshots.value?.length ?? 0, () => {
+watch(() => store.snapshots?.length ?? 0, () => {
   nextTick(renderChart)
 })
 
