@@ -384,16 +384,22 @@ const KNOWN_SYMBOLS = [
 
 // ── 组合数据 ────────────────────────────────────────────────────
 const portfolioStore = usePortfolioStore()
-const portfolioOptions = computed(() =>
-  (portfolioStore.portfolios || []).filter(p => !p.parent_id)
-)
+
+// 主动触发一次数据拉取（await 确保组件首次渲染前数据已就位）
+onMounted(async () => {
+  await portfolioStore.fetchPortfolios()
+})
+
+// portfolioStore.portfolios 在 reactive 代理中已自动解包，无需 .value
+// 用函数包裹读取，确保在 computed 函数体内建立明确的响应式依赖追踪
+const portfolioOptions = computed(() => {
+  const raw = portfolioStore.portfolios
+  return Array.isArray(raw) ? raw.filter(p => !p.parent_id) : []
+})
+
 const selectedPortfolioId = ref('')
 const positionTags = ref([])
 const positionTagsLoading = ref(false)
-
-onMounted(() => {
-  portfolioStore.fetchPortfolios?.()
-})
 
 async function onPortfolioChange() {
   positionTags.value = []
