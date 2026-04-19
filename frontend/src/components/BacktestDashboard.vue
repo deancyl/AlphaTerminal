@@ -112,9 +112,22 @@
         </div>
       </div>
 
-      <!-- 标的输入 -->
-      <div class="px-3 py-2.5 border-b border-theme">
-        <div class="text-[10px] text-theme-accent font-bold mb-2">🎯 标的</div>
+      <!-- 标的输入（股票模式） -->
+      <div v-if="targetMode === 'stock'" class="px-3 py-2.5 border-b border-theme">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[10px] text-theme-accent font-bold">🎯 标的</div>
+          <!-- 股票/组合切换 -->
+          <div class="flex rounded border border-slate-600 overflow-hidden text-[9px]">
+            <button
+              @click="targetMode = 'stock'"
+              :class="targetMode === 'stock' ? 'bg-cyan-500/20 text-cyan-400 border-r border-slate-600' : 'text-slate-400'"
+              class="px-2 py-0.5">股票</button>
+            <button
+              @click="targetMode = 'portfolio'"
+              :class="targetMode === 'portfolio' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400'"
+              class="px-2 py-0.5">组合</button>
+          </div>
+        </div>
         <div class="flex items-center gap-1.5">
           <input v-model="symbol"
             class="flex-1 bg-black/40 border border-slate-600 rounded px-2 py-1 text-[10px] text-cyan-400 focus:outline-none focus:border-cyan-400 placeholder:text-slate-600"
@@ -137,48 +150,53 @@
           class="mt-1 text-[9px] text-slate-500 italic">回车执行回测</div>
       </div>
 
-      <!-- 投资组合联动 -->
-      <div class="px-3 py-2.5 border-b border-theme">
-        <div class="text-[10px] text-theme-accent font-bold mb-2">📦 从投资组合导入</div>
-
-        <!-- 有组合时：下拉 + 持仓标签 -->
-        <template v-if="portfolioOptions.length > 0">
-          <select v-model="selectedPortfolioId"
-            @change="onPortfolioChange"
-            class="w-full bg-black/40 border border-slate-600 rounded px-2 py-1 text-[10px] text-cyan-400 mb-2 focus:outline-none">
-            <option value="">— 选择组合 —</option>
-            <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
-              {{ p.name }}
-            </option>
-          </select>
-
-          <!-- 持仓标签（点击即执行回测） -->
-          <div v-if="positionTags.length" class="flex flex-wrap gap-1">
+      <!-- 投资组合模式 -->
+      <div v-else-if="targetMode === 'portfolio'" class="px-3 py-2.5 border-b border-theme">
+        <div class="flex items-center justify-between mb-2">
+          <div class="text-[10px] text-theme-accent font-bold">📦 组合回测</div>
+          <!-- 股票/组合切换 -->
+          <div class="flex rounded border border-slate-600 overflow-hidden text-[9px]">
             <button
-              v-for="pos in positionTags"
-              :key="pos.symbol"
-              @click="symbol = pos.symbol; runBacktest()"
-              :disabled="running"
-              class="px-1.5 py-0.5 text-[9px] rounded border transition-colors"
-              :class="running
-                ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
-                : 'border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20 cursor-pointer'"
-            >
-              {{ pos.name }}<span class="opacity-60 ml-0.5">{{ pos.symbol }}</span>
-            </button>
+              @click="targetMode = 'stock'"
+              :class="targetMode === 'stock' ? 'bg-cyan-500/20 text-cyan-400 border-r border-slate-600' : 'text-slate-400'"
+              class="px-2 py-0.5">股票</button>
+            <button
+              @click="targetMode = 'portfolio'"
+              :class="targetMode === 'portfolio' ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-400'"
+              class="px-2 py-0.5">组合</button>
           </div>
-          <div v-else-if="selectedPortfolioId && positionTagsLoading"
-            class="text-[9px] text-theme-muted italic">加载中...</div>
-          <div v-else-if="selectedPortfolioId"
-            class="text-[9px] text-theme-muted italic">该组合暂无持仓</div>
-          <div v-else class="text-[9px] text-theme-muted italic">选择组合后可快速回测持仓</div>
-        </template>
-
-        <!-- 无组合时：空状态引导 -->
-        <div v-if="portfolioOptions.length === 0"
-          class="text-[9px] text-theme-muted leading-relaxed">
-          暂无投资组合。请先在<span class="text-cyan-400">投资组合</span>面板中创建并添加持仓，即可在此一键导入回测。
         </div>
+
+        <!-- 组合下拉 -->
+        <select v-model="selectedPortfolioId"
+          @change="onPortfolioChange"
+          class="w-full bg-black/40 border border-slate-600 rounded px-2 py-1 text-[10px] text-cyan-400 mb-2 focus:outline-none">
+          <option value="">— 选择组合账户 —</option>
+          <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
+            {{ p.parent_id ? '  └ ' : '' }}{{ p.name }}
+          </option>
+        </select>
+
+        <!-- 持仓标签 -->
+        <div v-if="positionTags.length" class="flex flex-wrap gap-1">
+          <button
+            v-for="pos in positionTags"
+            :key="pos.symbol"
+            @click="runBacktestWithSymbol(pos.symbol)"
+            :disabled="running"
+            class="px-1.5 py-0.5 text-[9px] rounded border transition-colors"
+            :class="running
+              ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
+              : 'border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/20 cursor-pointer'"
+          >
+            {{ pos.name || pos.normalized }}<span class="opacity-60 ml-0.5">{{ pos.normalized }}</span>
+          </button>
+        </div>
+        <div v-else-if="selectedPortfolioId && positionTagsLoading"
+          class="text-[9px] text-theme-muted italic">加载中...</div>
+        <div v-else-if="selectedPortfolioId"
+          class="text-[9px] text-theme-muted italic">该组合暂无持仓</div>
+        <div v-else class="text-[9px] text-theme-muted italic">选择组合后，点击持仓标签即可回测</div>
       </div>
 
       <!-- 执行按钮（底部撑满） -->
@@ -382,6 +400,9 @@ const KNOWN_SYMBOLS = [
   { symbol: 'sh601127', name: '赛力斯',      industry: '新能源汽车' },
 ]
 
+// ── 标的输入模式 ────────────────────────────────────────────────
+const targetMode = ref('stock')  // 'stock' | 'portfolio'
+
 // ── 组合数据 ────────────────────────────────────────────────────
 const portfolioStore = usePortfolioStore()
 
@@ -391,15 +412,29 @@ onMounted(async () => {
 })
 
 // portfolioStore.portfolios 在 reactive 代理中已自动解包，无需 .value
-// 用函数包裹读取，确保在 computed 函数体内建立明确的响应式依赖追踪
+// 显示所有账户（包括主账户和子账户），用 parent_id 判断层级
 const portfolioOptions = computed(() => {
   const raw = portfolioStore.portfolios
-  return Array.isArray(raw) ? raw.filter(p => !p.parent_id) : []
+  return Array.isArray(raw) ? raw : []
 })
 
 const selectedPortfolioId = ref('')
 const positionTags = ref([])
 const positionTagsLoading = ref(false)
+
+// 将后端返回的无前缀代码（如 "600519"）补全为带市场前缀格式（"sh600519"）
+function normalizeSymbol(code) {
+  if (!code) return ''
+  const c = code.trim()
+  if (c.startsWith('sh') || c.startsWith('sz') || c.startsWith('hk') || c.startsWith('us')) {
+    return c.toLowerCase()
+  }
+  // A股：根据代码规则自动推断前缀
+  const num = c.replace(/[^0-9]/g, '')
+  if (num.startsWith('6') || num.startsWith('5') || num.startsWith('9')) return 'sh' + num
+  if (num.startsWith('0') || num.startsWith('1') || num.startsWith('2') || num.startsWith('3')) return 'sz' + num
+  return c
+}
 
 async function onPortfolioChange() {
   positionTags.value = []
@@ -408,16 +443,23 @@ async function onPortfolioChange() {
   positionTagsLoading.value = true
   try {
     const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`)
-    const list = Array.isArray(d) ? d : (d?.data || [])
+    const list = Array.isArray(d) ? d : (d?.positions || [])
     positionTags.value = list.map(p => ({
-      symbol: p.symbol || p.code || '',
-      name: p.name || p.symbol || '',
+      symbol:     p.symbol || '',
+      name:       p.name || (p.symbol ? normalizeSymbol(p.symbol).toUpperCase() : ''),
+      normalized: normalizeSymbol(p.symbol),
     }))
   } catch (e) {
     positionTags.value = []
   } finally {
     positionTagsLoading.value = false
   }
+}
+
+// 从组合持仓标签点击触发回测（自动补全市场前缀）
+function runBacktestWithSymbol(rawSymbol) {
+  symbol.value = normalizeSymbol(rawSymbol)
+  runBacktest()
 }
 
 // ── 回测参数 ────────────────────────────────────────────────────
