@@ -178,6 +178,20 @@ const liveTick   = shallowRef(null)       // 实时 tick
 // chartData 专用 shallowRef，避免每次 histData 变化触发父级深度 diff
 const processedChartData = shallowRef({ isEmpty: true })
 
+// ── ETF 代码检测 ────────────────────────────────────────────────
+const ETF_PREFIXES = ['51', '15', '16', '56']
+
+function _isEtfCode(sym) {
+  if (!sym) return false
+  // 去掉 sh/sz/hk 等前缀
+  const num = sym.replace(/^(sh|sz|hk|us)/i, '')
+  return num.length === 6 && /^\d{6}$/.test(num) && ETF_PREFIXES.some(p => num.startsWith(p))
+}
+
+function _etfCode(sym) {
+  return sym.replace(/^(sh|sz|hk|us)/i, '')
+}
+
 function rebuildChartData() {
   processedChartData.value = histData.value.length
     ? buildChartData(histData.value, period.value, indicatorParams.value, overlayData.value)
@@ -298,7 +312,11 @@ async function fetchHistory(append = false) {
     })
     if (drillDownDate.value) params.set('trade_date', drillDownDate.value)
 
-    const data = await apiFetch(`/api/v1/market/history/${sym}?${params}`)
+    // ETF 代码路由：场内ETF（51/15/16/56开头）走专用基金API
+    const url = _isEtfCode(sym)
+      ? `/api/v1/fund/etf/history?code=${_etfCode(sym)}&${params}`
+      : `/api/v1/market/history/${sym}?${params}`
+    const data = await apiFetch(url)
 
     isFetching.value = data?.fetching ?? false
 
