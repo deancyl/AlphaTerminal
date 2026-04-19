@@ -275,3 +275,34 @@ App.vue 数据提取逻辑中三元运算符优先级问题
 ---
 
 *v0.5.4 → v0.5.117 共 141 次提交，详见 https://github.com/deancyl/AlphaTerminal/commits/master*
+
+---
+
+## v0.5.118 — 2026-04-20
+
+### 新增：国内基金数据支持
+
+**后端新增 API（`/api/v1/fund/*`）：**
+
+| 端点 | 数据源 | 代理需求 | 说明 |
+|:---|:---|:---:|:---|
+| `GET /fund/etf/history` | 新浪财经 | ❌ 不需要 | ETF 日K线（前复权），可多周期 |
+| `GET /fund/etf/info` | 新浪财经 | ❌ 不需要 | ETF 实时行情（价格/涨跌幅/成交量）|
+| `GET /fund/open/rank` | AkShare 东方财富 | ⚠️ 需要 | 场外基金排行（股票/混合/债券/指数型）|
+| `GET /fund/money/rank` | AkShare 东方财富 | ⚠️ 需要 | 货币基金行情（7日年化/万份收益）|
+| `GET /fund/portfolio/{code}` | AkShare 东方财富 | ⚠️ 需要 | 基金前10大重仓股 |
+
+**前端集成：**
+- `AdvancedKlinePanel.vue`：自动检测 ETF 代码（51/15/16/56 开头），路由到 `/fund/etf/history`
+- ETF K线数据格式与股票 K线完全一致，可复用现有 ECharts 组件
+
+**工程修复：**
+- `start_backend.py`：手动解析 `.env` 中的 `HTTP_PROXY` 配置（python-dotenv 未安装）
+- `_sina_etf_history`：修复数据顺序（Sina 返回从旧到新，改为从新到旧）
+
+**ETF 代码规则：**
+- `sh510300` / `sz159920` 等：场内 ETF，前端直接输入即可渲染 K线
+
+---
+
+*v0.5.117 → v0.5.118，详见 GitHub*
