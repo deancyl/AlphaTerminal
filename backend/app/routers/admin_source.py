@@ -34,7 +34,7 @@ class HealthStatus(BaseModel):
 
 # ── 路由 ────────────────────────────────────────────────────────────────
 
-@router.get("/api/v1/admin/data-sources")
+@router.get("/admin/data-sources")
 async def list_data_sources():
     """列出所有可用的数据源"""
     try:
@@ -62,7 +62,7 @@ async def list_data_sources():
         return {"code": 500, "message": str(e)}
 
 
-@router.post("/api/v1/admin/data-sources/switch")
+@router.post("/admin/data-sources/switch")
 async def switch_data_source(name: str):
     """切换当前数据源"""
     try:
@@ -83,7 +83,7 @@ async def switch_data_source(name: str):
         return {"code": 500, "message": str(e)}
 
 
-@router.post("/api/v1/admin/data-sources/health-check")
+@router.post("/admin/data-sources/health-check")
 async def health_check_source(name: Optional[str] = None):
     """健康检查指定数据源或当前数据源"""
     try:
@@ -112,7 +112,7 @@ async def health_check_source(name: Optional[str] = None):
         return {"code": 500, "message": str(e)}
 
 
-@router.get("/api/v1/admin/data-sources/status")
+@router.get("/admin/data-sources/status")
 async def get_source_status():
     """获取数据源整体状态"""
     try:
@@ -138,7 +138,7 @@ async def get_source_status():
         return {"code": 500, "message": str(e)}
 
 
-@router.post("/api/v1/admin/data-sources/reset/{name}")
+@router.post("/admin/data-sources/reset/{name}")
 async def reset_circuit_breaker(name: str):
     """重置指定数据源的熔断器"""
     try:
