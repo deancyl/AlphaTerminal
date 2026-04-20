@@ -104,7 +104,7 @@
             :color="currentIndexOption.color"
             :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
             :indicators="activeIndicators"
-
+            @open-fullscreen="$emit('open-fullscreen', $event)"
           />
         </div>
       </div>

@@ -9,22 +9,22 @@
     <div class="flex-1 overflow-y-auto" style="max-height: 360px;">
       <!-- 响应式网格：根据容器宽度自动调整列数 -->
       <div 
-        class="grid gap-1"
+        class="grid gap-1 overflow-hidden"
         :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }"
       >
         <div
           v-for="sec in displaySectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-2 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 hover:scale-105"
+          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 min-w-0"
           :class="(sec.change_pct || 0) >= 0
             ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
             : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"
           @click="handleClick(sec)"
           :title="`${sec.name} (点击查看领涨股 ${sec.top_stock?.name || '无'})`"
         >
-          <!-- 板块名称 -->
+          <!-- 板块名称：强制截断 -->
           <span
-            class="text-[10px] font-medium leading-tight text-center w-full truncate"
+            class="text-[10px] font-medium leading-tight text-center w-full block overflow-hidden whitespace-nowrap text-overflow-ellipsis"
             :class="(sec.change_pct || 0) >= 0 ? 'text-red-300' : 'text-green-300'"
           >
             {{ sec.name }}
@@ -61,6 +61,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useWindowSize } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { apiFetch } from '../utils/api.js'
@@ -74,9 +75,12 @@ const tsDisplay = ref('')
 let refreshTimer = null
 
 // 响应式列数（根据容器宽度估算）
+const { width: winWidth } = useWindowSize()
 const gridCols = computed(() => {
-  // 默认5列，响应式调整
-  return 5
+  if (winWidth.value < 480) return 2   // 手机 < 480px → 2列
+  if (winWidth.value < 768) return 3  // 手机 ≥ 480px → 3列
+  if (winWidth.value < 1024) return 4 // 平板 → 4列
+  return 5  // 桌面 → 5列
 })
 
 // 最多显示20个板块

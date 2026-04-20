@@ -58,7 +58,7 @@
       <Sidebar
         :is-open="isSidebarOpen"
         :active-id="currentView"
-        @navigate="handleSidebarNavigate; isSidebarOpen = false"
+        @navigate="(id) => { handleSidebarNavigate(id); isSidebarOpen = false }"
         @close="isSidebarOpen = false"
       />
     </div>

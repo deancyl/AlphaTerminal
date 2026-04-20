@@ -5,6 +5,12 @@
     <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
       <div class="px-2 py-1 flex items-center justify-between">
         <span class="text-[11px] font-bold text-theme-primary tracking-wider">{{ currentName }}</span>
+        <!-- 移动端全屏按钮 -->
+        <button
+          class="md:hidden ml-auto mr-1 px-1.5 py-0.5 text-[10px] rounded border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors"
+          title="横屏全屏"
+          @click="emit('open-fullscreen', { symbol: symbol || props.symbol, name: name || props.name })"
+        >⛶ 全屏</button>
         <span v-if="isLoading" class="text-[10px] font-mono text-theme-tertiary animate-pulse">加载中…</span>
       </div>
       <div class="flex items-center gap-3 px-2 py-1">
@@ -65,6 +71,8 @@ const props = defineProps({
   overlaySymbol: { type: String, default: '' },
   overlayName:   { type: String, default: '' },
 })
+
+const emit = defineEmits(['open-fullscreen'])
 
 const chartRef     = ref(null)
 const chartError   = ref('')
