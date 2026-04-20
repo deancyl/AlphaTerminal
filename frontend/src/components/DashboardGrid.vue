@@ -1,24 +1,46 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-3 p-2 overflow-y-auto h-full">
+  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto h-full">
+
+    <!-- 快捷导航胶囊 -->
+    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+      <button v-for="anchor in mobileAnchors" :key="anchor.id"
+        :href="`#${anchor.id}`"
+        class="shrink-0 px-3 py-1 rounded-full text-[10px] border transition-colors"
+        :class="'bg-terminal-accent/10 border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/20'"
+        @click.prevent="scrollToMobileSection(anchor.id)">
+        {{ anchor.label }}
+      </button>
+    </div>
+
     <!-- K线图 -->
-    <div class="terminal-panel p-3 min-h-[280px]">
+    <div id="section-chart" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
       <div class="flex items-center justify-between mb-2">
         <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       </div>
       <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full h-[200px]" />
     </div>
+
     <!-- A股监测 -->
-    <div class="terminal-panel p-3 min-h-[180px]">
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
       <div class="text-terminal-accent font-bold text-sm mb-2">📊 A股监测</div>
       <StockScreener :data="globalItems" class="w-full h-[120px]" />
     </div>
-    <!-- 板块热度 -->
-    <div class="terminal-panel p-3 min-h-[160px]">
-      <HotSectors :data="sectors" class="w-full h-[100px]" />
+
+    <!-- 板块热度（折叠前5条） -->
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-terminal-accent font-bold text-sm">🔥 板块热度</span>
+        <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
+          class="text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors">
+          {{ showAllSectors ? '收起' : `更多(${sectors.length - 5})` }}
+        </button>
+      </div>
+      <HotSectors :data="showAllSectors ? sectors : sectors.slice(0, 5)" class="w-full" />
     </div>
+
     <!-- 新闻快讯 -->
-    <div class="terminal-panel p-3 min-h-[200px]">
+    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
       <NewsFeed class="w-full h-[160px]" />
     </div>
   </div>
@@ -426,6 +448,20 @@ const windItems = computed(() => {
 })
 const globalItems = computed(() => globalData.value || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
+const sectors = computed(() => props.sectorsData || [])
+
+const showAllSectors = ref(false)
+
+const mobileAnchors = [
+  { id: 'section-chart',    label: '📈 图表' },
+  { id: 'section-screener', label: '📊 监测' },
+  { id: 'section-sectors', label: '🔥 板块' },
+  { id: 'section-news',    label: '📰 快讯' },
+]
+
+function scrollToMobileSection(id) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 // ── 低频数据自持（宏观/利率/海外，5分钟轮询）────────────────────────
 const macroData  = ref([])
@@ -458,7 +494,7 @@ watch(visibility, (v) => {
 onMounted(async () => {
   fetchLowFreq()
   await nextTick()
-  if (typeof window !== 'undefined' && window.GridStack) {
+  if (!isMobile.value && typeof window !== 'undefined' && window.GridStack && document.querySelector('.grid-stack')) {
     grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
     grid.setStatic(props.isLocked)
   }
@@ -512,4 +548,6 @@ function toggleLock() {
 <style>
 .grid-stack { width: 100%; height: 100%; overflow: hidden; }
 .grid-stack-item-content { inset: 4px; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
