@@ -290,6 +290,8 @@
             <li><strong>内存</strong>：RAM使用情况，接近100%时系统可能变慢</li>
             <li><strong>磁盘</strong>：硬盘使用率，接近100%时需要清理空间</li>
             <li><strong>网络连接</strong>：当前活跃的网络连接数</li>
+        </ul>
+      </div>
 
       <!-- 数据源健康度仪表盘 -->
       <div v-else-if="activeTab === 'source-health'" class="space-y-6">
@@ -341,10 +343,6 @@
               <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
             </div>
           </div>
-        </div>
-      </div>
-
-          </ul>
         </div>
       </div>
 
