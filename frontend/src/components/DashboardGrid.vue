@@ -504,27 +504,9 @@ watch(selectedIndex, (sym) => {
 })
 
 // ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
-watch(() => props.isLocked, (locked) => {
-  if (grid) {
-    grid.setStatic(locked)
-  }
-}, { immediate: true })
-
 function toggleLock() {
   emit('toggle-lock')
 }
-
-onMounted(async () => {
-  await nextTick()
-  if (typeof window !== 'undefined' && window.GridStack) {
-    grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
-    grid.setStatic(props.isLocked)  // 跟随 props 初始状态
-  }
-})
-
-onUnmounted(() => {
-  grid?.destroy(false)
-})
 </script>
 
 <style>
