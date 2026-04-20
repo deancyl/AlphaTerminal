@@ -99,6 +99,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 // echarts 从 CDN 加载 via window.echarts
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { buildXAxisLabels } from '../utils/symbols.js'
@@ -239,5 +240,7 @@ onUnmounted(() => {
   chartInstance?.dispose()
 })
 
-watch(() => [props.hist, props.activeTab, props.indicatorParams], () => nextTick(render), { deep: true })
+const debouncedRender = useDebounceFn(() => nextTick(render), 150)
+
+watch(() => [props.hist, props.activeTab, props.indicatorParams], () => { debouncedRender() }, { deep: true })
 </script>

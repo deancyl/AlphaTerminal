@@ -103,6 +103,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
 import { apiFetch } from '../utils/api.js'
@@ -363,9 +364,11 @@ async function fetchHistogram() {
   }
 }
 
-watch(data, () => {
+const debouncedUpdate = useDebounceFn(() => {
   if (chartInst) chartInst.setOption(buildHistogramOption(data.value.buckets), true)
-})
+}, 150)
+
+watch(data, () => { debouncedUpdate() })
 
 onMounted(async () => {
   await fetchHistogram()

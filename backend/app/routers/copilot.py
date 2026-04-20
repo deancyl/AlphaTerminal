@@ -64,7 +64,7 @@ SYSTEM_PROMPT_TEMPLATE = """你是一个专业的金融投研助手AlphaTerminal
 {context_block}
 """.strip()
 
-def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list) -> str:
+def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list, valuation_data: dict) -> str:
     """构建注入给 LLM 的上下文数据块"""
     parts = []
 
@@ -81,6 +81,23 @@ def _build_context_block(symbol: Optional[str], price_info: dict, news_items: li
                 f"【实时行情】{name} 现价 {price:.2f} 元，"
                 f"涨跌 {arrow} {abs(chg or 0):.2f}%"
             )
+
+    # ── 市场估值（PE/PB/YTD收益率）────────────────────────────
+    if valuation_data:
+        pe_ttm     = valuation_data.get("pe_ttm")
+        pb         = valuation_data.get("pb")
+        ret_ytd    = valuation_data.get("returns_ytd")
+        pe_pct     = valuation_data.get("pe_percentile")
+        pb_pct     = valuation_data.get("pb_percentile")
+        if pe_ttm is not None:
+            pe_str = f"{pe_ttm:.2f}" + (f"（历史分位：{pe_pct:.1f}%）" if pe_pct else "")
+            parts.append(f"【市场估值】当前 PE_TTM：{pe_str}")
+        if pb is not None:
+            pb_str = f"{pb:.2f}" + (f"（历史分位：{pb_pct:.1f}%）" if pb_pct else "")
+            parts.append(f"当前 PB：{pb_str}")
+        if ret_ytd is not None:
+            arrow_ytd = "▲" if ret_ytd >= 0 else "▼"
+            parts.append(f"年初至今收益率：{arrow_ytd}{abs(ret_ytd):.2f}%")
 
     if news_items:
         parts.append("【最新快讯】（按时间倒序）")
@@ -392,6 +409,41 @@ def _fetch_latest_news(limit: int = 5) -> list:
     return []
 
 
+def _fetch_valuation_data(symbol: Optional[str]) -> dict:
+    """获取市场估值数据（PE_TTM、PB、历史分位、YTD收益率）"""
+    try:
+        # 从 market_quote_detail 获取大盘指数（如上证指数 sh000001）的估值
+        # 优先使用 sh000001 作为大盘基准
+        index_sym = symbol.upper() if symbol else None
+        if not index_sym:
+            index_sym = "sh000001"
+        # 去掉前缀以匹配 market_quote_detail 的 normalize 逻辑
+        sym_clean = index_sym.lower().replace("sh", "").replace("sz", "")
+
+        # 调用 market.py 的 quote_detail 端点获取估值
+        from app.db import get_latest_prices
+        from app.services.quote_source import get_quote_with_fallback
+
+        db_sym = sym_clean  # market_data_realtime 存无前缀纯数字
+        rows = get_latest_prices([db_sym]) if callable(get_latest_prices) else []
+        quote_data = get_quote_with_fallback(index_sym) if index_sym else {}
+
+        # pe_tbm / pb 从腾讯/东财/新浪多源fallback获取
+        pe_ttm = quote_data.get("pe_ttm")
+        pb     = quote_data.get("pb")
+
+        return {
+            "pe_ttm":        float(pe_ttm) if pe_ttm not in (None, 0, '-', '') else None,
+            "pb":            float(pb)     if pb     not in (None, 0, '-', '') else None,
+            "pe_percentile": None,   # 需要历史PE数据计算，后续接入 akshare 或 tushare
+            "pb_percentile": None,   # 同上
+            "returns_ytd":   None,   # YTD收益率需要历史数据计算
+        }
+    except Exception as e:
+        logger.warning(f"[Copilot] valuation lookup error: {e}")
+        return {"pe_ttm": None, "pb": None, "pe_percentile": None, "pb_percentile": None, "returns_ytd": None}
+
+
 # ═══════════════════════════════════════════════════════════════
 # SSE 流式对话端点
 # ═══════════════════════════════════════════════════════════════
@@ -428,7 +480,8 @@ async def copilot_chat(request: Request):
     frontend_context = (body.get("context") or "").strip()
     price_info = _fetch_price_context(symbol)
     news_items = _fetch_latest_news(limit=5)
-    context_block = _build_context_block(symbol, price_info, news_items)
+    valuation_data = _fetch_valuation_data(symbol)
+    context_block = _build_context_block(symbol, price_info, news_items, valuation_data)
     
     # 合并：前端上下文（更丰富）+ 后端上下文（实时行情+快讯）
     if frontend_context:

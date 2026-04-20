@@ -4,6 +4,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 
@@ -346,13 +347,14 @@ onBeforeUnmount(() => {
   }
 })
 
-// 核心 watcher：chartData 或 subCharts 变化时合并更新（非全量重建）
-watch([() => props.chartData, () => props.subCharts], () => {
+// 核心 watcher：chartData 或 subCharts 变化时合并更新（节流 200ms）
+const debouncedUpdateChart = useDebounceFn(() => {
   if (!chart || !props.chartData || props.chartData.isEmpty) return
   _lastChartData = props.chartData
-  // 使用 notMerge:false 增量合并，避免频繁重建导致页面卡顿
   chart.setOption(buildOption(props.chartData), { notMerge: false })
-})
+}, 200)
+
+watch([() => props.chartData, () => props.subCharts], () => { debouncedUpdateChart() })
 
 // tick watcher：增量 patch 最后根 K 线
 watch(() => props.tick, (t) => {

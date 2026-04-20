@@ -91,6 +91,7 @@
 
 <script setup>
 import { ref, shallowRef, computed, watch, onMounted, onUnmounted } from 'vue'
+import { useThrottleFn } from '@vueuse/core'
 import BaseKLineChart from './BaseKLineChart.vue'
 import TermStructureChart from './TermStructureChart.vue'
 import { buildChartData } from '../utils/chartDataBuilder.js'
@@ -180,16 +181,14 @@ const periods = [
   { label: '60分', value: '60min' },
 ]
 
-// ── WS tick → 增量更新 histData（shallowRef + 整体替换）──────────
-watch(liveTick, (t) => {
+// ── WS tick → 增量更新 histData（节流 150ms）──────────────────
+const handleTickUpdate = useThrottleFn((t) => {
   if (!t || !histData.value.length) return
   const sym = (t.symbol || '').toLowerCase()
   if (sym !== currentSymbol.value.toLowerCase()) return
-
   latestPrice.value  = t.price
   latestChange.value = t.chg_pct ?? 0
   latestHold.value   = t.hold ?? null
-
   const arr = histData.value.slice()
   const last = arr[arr.length - 1]
   if (!last) return
@@ -203,7 +202,9 @@ watch(liveTick, (t) => {
     hold:   t.hold != null ? t.hold : last.hold,
   }
   histData.value = arr
-})
+}, 150)
+
+watch(liveTick, (t) => { handleTickUpdate(t) })
 
 // ── 数据拉取 ─────────────────────────────────────────────────
 async function fetchData() {
