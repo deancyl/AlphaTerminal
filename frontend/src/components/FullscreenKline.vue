@@ -36,6 +36,7 @@
       <div class="header-right">
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
+        <button class="md:hidden text-[10px] bg-theme-secondary/20 px-2 py-1 rounded" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <button class="close-btn" @click="emit('close')">✕ 关闭</button>
       </div>
     </header>
@@ -141,6 +142,21 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'symbol-change'])
+
+const toggleMobileLandscape = async () => {
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen()
+      await screen.orientation?.lock('landscape')
+    } else {
+      await document.exitFullscreen()
+      screen.orientation?.unlock()
+    }
+  } catch (e) {
+    console.warn('横屏切换失败(可能是iOS限制):', e)
+    alert('当前设备或浏览器不支持强制横屏，请手动旋转手机。')
+  }
+}
 
 // ── 移动端断点侦听（sprint 2-2 性能降级）────────────────────────────────────
 // useBreakpoints(breakpointsTailwind) 返回 Breakpoints 对象，直接调用 .smaller() 方法

@@ -2,11 +2,16 @@
   <div class="flex flex-col h-full min-w-0 overflow-hidden">
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
-      <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
+      <div class="flex items-center gap-2">
+        <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
+        <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
+          class="text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors">
+          {{ showAllSectors ? '收起' : `更多(${sectors.length})` }}
+        </button>
+      </div>
     </div>
 
-    <!-- 响应式网格：自适应列数 -->
-    <div class="flex-1 overflow-y-auto min-w-0" style="max-height: 360px;">
+    <div class="flex-1 overflow-y-auto min-w-0">
       <!-- 响应式网格：根据容器宽度自动调整列数 -->
       <div
         class="grid gap-1 overflow-hidden"
@@ -72,6 +77,7 @@ const { setSymbol } = useMarketStore()
 const sectors = ref([])
 const isLoading = ref(false)
 const tsDisplay = ref('')
+const showAllSectors = ref(false)
 let refreshTimer = null
 
 // 响应式列数（根据容器宽度估算）
@@ -83,8 +89,10 @@ const gridCols = computed(() => {
   return 5  // 桌面 → 5列
 })
 
-// 最多显示20个板块
-const displaySectors = computed(() => sectors.value.slice(0, 20))
+// 显示所有板块（受 showAllSectors 控制）
+const displaySectors = computed(() =>
+  showAllSectors.value ? sectors.value : sectors.value.slice(0, 20)
+)
 
 async function fetchSectors() {
   isLoading.value = sectors.value.length === 0 // 首次加载显示骨架屏

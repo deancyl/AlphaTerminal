@@ -22,26 +22,19 @@
     </div>
 
     <!-- A股监测 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[280px]">
       <div class="text-terminal-accent font-bold text-sm mb-2">📊 A股监测</div>
-      <StockScreener :data="globalItems" class="w-full h-[120px]" />
+      <StockScreener :data="globalItems" class="w-full" />
     </div>
 
-    <!-- 板块热度（折叠前5条） -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-terminal-accent font-bold text-sm">🔥 板块热度</span>
-        <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
-          class="text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors">
-          {{ showAllSectors ? '收起' : `更多(${sectors.length - 5})` }}
-        </button>
-      </div>
-      <HotSectors :data="showAllSectors ? sectors : sectors.slice(0, 5)" class="w-full" />
+    <!-- 板块热度 -->
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[200px]">
+      <HotSectors :data="sectors" class="w-full" />
     </div>
 
     <!-- 新闻快讯 -->
-    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
-      <NewsFeed class="w-full h-[160px]" />
+    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[350px]">
+      <NewsFeed class="w-full" />
     </div>
   </div>
 
@@ -448,8 +441,6 @@ const windItems = computed(() => {
 const globalItems = computed(() => globalData.value || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
 const sectors = computed(() => props.sectorsData || [])
-
-const showAllSectors = ref(false)
 
 const mobileAnchors = [
   { id: 'section-chart',    label: '📈 图表' },
