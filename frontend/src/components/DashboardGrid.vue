@@ -29,7 +29,7 @@
 
     <!-- 市场情绪：移动端信息流补充 -->
     <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[200px]">
-      <EmotionChart class="w-full h-full" />
+      <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
     <!-- 板块热度：固定高度 h-[400px]，内部滚动 -->
@@ -236,7 +236,6 @@ import { useMarketStore } from '../stores/market.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
-import EmotionChart      from './EmotionChart.vue'
 import HotSectors        from './HotSectors.vue'
 import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
