@@ -1,21 +1,21 @@
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full min-w-0 overflow-hidden">
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
       <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
     </div>
 
     <!-- 响应式网格：自适应列数 -->
-    <div class="flex-1 overflow-y-auto" style="max-height: 360px;">
+    <div class="flex-1 overflow-y-auto min-w-0" style="max-height: 360px;">
       <!-- 响应式网格：根据容器宽度自动调整列数 -->
-      <div 
+      <div
         class="grid gap-1 overflow-hidden"
         :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }"
       >
         <div
           v-for="sec in displaySectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 min-w-0"
+          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 min-w-0 overflow-hidden"
           :class="(sec.change_pct || 0) >= 0
             ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
             : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"

@@ -1,6 +1,6 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto h-full">
+  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto h-full min-w-0">
 
     <!-- 快捷导航胶囊 -->
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -104,7 +104,6 @@
             :color="currentIndexOption.color"
             :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
             :indicators="activeIndicators"
-            @open-fullscreen="$emit('open-fullscreen', $event)"
           />
         </div>
       </div>
@@ -140,7 +139,7 @@
         <div class="grid grid-cols-2 gap-1 p-0.5">
           <div
             v-for="item in windItems" :key="item.symbol"
-            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors"
+            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors min-w-0 overflow-hidden"
             @click="handleWindClick(item)"
           >
             <!-- 标的名称（分类标签） -->

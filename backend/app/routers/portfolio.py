@@ -64,14 +64,15 @@ def _row2dict(rows, cols):
 
 @router.get("/")
 async def list_portfolios():
-    """所有账户列表"""
-    with _lock:
-        conn = _get_conn()
+    """所有账户列表（WAL 模式并发读，无需应用层锁）"""
+    conn = _get_conn()
+    try:
         rows = conn.execute(
             """SELECT id, name, type, parent_id, created_at, total_cost,
                       currency, asset_class, strategy, benchmark, status, initial_capital, description
                FROM portfolios ORDER BY id"""
         ).fetchall()
+    finally:
         conn.close()
     return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
                                             "currency", "asset_class", "strategy", "benchmark", "status",
@@ -84,6 +85,16 @@ async def create_portfolio(body: PortfolioIn):
     with _lock:
         conn = _get_conn()
         try:
+            # ── 环形嵌套防御 ─────────────────────────────────────
+            if body.parent_id is not None:
+                # 自身不能作为自己的 parent
+                if body.parent_id == 0:
+                    raise HTTPException(400, "parent_id 不能为 0（自身）")
+                # parent_id 不能是自身的子孙节点：查出自身所有后代并校验
+                descendants = _get_all_descendants(conn, body.parent_id)
+                if body.parent_id in descendants:
+                    raise HTTPException(400, f"parent_id ({body.parent_id}) 不能指向自身的后代节点，检测到环形嵌套")
+            # ── 写入 ─────────────────────────────────────────────
             cur = conn.execute(
                 """INSERT INTO portfolios (name, type, parent_id, created_at, total_cost,
                         currency, asset_class, strategy, benchmark, status, initial_capital, description)
@@ -94,8 +105,9 @@ async def create_portfolio(body: PortfolioIn):
             )
             conn.commit()
             pid = cur.lastrowid
+        except HTTPException:
+            raise
         except Exception as e:
-            conn.close()
             raise HTTPException(400, f"创建账户失败: {e}")
         conn.close()
     return {"id": pid, "name": body.name, "type": body.type, "parent_id": body.parent_id,
@@ -119,20 +131,26 @@ async def delete_portfolio(portfolio_id: int):
 
 # ── 持仓 CRUD ─────────────────────────────────────────────────
 
-def _get_all_descendants(conn, portfolio_id: int) -> list:
-    """递归获取所有后代账户ID（包括子账户、孙账户等）"""
+def _get_all_descendants(conn, portfolio_id: int, visited: set = None) -> list:
+    """递归获取所有后代账户ID（包括子账户、孙账户等）。使用 visited set 阻断环形嵌套。"""
+    if visited is None:
+        visited = set()
+    if portfolio_id in visited:
+        return []
+    visited.add(portfolio_id)
     result = [portfolio_id]
     cursor = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,))
     children = [row[0] for row in cursor.fetchall()]
     for child_id in children:
-        result.extend(_get_all_descendants(conn, child_id))
+        result.extend(_get_all_descendants(conn, child_id, visited))
     return result
 
 @router.get("/{portfolio_id}/positions")
 async def list_positions(portfolio_id: int, include_children: bool = Query(False, description="是否包含子账户持仓")):
     """账户当前持仓，可选包含所有子账户持仓"""
-    with _lock:
-        conn = _get_conn()
+    # WAL 模式支持并发读
+    conn = _get_conn()
+    try:
         if include_children:
             # 获取所有后代账户ID
             all_ids = _get_all_descendants(conn, portfolio_id)
@@ -145,7 +163,6 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
                     WHERE p.portfolio_id IN ({placeholders})""",
                 tuple(all_ids)
             ).fetchall()
-            conn.close()
             return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
                                     "avg_cost": r[3], "updated_at": r[4],
                                     "portfolio_name": r[5], "portfolio_id": r[6]} for r in rows],
@@ -156,9 +173,10 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
                 "SELECT id, symbol, shares, avg_cost, updated_at FROM positions WHERE portfolio_id=?",
                 (portfolio_id,)
             ).fetchall()
-            conn.close()
             return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
                                     "avg_cost": r[3], "updated_at": r[4]} for r in rows]}
+    finally:
+        conn.close()
 
 @router.post("/positions")
 async def upsert_position(body: PositionIn):
@@ -211,9 +229,9 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     """
     from app.services.sentiment_engine import SpotCache
 
-    with _lock:
-        conn = _get_conn()
-
+    # WAL 模式支持并发读，但 SpotCache 读取和 DB 读取之间保持原子视图
+    conn = _get_conn()
+    try:
         if include_children:
             # 获取所有后代账户ID
             all_ids = _get_all_descendants(conn, portfolio_id)
@@ -242,6 +260,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
         except:
             pass
+    finally:
         conn.close()
 
     if not rows:
@@ -405,8 +424,9 @@ async def get_snapshots(
     end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
 ):
     """净值历史快照"""
-    with _lock:
-        conn = _get_conn()
+    # WAL 模式支持并发读
+    conn = _get_conn()
+    try:
         if start_date and end_date:
             rows = conn.execute(
                 "SELECT date, total_asset, total_cost FROM portfolio_snapshots "
@@ -431,6 +451,7 @@ async def get_snapshots(
                 "WHERE portfolio_id=? ORDER BY date ASC LIMIT 365"
                 , (portfolio_id,)
             ).fetchall()
+    finally:
         conn.close()
     return {
         "snapshots": [
@@ -562,29 +583,30 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
     from app.db.database import _get_conn
     from app.services.sentiment_engine import SpotCache
 
-    # ── 1. 获取持仓 ────────────────────────────────────────────
-    with _lock:
-        conn = _get_conn()
-        try:
-            if include_children:
-                all_ids = [portfolio_id]
-                cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
-                all_ids += [r[0] for r in cur]
-                ph = ','.join(['?'] * len(all_ids))
-                rows = conn.execute(
-                    f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
-                    tuple(all_ids)
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
-                    (portfolio_id,)
-                ).fetchall()
-        finally:
-            conn.close()
+    # ── 1. 获取持仓（WAL 模式并发读）────────────────────────────
+    conn = _get_conn()
+    try:
+        if include_children:
+            all_ids = [portfolio_id]
+            cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
+            all_ids += [r[0] for r in cur]
+            ph = ','.join(['?'] * len(all_ids))
+            rows = conn.execute(
+                f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
+                tuple(all_ids)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+                (portfolio_id,)
+            ).fetchall()
+    finally:
+        conn.close()
 
     if not rows:
         return _ok({"attribution": [], "risk_metrics": None, "total_exposure": []})
+
+    # ── 2. 获取最新价格 ────────────────────────────────────────
 
     # ── 2. 获取最新价格 ────────────────────────────────────────
     spot = SpotCache.get_stocks()
@@ -658,95 +680,107 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
             "pnl_pct":      round(pnl_pct, 2),
         })
 
-    # ── 4. 汇总计算 ────────────────────────────────────────────
-    total_mv    = sum(g["market_value"] for g in groups.values())
-    total_cost  = sum(g["cost"]        for g in groups.values())
-    total_pnl   = sum(g["pnl"]         for g in groups.values())
+    # ── 4. 汇总计算（防御性容错）──────────────────────────────
+    try:
+        total_mv    = sum(g["market_value"] for g in groups.values())
+        total_cost  = sum(g["cost"]        for g in groups.values())
+        total_pnl   = sum(g["pnl"]         for g in groups.values())
 
-    attribution = []
-    for g in groups.values():
-        w  = g["market_value"] / total_mv if total_mv > 0 else 0
-        pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
-        attribution.append({
-            "category":        g["category"],
-            "sub_category":    g["sub_category"],
-            "is_index":        g["is_index"],
-            "market_value":    round(g["market_value"], 2),
-            "cost":            round(g["cost"], 2),
-            "pnl":             round(g["pnl"], 2),
-            "weight":          round(w * 100, 2),
-            "pnl_contrib_pct": round(pc, 2),
-            "position_count":  len(g["positions"]),
-            "positions":       g["positions"][:5],
+        # 极端边界：所有持仓市值和盈亏均为 0（价格全失效），返回空数据避免后续除零
+        if total_mv <= 0 and total_pnl == 0:
+            return _ok({"attribution": [], "risk_metrics": None, "total_exposure": [],
+                        "summary": {"total_market_value": 0, "total_cost": 0, "total_pnl": 0, "total_pnl_pct": 0}})
+
+        attribution = []
+        for g in groups.values():
+            w  = g["market_value"] / total_mv if total_mv > 0 else 0
+            pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
+            attribution.append({
+                "category":        g["category"],
+                "sub_category":    g["sub_category"],
+                "is_index":        g["is_index"],
+                "market_value":    round(g["market_value"], 2),
+                "cost":            round(g["cost"], 2),
+                "pnl":             round(g["pnl"], 2),
+                "weight":          round(w * 100, 2),
+                "pnl_contrib_pct": round(pc, 2),
+                "position_count":  len(g["positions"]),
+                "positions":       g["positions"][:5],
+            })
+
+        attribution.sort(key=lambda x: x["market_value"], reverse=True)
+
+        # ── 5. 底层资产配置 ─────────────────────────────────────
+        total_exposure = [
+            {"name": g["sub_category"], "category": g["category"],
+             "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
+            for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
+        ]
+
+        # ── 6. 风险指标 ─────────────────────────────────────────
+        risk_metrics = None
+        try:
+            conn3 = _get_conn()
+            try:
+                snap_rows = conn3.execute(
+                    "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
+                    (portfolio_id,)
+                ).fetchall()
+            finally:
+                conn3.close()
+
+            if snap_rows and len(snap_rows) >= 5:
+                assets  = [float(r[1]) for r in snap_rows]
+                returns = [(assets[i] - assets[i-1]) / assets[i-1]
+                           for i in range(1, len(assets)) if assets[i-1] > 0]
+
+                if returns:
+                    import math
+                    mean_ret  = sum(returns) / len(returns)
+                    variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+                    daily_vol = math.sqrt(variance)
+                    ann_vol   = daily_vol * math.sqrt(252)
+
+                    try:
+                        from statistics import NormalDist
+                        z_95 = NormalDist().inv_cdf(0.95)
+                    except Exception:
+                        z_95 = 1.645
+
+                    latest_asset = assets[-1]
+                    var_daily_95 = latest_asset * z_95 * daily_vol
+
+                    risk_free     = 0.03
+                    years         = max(len(assets) / 252, 0.01)
+                    total_ret     = (assets[-1] - assets[0]) / assets[0]
+                    ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
+                    sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
+
+                    risk_metrics = {
+                        "var_daily_95":      round(var_daily_95, 2),
+                        "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
+                        "annual_volatility": round(ann_vol * 100, 2),
+                        "sharpe_ratio":      round(sharpe, 2),
+                        "total_return_pct":  round(total_ret * 100, 2),
+                        "annual_return_pct": round(ann_ret * 100, 2),
+                        "days":              len(assets),
+                    }
+        except Exception as e:
+            logger.warning(f"[Attribution] risk_metrics error: {e}")
+
+        return _ok({
+            "attribution":    attribution,
+            "total_exposure":  total_exposure,
+            "risk_metrics":    risk_metrics,
+            "summary": {
+                "total_market_value": round(total_mv, 2),
+                "total_cost":        round(total_cost, 2),
+                "total_pnl":         round(total_pnl, 2),
+                "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
+            },
         })
 
-    attribution.sort(key=lambda x: x["market_value"], reverse=True)
-
-    # ── 5. 底层资产配置 ────────────────────────────────────────
-    total_exposure = [
-        {"name": g["sub_category"], "category": g["category"],
-         "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
-        for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
-    ]
-
-    # ── 6. 风险指标 ────────────────────────────────────────────
-    risk_metrics = None
-    try:
-        with _lock:
-            conn3 = _get_conn()
-            snap_rows = conn3.execute(
-                "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
-                (portfolio_id,)
-            ).fetchall()
-            conn3.close()
-
-        if snap_rows and len(snap_rows) >= 5:
-            assets  = [float(r[1]) for r in snap_rows]
-            returns = [(assets[i] - assets[i-1]) / assets[i-1]
-                       for i in range(1, len(assets)) if assets[i-1] > 0]
-
-            if returns:
-                import math
-                mean_ret  = sum(returns) / len(returns)
-                variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
-                daily_vol = math.sqrt(variance)
-                ann_vol   = daily_vol * math.sqrt(252)
-
-                try:
-                    from statistics import NormalDist
-                    z_95 = NormalDist().inv_cdf(0.95)
-                except Exception:
-                    z_95 = 1.645
-
-                latest_asset  = assets[-1]
-                var_daily_95  = latest_asset * z_95 * daily_vol
-
-                risk_free     = 0.03
-                years         = max(len(assets) / 252, 0.01)
-                total_ret     = (assets[-1] - assets[0]) / assets[0]
-                ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
-                sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
-
-                risk_metrics = {
-                    "var_daily_95":      round(var_daily_95, 2),
-                    "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
-                    "annual_volatility": round(ann_vol * 100, 2),
-                    "sharpe_ratio":      round(sharpe, 2),
-                    "total_return_pct":  round(total_ret * 100, 2),
-                    "annual_return_pct": round(ann_ret * 100, 2),
-                    "days":              len(assets),
-                }
     except Exception as e:
-        logger.warning(f"[Attribution] risk_metrics error: {e}")
-
-    return _ok({
-        "attribution":    attribution,
-        "total_exposure":  total_exposure,
-        "risk_metrics":    risk_metrics,
-        "summary": {
-            "total_market_value": round(total_mv, 2),
-            "total_cost":        round(total_cost, 2),
-            "total_pnl":         round(total_pnl, 2),
-            "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
-        },
-    })
+        logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")

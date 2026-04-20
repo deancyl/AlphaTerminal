@@ -8,8 +8,8 @@
     >
       <FullscreenKline
         v-if="!futuresFullscreen"
-        :symbol="fullscreenSymbol"
-        :name="fullscreenName"
+        :symbol="ui.fullscreenSymbol"
+        :name="ui.fullscreenName"
         :isFull="true"
         @close="() => { ui.klineFullscreen = false }"
         @symbol-change="openFullscreenKline"
@@ -219,7 +219,7 @@ import { useTheme } from './composables/useTheme.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 
-const { ui } = useUiStore()
+const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
 
 // 初始化主题系统（必须在组件挂载前调用）
@@ -273,16 +273,8 @@ const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
-const fullscreenSymbol = ref('sh000001')
-const fullscreenName   = ref('上证指数')
-
 function openFullscreenKline({ symbol, name }) {
-  logger.log('[DEBUG] openFullscreenKline called', { symbol, name, klineFullscreenBefore: ui.klineFullscreen })
-  console.log('[App] 准备全屏订阅代码:', symbol)
-  fullscreenSymbol.value = symbol || 'sh000001'
-  fullscreenName.value  = name  || '上证指数'
-  ui.klineFullscreen = true
-  logger.log('[DEBUG] ui.klineFullscreen set to', ui.klineFullscreen, '| fullscreenSymbol:', fullscreenSymbol.value)
+  openKlineFullscreen({ symbol, name })
 }
 
 function toggleLock() {

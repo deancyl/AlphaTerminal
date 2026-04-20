@@ -9,7 +9,7 @@
         <button
           class="md:hidden ml-auto mr-1 px-1.5 py-0.5 text-[10px] rounded border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors"
           title="横屏全屏"
-          @click="emit('open-fullscreen', { symbol: symbol || props.symbol, name: name || props.name })"
+          @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
         >⛶ 全屏</button>
         <span v-if="isLoading" class="text-[10px] font-mono text-theme-tertiary animate-pulse">加载中…</span>
       </div>
@@ -60,6 +60,7 @@ import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
+import { useUiStore } from '../composables/useUiStore.js'
 
 const props = defineProps({
   symbol:     { type: String, default: '000001' },
@@ -71,8 +72,6 @@ const props = defineProps({
   overlaySymbol: { type: String, default: '' },
   overlayName:   { type: String, default: '' },
 })
-
-const emit = defineEmits(['open-fullscreen'])
 
 const chartRef     = ref(null)
 const chartError   = ref('')
