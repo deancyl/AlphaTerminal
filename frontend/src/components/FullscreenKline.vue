@@ -154,6 +154,8 @@ const toggleMobileLandscape = async () => {
       await document.exitFullscreen()
       screen.orientation?.unlock()
     }
+    // 全屏切换完成后触发图表重绘
+    setTimeout(handleResize, 150)
   } catch (e) {
     console.warn('横屏切换失败(可能是iOS限制):', e)
     alert('当前设备或浏览器不支持强制横屏，请手动旋转手机。')
