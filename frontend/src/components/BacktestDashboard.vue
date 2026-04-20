@@ -1,8 +1,8 @@
 <template>
-  <div class="flex w-full h-full overflow-hidden">
+  <div class="flex flex-col md:flex-row w-full h-full overflow-hidden">
 
     <!-- ═══════════════ 左侧边栏 ═══════════════ -->
-    <aside class="w-56 shrink-0 flex flex-col border-r border-theme bg-terminal-panel overflow-y-auto">
+    <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3">
 
       <!-- 策略参数 -->
       <div class="px-3 py-2.5 border-b border-theme">
@@ -22,54 +22,62 @@
 
           <!-- 双均线参数 -->
           <template v-if="strategyType === 'ma_crossover'">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">快线</span>
-              <input v-model.number="fastMa" type="number" min="2" max="60"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">快线</span>
+                <input v-model.number="fastMa" type="number" min="2" max="60"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">慢线</span>
+                <input v-model.number="slowMa" type="number" min="5" max="250"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
             </div>
-            <div class="text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">慢线</span>
-              <input v-model.number="slowMa" type="number" min="5" max="250"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
-            </div>
-            <div class="text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
+            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
+            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
           </template>
 
           <!-- RSI 参数 -->
           <template v-if="strategyType === 'rsi_oversold'">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">周期</span>
-              <input v-model.number="rsiPeriod" type="number" min="7" max="30"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">周期</span>
+                <input v-model.number="rsiPeriod" type="number" min="7" max="30"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">买入</span>
+                <input v-model.number="rsiBuy" type="number" min="10" max="50"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">买入</span>
-              <input v-model.number="rsiBuy" type="number" min="10" max="50"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">RSI &lt; 此值买入（默认30超卖）</div>
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">卖出</span>
+                <input v-model.number="rsiSell" type="number" min="50" max="90"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
             </div>
-            <div class="text-[9px] text-theme-muted leading-tight">RSI &lt; 此值买入（默认30超卖）</div>
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">卖出</span>
-              <input v-model.number="rsiSell" type="number" min="50" max="90"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
-            </div>
-            <div class="text-[9px] text-theme-muted leading-tight">RSI &gt; 此值卖出（默认70超买）</div>
+            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">RSI &gt; 此值卖出（默认70超买）</div>
           </template>
 
           <!-- 布林带参数 -->
           <template v-if="strategyType === 'bollinger_bands'">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">周期</span>
-              <input v-model.number="bbPeriod" type="number" min="10" max="60"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">周期</span>
+                <input v-model.number="bbPeriod" type="number" min="10" max="60"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[9px] text-theme-muted w-8">倍数</span>
+                <input v-model.number="bbStd" type="number" min="1" max="4" step="0.5"
+                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
+              </div>
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] text-theme-muted w-8">倍数</span>
-              <input v-model.number="bbStd" type="number" min="1" max="4" step="0.5"
-                class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-cyan-400 w-14 text-center focus:outline-none focus:border-cyan-400/60" />
-            </div>
-            <div class="text-[9px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
+            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
           </template>
 
           <!-- 窗口 -->
@@ -92,7 +100,7 @@
           </div>
 
           <!-- 策略规则提示（根据所选策略动态切换） -->
-          <div class="mt-2 px-2 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] leading-snug">
+          <div class="hidden md:block mt-2 px-2 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[9px] leading-snug">
             <template v-if="strategyType === 'ma_crossover'">
               💡 <span class="text-blue-300 font-medium">双均线策略：</span>
               <span class="text-blue-200/70">快线向上穿越慢线时<span class="text-green-400">金叉→全仓买入</span>；</span>
@@ -223,7 +231,7 @@
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
       <!-- 图表区 -->
-      <div class="flex-1 min-h-0 relative" ref="chartWrapRef">
+      <div class="flex-1 flex flex-col min-h-[50vh] md:min-h-0 relative" ref="chartWrapRef">
         <BacktestChart
           v-if="histData.length > 0"
           ref="chartRef"
