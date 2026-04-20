@@ -424,9 +424,15 @@ async def copilot_chat(request: Request):
     provider = _detect_provider()
 
     # ── 构建上下文注入 ────────────────────────────────────────
+    # 前端可传 context 字段（格式化的市场/板块/情绪数据），补充后端实时数据
+    frontend_context = (body.get("context") or "").strip()
     price_info = _fetch_price_context(symbol)
     news_items = _fetch_latest_news(limit=5)
     context_block = _build_context_block(symbol, price_info, news_items)
+    
+    # 合并：前端上下文（更丰富）+ 后端上下文（实时行情+快讯）
+    if frontend_context:
+        context_block = f"{frontend_context}\n{context_block}"
 
     from datetime import datetime
     current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")

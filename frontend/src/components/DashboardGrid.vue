@@ -232,7 +232,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility } from '@vueuse/core'
+import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
 import IndexLineChart    from './IndexLineChart.vue'
@@ -514,17 +514,17 @@ function formatMacroPrice(item) {
   return item.unit ? `${p} ${item.unit}` : p
 }
 
-// ── GridStack 锁定 ─────────────────────────────────────────────
-// ── GridStack 锁定：响应 props.isLocked 变化 ────────────────────
-// ── 标的切换时自动回退不支持的周期 ────────────────────────────────
 // ── StockScreener / Copilot 等外部改变了 currentSymbol 时同步 selectedIndex ──
-// Use getter () => currentSymbol.value to safely watch Pinia refs
+// 防抖版：避免 rapid setSymbol 调用导致频繁更新
+let syncIndexTimer = null
 watch(() => currentSymbol.value, (sym) => {
-  if (sym && sym !== selectedIndex.value) {
-    selectedIndex.value = sym
-  }
-  // 同步名称（StockScreener 等外部组件通过 store.setSymbol 更新了 currentSymbolName）
-  currentIndexName.value = currentSymbolName.value || currentIndexName.value
+  clearTimeout(syncIndexTimer)
+  syncIndexTimer = setTimeout(() => {
+    if (sym && sym !== selectedIndex.value) {
+      selectedIndex.value = sym
+    }
+    currentIndexName.value = currentSymbolName.value || currentIndexName.value
+  }, 50)
 })
 
 // ── 标的切换时自动回退不支持的周期 ────────────────────────────────
