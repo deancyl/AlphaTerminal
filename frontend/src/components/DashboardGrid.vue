@@ -1,9 +1,9 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto h-full min-w-0">
+  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto h-full min-w-0" style="height: 100dvh;">
 
     <!-- 快捷导航胶囊 -->
-    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
       <button v-for="anchor in mobileAnchors" :key="anchor.id"
         :href="`#${anchor.id}`"
         class="shrink-0 px-3 py-1 rounded-full text-[10px] border transition-colors"
@@ -13,32 +13,34 @@
       </button>
     </div>
 
-    <!-- K线图 -->
-    <div id="section-chart" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3">
-      <div class="flex items-center justify-between mb-2">
+    <!-- K线图：固定高度，内部图表自适应 -->
+    <div id="section-chart" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 280px;">
+      <div class="flex items-center justify-between mb-2 shrink-0">
         <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       </div>
-      <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full h-[200px]" />
+      <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full" style="height: 220px;" />
     </div>
 
-    <!-- A股监测：固定高度 h-[520px]，底部分页永远可见 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-[520px] flex flex-col">
+    <!-- A股监测：固定高度 480px，内部滚动 -->
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="height: 480px; overflow: hidden;">
       <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
-      <StockScreener :data="globalItems" class="w-full flex-1 min-h-0" />
+      <div class="w-full overflow-y-auto" style="height: calc(100% - 32px);">
+        <StockScreener :data="globalItems" />
+      </div>
     </div>
 
-    <!-- 市场情绪：移动端信息流补充 -->
-    <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[200px]">
+    <!-- 市场情绪 -->
+    <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 200px;">
       <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
-    <!-- 板块热度：固定高度 h-[400px]，内部滚动 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-[400px] flex flex-col">
-      <HotSectors :data="sectors" class="w-full flex-1 min-h-0" />
+    <!-- 板块热度：固定高度 380px，内部滚动 -->
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="height: 380px; overflow: hidden;">
+      <HotSectors :data="sectors" class="w-full" />
     </div>
 
-    <!-- 新闻快讯：min-h-[500px] -->
-    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[500px]">
+    <!-- 新闻快讯：固定高度 420px，内部滚动 -->
+    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="height: 420px; overflow: hidden;">
       <NewsFeed class="w-full" />
     </div>
   </div>

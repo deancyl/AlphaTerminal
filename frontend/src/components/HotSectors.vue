@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full min-w-0 overflow-hidden">
+  <div class="flex flex-col min-w-0 overflow-hidden" style="height: 100%;">
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
       <div class="flex items-center gap-2">
