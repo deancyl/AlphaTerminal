@@ -8,7 +8,14 @@ fund.py — 国内基金数据路由
 """
 import requests
 import logging
+import time
 from fastapi import APIRouter, Query, HTTPException
+
+def success_response(data, message="success"):
+    return {"code": 0, "message": message, "data": data, "timestamp": int(time.time() * 1000)}
+
+def error_response(code, message, data=None):
+    return {"code": code, "message": message, "data": data, "timestamp": int(time.time() * 1000)}
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fund", tags=["fund"])
@@ -139,12 +146,12 @@ async def etf_info(
         text = resp.text.strip()
 
         if 'hq_str_' not in text or "," not in text:
-            return {"code": 0, "symbol": code, "data": None, "message": "无数据"}
+            return error_response(1, "无数据", {"symbol": code})
 
         data_str = text.split('"')[1] if '"' in text else ""
         parts = data_str.split(",")
         if len(parts) < 32:
-            return {"code": 0, "symbol": code, "data": None, "message": "数据解析失败"}
+            return error_response(1, "数据解析失败", {"symbol": code})
 
         name     = parts[0]
         yclose   = float(parts[2]) if parts[2] else 0
@@ -156,8 +163,7 @@ async def etf_info(
         chg_pct  = round((price - yclose) / yclose * 100, 2) if yclose else 0
         chg_val  = round(price - yclose, 3) if yclose else 0
 
-        return {
-            "code":   0,
+        return success_response({
             "symbol": code,
             "name":   name,
             "data": {
@@ -170,10 +176,10 @@ async def etf_info(
                 "volume":     round(volume, 0),
                 "amount":     round(amount, 2),
             }
-        }
+        })
     except Exception as e:
         logger.warning(f"[ETF Info] {code} 获取失败: {e}")
-        return {"code": 0, "symbol": code, "data": None, "message": str(e)}
+        return error_response(1, str(e), {"symbol": code})
 
 
 # ══════════════════════════════════════════════════════════════════════

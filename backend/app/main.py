@@ -126,8 +126,7 @@ app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 # 回测模块
 try:
     from app.routers import backtest
-    app.include_router(copilot_router, prefix="/api/v1/copilot", tags=["copilot"])
-app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
+    app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
 except Exception as e:
     print(f"[Warning] Backtest module not loaded: {e}")
 

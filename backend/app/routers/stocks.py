@@ -361,8 +361,19 @@ async def get_limit_summary():
                     ind = str(row.get('所属行业', '其他'))
                     industry_dist[ind] = industry_dist.get(ind, 0) + 1
             
-            # 强势股（换手率最高的）
-            strong_df = zt_df.sort_values('换手率', ascending=False).head(5) if zt_df is not None and len(zt_df) > 0 else None
+            # 强势股（换手率最高的）- 兼容列名变化
+            def _safe_sort_by_turnover(df):
+                if df is None or len(df) == 0:
+                    return None
+                TURNOVER_COLS = ['换手率', '换手率(%)', 'turnover_rate']
+                col = next((c for c in TURNOVER_COLS if c in df.columns), None)
+                if col is None:
+                    return None
+                return df.sort_values(col, ascending=False).head(5)
+            
+            strong_df = _safe_sort_by_turnover(zt_df)
+            CHANGE_COLS = ['涨跌幅', '涨跌额', 'change_pct']
+            NAME_COLS = ['名称', 'name', '股票名称']
             
             return {
                 'date': today,
@@ -371,9 +382,13 @@ async def get_limit_summary():
                 'market_sentiment': '极强' if zt_count > 50 else '强势' if zt_count > 30 else '偏强' if zt_count > 15 else '偏弱' if zt_count > 5 else '极弱',
                 'zt_industry': dict(sorted(industry_dist.items(), key=lambda x: x[1], reverse=True)[:5]),
                 'strongest': [
-                    {'name': str(r['名称']), 'turnover_rate': float(r['换手率']), 'change_pct': float(r['涨跌幅'])}
-                    for r in strong_df.to_dict('records')
-                ] if strong_df is not None else [],
+                    {
+                        'name': str(r.get('名称') or r.get('name') or r.get('股票名称', '')),
+                        'turnover_rate': float(r.get('换手率') or r.get('换手率(%)') or r.get('turnover_rate', 0)),
+                        'change_pct': float(r.get('涨跌幅') or r.get('涨跌额') or r.get('change_pct', 0))
+                    }
+                    for r in (strong_df.to_dict('records') if strong_df is not None else [])
+                ],
             }
         except Exception as e:
             logger.warning(f"[Stocks] limit_summary error: {e}")

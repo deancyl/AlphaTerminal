@@ -31,7 +31,7 @@
 
     <!-- 市场情绪 -->
     <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 200px;">
-      <SentimentGauge :market-data="{ indices: marketStore.indices }" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
+      <SentimentGauge :market-data="{ indices: indices }" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
     <!-- 板块热度：固定高度 380px，内部滚动 -->
@@ -245,7 +245,7 @@ import StockScreener     from './StockScreener.vue'
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
-const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol } = useMarketStore()
+const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol, indices } = useMarketStore()
 const currentIndexName = ref('上证指数')
 
 const props = defineProps({

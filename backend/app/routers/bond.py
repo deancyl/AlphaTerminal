@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -286,13 +287,17 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         df = await _get_bond_history_df()
         if df is None or df.empty:
             raise ValueError("empty df")
-        tenor_col = next((c for c in df.columns if tenor in c), None)
+        tenor_col = next((c for c in df.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
-        series = df[tenor_col].dropna().astype(float)
-        current_yield = series.iloc[-1] if len(series) else None
+        # 安全转换：过滤非数字值
+        raw = df[tenor_col].dropna()
+        numeric = pd.to_numeric(raw, errors='coerce').dropna()
+        if numeric.empty:
+            raise ValueError(f"no numeric data in column: {tenor_col}")
+        current_yield = numeric.iloc[-1] if len(numeric) else None
         if current_yield is not None:
-            percentile = float(np.sum(series < current_yield) / len(series) * 100)
+            percentile = float(np.sum(numeric < current_yield) / len(numeric) * 100)
         else:
             percentile = None
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
