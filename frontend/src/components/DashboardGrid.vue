@@ -21,19 +21,24 @@
       <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full h-[200px]" />
     </div>
 
-    <!-- A股监测 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[280px]">
+    <!-- A股监测：min-h-[480px] 保底，可滚动显示20只股 -->
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[480px]">
       <div class="text-terminal-accent font-bold text-sm mb-2">📊 A股监测</div>
       <StockScreener :data="globalItems" class="w-full" />
     </div>
 
-    <!-- 板块热度 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[200px]">
+    <!-- 市场情绪：移动端信息流补充 -->
+    <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[200px]">
+      <EmotionChart class="w-full h-full" />
+    </div>
+
+    <!-- 板块热度：h-auto 让内容自由撑开 -->
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-auto">
       <HotSectors :data="sectors" class="w-full" />
     </div>
 
-    <!-- 新闻快讯 -->
-    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[350px]">
+    <!-- 新闻快讯：min-h-[500px] -->
+    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[500px]">
       <NewsFeed class="w-full" />
     </div>
   </div>
@@ -231,6 +236,7 @@ import { useMarketStore } from '../stores/market.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
+import EmotionChart      from './EmotionChart.vue'
 import HotSectors        from './HotSectors.vue'
 import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
@@ -445,6 +451,7 @@ const sectors = computed(() => props.sectorsData || [])
 const mobileAnchors = [
   { id: 'section-chart',    label: '📈 图表' },
   { id: 'section-screener', label: '📊 监测' },
+  { id: 'section-sentiment', label: '🌡️ 情绪' },
   { id: 'section-sectors', label: '🔥 板块' },
   { id: 'section-news',    label: '📰 快讯' },
 ]

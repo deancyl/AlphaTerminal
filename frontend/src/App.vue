@@ -82,7 +82,7 @@
           </button>
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
         </div>
-        <div class="flex items-center gap-3 text-xs text-terminal-dim">
+        <div class="flex items-center gap-3 text-xs text-terminal-dim flex-nowrap overflow-x-auto scrollbar-hide">
           <!-- 仅桌面端显示时钟 -->
           <span v-if="!isMobile" id="clock" class="font-mono">{{ currentTime }}</span>
           <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">

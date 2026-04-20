@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full min-h-0">
+  <div class="flex flex-col h-full min-h-[500px]">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0">

@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full min-h-[280px] md:min-h-0 bg-terminal-bg">
+  <div class="flex flex-col h-full min-h-[480px] md:min-h-0 bg-terminal-bg">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📊 A股监测</span>
@@ -31,7 +31,7 @@
             :key="item.symbol || idx"
             class="border-b border-theme-secondary/30 hover:bg-white/5 transition-colors"
           >
-            <td class="px-1.5 py-1 text-terminal-dim text-[10px]">{{ idx + 1 }}</td>
+            <td class="px-1.5 py-1 text-terminal-dim text-[10px]">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
             <td class="px-1.5 py-1 min-w-0 truncate text-theme-primary text-[11px]">{{ item.name || item.symbol }}</td>
             <td class="px-1.5 py-1 text-right font-mono text-[11px] text-theme-primary">{{ item.price != null ? Number(item.price).toFixed(2) : '--' }}</td>
             <td
@@ -47,6 +47,13 @@
         </tbody>
       </table>
     </div>
+
+    <!-- 分页控制器：shrink-0 确保不被挤压出可视区 -->
+    <div v-if="totalPages > 1" class="shrink-0 bg-theme-panel pb-2 flex items-center justify-center gap-1 mt-1">
+      <button class="px-1.5 py-0.5 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === 1" @click="currentPage--">‹</button>
+      <span class="text-[9px] text-terminal-dim px-1">{{ currentPage }}/{{ totalPages }}</span>
+      <button class="px-1.5 py-0.5 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === totalPages" @click="currentPage++">›</button>
+    </div>
   </div>
 </template>
 
@@ -58,17 +65,24 @@ const props = defineProps({
 })
 
 const searchQuery = ref('')
+const currentPage = ref(1)
+const pageSize = 20
+
+const filtered = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return props.data
+  return props.data.filter(i => {
+    const sym = (i.symbol || '').toLowerCase()
+    const name = (i.name || '').toLowerCase()
+    return sym.includes(q) || name.includes(q)
+  })
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
 
 const displayedItems = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return props.data.slice(0, 50)
-  return props.data
-    .filter(i => {
-      const sym = (i.symbol || '').toLowerCase()
-      const name = (i.name || '').toLowerCase()
-      return sym.includes(q) || name.includes(q)
-    })
-    .slice(0, 50)
+  const start = (currentPage.value - 1) * pageSize
+  return filtered.value.slice(start, start + pageSize)
 })
 
 const total = computed(() => props.data.length)

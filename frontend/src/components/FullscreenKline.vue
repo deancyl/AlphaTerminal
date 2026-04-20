@@ -7,13 +7,16 @@
         <span class="symbol-code">{{ props.symbol ?? '--' }}</span>
       </div>
 
-      <div class="header-center">
+      <!-- 工具栏：横向滚动，不换行 -->
+      <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0">
+        <!-- 横屏按钮：仅移动端显示，最左侧 -->
+        <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-2 py-1 rounded mr-2" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <!-- 周期选择 -->
-        <div class="period-selector">
+        <div class="period-selector flex-nowrap shrink-0">
           <button
             v-for="p in periods"
             :key="p.value"
-            :class="['period-btn', { active: period === p.value }]"
+            :class="['period-btn shrink-0', { active: period === p.value }]"
             @click="period = p.value"
           >
             {{ p.label }}
@@ -21,11 +24,11 @@
         </div>
 
         <!-- 副图选择 -->
-        <div class="indicator-selector">
+        <div class="indicator-selector flex-nowrap shrink-0">
           <button
             v-for="ind in subChartOptions"
             :key="ind.key"
-            :class="['indicator-btn', { active: activeSubChart === ind.key }]"
+            :class="['indicator-btn shrink-0', { active: activeSubChart === ind.key }]"
             @click="activeSubChart = ind.key"
           >
             {{ ind.label }}
@@ -33,10 +36,9 @@
         </div>
       </div>
 
-      <div class="header-right">
+      <div class="header-right shrink-0">
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
-        <button class="md:hidden text-[10px] bg-theme-secondary/20 px-2 py-1 rounded" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <button class="close-btn" @click="emit('close')">✕ 关闭</button>
       </div>
     </header>
