@@ -1,88 +1,24 @@
 {
   "schemaVersion": "1.0.0",
-  "phase": "AUDIT",
-  "activeTaskId": "TASK-CODE-QUALITY",
+  "phase": "IDLE",
+  "activeTaskId": null,
   "tasks": [
     {
       "id": "TASK-CODE-QUALITY",
       "title": "代码质量基线评估",
-      "description": "全量扫描前后端代码，输出 P0-P3 缺陷清单，为 TASK-005 Bug修复提供蓝图。",
-      "status": "AUDITING",
-      "type": "AUDIT",
-      "priority": "P0",
-      "targets": ["frontend/src/", "backend/app/"],
-      "blueprint": null,
-      "commits": [],
-      "verdict": null,
-      "createdAt": "2026-04-21T01:43:00+08:00",
-      "updatedAt": "2026-04-21T01:43:00+08:00",
-      "startedAt": "2026-04-21T01:43:00+08:00"
-    },
-    {
-      "id": "TASK-002",
-      "title": "Sidebar + AdminDashboard 功能完善",
-      "description": "数据源探针真实延迟测试、系统监控看板（CPU/内存/WebSocket）、熔断器可视化控制。",
-      "status": "PENDING",
-      "type": "FEATURE",
-      "priority": "P1",
-      "targets": ["frontend/src/components/Sidebar.vue", "frontend/src/components/AdminDashboard.vue", "backend/app/routers/admin_source.py"],
-      "blueprint": null,
-      "commits": [],
-      "verdict": null,
-      "createdAt": "2026-04-21T01:42:00+08:00",
-      "updatedAt": "2026-04-21T01:42:00+08:00"
-    },
-    {
-      "id": "TASK-003",
-      "title": "移动端适配优化与 UX 自测",
-      "description": "Bottom Nav + Tabs 替代 GridStack；K线降级 Sparkline；ECharts resize 修复。",
-      "status": "PENDING",
-      "type": "REFACTOR",
-      "priority": "P1",
-      "targets": ["frontend/src/App.vue", "frontend/src/components/DashboardGrid.vue", "frontend/src/components/FullscreenKline.vue"],
-      "blueprint": null,
-      "commits": [],
-      "verdict": null,
-      "createdAt": "2026-04-21T01:42:00+08:00",
-      "updatedAt": "2026-04-21T01:42:00+08:00"
-    },
-    {
-      "id": "TASK-004",
-      "title": "Copilot 功能完善与金融模型建立",
-      "description": "WebLLM fallback、4个金融分析模型（趋势/资金/形态/基本面）、小白友好输出格式。",
-      "status": "PENDING",
-      "type": "FEATURE",
-      "priority": "P1",
-      "targets": ["backend/app/routers/copilot.py", "frontend/src/components/CopilotSidebar.vue"],
-      "blueprint": null,
-      "commits": [],
-      "verdict": null,
-      "createdAt": "2026-04-21T01:42:00+08:00",
-      "updatedAt": "2026-04-21T01:42:00+08:00"
+      "status": "COMPLETED",
+      "completedAt": "2026-04-21T01:55:00+08:00",
+      "report": "/tmp/auditor_report_v0.5.132.json"
     },
     {
       "id": "TASK-005",
-      "title": "Bug 修复（贯穿全流程）",
-      "description": "根据基线报告 + 开发中发现的问题，修复 ECharts泄漏/watch竞态/AkShare熔断/API契约等。",
-      "status": "PENDING",
-      "type": "FIX",
-      "priority": "P0",
-      "targets": ["frontend/src/", "backend/app/"],
-      "blueprint": null,
-      "commits": [],
-      "verdict": null,
-      "createdAt": "2026-04-21T01:42:00+08:00",
-      "updatedAt": "2026-04-21T01:42:00+08:00"
+      "title": "Bug 修复 v0.5.133",
+      "description": "根据基线报告修复 ECharts泄漏/watch竞态/circuit breaker",
+      "status": "COMPLETED",
+      "completedAt": "2026-04-21T01:55:00+08:00"
     }
   ],
-  "auditSession": {
-    "status": "IN_PROGRESS",
-    "spawnedAt": "2026-04-21T01:43:00+08:00",
-    "completedAt": null,
-    "report": null
-  },
-  "lastRunAt": "2026-04-21T01:43:00+08:00",
+  "lastRunAt": "2026-04-21T01:55:00+08:00",
   "lastError": null,
-  "cycleCount": 1,
-  "maxRetries": 3
+  "cycleCount": 1
 }
