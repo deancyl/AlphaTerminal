@@ -3,6 +3,7 @@ import threading
 import json
 import logging
 import os
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 # 使用工作区根目录的 database.db（包含示例数据）
@@ -11,6 +12,15 @@ _lock = threading.RLock()
 
 # 延迟导入，避免循环依赖
 from app.db.db_writer import enqueue, T_DAILY, T_PERIODIC, T_REALTIME, T_ALLSTOCKS, T_BUFFER
+
+@contextmanager
+def get_conn():
+    """上下文管理器：确保连接在正常返回和异常时都能正确释放。"""
+    conn = _get_conn()
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def _get_conn():
     conn = sqlite3.connect(_db_path, timeout=30)
@@ -376,8 +386,9 @@ def search_stocks(
 
 def get_all_stocks(limit=5000, offset=0, search=None):
     """获取全市场个股列表，支持搜索"""
-    with _lock:
-        conn = _get_conn()
+    # WAL 模式支持并发读，不再需要应用层锁
+    conn = _get_conn()
+    try:
         if search:
             pattern = f"%{search}%"
             rows = conn.execute("""
@@ -396,6 +407,7 @@ def get_all_stocks(limit=5000, offset=0, search=None):
                 ORDER BY code LIMIT ? OFFSET ?
             """, (limit, offset)).fetchall()
             total = conn.execute("SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+    finally:
         conn.close()
         rows_list = [dict(r) for r in rows]
         # 补充 change 字段（数据库只有 change_pct）
@@ -441,11 +453,13 @@ def get_all_stocks_lite():
 
 def get_all_stocks_count():
     """返回全市场个股总数"""
-    with _lock:
-        conn = _get_conn()
+    # WAL 模式支持并发读
+    conn = _get_conn()
+    try:
         cnt = conn.execute("SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+    finally:
         conn.close()
-        return cnt
+    return cnt
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Admin 系统配置持久化

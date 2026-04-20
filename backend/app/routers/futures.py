@@ -140,7 +140,7 @@ def _fetch_futures_data():
     if not fetch_success or len(spot_data) == 0:
         logger.warning("[Futures] Using mock commodity data as fallback")
         # 使用 Mock 商品数据的 price/change_pct
-        for sym, mock_item in enumerate(_MOCK_COMMODITIES):
+        for mock_item in _MOCK_COMMODITIES:
             spot_data[mock_item["symbol"]] = {
                 "price": mock_item.get("price", 0),
                 "change_pct": mock_item.get("change_pct", 0),
@@ -294,10 +294,14 @@ async def futures_term_structure(symbol: str = "RB"):
                 continue
 
             # 提取交割月数字：RB2405 → 2405
-            month_match = re.search(r'\d+$', contract_sym)
-            if not month_match:
+            try:
+                month_match = re.search(r'\d+$', contract_sym)
+                if not month_match:
+                    continue
+                month_code = month_match.group()
+            except Exception:
+                # AkShare 上游接口字段规则变动时，fail-safe 跳过该行
                 continue
-            month_code = month_match.group()
 
             curves.append({
                 "contract": contract_sym.upper(),
