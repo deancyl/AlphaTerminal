@@ -132,6 +132,7 @@ class CircuitBreaker:
                 if self._stats.consecutive_successes >= self.config.success_threshold:
                     self._state = CircuitState.CLOSED
                     self._stats.consecutive_successes = 0
+                    self._stats.consecutive_failures = 0  # 修复: 进入 CLOSED 前必须重置失败计数
                     self._record_state_change(CircuitState.CLOSED)
     
     def record_failure(self):

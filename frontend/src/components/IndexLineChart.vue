@@ -57,6 +57,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
@@ -773,19 +774,18 @@ async function fetchAndRender() {
     isLoading.value = false
   }
 }
+const debouncedFetch = useDebounceFn(fetchAndRender, 300)
 
 function retryChart() { chartError.value = ''; fetchAndRender() }
 
 // props.symbol 变化时立即重置名称（不等数据加载）
-watch(() => props.symbol, async (sym) => {
+watch(() => props.symbol, (sym) => {
   logger.log('[KLine] watch: props.symbol changed', { sym, props: { name: props.name, symbol: props.symbol } })
-  // symbol 变化时：先清空旧名称显示（立即响应），等数据回来再显示新名称
+  // symbol 变化时：先清空旧图表（立即响应），等数据回来再显示
+  chartInstance?.clear()
   currentName.value = props.name || '指标图表'
-  await fetchAndRender()
-  // fetchAndRender 之后用正确的 props.name 更新一次
-  currentName.value = props.name || '指标图表'
+  debouncedFetch()
 })
-
 // 指标 watch（独立，不与 symbol watch 联动，防止 symbol+indicators 同时变化触发两次）
 watch(() => props.indicators, () => { fetchAndRender() }, { deep: true })
 

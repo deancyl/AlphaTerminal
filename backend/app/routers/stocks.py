@@ -255,14 +255,29 @@ _COMMON_STOCKS = [
 
 
 def _search_stocks_local(q):
-    """本地搜索"""
+    """本地搜索：同时搜索 _COMMON_STOCKS 和 _STOCK_CACHE"""
     q_lower = q.lower()
     results = []
+    seen = set()
     
-    # 直接搜索常用股票
+    def add_stock(stock):
+        key = stock['code']
+        if key not in seen:
+            seen.add(key)
+            results.append(stock)
+    
+    # 优先搜索常用股票
     for stock in _COMMON_STOCKS:
         if q_lower in stock['code'].lower() or q_lower in stock['name'].lower():
-            results.append(stock)
+            add_stock(stock)
+            if len(results) >= 20:
+                return results
+    
+    # 再搜索全量缓存（沪/深股票）
+    _load_stock_cache()  # 确保缓存已加载
+    for stock in _STOCK_CACHE:
+        if q_lower in stock['code'].lower() or q_lower in stock['name'].lower():
+            add_stock(stock)
             if len(results) >= 20:
                 break
     

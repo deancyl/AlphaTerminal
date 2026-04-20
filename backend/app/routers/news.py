@@ -114,8 +114,35 @@ async def news_force_refresh():
 async def news_detail(url: str = Query(..., description="新闻原文 URL")):
     """
     抓取新闻原文正文（纯文本，剥离图片/脚本/样式）
+    SSRF 防护：仅允许 http/https，拒绝内网地址
     """
     try:
+        # ── SSRF 防护：校验 URL ────────────────────────────────────
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+
+        # 仅允许 http/https
+        if parsed.scheme not in ("http", "https"):
+            return error_response(1, "仅支持 http/https 协议", {"url": url})
+
+        # 禁止访问内网/云元数据地址
+        BLOCKED_HOSTS = {
+            "localhost", "127.0.0.1", "0.0.0.0", "::1", "::",
+            "169.254.169.254",      # AWS/GCP/Alibaba cloud metadata
+            "metadata.google.internal",
+        }
+        # 禁止 10.x.x.x, 172.16-31.x.x, 192.168.x.x 等私有网段
+        import ipaddress
+        try:
+            ip = ipaddress.ip_address(host)
+            if ip.is_private or ip.is_loopback or ip.is_reserved:
+                return error_response(1, "禁止访问内网地址", {"url": url})
+        except ValueError:
+            # 不是 IP 地址，检查域名
+            if host in BLOCKED_HOSTS or host.endswith(".local") or host.endswith(".internal"):
+                return error_response(1, "禁止访问内网地址", {"url": url})
+
         import requests
         from bs4 import BeautifulSoup
 
