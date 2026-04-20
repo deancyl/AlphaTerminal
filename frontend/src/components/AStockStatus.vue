@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full min-h-[480px] md:min-h-0 bg-terminal-bg">
+  <div class="flex flex-col h-full min-h-0 md:min-h-0 bg-terminal-bg">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-2 shrink-0">
       <span class="text-terminal-accent font-bold text-sm">📊 A股监测</span>

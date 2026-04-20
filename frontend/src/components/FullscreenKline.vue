@@ -8,7 +8,7 @@
       </div>
 
       <!-- 工具栏：横向滚动，不换行 -->
-      <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0">
+      <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0 max-w-full">
         <!-- 横屏按钮：仅移动端显示，最左侧 -->
         <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-2 py-1 rounded mr-2" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <!-- 周期选择 -->

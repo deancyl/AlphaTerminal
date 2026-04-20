@@ -21,10 +21,10 @@
       <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full h-[200px]" />
     </div>
 
-    <!-- A股监测：min-h-[480px] 保底，可滚动显示20只股 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 min-h-[480px]">
-      <div class="text-terminal-accent font-bold text-sm mb-2">📊 A股监测</div>
-      <StockScreener :data="globalItems" class="w-full" />
+    <!-- A股监测：固定高度 h-[520px]，底部分页永远可见 -->
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-[520px] flex flex-col">
+      <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
+      <StockScreener :data="globalItems" class="w-full flex-1 min-h-0" />
     </div>
 
     <!-- 市场情绪：移动端信息流补充 -->
@@ -32,9 +32,9 @@
       <EmotionChart class="w-full h-full" />
     </div>
 
-    <!-- 板块热度：h-auto 让内容自由撑开 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-auto">
-      <HotSectors :data="sectors" class="w-full" />
+    <!-- 板块热度：固定高度 h-[400px]，内部滚动 -->
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 mb-3 h-[400px] flex flex-col">
+      <HotSectors :data="sectors" class="w-full flex-1 min-h-0" />
     </div>
 
     <!-- 新闻快讯：min-h-[500px] -->
