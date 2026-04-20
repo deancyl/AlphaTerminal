@@ -7,6 +7,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 
 const props = defineProps({
   futuresData: { type: Array, default: () => [] },
@@ -91,13 +92,15 @@ function buildChart() {
 
 async function init() { await nextTick(); buildChart() }
 
+const debouncedInit = useDebounceFn(init, 100)
+
 let ro = null
 onMounted(() => {
   init()
   if (chartRef.value) { ro = new ResizeObserver(() => chartInstance && chartInstance.resize()); ro.observe(chartRef.value) }
 })
 onUnmounted(() => { ro && ro.disconnect(); chartInstance && chartInstance.dispose() })
-watch(() => props.futuresData, () => { init() }, { deep: true })
+watch(() => props.futuresData, () => { debouncedInit() }, { deep: true })
 </script>
 
 <style scoped>

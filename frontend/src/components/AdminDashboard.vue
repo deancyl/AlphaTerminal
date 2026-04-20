@@ -290,6 +290,60 @@
             <li><strong>内存</strong>：RAM使用情况，接近100%时系统可能变慢</li>
             <li><strong>磁盘</strong>：硬盘使用率，接近100%时需要清理空间</li>
             <li><strong>网络连接</strong>：当前活跃的网络连接数</li>
+
+      <!-- 数据源健康度仪表盘 -->
+      <div v-else-if="activeTab === 'source-health'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">📡 数据源健康度</h2>
+            <p class="text-xs text-theme-muted mt-1">实时监测各数据源连通性与响应速度</p>
+          </div>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
+        </div>
+
+        <!-- 代理配置 -->
+        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+          <h3 class="text-sm font-bold text-blue-400 mb-2">🌐 代理配置</h3>
+          <div v-if="proxyConfig" class="mt-2 flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-theme-muted">代理地址：</span>
+              <span class="text-terminal-accent font-mono">{{ proxyConfig.proxy_url || '未配置' }}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px]" :class="proxyConfig.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'">
+              {{ proxyConfig.enabled ? '● 已启用' : '○ 已禁用' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 饼图 + 卡片 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- ECharts 饼图 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
+            <div ref="sourceChartRef" style="width:100%;height:220px"></div>
+          </div>
+          <!-- 状态列表 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
+            <div class="space-y-2">
+              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded bg-theme-panel/50">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-green-400' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-red-400'"></span>
+                  <span class="text-sm text-theme-primary">{{ key }}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                  <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px]" :class="info.status === 'ok' ? 'bg-green-500/20 text-green-400' : info.status === 'slow' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'">
+                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
           </ul>
         </div>
       </div>
@@ -327,7 +381,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import * as echarts from 'echarts'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 
@@ -337,6 +392,7 @@ const logContainer = ref(null)
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-green-400' },
+  { id: 'source-health', label: '源健康度', desc: '数据源连通性监测与ECharts可视化', icon: '📊', status: false, statusClass: 'bg-green-400' },
   { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-green-400' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-green-400' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-green-400' },
@@ -408,6 +464,73 @@ const systemMetrics = reactive({
   disk: { percent: 29.0, used_gb: 17.22, total_gb: 62.6 },
   process: { memory_mb: 167, threads: 12 },
   network: { connections: 471, io_counters: { bytes_sent: 74188244056, bytes_recv: 82540093634 } }
+})
+
+// ── 数据源健康度 ──────────────────────────────────────────────────
+const sourceChartRef = ref(null)
+const sourceHealthData = ref({})
+const proxyConfig = ref(null)
+let sourceChart = null
+
+async function refreshSourceHealth() {
+  try {
+    const [statusData, configData] = await Promise.all([
+      apiFetch('/source/status'),
+      apiFetch('/source/config'),
+    ])
+    // 转换后端数据格式为前端所需
+    const sources = statusData?.data?.sources || statusData?.sources || {}
+    const converted = {}
+    for (const [key, info] of Object.entries(sources)) {
+      converted[key] = {
+        status: info.status === 'ok' ? 'ok' : info.status === 'slow' ? 'slow' : 'error',
+        latency_ms: info.latency || 0,
+        fail_count: info.fail_count || 0,
+      }
+    }
+    sourceHealthData.value = converted
+    proxyConfig.value = configData?.data || configData || {}
+
+    // 更新 ECharts 饼图
+    updateSourceChart(converted)
+  } catch (e) {
+    logger.error('[SourceHealth] refresh failed:', e)
+  }
+}
+
+function updateSourceChart(sources) {
+  if (!sourceChartRef.value) return
+  if (!sourceChart) {
+    sourceChart = echarts.init(sourceChartRef.value)
+  }
+  const okCount = Object.values(sources).filter(s => s.status === 'ok').length
+  const slowCount = Object.values(sources).filter(s => s.status === 'slow').length
+  const errorCount = Object.values(sources).filter(s => s.status === 'error').length
+  const chartData = [
+    { value: okCount, name: '正常', itemStyle: { color: '#22c55e' } },
+    { value: slowCount, name: '缓慢', itemStyle: { color: '#eab308' } },
+    { value: errorCount, name: '异常', itemStyle: { color: '#ef4444' } },
+  ]
+  sourceChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} 个' },
+    legend: { bottom: 0, textStyle: { color: '#9ca3af', fontSize: 11 } },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      label: { show: true, formatter: '{b} {c}', fontSize: 11, color: '#d1d5db' },
+      data: chartData,
+    }],
+  })
+}
+
+// 监听窗口变化
+onMounted(() => {
+  refreshSourceHealth()
+  window.addEventListener('resize', () => sourceChart?.resize())
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', () => sourceChart?.resize())
+  sourceChart?.dispose()
 })
 
 // ── 日志数据 + WebSocket 实时流（替代 HTTP 轮询）────────────────────────────

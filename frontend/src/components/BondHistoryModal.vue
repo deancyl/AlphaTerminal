@@ -252,4 +252,6 @@ function close() { emit('close') }
 watch(() => props.visible, (v) => { if (v) fetchHistory() })
 watch(() => props.tenor,   ()  => { if (props.visible) fetchHistory() })
 watch(() => props.period,  ()  => { if (props.visible) fetchHistory() })
+
+onUnmounted(() => { chartInst.value?.dispose(); chartInst.value = null })
 </script>

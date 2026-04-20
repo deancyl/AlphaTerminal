@@ -123,7 +123,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
-import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useBreakpoints, breakpointsTailwind, useThrottleFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
@@ -704,13 +704,14 @@ watch(period, () => fetchData())
 // 使用 WebSocket 实时行情
 const { tick, connect: connectStream, disconnect: disconnectStream, wsStatus } = useMarketStream()
 
-// 监听 WebSocket tick（直接使用 tick computed，不需要中间变量）
-watch(tick, (t) => {
+// 节流处理 WebSocket tick，避免频繁重绘
+const throttledTick = useThrottleFn((t) => {
   if (t && t.price) {
-    // 更新最新价格（供右侧面板实时显示）
     latestPrice.value = t.price
   }
-})
+}, 100)
+
+watch(tick, (t) => { throttledTick(t) })
 
 // ⚡ WS 断开时自动启用 HTTP 轮询降级；WS 恢复时静默停止轮询
 // 防止双重数据总线：WS 工作时 HTTP 轮询不运行

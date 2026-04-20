@@ -28,7 +28,7 @@ class CircuitBreakerConfig:
     failure_threshold: int = 5       # 失败次数阈值 (OPEN)
     success_threshold: int = 2       # 成功次数阈值 (CLOSED from HALF_OPEN)
     timeout: float = 30.0             # OPEN 状态持续时间 (秒)
-    half_open_max_calls: int = 1     # HALF_OPEN 状态下允许的调用数
+    half_open_max_calls: int = 3     # HALF_OPEN 状态下允许的调用数（需 >= success_threshold）
 
 
 @dataclass

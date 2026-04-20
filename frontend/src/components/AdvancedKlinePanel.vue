@@ -137,6 +137,7 @@
 
 <script setup>
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
+import { useThrottleFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 
 import { useMarketStore } from '../stores/market.js'
@@ -538,8 +539,8 @@ watch(currentSymbol, () => {
 // 使用 WebSocket 实时行情
 const { tick, connect: connectStream, disconnect: disconnectStream, connected, wsStatus } = useMarketStream()
 
-// 监听 WebSocket tick 更新
-watch(tick, (t) => {
+// 监听 WebSocket tick 更新（节流 100ms）
+const throttledTick = useThrottleFn((t) => {
   if (t && t.price) {
     liveTick.value = { price: t.price, volume: t.volume, time: t.time || Date.now() }
     currentQuote.value = {
@@ -547,7 +548,9 @@ watch(tick, (t) => {
       volume: t.volume, amount: t.amount,
     }
   }
-})
+}, 100)
+
+watch(tick, (t) => { throttledTick(t) })
 
 // 切换 symbol 时重新订阅
 watch(currentSymbol, (sym) => {

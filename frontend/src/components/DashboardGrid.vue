@@ -493,7 +493,14 @@ onMounted(async () => {
   fetchLowFreq()
   await nextTick()
   if (!isMobile.value && typeof window !== 'undefined' && window.GridStack && document.querySelector('.grid-stack')) {
-    grid = GridStack.init({ column: 12, cellHeight: 80, float: true, margin: 8 })
+    grid = GridStack.init({
+      column: 12,
+      cellHeight: 80,
+      float: true,
+      margin: 8,
+      disableDrag: isMobile.value,   // 手机端禁止拖拽
+      disableResize: isMobile.value, // 手机端禁止缩放
+    })
     grid.setStatic(props.isLocked)
   }
 })

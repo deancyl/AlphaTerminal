@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AlphaTerminal Agent Task Queue",
+  "description": "Shared state file for orchestrating automated SDLC loops. Read/write by Orchestrator; read by Auditor/Coder/Verifier.",
+  "version": "1.0.0",
+
+  "definitions": {
+    "TaskStatus": {
+      "enum": ["PENDING", "AUDITING", "PLANNING", "CODING", "VERIFYING", "DONE", "BLOCKED", "CANCELLED"]
+    },
+    "TaskType": {
+      "enum": ["AUDIT", "FIX", "FEATURE", "REFACTOR", "TEST"]
+    },
+    "TaskPriority": {
+      "enum": ["P0", "P1", "P2", "P3"]
+    },
+    "Task": {
+      "type": "object",
+      "required": ["id", "status", "type", "priority", "createdAt", "updatedAt"],
+      "properties": {
+        "id":          { "type": "string", "description": "Unique task ID, e.g. TASK-001" },
+        "title":       { "type": "string" },
+        "description": { "type": "string" },
+        "status":      { "$ref": "#/definitions/TaskStatus" },
+        "type":        { "$ref": "#/definitions/TaskType" },
+        "priority":    { "$ref": "#/definitions/TaskPriority" },
+        "targets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "File paths or module names relevant to this task"
+        },
+        "blueprint": {
+          "type": "string",
+          "description": "Auditor's structured fix suggestion (JSON string)"
+        },
+        "commits": {
+          "type": "array",
+          "description": "Git commit hashes produced by Coder",
+          "items": { "type": "string" }
+        },
+        "verdict": {
+          "type": "object",
+          "properties": {
+            "passed":     { "type": "boolean" },
+            "errorLog":   { "type": "string" },
+            "retryCount": { "type": "integer", "default": 0 }
+          }
+        },
+        "createdAt":  { "type": "string", "format": "date-time" },
+        "updatedAt":  { "type": "string", "format": "date-time" },
+        "startedAt":  { "type": "string", "format": "date-time" },
+        "doneAt":     { "type": "string", "format": "date-time" },
+        "blockedReason": { "type": "string" }
+      }
+    },
+    "PhaseStatus": {
+      "enum": ["IDLE", "AUDIT", "PLAN", "CODE", "VERIFY", "COMMIT", "COMPLETE"]
+    }
+  },
+
+  "type": "object",
+  "required": ["schemaVersion", "phase", "tasks", "lastRunAt", "cycleCount"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "phase":         { "$ref": "#/definitions/PhaseStatus" },
+    "activeTaskId":  { "type": "string", "description": "Task currently being worked on" },
+    "tasks": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/Task" }
+    },
+    "auditSession": {
+      "type": "object",
+      "properties": {
+        "status":     { "type": "string" },
+        "spawnedAt":  { "type": "string" },
+        "completedAt":{ "type": "string" },
+        "report":     { "type": "string" }
+      }
+    },
+    "lastRunAt":   { "type": "string", "format": "date-time" },
+    "lastError":   { "type": "string" },
+    "cycleCount":  { "type": "integer", "minimum": 0 },
+    "maxRetries":  { "type": "integer", "default": 3 }
+  }
+}

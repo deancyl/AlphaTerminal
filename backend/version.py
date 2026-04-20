@@ -1,6 +1,6 @@
 """
 AlphaTerminal 版本信息
 """
-__version__ = "0.5.132"
+__version__ = "0.5.133"
 __app_name__ = "AlphaTerminal"
 __description__ = "A股/港股/美股投研终端"
