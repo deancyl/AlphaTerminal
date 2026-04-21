@@ -750,6 +750,8 @@ async function fetchAndRender() {
       return
     }
 
+    // 注：GOLD/WTI/VIX 等宏观品种后端已有K线数据，
+    // 不再显示"暂无K线数据"（后端 `/api/v1/market/history/{symbol}` 已支持）
     chartError.value = ''
     opt._rawHist = d?.data?.history || d?.history || d || []
 

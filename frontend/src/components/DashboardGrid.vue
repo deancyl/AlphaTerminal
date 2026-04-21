@@ -25,7 +25,7 @@
     <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="height: 480px; overflow: hidden;">
       <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
       <div class="w-full overflow-y-auto" style="height: calc(100% - 32px);">
-        <StockScreener :data="globalItems" />
+        <StockScreener :data="globalItems" @symbol-click="handleScreenerClick" />
       </div>
     </div>
 
@@ -223,7 +223,7 @@
     <div class="grid-stack-item"
          gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
-        <StockScreener />
+        <StockScreener @symbol-click="handleScreenerClick" />
       </div>
     </div>
 
@@ -276,69 +276,80 @@ const _MACRO_NAME_MAP = {
 }
 
 function handleWindClick(item) {
-  // 宏观大宗（黄金/WTI/VIX/外汇）无 K 线数据，跳过图表切换
-  if (item.category === 'macro') {
-    setSymbol('GOLD', item.name || 'GOLD', '#fbbf24')
-    return
+  let sym = item.symbol || item.key || ''
+  const LOWER_MACRO_MAP = {
+    '黄金': 'GOLD', 'xau': 'GOLD', 'gld': 'GOLD',
+    'wti原油': 'WTI', 'wti': 'WTI', '原油': 'WTI',
+    'vix': 'VIX', '恐慌指数': 'VIX', '波幅': 'VIX',
+    'usd/cnh': 'CNHUSD', '离岸人民币': 'CNHUSD', '人民币': 'CNHUSD',
+    'dxy': 'DXY', '美元指数': 'DXY',
+    '恒指波幅': 'VHSI', 'vhsi': 'VHSI',
+    '日经225': 'N225', '日经': 'N225',
   }
 
-  // 指数类：有独立 K 线，直接用 symbol
-  let sym = item.symbol || item.key || ''
-
-  // 名称特征匹配（宏观大宗没有 symbol 字段，只有全名）
+  // 名称特征匹配：macro 品种只有 name（中文/英文），没有标准 symbol
   if (!/^[A-Za-z]{2,6}$/.test(sym)) {
     const lower = sym.toLowerCase()
-    if (lower.includes('黄金') || lower.includes('xau') || lower.includes('gld')) {
-      sym = 'GOLD'
-    } else if (lower.includes('wti') || lower.includes('原油')) {
-      sym = 'WTI'
-    } else if (lower.includes('vix') || lower.includes('波幅') || lower.includes('vhsi')) {
-      sym = 'VIX'
-    } else if (lower.includes('人民币') || lower.includes('cny') || lower.includes('cny')) {
-      sym = 'CNH'
-    } else if (lower.includes('美元') && !lower.includes('原油')) {
-      sym = 'DXY'
+    if (LOWER_MACRO_MAP[lower] || LOWER_MACRO_MAP[sym]) {
+      sym = LOWER_MACRO_MAP[sym] || LOWER_MACRO_MAP[lower]
     } else {
-      // 兜底：去掉数字和特殊字符后 normalize
-      sym = normalizeSymbol(sym.replace(/[^\w]/g, ''))
+      // 兜底：去掉非字母数字后取前6字符 normalize
+      const cleaned = sym.replace(/[^\w]/g, '').toLowerCase().slice(0, 6)
+      sym = LOWER_MACRO_MAP[cleaned] || normalizeSymbol(sym)
     }
   }
 
   const norm = normalizeSymbol(sym)
   setSymbol(norm, item.name || sym, '#f87171')
-  currentIndexName.value = item.name || norm
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = item.name || norm
+  })
 }
 
 function handleGlobalClick(item) {
   // globalItems 可能有 usIXIC / usNDX / hkHSI 等前缀
   const norm = normalizeSymbol(item.symbol || item.name || item.key || '')
   setSymbol(norm, item.name || norm, '#60a5fa')
-  currentIndexName.value = item.name || norm
+  // 同步更新本地 selectedIndex
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = item.name || norm
+  })
 }
 
 function handleChinaClick(item) {
-  setSymbol(item.symbol, item.name, '#f87171')
-  // currentIndexName 同步（selectedIndex 由 watch(currentSymbol) 统一处理）
-  currentIndexName.value = item.name || item.symbol
+  const norm = normalizeSymbol(item.symbol)
+  setSymbol(norm, item.name, '#f87171')
+  // 同步更新本地 selectedIndex
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = item.name || item.symbol
+  })
 }
 
 function handleSectorClick(sec) {
   // 板块无独立K线，使用板块的领涨股代码替代
-  // 领涨股code可能是纯数字如300750，需要添加交易所前缀
-  let code = sec.top_stock?.code || '000001'
+  const rawCode = sec.top_stock?.code || ''
   const topName = sec.top_stock?.name || ''
-  
-  // 尝试添加前缀：如果code是纯数字，根据规则添加sh/sz
-  if (!isNaN(code) && code.length >= 6) {
-    // 6开头是上海，0/3开头是深圳
-    code = code.startsWith('6') ? 'sh' + code : 'sz' + code
-  }
-  
+
+  // 统一用 normalizeSymbol 处理：自动添加 sh/sz 前缀（兼容纯数字码）
+  // normalizeSymbol 规则：6/9/000开头→sh；其余(0/2/3)→sz
+  const code = rawCode ? normalizeSymbol(rawCode) : 'sh000001'
   const displayName = topName ? `${sec.name}-${topName}` : sec.name
   setSymbol(code, displayName, '#fbbf24')
   queueMicrotask(() => {
     selectedIndex.value = code
     currentIndexName.value = displayName
+  })
+}
+
+function handleScreenerClick({ symbol, name }) {
+  const norm = normalizeSymbol(symbol)
+  setSymbol(norm, name || symbol, '#00ff88')
+  queueMicrotask(() => {
+    selectedIndex.value = norm
+    currentIndexName.value = name || symbol
   })
 }
 

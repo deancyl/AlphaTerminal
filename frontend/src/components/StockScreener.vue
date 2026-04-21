@@ -61,7 +61,8 @@
         </thead>
         <tbody>
           <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
-              class="border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group">
+              class="border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer"
+              @click="handleClick(stock)">
             <td class="px-2 py-1.5 text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</td>
             <td class="px-2 py-1.5">
               <div class="font-medium group-hover:text-theme-accent transition-colors">{{ stock.name }}</div>
@@ -116,6 +117,7 @@ import { useMarketStore } from '../stores/market.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
 import { apiFetch } from '../utils/api.js'
 
+const emit = defineEmits(['symbol-click'])
 const { setSymbol } = useMarketStore()
 
 // ── 服务端分页数据状态 ─────────────────────────────────────────────
@@ -220,7 +222,16 @@ watch(flt, () => { currentPage.value = 1; debouncedFetch() }, { deep: true })
 
 // ── 点击个股 ──────────────────────────────────────────────────────────
 function handleClick(stock) {
-  setSymbol(stock.code, stock.name, (stock.change_pct || 0) >= 0 ? '#ef232a' : '#14b143')
+  // 确保数字代码加上 sh/sz 前缀（normalizeSymbol 依赖 registry 加载，
+  // 可能未就绪，所以手动处理常见情况）
+  let sym = stock.code
+  if (/^\d{6}$/.test(sym)) {
+    const prefix = sym.startsWith('6') || sym.startsWith('9') || sym.startsWith('000') ? 'sh' : 'sz'
+    sym = prefix + sym
+  }
+  setSymbol(sym, stock.name, (stock.change_pct || 0) >= 0 ? '#ef232a' : '#14b143')
+  // 同步 selectedIndex，触发 IndexLineChart 刷新（通过 emit 通知父组件）
+  emit('symbol-click', { symbol: sym, name: stock.name })
 }
 
 // ── 重置过滤 ───────────────────────────────────────────────────────────
