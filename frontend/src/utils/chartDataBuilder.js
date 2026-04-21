@@ -91,9 +91,13 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     overlaySeriesData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
   }
 
-  // 5. Y 轴极值计算 (用于自适应优化)
-  const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
-  const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
+  // 过滤无效值，计算有效数据的极值
+  const validCloses = closes.filter(v => v != null && !isNaN(v))
+  if (validCloses.length === 0) {
+    return { isEmpty: true }
+  }
+  const yMin = +(Math.min(...validCloses) * 0.997).toFixed(2)
+  const yMax = +(Math.max(...validCloses) * 1.003).toFixed(2)
 
   // 6. 叠加标的 Y 轴自适应（双 Y 轴核心）
   //    策略：若叠加数据与主图量级差异 > 10x，切换为 min-max 归一化显示（0~100 范围）

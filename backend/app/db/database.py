@@ -326,7 +326,7 @@ def search_stocks(
             conditions.append("mktcap <= ?")
             args.append(float(max_mktcap) * 1e8)
 
-        # 排序字段白名单
+        # 排序字段白名单 + 排序方向严格验证
         ORDER_FIELDS = {
             'code': 'code', 'name': 'name', 'price': 'price',
             'change_pct': 'change_pct', 'turnover': 'turnover',
@@ -334,7 +334,8 @@ def search_stocks(
             'per': 'per', 'pb': 'pb', 'mktcap': 'mktcap',
         }
         order_col = ORDER_FIELDS.get(sort_by, 'change_pct')
-        order_dir = 'DESC' if sort_dir.lower() == 'desc' else 'ASC'
+        # 严格验证排序方向，防止 SQL 注入
+        order_dir = 'DESC' if sort_dir.lower() in ('desc', 'descending', 'down') else 'ASC'
 
         where_clause = " AND ".join(conditions)
 

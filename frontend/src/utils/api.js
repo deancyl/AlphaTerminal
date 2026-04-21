@@ -159,6 +159,17 @@ export async function apiFetch(url, options = {}) {
             continue
           }
         }
+        // 422 校验错误：解析后端返回的详细错误信息
+        if (res.status === 422) {
+          try {
+            const data = await res.json()
+            const detail = data?.detail?.[0]?.msg || data?.message || JSON.stringify(data)
+            throw new Error(`参数校验失败: ${detail}`)
+          } catch (parseErr) {
+            if (parseErr.message.startsWith('参数校验失败')) throw parseErr
+            throw new Error(`参数校验失败 (HTTP ${res.status})`)
+          }
+        }
         // 4xx错误或已达到重试上限，抛出异常
         throw new Error(`HTTP ${res.status}`)
       }

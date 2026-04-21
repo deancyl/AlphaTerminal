@@ -348,11 +348,22 @@ async function fetchMedFreq() {
 
 // ── 计数：两个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
 let _loadedCount = 0
-function _checkInitDone() {
+let _hasAnyError = false
+const _骨架屏超时 = setTimeout(() => {
+  isInitialLoading.value = false
+  console.warn('[App] 骨架屏超时强制关闭（3秒）')
+}, 3000)
+
+function _checkInitDone(hasError = false) {
   _loadedCount++
+  _hasAnyError = _hasAnyError || hasError
   if (_loadedCount >= 2) {
+    clearTimeout(_骨架屏超时)
     isInitialLoading.value = false
     _loadedCount = 0
+    if (_hasAnyError) {
+      loadError.value = '部分数据加载失败，请检查网络连接'
+    }
   }
 }
 
