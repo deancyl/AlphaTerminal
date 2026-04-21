@@ -541,7 +541,9 @@ async function runBacktest() {
     const histResp = await apiFetch(
       `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`
     )
-    const rawHist = (histResp?.history || []).map(s => ({
+    // 统一解包: apiFetch 已解包 data，需兼容 history 在不同层级
+    const histDataRaw = histResp?.data?.history || histResp?.history || histResp || []
+    const rawHist = histDataRaw.map(s => ({
       date:   s.date || s.time || '',
       open:   Number(s.open)  || 0,
       high:   Number(s.high)  || 0,

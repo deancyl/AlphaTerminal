@@ -319,9 +319,11 @@ async function fetchHistory(append = false) {
       : `/api/v1/market/history/${sym}?${params}`
     const data = await apiFetch(url)
 
-    isFetching.value = data?.fetching ?? false
+    // 统一解包: data.history
+    const payload = data?.data || data
+    isFetching.value = payload?.fetching ?? data?.fetching ?? false
 
-    const items = (data?.history || []).map(sanitizeItem)
+    const items = ((payload?.history || data?.history) || []).map(sanitizeItem)
     const isDesc = items.length >= 2 &&
       new Date(items[0].date).getTime() > new Date(items[items.length - 1].date).getTime()
     const sortedItems = isDesc ? [...items].reverse() : items
@@ -334,7 +336,7 @@ async function fetchHistory(append = false) {
       loadOffset.value = sortedItems.length
     }
 
-    hasMore.value = data?.has_more ?? items.length >= 300
+    hasMore.value = payload?.has_more ?? items.length >= 300
 
     if (items.length > 0) {
       const last  = items[items.length - 1]

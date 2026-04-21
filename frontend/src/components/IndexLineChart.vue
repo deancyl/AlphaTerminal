@@ -733,7 +733,8 @@ async function fetchAndRender() {
     chartType.value = type
     // 分钟数据需要特殊处理
     const isMinute = type === 'line' || props.url.includes('minutely') || props.url.includes('period=1m') || props.url.includes('period=5m')
-    const hist = _sanitize(d?.history || d || [], isMinute)
+    // 统一解包: apiFetch 已自动解包 data，但需兼容直接返回 history 的情况
+    const hist = _sanitize(d?.data?.history || d?.history || d || [], isMinute)
 
     // 将 raw hist 塞给 option，方便 hover 时访问
     // 确保数据按时间正序（左边=最旧，右边=最新）
@@ -750,7 +751,7 @@ async function fetchAndRender() {
     }
 
     chartError.value = ''
-    opt._rawHist = d?.history || d || []
+    opt._rawHist = d?.data?.history || d?.history || d || []
 
     currentName.value = props.name || '指标图表'
 
@@ -765,7 +766,7 @@ async function fetchAndRender() {
     chartInstance.setOption(opt, { notMerge: true })
 
     // 回填最新一根数据到 hover bar（保证刷新后默认显示）
-    lastHistRaw = d?.history || d || []
+    lastHistRaw = d?.data?.history || d?.history || d || []
     fillHoverBarLatest(_sanitize(lastHistRaw, isMinute))
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`

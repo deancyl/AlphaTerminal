@@ -372,7 +372,7 @@ CHINA_ALL_SYMBOLS = [
 ]
 RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
 GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
-DERIVATIVE_SYMBOLS = ["IF", "GC", "CL"]
+DERIVATIVE_SYMBOLS = ["GC", "CL"]
 
 # ── 实时行情缓存（10秒 TTL，避免频繁调 Sina）─────────────────────────
 _REALTIME_CACHE = {"wind": None, "china_all": None, "_ts": 0}

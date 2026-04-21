@@ -334,8 +334,8 @@ async function fetchSpreadHistory() {
       apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(() => null),
       apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('2年')}&period=1Y`, 10000).catch(() => null),
     ])
-    spreadHistory10y.value  = (data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
-    spreadHistory2y.value   = (data2y?.history  || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory10y.value  = (data10y?.data?.history || data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory2y.value   = (data2y?.data?.history || data2y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
   } catch (e) {
     spreadError.value = e.message

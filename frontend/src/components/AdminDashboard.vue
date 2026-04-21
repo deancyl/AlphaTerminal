@@ -474,8 +474,8 @@ let sourceChart = null
 async function refreshSourceHealth() {
   try {
     const [statusData, configData] = await Promise.all([
-      apiFetch('/source/status'),
-      apiFetch('/source/config'),
+      apiFetch('/api/v1/admin/sources/status'),
+      apiFetch('/api/v1/admin/data-sources'),
     ])
     // 转换后端数据格式为前端所需
     const sources = statusData?.data?.sources || statusData?.sources || {}
