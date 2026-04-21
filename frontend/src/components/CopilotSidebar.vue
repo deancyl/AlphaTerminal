@@ -10,24 +10,9 @@
           </h2>
           <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 数据驱动分析</p>
         </div>
-        <!-- 模式切换按钮 -->
-        <button
-          class="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] border transition"
-          :class="llmMode === 'webllm'
-            ? 'border-green-500/50 bg-green-500/10 text-bearish'
-            : 'border-purple-500/50 bg-purple-500/10 text-purple-400'"
-          @click="toggleLlmMode"
-          :disabled="isWebllmLoading"
-        >
-          <span v-if="isWebllmLoading" class="w-3 h-3 border border-green-400/50 border-t-green-400 rounded-full animate-spin"></span>
-          <span v-else>{{ llmMode === 'webllm' ? '🌐 WebLLM' : '🤖 云端' }}</span>
-        </button>
-      </div>
-      <!-- WebLLM 状态提示 -->
-      <div v-if="llmMode === 'webllm'" class="mt-2 text-[10px]">
-        <span v-if="webllmReady" class="text-bearish">✓ 模型已加载</span>
-        <span v-else-if="isWebllmLoading" class="text-yellow-400">⏳ 加载中...</span>
-        <span v-else class="text-bullish">✗ 点击切换到 WebLLM 模式</span>
+        <div class="px-2 py-1 rounded text-[10px] border border-purple-500/50 bg-purple-500/10 text-purple-400">
+          🤖 云端模式
+        </div>
       </div>
     </div>
 
@@ -139,7 +124,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick } from 'vue'
 import { logger } from '../utils/logger.js'
 import {
   getMarketOverview,
@@ -171,145 +156,6 @@ import {
   formatSearchResults,
   formatHelp,
 } from '../services/copilotResponse.js'
-
-// WebLLM 状态
-const llmMode = ref('cloud')  // 'cloud' | 'webllm'
-const webllmReady = ref(false)
-const isWebllmLoading = ref(false)
-let webllmEngine = null
-
-// 初始化 WebLLM（懒加载）
-async function initWebllm() {
-  if (webllmReady.value || isWebllmLoading.value) return
-  
-  // F3修复: 移动端检测，低内存设备禁用WebLLM
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-  const isLowMemory = navigator.deviceMemory && navigator.deviceMemory < 4  // 小于4GB内存
-  
-  if (isMobile || isLowMemory) {
-    isWebllmLoading.value = false
-    addAssistantMessage('📱 检测到移动设备或低内存环境，已自动禁用 WebLLM 模式。\n\n请使用云端模式，或切换到桌面设备体验本地 AI。')
-    llmMode.value = 'cloud'
-    return
-  }
-  
-  isWebllmLoading.value = true
-  addAssistantMessage('⏳ 正在加载 WebLLM (尝试更小的模型)...')
-  
-  try {
-    const webllmModule = await import('@mlc-ai/web-llm')
-    
-    // 进度回调
-    const initProgressCallback = (progress) => {
-      let pct = 0
-      let text = ''
-      
-      if (typeof progress === 'number') {
-        pct = progress * 100
-      } else if (progress?.progress !== undefined) {
-        pct = progress.progress * 100
-        text = progress.text || ''
-      }
-      
-      const statusText = text || `下载中 (${pct.toFixed(0)}%)`
-      const lastMsg = messages.value[messages.value.length - 1]
-      if (lastMsg && lastMsg.content.includes('正在加载')) {
-        lastMsg.displayedContent = `⏳ 加载模型中... ${pct.toFixed(0)}%\n${statusText}`
-        scrollToBottom()
-      }
-    }
-    
-    // F2修复: 仅尝试1个最小模型，避免内存溢出
-    const modelOptions = [
-      'SmolLM2-360M-Instruct-q0f16-MLC',  // 最小 (~200MB)，移动端友好
-    ]
-    
-    let engine = null
-    
-    for (const model of modelOptions) {
-      try {
-        addAssistantMessage(`尝试加载 ${model}...`)
-        const { CreateMLCEngine } = webllmModule
-        engine = await CreateMLCEngine(model, { initProgressCallback })
-        webllmReady.value = true
-        break
-      } catch (err) {
-        logger.warn(`[WebLLM] ${model} failed:`, err.message)
-        addAssistantMessage(`❌ ${model} 加载失败: ${err.message}`)
-      }
-    }
-    
-    if (webllmReady.value && engine) {
-      webllmEngine = engine
-      isWebllmLoading.value = false
-      messages.value = messages.value.filter(m => m.content.includes('正在加载'))
-      addAssistantMessage('✅ WebLLM 模型加载成功！')
-    } else {
-      isWebllmLoading.value = false
-      addAssistantMessage(`❌ WebLLM 加载失败。\n\n您的设备可能不支持本地 LLM。\n\n可尝试：\n1. 更新浏览器和显卡驱动\n2. 使用其他设备（Mac/高端 PC）\n3. 继续使用云端模式`)
-    }
-    
-  } catch (err) {
-    logger.error('[WebLLM] Init error:', err)
-    isWebllmLoading.value = false
-    addAssistantMessage(`❌ WebLLM 加载失败: ${err.message}\n\n您的设备可能不支持本地 LLM。\n\n可尝试：\n1. 更新浏览器和显卡驱动\n2. 使用其他设备（Mac/高端 PC）\n3. 继续使用云端模式`)
-  }
-}
-
-// 切换 LLM 模式
-async function toggleLlmMode() {
-  if (llmMode.value === 'cloud') {
-    // 切换到 WebLLM 模式
-    llmMode.value = 'webllm'
-    await initWebllm()
-  } else {
-    // 切换回云端模式
-    llmMode.value = 'cloud'
-    webllmReady.value = false
-    addAssistantMessage('已切换回云端模式（Mock AI）。如需使用本地 AI，请点击切换到 WebLLM。')
-  }
-}
-
-// 使用 WebLLM 生成回复
-async function generateWithWebllm(prompt, context) {
-  if (!webllmReady.value || !webllmEngine) {
-    throw new Error('WebLLM 未就绪')
-  }
-  
-  // 构建完整提示词
-  let fullPrompt = `你是一个专业的金融投研助手AlphaTerminal，专门为中国A股投资者提供数据分析、市场解读和投资建议。当前时间：2026年4月。请用中文回答，保持专业但不要过于正式。`
-  
-  if (context) {
-    fullPrompt += `\n\n参考数据：\n${context}`
-  }
-  
-  fullPrompt += `\n\n用户问题：${prompt}`
-  
-  // 使用流式生成
-  const chunks = []
-  const stream = await webllmEngine.chat.completions.create({
-    messages: [{ role: 'user', content: fullPrompt }],
-    stream: true,
-    temperature: 0.7,
-    max_tokens: 2000,
-  })
-  
-  for await (const chunk of stream) {
-    const content = chunk.choices[0]?.delta?.content || ''
-    if (content) {
-      chunks.push(content)
-      // 实时更新显示
-      const lastMsg = messages.value[messages.value.length - 1]
-      if (lastMsg && lastMsg.role === 'assistant' && lastMsg.streaming) {
-        lastMsg.displayedContent = chunks.join('')
-        lastMsg.content = chunks.join('')
-        scrollToBottom()
-      }
-    }
-  }
-  
-  return chunks.join('')
-}
 
 const messages       = ref([])
 const inputText      = ref('')
@@ -882,13 +728,7 @@ async function sendToLLM(text) {
       context += formatMarketOverview(props.marketOverview) + '\n'
     }
     
-    
-    // 根据模式选择不同的生成方式
-    if (llmMode.value === 'webllm' && webllmReady.value && webllmEngine) {
-      // 使用 WebLLM 本地生成
-      await generateWithWebllm(text, context)
-      messages.value[aiMsgIndex].streaming = false
-    } else if (cachedResponse) {
+    if (cachedResponse) {
       // 使用缓存（立即显示，无流式）
       messages.value[aiMsgIndex].displayedContent = cachedResponse
       messages.value[aiMsgIndex].content = cachedResponse
