@@ -279,23 +279,28 @@ function handleWindClick(item) {
   let sym = item.symbol || item.key || ''
   const LOWER_MACRO_MAP = {
     '黄金': 'GOLD', 'xau': 'GOLD', 'gld': 'GOLD',
-    'wti原油': 'WTI', 'wti': 'WTI', '原油': 'WTI',
+    'wti原油': 'WTI', 'wti': 'WTI', '原油': 'WTI', 'wtic': 'WTI',
     'vix': 'VIX', '恐慌指数': 'VIX', '波幅': 'VIX',
     'usd/cnh': 'CNHUSD', '离岸人民币': 'CNHUSD', '人民币': 'CNHUSD',
     'dxy': 'DXY', '美元指数': 'DXY',
     '恒指波幅': 'VHSI', 'vhsi': 'VHSI',
     '日经225': 'N225', '日经': 'N225',
+    // 扩展：无括号的标准名称
+    'gold': 'GOLD', 'wti': 'WTI', 'vix': 'VIX', 'cnhusd': 'CNHUSD',
+    'dji': 'DJI', 'spx': 'SPX', 'ndx': 'NDX',
   }
 
   // 名称特征匹配：macro 品种只有 name（中文/英文），没有标准 symbol
   if (!/^[A-Za-z]{2,6}$/.test(sym)) {
-    const lower = sym.toLowerCase()
-    if (LOWER_MACRO_MAP[lower] || LOWER_MACRO_MAP[sym]) {
-      sym = LOWER_MACRO_MAP[sym] || LOWER_MACRO_MAP[lower]
+    // 去掉括号及其内容（如 "(美元)" "(VHSI)"），再匹配
+    const cleaned = sym.replace(/\([^)]*\)/g, '').trim()
+    const lower = cleaned.toLowerCase()
+    if (LOWER_MACRO_MAP[lower] || LOWER_MACRO_MAP[cleaned]) {
+      sym = LOWER_MACRO_MAP[cleaned] || LOWER_MACRO_MAP[lower]
     } else {
-      // 兜底：去掉非字母数字后取前6字符 normalize
-      const cleaned = sym.replace(/[^\w]/g, '').toLowerCase().slice(0, 6)
-      sym = LOWER_MACRO_MAP[cleaned] || normalizeSymbol(sym)
+      // 兜底：去掉非字母数字后取前6字符 normalize（仅保留英文和数字）
+      const stripped = cleaned.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)
+      sym = LOWER_MACRO_MAP[stripped] || normalizeSymbol(stripped)
     }
   }
 

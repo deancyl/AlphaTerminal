@@ -34,3 +34,7 @@ git push origin v0.5.140 2>&1 | tee /tmp/git_tag.log || {
 }
 
 echo "=== 推送完成 ==="
+# 推送标签
+cd /vol3/@apphome/picoclaw/.picoclaw/workspace/AlphaTerminal
+git tag v0.5.141
+git push origin v0.5.141

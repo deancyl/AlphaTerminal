@@ -77,11 +77,13 @@ const props = defineProps({
 const chartRef     = ref(null)
 const chartError   = ref('')
 const isLoading    = ref(false)
+const isFetching   = ref(false)   // 后端正在抓取宏观品种数据
 const chartType    = ref('candlestick')
 const currentName  = ref('指标图表')
 
 let   chartInstance = null
 let   resizeObserver = null
+let   _fetchRetryCount = 0  // 宏观品种抓取重试计数器
 const hoverBar      = ref({})   // Task 3: 动态 OHLCV 数据
 
 // ─────────────────────────────────────────────────────────────────
@@ -731,6 +733,26 @@ async function fetchAndRender() {
     const d = await apiFetch(fullUrl)
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
+
+    // 后端正在异步抓取宏观品种数据（如 VHSI），显示加载状态并轮询
+    if (d?.fetching) {
+      isFetching.value = true
+      isLoading.value = false
+      chartError.value = '正在加载数据...'
+      // 2秒后重试（最多3次，约6秒）
+      if (!_fetchRetryCount) _fetchRetryCount = 0
+      if (_fetchRetryCount < 3) {
+        _fetchRetryCount++
+        setTimeout(fetchAndRender, 2000)
+      } else {
+        _fetchRetryCount = 0
+        chartError.value = '数据加载超时，请稍后重试'
+      }
+      return
+    }
+    _fetchRetryCount = 0
+    isFetching.value = false
+
     // 分钟数据需要特殊处理
     const isMinute = type === 'line' || props.url.includes('minutely') || props.url.includes('period=1m') || props.url.includes('period=5m')
     // 统一解包: apiFetch 已自动解包 data，但需兼容直接返回 history 的情况
