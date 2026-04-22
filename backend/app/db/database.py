@@ -116,6 +116,43 @@ def init_tables():
                 updated_at TEXT NOT NULL
             )
         """)
+        # ── Phase 1: 子账户系统增强 ───────────────────────────────
+        # portfolios 表结构增强（新增字段，兼容存量数据）
+        for col, dtype, default in [
+            ("parent_id",      "INTEGER", "DEFAULT NULL"),
+            ("cash_balance",   "REAL",    "DEFAULT 0.0"),
+            ("currency",       "TEXT",     "DEFAULT 'CNY'"),
+            ("asset_class",    "TEXT",     "DEFAULT 'mixed'"),
+            ("initial_capital","REAL",    "DEFAULT 0.0"),
+            ("status",         "TEXT",     "DEFAULT 'active'"),
+            ("strategy",      "TEXT",     "DEFAULT NULL"),
+            ("benchmark",     "TEXT",     "DEFAULT NULL"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE portfolios ADD COLUMN {col} {dtype} {default}")
+            except Exception:
+                pass  # 列已存在时静默忽略
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_portfolios_parent ON portfolios(parent_id)")
+
+        # transactions 资金流水表（审计基石）
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transactions (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id    INTEGER NOT NULL,
+                type            TEXT NOT NULL,
+                amount          REAL NOT NULL,
+                balance_after   REAL NOT NULL,
+                counterparty_id  INTEGER DEFAULT NULL,
+                related_symbol  TEXT DEFAULT NULL,
+                note            TEXT DEFAULT NULL,
+                created_at      TEXT NOT NULL,
+                operator        TEXT DEFAULT 'system'
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_portfolio ON transactions(portfolio_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_type     ON transactions(type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_created  ON transactions(created_at)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────

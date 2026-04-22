@@ -49,6 +49,89 @@ class PositionUpdate(BaseModel):
     shares: Optional[int] = None
     avg_cost: Optional[float] = None
 
+class TransactionIn(BaseModel):
+    portfolio_id: int
+    type: str          # deposit | withdraw | transfer_in | transfer_out | dividend | fee
+    amount: float
+    balance_after: float
+    counterparty_id: Optional[int] = None
+    related_symbol: Optional[str] = None
+    note: Optional[str] = None
+    operator: str = "user"
+
+# ── 事务流水工具 ─────────────────────────────────────────────
+def _insert_transaction(
+    conn,
+    portfolio_id: int,
+    txn_type: str,
+    amount: float,
+    balance_after: float,
+    counterparty_id: Optional[int] = None,
+    related_symbol: Optional[str] = None,
+    note: Optional[str] = None,
+    operator: str = "system",
+) -> int:
+    """写入一笔资金流水记录，返回自增 ID。"""
+    now = datetime.now().isoformat()
+    cur = conn.execute(
+        """INSERT INTO transactions
+           (portfolio_id, type, amount, balance_after, counterparty_id,
+            related_symbol, note, created_at, operator)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (portfolio_id, txn_type, amount, balance_after,
+         counterparty_id, related_symbol, note, now, operator),
+    )
+    return cur.lastrowid
+
+def _transfer_between_accounts(
+    from_pid: int, to_pid: int, amount: float, note: Optional[str] = None
+) -> dict:
+    """
+    原子划转：从账户A扣款，账户B入账，写入两条对立流水。
+    返回划转结果。
+    """
+    with _lock:
+        conn = _get_conn()
+        try:
+            # 读取双方现 金余额
+            rows = conn.execute(
+                "SELECT id, cash_balance FROM portfolios WHERE id IN (?,?)",
+                (from_pid, to_pid),
+            ).fetchall()
+            balance_map = {r[0]: r[1] for r in rows}
+            bal_from = balance_map.get(from_pid, 0.0)
+            bal_to   = balance_map.get(to_pid, 0.0)
+
+            if bal_from < amount:
+                raise ValueError(f"账户 {from_pid} 现金余额 ({bal_from}) 不足")
+
+            new_bal_from = bal_from - amount
+            new_bal_to   = bal_to   + amount
+            now = datetime.now().isoformat()
+
+            conn.execute(
+                "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                (new_bal_from, from_pid),
+            )
+            conn.execute(
+                "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                (new_bal_to, to_pid),
+            )
+
+            # 写流水（from 侧）
+            _insert_transaction(conn, from_pid, "transfer_out",
+                                amount, new_bal_from, to_pid, note=note)
+            # 写流水（to 侧）
+            _insert_transaction(conn, to_pid, "transfer_in",
+                                amount, new_bal_to, from_pid, note=note)
+
+            conn.commit()
+        finally:
+            conn.close()
+
+    return {"from": from_pid, "to": to_pid, "amount": amount,
+            "balance_from": new_bal_from, "balance_to": new_bal_to}
+
 # ── 响应格式标准化（可选使用）─────────────────────────────
 def _ok(data, msg="success"):
     return {"code": 0, "message": msg, "data": data, "timestamp": int(time.time() * 1000)}
@@ -68,15 +151,15 @@ async def list_portfolios():
     conn = _get_conn()
     try:
         rows = conn.execute(
-            """SELECT id, name, type, parent_id, created_at, total_cost,
+            """SELECT id, name, type, parent_id, created_at, total_cost, cash_balance,
                       currency, asset_class, strategy, benchmark, status, initial_capital, description
                FROM portfolios ORDER BY id"""
         ).fetchall()
     finally:
         conn.close()
     return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
-                                            "currency", "asset_class", "strategy", "benchmark", "status",
-                                            "initial_capital", "description"])}
+                                            "cash_balance", "currency", "asset_class", "strategy", "benchmark",
+                                            "status", "initial_capital", "description"])}
 
 @router.post("/")
 async def create_portfolio(body: PortfolioIn):
@@ -90,15 +173,19 @@ async def create_portfolio(body: PortfolioIn):
                 # 自身不能作为自己的 parent
                 if body.parent_id == 0:
                     raise HTTPException(400, "parent_id 不能为 0（自身）")
-                # parent_id 不能是自身的子孙节点：查出自身所有后代并校验
-                descendants = _get_all_descendants(conn, body.parent_id)
-                if body.parent_id in descendants:
+                # 检查父节点是否"有效"：其后代节点集合不能包含自身（portfolio_id 本身，
+                # 此时为 None，因为新账户尚未插入 DB，故此处只需检查父节点是否有后代）
+                children_of_parent = _get_all_descendants(conn, body.parent_id)
+                # children_of_parent 不应包含 body.parent_id 自身（若包含说明查到了自己）
+                # 对于新账户场景：children_of_parent 应只返回已有的子账户，不含父节点本身
+                if body.parent_id in children_of_parent:
                     raise HTTPException(400, f"parent_id ({body.parent_id}) 不能指向自身的后代节点，检测到环形嵌套")
             # ── 写入 ─────────────────────────────────────────────
             cur = conn.execute(
                 """INSERT INTO portfolios (name, type, parent_id, created_at, total_cost,
-                        currency, asset_class, strategy, benchmark, status, initial_capital, description)
-                 VALUES (?,?,?,?,0,?,?,?,?,?,?,?)""",
+                        currency, asset_class, strategy, benchmark, status, initial_capital,
+                        description, cash_balance)
+                 VALUES (?,?,?,?,0,?,?,?,?,?,?,?,0.0)""",
                 (body.name, body.type, body.parent_id, now,
                  body.currency, body.asset_class, body.strategy, body.benchmark,
                  body.status, body.initial_capital, body.description)
@@ -132,16 +219,20 @@ async def delete_portfolio(portfolio_id: int):
 # ── 持仓 CRUD ─────────────────────────────────────────────────
 
 def _get_all_descendants(conn, portfolio_id: int, visited: set = None) -> list:
-    """递归获取所有后代账户ID（包括子账户、孙账户等）。使用 visited set 阻断环形嵌套。"""
+    """
+    递归获取所有后代账户ID（子孙，不含自身）。
+    使用 visited set 阻断环形嵌套。
+    """
     if visited is None:
         visited = set()
     if portfolio_id in visited:
         return []
     visited.add(portfolio_id)
-    result = [portfolio_id]
+    result = []
     cursor = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,))
     children = [row[0] for row in cursor.fetchall()]
     for child_id in children:
+        result.append(child_id)
         result.extend(_get_all_descendants(conn, child_id, visited))
     return result
 
@@ -784,3 +875,152 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
         logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
         from fastapi import HTTPException
         raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")
+
+
+# ══════════════════════════════════════════════════════════════
+#  Phase 1 扩展：资金流水 + 现金余额管理
+# ══════════════════════════════════════════════════════════════
+
+@router.post("/transfer")
+async def transfer(body: TransactionIn):
+    """
+    资金划转（子账户间）
+    body.type = 'transfer_out' / 'transfer_in'（通常前端只传一方）
+    为简化操作，提供 /transfer 接口：from_pid / to_pid / amount
+    """
+    raise HTTPException(400, "transfer 需要明确 from_pid 和 to_pid，请使用 /transfer/direct 接口")
+
+
+class TransferIn(BaseModel):
+    from_portfolio_id: int
+    to_portfolio_id: int
+    amount: float
+    note: Optional[str] = None
+
+
+@router.post("/transfer/direct")
+async def transfer_direct(body: TransferIn):
+    """直接划转：原子操作，同时更新两个账户的 cash_balance 并写流水"""
+    if body.amount <= 0:
+        raise HTTPException(400, "划转金额必须为正数")
+    try:
+        result = _transfer_between_accounts(
+            body.from_portfolio_id,
+            body.to_portfolio_id,
+            body.amount,
+            body.note,
+        )
+        return _ok(result)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        raise HTTPException(500, f"划转失败: {e}")
+
+
+@router.get("/{portfolio_id}/cash")
+async def get_cash(portfolio_id: int):
+    """查询账户现金余额"""
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT id, name, cash_balance FROM portfolios WHERE id=?",
+            (portfolio_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if not row:
+        raise HTTPException(404, "账户不存在")
+    return _ok({"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]})
+
+
+class CashOpIn(BaseModel):
+    """充值/提现操作"""
+    amount: float
+    operator: str = "user"
+    note: Optional[str] = None
+
+
+@router.post("/{portfolio_id}/cash/deposit")
+async def cash_deposit(portfolio_id: int, body: CashOpIn):
+    """充值：账户现金增加 + 写 deposit 流水"""
+    if body.amount <= 0:
+        raise HTTPException(400, "充值金额必须为正数")
+    with _lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT id, cash_balance FROM portfolios WHERE id=?",
+                (portfolio_id,),
+            ).fetchone()
+            if not row:
+                raise HTTPException(404, "账户不存在")
+
+            new_balance = (row[1] or 0.0) + body.amount
+            conn.execute(
+                "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                (new_balance, portfolio_id),
+            )
+            _insert_transaction(conn, portfolio_id, "deposit",
+                                body.amount, new_balance, operator=body.operator,
+                                note=body.note or "充值")
+            conn.commit()
+            return _ok({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+        finally:
+            conn.close()
+
+
+@router.post("/{portfolio_id}/cash/withdraw")
+async def cash_withdraw(portfolio_id: int, body: CashOpIn):
+    """提现：账户现金减少 + 写 withdraw 流水"""
+    if body.amount <= 0:
+        raise HTTPException(400, "提现金额必须为正数")
+    with _lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT id, cash_balance FROM portfolios WHERE id=?",
+                (portfolio_id,),
+            ).fetchone()
+            if not row:
+                raise HTTPException(404, "账户不存在")
+
+            if (row[1] or 0.0) < body.amount:
+                raise HTTPException(400, f"现金余额不足（当前: {row[1]}，需: {body.amount}）")
+
+            new_balance = (row[1] or 0.0) - body.amount
+            conn.execute(
+                "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                (new_balance, portfolio_id),
+            )
+            _insert_transaction(conn, portfolio_id, "withdraw",
+                                body.amount, new_balance, operator=body.operator,
+                                note=body.note or "提现")
+            conn.commit()
+            return _ok({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+        finally:
+            conn.close()
+
+
+@router.get("/{portfolio_id}/transactions")
+async def list_transactions(
+    portfolio_id: int,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    txn_type: Optional[str] = Query(None, description="过滤类型: deposit/withdraw/transfer_in/transfer_out/dividend/fee"),
+):
+    """资金流水记录查询"""
+    conn = _get_conn()
+    try:
+        sql = "SELECT * FROM transactions WHERE portfolio_id=?"
+        params: list = [portfolio_id]
+        if txn_type:
+            sql += " AND type=?"
+            params.append(txn_type)
+        sql += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        rows = conn.execute(sql, params).fetchall()
+        cols = ["id", "portfolio_id", "type", "amount", "balance_after",
+                "counterparty_id", "related_symbol", "note", "created_at", "operator"]
+    finally:
+        conn.close()
+    return _ok({"transactions": _row2dict(rows, cols), "total": len(rows)})

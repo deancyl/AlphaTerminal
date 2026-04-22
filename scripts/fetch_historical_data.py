@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.db')
 
 # Alpha Vantage API 配置
-AV_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY')
+AV_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '4M3YTMFEMBOPM1W2')
 AV_BASE_URL = 'https://www.alphavantage.co/query'
 
 # 支持的指数和股票映射
@@ -96,7 +96,15 @@ def fetch_from_alpha_vantage(symbol: str, years: int = 20) -> Optional[pd.DataFr
             'apikey': AV_API_KEY
         }
 
-        response = requests.get(AV_BASE_URL, params=params, timeout=30)
+        response = requests.get(
+            AV_BASE_URL,
+            params=params,
+            timeout=30,
+            proxies={
+                "http":  "http://192.168.1.50:7897",
+                "https": "http://192.168.1.50:7897",
+            } if os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy") else None,
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -155,86 +163,99 @@ def fetch_from_alpha_vantage(symbol: str, years: int = 20) -> Optional[pd.DataFr
         print(f"[AV] {symbol} 未知错误: {e}")
         return None
 
+def _get_akshare_proxies():
+    """
+    为 AkShare 返回直连代理配置（国内数据源不走代理）。
+    akshare 主要访问 eastmoney.com/sina.com.cn 等国内节点，
+    走代理反而会被墙。
+    """
+    return None  # 直连
+
+
 def fetch_from_akshare(symbol: str, years: int = 5) -> Optional[pd.DataFrame]:
     """
-    从 AkShare 获取 A 股数据
-
-    Args:
-        symbol: 标准化后的符号（如 'sh000001'）
-        years: 获取多少年的历史数据
-
-    Returns:
-        DataFrame with columns: date, open, high, low, close, volume
+    从 AkShare 获取 A 股数据（直连，不走代理）
     """
+    import requests
     try:
         import akshare as ak
 
-        # 转换为 AkShare 格式
-        if symbol.startswith('sh'):
-            ak_symbol = symbol[2:]  # 去掉 'sh'
-            is_index = True
-        elif symbol.startswith('sz'):
-            ak_symbol = symbol[2:]  # 去掉 'sz'
-            is_index = True
-        else:
-            # 默认认为是 A 股代码
-            ak_symbol = symbol
-            is_index = False
+        # 临时禁用代理，确保国内数据源直连
+        old_http  = os.environ.pop("HTTP_PROXY",  None)
+        old_https = os.environ.pop("HTTPS_PROXY", None)
+        old_hp    = os.environ.pop("http_proxy",  None)
+        old_hps   = os.environ.pop("https_proxy", None)
 
-        print(f"[AkShare] 开始拉取 {symbol} ({ak_symbol}) {years}年数据...")
+        try:
+            # 转换 AkShare 格式
+            if symbol.startswith('sh'):
+                ak_symbol = symbol[2:]  # 去掉 'sh'
+                is_index = True
+            elif symbol.startswith('sz'):
+                ak_symbol = symbol[2:]  # 去掉 'sz'
+                is_index = True
+            else:
+                ak_symbol = symbol
+                is_index = False
 
-        # 计算日期范围
-        end_date = datetime.now().strftime('%Y%m%d')
-        start_date = (datetime.now() - timedelta(days=years*365)).strftime('%Y%m%d')
+            print(f"[AkShare] 直连拉取 {symbol} ({ak_symbol}) {years}年数据...")
 
-        if is_index:
-            # 指数数据（index_zh_a_hist 不接受 adjust 参数）
-            df = ak.index_zh_a_hist(
-                symbol=ak_symbol,
-                period="daily",
-                start_date=start_date,
-                end_date=end_date
-            )
-        else:
-            # 个股数据
-            df = ak.stock_zh_a_daily(
-                symbol=ak_symbol,
-                start_date=start_date,
-                end_date=end_date,
-                adjust="qfq"
-            )
+            end_date   = datetime.now().strftime('%Y%m%d')
+            start_date = (datetime.now() - timedelta(days=years*365)).strftime('%Y%m%d')
 
-        if df is None or df.empty:
-            print(f"[AkShare] {symbol} 无数据返回")
-            return None
+            if is_index:
+                df = ak.index_zh_a_hist(
+                    symbol=ak_symbol,
+                    period="daily",
+                    start_date=start_date,
+                    end_date=end_date,
+                )
+            else:
+                df = ak.stock_zh_a_daily(
+                    symbol=ak_symbol,
+                    start_date=start_date,
+                    end_date=end_date,
+                    adjust="qfq",
+                )
 
-        # 标准化列名
-        df = df.rename(columns={
-            '日期': 'date',
-            '开盘': 'open',
-            '最高': 'high',
-            '最低': 'low',
-            '收盘': 'close',
-            '成交量': 'volume'
-        })
+            if df is None or df.empty:
+                print(f"[AkShare] {symbol} 无数据返回")
+                return None
 
-        # 添加标准字段
-        df['symbol'] = symbol
-        df['timestamp'] = pd.to_datetime(df['date']).apply(lambda x: int(x.timestamp()))
-        df['data_type'] = 'daily'
+            # 标准化列名
+            df = df.rename(columns={
+                '日期': 'date',
+                '开盘': 'open',
+                '最高': 'high',
+                '最低': 'low',
+                '收盘': 'close',
+                '成交量': 'volume'
+            })
 
-        # 选择需要的列
-        df = df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'timestamp', 'data_type']]
+            # 添加标准字段
+            df['symbol'] = symbol
+            df['timestamp'] = pd.to_datetime(df['date']).apply(lambda x: int(x.timestamp()))
+            df['data_type'] = 'daily'
 
-        # 转换数据类型
-        df['open'] = df['open'].astype(float)
-        df['high'] = df['high'].astype(float)
-        df['low'] = df['low'].astype(float)
-        df['close'] = df['close'].astype(float)
-        df['volume'] = df['volume'].astype(int)
+            # 选择需要的列
+            df = df[['symbol', 'date', 'open', 'high', 'low', 'close', 'volume', 'timestamp', 'data_type']]
 
-        print(f"[AkShare] {symbol} 拉取成功: {len(df)} 条记录 ({df['date'].min()} ~ {df['date'].max()})")
-        return df
+            # 转换数据类型
+            df['open'] = df['open'].astype(float)
+            df['high'] = df['high'].astype(float)
+            df['low'] = df['low'].astype(float)
+            df['close'] = df['close'].astype(float)
+            df['volume'] = df['volume'].astype(int)
+
+            print(f"[AkShare] {symbol} 拉取成功: {len(df)} 条记录 ({df['date'].min()} ~ {df['date'].max()})")
+            return df
+
+        finally:
+            # 恢复代理环境变量
+            if old_http:  os.environ["HTTP_PROXY"]  = old_http
+            if old_https: os.environ["HTTPS_PROXY"] = old_https
+            if old_hp:    os.environ["http_proxy"]  = old_hp
+            if old_hps:   os.environ["https_proxy"] = old_hps
 
     except ImportError:
         print(f"[AkShare] 未安装 akshare 库")
