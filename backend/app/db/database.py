@@ -173,6 +173,21 @@ def init_tables():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_port_sym ON position_lots(portfolio_id, symbol)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_status  ON position_lots(status)")
 
+        # ── Phase 3: 持仓聚合视图表（Read-optimized summary）────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS position_summary (
+                portfolio_id INTEGER NOT NULL,
+                symbol       TEXT NOT NULL,
+                total_shares INTEGER NOT NULL DEFAULT 0,
+                avg_cost     REAL    NOT NULL DEFAULT 0.0,
+                market_value REAL    NOT NULL DEFAULT 0.0,
+                unrealized_pnl REAL NOT NULL DEFAULT 0.0,
+                updated_at   TEXT    NOT NULL,
+                PRIMARY KEY (portfolio_id, symbol)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_psym_portfolio ON position_summary(portfolio_id)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────

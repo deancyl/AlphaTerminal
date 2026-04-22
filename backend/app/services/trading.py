@@ -141,6 +141,7 @@ def execute_sell(
 
     finally:
         conn.commit()
+        upsert_position_summary(portfolio_id, symbol)   # Phase 3: sync summary
         conn.close()
 
     return SellResult(
@@ -183,6 +184,7 @@ def execute_buy(
         )
         new_id = cur.lastrowid
         conn.commit()
+        upsert_position_summary(portfolio_id, symbol)   # Phase 3: sync summary
     finally:
         conn.close()
 
@@ -267,3 +269,126 @@ def calc_unrealized_pnl(portfolio_id: int, symbol: str, current_price: float) ->
         "unrealized_pnl_pct": round(unrealized / total_cost * 100, 2) if total_cost else 0,
         "open_lots":       len(lots),
     }
+
+# ── Phase 3: 持仓聚合表（position_summary）读写 ────────────────────────
+
+def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
+    """
+    当持仓批次发生变动（buy/sell）后，重新计算并 UPSERT position_summary。
+    计算逻辑：
+      total_shares = Σ(open_lot.shares)
+      avg_cost     = Σ(shares×cost) / total_shares
+      market_value = Σ(shares × latest_price)   ← 需要外部喂价
+      unrealized_pnl = market_value - Σ(shares × avg_cost)
+    注：market_value 和 unrealized_pnl 由外部调用方在已知 current_price 时更新。
+    """
+    conn = _get_lots_conn()
+    try:
+        rows = conn.execute(
+            """
+            SELECT shares, avg_cost
+              FROM position_lots
+             WHERE portfolio_id=? AND symbol=? AND status='open'
+            """,
+            (portfolio_id, symbol),
+        ).fetchall()
+
+        if not rows:
+            # 无 open 批次 → 删除聚合记录
+            conn.execute(
+                "DELETE FROM position_summary WHERE portfolio_id=? AND symbol=?",
+                (portfolio_id, symbol),
+            )
+        else:
+            total_shares = sum(r[0] for r in rows)
+            total_cost   = sum(r[0] * r[1] for r in rows)
+            avg_cost     = total_cost / total_shares if total_shares else 0.0
+            now_str      = datetime.now().isoformat()
+
+            conn.execute(
+                """
+                INSERT INTO position_summary
+                    (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, updated_at)
+                VALUES (?, ?, ?, ?, 0.0, 0.0, ?)
+                ON CONFLICT(portfolio_id, symbol) DO UPDATE SET
+                    total_shares=excluded.total_shares,
+                    avg_cost=excluded.avg_cost,
+                    updated_at=excluded.updated_at
+                """,
+                (portfolio_id, symbol, total_shares, avg_cost, now_str),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def update_market_value(portfolio_id: int, symbol: str, current_price: float) -> dict:
+    """
+    更新持仓聚合表的市値和浮动盈亏。
+    外部调用：行情刷新时批量更新所有 open_lots 的聚合市値。
+    """
+    conn = _get_lots_conn()
+    try:
+        row = conn.execute(
+            "SELECT total_shares, avg_cost FROM position_summary WHERE portfolio_id=? AND symbol=?",
+            (portfolio_id, symbol),
+        ).fetchone()
+
+        if not row or row[0] == 0:
+            return {"portfolio_id": portfolio_id, "symbol": symbol,
+                    "total_shares": 0, "market_value": 0.0, "unrealized_pnl": 0.0}
+
+        total_shares, avg_cost = row
+        market_value   = total_shares * current_price
+        total_cost     = total_shares * avg_cost
+        unrealized_pnl = market_value - total_cost
+        now_str        = datetime.now().isoformat()
+
+        conn.execute(
+            """
+            INSERT INTO position_summary
+                (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(portfolio_id, symbol) DO UPDATE SET
+                market_value=excluded.market_value,
+                unrealized_pnl=excluded.unrealized_pnl,
+                updated_at=excluded.updated_at
+            """,
+            (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, now_str),
+        )
+        conn.commit()
+        return {
+            "portfolio_id": portfolio_id, "symbol": symbol,
+            "total_shares": total_shares, "avg_cost": round(avg_cost, 3),
+            "current_price": current_price,
+            "market_value": round(market_value, 2),
+            "total_cost": round(total_cost, 2),
+            "unrealized_pnl": round(unrealized_pnl, 2),
+            "updated_at": now_str,
+        }
+    finally:
+        conn.close()
+
+
+def get_position_summary(portfolio_id: int, symbol: str = None) -> list[dict]:
+    """
+    读取持仓聚合表（可按 portfolio_id 过滤，symbol 不传则返回全部）。
+    """
+    conn = _get_lots_conn()
+    try:
+        if symbol:
+            rows = conn.execute(
+                "SELECT * FROM position_summary WHERE portfolio_id=? AND symbol=?",
+                (portfolio_id, symbol),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM position_summary WHERE portfolio_id=?",
+                (portfolio_id,),
+            ).fetchall()
+
+        cols = ["portfolio_id", "symbol", "total_shares", "avg_cost",
+                "market_value", "unrealized_pnl", "updated_at"]
+        return [dict(zip(cols, r)) for r in rows]
+    finally:
+        conn.close()

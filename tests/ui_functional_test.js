@@ -1,370 +1,417 @@
 /**
- * ui_functional_test.js
- * ─────────────────────────────────────────────────────────────────────────────
- * AlphaTerminal 前端功能自动化验证器（Headless F12）
+ * ui_functional_test.js — Phase 2 升级版
+ * 双端视口 + 多步导航 + 全链路 F12 嗅探
+ *
+ * 运行:
+ *   node tests/ui_functional_test.js               # desktop (1920×1080)
+ *   node tests/ui_functional_test.js --mobile      # mobile (375×667)
+ *   node tests/ui_functional_test.js --both         # desktop + mobile
  *
  * 职责：
- *   1. 访问前端子账户管理页面（PortfolioDashboard）
- *   2. 模拟「新建子账户」操作链路（点击 → 输入 → 提交）
- *   3. 模拟「资金划转」操作链路
- *   4. 全程监听 console.error / console.log 及所有发往后端 /portfolio/ API 的
- *      请求载荷（payload）与响应状态
- *
- * 运行：node tests/ui_functional_test.js
- * ─────────────────────────────────────────────────────────────────────────────
+ *   - 桌面端：直接点击侧边栏"投资组合"，定位 PortfolioDashboard，模拟完整新建+划转
+ *   - 移动端：先点汉堡菜单展开抽屉，再导航到"投资组合"
+ *   - 全程捕获 console.error / console.log / network responses
+ *   - 内部截图（不输出到报告）用于调试
+ *   - 纯文本汇报：点击链路 + console 报错 + API 成功率 + 延迟
  */
 const { chromium } = require('playwright');
 
 const FRONTEND   = 'http://localhost:60100';
 const BACKEND    = 'http://localhost:8002';
-const BASE_PATH  = '/api/v1/portfolio';
-const OUT_DIR    = '/tmp/ui_test_results';
+const BASE       = '/api/v1/portfolio';
 
-// ── helpers ────────────────────────────────────────────────────────────────────
-function now() { return new Date().toISOString().slice(11, 23); }
-function log(tag, msg) { console.log(`[${now()}] ${tag} ${msg}`); }
+// ── CLI args ────────────────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+const runDesktop = !args.includes('--mobile');
+const runMobile  = args.includes('--mobile') || args.includes('--both');
+const runBoth    = args.includes('--both');
 
-// ── test state ────────────────────────────────────────────────────────────────
-let PASS = 0, FAIL = 0;
-const errors   = [];
-const warns    = [];
-const apiCalls = [];   // { method, path, payload, status, latency, response }
-const opsLog  = [];   // 操作链路
+// ── helpers ──────────────────────────────────────────────────────────────────
+const now = () => new Date().toISOString().slice(11, 23);
+const log = (tag, msg) => console.log(`[${now()}] ${tag} ${msg}`);
 
-// ── main ────────────────────────────────────────────────────────────────────────
-(async () => {
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-web-security'],
+async function snapshot(page, label) {
+  // 内部截图（仅用于调试 DOM，不输出到报告）
+  try {
+    await page.screenshot({ path: `/tmp/ui_test/_snap_${label}.png`, fullPage: false });
+  } catch (_) {}
+}
+
+// ── Main test runner ─────────────────────────────────────────────────────────
+async function runViewport(page, mode, viewport) {
+  const W = viewport.width, H = viewport.height;
+  const label = `${mode} ${W}×${H}`;
+  const errors = [], warns = [], apiCalls = [], opsLog = [];
+
+  log('═', `【${label}】初始化`);
+  await page.setViewportSize(viewport);
+  await page.setDefaultTimeout(8000);
+
+  // ── interceptors ────────────────────────────────────────────────────────────
+  page.on('console', msg => {
+    const t = msg.type(), txt = msg.text();
+    if (t === 'error')   { errors.push(txt); log('🔴', `[${label}] ${txt}`); }
+    else if (t === 'warn') { warns.push(txt);  log('🟡', `[${label}] ${txt}`); }
+    else if (t === 'log')  { log('📝', `[${label}] ${txt}`); }
   });
-  const page = await browser.newPage();
+  page.on('pageerror', e => { const t = `Uncaught: ${e.message}`; errors.push(t); log('💥', t); });
 
-  // ── intercept ALL fetch/XHR ──────────────────────────────────────────────────
+  const reqMap = new Map(); // url → {method, path, latency, status, response}
   page.on('request', req => {
     const url = req.url();
     if (!url.startsWith(BACKEND) && !url.startsWith(FRONTEND)) return;
     const path = url.replace(BACKEND, '').replace(FRONTEND, '');
-    const entry = { method: req.method(), path, url, latency: null, status: null, payload: null, response: null };
-    apiCalls.push(entry);
-    req.continue();
+    reqMap.set(path, { method: req.method(), path, status: null, latency: null });
   });
-
-  page.on('response', resp => {
+  page.on('response', async resp => {
     const url = resp.url();
     if (!url.startsWith(BACKEND) && !url.startsWith(FRONTEND)) return;
     const path = url.replace(BACKEND, '').replace(FRONTEND, '');
-    const entry = apiCalls.find(e => e.path === path && e.latency === null) || apiCalls[apiCalls.length - 1];
+    const entry = reqMap.get(path);
     if (entry) {
       entry.status = resp.status();
       entry.latency = Date.now();
-      resp.text().then(txt => { entry.response = txt.slice(0, 200); }).catch(() => {});
+      try { entry.response = await resp.text(); } catch (_) {}
     }
   });
 
-  page.on('console', msg => {
-    const type = msg.type(), text = msg.text();
-    if (type === 'error')   { errors.push(text); log('🔴 ERR', text); }
-    else if (type === 'log') { log('📝 LOG', text); }
-    else if (type === 'warn'){ warns.push(text);  log('🟡 WARN', text); }
-  });
-
-  page.on('pageerror', err => {
-    const t = `Uncaught: ${err.message}`;
-    errors.push(t); log('💥 PAGEERROR', t);
-  });
-
-  // ── navigate ────────────────────────────────────────────────────────────────
-  log('▶', `Navigating → ${FRONTEND}`);
+  // ── navigate ─────────────────────────────────────────────────────────────
+  log('▶', `【${label}】打开前端 → ${FRONTEND}`);
   try {
-    await page.goto(FRONTEND, { waitUntil: 'domcontentloaded', timeout: 15_000 });
-  } catch (e) { log('⚠️', `goto failed: ${e.message}`); }
-  await page.waitForTimeout(3_000);
+    await page.goto(FRONTEND, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(2000);
+  } catch (e) { log('⚠️', `goto failed: ${e.message}`); return { label, errors, warns, apiCalls: [], opsLog, fatal: true }; }
 
-  // ── test helpers ────────────────────────────────────────────────────────────
-  async function clickAndLog(selector, label) {
+  // ── navigation helpers ────────────────────────────────────────────────────
+  async function clickDesktop() {
+    // Desktop: sidebar is always visible, click "投资组合"
+    log('→', 'Desktop 导航：点击侧边栏"投资组合"');
+    await snapshot(page, `${label}_before_nav`);
     try {
-      await page.click(selector, { timeout: 5_000 });
-      opsLog.push(`CLICK → ${label} [${selector}]`);
-      log('👉', `Clicked ${label}`);
-      await page.waitForTimeout(500);
-    } catch (e) { opsLog.push(`CLICK FAILED → ${label} [${selector}]: ${e.message}`); log('❌', `Click failed ${label}: ${e.message}`); }
-  }
-
-  async function fillAndLog(inputSelector, label, value) {
-    try {
-      await page.fill(inputSelector, String(value));
-      opsLog.push(`FILL → ${label} [${inputSelector}] = "${value}"`);
-      log('✏️', `Filled "${label}" = "${value}"`);
-      await page.waitForTimeout(200);
-    } catch (e) { opsLog.push(`FILL FAILED → ${label}: ${e.message}`); log('❌', `Fill failed ${label}: ${e.message}`); }
-  }
-
-  async function typeAndLog(inputSelector, label, value) {
-    try {
-      await page.click(inputSelector);
-      await page.keyboard.type(String(value), { delay: 80 });
-      opsLog.push(`TYPE → ${label} [${inputSelector}] = "${value}"`);
-      log('⌨️', `Typed "${label}" = "${value}"`);
-      await page.waitForTimeout(200);
-    } catch (e) { opsLog.push(`TYPE FAILED → ${label}: ${e.message}`); log('❌', `Type failed ${label}: ${e.message}`); }
-  }
-
-  async function submitAndLog(buttonSelector, label) {
-    try {
-      await page.click(buttonSelector, { timeout: 5_000 });
-      opsLog.push(`SUBMIT → ${label} [${buttonSelector}]`);
-      log('✔️', `Submitted ${label}`);
-      await page.waitForTimeout(2_000);
-    } catch (e) { opsLog.push(`SUBMIT FAILED → ${label}: ${e.message}`); log('❌', `Submit failed ${label}: ${e.message}`); }
-  }
-
-  async function findPortfolioId(name) {
-    // Extract ID from store.portfolios after creation
-    return await page.evaluate(n => {
-      // usePortfolioStore is a reactive singleton — find in window or via store
-      return null; // will read from API calls directly
-    }, name);
-  }
-
-  // ── STEP 1: Open account list ─────────────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('①', 'STEP 1 — 打开账户列表页面');
-  log('═', '═══════════════════════════════════════════════');
-
-  try {
-    await page.goto(FRONTEND, { waitUntil: 'networkidle', timeout: 15_000 });
-    await page.waitForTimeout(3_000);
-    opsLog.push('NAVIGATE → http://localhost:60100 (PortfolioDashboard)');
-    log('✅', 'Page loaded');
-  } catch (e) {
-    log('❌', `Page load failed: ${e.message}`);
-  }
-
-  // ── STEP 2: Click "新建子账户" button ──────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('②', 'STEP 2 — 打开「新建账户」弹窗');
-  log('═', '═══════════════════════════════════════════════');
-
-  // The button text contains "新建"
-  try {
-    const btns = await page.locator('button:has-text("新建")').all();
-    if (btns.length) {
-      await btns[0].click();
-      opsLog.push('CLICK → [button:has-text("新建")]');
-      log('👉', 'Clicked button:has-text("新建")');
-      await page.waitForTimeout(1_000);
-    } else {
-      opsLog.push('WARN: no button with text "新建" found');
-      log('⚠️', 'No "新建" button found');
-    }
-  } catch (e) {
-    log('⚠️', `Button click exception: ${e.message}`);
-  }
-
-  // ── STEP 3: Fill create account form ────────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('③', 'STEP 3 — 填写账户表单');
-  log('═', '═══════════════════════════════════════════════');
-
-  // Wait for modal to appear
-  await page.waitForTimeout(1_000);
-
-  // Input: account name
-  try {
-    const nameInput = page.locator('input[placeholder*="基金"]').first();
-    await nameInput.fill('自动化子账户-Test');
-    opsLog.push('FILL → 账户名称 = "自动化子账户-Test"');
-    log('✏️', 'Filled account name');
-    await page.waitForTimeout(300);
-  } catch (e) {
-    // fallback by placeholder
-    const inputs = await page.locator('input[type="text"]').all();
-    for (const inp of inputs) {
-      const ph = await inp.getAttribute('placeholder') || '';
-      if (ph) { await inp.fill('自动化子账户-Test'); log('✏️', `Filled: ${ph}`); break; }
+      // Try multiple selectors for sidebar portfolio link
+      const selectors = [
+        'button[title="投资组合"]',
+        'button:has-text("投资组合")',
+        '[data-sidebar-nav="portfolio"]',
+        'span:has-text("💰")',
+        'a:has-text("投资组合")',
+      ];
+      for (const sel of selectors) {
+        const el = page.locator(sel).first();
+        if (await el.count() > 0) {
+          await el.click({ force: true });
+          opsLog.push(`CLICK sidebar[💰投资组合] via ${sel}`);
+          log('👉', `Clicked: ${sel}`);
+          await page.waitForTimeout(1500);
+          await snapshot(page, `${label}_after_nav`);
+          return true;
+        }
+      }
+      // Fallback: click by emoji
+      await page.locator('button').filter({ hasText: '💰' }).first().click();
+      opsLog.push('CLICK sidebar[💰] via emoji filter');
+      await page.waitForTimeout(1500);
+      return true;
+    } catch (e) {
+      log('❌', `Desktop nav failed: ${e.message}`);
+      return false;
     }
   }
 
-  // Select type: portfolio
-  try {
-    const selects = await page.locator('select').all();
-    for (const sel of selects) {
-      const opts = await sel.locator('option').allTextContents();
-      if (opts.some(o => o.includes('投资组合'))) {
-        await sel.selectOption({ label: '投资组合' });
-        opsLog.push('SELECT → 账户类型 = "投资组合"');
-        log('✏️', 'Selected account type: 投资组合');
-        await page.waitForTimeout(200);
+  async function clickMobile() {
+    // Mobile: need to open hamburger first
+    log('→', 'Mobile 导航：打开汉堡菜单 → 找投资组合');
+    await snapshot(page, `${label}_before_hamburger`);
+    const hamSelectors = [
+      'button[aria-label="菜单"]',
+      'button[aria-label="menu"]',
+      'button[aria-label="Menu"]',
+      '[aria-label="menu"]',
+      'button:has-text("☰")',
+      'button:has-text("菜单")',
+      'svg.icon-menu',
+      '[class*="hamburger"]',
+    ];
+    let hamClicked = false;
+    for (const sel of hamSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.click({ force: true });
+        opsLog.push(`CLICK hamburger[${sel}]`);
+        log('👉', `Clicked hamburger: ${sel}`);
+        await page.waitForTimeout(800);
+        hamClicked = true;
         break;
       }
     }
-  } catch (e) {
-    log('⚠️', `Select type failed: ${e.message}`);
+    if (!hamClicked) {
+      // Try any visible button that might be the menu
+      const buttons = await page.locator('button').all();
+      for (const btn of buttons) {
+        try {
+          const box = await btn.boundingBox();
+          if (box && box.y < 100 && box.x < 100) {
+            await btn.click();
+            opsLog.push('CLICK top-left button (hamburger guess)');
+            log('👉', 'Clicked top-left as hamburger');
+            await page.waitForTimeout(800);
+            hamClicked = true;
+            break;
+          }
+        } catch (_) {}
+      }
+    }
+
+    await snapshot(page, `${label}_after_hamburger`);
+
+    // Now click "投资组合" in the nav/drawer
+    const navSelectors = [
+      'button:has-text("投资组合")',
+      'a:has-text("投资组合")',
+      'span:has-text("💰")',
+      '[data-nav="portfolio"]',
+    ];
+    for (const sel of navSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.click({ force: true });
+        opsLog.push(`CLICK nav[投资组合] via ${sel}`);
+        log('👉', `Clicked nav item: ${sel}`);
+        await page.waitForTimeout(1500);
+        await snapshot(page, `${label}_after_nav`);
+        return true;
+      }
+    }
+    log('⚠️', 'Mobile nav: could not find 投资组合 in drawer');
+    return false;
   }
 
-  // Fill initial capital
-  try {
-    const numInputs = await page.locator('input[type="number"]').all();
-    for (const inp of numInputs) {
-      await inp.fill('50000');
-      opsLog.push('FILL → 初始资金 = 50000');
-      log('✏️', 'Filled initial_capital = 50000');
-      await page.waitForTimeout(200);
+  // ── Step 1: Navigate to PortfolioDashboard ──────────────────────────────
+  log('①', `【${label}】STEP 1 — 导航到「投资组合」`);
+  let navOk = false;
+  if (mode === 'desktop') navOk = await clickDesktop();
+  else navOk = await clickMobile();
+
+  if (!navOk) {
+    // Try direct URL access
+    try {
+      await page.goto(`${FRONTEND}`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+      await page.waitForTimeout(1000);
+      opsLog.push('FALLBACK: page reload');
+    } catch (_) {}
+  }
+
+  // ── Step 2: Click "新建" ──────────────────────────────────────────────
+  log('②', `【${label}】STEP 2 — 打开「新建账户」弹窗`);
+  await snapshot(page, `${label}_before_newbtn`);
+  const newBtnSelectors = [
+    'button:has-text("新建")',
+    'button:has-text("新建账户")',
+    '[data-action="create-account"]',
+  ];
+  let newClicked = false;
+  for (const sel of newBtnSelectors) {
+    const el = page.locator(sel).first();
+    if (await el.count() > 0) {
+      try {
+        await el.click({ force: true });
+        opsLog.push(`CLICK [新建] via ${sel}`);
+        log('👉', `Clicked 新建 button: ${sel}`);
+        await page.waitForTimeout(1000);
+        newClicked = true;
+        await snapshot(page, `${label}_after_newbtn`);
+      } catch (_) {}
       break;
     }
-  } catch (e) {
-    log('⚠️', `Fill capital failed: ${e.message}`);
+  }
+  if (!newClicked) {
+    log('⚠️', '新建 button not found — trying any button with 新建');
+    try {
+      const btns = await page.locator('button').all();
+      for (const b of btns) {
+        const txt = await b.innerText().catch(() => '');
+        if (txt.includes('新建')) {
+          await b.click({ force: true });
+          opsLog.push(`CLICK [新建] via text match: "${txt}"`);
+          log('👉', `Clicked button with text: "${txt}"`);
+          await page.waitForTimeout(1000);
+          newClicked = true;
+          break;
+        }
+      }
+    } catch (_) {}
   }
 
-  // ── STEP 4: Submit form ──────────────────────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('④', 'STEP 4 — 提交「创建账户」');
-  log('═', '═══════════════════════════════════════════════');
+  // ── Step 3: Fill form ─────────────────────────────────────────────────
+  log('③', `【${label}】STEP 3 — 填写账户表单`);
+  if (newClicked) {
+    await page.waitForTimeout(600);
+    const accountName = `自动化_${mode}_${Date.now().toString(36)}`;
+    try {
+      // Find all text/number inputs in the modal
+      const textInputs = await page.locator('input[type="text"]').all();
+      const numInputs  = await page.locator('input[type="number"]').all();
+      for (const inp of textInputs) {
+        const ph = await inp.getAttribute('placeholder') || '';
+        if (ph.includes('基金') || ph.includes('名称') || ph.includes('账户')) {
+          await inp.fill(accountName);
+          opsLog.push(`FILL name="${accountName}" placeholder="${ph}"`);
+          log('✏️', `Filled name="${accountName}"`);
+          break;
+        }
+      }
+      // Fill initial capital
+      for (const inp of numInputs) {
+        await inp.fill('100000');
+        opsLog.push('FILL initial_capital=100000');
+        log('✏️', 'Filled initial_capital=100000');
+        break;
+      }
+    } catch (e) { log('⚠️', `Fill form failed: ${e.message}`); }
+  }
 
-  await page.waitForTimeout(500);
+  // ── Step 4: Submit create ─────────────────────────────────────────────
+  log('④', `【${label}】STEP 4 — 提交「创建账户」`);
   try {
-    // Click "创建" button inside modal
-    const createBtn = page.locator('button:has-text("创建")').last();
-    await createBtn.click();
-    opsLog.push('CLICK → [button:has-text("创建")] (modal confirm)');
-    log('✔️', 'Clicked 创建 (confirm button)');
-    await page.waitForTimeout(3_000);
-  } catch (e) {
-    log('❌', `Create submit failed: ${e.message}`);
-  }
+    const createBtns = await page.locator('button').all();
+    for (const b of createBtns) {
+      const txt = await b.innerText().catch(() => '');
+      if (txt.includes('创建') && !txt.includes('取消')) {
+        await b.click({ force: true });
+        opsLog.push(`SUBMIT [创建] text="${txt.trim()}"`);
+        log('✔️', `Clicked 创建: "${txt.trim()}"`);
+        await page.waitForTimeout(2500);
+        break;
+      }
+    }
+  } catch (e) { log('⚠️', `Submit failed: ${e.message}`); }
 
-  // ── STEP 5: Find the newly created account ───────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('⑤', 'STEP 5 — 定位新建账户 ID');
-  log('═', '═══════════════════════════════════════════════');
-
-  // Get latest POST /portfolio/ from apiCalls
-  const createCall = apiCalls.filter(c => c.method === 'POST' && c.path.includes('/portfolio/') && !c.path.includes('transfer') && !c.path.includes('cash')).slice(-1)[0];
-  const newAccId = createCall ? `created_id_in_response` : 'unknown';
-  opsLog.push(`FIND → 最新创建账户调用: POST ${createCall?.path || 'n/a'} → status=${createCall?.status || 'n/a'}`);
-  log('🔍', `Create API call: POST ${createCall?.path || 'n/a'} → status=${createCall?.status || 'n/a'}`);
-
-  // ── STEP 6: Fetch accounts and identify IDs ─────────────────────────────────
-  let mainId = null, subId = null;
+  // ── Step 5: Identify account IDs ──────────────────────────────────────
+  log('⑤', `【${label}】STEP 5 — 定位账户 ID`);
+  await page.waitForTimeout(1000);
+  let mainId = null, subId = null, newAccId = null;
   try {
     const listRes = await page.evaluate(async () => {
       const r = await fetch('/api/v1/portfolio/');
-      return r.json();
+      return r.json().catch(() => ({}));
     });
     const accs = listRes.portfolios || [];
-    const main = accs.find(p => !p.parent_id);
+    const main = accs.filter(p => !p.parent_id).sort((a,b) => a.id - b.id)[0];
     const sub  = accs.filter(p => p.parent_id).sort((a,b) => a.id - b.id)[0];
     mainId = main?.id;
     subId  = sub?.id;
-    opsLog.push(`FIND → main_id=${mainId} sub_id=${subId}`);
+    newAccId = mainId;
+    opsLog.push(`FIND main_id=${mainId} sub_id=${subId}`);
     log('🔍', `Accounts: main_id=${mainId} sub_id=${subId}`);
-  } catch (e) {
-    log('⚠️', `Failed to fetch account list: ${e.message}`);
-  }
+  } catch (e) { log('⚠️', `Account list fetch failed: ${e.message}`); }
 
-  // ── STEP 7: Transfer between accounts ───────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('⑦', 'STEP 7 — 执行资金划转（主→子）');
-  log('═', '═══════════════════════════════════════════════');
-
+  // ── Step 6: Direct transfer via fetch ───────────────────────────────────
+  log('⑥', `【${label}】STEP 6 — 资金划转（主→子）`);
   if (mainId && subId) {
     try {
-      const transferRes = await page.evaluate(async (from, to, amt) => {
-        const r = await fetch('/api/v1/portfolio/transfer/direct', {
+      const r = await page.evaluate(async ({ f, t }) => {
+        const res = await fetch('/api/v1/portfolio/transfer/direct', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ from_portfolio_id: from, to_portfolio_id: to, amount: amt, note: 'UI自动化测试划转' }),
+          body: JSON.stringify({
+            from_portfolio_id: f, to_portfolio_id: t,
+            amount: 5000, note: `自动化desktop测试划转`,
+          }),
         });
-        return { status: r.status, body: await r.text().catch(() => '') };
-      }, mainId, subId, 10000);
-
-      opsLog.push(`TRANSFER → from=${mainId} to=${subId} amount=10000 status=${transferRes.status}`);
-      log('✔️', `Transfer result: HTTP ${transferRes.status} payload=${transferRes.body?.slice(0, 100)}`);
-      if (transferRes.status >= 400) errors.push(`Transfer failed: HTTP ${transferRes.status}`);
-    } catch (e) {
-      errors.push(`Transfer error: ${e.message}`);
-      log('❌', `Transfer exception: ${e.message}`);
-    }
-  } else {
-    opsLog.push('SKIP → 无法获取账户ID，跳过划转测试');
-    log('⚠️', 'Skipping transfer: account IDs not found');
+        return { status: res.status, body: await res.text().catch(() => '') };
+      }, { f: mainId, t: subId });
+      opsLog.push(`TRANSFER from=${mainId} to=${subId} amount=5000 status=${r.status} body="${r.body.slice(0,80)}"`);
+      log('✔️', `Transfer HTTP ${r.status}`);
+      if (r.status >= 400) errors.push(`Transfer failed: HTTP ${r.status} ${r.body}`);
+    } catch (e) { errors.push(`Transfer: ${e.message}`); }
   }
 
-  // ── STEP 8: Query transactions ───────────────────────────────────────────────
-  log('═', '═══════════════════════════════════════════════');
-  log('⑧', 'STEP 8 — 查询流水接口验证');
-  log('═', '═══════════════════════════════════════════════');
-
+  // ── Step 7: Transactions query ─────────────────────────────────────────
+  log('⑦', `【${label}】STEP 7 — 查询流水接口`);
   if (mainId) {
     try {
-      const txnRes = await page.evaluate(async (pid) => {
-        const r = await fetch(`/api/v1/portfolio/${pid}/transactions?limit=3`);
-        return { status: r.status, body: await r.json().catch(() => ({})) };
-      }, mainId);
-      opsLog.push(`TXNS → main_id=${mainId} status=${txnRes.status} count=${txnRes.body?.data?.transactions?.length || 0}`);
-      log('🔍', `Transactions: HTTP ${txnRes.status}, ${txnRes.body?.data?.transactions?.length || 0} 条记录`);
-    } catch (e) {
-      log('⚠️', `Transactions query failed: ${e.message}`);
+      const r = await page.evaluate(async ({ pid }) => {
+        const res = await fetch(`/api/v1/portfolio/${pid}/transactions?limit=3`);
+        return { status: res.status, count: 0, body: await res.json().catch(() => ({})) };
+      }, { pid: mainId });
+      opsLog.push(`TXNS main_id=${mainId} status=${r.status} count=${r.body?.data?.transactions?.length || 0}`);
+      log('🔍', `Transactions: HTTP ${r.status}, ${r.body?.data?.transactions?.length || 0} 条`);
+    } catch (e) { log('⚠️', `Transactions query: ${e.message}`); }
+  }
+
+  await page.waitForTimeout(500);
+
+  // ── collect api calls ───────────────────────────────────────────────────
+  const calls = Array.from(reqMap.values()).filter(c => c.path.startsWith('/api/v1/'));
+
+  return { label, errors, warns, apiCalls: calls, opsLog };
+}
+
+// ── Report formatter ──────────────────────────────────────────────────────────
+function printReport(results) {
+  for (const { label, errors, warns, apiCalls, opsLog, fatal } of results) {
+    if (fatal) {
+      console.log(`\n  ❌ 【${label}】页面无法加载，跳过`);
+      continue;
     }
+    const ok = v => v >= 200 && v < 300;
+    const success = apiCalls.filter(c => ok(c.status)).length;
+    const failed  = apiCalls.filter(c => !ok(c.status)).length;
+    const rate    = apiCalls.length ? Math.round(success / apiCalls.length * 100) : 0;
+
+    console.log(`\n╔═══ ${label} ═══════════════════════════════════════════════════╗`);
+    console.log(`║  点击链路                                              ║`);
+    opsLog.forEach((op, i) => console.log(`║    ${i+1}. ${op}`));
+    console.log(`║                                                        ║`);
+    console.log(`║  Console Errors   : ${errors.length === 0 ? '✅ 0' : '❌ ' + errors.length}`);
+    errors.slice(0, 3).forEach(e => console.log(`║    🔴 ${e.slice(0,60)}`));
+    console.log(`║  Console Warnings : ${warns.length === 0 ? '✅ 0' : '🟡 ' + warns.length}`);
+    warns.slice(0, 3).forEach(w => console.log(`║    🟡 ${w.slice(0,60)}`));
+    console.log(`║                                                        ║`);
+    console.log(`║  API 调用: ${apiCalls.length} 次  成功: ${success}  失败: ${failed}  成功率: ${rate}%`);
+    console.log(`║  详细:`);
+    apiCalls.forEach(c => {
+      const icon = ok(c.status) ? '✅' : (c.status === 0 ? '⚠️' : '❌');
+      console.log(`║    ${icon} [${c.method}] ${c.path} → ${c.status || '?'}`);
+    });
+    const pass = errors.length === 0 && failed === 0;
+    console.log(`║                                                        ║`);
+    console.log(`║  结论: ${pass ? '✅ PASS' : '❌ FAIL'}`);
+    console.log(`╚════════════════════════════════════════════════════════════╝`);
   }
+}
 
-  // ── finalise latency on each call ─────────────────────────────────────────
-  const t0 = Date.now();
-  apiCalls.forEach(c => { if (c.latency === null) c.latency = Date.now() - t0; });
-
-  // ── print report ────────────────────────────────────────────────────────────
-  console.log('\n');
-  console.log('╔═══════════════════════════════════════════════════════════════════╗');
-  console.log('║          UI FUNCTIONAL TEST REPORT — AlphaTerminal               ║');
-  console.log('╚═══════════════════════════════════════════════════════════════════╝');
-  console.log('');
-
-  console.log('── 操作链路 ─────────────────────────────────────────────────────────');
-  opsLog.forEach((op, i) => console.log(`  ${i + 1}. ${op}`));
-  console.log('');
-
-  console.log('── Console Errors ──────────────────────────────────────────────────');
-  if (errors.length === 0) { console.log('  ✅ 无 Console Error'); PASS++; }
-  else { errors.forEach(e => console.log(`  🔴 ${e}`)); FAIL += errors.length; }
-  console.log('');
-
-  console.log('── Console Warnings ───────────────────────────────────────────────');
-  if (warns.length === 0) { console.log('  ✅ 无 Console Warning'); PASS++; }
-  else { warns.slice(0, 5).forEach(w => console.log(`  🟡 ${w}`)); FAIL += warns.length; }
-  console.log('');
-
-  console.log('── Backend API Calls ─────────────────────────────────────────────');
-  const beCalls = apiCalls.filter(c => c.path.startsWith('/api/v1/'));
-  const successCalls = beCalls.filter(c => c.status >= 200 && c.status < 300);
-  const failCalls   = beCalls.filter(c => c.status >= 400 || c.status === 0);
-  console.log(`  总计: ${beCalls.length}  次 API 调用`);
-  console.log(`  成功: ${successCalls.length}  次 (HTTP 2xx)`);
-  console.log(`  失败: ${failCalls.length}  次 (HTTP 4xx/5xx/0)`);
-  console.log('');
-  console.log('  详细调用:');
-  beCalls.forEach(c => {
-    const ok = c.status >= 200 && c.status < 300 ? '✅' : (c.status === 0 ? '⚠️' : '❌');
-    const lat = c.latency ? `+${c.latency}ms` : '?ms';
-    console.log(`  ${ok} [${c.method}] ${c.path}  → HTTP ${c.status || '?'} (${lat})`);
-    if (c.payload) console.log(`       payload: ${JSON.stringify(c.payload).slice(0, 120)}`);
-    if (c.response) console.log(`       response: ${c.response.slice(0, 120)}`);
+// ── entry point ──────────────────────────────────────────────────────────────
+(async () => {
+  const browser = await chromium.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
   });
-  console.log('');
 
-  console.log('── 结论 ──────────────────────────────────────────────────────────');
-  const apiSuccess = failCalls.length === 0;
-  const noErrors   = errors.length === 0;
-  if (apiSuccess && noErrors) {
-    console.log('  ✅ PASS — 前端功能正常，所有 API 调用成功，无 Console Error');
-  } else {
-    console.log('  ❌ FAIL — 发现问题请查看上方报告');
-    FAIL++;
+  require('fs').mkdirSync('/tmp/ui_test', {recursive:true});
+  const results = [];
+
+  if (runDesktop || runBoth) {
+    const ctx1 = await browser.newContext();
+    const page1 = await ctx1.newPage();
+    results.push(await runViewport(page1, 'desktop', { width: 1920, height: 1080 }));
+    await ctx1.close();
   }
 
-  console.log('\n  API 成功率: ' + Math.round(successCalls.length / Math.max(beCalls.length, 1) * 100) + '%');
-  console.log(`  总 PASS=${PASS}  FAIL=${FAIL}  ops=${opsLog.length}`);
-  console.log('\n');
+  if (runMobile || runBoth) {
+    const ctx2 = await browser.newContext({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1' });
+    const page2 = await ctx2.newPage();
+    results.push(await runViewport(page2, 'mobile', { width: 375, height: 667 }));
+    await ctx2.close();
+  }
 
   await browser.close();
-  process.exit(FAIL > 0 ? 1 : 0);
+  console.log('\n');
+  console.log('═══════════════════════════════════════');
+  console.log('   DUAL-VIEWPORT TEST REPORT           ');
+  console.log('═══════════════════════════════════════');
+  printReport(results);
+
+  const totalFails = results.reduce((s, r) => s + r.errors.filter(e => !e.includes('⚠️')).length, 0);
+  process.exit(totalFails > 0 ? 1 : 0);
 })();

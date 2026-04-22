@@ -120,10 +120,10 @@ def _transfer_between_accounts(
 
             # 写流水（from 侧）
             _insert_transaction(conn, from_pid, "transfer_out",
-                                amount, new_bal_from, to_pid, note=note)
+                                amount, new_bal_from, counterparty_id=to_pid, note=note)
             # 写流水（to 侧）
             _insert_transaction(conn, to_pid, "transfer_in",
-                                amount, new_bal_to, from_pid, note=note)
+                                amount, new_bal_to, counterparty_id=from_pid, note=note)
 
             conn.commit()
         finally:
@@ -354,8 +354,24 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     finally:
         conn.close()
 
+    # ── 获取现金余额 ──────────────────────────────────────────────
+    cash_balance = 0.0
+    try:
+        conn3 = _get_conn()
+        cb = conn3.execute(
+            "SELECT cash_balance FROM portfolios WHERE id=?",
+            (portfolio_id,),
+        ).fetchone()
+        cash_balance = cb[0] or 0.0 if cb else 0.0
+        conn3.close()
+    except Exception:
+        pass
+
     if not rows:
-        return {"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0, "includes_children": include_children}
+        return _ok({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
+                     "includes_children": include_children,
+                     "realized_pnl": 0.0, "unrealized_pnl": 0.0, "daily_pnl": 0.0,
+                     "cash_balance": cash_balance})
 
     spot = SpotCache.get_stocks()
     # 构建价格映射表，同时支持带前缀和不带前缀的代码
@@ -479,31 +495,76 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
 
+    # ── 从 position_lots 读取已实现 PnL ────────────────────────────
+    conn2 = _get_conn()
+    realized_pnl = 0.0
+    try:
+        closed_rows = conn2.execute(
+            "SELECT SUM(realized_pnl) FROM position_lots WHERE portfolio_id=? AND status='closed'",
+            (portfolio_id,),
+        ).fetchone()
+        realized_pnl = closed_rows[0] or 0.0
+    finally:
+        conn2.close()
+
+    # ── 从 position_summary 读取浮动盈亏（用独立连接，读取已已提交数据）────────
+    unrealized_pnl = 0.0
+    try:
+        _conn_ps = _get_conn()   # fresh connection = committed view
+        # DEBUG: verify what _conn_ps is and what data it sees
+        import sys as _sys; print(f"DEBUG unrealized: _conn_ps id={id(_conn_ps)}", file=_sys.stderr)
+        _sys.stderr.flush()
+        unrealized_row = _conn_ps.execute(
+            "SELECT SUM(unrealized_pnl) FROM position_summary WHERE portfolio_id=?",
+            (portfolio_id,),
+        ).fetchone()
+        unrealized_pnl = float(unrealized_row[0]) if unrealized_row and unrealized_row[0] is not None else 0.0
+        _conn_ps.close()
+    except Exception:
+        pass
+
+    # ── 从 transactions 计算当日盈亏 ───────────────────────────────────
+    today = datetime.now().strftime('%Y-%m-%d')
+    daily_pnl = 0.0
+    try:
+        txn_rows = conn.execute(
+            "SELECT SUM(amount) FROM transactions "
+            "WHERE portfolio_id=? AND created_at>=? AND type IN ('sell_pnl','deposit','withdraw','transfer_in','transfer_out')",
+            (portfolio_id, today),
+        ).fetchone()
+        daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
+    except Exception:
+        pass
+
     response = {
-        "positions":    result,
-        "total_cost":  round(total_cost, 2),
-        "total_value": round(total_value, 2),
-        "total_pnl":   round(total_pnl, 2),
-        "total_pnl_pct": round(total_pnl_pct, 2),
+        # ── 三分 PnL ──────────────────────────────────────────
+        "total_value":      round(total_value + cash_balance, 2),
+        "total_cost":       round(total_cost, 2),
+        "total_pnl":        round(total_value + cash_balance - total_cost, 2),
+        "total_pnl_pct":    round((total_value + cash_balance - total_cost) / total_cost * 100, 2) if total_cost else 0,
+        "daily_pnl":        round(daily_pnl, 2),
+        "daily_pnl_pct":    round(daily_pnl / total_cost * 100, 2) if total_cost else 0,
+        "realized_pnl":     round(realized_pnl, 2),
+        "unrealized_pnl":   round(unrealized_pnl, 2),
+        "cash_balance":     cash_balance,
+        "positions":        result,
     }
 
     if include_children:
         response["includes_children"] = True
         response["portfolio_count"] = len(set(r.get("portfolio_id") for r in result if r.get("portfolio_id")))
     
-    # 添加调试信息
     if missing_prices:
         response["missing_price_count"] = len(missing_prices)
-        response["missing_price_symbols"] = missing_prices[:10]  # 最多显示10个
+        response["missing_price_symbols"] = missing_prices[:10]
     
-    # 添加价格数据源信息
     if db_price_loaded:
         response["price_data_source"] = "DatabaseFallback"
     elif spot:
         response["price_data_source"] = "SpotCache"
     response["price_data_count"] = len(spot) if spot else 0
 
-    return response
+    return _ok(response)
 
 
 
@@ -1032,7 +1093,9 @@ async def list_transactions(
 
 from app.services.trading import (
     execute_buy, execute_sell, get_open_lots,
-    calc_unrealized_pnl, LotRecord, SellResult,
+    calc_unrealized_pnl,
+    upsert_position_summary, update_market_value, get_position_summary,
+    LotRecord, SellResult,
 )
 
 # ── Pydantic 模型 ────────────────────────────────────────────────────
@@ -1205,3 +1268,114 @@ async def unrealized_pnl(
     except Exception as e:
         logger.error(f"[UnrealizedPnl] error: {e}", exc_info=True)
         raise HTTPException(500, f"盈亏计算失败: {e}")
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Phase 3: position_summary 聚合表路由 + ECharts 数据端点
+# ══════════════════════════════════════════════════════════════════════════
+
+@router.get("/{portfolio_id}/lots/summary")
+async def lots_summary(portfolio_id: int, symbol: Optional[str] = Query(None)):
+    """
+    读取 position_summary 聚合表（读优化视图）。
+    不带 symbol → 返回该账户全部聚合持仓；
+    带 symbol → 返回单个标的聚合数据。
+    """
+    try:
+        rows = get_position_summary(portfolio_id, symbol)
+        return _ok({"summary": rows, "count": len(rows)})
+    except Exception as e:
+        logger.error(f"[lots_summary] error: {e}", exc_info=True)
+        raise HTTPException(500, str(e))
+
+
+@router.post("/{portfolio_id}/lots/update_price")
+async def refresh_market_value(
+    portfolio_id: int,
+    symbol: str    = Query(..., description="标的代码"),
+    current_price: float = Query(..., description="当前市价"),
+):
+    """
+    批量刷新持仓聚合表的 market_value 和 unrealized_pnl。
+    行情刷新时由调度器调用，也可在 GET /lots/summary 前调用。
+    """
+    try:
+        result = update_market_value(portfolio_id, symbol, current_price)
+        return _ok(result)
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/{portfolio_id}/lots/echarts")
+async def lots_echarts_data(portfolio_id: int):
+    """
+    返回适合 ECharts 饼图 + 列表的持仓聚合数据。
+    """
+    try:
+        rows = get_position_summary(portfolio_id)
+        total_mv = sum(r.get('market_value', 0) for r in rows)
+        chart_data = []
+        for r in rows:
+            mv = r.get('market_value', 0)
+            pct = round(mv / total_mv * 100, 2) if total_mv else 0
+            chart_data.append({
+                "symbol":      r['symbol'],
+                "total_shares": r['total_shares'],
+                "avg_cost":    r['avg_cost'],
+                "current_price": r.get('market_value', 0) / r['total_shares'] if r['total_shares'] else 0,
+                "market_value": mv,
+                "unrealized_pnl": r.get('unrealized_pnl', 0),
+                "weight_pct":   pct,
+            })
+        return _ok({
+            "total_market_value": round(total_mv, 2),
+            "positions": chart_data,
+        })
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@router.get("/{portfolio_id}/pnl/today")
+async def daily_pnl_only(portfolio_id: int):
+    """
+    仅返回当日三分数据（轻量端点，供 ECharts 看板高频轮询）。
+    """
+    today = datetime.now().strftime('%Y-%m-%d')
+    conn = _get_conn()
+    try:
+        # realized today
+        rt = conn.execute(
+            "SELECT SUM(amount) FROM transactions "
+            "WHERE portfolio_id=? AND created_at>=? AND type='sell_pnl'",
+            (portfolio_id, today),
+        ).fetchone()
+        realized_today = rt[0] or 0.0
+
+        # deposits/withdrawals/transfer today
+        dt = conn.execute(
+            "SELECT SUM(amount) FROM transactions "
+            "WHERE portfolio_id=? AND created_at>=? AND type IN ('deposit','withdraw','transfer_in','transfer_out')",
+            (portfolio_id, today),
+        ).fetchone()
+        cash_flow = dt[0] or 0.0
+
+        # unrealized (from summary)
+        unrealized = 0.0
+        try:
+            ur = conn.execute(
+                "SELECT SUM(unrealized_pnl) FROM position_summary WHERE portfolio_id=?",
+                (portfolio_id,),
+            ).fetchone()
+            unrealized = ur[0] or 0.0 if ur else 0.0
+        except Exception:
+            pass
+
+        return _ok({
+            "date":           today,
+            "realized_today": round(realized_today, 2),
+            "cash_flow":      round(cash_flow, 2),
+            "unrealized_pnl": round(unrealized, 2),
+            "daily_pnl":      round(realized_today + cash_flow, 2),
+        })
+    finally:
+        conn.close()
