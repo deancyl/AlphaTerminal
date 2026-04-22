@@ -153,6 +153,26 @@ def init_tables():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_type     ON transactions(type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_txn_created  ON transactions(created_at)")
 
+        # ── Phase 2: 持仓批次追踪（Lots）────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS position_lots (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id    INTEGER NOT NULL,
+                symbol          TEXT NOT NULL,
+                shares          INTEGER NOT NULL,        -- 本批次剩余股数（动态递减）
+                avg_cost        REAL NOT NULL,           -- 本批次买入均价
+                buy_date        TEXT NOT NULL,           -- 买入日期（date）
+                buy_order_id    TEXT DEFAULT NULL,       -- 来源订单号（可选）
+                status          TEXT NOT NULL DEFAULT 'open',  -- 'open' | 'closed'
+                closed_at       TEXT DEFAULT NULL,       -- 平仓日期
+                realized_pnl    REAL DEFAULT 0.0,         -- 已实现盈亏（平仓时计算）
+                created_at      TEXT NOT NULL,
+                UNIQUE(portfolio_id, symbol, buy_order_id, buy_date)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_port_sym ON position_lots(portfolio_id, symbol)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_lots_status  ON position_lots(status)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────

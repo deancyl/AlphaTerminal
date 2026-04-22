@@ -1024,3 +1024,184 @@ async def list_transactions(
     finally:
         conn.close()
     return _ok({"transactions": _row2dict(rows, cols), "total": len(rows)})
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  Phase 2: 持仓批次（Lots）路由 — Buy / Sell / Lots 查询
+# ══════════════════════════════════════════════════════════════════════════
+
+from app.services.trading import (
+    execute_buy, execute_sell, get_open_lots,
+    calc_unrealized_pnl, LotRecord, SellResult,
+)
+
+# ── Pydantic 模型 ────────────────────────────────────────────────────
+
+class BuyIn(BaseModel):
+    symbol:    str
+    shares:    int
+    buy_price: float
+    buy_date:  Optional[str] = None
+    order_id:  Optional[str] = None
+
+class SellIn(BaseModel):
+    symbol:    str
+    shares:    int
+    sell_price: float
+    order_id:  Optional[str] = None
+
+
+# ── 买入（BUI）── 新增批次 ────────────────────────────────────────────
+
+@router.post("/{portfolio_id}/lots/buy")
+async def buy_lot(portfolio_id: int, body: BuyIn):
+    """
+    买入时新增一个批次（lot）。
+    同一标的同一日期可有多批次，但 avg_cost 独立计算。
+    """
+    try:
+        lot = execute_buy(
+            portfolio_id = portfolio_id,
+            symbol       = body.symbol,
+            shares       = body.shares,
+            buy_price    = body.buy_price,
+            buy_date     = body.buy_date,
+            order_id     = body.order_id,
+        )
+        return _ok({
+            "lot_id":    lot.id,
+            "symbol":    lot.symbol,
+            "shares":    lot.shares,
+            "avg_cost":  lot.avg_cost,
+            "buy_date":  lot.buy_date,
+            "status":    lot.status,
+        })
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.error(f"[Buy] error: {e}", exc_info=True)
+        raise HTTPException(500, f"买入失败: {e}")
+
+
+# ── 卖出（SELL）── FIFO 平仓 ─────────────────────────────────────────
+
+@router.post("/{portfolio_id}/lots/sell")
+async def sell_lot(portfolio_id: int, body: SellIn):
+    """
+    FIFO 平仓算法：
+      1. 按 buy_date 升序匹配 open 批次
+      2. 每批次平仓时计算 realized_pnl 并累加
+      3. 返回平仓明细和总已实现盈亏
+    """
+    try:
+        result = execute_sell(
+            portfolio_id = portfolio_id,
+            symbol       = body.symbol,
+            shares       = body.shares,
+            sell_price   = body.sell_price,
+            order_id     = body.order_id,
+        )
+
+        # 平仓写流水（可选：也可在持仓路由层写）
+        conn = _get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT cash_balance FROM portfolios WHERE id=?",
+                (portfolio_id,),
+            ).fetchone()
+            cash_bal = (rows[0] or 0.0) if rows else 0.0
+            new_cash = cash_bal + result.total_realized_pnl
+            conn.execute(
+                "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                (new_cash, portfolio_id),
+            )
+            _insert_transaction(
+                conn,
+                portfolio_id,
+                "sell_pnl",
+                result.total_realized_pnl,
+                new_cash,
+                related_symbol = body.symbol,
+                note = f"卖出{body.symbol} × {body.shares}手",
+                operator = "user",
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return _ok({
+            "symbol":              body.symbol,
+            "shares_sold":         body.shares - result.shares_remaining,
+            "total_realized_pnl":  result.total_realized_pnl,
+            "sell_price":          result.sell_price,
+            "timestamp":           result.timestamp,
+            "lots_closed": [
+                {
+                    "lot_id":        lc.lot_id,
+                    "shares_closed": lc.shares_closed,
+                    "avg_cost":      lc.avg_cost,
+                    "sell_price":    lc.sell_price,
+                    "realized_pnl":  lc.realized_pnl,
+                }
+                for lc in result.lots_closed
+            ],
+        })
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except Exception as e:
+        logger.error(f"[Sell] error: {e}", exc_info=True)
+        raise HTTPException(500, f"卖出失败: {e}")
+
+
+# ── 批次查询 ─────────────────────────────────────────────────────────
+
+@router.get("/{portfolio_id}/lots")
+async def list_lots(
+    portfolio_id: int,
+    symbol: Optional[str] = Query(None, description="过滤标的代码（不传则返回全部）"),
+):
+    """
+    返回某账户的未平批次（可按标的过滤）。
+    用于前端展示批次持仓和计算成本。
+    """
+    try:
+        lots = get_open_lots(portfolio_id, symbol)
+        return _ok({
+            "lots": [
+                {
+                    "id":           l.id,
+                    "symbol":      l.symbol,
+                    "shares":      l.shares,
+                    "avg_cost":    l.avg_cost,
+                    "buy_date":    l.buy_date,
+                    "buy_order_id": l.buy_order_id,
+                    "status":      l.status,
+                    "realized_pnl": l.realized_pnl,
+                }
+                for l in lots
+            ],
+            "count": len(lots),
+        })
+    except Exception as e:
+        logger.error(f"[Lots] error: {e}", exc_info=True)
+        raise HTTPException(500, f"批次查询失败: {e}")
+
+
+# ── 未实现盈亏 ──────────────────────────────────────────────────────
+
+@router.get("/{portfolio_id}/lots/unrealized")
+async def unrealized_pnl(
+    portfolio_id: int,
+    symbol: str    = Query(..., description="标的代码，如 000001"),
+    current_price: float = Query(..., description="当前市场价格"),
+):
+    """
+    计算浮动盈亏。
+    未实现 PnL = Σ(shares × (current_price - avg_cost))
+    """
+    try:
+        result = calc_unrealized_pnl(portfolio_id, symbol, current_price)
+        return _ok(result)
+    except Exception as e:
+        logger.error(f"[UnrealizedPnl] error: {e}", exc_info=True)
+        raise HTTPException(500, f"盈亏计算失败: {e}")
