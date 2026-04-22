@@ -1,0 +1,1 @@
+⚠️ Commit 范围说明：本 commit 标题为「修复 PortfolioDashboard.vue 闭括号缺失」，但实际包含了该文件此前 session 积累的大量未提交改动（265 行新增 / 961 行删除），原因是当时使用了 git add（而非 git add -p）将整个文件的全部未暂台变更一并提交。今后 single-file fix 应使用 git add -p <file> 精确暂存局部改动，避免裹入无关变更。
