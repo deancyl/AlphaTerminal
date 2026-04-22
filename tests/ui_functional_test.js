@@ -405,13 +405,127 @@ function printReport(results) {
     await ctx2.close();
   }
 
-  await browser.close();
-  console.log('\n');
+  // ── Phase 4: Chart DOM Verification ───────────────────────────
+  console.log('\n═══════════════════════════════════════');
+  console.log('   PHASE 4 — CHART DOM VERIFICATION      ');
   console.log('═══════════════════════════════════════');
-  console.log('   DUAL-VIEWPORT TEST REPORT           ');
+  for (const { label, fatal } of results) {
+    if (!fatal) {
+      const ctxChart = await browser.newContext();
+      const pageChart = await ctxChart.newPage();
+      const chartResult = await runChartTests(pageChart, label.split(' ')[0].toLowerCase());
+      results.push(chartResult);
+      await ctxChart.close();
+    }
+  }
+
+  await browser.close();
+  console.log('\n═══════════════════════════════════════');
+  console.log('   FINAL CONSOLIDATED REPORT            ');
   console.log('═══════════════════════════════════════');
   printReport(results);
 
   const totalFails = results.reduce((s, r) => s + r.errors.filter(e => !e.includes('⚠️')).length, 0);
   process.exit(totalFails > 0 ? 1 : 0);
 })();
+
+// ═══════════════════════════════════════════════════════════════
+//  Phase 4 Extended Tests — Chart & DOM Verification
+// ═══════════════════════════════════════════════════════════════
+
+async function runChartTests(page, mode) {
+  const label = `${mode} Chart`;
+  const errors = [], warns = [], apiCalls = [], opsLog = [];
+
+  log('═', `【${label}】图表 DOM 检测`);
+  await page.setViewportSize({ width: mode === 'desktop' ? 1920 : 375, height: mode === 'desktop' ? 1080 : 667 });
+
+  page.on('console', msg => {
+    if (msg.type() === 'error') { errors.push(msg.text()); log('🔴', `[${label}] ${msg.text()}`); }
+  });
+
+  const reqMap = new Map();
+  page.on('request', req => {
+    const url = req.url();
+    if (!url.startsWith(BACKEND) && !url.startsWith(FRONTEND)) return;
+    const path = url.replace(BACKEND, '').replace(FRONTEND, '');
+    reqMap.set(path, { method: req.method(), path, status: null, latency: null });
+  });
+  page.on('response', async resp => {
+    const url = resp.url();
+    if (!url.startsWith(BACKEND) && !url.startsWith(FRONTEND)) return;
+    const path = url.replace(BACKEND, '').replace(FRONTEND, '');
+    const e = reqMap.get(path);
+    if (e) { e.status = resp.status(); e.latency = Date.now(); }
+  });
+
+  try {
+    await page.goto(FRONTEND, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.waitForTimeout(2000);
+    opsLog.push('NAVIGATE → http://localhost:60100');
+
+    // Navigate to portfolio
+    try {
+      await page.locator('button').filter({ hasText: '💰' }).first().click({ force: true });
+      opsLog.push('CLICK sidebar[💰]');
+      await page.waitForTimeout(2000);
+    } catch (_) {}
+
+    // Wait for async data (lots/echarts endpoint)
+    await page.waitForTimeout(5000);
+
+    opsLog.push('WAIT 5s for chart rendering');
+
+    // ── Check 1: .echart-container exists and has size ─────────────────
+    const echartExists = await page.locator('.echart-container').count();
+    const echartBox    = echartExists > 0 ? await page.locator('.echart-container').first().boundingBox() : null;
+    opsLog.push(`ECHARTS DOM: count=${echartExists} boundingBox=${JSON.stringify(echartBox)}`);
+    log('🔍', `echart-container: count=${echartExists} box=${JSON.stringify(echartBox)}`);
+
+    // ── Check 2: .lots-table exists (OpenLotsPanel) ──────────────────
+    const lotsTableExists = await page.locator('.lots-table').count();
+    opsLog.push(`LOTS TABLE DOM: count=${lotsTableExists}`);
+    log('🔍', `lots-table: count=${lotsTableExists}`);
+
+    // ── Check 3: .pnl-card exists (PnL cards row) ─────────────────────
+    const pnlCardCount = await page.locator('.pnl-card').count();
+    opsLog.push(`PNL CARDS DOM: count=${pnlCardCount}`);
+    log('🔍', `pnl-card: count=${pnlCardCount}`);
+
+    // ── Check 4: Pie legend items ──────────────────────────────────────
+    const legendCount = await page.locator('.legend-item').count();
+    opsLog.push(`PIE LEGEND ITEMS: count=${legendCount}`);
+    log('🔍', `legend-item: count=${legendCount}`);
+
+    // ── Check 5: Backend API calls for lots/echarts ──────────────────
+    const echartsCall = Array.from(reqMap.values()).find(c => c.path.includes('lots/echarts'));
+    const pnlCall     = Array.from(reqMap.values()).find(c => c.path.includes('/pnl'));
+    if (echartsCall) opsLog.push(`API /lots/echarts → HTTP ${echartsCall.status}`);
+    if (pnlCall)    opsLog.push(`API /pnl → HTTP ${pnlCall.status}`);
+
+    // ── Summary ────────────────────────────────────────────────────────
+    const domChecks = [
+      { name: 'ECharts DOM (.echart-container)', pass: echartExists > 0 },
+      { name: 'Lots Table (.lots-table)',      pass: lotsTableExists > 0 },
+      { name: 'PnL Cards (.pnl-card)',          pass: pnlCardCount >= 3 },
+      { name: 'Pie Legend (.legend-item)',       pass: legendCount > 0 },
+      { name: '/lots/echarts API',              pass: echartsCall?.status === 200 },
+      { name: '/pnl API',                       pass: pnlCall?.status === 200 },
+    ];
+
+    console.log(`\n╔═══ ${label} DOM 检测 ══════════════════════════════════════════╗`);
+    domChecks.forEach((c, i) => {
+      const icon = c.pass ? '✅' : '❌';
+      console.log(`║  ${icon} ${c.name}: ${c.pass ? 'PASS' : 'FAIL'}`);
+    });
+    const domPass = domChecks.every(c => c.pass);
+    console.log(`║                                                        ║`);
+    console.log(`║  结论: ${domPass ? '✅ DOM 渲染通过' : '❌ 部分 DOM 未就绪'}                       ║`);
+    console.log(`╚════════════════════════════════════════════════════════════╝`);
+
+    return { label, errors, warns, apiCalls: Array.from(reqMap.values()), opsLog, domPass };
+  } catch (e) {
+    log('❌', `${label} failed: ${e.message}`);
+    return { label, errors, warns, apiCalls: [], opsLog, fatal: true };
+  }
+}

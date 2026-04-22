@@ -510,7 +510,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { ref, computed,
+  defineAsyncComponent,
+} from 'vue';
+import OpenLotsPanel from './OpenLotsPanel.vue';
+import PositionPieChart from './PositionPieChart.vue'; onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { logger } from '../utils/logger.js'
 import AttributionPanel from './AttributionPanel.vue'
 // echarts 从 CDN 加载 via window.echarts
@@ -1011,3 +1015,5 @@ watch(() => store.snapshots?.length ?? 0, () => {
 // 窗口 resize 时重绘
 window.addEventListener('resize', () => chart.value?.resize())
 </script>
+
+// ────────────────────────────────────────────────────────────────
