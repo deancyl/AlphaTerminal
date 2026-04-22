@@ -3,7 +3,14 @@
     <!-- 标题 -->
     <div class="flex items-center justify-between mb-1">
       <span class="text-terminal-accent font-bold text-sm">💰 投资组合</span>
-      <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
+      <div class="flex gap-2">
+        <button
+          v-if="selectedPortfolioId !== null"
+          @click="showTradeModal = true"
+          class="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1 rounded font-bold transition-colors"
+        >📋 模拟调仓</button>
+        <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
+      </div>
     </div>
 
     <!-- 树形账户选择器 + 聚合指示器 -->
@@ -153,6 +160,17 @@
       </div>
     </div>
   </div>
+
+  <!-- 模拟调仓弹窗 -->
+  <SimulatedTradeModal
+    v-if="selectedPortfolioId !== null"
+    :visible="showTradeModal"
+    :portfolioId="selectedPortfolioId"
+    :portfolioName="currentPortfolioName"
+    :isAggregated="isAggregated"
+    @trade-done="onTradeDone"
+    @close="showTradeModal = false"
+  />
 </template>
 
 <script setup>
@@ -161,6 +179,7 @@ import { apiFetch } from '../utils/api.js';
 import OpenLotsPanel from './OpenLotsPanel.vue';
 import PositionPieChart from './PositionPieChart.vue';
 import AttributionPanel from './AttributionPanel.vue';
+import SimulatedTradeModal from './SimulatedTradeModal.vue';
 
 // ── 常量 ─────────────────────────────────────────────────────────
 const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR'];
@@ -171,6 +190,7 @@ const positions = ref([]);
 const portfolioList = ref([]);
 const showCreateModal = ref(false);
 const showTransferModal = ref(false);
+const showTradeModal = ref(false);
 const activeTab = ref('positions');
 const filterSector = ref('');
 const filterPositionType = ref('');
@@ -208,6 +228,18 @@ const sectorList = computed(() => [...new Set(positions.value.map(p => p.sector)
 const selectableParentList = computed(() =>
   portfolioList.value.filter(p => p.type !== 'main')
 );
+
+// 当前选中账户名称（供模拟调仓弹窗显示）
+const currentPortfolioName = computed(() => {
+  const node = flatTree.value.find(n => n.id === selectedPortfolioId.value);
+  return node ? node.name : '';
+});
+
+// 模拟调仓完成后 → 刷新全部资产视图
+function onTradeDone() {
+  showTradeModal.value = false;
+  loadPortfolioData();
+}
 
 // ── 树形结构（扁平化带缩进，供 select 渲染）────────────────────
 const flatTree = computed(() => {
