@@ -347,6 +347,167 @@ async function runViewport(page, mode, viewport) {
   return { label, errors, warns, apiCalls: calls, opsLog };
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+//  Phase Roll-up: 子账户树形 PnL 聚合 — 自动化验证
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * 资金守恒定律测试 + 划转验证
+ * 1. GET /conservation  → 验证 parent_total == parent + children（守恒定律）
+ * 2. POST /transfer    → 子账户间划转
+ * 3. GET /conservation → 验证划转前后 grand_total 完全相等
+ */
+async function runConservationTest() {
+  const BASE = 'http://localhost:8002/api/v1';
+  const results = [];
+
+  async function api(path, method = 'GET', body = null) {
+    const opts = { method };
+    if (body) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    const resp = await fetch(`${BASE}${path}`, opts);
+    const text = await resp.text();
+    let json;
+    try { json = JSON.parse(text); } catch { json = { raw: text }; }
+    return { status: resp.status, data: json };
+  }
+
+  // ── Step 1: 获取账户列表 ──────────────────────────────────────
+  log('🔍', '[守恒测试] Step 1 — 获取账户列表');
+  const listRes = await api('/portfolio/');
+  const portfolios = listRes.data.portfolios || [];
+  const parent = portfolios.find(p => p.type === 'main');
+  const child  = portfolios.find(p => p.parent_id === parent?.id);
+
+  if (!parent) { console.log('❌ 无主账户，跳过守恒测试'); return results; }
+  console.log(`  主账户: id=${parent.id} "${parent.name}"`);
+  if (child) console.log(`  子账户: id=${child.id} "${child.name}"`);
+  else console.log('  ⚠️  无子账户，跳过划转测试');
+
+  // ── Step 2: 守恒定律验证（划转前）────────────────────────────────
+  log('🔍', '[守恒测试] Step 2 — 守恒定律验证（划转前）');
+  const consBefore = await api(`/portfolio/${parent.id}/conservation`);
+  console.log(`  HTTP ${consBefore.status}`);
+  if (consBefore.status === 200) {
+    const d = consBefore.data.data || consBefore.data;
+    const parentTotal  = d.parent?.total  || 0;
+    const childrenTotal= d.children_total || 0;
+    const grandTotal   = d.grand_total    || 0;
+    const delta        = d.conservation_delta || 0;
+    const ok           = d.conservation_ok !== false;
+
+    console.log(`  parent_total  = ¥${parentTotal.toLocaleString()}`);
+    console.log(`  children_total= ¥${childrenTotal.toLocaleString()}`);
+    console.log(`  grand_total  = ¥${grandTotal.toLocaleString()}`);
+    console.log(`  (grand - parent) = ¥${delta.toLocaleString()}  ← 应等于 children_total`);
+    console.log(`  conservation_ok  = ${ok ? '✅ true' : '❌ false'}`);
+    results.push({
+      name: '守恒定律（划转前）',
+      pass: ok && Math.abs(delta - childrenTotal) < 0.01,
+      detail: `parent=¥${parentTotal} children=¥${childrenTotal} grand=¥${grandTotal}`,
+    });
+  } else {
+    console.log(`  ❌ 失败: ${JSON.stringify(consBefore.data)}`);
+    results.push({ name: '守恒定律（划转前）', pass: false, detail: `HTTP ${consBefore.status}` });
+  }
+
+  // ── Step 3: 树形端点验证 ─────────────────────────────────────────
+  log('🔍', '[守恒测试] Step 3 — 树形端点 /tree');
+  const treeRes = await api(`/portfolio/${parent.id}/tree`);
+  console.log(`  HTTP ${treeRes.status}`);
+  if (treeRes.status === 200) {
+    const tree = (treeRes.data.data || treeRes.data).tree || {};
+    console.log(`  tree.name = "${tree.name}"`);
+    console.log(`  tree.children.length = ${(tree.children || []).length}`);
+    results.push({ name: '/tree 端点', pass: true, detail: `children=${tree.children?.length}` });
+  } else {
+    console.log(`  ❌ 失败`);
+    results.push({ name: '/tree 端点', pass: false, detail: `HTTP ${treeRes.status}` });
+  }
+
+  // ── Step 4: 子账户间划转（金额小，测试用）──────────────────────────
+  if (!child) {
+    console.log('  ⚠️  无子账户，跳过划转测试');
+  } else {
+    log('🔍', `[守恒测试] Step 4 — 子账户间划转 ¥1000（${parent.name} → ${child.name}）`);
+    const transferRes = await api('/portfolio/transfer/direct', 'POST', {
+      from_portfolio_id: parent.id,
+      to_portfolio_id:   child.id,
+      amount:            1000,
+    });
+    console.log(`  HTTP ${transferRes.status}`);
+    if (transferRes.status === 200 || transferRes.data?.code === 0) {
+      const td = transferRes.data.data || transferRes.data;
+      console.log(`  ✅ 划转成功: from_balance=¥${td.balance_from?.toLocaleString()} to_balance=¥${td.balance_to?.toLocaleString()}`);
+      results.push({
+        name: '子账户划转 API',
+        pass: true,
+        detail: `¥1000 ${parent.name} → ${child.name}`,
+      });
+    } else {
+      console.log(`  ❌ 划转失败: ${JSON.stringify(transferRes.data)}`);
+      results.push({ name: '子账户划转 API', pass: false, detail: `HTTP ${transferRes.status}` });
+    }
+
+    // ── Step 5: 守恒定律验证（划转后）────────────────────────────────
+    log('🔍', '[守恒测试] Step 5 — 守恒定律验证（划转后）');
+    const consAfter = await api(`/portfolio/${parent.id}/conservation`);
+
+    if (consAfter.status === 200) {
+      const before = (consBefore.data.data || consBefore.data).grand_total || 0;
+      const after  = (consAfter.data.data  || consAfter.data).grand_total  || 0;
+      const delta_abs = Math.abs(after - before);
+      // 划转是内部转账，grand_total 应完全不变
+      const conservation_ok = delta_abs < 0.01;
+      console.log(`  grand_total 划转前 = ¥${before.toLocaleString()}`);
+      console.log(`  grand_total 划转后 = ¥${after.toLocaleString()}`);
+      console.log(`  差值 = ¥${delta_abs.toFixed(4)}  ${conservation_ok ? '✅ 守恒（相等）' : '❌ 资金异常！）'}`);
+      results.push({
+        name: '资金守恒（划转后 = 划转前）',
+        pass: conservation_ok,
+        detail: `before=¥${before} after=¥${after} delta=¥${delta_abs}`,
+      });
+    } else {
+      console.log(`  ❌ 失败: HTTP ${consAfter.status}`);
+      results.push({ name: '资金守恒（划转后）', pass: false, detail: `HTTP ${consAfter.status}` });
+    }
+
+    // ── Step 6: 回滚划转（恢复原状）───────────────────────────────────
+    log('🔍', `[守恒测试] Step 6 — 回滚划转 ¥1000（${child.name} → ${parent.name}）`);
+    const rollbackRes = await api('/portfolio/transfer/direct', 'POST', {
+      from_portfolio_id: child.id,
+      to_portfolio_id:   parent.id,
+      amount:            1000,
+    });
+    if (rollbackRes.status === 200 || rollbackRes.data?.code === 0) {
+      console.log(`  ✅ 回滚成功`);
+      results.push({ name: '划转回滚', pass: true, detail: '¥1000 恢复原状' });
+    } else {
+      console.log(`  ⚠️  回滚失败（不影响主测试）: ${JSON.stringify(rollbackRes.data)}`);
+      results.push({ name: '划转回滚', pass: false, detail: `HTTP ${rollbackRes.status}` });
+    }
+  }
+
+  // ── Step 7: include_children 端点验证 ──────────────────────────────
+  log('🔍', '[守恒测试] Step 7 — include_children 各端点验证');
+  for (const [path, label] of [
+    [`/portfolio/${parent.id}/lots?include_children=true`,       '/lots?include_children'],
+    [`/portfolio/${parent.id}/lots/summary?include_children=true`, '/lots/summary?include_children'],
+    [`/portfolio/${parent.id}/lots/echarts?include_children=true`,'/lots/echarts?include_children'],
+    [`/portfolio/${parent.id}/pnl?include_children=true`,        '/pnl?include_children'],
+    [`/portfolio/${parent.id}/positions?include_children=true`,   '/positions?include_children'],
+  ]) {
+    const r = await api(path);
+    const pass = r.status === 200;
+    console.log(`  ${pass ? '✅' : '❌'} HTTP ${r.status}  ${path}`);
+    results.push({ name: label, pass, detail: `HTTP ${r.status}` });
+  }
+
+  return results;
+}
+
 // ── Report formatter ──────────────────────────────────────────────────────────
 function printReport(results) {
   for (const { label, errors, warns, apiCalls, opsLog, fatal } of results) {
@@ -420,13 +581,29 @@ function printReport(results) {
   }
 
   await browser.close();
+
+  // ── Phase Roll-up: 子账户树形聚合 + 守恒定律验证 ─────────────
+  console.log('\n═══════════════════════════════════════');
+  console.log('   PHASE ROLL-UP — TREE PNL + CONSERVATION  ');
+  console.log('═══════════════════════════════════════');
+  const conservationResults = await runConservationTest();
+
   console.log('\n═══════════════════════════════════════');
   console.log('   FINAL CONSOLIDATED REPORT            ');
   console.log('═══════════════════════════════════════');
+
+  // 守恒测试单独输出
+  console.log('\n  ── 守恒定律测试结果 ──');
+  let allPass = true;
+  for (const r of conservationResults) {
+    console.log(`    ${r.pass ? '✅' : '❌'} ${r.name}: ${r.detail}`);
+    if (!r.pass) allPass = false;
+  }
+
   printReport(results);
 
   const totalFails = results.reduce((s, r) => s + r.errors.filter(e => !e.includes('⚠️')).length, 0);
-  process.exit(totalFails > 0 ? 1 : 0);
+  process.exit((!allPass || totalFails > 0) ? 1 : 0);
 })();
 
 // ═══════════════════════════════════════════════════════════════

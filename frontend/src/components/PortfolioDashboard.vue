@@ -6,6 +6,19 @@
       <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
     </div>
 
+    <!-- 树形账户选择器 + 聚合指示器 -->
+    <div v-if="selectedPortfolioId !== null" class="flex items-center gap-2 mb-2">
+      <span class="text-gray-400 text-xs">账户：</span>
+      <select v-model="selectedPortfolioId" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs flex-1">
+        <template v-for="node in flatTree" :key="node.id">
+          <option :value="node.id">{{ node._label }}</option>
+        </template>
+      </select>
+      <span v-if="isAggregated" class="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-2 py-0.5">
+        📂 含子账户
+      </span>
+    </div>
+
     <!-- 操作栏：过滤器 -->
     <div v-if="selectedPortfolioId !== null" class="flex gap-2 mb-3 items-center text-xs flex-wrap">
       <select v-model="filterSector" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-200">
@@ -63,11 +76,11 @@
 
     <!-- Phase 4: 持仓分布饼图 -->
     <div class="pie-chart-wrapper" v-if="selectedPortfolioId">
-      <PositionPieChart v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" />
+      <PositionPieChart v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
     </div>
 
     <!-- Phase 4: Open Lots 批次明细 -->
-    <OpenLotsPanel v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" />
+    <OpenLotsPanel v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
 
     <!-- 归因分析 -->
     <div v-if="activeTab === 'analysis'" class="mt-4">
@@ -196,6 +209,47 @@ const selectableParentList = computed(() =>
   portfolioList.value.filter(p => p.type !== 'main')
 );
 
+// ── 树形结构（扁平化带缩进，供 select 渲染）────────────────────
+const flatTree = computed(() => {
+  // 建立 id → children map
+  const childMap = {};
+  portfolioList.value.forEach(p => {
+    const parent = p.parent_id ?? null;
+    if (!childMap[parent]) childMap[parent] = [];
+    childMap[parent].push(p);
+  });
+
+  const indent = (depth) => '　'.repeat(depth) + (depth > 0 ? '└─ ' : '');
+
+  const result = [];
+  function traverse(pid, depth) {
+    const nodes = childMap[pid] || [];
+    nodes.forEach(node => {
+      result.push({ ...node, _label: indent(depth) + (depth > 0 ? '📂 ' : '🏦 ') + node.name });
+      traverse(node.id, depth + 1);
+    });
+  }
+  traverse(null, 0);
+  return result;
+});
+
+// ── 当前选中账户是否有子账户（用于触发 include_children）────────
+const isAggregated = computed(() => {
+  const node = flatTree.value.find(n => n.id === selectedPortfolioId.value);
+  if (!node) return false;
+  return (childMap()[node.id] || []).length > 0;
+});
+
+function childMap() {
+  const m = {};
+  portfolioList.value.forEach(p => {
+    const k = p.parent_id ?? null;
+    if (!m[k]) m[k] = [];
+    m[k].push(p);
+  });
+  return m;
+}
+
 const canTransfer = computed(() =>
   transfer.value.from !== null &&
   transfer.value.to !== null &&
@@ -217,16 +271,26 @@ function pnlClass(v) {
 async function loadPortfolioData() {
   if (!selectedPortfolioId.value) return;
   loading.value = true;
+  const pid = selectedPortfolioId.value;
+  const agg = isAggregated.value ? '?include_children=true' : '';
   try {
-    const res = await apiFetch(`/api/v1/portfolio/${selectedPortfolioId.value}/positions`);
-    positions.value = res.data?.positions || [];
-    cashBalance.value = res.data?.cash_balance || 0;
-    dailyPnl.value     = res.data?.daily_pnl     || 0;
-    realizedPnl.value  = res.data?.realized_pnl  || 0;
-    unrealizedPnl.value = res.data?.unrealized_pnl || 0;
-    totalPnl.value     = res.data?.total_pnl     || 0;
-  } catch { positions.value = []; }
-  finally { loading.value = false; }
+    // 使用 /pnl 端点获取聚合视图（包含 cash_balance + 全量 PnL）
+    const res = await apiFetch(`/api/v1/portfolio/${pid}/pnl${agg}`);
+    const data = res.data || res;
+    // positions 端点返回 { positions: [...] }（无 data 包装）
+    const posRes = await apiFetch(`/api/v1/portfolio/${pid}/positions${agg}`);
+    positions.value = posRes.positions || posRes.data?.positions || [];
+    cashBalance.value  = data.cash_balance   || 0;
+    dailyPnl.value      = data.daily_pnl      || 0;
+    realizedPnl.value   = data.realized_pnl  || 0;
+    unrealizedPnl.value = data.unrealized_pnl || 0;
+    totalPnl.value     = data.total_pnl      || 0;
+  } catch (e) {
+    console.warn('[Portfolio] loadPortfolioData failed', e.message);
+    positions.value = [];
+  } finally {
+    loading.value = false;
+  }
 }
 
 async function loadPortfolios() {

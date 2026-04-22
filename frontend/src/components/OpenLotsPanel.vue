@@ -81,6 +81,7 @@ export default {
   name: 'OpenLotsPanel',
   props: {
     portfolioId: { type: Number, required: true },
+    includeChildren: { type: Boolean, default: false },
   },
   setup(props) {
     const loading = ref(false);
@@ -91,8 +92,9 @@ export default {
     async function loadLots() {
       loading.value = true;
       error.value = null;
+      const agg = props.includeChildren ? '?include_children=true' : '';
       try {
-        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots`);
+        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots${agg}`);
         const data = res.data || res;
         const rawLots = data.lots || [];
 
@@ -105,7 +107,7 @@ export default {
 
         // 补充 position_summary
         try {
-          const summRes = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/summary`);
+          const summRes = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/summary${agg}`);
           const summData = summRes.data || summRes;
           const summaryMap = {};
           (summData.summary || []).forEach(s => {

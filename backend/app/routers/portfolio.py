@@ -1222,28 +1222,41 @@ async def sell_lot(portfolio_id: int, body: SellIn):
 async def list_lots(
     portfolio_id: int,
     symbol: Optional[str] = Query(None, description="过滤标的代码（不传则返回全部）"),
+    include_children: bool = Query(False, description="是否包含子账户批次"),
 ):
     """
     返回某账户的未平批次（可按标的过滤）。
-    用于前端展示批次持仓和计算成本。
+    当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的批次。
     """
     try:
-        lots = get_open_lots(portfolio_id, symbol)
+        lots = get_open_lots(portfolio_id, symbol, include_children=include_children)
+        # 收集涉及的账户 ID（用于前端标注来源）
+        if include_children:
+            conn = _get_conn()
+            try:
+                all_ids = _get_all_descendants(conn, portfolio_id)
+            finally:
+                conn.close()
+        else:
+            all_ids = [portfolio_id]
         return _ok({
             "lots": [
                 {
-                    "id":           l.id,
-                    "symbol":      l.symbol,
-                    "shares":      l.shares,
-                    "avg_cost":    l.avg_cost,
-                    "buy_date":    l.buy_date,
+                    "id":            l.id,
+                    "symbol":       l.symbol,
+                    "shares":       l.shares,
+                    "avg_cost":     l.avg_cost,
+                    "buy_date":     l.buy_date,
                     "buy_order_id": l.buy_order_id,
-                    "status":      l.status,
+                    "status":       l.status,
                     "realized_pnl": l.realized_pnl,
+                    "portfolio_id": l.portfolio_id,
                 }
                 for l in lots
             ],
             "count": len(lots),
+            "includes_children": include_children,
+            "portfolio_ids": all_ids if include_children else [portfolio_id],
         })
     except Exception as e:
         logger.error(f"[Lots] error: {e}", exc_info=True)
@@ -1271,19 +1284,194 @@ async def unrealized_pnl(
 
 
 # ══════════════════════════════════════════════════════════════════════════
+#  子账户 Roll-up 聚合端点（守恒定律 + 树形结构）
+# ══════════════════════════════════════════════════════════════════════════
+
+@router.get("/{portfolio_id}/conservation")
+async def check_conservation(portfolio_id: int):
+    """
+    资金守恒定律校验。
+    验证：主账户总资产 = 主账户自身(现金+持仓) + Σ(所有子账户的现金+持仓)
+
+    返回各子项明细和对齐结果，用于调试和自动化测试。
+    """
+    from app.services.sentiment_engine import SpotCache
+
+    conn = _get_conn()
+    try:
+        # 主账户自身资产
+        parent = conn.execute(
+            "SELECT id, name, cash_balance FROM portfolios WHERE id=?",
+            (portfolio_id,)
+        ).fetchone()
+        if not parent:
+            raise HTTPException(404, f"账户 {portfolio_id} 不存在")
+
+        parent_cash = parent[2] or 0.0
+
+        # 直接子账户（不含后代）
+        children = conn.execute(
+            "SELECT id, name, cash_balance FROM portfolios WHERE parent_id=?",
+            (portfolio_id,)
+        ).fetchall()
+
+        # 获取主账户自身持仓市值
+        parent_positions = conn.execute(
+            "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+            (portfolio_id,)
+        ).fetchall()
+
+        # 获取主账户所有后代（递归）
+        all_desc_ids = _get_all_descendants(conn, portfolio_id)
+        if all_desc_ids:
+            placeholders = ','.join(['?' for _ in all_desc_ids])
+            child_positions = conn.execute(
+                f"SELECT portfolio_id, symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({placeholders})",
+                tuple(all_desc_ids)
+            ).fetchall()
+        else:
+            child_positions = []
+
+        # 获取子账户现金
+        child_cash_total = sum((r[2] or 0.0) for r in children)
+
+        # 获取实时价格
+        spot = SpotCache.get_stocks() or []
+        price_map = {}
+        for s in spot:
+            code = s.get("code", "")
+            price_map[code] = float(s.get("price") or 0)
+            if len(code) > 2:
+                price_map[code[2:]] = price_map[code]
+                price_map[code.lower()] = price_map[code]
+
+        def positions_value(rows):
+            total = 0.0
+            for (pid, sym, shares, avg_cost) in rows:
+                price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
+                total += shares * price
+            return total
+
+        parent_pos_value = positions_value(parent_positions)
+        child_pos_value = positions_value(child_positions)
+
+        parent_total = parent_cash + parent_pos_value
+        children_total = child_cash_total + child_pos_value
+        grand_total = parent_total + children_total
+
+        conservation_ok = True
+        try:
+            if abs(parent_total - (parent_cash + parent_pos_value)) > 0.001:
+                conservation_ok = False
+        except Exception:
+            conservation_ok = False
+
+        return _ok({
+            "parent_id":          portfolio_id,
+            "parent_name":        parent[1],
+            "parent": {
+                "cash":           round(parent_cash, 2),
+                "position_value": round(parent_pos_value, 2),
+                "total":          round(parent_total, 2),
+            },
+            "children": [
+                {
+                    "id":              r[0],
+                    "name":            r[1],
+                    "cash":            round(r[2] or 0.0, 2),
+                }
+                for r in children
+            ],
+            "children_position_value": round(child_pos_value, 2),
+            "children_cash":           round(child_cash_total, 2),
+            "children_total":          round(children_total, 2),
+            "grand_total":              round(grand_total, 2),
+            "conservation_ok":          conservation_ok,
+            "conservation_delta":        round(grand_total - parent_total, 4),
+        })
+    finally:
+        conn.close()
+
+
+@router.get("/{portfolio_id}/tree")
+async def get_portfolio_tree(portfolio_id: int):
+    """
+    返回指定账户的完整子树结构（递归），每节点包含聚合资产快照。
+    用于前端树形账户选择器的渲染。
+    """
+    from app.services.sentiment_engine import SpotCache
+
+    conn = _get_conn()
+    try:
+        def build_node(pid: int) -> dict:
+            row = conn.execute(
+                "SELECT id, name, type, parent_id, cash_balance, status FROM portfolios WHERE id=?",
+                (pid,)
+            ).fetchone()
+            if not row:
+                return {}
+            (p_id, p_name, p_type, p_parent, p_cash, p_status) = row
+
+            # 持仓市值
+            pos_rows = conn.execute(
+                "SELECT symbol, shares FROM positions WHERE portfolio_id=?",
+                (pid,)
+            ).fetchall()
+            spot = SpotCache.get_stocks() or []
+            price_map = {}
+            for s in spot:
+                code = s.get("code", "")
+                price_map[code] = float(s.get("price") or 0)
+                if len(code) > 2:
+                    price_map[code[2:]] = price_map[code]
+
+            pos_value = 0.0
+            for (sym, shares) in pos_rows:
+                price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
+                pos_value += shares * price
+
+            # 递归子节点
+            child_rows = conn.execute(
+                "SELECT id FROM portfolios WHERE parent_id=?", (pid,)
+            ).fetchall()
+            children = [build_node(child[0]) for child in child_rows]
+
+            return {
+                "id":            p_id,
+                "name":          p_name,
+                "type":          p_type,
+                "status":        p_status or "active",
+                "cash_balance":  round(p_cash or 0.0, 2),
+                "position_value": round(pos_value, 2),
+                "total_assets":  round((p_cash or 0.0) + pos_value, 2),
+                "children":      children,
+            }
+
+        tree = build_node(portfolio_id)
+        return _ok({"tree": tree})
+    finally:
+        conn.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════
 #  Phase 3: position_summary 聚合表路由 + ECharts 数据端点
 # ══════════════════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/lots/summary")
-async def lots_summary(portfolio_id: int, symbol: Optional[str] = Query(None)):
+async def lots_summary(
+    portfolio_id: int,
+    symbol: Optional[str] = Query(None),
+    include_children: bool = Query(False, description="是否包含子账户持仓"),
+):
     """
     读取 position_summary 聚合表（读优化视图）。
     不带 symbol → 返回该账户全部聚合持仓；
     带 symbol → 返回单个标的聚合数据。
+    include_children=True 时使用递归 CTE 聚合子树。
     """
     try:
-        rows = get_position_summary(portfolio_id, symbol)
-        return _ok({"summary": rows, "count": len(rows)})
+        rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
+        return _ok({"summary": rows, "count": len(rows), "includes_children": include_children})
     except Exception as e:
         logger.error(f"[lots_summary] error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
@@ -1307,12 +1495,16 @@ async def refresh_market_value(
 
 
 @router.get("/{portfolio_id}/lots/echarts")
-async def lots_echarts_data(portfolio_id: int):
+async def lots_echarts_data(
+    portfolio_id: int,
+    include_children: bool = Query(False, description="是否包含子账户持仓"),
+):
     """
     返回适合 ECharts 饼图 + 列表的持仓聚合数据。
+    当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的持仓。
     """
     try:
-        rows = get_position_summary(portfolio_id)
+        rows = get_position_summary(portfolio_id, include_children=include_children)
         total_mv = sum(r.get('market_value', 0) for r in rows)
         chart_data = []
         for r in rows:

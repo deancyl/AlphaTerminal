@@ -62,6 +62,7 @@ export default {
   name: 'PositionPieChart',
   props: {
     portfolioId: { type: Number, required: true },
+    includeChildren: { type: Boolean, default: false },
   },
   setup(props) {
     const chartEl = ref(null);
@@ -78,8 +79,9 @@ export default {
 
     async function load() {
       loading.value = true;
+      const agg = props.includeChildren ? '?include_children=true' : '';
       try {
-        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/echarts`);
+        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/echarts${agg}`);
         const data = res.data || res;
         const pos = data.positions || [];
         totalMv.value = data.total_market_value || 0;

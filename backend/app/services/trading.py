@@ -204,37 +204,82 @@ def execute_buy(
 
 
 # ── 批次查询 ──────────────────────────────────────────────────────────
-def get_open_lots(portfolio_id: int, symbol: Optional[str] = None) -> list[LotRecord]:
+def get_open_lots(
+    portfolio_id: int,
+    symbol: Optional[str] = None,
+    include_children: bool = False,
+) -> list[LotRecord]:
     """
     获取未平批次（可指定标的或全部）。
-    返回按 buy_date 升序排列。
+    当 include_children=True 时，使用递归 CTE 将所有后代子账户的批次一并返回。
     """
     conn = _get_lots_conn()
     try:
-        if symbol:
-            rows = conn.execute(
-                """
-                SELECT id, portfolio_id, symbol, shares, avg_cost,
-                       buy_date, buy_order_id, status, closed_at,
-                       realized_pnl, created_at
-                  FROM position_lots
-                 WHERE portfolio_id=? AND symbol=? AND status='open'
-                 ORDER BY buy_date ASC, id ASC
-                """,
-                (portfolio_id, symbol),
-            ).fetchall()
+        if include_children:
+            # 递归 CTE：展开整棵子树
+            descendants_cte = """
+                WITH RECURSIVE subtree AS (
+                    SELECT id FROM portfolios WHERE id = ?
+                    UNION ALL
+                    SELECT p.id FROM portfolios p JOIN subtree s ON p.parent_id = s.id
+                )
+            """
+            base = f"{descendants_cte} SELECT id FROM subtree WHERE id != ?"
+            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            if not desc_ids:
+                return []
+            placeholders = ','.join(['?' for _ in desc_ids])
+            if symbol:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, portfolio_id, symbol, shares, avg_cost,
+                           buy_date, buy_order_id, status, closed_at,
+                           realized_pnl, created_at
+                      FROM position_lots
+                     WHERE portfolio_id IN ({placeholders})
+                       AND symbol=? AND status='open'
+                     ORDER BY buy_date ASC, id ASC
+                    """,
+                    (*desc_ids, symbol),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"""
+                    SELECT id, portfolio_id, symbol, shares, avg_cost,
+                           buy_date, buy_order_id, status, closed_at,
+                           realized_pnl, created_at
+                      FROM position_lots
+                     WHERE portfolio_id IN ({placeholders})
+                       AND status='open'
+                     ORDER BY buy_date ASC, id ASC
+                    """,
+                    tuple(desc_ids),
+                ).fetchall()
         else:
-            rows = conn.execute(
-                """
-                SELECT id, portfolio_id, symbol, shares, avg_cost,
-                       buy_date, buy_order_id, status, closed_at,
-                       realized_pnl, created_at
-                  FROM position_lots
-                 WHERE portfolio_id=? AND status='open'
-                 ORDER BY buy_date ASC, id ASC
-                """,
-                (portfolio_id,),
-            ).fetchall()
+            if symbol:
+                rows = conn.execute(
+                    """
+                    SELECT id, portfolio_id, symbol, shares, avg_cost,
+                           buy_date, buy_order_id, status, closed_at,
+                           realized_pnl, created_at
+                      FROM position_lots
+                     WHERE portfolio_id=? AND symbol=? AND status='open'
+                     ORDER BY buy_date ASC, id ASC
+                    """,
+                    (portfolio_id, symbol),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, portfolio_id, symbol, shares, avg_cost,
+                           buy_date, buy_order_id, status, closed_at,
+                           realized_pnl, created_at
+                      FROM position_lots
+                     WHERE portfolio_id=? AND status='open'
+                     ORDER BY buy_date ASC, id ASC
+                    """,
+                    (portfolio_id,),
+                ).fetchall()
 
         return [LotRecord(*r) for r in rows]
     finally:
@@ -370,25 +415,55 @@ def update_market_value(portfolio_id: int, symbol: str, current_price: float) ->
         conn.close()
 
 
-def get_position_summary(portfolio_id: int, symbol: str = None) -> list[dict]:
+def get_position_summary(
+    portfolio_id: int,
+    symbol: str = None,
+    include_children: bool = False,
+) -> list[dict]:
     """
     读取持仓聚合表（可按 portfolio_id 过滤，symbol 不传则返回全部）。
+    当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的持仓。
     """
     conn = _get_lots_conn()
     try:
-        if symbol:
-            rows = conn.execute(
-                "SELECT * FROM position_summary WHERE portfolio_id=? AND symbol=?",
-                (portfolio_id, symbol),
-            ).fetchall()
+        if include_children:
+            cte = """
+                WITH RECURSIVE subtree AS (
+                    SELECT id FROM portfolios WHERE id = ?
+                    UNION ALL
+                    SELECT p.id FROM portfolios p JOIN subtree s ON p.parent_id = s.id
+                )
+            """
+            base = f"{cte} SELECT id FROM subtree WHERE id != ?"
+            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            if not desc_ids:
+                return []
+            placeholders = ','.join(['?' for _ in desc_ids])
+            if symbol:
+                rows = conn.execute(
+                    f"SELECT * FROM position_summary WHERE portfolio_id IN ({placeholders}) AND symbol=?",
+                    (*desc_ids, symbol),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"SELECT * FROM position_summary WHERE portfolio_id IN ({placeholders})",
+                    tuple(desc_ids),
+                ).fetchall()
         else:
-            rows = conn.execute(
-                "SELECT * FROM position_summary WHERE portfolio_id=?",
-                (portfolio_id,),
-            ).fetchall()
+            if symbol:
+                rows = conn.execute(
+                    "SELECT * FROM position_summary WHERE portfolio_id=? AND symbol=?",
+                    (portfolio_id, symbol),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM position_summary WHERE portfolio_id=?",
+                    (portfolio_id,),
+                ).fetchall()
 
         cols = ["portfolio_id", "symbol", "total_shares", "avg_cost",
                 "market_value", "unrealized_pnl", "updated_at"]
         return [dict(zip(cols, r)) for r in rows]
     finally:
+        conn.close()
         conn.close()
