@@ -13,7 +13,7 @@
           {{ lastRefreshLabel }}
         </span>
         <span class="text-terminal-dim text-[10px]">{{ total }} 条</span>
-        <!-- 手动刷新按钮 —— 放大触摸区域 -->
+        <!-- 手动刷新按钮 -->
         <button
           class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
           :class="isRefreshing
@@ -26,13 +26,40 @@
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
                class="w-4 h-4 transition-all"
                :class="isRefreshing ? 'animate-spin' : ''">
-            <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
+            <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
           </svg>
         </button>
-        <!-- 状态指示灯 -->
         <span class="w-1.5 h-1.5 rounded-full shrink-0"
               :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
       </div>
+    </div>
+
+    <!-- ── 舆情情绪摘要栏 ──────────────────────────────────── -->
+    <div v-if="sentiment.total_count > 0"
+         class="flex items-center gap-2 mb-2 shrink-0 px-2 py-1.5 rounded-lg border transition"
+         :class="sentiment.score > 0.1
+           ? 'border-red-500/30 bg-red-500/5'
+           : sentiment.score < -0.1
+             ? 'border-green-500/30 bg-green-500/5'
+             : 'border-theme-secondary bg-theme-tertiary/5'">
+      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+            :class="sentiment.score > 0.1
+              ? 'bg-red-500/20 text-bullish'
+              : sentiment.score < -0.1
+                ? 'bg-green-500/20 text-bearish'
+                : 'bg-theme-tertiary/20 text-theme-secondary'">
+        {{ sentiment.label }}
+      </span>
+      <span class="text-[10px] text-terminal-dim shrink-0">
+        {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
+      </span>
+      <div class="flex-1 flex gap-1 overflow-x-auto ml-2 scrollbar-hide">
+        <span v-for="kw in sentiment.keywords.slice(0, 5)" :key="kw"
+              class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap">
+          {{ kw }}
+        </span>
+      </div>
+      <span class="text-[9px] text-terminal-dim/50 shrink-0">{{ sentimentTime }}</span>
     </div>
 
     <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
@@ -53,16 +80,21 @@
                   :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
-            <!-- 时间左置（固定宽度，只显示 HH:MM） -->
+            <!-- 时间 -->
             <span class="shrink-0 text-[9px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
             <!-- 标题 + 来源 -->
             <div class="flex-1 min-w-0">
               <p class="text-xs text-theme-primary leading-snug line-clamp-2">{{ item.title }}</p>
               <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
             </div>
+            <!-- 情绪徽章 -->
+            <span v-if="getItemSentiment(item)" class="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium"
+                  :class="sentimentBadgeClass(getItemSentiment(item))">
+              {{ getItemSentiment(item) }}
+            </span>
           </div>
         </div>
-        <!-- F1修复: 新闻骨架屏 -->
+        <!-- 骨架屏 -->
         <div v-if="isRefreshing && !pagedItems.length" class="space-y-2 animate-pulse">
           <div v-for="i in 5" :key="i" class="flex items-start gap-2">
             <div class="w-8 h-4 rounded bg-terminal-panel"></div>
@@ -89,7 +121,6 @@
         @click="prevPage">
         ‹
       </button>
-
       <button
         v-for="p in visiblePages"
         :key="p"
@@ -100,7 +131,6 @@
         @click="goToPage(p)">
         {{ p }}
       </button>
-
       <button
         class="px-2 py-0.5 text-[10px] rounded border transition"
         :class="currentPage === totalPages
@@ -110,7 +140,6 @@
         @click="nextPage">
         ›
       </button>
-
       <span class="text-terminal-dim text-[9px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
     </div>
 
@@ -119,12 +148,9 @@
       <div v-if="modalItem"
            class="fixed inset-0 z-50 flex items-center justify-center p-4"
            @click.self="closeModal">
-        <!-- 遮罩 -->
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <!-- 弹窗 -->
         <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
                     bg-[#0d1117] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
-          <!-- Header -->
           <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
             <div class="flex-1 pr-4">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
@@ -143,22 +169,17 @@
               ✕
             </button>
           </div>
-          <!-- Body -->
           <div class="flex-1 overflow-y-auto p-4">
-            <!-- 加载态 -->
             <p v-if="modalLoading" class="text-xs text-terminal-dim italic leading-relaxed">
               正文努力提取中...
             </p>
-            <!-- 正文内容 -->
             <p v-else-if="modalContent" class="text-xs text-theme-primary leading-relaxed whitespace-pre-wrap">
               {{ modalContent }}
             </p>
-            <!-- 降级 -->
             <p v-else class="text-xs text-theme-tertiary leading-relaxed italic">
               （暂无正文内容，请点击来源链接查看原文）
             </p>
           </div>
-          <!-- Footer -->
           <div class="p-3 border-t border-theme shrink-0 flex justify-between items-center">
             <a v-if="modalItem.url"
                :href="modalItem.url" target="_blank" rel="noopener"
@@ -189,14 +210,70 @@ const props = defineProps({
 
 const items        = ref(props.initialItems)
 const total        = ref(0)
-const loading      = ref(false)      // 自动刷新状态
-const isRefreshing = ref(false)     // 手动刷新状态（按钮专用）
-const showRefreshed = ref(false)     // "刚刚更新" 成功提示
-const refreshMsg   = ref('')         // 动态 Toast 文案（来源 + 条数）
+const loading      = ref(false)
+const isRefreshing = ref(false)
+const showRefreshed = ref(false)
+const refreshMsg   = ref('')
 const listEl       = ref(null)
 const refreshTimer  = ref(null)
 const forceRefreshCounter = ref(0)
 const lastRefreshTime = ref(null)
+
+// ── 舆情情感数据 ──────────────────────────────────────────────
+const sentiment = ref({
+  score: 0,
+  label: '中性',
+  bullish_count: 0,
+  bearish_count: 0,
+  total_count: 0,
+  keywords: [],
+  timestamp: '',
+})
+const sentimentTimer = ref(null)
+
+const sentimentTime = computed(() => {
+  if (!sentiment.value.timestamp) return ''
+  const parts = sentiment.value.timestamp.split(' ')
+  return parts.length >= 2 ? parts[1].slice(0, 5) : ''
+})
+
+/** 基于关键词匹配判断单条新闻情绪 */
+function getItemSentiment(item) {
+  const title = (item.title || '').toLowerCase()
+  const bullKw = sentiment.value.keywords.filter(k =>
+    ['买入', '增持', '资金流入', '业绩', '增长', '利好', '新高', '涨停'].some(b => k.includes(b)))
+  const bearKw = sentiment.value.keywords.filter(k =>
+    ['风险', '资金出逃', '利空', '下跌', '亏损', '减持'].some(b => k.includes(b)))
+
+  const bullHit = bullKw.some(k => title.includes(k.toLowerCase()) || (item.tag || '').includes(k))
+  const bearHit = bearKw.some(k => title.includes(k.toLowerCase()) || (item.tag || '').includes(k))
+
+  if (bullHit && !bearHit) return '利好'
+  if (bearHit && !bullHit) return '利空'
+  if (sentiment.value.score > 0.2 && bullKw.length > bearKw.length) return '偏多'
+  if (sentiment.value.score < -0.2 && bearKw.length > bullKw.length) return '偏空'
+  return ''
+}
+
+function sentimentBadgeClass(s) {
+  if (s === '利好' || s === '偏多') return 'bg-red-500/20 text-bullish border border-red-500/30'
+  if (s === '利空' || s === '偏空') return 'bg-green-500/20 text-bearish border border-green-500/30'
+  return ''
+}
+
+async function fetchSentiment() {
+  try {
+    const res = await fetch(`/api/v1/market/sentiment/news?_t=${Date.now()}`)
+    if (!res.ok) return
+    const json = await res.json()
+    const data = (json && json.code === 0) ? json.data : json
+    if (data && data.total_count > 0) {
+      sentiment.value = { ...data }
+    }
+  } catch (e) {
+    logger.debug('[NewsFeed] sentiment fetch failed:', e.message)
+  }
+}
 
 const lastRefreshLabel = computed(() => {
   if (!lastRefreshTime.value) return ''
@@ -213,13 +290,11 @@ const currentPage = ref(1)
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 
-// 当前页数据
 const pagedItems = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE
   return items.value.slice(start, start + PAGE_SIZE)
 })
 
-// 显示的页码按钮（最多 5 个）
 const visiblePages = computed(() => {
   const tp = totalPages.value
   const cp = currentPage.value
@@ -249,10 +324,8 @@ const modalContent = ref('')
 const modalLoading = ref(false)
 
 // ── 标签颜色映射 ──────────────────────────────────────────────────────
-
 function formatTime(timeStr) {
   if (!timeStr) return '--:--'
-  // 只显示 HH:MM，截断日期前缀
   const parts = timeStr.split(' ')
   return parts.length >= 2 ? parts[1].slice(0, 5) : (timeStr.slice(0, 5))
 }
@@ -278,7 +351,6 @@ async function openModal(item) {
     const res = await fetch(`/api/v1/news/detail?url=${encodeURIComponent(item.url)}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = await res.json()
-    // 兼容标准API格式
     const data = (json && json.code === 0) ? json.data : json
     modalContent.value = data?.content || ''
   } catch (e) {
@@ -299,7 +371,6 @@ function closeModal() {
 async function fetchNews(quiet = false, isTimer = false) {
   if (!quiet) isRefreshing.value = true
   try {
-    // 轮询策略：定时器每3次执行一次 force_refresh（真正拉外网），其余读缓存
     if (isTimer) {
       forceRefreshCounter.value = (forceRefreshCounter.value || 0) + 1
     }
@@ -309,7 +380,6 @@ async function fetchNews(quiet = false, isTimer = false) {
       : `/api/v1/news/flash?_t=${Date.now()}`
     const res = await fetch(url, useForce ? { method: 'POST' } : {})
     if (!res.ok) {
-      // 后端抛 HTTP 500：尝试从响应体提取错误详情
       let errMsg = `HTTP ${res.status}`
       try {
         const errBody = await res.json()
@@ -332,11 +402,9 @@ async function fetchNews(quiet = false, isTimer = false) {
       return
     }
     const d = await res.json()
-    // 兼容新旧格式
     const payload = d.data || d
     const incoming = payload.news || []
 
-    // items_stale=true 表示后端抓取失败、返回了旧缓存
     if (!quiet && payload.items_stale && !incoming.length) {
       refreshMsg.value = `⚠️ 网络异常，显示 ${payload.stale_count || 0} 条旧数据`
       showRefreshed.value = true
@@ -346,7 +414,6 @@ async function fetchNews(quiet = false, isTimer = false) {
 
     if (!incoming.length) return
 
-    // 去重
     const existingIds = new Set(items.value.map(it => it.id || it.title))
     const newItems = incoming.filter(it => {
       const id = it.id || it.title
@@ -354,7 +421,6 @@ async function fetchNews(quiet = false, isTimer = false) {
     })
 
     if (newItems.length) {
-      // 合并后强制全局倒序（时间最新在前），防止旧日期新闻被误置顶
       const merged = [...newItems, ...items.value]
       items.value = merged
         .sort((a, b) => (b.time || '').localeCompare(a.time || ''))
@@ -365,7 +431,6 @@ async function fetchNews(quiet = false, isTimer = false) {
     currentPage.value = 1
     if (listEl.value) listEl.value.scrollTop = 0
 
-    // 手动刷新成功：动态 Toast 提示
     if (!quiet) {
       if (newItems.length > 0) {
         const sources = [...new Set(newItems.map(it => it.source))].join('、')
@@ -376,7 +441,6 @@ async function fetchNews(quiet = false, isTimer = false) {
       showRefreshed.value = true
       setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 4000)
 
-      // Phase 4: 触发全局事件，通知情绪面板联动刷新
       if (!quiet) busEmit('news-refreshed', { count: newItems.length, sources: [...new Set(newItems.map(it => it.source))] })
     }
   } catch (e) {
@@ -390,17 +454,20 @@ async function fetchNews(quiet = false, isTimer = false) {
 async function manualRefresh() {
   logger.log('[NewsFeed] 点击刷新，发起 POST /api/v1/news/force_refresh ...')
   if (isRefreshing.value) return
-  await fetchNews(false)
+  await Promise.all([fetchNews(false), fetchSentiment()])
 }
 
 function startAutoRefresh() {
-  fetchNews(true)   // 首次：静默读缓存，不弹 loading（不是定时器，不触发 force）
-  refreshTimer.value = setInterval(() => fetchNews(true, true), 2 * 60 * 1000)   // 定时：2分钟，定时器才计数 force
+  fetchNews(true)
+  fetchSentiment()
+  refreshTimer.value = setInterval(() => fetchNews(true, true), 2 * 60 * 1000)
+  sentimentTimer.value = setInterval(() => fetchSentiment(), 60 * 1000)
 }
 
 onMounted(startAutoRefresh)
 onUnmounted(() => {
   if (refreshTimer.value) clearInterval(refreshTimer.value)
+  if (sentimentTimer.value) clearInterval(sentimentTimer.value)
 })
 </script>
 
@@ -410,5 +477,12 @@ onUnmounted(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 </style>
