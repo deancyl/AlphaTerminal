@@ -128,6 +128,35 @@ import { ref, nextTick, computed } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { logger } from '../utils/logger.js'
 import {
+  getMarketOverview,
+  getSectors,
+  getChinaStocks,
+  searchStock,
+  getLimitUpStocks,
+  getLimitDownStocks,
+  getUnusualStocks,
+  getTopSectors,
+  getNorthFlowRanking,
+  getLimitSummary,
+  clearCache,
+} from '../services/copilotData.js'
+import {
+  generateAnalysisReport,
+  analyzeMarketSentiment,
+} from '../services/copilotAnalysis.js'
+import {
+  formatMarketOverview,
+  formatSectorList,
+  formatLimitUp,
+  formatLimitDown,
+  formatUnusualStocks,
+  formatAnalysisReport,
+  formatMarketSentiment,
+  formatTopSectors,
+  formatNorthFlowRanking,
+  formatSearchResults,
+  formatHelp,
+} from '../services/copilotResponse.js'
 
 // ── Markdown 渲染器配置 ──────────────────────────────────────
 const mdParser = new MarkdownIt({
@@ -178,35 +207,6 @@ function mdRender(text) {
   if (!text) return ''
   return renderMarkdown(text)
 }
-  getMarketOverview,
-  getSectors,
-  getChinaStocks,
-  searchStock,
-  getLimitUpStocks,
-  getLimitDownStocks,
-  getUnusualStocks,
-  getTopSectors,
-  getNorthFlowRanking,
-  getLimitSummary,
-  clearCache,
-} from '../services/copilotData.js'
-import {
-  generateAnalysisReport,
-  analyzeMarketSentiment,
-} from '../services/copilotAnalysis.js'
-import {
-  formatMarketOverview,
-  formatSectorList,
-  formatLimitUp,
-  formatLimitDown,
-  formatUnusualStocks,
-  formatAnalysisReport,
-  formatMarketSentiment,
-  formatTopSectors,
-  formatNorthFlowRanking,
-  formatSearchResults,
-  formatHelp,
-} from '../services/copilotResponse.js'
 
 const messages       = ref([])
 const inputText      = ref('')
