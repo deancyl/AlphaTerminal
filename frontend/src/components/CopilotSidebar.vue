@@ -77,8 +77,8 @@
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="text-theme-primary">{{ msg.content }}</div>
         <!-- AI 消息 -->
-        <div v-else class="text-theme-primary">
-          <span>{{ msg.displayedContent }}</span>
+        <div v-else class="text-theme-primary copilot-markdown">
+          <span v-html="msg.renderedContent || mdRender(msg.displayedContent)"></span>
           <span v-if="msg.streaming" class="animate-pulse text-terminal-accent">▌</span>
         </div>
       </div>
@@ -124,9 +124,60 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed } from 'vue'
+import MarkdownIt from 'markdown-it'
 import { logger } from '../utils/logger.js'
 import {
+
+// ── Markdown 渲染器配置 ──────────────────────────────────────
+const md = new MarkdownIt({
+  html:         true,
+  linkify:      true,
+  typographer:  true,
+  breaks:       true,    // 换行符 → <br>
+})
+
+/** 解析 Markdown + 折叠 <think> 思考链 */
+function renderMarkdown(raw) {
+  if (!raw) return ''
+  // 提取 <think>...</think> 块（DeepSeek R1 推理过程）
+  const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+  const parts = []
+  let lastIdx = 0
+  let match
+
+  while ((match = thinkRegex.exec(raw)) !== null) {
+    // 思考前的普通内容
+    if (match.index > lastIdx) {
+      parts.push({ type: 'content', text: raw.slice(lastIdx, match.index) })
+    }
+    // 推理内容
+    parts.push({ type: 'thinking', text: match[1].trim() })
+    lastIdx = match.index + match[0].length
+  }
+  // 剩余普通内容
+  if (lastIdx < raw.length) {
+    parts.push({ type: 'content', text: raw.slice(lastIdx) })
+  }
+
+  if (parts.length === 0) return md.render(raw)
+
+  return parts.map(p => {
+    if (p.type === 'thinking') {
+      // 折叠式推理
+      const preview = p.text.slice(0, 80) + (p.text.length > 80 ? '...' : '')
+      const safeHtml = p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      return `<details class="copilot-thinking"><summary>🧠 深度推理（${p.text.length}字）</summary><div class="copilot-thinking-content">${safeHtml}</div></details>`
+    }
+    return md.render(p.text)
+  }).join('')
+}
+
+/** 简单渲染（用于缓存消息回显） */
+function mdRender(text) {
+  if (!text) return ''
+  return renderMarkdown(text)
+}
   getMarketOverview,
   getSectors,
   getChinaStocks,
@@ -732,6 +783,7 @@ async function sendToLLM(text) {
       // 使用缓存（立即显示，无流式）
       messages.value[aiMsgIndex].displayedContent = cachedResponse
       messages.value[aiMsgIndex].content = cachedResponse
+      messages.value[aiMsgIndex].renderedContent = mdRender(cachedResponse)
       messages.value[aiMsgIndex].streaming = false
       messages.value[aiMsgIndex].fromCache = true
       scrollToBottom()
@@ -758,6 +810,7 @@ async function sendToLLM(text) {
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
+      let fullReasoning = ''
       
       while (true) {
         const { done, value } = await reader.read()
@@ -772,15 +825,30 @@ async function sendToLLM(text) {
           try {
             const data = JSON.parse(payload)
             if (data.error) throw new Error(data.error)
+            // DeepSeek R1 推理内容
+            if (data.reasoning !== undefined) {
+              fullReasoning += data.reasoning
+              // 在 content 中嵌入 thinking 标签，供 renderMarkdown 处理
+              const thinkTag = `<think>${fullReasoning}\n</think>`
+              const combined = thinkTag + fullContent
+              messages.value[aiMsgIndex].renderedContent = renderMarkdown(combined)
+              messages.value[aiMsgIndex].content = combined
+              scrollToBottom()
+            }
+            // 正常回复内容
             if (data.content !== undefined) {
               fullContent += data.content
-              messages.value[aiMsgIndex].displayedContent = fullContent
-              messages.value[aiMsgIndex].content = fullContent
+              // 如果有推理内容，组合后渲染
+              const displayText = fullReasoning
+                ? `<think>${fullReasoning}\n</think>${fullContent}`
+                : fullContent
+              messages.value[aiMsgIndex].renderedContent = renderMarkdown(displayText)
+              messages.value[aiMsgIndex].content = displayText
               scrollToBottom()
             }
             if (data.done) {
               messages.value[aiMsgIndex].streaming = false
-              // 缓存响应
+              // 缓存响应（不含推理过程，只缓存正文）
               if (fullContent) {
                 setCachedResponse(text, fullContent)
               }
@@ -815,7 +883,13 @@ function addUserMessage(content) {
 }
 
 function addAssistantMessage(content) {
-  messages.value.push({ role: 'assistant', content, displayedContent: content, streaming: false })
+  messages.value.push({
+    role: 'assistant',
+    content,
+    displayedContent: content,
+    renderedContent: mdRender(content),
+    streaming: false,
+  })
   scrollToBottom()
 }
 
@@ -844,3 +918,107 @@ async function sendMessage() {
   inputEl.value?.focus()
 }
 </script>
+
+<style scoped>
+/* ── Copilot Markdown 渲染样式 ──────────────────────────── */
+:deep(.copilot-markdown) {
+  line-height: 1.65;
+}
+:deep(.copilot-markdown h1),
+:deep(.copilot-markdown h2),
+:deep(.copilot-markdown h3),
+:deep(.copilot-markdown h4) {
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+  font-weight: 700;
+  color: var(--terminal-accent, #60a5fa);
+}
+:deep(.copilot-markdown h2) { font-size: 1.05em; border-bottom: 1px solid rgba(96,165,250,0.15); padding-bottom: 0.25em; }
+:deep(.copilot-markdown h3) { font-size: 0.95em; }
+:deep(.copilot-markdown h4) { font-size: 0.9em; }
+
+:deep(.copilot-markdown p) { margin: 0.4em 0; }
+:deep(.copilot-markdown ul),
+:deep(.copilot-markdown ol) { padding-left: 1.2em; margin: 0.4em 0; }
+:deep(.copilot-markdown li) { margin: 0.2em 0; }
+
+:deep(.copilot-markdown strong) { color: #f0f0f0; font-weight: 700; }
+:deep(.copilot-markdown em) { color: #d4a574; font-style: italic; }
+:deep(.copilot-markdown code) {
+  background: rgba(255,255,255,0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+:deep(.copilot-markdown pre) {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.7em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+:deep(.copilot-markdown pre code) {
+  background: none;
+  padding: 0;
+  font-size: 0.82em;
+}
+
+:deep(.copilot-markdown blockquote) {
+  border-left: 3px solid rgba(96,165,250,0.4);
+  padding-left: 0.7em;
+  margin: 0.5em 0;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+:deep(.copilot-markdown table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+:deep(.copilot-markdown th),
+:deep(.copilot-markdown td) {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0.35em 0.5em;
+  text-align: left;
+}
+:deep(.copilot-markdown th) {
+  background: rgba(96,165,250,0.08);
+  color: #60a5fa;
+  font-weight: 600;
+}
+:deep(.copilot-markdown tr:nth-child(even)) {
+  background: rgba(255,255,255,0.015);
+}
+:deep(.copilot-markdown a) { color: #60a5fa; text-decoration: underline; }
+:deep(.copilot-markdown hr) { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.8em 0; }
+
+/* ── 深度推理折叠区块 ──────────────────────────────────── */
+:deep(.copilot-thinking) {
+  margin: 0.4em 0;
+  border: 1px solid rgba(168,85,247,0.2);
+  border-radius: 6px;
+  background: rgba(168,85,247,0.04);
+  overflow: hidden;
+}
+:deep(.copilot-thinking summary) {
+  cursor: pointer;
+  padding: 0.4em 0.7em;
+  font-size: 0.8em;
+  color: #a855f7;
+  user-select: none;
+}
+:deep(.copilot-thinking summary:hover) { background: rgba(168,85,247,0.08); }
+:deep(.copilot-thinking[open] summary) { border-bottom: 1px solid rgba(168,85,247,0.15); }
+:deep(.copilot-thinking-content) {
+  padding: 0.5em 0.7em;
+  font-size: 0.8em;
+  color: #a78bfa;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+</style>

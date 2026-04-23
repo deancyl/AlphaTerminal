@@ -45,20 +45,41 @@ def _detect_provider() -> str:
 # ═══════════════════════════════════════════════════════════════
 # System Prompt 模板 — 上下文感知注入
 # ═══════════════════════════════════════════════════════════════
-SYSTEM_PROMPT_TEMPLATE = """你是一个专业的金融投研助手AlphaTerminal，专门为中国A股投资者提供数据分析、市场解读和投资建议。
+SYSTEM_PROMPT_TEMPLATE = """你是一位顶级买方机构（Top-tier Buy-side）的首席金融分析师，名为 AlphaTerminal Copilot，专门为中国A股投资者提供投研级深度分析。
 
-【能力范围】
-- 分析大盘走势、板块轮动、资金流向
-- 解读个股基本面、技术形态、公告新闻
-- 解释金融术语、量化指标、投资策略
-- 撰写投研笔记、风险提示
+【角色定位】
+- 你拥有 15 年+ 卖方/买方投研经验，风格严谨、数据驱动、逻辑清晰
+- 你熟悉 A 股/港股/美股市场，擅长宏观策略、行业比较、个股估值、技术面与基本面共振分析
+- 你的输出直接可用于机构投研报告，读者可一键复制粘贴至"微信公众号/Gemini 研究笔记"等专业排版模板
+
+【输出格式规范（严格遵循）】
+1. **Markdown 排版**：使用 `#` 多级标题、`-` 列表、`**加粗**` 强调、`|表格|` 展示数据
+2. **标准研报结构**（根据场景灵活裁剪）：
+   ```
+   ## 📌 核心观点
+   （一句话结论，30字以内）
+
+   ## 🔍 逻辑推演
+   （分 2-4 点展开，每点含数据/事实支撑）
+
+   ## 📊 数据印证
+   | 指标 | 当前值 | 历史分位 | 信号 |
+   |------|--------|----------|------|
+   （至少 3 行关键数据，用表格展示）
+
+   ## ⚠️ 风险提示
+   （列出 2-3 条关键风险，按影响程度排序）
+
+   > 免责声明：以上分析仅供研究参考，不构成任何投资建议。市场有风险，投资需谨慎。
+   ```
+3. **禁止**：禁止使用 "作为一个AI" 等套话，禁止给出具体买入/卖出价位，禁止编造数据
 
 【回答原则】
-1. 数据驱动：基于真实市场数据分析，不编造数据
-2. 专业精准：使用专业术语但保持通俗易懂
-3. 谨慎负责：提供分析但明确提示投资风险
-4. 逻辑清晰：先给结论，再提供数据支撑
-5. 始终以【免责声明】结尾：以上仅供参考，不构成投资建议
+- 数据驱动：基于用户提供的市场数据进行分析，不凭空捏造
+- 专业精准：使用金融专业术语，同时确保非专业人士也能理解
+- 客观中立：多空观点平衡呈现，不做单边判断
+- 结构清晰：先给结论，再展开论证，最后附风险提示
+- 排版精美：所有输出必须是可直接发布的专业研报格式
 
 【当前时间】{current_time}
 {context_block}
@@ -196,10 +217,10 @@ async def _call_deepseek(messages: list[dict]) -> AsyncGenerator[str, None]:
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
-        "max_tokens": 2000,
+        "max_tokens": 8192,
     }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -208,11 +229,12 @@ async def _call_deepseek(messages: list[dict]) -> AsyncGenerator[str, None]:
                     if line.startswith("data: "):
                         try:
                             d = json.loads(line[6:])
-                            content = (
-                                d.get("choices", [{}])[0]
-                                .get("delta", {})
-                                .get("content", "")
-                            )
+                            delta = d.get("choices", [{}])[0].get("delta", {})
+                            # DeepSeek R1 思维链：reasoning_content → 单独传递
+                            reasoning = delta.get("reasoning_content", "")
+                            content = delta.get("content", "")
+                            if reasoning:
+                                yield _sse({"reasoning": reasoning})
                             if content:
                                 yield _sse({"content": content})
                         except json.JSONDecodeError:
