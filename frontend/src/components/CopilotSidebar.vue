@@ -10,11 +10,8 @@
           </h2>
           <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 数据驱动分析</p>
         </div>
-        <div class="px-2 py-1 rounded text-[10px] border border-purple-500/50 bg-purple-500/10 text-purple-400">
-          🤖 云端模式
-        </div>
       </div>
-    </div>
+      </div>
 
     <!-- 快捷命令按钮 -->
     <div class="px-4 py-2 border-b border-theme-secondary">
@@ -95,7 +92,6 @@
           <span v-if="msg.streaming" class="animate-pulse text-terminal-accent">▌</span>
         </div>
       </div>
-    </div>
 
     <!-- 输入区 -->
     <div class="p-4 border-t border-theme-secondary shrink-0">
@@ -133,7 +129,6 @@
       </div>
     </div>
 
-  </div>
 </template>
 
 <script setup>
@@ -796,11 +791,54 @@ async function sendToLLM(text) {
   })
   
   try {
-    // 构建上下文
-    let context = ''
-    if (ctxMarket.value && props.marketOverview) {
-      context += formatMarketOverview(props.marketOverview) + '\n'
+    // ── Phase 3.3: 本地数据 RAG 注入 ──────────────────────────────
+    // 根据勾选的上下文，从本地 API 获取实时数据并组装成 context
+    const contextParts = []
+    
+    const fetchCtx = async (url, label, formatter) => {
+      try {
+        const res = await fetch(`${url}?_t=${Date.now()}`)
+        if (res.ok) {
+          const json = await res.json()
+          const data = json.data || json
+          contextParts.push(formatter(data))
+        }
+      } catch (e) {
+        logger.debug(`[Copilot] context fetch ${label}:`, e.message)
+      }
     }
+    
+    if (ctxMarket.value) {
+      await fetchCtx('/api/v1/market/overview', 'market', (data) => {
+        const indices = data?.wind?.indices || []
+        const lines = indices.slice(0, 8).map(i =>
+          `  ${i.name || i.symbol}: ${i.price || i.close} (${i.change_pct >= 0 ? '+' : ''}${i.change_pct?.toFixed(2)}%)`
+        ).join('\n')
+        return `<context_market>今日大盘数据：\n${lines || '无数据'}\n</context_market>`
+      })
+    }
+    
+    if (ctxNews.value) {
+      await fetchCtx('/api/v1/news/flash', 'news', (data) => {
+        const news = (data.news || []).slice(0, 5)
+        const lines = news.map(n =>
+          `  [${n.time}] ${n.title}`
+        ).join('\n')
+        return `<context_news>最新市场快讯（5条）：\n${lines || '无数据'}\n</context_news>`
+      })
+    }
+    
+    if (ctxRates.value) {
+      await fetchCtx('/api/v1/bond/curve', 'bond', (data) => {
+        const curve = data.yield_curve || {}
+        const lines = Object.entries(curve).map(([k, v]) =>
+          `  ${k}: ${(typeof v === 'number' ? v.toFixed(4) : v)}%`
+        ).join('\n')
+        return `<context_bond>当前国债收益率曲线：\n${lines || '无数据'}\n</context_bond>`
+      })
+    }
+    
+    const context = contextParts.join('\n\n')
     
     if (cachedResponse) {
       // 使用缓存（立即显示，无流式）
