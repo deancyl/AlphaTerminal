@@ -11,21 +11,17 @@
           <p class="text-terminal-dim text-xs mt-0.5">智能投研助手 · 数据驱动分析</p>
         </div>
       </div>
-      </div>
+    </div>
 
     <!-- 快捷命令按钮 -->
     <div class="px-4 py-2 border-b border-theme-secondary">
       <div class="text-[10px] text-terminal-dim mb-2">💡 快捷命令</div>
       <div class="flex flex-wrap gap-1.5">
         <button
-          v-for="cmd in quickCommands"
-          :key="cmd.cmd"
-          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-theme
-                 text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent
-                 transition-colors whitespace-nowrap"
-          :disabled="isLoading"
-          @click="executeQuickCommand(cmd)"
-        >
+          v-for="cmd in quickCommands" :key="cmd.cmd"
+          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-theme text-terminal-dim
+                 hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors whitespace-nowrap"
+          :disabled="isLoading" @click="executeQuickCommand(cmd)">
           {{ cmd.icon }} {{ cmd.label }}
         </button>
       </div>
@@ -52,11 +48,8 @@
       <span class="text-[10px] text-terminal-dim shrink-0">🤖 模型</span>
       <select v-model="selectedModel"
               class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
-                     text-theme-primary focus:outline-none focus:border-terminal-accent/60
-                     cursor-pointer">
-        <option v-for="m in modelOptions" :key="m.value" :value="m.value">
-          {{ m.label }}
-        </option>
+                     text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
+        <option v-for="m in modelOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
       </select>
     </div>
 
@@ -84,39 +77,31 @@
           <span>{{ msg.role === 'user' ? '你' : '🤖 AlphaTerminal' }}</span>
           <span v-if="msg.fromCache" class="text-[9px] text-bearish">📋 缓存</span>
         </div>
-        <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="text-theme-primary">{{ msg.content }}</div>
-        <!-- AI 消息 -->
         <div v-else class="text-theme-primary copilot-markdown">
           <span v-html="msg.renderedContent || mdRender(msg.displayedContent)"></span>
           <span v-if="msg.streaming" class="animate-pulse text-terminal-accent">▌</span>
         </div>
       </div>
+    </div>
 
     <!-- 输入区 -->
     <div class="p-4 border-t border-theme-secondary shrink-0">
       <div class="relative">
         <textarea
-          ref="inputEl"
-          v-model="inputText"
+          ref="inputEl" v-model="inputText"
           class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2.5 pr-12
-                 text-sm text-theme-primary resize-none
-                 focus:outline-none focus:border-terminal-accent/60
+                 text-sm text-theme-primary resize-none focus:outline-none focus:border-terminal-accent/60
                  placeholder:text-terminal-dim/50"
-          rows="3"
-          placeholder="输入命令或问题... (Shift+Enter 换行)"
-          :disabled="isLoading"
-          @keydown.enter.exact.prevent="sendMessage"
+          rows="3" placeholder="输入命令或问题... (Shift+Enter 换行)"
+          :disabled="isLoading" @keydown.enter.exact.prevent="sendMessage"
         ></textarea>
         <button
-          class="absolute right-2 bottom-2 w-8 h-8 rounded flex items-center justify-center
-                 transition-colors"
+          class="absolute right-2 bottom-2 w-8 h-8 rounded flex items-center justify-center transition-colors"
           :class="isLoading || !inputText.trim()
             ? 'bg-terminal-bg text-terminal-dim/30 cursor-not-allowed'
             : 'bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30'"
-          :disabled="isLoading || !inputText.trim()"
-          @click="sendMessage"
-        >
+          :disabled="isLoading || !inputText.trim()" @click="sendMessage">
           <svg v-if="!isLoading" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
           </svg>
@@ -129,7 +114,10 @@
       </div>
     </div>
 
+  </div>
 </template>
+
+
 
 <script setup>
 import { ref, nextTick, computed } from 'vue'
