@@ -141,22 +141,23 @@ def _build_context_block(symbol: Optional[str], price_info: dict, news_items: li
 async def _llm_stream(
     provider: str,
     messages: list[dict],
+    model_override: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """
     统一的 LLM 流式调用，分发给各 Provider。
     messages: [{"role": "user"|"system"|"assistant", "content": str}, ...]
     """
     if provider == "deepseek":
-        async for chunk in _call_deepseek(messages):
+        async for chunk in _call_deepseek(messages, model_override):
             yield chunk
     elif provider == "qianwen":
-        async for chunk in _call_qianwen(messages):
+        async for chunk in _call_qianwen(messages, model_override):
             yield chunk
     elif provider == "minimax":
         async for chunk in _call_minimax(messages):
             yield chunk
     elif provider == "openai":
-        async for chunk in _call_openai(messages):
+        async for chunk in _call_openai(messages, model_override):
             yield chunk
     else:
         async for chunk in _mock_stream(messages):
@@ -167,7 +168,7 @@ def _sse(data: dict) -> str:
     return f"data: {json.dumps(data)}\n\n"
 
 
-async def _call_openai(messages: list[dict]) -> AsyncGenerator[str, None]:
+async def _call_openai(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
     url = f"{OPENAI_API_BASE.rstrip('/')}/chat/completions"
     headers = {
@@ -175,7 +176,7 @@ async def _call_openai(messages: list[dict]) -> AsyncGenerator[str, None]:
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       OPENAI_MODEL,
+        "model":       model_override or OPENAI_MODEL,
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -205,7 +206,7 @@ async def _call_openai(messages: list[dict]) -> AsyncGenerator[str, None]:
         yield _sse({"error": f"OpenAI API 调用失败: {e}"})
 
 
-async def _call_deepseek(messages: list[dict]) -> AsyncGenerator[str, None]:
+async def _call_deepseek(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
     url = f"{DEEPSEEK_API_BASE.rstrip('/')}/chat/completions"
     headers = {
@@ -213,7 +214,7 @@ async def _call_deepseek(messages: list[dict]) -> AsyncGenerator[str, None]:
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       DEEPSEEK_MODEL,
+        "model":       model_override or DEEPSEEK_MODEL,
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -244,7 +245,7 @@ async def _call_deepseek(messages: list[dict]) -> AsyncGenerator[str, None]:
         yield _sse({"error": f"DeepSeek API 调用失败: {e}"})
 
 
-async def _call_qianwen(messages: list[dict]) -> AsyncGenerator[str, None]:
+async def _call_qianwen(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
     url = f"{QIANWEN_API_BASE.rstrip('/')}/chat/completions"
     headers = {
@@ -252,7 +253,7 @@ async def _call_qianwen(messages: list[dict]) -> AsyncGenerator[str, None]:
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       QIANWEN_MODEL,
+        "model":       model_override or QIANWEN_MODEL,
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -489,13 +490,22 @@ async def copilot_chat(request: Request):
     prompt = (body.get("prompt") or "").strip()
     symbol = (body.get("symbol") or "").strip() or None
 
+    provider_override = (body.get("provider") or "").strip().lower() or None
+    model_override = (body.get("model") or "").strip() or None
+
     if not prompt:
         return StreamingResponse(
             iter([_sse({"error": "prompt 不能为空"})]),
             media_type="text/event-stream",
         )
 
-    provider = _detect_provider()
+    provider = provider_override if provider_override else _detect_provider()
+
+    # ── Provider 可用性校验：前端指定但 API Key 为空时降级 Mock ──
+    KEY_MAP = {"deepseek": DEEPSEEK_API_KEY, "qianwen": QIANWEN_API_KEY, "minimax": MINIMAX_API_KEY, "openai": OPENAI_API_KEY}
+    if provider != "mock" and not KEY_MAP.get(provider, ""):
+        logger.warning(f"[Copilot] provider={provider} API Key 为空，降级为 Mock")
+        provider = "mock"
 
     # ── 构建上下文注入 ────────────────────────────────────────
     # 前端可传 context 字段（格式化的市场/板块/情绪数据），补充后端实时数据
@@ -523,12 +533,12 @@ async def copilot_chat(request: Request):
     ]
 
     logger.info(
-        f"[Copilot] provider={provider} symbol={symbol or '-'} "
+        f"[Copilot] provider={provider} model={model_override or 'default'} symbol={symbol or '-'} "
         f"prompt='{prompt[:40]}...' context_blocks={len(context_block)}"
     )
 
     return StreamingResponse(
-        _llm_stream(provider, messages),
+        _llm_stream(provider, messages, model_override),
         media_type="text/event-stream",
         headers={
             "Cache-Control":   "no-cache",

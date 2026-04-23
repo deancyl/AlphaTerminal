@@ -50,6 +50,19 @@
       </label>
     </div>
 
+    <!-- 模型选择器 -->
+    <div class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
+      <span class="text-[10px] text-terminal-dim shrink-0">🤖 模型</span>
+      <select v-model="selectedModel"
+              class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
+                     text-theme-primary focus:outline-none focus:border-terminal-accent/60
+                     cursor-pointer">
+        <option v-for="m in modelOptions" :key="m.value" :value="m.value">
+          {{ m.label }}
+        </option>
+      </select>
+    </div>
+
     <!-- 对话历史 -->
     <div ref="historyEl" class="flex-1 overflow-y-auto p-4 space-y-3">
       <div v-if="messages.length === 0" class="text-center mt-12">
@@ -251,6 +264,16 @@ function setCachedResponse(prompt, response) {
 const ctxMarket = ref(true)
 const ctxRates  = ref(false)
 const ctxNews   = ref(false)
+
+// ── 模型选择 ──────────────────────────────────────────────────
+const selectedModel = ref('deepseek-v3')
+const modelOptions = [
+  { label: 'DeepSeek-V3（推荐）',     value: 'deepseek-v3',  provider: 'deepseek', model: 'deepseek-chat' },
+  { label: 'DeepSeek-R1（思维链）',   value: 'deepseek-r1',  provider: 'deepseek', model: 'deepseek-reasoner' },
+  { label: 'Qwen Plus',               value: 'qwen',         provider: 'qianwen',  model: 'qwen-plus' },
+  { label: 'OpenAI GPT-3.5',          value: 'openai',       provider: 'openai',   model: 'gpt-3.5-turbo' },
+  { label: 'Mock（本地模拟）',         value: 'mock',         provider: 'mock',     model: '' },
+]
 
 // 快捷命令
 const quickCommands = [
@@ -794,13 +817,17 @@ async function sendToLLM(text) {
       }
       currentAbortController = new AbortController()
       
-      // 使用云端 API
+      // 根据选中的模型提取 provider 和 model 名
+      const sel = modelOptions.find(m => m.value === selectedModel.value) || modelOptions[0]
+
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
         body: JSON.stringify({ 
           prompt: text,
           context: context || undefined,
+          provider: sel.provider,
+          model: sel.model || undefined,
         }),
         signal: currentAbortController.signal
       })
