@@ -238,7 +238,83 @@
       </div>
 
       <!-- 系统监控 -->
-      <div v-else-if="activeTab === 'monitor'" class="space-y-6">
+<!-- LLM 配置 -->
+      <div v-else-if="activeTab === 'llm'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">🤖 模型服务配置</h2>
+            <p class="text-xs text-theme-muted mt-1">配置 LLM API Key 和 Base URL，数据库配置优先于 .env</p>
+          </div>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="loadLlmConfig">🔄 刷新</button>
+        </div>
+
+        <div v-for="(cfg, provider) in llmProviders" :key="provider"
+             class="bg-theme-panel border border-theme rounded-xl p-5">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="text-lg">{{ cfg.icon }}</div>
+            <div>
+              <div class="font-bold text-theme-primary">{{ cfg.label }}</div>
+              <div class="text-[11px] text-theme-muted">{{ cfg.desc }}</div>
+            </div>
+            <span v-if="cfg.has_db_config"
+                  class="ml-auto px-2 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/30">
+              数据库已配置
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="text-[11px] text-theme-muted mb-1.5 block">API Key</label>
+              <div class="relative">
+                <input
+                  v-model="cfg.input_key"
+                  :type="cfg.show_key ? 'text' : 'password'"
+                  class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                         focus:outline-none focus:border-terminal-accent/60 pr-10"
+                  placeholder="sk-...">
+                <button class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-theme-muted hover:text-terminal-accent"
+                        @click="cfg.show_key = !cfg.show_key">
+                  {{ cfg.show_key ? '🙈' : '👁' }}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="text-[11px] text-theme-muted mb-1.5 block">Base URL</label>
+              <input
+                v-model="cfg.input_base"
+                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                       focus:outline-none focus:border-terminal-accent/60"
+                :placeholder="cfg.default_base">
+            </div>
+            <div class="col-span-2">
+              <label class="text-[11px] text-theme-muted mb-1.5 block">模型名称</label>
+              <input
+                v-model="cfg.input_model"
+                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                       focus:outline-none focus:border-terminal-accent/60"
+                :placeholder="cfg.default_model">
+            </div>
+          </div>
+
+          <div class="flex gap-3 mt-4">
+            <button
+              class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm hover:bg-terminal-accent/25 transition-colors"
+              :disabled="cfg.testing"
+              @click="testLlmConnection(provider)">
+              {{ cfg.testing ? '⏳ 测试中...' : '🔗 测试连接' }}
+            </button>
+            <button
+              class="px-4 py-2 bg-terminal-accent rounded-lg text-sm text-white hover:bg-terminal-accent/80 transition-colors"
+              :disabled="cfg.saving"
+              @click="saveLlmConfig(provider)">
+              {{ cfg.saving ? '💾 保存中...' : '💾 保存全局配置' }}
+            </button>
+            <span v-if="cfg.message" class="flex items-center text-[11px]" :class="cfg.message_ok ? 'text-green-400' : 'text-red-400'">
+              {{ cfg.message }}
+            </span>
+          </div>
+        </div>
+      </div>
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold text-theme-primary">📊 系统监控</h2>
           <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSystemMetrics">🔄 刷新</button>
@@ -389,6 +465,91 @@ const version = __APP_VERSION__
 const activeTab = ref('sources')
 const logContainer = ref(null)
 
+// ── LLM 配置 ──────────────────────────────────────────────────────────
+const llmProviders = reactive({
+  deepseek: {
+    label: 'DeepSeek', icon: '🧠', desc: 'DeepSeek-V3 / DeepSeek-R1',
+    default_base: 'https://api.deepseek.com', default_model: 'deepseek-chat',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+  },
+  qianwen: {
+    label: '通义千问', icon: '🌐', desc: 'Qwen Plus / Max',
+    default_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', default_model: 'qwen-plus',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+  },
+  openai: {
+    label: 'OpenAI', icon: '🤖', desc: 'GPT-3.5 / GPT-4',
+    default_base: 'https://api.openai.com/v1', default_model: 'gpt-3.5-turbo',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+  },
+})
+
+async function loadLlmConfig() {
+  try {
+    const res = await fetch('/api/v1/admin/settings/llm')
+    const json = await res.json()
+    if (json.code !== 0) return
+    for (const [p, data] of Object.entries(json.data)) {
+      const cfg = llmProviders[p]
+      if (!cfg) continue
+      cfg.api_key  = data.api_key || ''
+      cfg.base_url = data.base_url || cfg.default_base
+      cfg.model    = data.model || cfg.default_model
+      cfg.has_db_config = data.has_db_config || false
+      cfg.input_key  = data.api_key || ''
+      cfg.input_base = data.base_url || cfg.default_base
+      cfg.input_model = data.model || cfg.default_model
+      cfg.message = ''
+    }
+  } catch (e) { console.error('[Admin] loadLlmConfig:', e) }
+}
+
+async function saveLlmConfig(provider) {
+  const cfg = llmProviders[provider]
+  cfg.saving = true; cfg.message = ''
+  try {
+    const res = await fetch('/api/v1/admin/settings/llm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: cfg.input_key, base_url: cfg.input_base, model: cfg.input_model }),
+    })
+    const json = await res.json()
+    if (json.code === 0) {
+      cfg.has_db_config = true; cfg.api_key = cfg.input_key; cfg.base_url = cfg.input_base; cfg.model = cfg.input_model
+      cfg.message = '✅ 已保存'; cfg.message_ok = true
+      setTimeout(() => { cfg.message = '' }, 4000)
+    } else { cfg.message = '❌ ' + (json.error || '保存失败'); cfg.message_ok = false }
+  } catch (e) { cfg.message = '❌ ' + e.message; cfg.message_ok = false }
+  finally { cfg.saving = false }
+}
+
+async function testLlmConnection(provider) {
+  const cfg = llmProviders[provider]
+  if (!cfg.input_key) { cfg.message = '⚠️ 请先输入 API Key'; return }
+  cfg.testing = true; cfg.message = ''
+  try {
+    const res = await fetch('/api/v1/admin/settings/llm/test', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: cfg.input_key, base_url: cfg.input_base, model: cfg.input_model }),
+    })
+    const json = await res.json()
+    cfg.message = json.code === 0 ? '✅ 连接成功' : '❌ ' + (json.error || '连接失败')
+    cfg.message_ok = json.code === 0
+    setTimeout(() => { cfg.message = '' }, 6000)
+  } catch (e) { cfg.message = '❌ ' + e.message; cfg.message_ok = false }
+  finally { cfg.testing = false }
+}
+
+loadLlmConfig()
+
+
+
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-green-400' },
   { id: 'source-health', label: '源健康度', desc: '数据源连通性监测与ECharts可视化', icon: '📊', status: false, statusClass: 'bg-green-400' },
@@ -396,6 +557,7 @@ const navItems = [
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-green-400' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-green-400' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-green-400' },
+  { id: 'llm', label: '模型配置', desc: 'LLM API Key 和连接配置', icon: '🤖', status: true, statusClass: 'bg-green-400' },
   { id: 'logs', label: '日志查看', desc: '查看系统运行日志和错误信息', icon: '📝', status: false, statusClass: 'bg-gray-400' },
 ]
 

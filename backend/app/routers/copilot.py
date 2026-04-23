@@ -16,29 +16,38 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ═══════════════════════════════════════════════════════════════
-# LLM 配置 — 从环境变量读取（支持多种 Provider）
+# LLM 配置 — 优先级：数据库 > 环境变量 > 默认值
 # ═══════════════════════════════════════════════════════════════
-OPENAI_API_KEY  = os.getenv("OPENAI_API_KEY",  "")
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE",  "https://api.openai.com/v1")
-OPENAI_MODEL    = os.getenv("OPENAI_MODEL",     "gpt-3.5-turbo")
 
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-DEEPSEEK_API_BASE = os.getenv("DEEPSEEK_API_BASE", "https://api.deepseek.com")
-DEEPSEEK_MODEL   = os.getenv("DEEPSEEK_MODEL",   "deepseek-chat")
-
-QIANWEN_API_KEY = os.getenv("QIANWEN_API_KEY", "")
-QIANWEN_API_BASE = os.getenv("QIANWEN_API_BASE", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-QIANWEN_MODEL   = os.getenv("QIANWEN_MODEL",    "qwen-plus")
-
-MINIMAX_API_KEY  = os.getenv("MINIMAX_API_KEY",  "")
-MINIMAX_GROUP_ID = os.getenv("MINIMAX_GROUP_ID",  "")
+def _get_llm_config(provider: str) -> dict:
+    """
+    获取指定 Provider 的完整配置（DB > .env > 默认值）。
+    """
+    # 1. 数据库（用户 UI 保存的配置，优先级最高）
+    try:
+        from app.db.database import get_admin_config
+        db_cfg = get_admin_config(f"llm_{provider}")
+        if db_cfg and isinstance(db_cfg, dict) and db_cfg.get("api_key"):
+            return {
+                "api_key":  db_cfg.get("api_key", ""),
+                "base_url": db_cfg.get("base_url", ""),
+                "model":    db_cfg.get("model", ""),
+            }
+    except Exception:
+        pass
+    # 2. 环境变量（.env 文件）
+    defaults = {
+        "deepseek": {"api_key": os.getenv("DEEPSEEK_API_KEY",""), "base_url": os.getenv("DEEPSEEK_API_BASE","https://api.deepseek.com"), "model": os.getenv("DEEPSEEK_MODEL","deepseek-chat")},
+        "qianwen":  {"api_key": os.getenv("QIANWEN_API_KEY",""),  "base_url": os.getenv("QIANWEN_API_BASE","https://dashscope.aliyuncs.com/compatible-mode/v1"), "model": os.getenv("QIANWEN_MODEL","qwen-plus")},
+        "openai":   {"api_key": os.getenv("OPENAI_API_KEY",""),  "base_url": os.getenv("OPENAI_API_BASE","https://api.openai.com/v1"), "model": os.getenv("OPENAI_MODEL","gpt-3.5-turbo")},
+    }
+    return defaults.get(provider, {})
 
 def _detect_provider() -> str:
-    """按优先级检测可用的 LLM Provider"""
-    if DEEPSEEK_API_KEY:  return "deepseek"
-    if QIANWEN_API_KEY:   return "qianwen"
-    if MINIMAX_API_KEY:   return "minimax"
-    if OPENAI_API_KEY:    return "openai"
+    """按优先级检测可用的 LLM Provider（优先使用数据库配置）"""
+    for p in ["deepseek", "qianwen", "openai"]:
+        if _get_llm_config(p).get("api_key"):
+            return p
     return "mock"
 
 
@@ -170,13 +179,14 @@ def _sse(data: dict) -> str:
 
 async def _call_openai(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
-    url = f"{OPENAI_API_BASE.rstrip('/')}/chat/completions"
+    cfg = _get_llm_config("openai")
+    url = f"{(cfg['base_url'] or 'https://api.openai.com/v1').rstrip('/')}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or OPENAI_MODEL,
+        "model":       model_override or cfg.get("model") or "gpt-3.5-turbo",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -208,13 +218,14 @@ async def _call_openai(messages: list[dict], model_override: str | None = None) 
 
 async def _call_deepseek(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
-    url = f"{DEEPSEEK_API_BASE.rstrip('/')}/chat/completions"
+    cfg = _get_llm_config("deepseek")
+    url = f"{(cfg['base_url'] or 'https://api.deepseek.com').rstrip('/')}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or DEEPSEEK_MODEL,
+        "model":       model_override or cfg.get("model") or "deepseek-chat",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -247,13 +258,14 @@ async def _call_deepseek(messages: list[dict], model_override: str | None = None
 
 async def _call_qianwen(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
-    url = f"{QIANWEN_API_BASE.rstrip('/')}/chat/completions"
+    cfg = _get_llm_config("qianwen")
+    url = f"{(cfg['base_url'] or 'https://dashscope.aliyuncs.com/compatible-mode/v1').rstrip('/')}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {QIANWEN_API_KEY}",
+        "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or QIANWEN_MODEL,
+        "model":       model_override or cfg.get("model") or "qwen-plus",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,

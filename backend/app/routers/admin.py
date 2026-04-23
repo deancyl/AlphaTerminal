@@ -9,7 +9,7 @@ import psutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel
 
@@ -54,6 +54,91 @@ def admin_read_auth(api_key: str = None):
 def admin_write_auth(api_key: str = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
     return verify_admin_key(api_key)
+
+
+# ═══════════════════════════════════════════════════════════════
+# LLM 配置管理（API Key 可视化配置）
+# ═══════════════════════════════════════════════════════════════
+
+def _mask_key(key: str) -> str:
+    """掩码处理 API Key"""
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return key
+    return f"{key[:6]}...{key[-4:]}"
+
+@router.get("/settings/llm")
+def get_llm_settings():
+    """
+    获取 LLM 配置（API Key 已掩码）。
+    优先级：数据库 > .env > 默认值
+    """
+    from app.db.database import get_admin_config
+    providers = ["deepseek", "qianwen", "openai"]
+    result = {}
+    for p in providers:
+        db_cfg = get_admin_config(f"llm_{p}") or {}
+        env_key = os.getenv(f"{p.upper()}_API_KEY", "")
+        env_base = os.getenv(f"{p.upper()}_API_BASE", "")
+        env_model = os.getenv(f"{p.upper()}_MODEL", "")
+        result[p] = {
+            "api_key":  _mask_key(db_cfg.get("api_key") or env_key),
+            "base_url": db_cfg.get("base_url") or env_base,
+            "model":    db_cfg.get("model") or env_model,
+            "has_db_config": bool(db_cfg and db_cfg.get("api_key")),
+        }
+    return {"code": 0, "data": result}
+
+@router.post("/settings/llm")
+def save_llm_settings(body: dict = Body(...)):
+    """
+    保存 LLM Provider 配置到数据库（永久生效，优先于 .env）。
+    body: {"provider": "deepseek", "api_key": "...", "base_url": "...", "model": "..."}
+    """
+    from app.db.database import get_admin_config, set_admin_config
+    provider = (body.get("provider") or "").lower()
+    valid = {"deepseek": "llm_deepseek", "qianwen": "llm_qianwen", "openai": "llm_openai"}
+    if provider not in valid:
+        return {"code": 1, "error": f"Unknown provider: {provider}"}
+    cfg = {
+        "api_key":  body.get("api_key", "").strip(),
+        "base_url": body.get("base_url", "").strip(),
+        "model":    body.get("model", "").strip(),
+    }
+    set_admin_config(valid[provider], cfg)
+    return {"code": 0, "message": f"{provider} 配置已保存，重启对话后生效"}
+
+@router.post("/settings/llm/test")
+def test_llm_connection(body: dict = Body(...)):
+    """
+    探测 LLM Provider 连接是否可用。
+    body: {"provider": "...", "api_key": "...", "base_url": "...", "model": "..."}
+    """
+    import httpx
+    provider = (body.get("provider") or "").lower()
+    api_key  = (body.get("api_key") or "").strip()
+    base_url = (body.get("base_url") or "").strip()
+    model    = (body.get("model") or "").strip()
+    if not api_key:
+        return {"code": 1, "error": "API Key 不能为空"}
+    model_defaults = {"deepseek": "deepseek-chat", "qianwen": "qwen-plus", "openai": "gpt-3.5-turbo"}
+    test_url = f"{base_url.rstrip('/')}/chat/completions"
+    headers  = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    payload  = {"model": model or model_defaults.get(provider, "gpt-3.5-turbo"),
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 5}
+    try:
+        resp = httpx.post(test_url, headers=headers, json=payload, timeout=15)
+        if resp.status_code == 200:
+            return {"code": 0, "message": "连接成功 ✅", "status": resp.status_code}
+        err_body = resp.json().get("error", {}) if resp.headers.get("content-type","").startswith("application/json") else {}
+        return {"code": 1, "error": f"HTTP {resp.status_code}: {err_body.get('message', resp.text[:80])}"}
+    except httpx.TimeoutException:
+        return {"code": 1, "error": "连接超时，请检查 URL"}
+    except Exception as e:
+        return {"code": 1, "error": str(e)[:100]}
+
 
 # ═══════════════════════════════════════════════════════════════
 # 数据源控制
