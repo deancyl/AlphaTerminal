@@ -609,3 +609,11 @@ async def log_stream_ws(websocket: WebSocket):
 
 # 预先创建日志队列供外部导入使用
 _log_queue = asyncio.Queue(maxsize=100)
+
+# 初始化 error_logger 的队列引用
+try:
+    from app.services.error_logger import init_log_queue
+    init_log_queue(_log_queue)
+    logger.info("[Admin] error_logger 队列已初始化")
+except Exception as e:
+    logger.warning(f"[Admin] error_logger 初始化失败: {e}")

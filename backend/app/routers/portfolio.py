@@ -364,8 +364,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         ).fetchone()
         cash_balance = cb[0] or 0.0 if cb else 0.0
         conn3.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}")
 
     if not rows:
         return _ok({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
@@ -520,8 +520,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         ).fetchone()
         unrealized_pnl = float(unrealized_row[0]) if unrealized_row and unrealized_row[0] is not None else 0.0
         _conn_ps.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Portfolio PnL] 读取 unrealized_pnl 失败 (portfolio_id={portfolio_id}): {e}")
 
     # ── 从 transactions 计算当日盈亏 ───────────────────────────────────
     today = datetime.now().strftime('%Y-%m-%d')
@@ -533,8 +533,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             (portfolio_id, today),
         ).fetchone()
         daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Portfolio PnL] 计算当日盈亏失败 (portfolio_id={portfolio_id}): {e}")
 
     response = {
         # ── 三分 PnL ──────────────────────────────────────────
@@ -897,6 +897,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
                         from statistics import NormalDist
                         z_95 = NormalDist().inv_cdf(0.95)
                     except Exception:
+                        logger.debug("[Portfolio Attribution] NormalDist 不可用，使用默认 z_95=1.645")
                         z_95 = 1.645
 
                     latest_asset = assets[-1]
@@ -1363,7 +1364,8 @@ async def check_conservation(portfolio_id: int):
         try:
             if abs(parent_total - (parent_cash + parent_pos_value)) > 0.001:
                 conservation_ok = False
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[Portfolio Conservation] 校验异常 (portfolio_id={portfolio_id}): {e}")
             conservation_ok = False
 
         return _ok({
@@ -1559,8 +1561,8 @@ async def daily_pnl_only(portfolio_id: int):
                 (portfolio_id,),
             ).fetchone()
             unrealized = ur[0] or 0.0 if ur else 0.0
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Portfolio daily_pnl] 读取 unrealized 失败 (portfolio_id={portfolio_id}): {e}")
 
         return _ok({
             "date":           today,

@@ -86,6 +86,11 @@
       <PositionPieChart v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
     </div>
 
+    <!-- Phase 5: 对账审计卡片 -->
+    <div v-if="selectedPortfolioId" class="audit-card-wrapper">
+      <ConservationAuditCard :portfolioId="selectedPortfolioId" />
+    </div>
+
     <!-- Phase 4: Open Lots 批次明细 -->
     <OpenLotsPanel v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
 
@@ -180,6 +185,7 @@ import OpenLotsPanel from './OpenLotsPanel.vue';
 import PositionPieChart from './PositionPieChart.vue';
 import AttributionPanel from './AttributionPanel.vue';
 import SimulatedTradeModal from './SimulatedTradeModal.vue';
+import ConservationAuditCard from './ConservationAuditCard.vue';
 
 // ── 常量 ─────────────────────────────────────────────────────────
 const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR'];
@@ -417,4 +423,6 @@ function handleTransferOk() {
 .pie-chart-wrapper { padding: 0 0 12px; }
 .pie-chart-wrapper :deep(.position-pie-chart) { min-height: 300px; display: flex; flex-direction: column; }
 .pie-chart-wrapper :deep(.echart-container) { min-height: 260px; height: 260px; }
+.audit-card-wrapper { padding: 0 0 12px; }
+.audit-card-wrapper :deep(.conservation-audit-card) { min-height: 180px; }
 </style>
