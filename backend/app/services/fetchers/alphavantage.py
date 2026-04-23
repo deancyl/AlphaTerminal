@@ -6,7 +6,7 @@ alphavantage.py — Alphavantage 海外数据源 fetcher
 - 外汇实时报价
 - K线历史数据
 
-API Key: 4M3YTMFEMBOPM1W2
+API Key: 从环境变量 ALPHA_VANTAGE_API_KEY 读取
 文档: https://www.alphavantage.co/documentation/
 
 注意：
@@ -17,6 +17,7 @@ API Key: 4M3YTMFEMBOPM1W2
 from __future__ import annotations
 
 import logging
+import os
 import time
 from datetime import datetime
 from typing import Optional, List
@@ -29,7 +30,7 @@ from ..data_validator import QuoteData, KlineData, MarketType, DataType
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://www.alphavantage.co/query"
-API_KEY = "4M3YTMFEMBOPM1W2"
+API_KEY = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
 
 # Alphavantage → 标准 MarketType 映射
 SYMBOL_TO_MARKET = {

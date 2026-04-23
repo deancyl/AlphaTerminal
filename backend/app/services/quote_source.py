@@ -3,6 +3,7 @@
 支持: A股(腾讯/新浪), 港股(腾讯港股), 美股(AlphaVantage), K线(新浪)
 """
 import logging
+import os
 import time
 import httpx
 
@@ -68,7 +69,7 @@ DATA_SOURCES = {
         "proxy": False,
         "timeout": 30,
         "weight": 20,
-        "api_key": "NTPKY2RBGQ2ZS8IU",
+        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY", ""),
         "has_pepb": True,
         "has_realtime": True,
     },

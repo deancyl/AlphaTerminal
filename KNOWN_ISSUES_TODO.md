@@ -223,7 +223,7 @@
 | 1 | SQLite 禁止放 SSHFS/FUSE 网络盘 | database.py | ✅ 已在文档注明 |
 | 2 | 全局无单元测试 | backend/ | ⚠️ 待建立 |
 | 3 | 后端无统一错误码规范 | backend/app/ | ⚠️ 待建立 |
-| 4 | AkShare 债券数据停更 | bond.py | ⚠️ 需切换数据源 |
+| 4 | AkShare 债券数据停更 | bond.py | ✅ 已优雅降级（akshare → Mock fallback） |
 | 5 | 子账户（parent_id）支持完整联动 | portfolio.py | ⚠️ 进行中 |
 | 6 | 回测支持港股/美股 symbol | backtest.py | ⚠️ 待扩展 |
 | 7 | 前端无 E2E 测试 | frontend/ | ⚠️ 待建立 |
