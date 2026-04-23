@@ -168,7 +168,7 @@ export default {
 .empty-icon { font-size: 32px; margin-bottom: 8px; }
 .empty-text { font-size: 14px; font-weight: 600; }
 .empty-hint { font-size: 12px; margin-top: 4px; color: #3a4a5a; }
-.lots-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lots-table { width: 100%; min-height: 60px; border-collapse: collapse; font-size: 12px; }
 .lots-table th { padding: 8px 12px; text-align: left; color: #4a5a6a; font-weight: 500; font-size: 11px; border-bottom: 1px solid #1e2535; }
 .lots-table td { padding: 8px 12px; border-bottom: 1px solid #1a2030; color: #c8d4e8; }
 .lots-table tr:hover td { background: #131a28; }

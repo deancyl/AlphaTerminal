@@ -52,10 +52,16 @@ import { apiFetch } from '../utils/api.js';
 // 动态引入 echarts（SSR 友好）
 let echarts = null;
 async function getEcharts() {
-  if (!echarts) {
-    echarts = await import('echarts');
+  // 优先使用 index.html CDN 加载的全局 echarts（100% 可用）
+  if (typeof window !== 'undefined' && window.echarts) {
+    return window.echarts;
   }
-  return echarts;
+  // fallback: Vite 动态 import（仅在 CDN 未注入时尝试）
+  if (!echarts) {
+    echarts = await import('echarts').catch(() => null);
+  }
+  if (echarts) return echarts;
+  throw new Error('ECharts 不可用（window.echarts 未注入且 import 失败）');
 }
 
 export default {
@@ -87,7 +93,6 @@ export default {
         totalMv.value = data.total_market_value || 0;
         totalPnl.value = pos.reduce((s, p) => s + (p.unrealized_pnl || 0), 0);
 
-        // 给每个标的分配颜色
         positions.value = pos.map((p, i) => ({
           ...p,
           color: ECHART_COLORS[i % ECHART_COLORS.length],
@@ -102,52 +107,48 @@ export default {
     }
 
     async function renderChart() {
-      if (!chartEl.value || positions.value.length === 0) return;
-      const ec = await getEcharts();
-      if (!chartEl.value) return;
-
-      if (chartInstance) {
-        chartInstance.dispose();
-        chartInstance = null;
+      // Try ref first, fall back to DOM query (fixes ref binding race in Options API + setup() mix)
+      const domEl = chartEl.value || document.querySelector('.echart-container');
+      if (!domEl) {
+        console.log('[PPC] renderChart: no DOM element (.echart-container) found');
+        return;
       }
+      if (positions.value.length === 0) {
+        console.log('[PPC] renderChart: 0 positions, skip');
+        return;
+      }
+      console.log('[PPC] renderChart using', domEl.className, 'w=', domEl.offsetWidth, 'h=', domEl.offsetHeight);
+      let ec;
+      try { ec = await getEcharts(); console.log('[PPC] echarts version:', ec?.version); }
+      catch(e) { console.error('[PPC] getEcharts FAILED:', e.message); return; }
+
+      if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
 
       const chartData = positions.value.map(p => ({
-        name:  p.symbol,
-        value: p.market_value,
-        itemStyle: { color: p.color },
+        name: p.symbol, value: p.market_value, itemStyle: { color: p.color },
       }));
+      console.log('[PPC] chartData:', JSON.stringify(chartData));
 
-      chartInstance = ec.init(chartEl.value, null, { renderer: 'canvas' });
-      chartInstance.setOption({
-        backgroundColor: 'transparent',
-        tooltip: {
-          trigger: 'item',
-          formatter: '{b}: ¥{c} ({d}%)',
-          backgroundColor: '#1e2535',
-          borderColor: '#2a3444',
-          textStyle: { color: '#c8d4e8', fontSize: 12 },
-        },
-        series: [{
-          type: 'pie',
-          radius: ['35%', '65%'],
-          center: ['50%', '50%'],
-          data: chartData,
-          label: {
-            show: true,
-            formatter: '{b}\n{d}%',
-            color: '#7a8ba8',
-            fontSize: 11,
-          },
-          labelLine: { show: true, lineStyle: { color: '#2a3444' } },
-          emphasis: {
-            itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' },
-            label: { show: true, fontSize: 13, fontWeight: 'bold', color: '#fff' },
-          },
-          itemStyle: { borderRadius: 4, borderColor: '#0f1419', borderWidth: 2 },
-        }],
-      });
+      try {
+        chartInstance = ec.init(domEl, null, { renderer: 'canvas' });
+        console.log('[PPC] ec.init succeeded, instance=', !!chartInstance);
+      } catch(e) { console.error('[PPC] init FAILED:', e.message); return; }
 
-      // 响应式 resize
+      try {
+        chartInstance.setOption({
+          backgroundColor: 'transparent',
+          tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)', backgroundColor: '#1e2535', borderColor: '#2a3444', textStyle: { color: '#c8d4e8', fontSize: 12 } },
+          series: [{
+            type: 'pie', radius: ['35%', '65%'], center: ['50%', '50%'], data: chartData,
+            label: { show: true, formatter: '{b}\n{d}%', color: '#7a8ba8', fontSize: 11 },
+            labelLine: { show: true, lineStyle: { color: '#2a3444' } },
+            emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' }, label: { show: true, fontSize: 13, fontWeight: 'bold', color: '#fff' } },
+            itemStyle: { borderRadius: 4, borderColor: '#0f1419', borderWidth: 2 },
+          }],
+        });
+        console.log('[PPC] setOption ok, canvas count=', document.querySelectorAll('canvas').length);
+      } catch(e) { console.error('[PPC] setOption FAILED:', e.message); }
+
       window.addEventListener('resize', handleResize);
     }
 
@@ -189,7 +190,15 @@ export default {
 .empty-icon { font-size: 32px; margin-bottom: 8px; }
 .empty-text { font-size: 14px; font-weight: 600; }
 .empty-hint { font-size: 12px; margin-top: 4px; color: #3a4a5a; }
-.echart-container { height: 220px; width: 100%; flex-shrink: 0; }
+.echart-container {
+  height: 220px;
+  width: 100%;
+  min-height: 220px;   /* 强制撑开，防止父容器 flex 压缩为 0 */
+  flex-shrink: 0;
+  /* ECharts 画布安全区，确保 canvas 可见 */
+  position: relative;
+  z-index: 1;
+}
 .pie-legend { padding: 8px 12px; }
 .legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: #7a8ba8; border-bottom: 1px solid #1a2030; }
 .legend-item:last-child { border-bottom: none; }

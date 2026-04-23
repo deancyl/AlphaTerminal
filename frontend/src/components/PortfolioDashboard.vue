@@ -415,5 +415,6 @@ function handleTransferOk() {
 .pnl-neg .pnl-card-value { color: #f87171; }
 .pnl-zero .pnl-card-value { color: #4a5a6a; }
 .pie-chart-wrapper { padding: 0 0 12px; }
-.pie-chart-wrapper :deep(.position-pie-chart) { min-height: 260px; }
+.pie-chart-wrapper :deep(.position-pie-chart) { min-height: 300px; display: flex; flex-direction: column; }
+.pie-chart-wrapper :deep(.echart-container) { min-height: 260px; height: 260px; }
 </style>

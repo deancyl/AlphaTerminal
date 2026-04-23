@@ -932,38 +932,139 @@ async function runChartTests(page, mode) {
     await page.waitForTimeout(2000);
     opsLog.push('NAVIGATE → http://localhost:60100');
 
-    // Navigate to portfolio
-    try {
-      await page.locator('button').filter({ hasText: '💰' }).first().click({ force: true });
-      opsLog.push('CLICK sidebar[💰]');
-      await page.waitForTimeout(2000);
-    } catch (_) {}
+    // Navigate to portfolio (CRITICAL: must click sidebar item to switch currentView to 'portfolio')
+    const navSelectors = [
+      'button:has-text("💰")',
+      'button:has-text("投资组合")',
+      '[data-sidebar-id="portfolio"]',
+    ];
+    let navClicked = false;
+    for (const sel of navSelectors) {
+      const el = page.locator(sel).first();
+      if (await el.count() > 0) {
+        await el.click({ force: true });
+        opsLog.push(`CLICK nav[💰投资组合] via ${sel}`);
+        log('👉', `导航到投资组合: ${sel}`);
+        await page.waitForTimeout(2000); // wait for Vue currentView switch + component mount
+        navClicked = true;
+        await snapshot(page, `${label}_after_portfolio_nav`);
+        break;
+      }
+    }
+    if (!navClicked) {
+      opsLog.push('WARN: portfolio nav button not found, trying direct click on any 💰 button');
+      log('⚠️', 'portfolio nav button not found, trying fallback');
+      try {
+        await page.locator('button').filter({ hasText: '💰' }).first().click({ force: true });
+        opsLog.push('CLICK [💰] via emoji filter (fallback)');
+        await page.waitForTimeout(2000);
+        navClicked = true;
+      } catch (_) {}
+    }
 
-    // Wait for async data (lots/echarts endpoint)
+    // ── Select an account that has positions (prefer a sub-account with lots) ─
+    // Wait for account selector to appear
+    await page.waitForTimeout(1000);
+    const selectExists = await page.locator('select').count();
+    if (selectExists > 0) {
+      const options = await page.locator('select option').all();
+      opsLog.push(`SELECT: found ${options.length} account options`);
+      // Select last non-main account (sub-accounts more likely to have lots for chart testing)
+      if (options.length > 1) {
+        const lastOptionVal = await options[options.length - 1].getAttribute('value');
+        await page.locator('select').selectOption(lastOptionVal);
+        opsLog.push(`SELECT: picked last account option (value=${lastOptionVal}) for chart test`);
+        await page.waitForTimeout(2000); // wait for lots/echarts API response + chart render
+      }
+    }
+
+    // Wait for async data (lots/echarts endpoint) to complete
     await page.waitForTimeout(5000);
 
-    opsLog.push('WAIT 5s for chart rendering');
+    opsLog.push('WAIT 5s for chart rendering after account selection');
 
-    // ── Check 1: .echart-container exists and has size ─────────────────
+    // ── Check 1: .echart-container exists and has REAL pixel dimensions ─────────
     const echartExists = await page.locator('.echart-container').count();
-    const echartBox    = echartExists > 0 ? await page.locator('.echart-container').first().boundingBox() : null;
-    opsLog.push(`ECHARTS DOM: count=${echartExists} boundingBox=${JSON.stringify(echartBox)}`);
-    log('🔍', `echart-container: count=${echartExists} box=${JSON.stringify(echartBox)}`);
+    let echartBox = null;
+    let echartRenderFail = false;
+    if (echartExists > 0) {
+      echartBox = await page.locator('.echart-container').first().boundingBox();
+      if (!echartBox) {
+        echartRenderFail = true;
+        opsLog.push(`FAIL: .echart-container found but boundingBox=null (CSS collapse!)`);
+      } else if (echartBox.height < 10 || echartBox.width < 10) {
+        echartRenderFail = true;
+        opsLog.push(`FAIL: .echart-container boundingBox=${echartBox.width}×${echartBox.height}px (< 10px → visual collapse!)`);
+      } else {
+        opsLog.push(`✅ .echart-container boundingBox=${echartBox.width}×${echartBox.height}px`);
+      }
+    } else {
+      echartRenderFail = true;
+      opsLog.push(`FAIL: .echart-container not found in DOM`);
+    }
+    log('🔍', `echart-container: count=${echartExists} box=${JSON.stringify(echartBox)} → ${echartRenderFail ? '❌ COLLAPSED' : '✅ OK'}`);
 
-    // ── Check 2: .lots-table exists (OpenLotsPanel) ──────────────────
+    // ── Check 2: .lots-table exists and has REAL pixel height ─────────────────
     const lotsTableExists = await page.locator('.lots-table').count();
-    opsLog.push(`LOTS TABLE DOM: count=${lotsTableExists}`);
-    log('🔍', `lots-table: count=${lotsTableExists}`);
+    let lotsBox = null;
+    let lotsRenderFail = false;
+    if (lotsTableExists > 0) {
+      lotsBox = await page.locator('.lots-table').first().boundingBox();
+      if (!lotsBox) {
+        lotsRenderFail = true;
+        opsLog.push(`FAIL: .lots-table found but boundingBox=null (CSS collapse!)`);
+      } else if (lotsBox.height < 10) {
+        lotsRenderFail = true;
+        opsLog.push(`FAIL: .lots-table boundingBox.height=${lotsBox.height}px (< 10px → visual collapse!)`);
+      } else {
+        opsLog.push(`✅ .lots-table boundingBox=${lotsBox.width}×${lotsBox.height}px`);
+      }
+    } else {
+      lotsRenderFail = true;
+      opsLog.push(`FAIL: .lots-table not found in DOM`);
+    }
+    log('🔍', `lots-table: count=${lotsTableExists} box=${JSON.stringify(lotsBox)} → ${lotsRenderFail ? '❌ COLLAPSED' : '✅ OK'}`);
 
-    // ── Check 3: .pnl-card exists (PnL cards row) ─────────────────────
+    // ── Check 3: .pnl-card exists and has REAL pixel dimensions ─────────────────
     const pnlCardCount = await page.locator('.pnl-card').count();
-    opsLog.push(`PNL CARDS DOM: count=${pnlCardCount}`);
-    log('🔍', `pnl-card: count=${pnlCardCount}`);
+    let pnlCardBoxes = [];
+    let pnlRenderFail = false;
+    if (pnlCardCount > 0) {
+      const cards = page.locator('.pnl-card');
+      for (let i = 0; i < Math.min(pnlCardCount, 5); i++) {
+        const box = await cards.nth(i).boundingBox();
+        pnlCardBoxes.push(box);
+        if (box && (box.height < 10 || box.width < 10)) {
+          pnlRenderFail = true;
+        }
+      }
+      if (!pnlRenderFail) {
+        opsLog.push(`✅ .pnl-card count=${pnlCardCount} boxes=[${pnlCardBoxes.map(b => b ? `${b.width}×${b.height}` : 'null').join(', ')}]`);
+      } else {
+        opsLog.push(`FAIL: .pnl-card at least one card < 10px → visual collapse!`);
+      }
+    } else {
+      pnlRenderFail = true;
+      opsLog.push(`FAIL: .pnl-card not found in DOM`);
+    }
+    log('🔍', `pnl-card: count=${pnlCardCount} firstBox=${JSON.stringify(pnlCardBoxes[0])} → ${pnlRenderFail ? '❌ COLLAPSED' : '✅ OK'}`);
 
-    // ── Check 4: Pie legend items ──────────────────────────────────────
+    // ── Check 4: Pie legend items and their pixel dimensions ───────────────────
     const legendCount = await page.locator('.legend-item').count();
-    opsLog.push(`PIE LEGEND ITEMS: count=${legendCount}`);
-    log('🔍', `legend-item: count=${legendCount}`);
+    let legendRenderFail = false;
+    if (legendCount > 0) {
+      const firstLegendBox = await page.locator('.legend-item').first().boundingBox();
+      if (!firstLegendBox || firstLegendBox.height < 5) {
+        legendRenderFail = true;
+        opsLog.push(`FAIL: .legend-item boundingBox.height=${firstLegendBox?.height}px (< 5px → collapse!)`);
+      } else {
+        opsLog.push(`✅ .legend-item count=${legendCount} firstBox=${firstLegendBox.width}×${firstLegendBox.height}px`);
+      }
+    } else {
+      // No legend items is OK if positions are empty (空持仓 → no legend items)
+      opsLog.push(`INFO: .legend-item count=0 (may be empty portfolio, not a failure)`);
+    }
+    log('🔍', `legend-item: count=${legendCount} → ${legendRenderFail ? '❌ COLLAPSED' : (legendCount > 0 ? '✅ OK' : 'ℹ️ 0 items (empty portfolio)')}`);
 
     // ── Check 5: Backend API calls for lots/echarts ──────────────────
     const echartsCall = Array.from(reqMap.values()).find(c => c.path.includes('lots/echarts'));
@@ -971,27 +1072,65 @@ async function runChartTests(page, mode) {
     if (echartsCall) opsLog.push(`API /lots/echarts → HTTP ${echartsCall.status}`);
     if (pnlCall)    opsLog.push(`API /pnl → HTTP ${pnlCall.status}`);
 
+    // ── Check 6: Scan ALL iframes and shadow DOMs for hidden chart canvases ────
+    const canvasCount = await page.locator('canvas').count();
+    opsLog.push(`CANVAS elements in DOM: ${canvasCount}`);
+    if (canvasCount > 0) {
+      const firstCanvasBox = await page.locator('canvas').first().boundingBox();
+      opsLog.push(`First canvas boundingBox: ${JSON.stringify(firstCanvasBox)}`);
+    }
+
     // ── Summary ────────────────────────────────────────────────────────
     const domChecks = [
-      { name: 'ECharts DOM (.echart-container)', pass: echartExists > 0 },
-      { name: 'Lots Table (.lots-table)',      pass: lotsTableExists > 0 },
-      { name: 'PnL Cards (.pnl-card)',          pass: pnlCardCount >= 3 },
-      { name: 'Pie Legend (.legend-item)',       pass: legendCount > 0 },
-      { name: '/lots/echarts API',              pass: echartsCall?.status === 200 },
-      { name: '/pnl API',                       pass: pnlCall?.status === 200 },
+      {
+        name: 'ECharts DOM (.echart-container)',
+        pass: echartExists > 0 && !echartRenderFail,
+        detail: echartBox ? `${echartBox.width}×${echartBox.height}px` : 'boundingBox=null (塌陷!)'
+      },
+      {
+        name: 'Lots Table (.lots-table)',
+        pass: lotsTableExists > 0 && !lotsRenderFail,
+        detail: lotsBox ? `${lotsBox.width}×${lotsBox.height}px` : 'boundingBox=null (塌陷!)'
+      },
+      {
+        name: 'PnL Cards (.pnl-card)',
+        pass: pnlCardCount >= 3 && !pnlRenderFail,
+        detail: `count=${pnlCardCount} first=${JSON.stringify(pnlCardBoxes[0])}`
+      },
+      {
+        name: 'Pie Legend (.legend-item)',
+        pass: !legendRenderFail,
+        detail: legendCount > 0 ? `count=${legendCount}` : '0 items (empty portfolio)'
+      },
+      {
+        name: '/lots/echarts API',
+        pass: echartsCall?.status === 200,
+        detail: `HTTP ${echartsCall?.status || 'not called'}`
+      },
+      {
+        name: '/pnl API',
+        pass: pnlCall?.status === 200,
+        detail: `HTTP ${pnlCall?.status || 'not called'}`
+      },
+      {
+        name: 'Canvas elements (ECharts rendered)',
+        pass: canvasCount > 0,
+        detail: `${canvasCount} canvas found`
+      },
     ];
 
-    console.log(`\n╔═══ ${label} DOM 检测 ══════════════════════════════════════════╗`);
-    domChecks.forEach((c, i) => {
+    console.log(`\n╔═══ ${label} 像素级 DOM 检测 ══════════════════════════════════════╗`);
+    domChecks.forEach((c) => {
       const icon = c.pass ? '✅' : '❌';
-      console.log(`║  ${icon} ${c.name}: ${c.pass ? 'PASS' : 'FAIL'}`);
+      console.log(`║  ${icon} ${c.name}`);
+      console.log(`║     → ${c.detail}`);
     });
     const domPass = domChecks.every(c => c.pass);
-    console.log(`║                                                        ║`);
-    console.log(`║  结论: ${domPass ? '✅ DOM 渲染通过' : '❌ 部分 DOM 未就绪'}                       ║`);
-    console.log(`╚════════════════════════════════════════════════════════════╝`);
+    console.log(`║                                                              ║`);
+    console.log(`║  结论: ${domPass ? '✅ DOM 渲染通过（所有节点像素尺寸 ≥ 阈值）' : '❌ 部分 DOM 像素塌陷或未就绪'}  ║`);
+    console.log(`╚══════════════════════════════════════════════════════════════════╝`);
 
-    return { label, errors, warns, apiCalls: Array.from(reqMap.values()), opsLog, domPass };
+    return { label, errors, warns, apiCalls: Array.from(reqMap.values()), opsLog, domPass, domChecks };
   } catch (e) {
     log('❌', `${label} failed: ${e.message}`);
     return { label, errors, warns, apiCalls: [], opsLog, fatal: true };

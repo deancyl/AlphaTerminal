@@ -360,8 +360,163 @@ git clone --depth=1 https://github.com/deancyl/AlphaTerminal.git
 AlphaTerminal/database.db
 ```
 
-### 注意事项
-- 数据库文件在工作区根目录，非 `backend/` 下
-- 网络挂载路径 (`/vol3/`) 下 SQLite 禁用 WAL，使用 DELETE journal
-- `debug.py` 是兜底路由，放在 `app.include_router` 最后注册
-- 前端 StockScreener 使用**后端分页过滤**（避免前端 computed 阻塞）
+---
+
+## 9. Target Architecture Vision（目标架构蓝图）
+
+> 本章节是 AlphaTerminal 系统设计的**最高指导原则**。
+> 所有技术决策必须与本章描述的方向一致。
+
+---
+
+### 9.1 核心理念
+
+AlphaTerminal 的终极目标是成为**完全免费、可扩展的在线金融投研终端**，
+在不依赖重型本地硬件的前提下，通过云端 API 与多模型协同，实现专业级投研能力。
+
+---
+
+### 9.2 三层核心架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        表现层 (Vue 3 + ECharts)                  │
+│         40+ 组件、K线图表、组合仪表盘、舆情面板                    │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────┐
+│                    AI 编排层 (Multi-Agent)                        │
+│                                                                  │
+│  ┌──────────┐  ┌────────────────┐  ┌─────────────────────────┐  │
+│  │协调者 Agent│  │ 技术分析 Agent │  │  基本面分析 Agent        │  │
+│  │(Orchestrator)│ │(Technical)   │  │(Fundamental)          │  │
+│  └──────────┘  └────────────────┘  └─────────────────────────┘  │
+│                                                                  │
+│  ┌──────────────────┐  ┌───────────────────────────────────┐   │
+│  │ 动态模型路由      │  │ 配额 & 熔断管理                    │   │
+│  │(Dynamic Model    │  │(CircuitBreaker + QuotaMonitor)    │   │
+│  │ Model Router)    │  │                                    │   │
+│  └──────────────────┘  └───────────────────────────────────┘   │
+└──────────────────────────────┬──────────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────────┐
+│                   数据源插件层 (Plugin Layer)                     │
+│                                                                  │
+│  国内源（免费）：          海外源（免费）：      补充源：           │
+│  ─────────────────        ────────────────      ─────────────   │
+│  • Sina (hq.sinajs.cn)   • Alpha Vantage       • Twelve Data   │
+│  • 腾讯 (qt.gtimg.cn)    • Finnhub             • Yahoo Finance │
+│  • 东方财富              • Alpha Vantage FX    • FRED/Macro   │
+│  • 网易财经              • Polygon.io          • ...扩展至20+  │
+│                                                                  │
+│  每一数据源 = 一个插件Fetcher，遵循 BaseMarketFetcher 接口        │
+│  插件注册 → 健康检查 → 熔断 → 自动故障转移（Failover）           │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 9.3 数据源插件体系
+
+**目标：支持 20+ 独立数据源插件，零硬编码依赖**
+
+| 插件 | 用途 | 熔断策略 |
+|------|------|---------|
+| SinaFetcher | A股实时行情 | 连续5次失败 OPEN |
+| TencentFetcher | A股备用 | 同上 |
+| EastmoneyFetcher | 扩展数据 | 同上 |
+| AlphavantageFetcher | 美股/FX/历史K线 | 限速：5req/min，25req/day |
+| FinnhubFetcher | 美股报价/新闻 | 限速：60req/min |
+| TwelveDataFetcher | 多资产综合 | 限速：800req/day |
+| ... | ... | ... |
+
+**熔断状态机**：
+```
+CLOSED ─[连续5次失败]→ OPEN ─[30s后]→ HALF_OPEN ─[成功2次]→ CLOSED
+                         ↑                    │
+                         └────[失败]──────────┘
+```
+
+---
+
+### 9.4 AI 多智能体协作
+
+```
+用户请求
+    │
+    ▼
+┌─────────────────────┐
+│   协调者 Agent       │ ← 意图分类 / 任务分解
+│ (Orchestrator)      │
+└──────────┬──────────┘
+           │ 路由
+    ┌──────┼──────────────────┐
+    ▼      ▼                   ▼
+┌─────────────┐  ┌──────────────┐  ┌────────────────┐
+│技术分析Agent│  │基本面分析Agent│  │  风控 Agent    │
+│(Technical) │  │(Fundamental) │  │ (Risk)        │
+└──────┬─────┘  └──────┬───────┘  └───────┬────────┘
+       │                │                   │
+       ▼                ▼                   ▼
+  K线/指标            财报/估值          仓位/VaR
+  趋势判断            估值区间           风险提示
+```
+
+---
+
+### 9.5 动态模型路由（Dynamic Model Routing）
+
+**核心思想：根据任务特性，动态选择最适合的云端模型**
+
+| 任务类型 | 推荐模型 | 原因 |
+|---------|---------|------|
+| **极速渲染**（K线标注、指标计算） | Groq / Claude-mini | 低延迟 < 500ms |
+| **深度推理**（投资逻辑、策略评估） | DeepSeek V3 | 强推理能力 |
+| **长文本解析**（财报分析、年报摘要） | Zhipu / Claude Sonnet | 128K+ 上下文 |
+| **代码生成**（指标公式、回测脚本） | Claude Sonnet 4 | 代码质量最高 |
+
+**路由策略**：
+```python
+def route_model(task: str) -> str:
+    if is_long_text_task(task):    return "zhipu"
+    elif is_code_generation(task): return "claude-sonnet"
+    elif is_realtime_render(task): return "groq"
+    else:                          return "deepseek"
+```
+
+---
+
+### 9.6 配额与限流管理
+
+```
+每数据源独立配额计数器（存入 admin_config 表）：
+
+AlphaVantage:  25 req/day  → 配额耗尽 → 自动切换 TwelveData
+Finnhub:       60 req/min → 触发限流 → 退避 60s
+TwelveData:    800 req/day → 配额预警 → 降级至免费层
+```
+
+---
+
+### 9.7 当前开发阶段 vs 目标架构
+
+| 组件 | 当前状态 | 目标状态 |
+|------|---------|---------|
+| 数据源 | Sina/Tencent/Alphavantage 插件 | 20+ 插件 + 自动 failover |
+| 熔断器 | CircuitBreaker (CLOSED/OPEN/HALF_OPEN) | 配额感知 + 多源协调熔断 |
+| HTTP Client | ValidatedHTTPClient (retry + CB) | 全局 proxy + 统一 retry 策略 |
+| 数据校验 | QuoteData / KlineData Pydantic Schema | 所有数据源统一 Schema |
+| AI Agent | CopilotSidebar (单 Agent) | Orchestrator + 3+ 专业 Agent |
+| 模型路由 | MiniMax CN (单一) | Groq / DeepSeek / Zhipu 动态切换 |
+
+---
+
+### 9.8 技术债务预警
+
+| 债项 | 风险 | 计划 |
+|------|------|------|
+| AlphaVantage API Key 明文 | 泄露风险 | 迁移至 .env + gitignore |
+| 子账户系统 CRUD 不完整 | 功能缺失 | v0.6.x 完成 |
+| AkShare 债券数据停更 | 数据不准确 | 切换至东方财富债券接口 |
+| 前端无 E2E 测试 | 回归风险 | Playwright 已装（devDependency）|
+| SQLite WAL 不支持网络盘 | 数据损坏 | 已在 database.py 降级为 DELETE journal |
