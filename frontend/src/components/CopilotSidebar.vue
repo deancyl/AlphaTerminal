@@ -130,17 +130,17 @@ import { logger } from '../utils/logger.js'
 import {
 
 // ── Markdown 渲染器配置 ──────────────────────────────────────
-const md = new MarkdownIt({
+const mdParser = new MarkdownIt({
   html:         true,
   linkify:      true,
   typographer:  true,
   breaks:       true,    // 换行符 → <br>
 })
 
-/** 解析 Markdown + 折叠 <think> 思考链 */
+/** 解析 Markdown + 折叠 thinking 思考链（DeepSeek R1 推理内容） */
 function renderMarkdown(raw) {
   if (!raw) return ''
-  // 提取 <think>...</think> 块（DeepSeek R1 推理过程）
+  // 提取 thinking 块（DeepSeek R1 推理过程）
   const thinkRegex = /<think>([\s\S]*?)<\/think>/g
   const parts = []
   let lastIdx = 0
@@ -160,7 +160,7 @@ function renderMarkdown(raw) {
     parts.push({ type: 'content', text: raw.slice(lastIdx) })
   }
 
-  if (parts.length === 0) return md.render(raw)
+  if (parts.length === 0) return mdParser.render(raw)
 
   return parts.map(p => {
     if (p.type === 'thinking') {
@@ -169,7 +169,7 @@ function renderMarkdown(raw) {
       const safeHtml = p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       return `<details class="copilot-thinking"><summary>🧠 深度推理（${p.text.length}字）</summary><div class="copilot-thinking-content">${safeHtml}</div></details>`
     }
-    return md.render(p.text)
+    return mdParser.render(p.text)
   }).join('')
 }
 
