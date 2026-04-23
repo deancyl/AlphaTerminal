@@ -238,83 +238,7 @@
       </div>
 
       <!-- 系统监控 -->
-<!-- LLM 配置 -->
-      <div v-else-if="activeTab === 'llm'" class="space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-bold text-theme-primary">🤖 模型服务配置</h2>
-            <p class="text-xs text-theme-muted mt-1">配置 LLM API Key 和 Base URL，数据库配置优先于 .env</p>
-          </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="loadLlmConfig">🔄 刷新</button>
-        </div>
-
-        <div v-for="(cfg, provider) in llmProviders" :key="provider"
-             class="bg-theme-panel border border-theme rounded-xl p-5">
-          <div class="flex items-center gap-3 mb-4">
-            <div class="text-lg">{{ cfg.icon }}</div>
-            <div>
-              <div class="font-bold text-theme-primary">{{ cfg.label }}</div>
-              <div class="text-[11px] text-theme-muted">{{ cfg.desc }}</div>
-            </div>
-            <span v-if="cfg.has_db_config"
-                  class="ml-auto px-2 py-0.5 rounded text-[10px] bg-blue-500/15 text-blue-400 border border-blue-500/30">
-              数据库已配置
-            </span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="text-[11px] text-theme-muted mb-1.5 block">API Key</label>
-              <div class="relative">
-                <input
-                  v-model="cfg.input_key"
-                  :type="cfg.show_key ? 'text' : 'password'"
-                  class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
-                         focus:outline-none focus:border-terminal-accent/60 pr-10"
-                  placeholder="sk-...">
-                <button class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-theme-muted hover:text-terminal-accent"
-                        @click="cfg.show_key = !cfg.show_key">
-                  {{ cfg.show_key ? '🙈' : '👁' }}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label class="text-[11px] text-theme-muted mb-1.5 block">Base URL</label>
-              <input
-                v-model="cfg.input_base"
-                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
-                       focus:outline-none focus:border-terminal-accent/60"
-                :placeholder="cfg.default_base">
-            </div>
-            <div class="col-span-2">
-              <label class="text-[11px] text-theme-muted mb-1.5 block">模型名称</label>
-              <input
-                v-model="cfg.input_model"
-                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
-                       focus:outline-none focus:border-terminal-accent/60"
-                :placeholder="cfg.default_model">
-            </div>
-          </div>
-
-          <div class="flex gap-3 mt-4">
-            <button
-              class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm hover:bg-terminal-accent/25 transition-colors"
-              :disabled="cfg.testing"
-              @click="testLlmConnection(provider)">
-              {{ cfg.testing ? '⏳ 测试中...' : '🔗 测试连接' }}
-            </button>
-            <button
-              class="px-4 py-2 bg-terminal-accent rounded-lg text-sm text-white hover:bg-terminal-accent/80 transition-colors"
-              :disabled="cfg.saving"
-              @click="saveLlmConfig(provider)">
-              {{ cfg.saving ? '💾 保存中...' : '💾 保存全局配置' }}
-            </button>
-            <span v-if="cfg.message" class="flex items-center text-[11px]" :class="cfg.message_ok ? 'text-green-400' : 'text-red-400'">
-              {{ cfg.message }}
-            </span>
-          </div>
-        </div>
-      </div>
+      <div v-else-if="activeTab === 'monitor'" class="space-y-6">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold text-theme-primary">📊 系统监控</h2>
           <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSystemMetrics">🔄 刷新</button>
@@ -369,6 +293,59 @@
         </ul>
       </div>
     </div>
+
+      <!-- 数据源健康度仪表盘 -->
+      <div v-else-if="activeTab === 'source-health'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">📡 数据源健康度</h2>
+            <p class="text-xs text-theme-muted mt-1">实时监测各数据源连通性与响应速度</p>
+          </div>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
+        </div>
+
+        <!-- 代理配置 -->
+        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+          <h3 class="text-sm font-bold text-blue-400 mb-2">🌐 代理配置</h3>
+          <div v-if="proxyConfig" class="mt-2 flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-theme-muted">代理地址：</span>
+              <span class="text-terminal-accent font-mono">{{ proxyConfig.proxy_url || '未配置' }}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px]" :class="proxyConfig.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'">
+              {{ proxyConfig.enabled ? '● 已启用' : '○ 已禁用' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- 饼图 + 卡片 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- ECharts 饼图 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
+            <div ref="sourceChartRef" style="width:100%;height:220px"></div>
+          </div>
+          <!-- 状态列表 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
+            <div class="space-y-2">
+              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded bg-theme-panel/50">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-green-400' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-red-400'"></span>
+                  <span class="text-sm text-theme-primary">{{ key }}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                  <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
+                  <span class="px-1.5 py-0.5 rounded text-[10px]" :class="info.status === 'ok' ? 'bg-green-500/20 text-green-400' : info.status === 'slow' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'">
+                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- LLM 配置 -->
       <div v-else-if="activeTab === 'llm'" class="space-y-6">
@@ -448,59 +425,6 @@
         </div>
       </div>
 
-      <!-- 数据源健康度仪表盘 -->
-      <div v-else-if="activeTab === 'source-health'" class="space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-bold text-theme-primary">📡 数据源健康度</h2>
-            <p class="text-xs text-theme-muted mt-1">实时监测各数据源连通性与响应速度</p>
-          </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
-        </div>
-
-        <!-- 代理配置 -->
-        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
-          <h3 class="text-sm font-bold text-blue-400 mb-2">🌐 代理配置</h3>
-          <div v-if="proxyConfig" class="mt-2 flex items-center gap-4 text-xs">
-            <div class="flex items-center gap-2">
-              <span class="text-theme-muted">代理地址：</span>
-              <span class="text-terminal-accent font-mono">{{ proxyConfig.proxy_url || '未配置' }}</span>
-            </div>
-            <span class="px-2 py-0.5 rounded text-[10px]" :class="proxyConfig.enabled ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'">
-              {{ proxyConfig.enabled ? '● 已启用' : '○ 已禁用' }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 饼图 + 卡片 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- ECharts 饼图 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
-            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
-            <div ref="sourceChartRef" style="width:100%;height:220px"></div>
-          </div>
-          <!-- 状态列表 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
-            <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
-            <div class="space-y-2">
-              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded bg-theme-panel/50">
-                <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-green-400' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-red-400'"></span>
-                  <span class="text-sm text-theme-primary">{{ key }}</span>
-                </div>
-                <div class="flex items-center gap-3 text-xs">
-                  <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
-                  <span class="px-1.5 py-0.5 rounded text-[10px]" :class="info.status === 'ok' ? 'bg-green-500/20 text-green-400' : info.status === 'slow' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'">
-                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
-                  </span>
-                </div>
-              </div>
-              <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- 日志管理 -->
       <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-theme-panel border border-theme rounded text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">          <strong class="text-yellow-400">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
@@ -530,7 +454,7 @@
         </div>
       </div>
     </div>
-</div>
+  </div>
 </template>
 
 <script setup>
@@ -542,91 +466,6 @@ import { apiFetch } from '../utils/api.js'
 const version = __APP_VERSION__
 const activeTab = ref('sources')
 const logContainer = ref(null)
-
-// ── LLM 配置 ──────────────────────────────────────────────────────────
-const llmProviders = reactive({
-  deepseek: {
-    label: 'DeepSeek', icon: '🧠', desc: 'DeepSeek-V3 / DeepSeek-R1',
-    default_base: 'https://api.deepseek.com', default_model: 'deepseek-chat',
-    api_key: '', base_url: '', model: '', has_db_config: false,
-    input_key: '', input_base: '', input_model: '',
-    show_key: false, saving: false, testing: false, message: '', message_ok: false,
-  },
-  qianwen: {
-    label: '通义千问', icon: '🌐', desc: 'Qwen Plus / Max',
-    default_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', default_model: 'qwen-plus',
-    api_key: '', base_url: '', model: '', has_db_config: false,
-    input_key: '', input_base: '', input_model: '',
-    show_key: false, saving: false, testing: false, message: '', message_ok: false,
-  },
-  openai: {
-    label: 'OpenAI', icon: '🤖', desc: 'GPT-3.5 / GPT-4',
-    default_base: 'https://api.openai.com/v1', default_model: 'gpt-3.5-turbo',
-    api_key: '', base_url: '', model: '', has_db_config: false,
-    input_key: '', input_base: '', input_model: '',
-    show_key: false, saving: false, testing: false, message: '', message_ok: false,
-  },
-})
-
-async function loadLlmConfig() {
-  try {
-    const res = await fetch('/api/v1/admin/settings/llm')
-    const json = await res.json()
-    if (json.code !== 0) return
-    for (const [p, data] of Object.entries(json.data)) {
-      const cfg = llmProviders[p]
-      if (!cfg) continue
-      cfg.api_key  = data.api_key || ''
-      cfg.base_url = data.base_url || cfg.default_base
-      cfg.model    = data.model || cfg.default_model
-      cfg.has_db_config = data.has_db_config || false
-      cfg.input_key  = data.api_key || ''
-      cfg.input_base = data.base_url || cfg.default_base
-      cfg.input_model = data.model || cfg.default_model
-      cfg.message = ''
-    }
-  } catch (e) { console.error('[Admin] loadLlmConfig:', e) }
-}
-
-async function saveLlmConfig(provider) {
-  const cfg = llmProviders[provider]
-  cfg.saving = true; cfg.message = ''
-  try {
-    const res = await fetch('/api/v1/admin/settings/llm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, api_key: cfg.input_key, base_url: cfg.input_base, model: cfg.input_model }),
-    })
-    const json = await res.json()
-    if (json.code === 0) {
-      cfg.has_db_config = true; cfg.api_key = cfg.input_key; cfg.base_url = cfg.input_base; cfg.model = cfg.input_model
-      cfg.message = '✅ 已保存'; cfg.message_ok = true
-      setTimeout(() => { cfg.message = '' }, 4000)
-    } else { cfg.message = '❌ ' + (json.error || '保存失败'); cfg.message_ok = false }
-  } catch (e) { cfg.message = '❌ ' + e.message; cfg.message_ok = false }
-  finally { cfg.saving = false }
-}
-
-async function testLlmConnection(provider) {
-  const cfg = llmProviders[provider]
-  if (!cfg.input_key) { cfg.message = '⚠️ 请先输入 API Key'; return }
-  cfg.testing = true; cfg.message = ''
-  try {
-    const res = await fetch('/api/v1/admin/settings/llm/test', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider, api_key: cfg.input_key, base_url: cfg.input_base, model: cfg.input_model }),
-    })
-    const json = await res.json()
-    cfg.message = json.code === 0 ? '✅ 连接成功' : '❌ ' + (json.error || '连接失败')
-    cfg.message_ok = json.code === 0
-    setTimeout(() => { cfg.message = '' }, 6000)
-  } catch (e) { cfg.message = '❌ ' + e.message; cfg.message_ok = false }
-  finally { cfg.testing = false }
-}
-
-loadLlmConfig()
-
-
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-green-400' },
