@@ -10,6 +10,7 @@ fund_fetcher.py — 基金数据抓取器（Phase 6.5 真·异步版）
 import asyncio
 import time
 import logging
+import datetime
 from typing import Optional, Dict, List, Any
 
 logger = logging.getLogger(__name__)
@@ -187,10 +188,12 @@ class AkShareClient:
                         'rating': clean_value(row.get('评级')),
                     }
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
+            logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
-            logger.warning(f"[AkShare Fund] {code} 获取失败：{e}")
+            logger.error(f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}")
+            logger.exception("完整 traceback:")
         
+        logger.warning(f"[AkShare Fund] {code} 返回 None，降级到 Mock")
         return None
     
     @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
