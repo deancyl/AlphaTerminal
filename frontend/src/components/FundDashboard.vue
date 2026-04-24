@@ -296,7 +296,7 @@ import { logger } from '../utils/logger.js'
 const loading = ref(false)
 const searchQuery = ref('')
 const selectedFundCode = ref('')
-const activeTab = ref('etf') // 'etf' | 'open'
+const activeTab = ref('open') // 'etf' | 'open' - 默认场外基金（更常用）
 const fundInfo = ref(null)
 const dataSource = ref('')
 const lastUpdateTime = ref('')
@@ -632,9 +632,11 @@ onMounted(() => {
     assetChart?.resize()
   })
   
-  // 默认加载第一个快捷 ETF
-  if (quickETFs.length > 0) {
+  // 默认加载第一个快捷基金（根据当前选项卡）
+  if (activeTab.value === 'etf' && quickETFs.length > 0) {
     selectFund(quickETFs[0].code)
+  } else if (activeTab.value === 'open' && quickFunds.length > 0) {
+    selectFund(quickFunds[0].code)
   }
 })
 
