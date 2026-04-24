@@ -1,57 +1,41 @@
 """
-fund_fetcher.py — 基金数据抓取器（Phase 6.3 修复版）
+fund_fetcher.py — 基金数据抓取器（Phase 6.5 真·异步版）
 
-修复内容:
-1. 移除 cachetools.TTLCache（与 async 不兼容）
-2. 实现手动异步安全缓存（字典 + expire_at）
-3. 统一数据格式（英文 key，NaN → None）
-4. 保持超时控制（8s max）
+核心修复:
+1. 所有同步调用使用 asyncio.to_thread() 放入线程池
+2. 所有外部调用使用 asyncio.wait_for(..., timeout=5.0) 严格超时
+3. Mock 数据路径零阻塞（直接返回）
+4. 数据清洗与 Pandas 处理隔离到线程池
 """
-import requests
+import asyncio
 import time
 import logging
-import asyncio
 from typing import Optional, Dict, List, Any
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════
-# 异步安全缓存（手动实现）
+# 异步安全缓存
 # ══════════════════════════════════════════════════════════════════════
 
 class AsyncCache:
-    """
-    异步安全的内存缓存
-    
-    使用方式:
-    cache = AsyncCache()
-    
-    @cache.cached(ttl=3600)
-    async def get_data(key):
-        return await fetch_data()
-    """
+    """异步安全的内存缓存"""
     
     def __init__(self):
         self._cache: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
     
     async def get(self, key: str) -> Optional[Any]:
-        """获取缓存（检查过期）"""
         async with self._lock:
             if key not in self._cache:
                 return None
-            
             entry = self._cache[key]
             if entry['expire_at'] > time.time():
                 return entry['data']
-            
-            # 过期删除
             del self._cache[key]
             return None
     
     async def set(self, key: str, data: Any, ttl: int) -> None:
-        """设置缓存"""
         async with self._lock:
             self._cache[key] = {
                 'data': data,
@@ -59,86 +43,63 @@ class AsyncCache:
             }
     
     async def delete(self, key: str) -> None:
-        """删除缓存"""
         async with self._lock:
             self._cache.pop(key, None)
     
     def cached(self, ttl: int, key_prefix: str = ''):
-        """缓存装饰器（用于 async 函数）"""
         def decorator(func):
             async def wrapper(*args, **kwargs):
-                # 生成缓存键
                 cache_key = f"{key_prefix}{func.__name__}:{args}:{kwargs}"
-                
-                # 查缓存
                 result = await self.get(cache_key)
                 if result is not None:
-                    logger.debug(f"[Cache HIT] {cache_key[:60]}...")
+                    logger.debug(f"[Cache HIT] {cache_key[:50]}...")
                     return result
                 
-                # 执行函数
                 start = time.time()
                 result = await func(*args, **kwargs)
                 elapsed = time.time() - start
                 
-                # 写入缓存
                 if result is not None:
                     await self.set(cache_key, result, ttl)
-                    logger.info(f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s cache=MISS")
+                    logger.info(f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s")
                 
                 return result
             return wrapper
         return decorator
-    
-    def stats(self) -> Dict:
-        """缓存统计"""
-        now = time.time()
-        valid = sum(1 for e in self._cache.values() if e['expire_at'] > now)
-        return {
-            'total_keys': len(self._cache),
-            'valid_keys': valid,
-            'expired_keys': len(self._cache) - valid,
-        }
 
 
-# 全局缓存实例
 fund_cache = AsyncCache()
 
-# 缓存 TTL 配置（秒）
+# 缓存 TTL（秒）
 CACHE_TTL = {
-    'etf_spot': 60,        # ETF 实时：60 秒
-    'fund_info': 86400,    # 基金信息：24 小时
-    'portfolio': 43200,    # 投资组合：12 小时
-    'nav_history': 14400,  # 净值历史：4 小时
-    'fund_rank': 3600,     # 基金排行：1 小时
+    'etf_spot': 60,
+    'fund_info': 86400,
+    'portfolio': 43200,
+    'nav_history': 14400,
+    'fund_rank': 3600,
 }
 
-# 超时配置（秒）
-TIMEOUT_TOTAL = 8
+# 严格超时（秒）
+TIMEOUT_TOTAL = 5.0  # ⚠️ 绝对不超过 5 秒
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 数据清洗工具
+# 数据清洗（同步函数，在线程池执行）
 # ══════════════════════════════════════════════════════════════════════
 
 def clean_value(val) -> Any:
-    """
-    清洗 Pandas 特殊值
-    NaN/NaT → None
-    numpy 类型 → Python 原生类型
-    """
+    """清洗 Pandas 特殊值（同步函数）"""
     import numpy as np
+    import pandas as pd
     
     if val is None:
         return None
     
-    # 处理 Pandas 时间类型
     if hasattr(pd, 'isna') and pd.isna(val):
         return None
     
-    # 处理 numpy 类型
     if isinstance(val, (np.floating, np.integer)):
-        return val.item()  # numpy → Python
+        return val.item()
     
     if isinstance(val, float):
         if val != val:  # NaN check
@@ -151,31 +112,20 @@ def clean_value(val) -> Any:
     return val
 
 
-def clean_dataframe_row(row: pd.Series) -> Dict:
-    """清洗 DataFrame 行"""
-    return {k: clean_value(v) for k, v in row.items()}
-
-
 # ══════════════════════════════════════════════════════════════════════
-# 数据源客户端（异步 + 缓存 + 超时）
+# AkShare 客户端（真·异步）
 # ══════════════════════════════════════════════════════════════════════
 
 class AkShareClient:
-    """AkShare 东方财富数据源（主力）"""
-    
-    def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        })
+    """AkShare 客户端（所有调用在线程池）"""
     
     @fund_cache.cached(CACHE_TTL['etf_spot'], key_prefix='etf:')
     async def get_etf_spot(self, code: str) -> Optional[Dict]:
-        """获取 ETF 实时行情（含折溢价）"""
+        """获取 ETF 实时行情"""
         try:
             import akshare as ak
             
-            # 同步调用转异步（带超时）
+            # ✅ 真·异步：to_thread + wait_for
             df = await asyncio.wait_for(
                 asyncio.to_thread(ak.fund_etf_spot_em),
                 timeout=TIMEOUT_TOTAL
@@ -209,7 +159,7 @@ class AkShareClient:
     
     @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
     async def get_fund_info(self, code: str) -> Optional[Dict]:
-        """获取场外公募基金基本信息"""
+        """获取场外公募基金信息"""
         try:
             import akshare as ak
             
@@ -245,7 +195,7 @@ class AkShareClient:
     
     @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
-        """获取基金投资组合（重仓股 + 资产配置）"""
+        """获取基金投资组合"""
         try:
             import akshare as ak
             
@@ -301,7 +251,7 @@ class AkShareClient:
     
     @fund_cache.cached(CACHE_TTL['nav_history'], key_prefix='nav:')
     async def get_fund_nav_history(self, code: str, period: str = '6m') -> Optional[List[Dict]]:
-        """获取场外基金净值历史"""
+        """获取基金净值历史"""
         try:
             import akshare as ak
             
@@ -360,7 +310,7 @@ class AkShareClient:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 统一抓取器
+# 统一抓取器（快速 Mock 路径）
 # ══════════════════════════════════════════════════════════════════════
 
 class FundFetcher:
@@ -370,48 +320,58 @@ class FundFetcher:
         self.ak = AkShareClient()
     
     async def get_etf_info(self, code: str) -> Optional[Dict]:
-        """获取 ETF 信息"""
         logger.info(f"[FundFetcher] 获取 ETF {code} 信息...")
+        start = time.time()
+        
         data = await self.ak.get_etf_spot(code)
         if data:
             return data
-        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
+        
+        elapsed = time.time() - start
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_etf_info(code)
     
     async def get_etf_history(self, code: str, period: str = 'daily') -> List[Dict]:
-        """获取 ETF 历史 K 线"""
         from app.routers.fund import _sina_etf_history
         return await asyncio.to_thread(_sina_etf_history, code, period, 300)
     
     async def get_fund_info(self, code: str) -> Optional[Dict]:
-        """获取公募基金信息"""
         logger.info(f"[FundFetcher] 获取公募基金 {code} 信息...")
+        start = time.time()
+        
         data = await self.ak.get_fund_info(code)
         if data:
             return data
-        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
+        
+        elapsed = time.time() - start
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_fund_info(code)
     
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
-        """获取基金投资组合"""
         logger.info(f"[FundFetcher] 获取 {code} 投资组合...")
+        start = time.time()
+        
         data = await self.ak.get_fund_portfolio(code)
         if data:
             return data
-        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
+        
+        elapsed = time.time() - start
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_portfolio(code)
     
     async def get_fund_nav_history(self, code: str, period: str = '6m') -> List[Dict]:
-        """获取基金净值历史"""
         logger.info(f"[FundFetcher] 获取 {code} 净值历史...")
+        start = time.time()
+        
         data = await self.ak.get_fund_nav_history(code, period)
         if data:
             return data
-        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
+        
+        elapsed = time.time() - start
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock elapsed={elapsed:.2f}s")
         return self._mock_nav_history(period)
     
     async def get_fund_rank(self, type: str = '全部') -> List[Dict]:
-        """获取基金排行"""
         logger.info(f"[FundFetcher] 获取基金排行 {type}...")
         data = await self.ak.get_fund_rank(type)
         return data if data else []
@@ -442,6 +402,7 @@ class FundFetcher:
             }
     
     def _mock_etf_info(self, code: str) -> Dict:
+        """Mock 数据（零阻塞，直接返回）"""
         return {
             'source': 'mock',
             'code': code,
@@ -454,6 +415,7 @@ class FundFetcher:
         }
     
     def _mock_fund_info(self, code: str) -> Dict:
+        """Mock 数据（零阻塞）"""
         return {
             'source': 'mock',
             'code': code,
@@ -467,6 +429,7 @@ class FundFetcher:
         }
     
     def _mock_portfolio(self, code: str) -> Dict:
+        """Mock 数据（零阻塞）"""
         return {
             'source': 'mock',
             'code': code,
@@ -484,6 +447,7 @@ class FundFetcher:
         }
     
     def _mock_nav_history(self, period: str) -> List[Dict]:
+        """Mock 数据（零阻塞）"""
         import datetime
         days = {'1m': 20, '3m': 60, '6m': 120, '1y': 240}.get(period, 120)
         result = []
@@ -499,7 +463,6 @@ class FundFetcher:
         return result
 
 
-# 单例
 _fetcher_instance = None
 
 def get_fetcher() -> FundFetcher:
