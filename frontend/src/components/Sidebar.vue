@@ -91,6 +91,7 @@ const { theme: currentTheme, setTheme } = useTheme()
 const mainNavItems = [
   { id: 'stock',     label: '股票行情',   icon: '📊' },
   { id: 'portfolio', label: '投资组合',   icon: '💰' },
+  { id: 'fund',      label: '基金分析',   icon: '📈' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
   { id: 'simplequote', label: '实时报价',   icon: '📈' },

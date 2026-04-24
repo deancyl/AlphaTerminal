@@ -161,6 +161,8 @@
         <BondDashboard v-else-if="currentView === 'bond'" />
         <!-- 投资组合 -->
         <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
+        <!-- 基金分析 -->
+        <FundDashboard v-else-if="currentView === 'fund'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
         <!-- 买卖盘口 -->
@@ -207,6 +209,7 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import BondDashboard   from './components/BondDashboard.vue'
 import FuturesDashboard from './components/FuturesDashboard.vue'
 import PortfolioDashboard from './components/PortfolioDashboard.vue'
+import FundDashboard from './components/FundDashboard.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
 import BacktestDashboard from './components/BacktestDashboard.vue'
 import FuturesPanel       from './components/FuturesPanel.vue'
