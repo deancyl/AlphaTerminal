@@ -1,336 +1,280 @@
 """
-fund.py — 国内基金数据路由
-支持：ETF K线、实时行情、场外基金排行、货币基金排行、基金重仓股
+fund.py — 基金数据路由（Phase 6.1 重构版）
 
-数据源：
-  - ETF K线/实时行情：新浪财经（无需代理）
-  - 场外基金/货币基金/重仓股：AkShare 东方财富
+支持:
+  - 场内基金 (ETF/LOF): 实时行情、折溢价、K 线
+  - 场外公募基金：净值、排行、投资组合、净值历史
+  
+数据源矩阵（瀑布降级）:
+  1. AkShare (东方财富) — 主力
+  2. TuShare Pro — 基本面补充  
+  3. Sina/Tencent — 行情兜底
+  4. Mock — 最终降级
 """
-import requests
 import logging
 import time
 from fastapi import APIRouter, Query, HTTPException
+from typing import Optional, List
 
-def success_response(data, message="success"):
-    return {"code": 0, "message": message, "data": data, "timestamp": int(time.time() * 1000)}
-
-def error_response(code, message, data=None):
-    return {"code": code, "message": message, "data": data, "timestamp": int(time.time() * 1000)}
+from app.services.fund_fetcher import get_fetcher
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fund", tags=["fund"])
 
-SINA_BASE = "https://quotes.sina.cn/cn/api/json_v2.php"
-# Sina K线 scale：240=日K，1200=周K（约5日×5），5440=月K（约22日×24）
-_ETF_SCALE_MAP = {"daily": 240, "weekly": 1200, "monthly": 5440}
+fetcher = get_fetcher()
+
 
 # ══════════════════════════════════════════════════════════════════════
-# 工具函数
+# 场内基金 (ETF/LOF)
 # ══════════════════════════════════════════════════════════════════════
 
-def _sina_etf_history(code: str, period: str = "daily", limit: int = 300) -> list:
+@router.get("/etf/info")
+async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字）")):
     """
-    通过新浪财经获取 ETF 历史K线（无需代理）。
-    返回格式与 /market/history 一致（date/open/high/low/close/volume/amount/change_pct/amplitude）。
+    获取 ETF 实时行情（含折溢价率）
+    
+    数据源优先级:
+    1. AkShare (含 IOPV、折价率)
+    2. Sina (纯行情)
+    3. Mock (兜底)
+    
+    返回字段:
+    - code: 基金代码
+    - name: 基金名称
+    - price: 最新价
+    - change_pct: 涨跌幅%
+    - volume: 成交量
+    - amount: 成交额
+    - iopv: 净值参考 (IOPV)
+    - premium_rate: 折溢价率%
+    - source: 数据来源
     """
-    sina_sym = f"sh{code}" if not code.startswith(("sh", "sz")) else code
-    scale = _ETF_SCALE_MAP.get(period, 240)
+    logger.info(f"[ETF Info] 请求 {code}")
+    
+    data = fetcher.get_etf_info(code)
+    if not data:
+        raise HTTPException(400, f"无法获取 ETF {code} 数据")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
 
-    try:
-        params = {"symbol": sina_sym, "scale": scale, "ma": "no", "datalen": limit}
-        resp = requests.get(f"{SINA_BASE}/CN_MarketDataService.getKLineData",
-                            params=params, timeout=15)
-        items = resp.json()
-        if not isinstance(items, list):
-            return []
-    except Exception as e:
-        logger.warning(f"[Sina ETF] {code} 请求失败: {e}")
-        return []
-
-    rows = []
-    for i, r in enumerate(items):
-        day   = r.get("day", "")
-        open_ = float(r.get("open", 0) or 0)
-        close = float(r.get("close", 0) or 0)
-        high  = float(r.get("high", 0) or 0)
-        low   = float(r.get("low", 0) or 0)
-        vol   = float(r.get("volume", 0) or 0)
-        amt   = float(r.get("amount", 0) or 0)
-
-        prev_close = rows[i - 1]["close"] if i > 0 else open_
-        chg_pct    = round((close - prev_close) / prev_close * 100, 2) if prev_close else 0
-        amplitude  = round((high - low) / prev_close * 100, 2) if prev_close else 0
-
-        rows.append({
-            "date":       day,
-            "open":       round(open_,  3),
-            "close":      round(close,  3),
-            "high":       round(high,   3),
-            "low":        round(low,    3),
-            "volume":     round(vol,    0),
-            "amount":     round(amt,    2),
-            "amplitude":  amplitude,
-            "change_pct": chg_pct,
-            "change":     round(close - prev_close, 3) if i > 0 else 0,
-            "turnover":   0,
-        })
-
-    # Sina 数据从旧到新 → 改为从新到旧（与 /market/history 顺序一致）
-    rows.reverse()
-    return rows
-
-
-# ══════════════════════════════════════════════════════════════════════
-# ETF 历史K线
-# ══════════════════════════════════════════════════════════════════════
 
 @router.get("/etf/history")
 async def etf_history(
-    code:   str = Query(..., description="ETF 代码（6位数字，如 510300）"),
-    period: str = Query("daily", description="周期：daily / weekly / monthly"),
-    limit:  int = Query(300, description="返回条数上限"),
-    offset: int = Query(0,  description="分页偏移"),
+    code: str = Query(..., description="ETF 代码"),
+    period: str = Query("daily", description="周期：daily/weekly/monthly"),
+    limit: int = Query(300, description="返回条数"),
 ):
     """
-    获取 ETF 历史K线（新浪财经，无需代理）。
-
-    ETF 代码规则（6位数字）：
-      51xxxx — 上交所 ETF
-      15xxxx — 深交所 ETF
-      56xxxx — 上交所创新型 ETF
-
-    返回格式与 /market/history/{symbol} 完全一致，前端 K 线组件可直接复用。
+    获取 ETF 历史 K 线（Sina 数据源）
     """
-    code = code.strip()
-    if len(code) != 6 or not code.isdigit():
-        raise HTTPException(400, f"无效ETF代码: {code}")
-
-    rows = _sina_etf_history(code, period=period, limit=limit + offset + 50)
-    total = len(rows)
-    rows = rows[offset: offset + limit] if offset else rows[:limit]
-
+    logger.info(f"[ETF History] 请求 {code} {period}")
+    
+    data = fetcher.get_etf_history(code, period, limit)
+    
     return {
-        "code":    0,
-        "symbol":  code,
-        "period":  period,
-        "adjust":  "none",
-        "data":    rows,
-        "total":   total,
-        "offset":  offset,
-        "limit":   limit,
-        "has_more": (offset + len(rows)) < total,
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000)
     }
 
 
 # ══════════════════════════════════════════════════════════════════════
-# ETF 实时行情
+# 场外公募基金
 # ══════════════════════════════════════════════════════════════════════
 
-@router.get("/etf/info")
-async def etf_info(
-    code: str = Query(..., description="ETF 代码（6位数字）"),
-):
+@router.get("/open/info")
+async def open_fund_info(code: str = Query(..., description="基金代码（6 位数字）")):
     """
-    获取 ETF 实时行情（成交价/涨跌幅/成交量/实时估算净值）。
-    数据来源：新浪财经（无需代理）。
+    获取场外公募基金详细信息
+    
+    数据源优先级:
+    1. AkShare (东方财富)
+    2. TuShare Pro
+    3. Mock
+    
+    返回字段:
+    - code: 基金代码
+    - name: 基金名称
+    - type: 基金类型
+    - nav: 单位净值
+    - nav_change_pct: 日增长率%
+    - nav_date: 净值日期
+    - scale: 基金规模
+    - found_date: 成立日期
+    - manager: 基金经理
+    - company: 基金公司
+    - source: 数据来源
     """
-    code = code.strip()
-    if len(code) != 6 or not code.isdigit():
-        raise HTTPException(400, f"无效ETF代码: {code}")
-
-    try:
-        sina_sym = f"sh{code}"
-        url = f"https://hq.sinajs.cn/list={sina_sym}"
-        headers = {"Referer": "https://finance.sina.com.cn", "User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=10)
-        text = resp.text.strip()
-
-        if 'hq_str_' not in text or "," not in text:
-            return error_response(1, "无数据", {"symbol": code})
-
-        data_str = text.split('"')[1] if '"' in text else ""
-        parts = data_str.split(",")
-        if len(parts) < 32:
-            return error_response(1, "数据解析失败", {"symbol": code})
-
-        name     = parts[0]
-        yclose   = float(parts[2]) if parts[2] else 0
-        price    = float(parts[3]) if parts[3] else 0
-        high     = float(parts[4]) if parts[4] else 0
-        low      = float(parts[5]) if parts[5] else 0
-        volume   = float(parts[8]) if parts[8] else 0
-        amount   = float(parts[9]) if parts[9] else 0
-        chg_pct  = round((price - yclose) / yclose * 100, 2) if yclose else 0
-        chg_val  = round(price - yclose, 3) if yclose else 0
-
-        return success_response({
-            "symbol": code,
-            "name":   name,
-            "data": {
-                "price":      price,
-                "prev_close": yclose,
-                "change":     chg_val,
-                "change_pct": chg_pct,
-                "high":       high,
-                "low":        low,
-                "volume":     round(volume, 0),
-                "amount":     round(amount, 2),
-            }
-        })
-    except Exception as e:
-        logger.warning(f"[ETF Info] {code} 获取失败: {e}")
-        return error_response(1, str(e), {"symbol": code})
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 场外基金 / 货币基金 排行（AkShare，需 HTTP_PROXY）
-# ══════════════════════════════════════════════════════════════════════
-
-def _ak_available():
-    try:
-        import akshare as ak
-        return True
-    except Exception:
-        return False
+    logger.info(f"[Open Fund Info] 请求 {code}")
+    
+    data = fetcher.get_fund_info(code)
+    if not data:
+        raise HTTPException(400, f"无法获取基金 {code} 数据")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
 
 
 @router.get("/open/rank")
 async def open_fund_rank(
-    sort:  str = Query("今年来", description="排序：今年来/近1年/近3年/近6月/近1月/近1周/日增长率"),
-    order: str = Query("desc",  description="desc / asc"),
-    top:   int = Query(100,    description="返回条数上限（最大500）"),
+    type: str = Query("全部", description="基金类型：全部/股票型/混合型/债券型/指数型"),
+    limit: int = Query(100, description="返回数量"),
 ):
-    """场外基金排行（股票型/混合型/债券型/指数型）。需要 HTTP_PROXY。"""
-    if not _ak_available():
-        return {"code": 1, "data": [], "total": 0,
-                "error": "AkShare 不可用，请检查安装"}
-
-    import akshare as ak
-    sort_map = {"今年来": "今年来", "近1年": "近1年", "近3年": "近3年",
-                "近6月": "近6月", "近1月": "近1月", "近1周": "近1周",
-                "日增长率": "日增长率"}
-    sf = sort_map.get(sort, "今年来")
-    top = min(top, 500)
-
+    """
+    场外基金排行（AkShare）
+    
+    返回字段:
+    - code: 基金代码
+    - name: 基金简称
+    - nav: 单位净值
+    - nav_growthrate: 日增长率%
+    - type: 基金类型
+    - scale: 基金规模
+    - find_date: 成立日期
+    - manager: 基金经理
+    """
+    logger.info(f"[Open Fund Rank] 请求 type={type}")
+    
     try:
-        df = ak.fund_open_fund_rank_em(symbol="全部")
+        import akshare as ak
+        df = ak.fund_open_fund_rank_em(symbol=type)
         if df is None or df.empty:
-            return {"code": 0, "data": [], "total": 0}
-
-        asc = (order == "asc")
-        if sf in df.columns:
-            df = df.sort_values(by=sf, ascending=asc)
-        else:
-            df = df.sort_values(by="今年来", ascending=False)
-        df = df.head(top)
-
-        rows = []
-        for r in df.to_dict("records"):
-            def _f(v): return float(v) if v not in (None, "---", "") else None
-            rows.append({
-                "code":      str(r.get("基金代码", "")),
-                "name":      r.get("基金简称", ""),
-                "nav_date":  r.get("日期", ""),
-                "nav":       _f(r.get("单位净值")),
-                "nav_accum": _f(r.get("累计净值")),
-                "daily_chg": _f(r.get("日增长率")),
-                "chg_1w":    r.get("近1周"),
-                "chg_1m":    r.get("近1月"),
-                "chg_3m":    r.get("近3月"),
-                "chg_6m":    r.get("近6月"),
-                "chg_1y":    r.get("近1年"),
-                "chg_3y":    r.get("近3年"),
-                "chg_ytd":   r.get("今年来"),
-                "fee":       str(r.get("手续费", "未知")),
+            return {"code": 0, "message": "success", "data": [], "timestamp": int(time.time() * 1000)}
+        
+        result = []
+        for _, row in df.head(limit).iterrows():
+            result.append({
+                "code": str(row.get("基金代码", "")),
+                "name": row.get("基金简称", ""),
+                "nav": float(row.get("单位净值", 0) or 0),
+                "nav_growthrate": float(row.get("日增长率", 0) or 0),
+                "type": row.get("基金类型", ""),
+                "scale": row.get("基金规模", ""),
+                "find_date": row.get("成立日期", ""),
+                "manager": row.get("基金经理", ""),
+                "company": row.get("基金公司", ""),
             })
-        return {"code": 0, "data": rows, "total": len(rows), "sort_by": sf}
-
+        
+        return {"code": 0, "message": "success", "data": result, "timestamp": int(time.time() * 1000)}
+    
     except Exception as e:
-        logger.warning(f"[Fund Open Rank] 获取失败: {e}")
-        return {"code": 0, "data": [], "total": 0, "error": str(e),
-                "note": "需要 HTTP_PROXY 访问东方财富"}
+        logger.error(f"[Open Fund Rank] 获取失败：{e}")
+        return {"code": 0, "message": "success", "data": [], "timestamp": int(time.time() * 1000)}
 
-
-@router.get("/money/rank")
-async def money_fund_rank(
-    sort:  str = Query("7日年化", description="排序：万份收益/7日年化"),
-    order: str = Query("desc", description="desc / asc"),
-    top:   int = Query(100, description="返回条数上限"),
-):
-    """货币基金行情排行。需要 HTTP_PROXY。"""
-    if not _ak_available():
-        return {"code": 1, "data": [], "total": 0,
-                "error": "AkShare 不可用"}
-
-    import akshare as ak
-    top = min(top, 500)
-
-    try:
-        df = ak.fund_money_fund_daily_em()
-        if df is None or df.empty:
-            return {"code": 0, "data": [], "total": 0}
-
-        yld_col = next((c for c in df.columns if "7日年化" in c), None)
-        w_col   = next((c for c in df.columns if "万份收益" in c and "2026" in c), None)
-
-        if yld_col:
-            df = df.sort_values(by=yld_col, ascending=(order == "asc"))
-        df = df.head(top)
-
-        rows = []
-        for _, r in df.iterrows():
-            rows.append({
-                "code":     str(r.get("基金代码", "")),
-                "name":     r.get("基金简称", ""),
-                "nav_date": yld_col.replace("-7日年化%", "").replace("2026-", "") if yld_col else "",
-                "w_profit": r.get(w_col) if w_col else None,
-                "yld_7d":   r.get(yld_col) if yld_col else None,
-                "manager":  r.get("基金经理", ""),
-                "est_date": r.get("成立日期", ""),
-                "fee":      r.get("手续费", "未知"),
-            })
-        return {"code": 0, "data": rows, "total": len(rows)}
-
-    except Exception as e:
-        logger.warning(f"[Fund Money Rank] 获取失败: {e}")
-        return {"code": 0, "data": [], "total": 0, "error": str(e)}
-
-
-# ══════════════════════════════════════════════════════════════════════
-# 基金重仓股
-# ══════════════════════════════════════════════════════════════════════
 
 @router.get("/portfolio/{code}")
-async def fund_top_holdings(code: str):
-    """获取基金最新一期前10大重仓股（AkShare，无需额外代理）。"""
-    if not _ak_available():
-        return {"code": 1, "symbol": code, "data": [], "error": "AkShare 不可用"}
+async def fund_portfolio(code: str):
+    """
+    获取基金投资组合（重仓股 + 资产配置）
+    
+    数据源：AkShare
+    
+    返回字段:
+    - quarter: 报告期
+    - stocks: 前 10 大重仓股列表
+      - code: 股票代码
+      - name: 股票名称
+      - price: 最新价
+      - change_pct: 涨跌幅%
+      - ratio: 占净值比%
+      - change: 较上期变化%
+    - assets: 资产配置列表
+      - name: 资产类型
+      - ratio: 占净值比例%
+    - source: 数据来源
+    """
+    logger.info(f"[Fund Portfolio] 请求 {code}")
+    
+    data = fetcher.get_fund_portfolio(code)
+    if not data:
+        return {"code": 0, "message": "success", "data": {"stocks": [], "assets": []}, "timestamp": int(time.time() * 1000)}
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "quarter": data.get('quarter', ''),
+            "stocks": data.get('stocks', []),
+            "assets": data.get('assets', []),
+            "source": data.get('source', 'unknown'),
+        },
+        "timestamp": int(time.time() * 1000)
+    }
 
-    import akshare as ak
-    code = code.strip()
-    if len(code) != 6 or not code.isdigit():
-        raise HTTPException(400, f"无效基金代码: {code}")
 
+@router.get("/open/nav/{code}")
+async def fund_nav_history(
+    code: str,
+    period: str = Query("6m", description="周期：1m/3m/6m/1y/3y"),
+):
+    """
+    获取场外基金净值历史
+    
+    数据源：AkShare
+    
+    返回字段:
+    - date: 日期
+    - nav: 单位净值
+    - accumulated_nav: 累计净值
+    """
+    logger.info(f"[Fund NAV History] 请求 {code} {period}")
+    
+    data = fetcher.get_fund_nav_history(code, period)
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000)
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 货币基金
+# ══════════════════════════════════════════════════════════════════════
+
+@router.get("/money/rank")
+async def money_fund_rank(limit: int = Query(50, description="返回数量")):
+    """
+    货币基金行情排行（AkShare）
+    
+    返回字段:
+    - code: 基金代码
+    - name: 基金简称
+    - return_7d: 7 日年化收益率%
+    - return_1d: 万份收益
+    - manager: 基金经理
+    """
+    logger.info(f"[Money Fund Rank] 请求 limit={limit}")
+    
     try:
-        df = ak.fund_portfolio_hold_em(symbol=code)
+        import akshare as ak
+        df = ak.fund_money_fund_daily_em()
         if df is None or df.empty:
-            return {"code": 0, "data": [], "symbol": code}
-
-        quarter = df["季度"].iloc[0] if "季度" in df.columns else ""
-        df_q = df[df["季度"] == quarter].head(10)
-
-        rows = []
-        for _, r in df_q.iterrows():
-            rows.append({
-                "symbol":    str(r.get("股票代码", "")),
-                "name":      r.get("股票名称", ""),
-                "weight":    r.get("占净值比例"),
-                "shares":    r.get("持股数"),
-                "mkt_value": r.get("持仓市值"),
-                "quarter":   r.get("季度", ""),
+            return {"code": 0, "message": "success", "data": [], "timestamp": int(time.time() * 1000)}
+        
+        result = []
+        for _, row in df.head(limit).iterrows():
+            result.append({
+                "code": str(row.get("基金代码", "")),
+                "name": row.get("基金简称", ""),
+                "return_7d": float(row.get("7 日年化", 0) or 0),
+                "return_1d": float(row.get("万份收益", 0) or 0),
+                "manager": row.get("基金经理", ""),
             })
-        return {"code": 0, "symbol": code, "quarter": quarter, "data": rows}
-
+        
+        return {"code": 0, "message": "success", "data": result, "timestamp": int(time.time() * 1000)}
+    
     except Exception as e:
-        logger.warning(f"[Fund Portfolio] {code} 获取失败: {e}")
-        return {"code": 0, "symbol": code, "data": [], "error": str(e)}
+        logger.error(f"[Money Fund Rank] 获取失败：{e}")
+        return {"code": 0, "message": "success", "data": [], "timestamp": int(time.time() * 1000)}
