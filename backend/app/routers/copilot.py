@@ -13,6 +13,14 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# 添加控制台 handler（如果还没有）
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[%(name)s] %(levelname)s: %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 router = APIRouter()
 
 # ═══════════════════════════════════════════════════════════════
@@ -220,6 +228,7 @@ async def _call_deepseek(messages: list[dict], model_override: str | None = None
     import httpx
     cfg = _get_llm_config("deepseek")
     url = f"{(cfg['base_url'] or 'https://api.deepseek.com').rstrip('/')}/chat/completions"
+    logger.warning(f"[DeepSeek] 调用配置：base_url={cfg.get('base_url')}, model={cfg.get('model')}, url={url}, api_key_masked={cfg.get('api_key', '')[:10]}...")
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
@@ -514,8 +523,9 @@ async def copilot_chat(request: Request):
     provider = provider_override if provider_override else _detect_provider()
 
     # ── Provider 可用性校验：前端指定但 API Key 为空时降级 Mock ──
-    KEY_MAP = {"deepseek": DEEPSEEK_API_KEY, "qianwen": QIANWEN_API_KEY, "minimax": MINIMAX_API_KEY, "openai": OPENAI_API_KEY}
-    if provider != "mock" and not KEY_MAP.get(provider, ""):
+    # 从 _get_llm_config 获取配置（DB > .env）
+    cfg = _get_llm_config(provider)
+    if provider != "mock" and not cfg.get("api_key"):
         logger.warning(f"[Copilot] provider={provider} API Key 为空，降级为 Mock")
         provider = "mock"
 

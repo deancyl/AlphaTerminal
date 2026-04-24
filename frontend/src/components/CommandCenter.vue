@@ -14,7 +14,7 @@
   <!-- 命令面板（fixed overlay） -->
   <Teleport to="body">
     <div v-if="isOpen" class="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh]" @mousedown.self="close">
-      <div class="w-[560px] max-h-[70vh] flex flex-col rounded-lg border border-theme bg-terminal-panel shadow-2xl overflow-hidden">
+      <div class="w-full max-w-[560px] max-h-[70vh] flex flex-col rounded-lg border border-theme bg-terminal-panel shadow-2xl overflow-hidden">
         <!-- 搜索框 -->
         <div class="flex items-center gap-2 px-4 py-3 border-b border-theme shrink-0">
           <span class="text-theme-secondary">🔍</span>

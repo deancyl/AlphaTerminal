@@ -157,7 +157,8 @@ async def get_sources_status():
     from app.services import quote_source
     
     # 从 quote_source 获取实时状态
-    real_time = quote_source.get_source_status()
+    status_data = quote_source.get_source_status()
+    real_time = status_data.get("sources", {})
     
     # 从 SQLite 获取持久化熔断状态
     conn = _get_conn()

@@ -9,7 +9,7 @@
     @click.self="close"
   >
     <!-- 弹窗主体 -->
-    <div class="terminal-panel border border-theme rounded-xl p-4 w-[540px] max-w-[95vw] flex flex-col gap-3 shadow-2xl"
+    <div class="terminal-panel border border-theme rounded-xl p-4 w-full max-w-[540px] flex flex-col gap-3 shadow-2xl"
          style="max-height: 90vh; overflow-y: auto;">
 
       <!-- 头部 -->

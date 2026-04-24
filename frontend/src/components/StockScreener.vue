@@ -44,7 +44,8 @@
 
     <!-- 单表结构：Sticky 表头 + 滚动 tbody + 固定分页栏 -->
     <div class="flex-1 min-h-0 overflow-y-auto relative">
-      <table class="w-full text-xs whitespace-nowrap">
+      <div class="overflow-x-auto scrollbar-hide">
+        <table class="w-full text-xs whitespace-nowrap">
         <thead class="bg-terminal-panel sticky top-0 z-10 shadow-sm">
           <tr class="text-terminal-dim border-b border-theme">
             <th class="px-2 py-1.5 text-left font-normal w-12">#</th>
@@ -82,6 +83,7 @@
           </tr>
         </tbody>
       </table>
+      </div>
 
       <!-- Sentinel for infinite scroll trigger -->
       <div ref="sentinelEl" class="h-px w-full"></div>
