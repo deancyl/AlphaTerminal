@@ -426,17 +426,26 @@ class FundFetcher:
         }
     
     def _mock_fund_info(self, code: str) -> Dict:
-        """Mock 数据（零阻塞）"""
+        """Mock 数据（零阻塞）- 完整字段，前端解构无 undefined"""
+        from datetime import datetime as _dt
+        nav_base = 1.0 + hash(code) % 2000 / 1000
         return {
             'source': 'mock',
             'code': code,
             'name': f'基金-{code}',
             'type': '混合型',
-            'nav': 1.0 + hash(code) % 2000 / 1000,
-            'nav_change_pct': (hash(code + 'c') % 200 - 100) / 10,
-            'scale': f'{hash(code) % 100}.{hash(code) % 10}',
-            'manager': '张三',
-            'company': 'XX 基金',
+            'nav': round(nav_base, 4),
+            'nav_change_pct': round((hash(code + 'c') % 200 - 100) / 10, 2),
+            'accumulated_nav': round(nav_base * (1.0 + (hash(code) % 50) / 100), 4),
+            'nav_date': _dt.now().strftime('%Y-%m-%d'),
+            'rating': '★★★★★' if hash(code) % 5 == 0 else ('★★★★☆' if hash(code) % 4 == 0 else '★★★☆☆'),
+            'purchase_fee': '1.5%' if hash(code) % 3 == 0 else '1.2%',
+            'redemption_fee': '0.5%' if hash(code) % 2 == 0 else '0.3%',
+            'dividend_freq': '每年',
+            'scale': f'{hash(code) % 100}.{hash(code) % 10}亿元',
+            'manager': ['张三', '李四', '王五', '赵六'][hash(code) % 4],
+            'company': ['华夏基金', '易方达', '嘉实基金', '南方基金', '博时基金'][hash(code) % 5],
+            'found_date': f'{2015 + hash(code) % 8}-0{1 + hash(code) % 9}-15',
         }
     
     def _mock_portfolio(self, code: str) -> Dict:

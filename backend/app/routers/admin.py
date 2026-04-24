@@ -462,3 +462,60 @@ try:
     logger.info("[Admin] error_logger 队列已初始化")
 except Exception as e:
     logger.warning(f"[Admin] error_logger 初始化失败: {e}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 进程保活监控 (Watchdog)
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/watchdog/status")
+async def get_watchdog_status():
+    """获取进程保活监控状态"""
+    from app.services.watchdog import get_watchdog_state
+    return {
+        "code": 0,
+        "message": "success",
+        "data": get_watchdog_state()
+    }
+
+
+@router.post("/watchdog/toggle")
+async def toggle_watchdog_endpoint(body: dict = Body(...)):
+    """切换进程保活开关
+    
+    请求体: {"enabled": true/false}
+    """
+    from app.services.watchdog import toggle_watchdog
+    
+    enabled = body.get("enabled")
+    if enabled is None:
+        return {"code": 400, "message": "缺少 enabled 参数"}
+    
+    success = toggle_watchdog(enabled)
+    if success:
+        return {
+            "code": 0,
+            "message": f"进程保活已{'启用' if enabled else '禁用'}",
+            "data": {"enabled": enabled}
+        }
+    else:
+        return {"code": 500, "message": "切换失败，请检查日志"}
+
+
+@router.post("/watchdog/restart")
+async def manual_restart_backend():
+    """手动触发后端重启（用于紧急恢复）"""
+    from app.services.watchdog import _restart_backend, _watchdog_state
+    
+    logger.warning("[Admin] 收到手动重启后端请求")
+    success = _restart_backend()
+    
+    if success:
+        _watchdog_state.record_restart()
+        return {
+            "code": 0,
+            "message": "后端重启指令已发送，请等待 5-10 秒后刷新页面",
+            "data": {"restart_time": datetime.now().isoformat()}
+        }
+    else:
+        return {"code": 500, "message": "重启失败，请检查后端日志"}

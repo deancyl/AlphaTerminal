@@ -131,6 +131,104 @@
         </div>
       </div>
 
+      <!-- 进程保活 -->
+      <div v-else-if="activeTab === 'watchdog'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">🛡️ 进程保活监控</h2>
+            <p class="text-xs text-theme-muted mt-1">监控后端进程健康状态，崩溃时自动重启</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span v-if="watchdogLoading" class="text-xs text-theme-muted">加载中...</span>
+            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshWatchdog">🔄 刷新状态</button>
+          </div>
+        </div>
+
+        <!-- 错误提示 -->
+        <div v-if="watchdogError" class="p-3 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
+          <strong>加载失败:</strong> {{ watchdogError }}
+        </div>
+
+        <div class="p-4 bg-blue-500/5 border border-blue-500/30 rounded-lg">
+          <h3 class="text-sm font-bold text-blue-400 mb-2">💡 这个功能是做什么的？</h3>
+          <p class="text-xs text-theme-secondary leading-relaxed">
+            <strong class="text-terminal-accent">进程保活</strong>会每30秒检查一次后端服务是否正常运行。
+            如果发现后端崩溃或无法响应，系统会<strong class="text-terminal-accent">自动重启</strong>服务，确保前端始终能获取数据。
+            适合长期运行的场景（如24小时监控）。
+          </p>
+        </div>
+
+        <!-- 状态卡片 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="p-4 rounded-lg border" :class="watchdogStatus.enabled ? 'bg-green-500/5 border-green-500/30' : 'bg-gray-500/5 border-gray-500/30'">
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-medium text-theme-primary">保活开关</span>
+              <span class="w-3 h-3 rounded-full" :class="watchdogStatus.enabled ? 'bg-green-400 animate-pulse' : 'bg-gray-400'"></span>
+            </div>
+            <div class="text-2xl font-bold" :class="watchdogStatus.enabled ? 'text-green-400' : 'text-gray-400'">
+              {{ watchdogStatus.enabled ? '已启用' : '已禁用' }}
+            </div>
+            <div class="text-[10px] text-theme-muted mt-1">
+              {{ watchdogStatus.enabled ? '后端崩溃时将自动重启' : '后端崩溃后需手动重启' }}
+            </div>
+            <div class="flex gap-2 mt-4 pt-3 border-t border-theme/50">
+              <button v-if="!watchdogStatus.enabled" class="flex-1 px-3 py-1.5 bg-green-500/20 text-green-400 rounded text-xs" @click="toggleWatchdog(true)">✅ 启用保活</button>
+              <button v-else class="flex-1 px-3 py-1.5 bg-red-500/20 text-red-400 rounded text-xs" @click="toggleWatchdog(false)">⏹️ 禁用保活</button>
+            </div>
+          </div>
+
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-[10px] text-theme-muted mb-1">监控状态</div>
+            <div class="text-xl font-bold" :class="watchdogStatus.running ? 'text-terminal-accent' : 'text-yellow-400'">
+              {{ watchdogStatus.running ? '运行中' : '未运行' }}
+            </div>
+            <div class="text-[10px] text-theme-muted mt-1">
+              上次检查: {{ watchdogStatus.last_check ? formatTime(watchdogStatus.last_check) : '从未' }}
+            </div>
+          </div>
+
+          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+            <div class="text-[10px] text-theme-muted mb-1">重启统计</div>
+            <div class="text-xl font-bold" :class="watchdogStatus.total_restarts > 0 ? 'text-yellow-400' : 'text-green-400'">
+              {{ watchdogStatus.total_restarts }} 次
+            </div>
+            <div class="text-[10px] text-theme-muted mt-1">
+              连续失败: {{ watchdogStatus.restart_count }}/3
+            </div>
+          </div>
+        </div>
+
+        <!-- 手动操作 -->
+        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <h3 class="text-sm font-bold text-theme-primary mb-4">紧急操作</h3>
+          <div class="flex flex-wrap gap-3">
+            <button class="px-4 py-2 bg-red-500/20 text-red-400 rounded text-sm" @click="confirmAction('手动重启后端', '这将立即终止当前后端进程并启动新实例，所有连接将中断5-10秒。确定？', manualRestart)">🔄 手动重启后端</button>
+            <button class="px-4 py-2 bg-blue-500/20 text-blue-400 rounded text-sm" @click="refreshWatchdog">📊 刷新状态</button>
+          </div>
+        </div>
+
+        <!-- 最近错误 -->
+        <div v-if="watchdogStatus.recent_errors && watchdogStatus.recent_errors.length > 0" class="p-4 bg-red-500/5 border border-red-500/30 rounded-lg">
+          <h3 class="text-sm font-bold text-red-400 mb-3">最近错误记录</h3>
+          <div class="space-y-2 text-xs">
+            <div v-for="(err, i) in watchdogStatus.recent_errors" :key="i" class="flex gap-3">
+              <span class="text-theme-muted whitespace-nowrap">{{ formatTime(err.time) }}</span>
+              <span class="text-red-400">{{ err.error }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded text-xs text-theme-muted">
+          <strong class="text-yellow-400">使用说明：</strong>
+          <ul class="mt-1 space-y-1 list-disc list-inside">
+            <li><strong>启用保活</strong>：后端崩溃后自动重启，适合长期运行场景</li>
+            <li><strong>禁用保活</strong>：后端崩溃后保持停止，便于调试问题</li>
+            <li><strong>手动重启</strong>：立即重启后端，用于紧急恢复或配置生效</li>
+            <li>连续重启3次仍失败会进入5分钟冷却期，防止无限循环</li>
+          </ul>
+        </div>
+      </div>
+
       <!-- 缓存管理 -->
       <div v-else-if="activeTab === 'cache'" class="space-y-6">
         <h2 class="text-lg font-bold text-theme-primary">💾 缓存管理</h2>
@@ -471,6 +569,7 @@ const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-green-400' },
   { id: 'source-health', label: '源健康度', desc: '数据源连通性监测与ECharts可视化', icon: '📊', status: false, statusClass: 'bg-green-400' },
   { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-green-400' },
+  { id: 'watchdog', label: '进程保活', desc: '监控后端进程状态，自动重启', icon: '🛡️', status: true, statusClass: 'bg-green-400' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-green-400' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-green-400' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-green-400' },
@@ -846,6 +945,98 @@ async function warmupCache(type) {
   } catch (e) { alert('操作失败: ' + e.message) }
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Watchdog 进程保活
+// ═══════════════════════════════════════════════════════════════
+
+const watchdogStatus = reactive({
+  enabled: false,
+  running: false,
+  last_check: null,
+  last_restart: null,
+  restart_count: 0,
+  total_restarts: 0,
+  recent_errors: []
+})
+const watchdogLoading = ref(false)
+const watchdogError = ref(null)
+
+async function refreshWatchdog() {
+  watchdogLoading.value = true
+  watchdogError.value = null
+  try {
+    const data = await apiFetch('/api/v1/admin/watchdog/status')
+    console.log('[Watchdog] Raw response:', data)
+    // apiFetch 已经通过 extractData 提取了 response.data
+    if (data && typeof data.enabled === 'boolean') {
+      // 直接赋值，因为 apiFetch 已经提取了 data 字段
+      watchdogStatus.enabled = data.enabled ?? false
+      watchdogStatus.running = data.running ?? false
+      watchdogStatus.last_check = data.last_check ?? null
+      watchdogStatus.last_restart = data.last_restart ?? null
+      watchdogStatus.restart_count = data.restart_count ?? 0
+      watchdogStatus.total_restarts = data.total_restarts ?? 0
+      watchdogStatus.recent_errors = data.recent_errors ?? []
+      console.log('[Watchdog] Status updated:', watchdogStatus)
+    } else {
+      console.warn('[Watchdog] Invalid response format:', data)
+      watchdogError.value = '响应格式错误: ' + JSON.stringify(data)
+    }
+  } catch (e) { 
+    console.error('[Watchdog] Refresh error:', e)
+    watchdogError.value = e.message || '加载失败'
+  } finally {
+    watchdogLoading.value = false
+  }
+}
+
+async function toggleWatchdog(enabled) {
+  try {
+    console.log('[Watchdog] Toggling to:', enabled)
+    watchdogLoading.value = true
+    // 乐观更新：立即更新 UI
+    watchdogStatus.enabled = enabled
+    
+    const res = await apiFetch('/api/v1/admin/watchdog/toggle', {
+      method: 'POST',
+      body: JSON.stringify({ enabled })
+    })
+    console.log('[Watchdog] Toggle response:', res)
+    // apiFetch 已经提取了 data 字段，res 直接是 {enabled: true/false}
+    
+    // 延迟刷新，确保后端已处理
+    setTimeout(async () => {
+      await refreshWatchdog()
+    }, 500)
+    
+    alert(enabled ? '进程保活已启用' : '进程保活已禁用')
+  } catch (e) { 
+    console.error('[Watchdog] Toggle failed:', e)
+    watchdogError.value = e.message || '切换失败'
+    // 失败时恢复原状态
+    await refreshWatchdog()
+    alert('操作失败: ' + e.message) 
+  } finally {
+    watchdogLoading.value = false
+  }
+}
+
+async function manualRestart() {
+  try {
+    watchdogLoading.value = true
+    await apiFetch('/api/v1/admin/watchdog/restart', { method: 'POST' })
+    alert('后端重启指令已发送，请等待 5-10 秒后刷新页面')
+    setTimeout(async () => {
+      await refreshWatchdog()
+    }, 3000)
+  } catch (e) { 
+    watchdogError.value = e.message || '重启失败'
+    alert('重启失败: ' + e.message) 
+  } finally {
+    watchdogLoading.value = false
+  }
+}
+
 async function dbMaintenance(action) {
   try {
     await apiFetch('/api/v1/admin/database/maintenance', {
@@ -869,5 +1060,7 @@ onMounted(() => {
   refreshScheduler()
   refreshSystemMetrics()
   refreshLogs()
+  console.log('[AdminDashboard] Mounting, calling refreshWatchdog...')
+  refreshWatchdog().catch(e => console.error('[AdminDashboard] refreshWatchdog failed:', e))
 })
 </script>

@@ -240,6 +240,7 @@ def _get_all_descendants(conn, portfolio_id: int, visited: set = None) -> list:
 async def list_positions(portfolio_id: int, include_children: bool = Query(False, description="是否包含子账户持仓")):
     """账户当前持仓，可选包含所有子账户持仓"""
     # WAL 模式支持并发读
+    # Phase 4: 从 position_summary 读取（lot-based 系统）
     conn = _get_conn()
     try:
         if include_children:
@@ -247,25 +248,30 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
             all_ids = _get_all_descendants(conn, portfolio_id)
             placeholders = ','.join(['?' for _ in all_ids])
             rows = conn.execute(
-                f"""SELECT p.id, p.symbol, p.shares, p.avg_cost, p.updated_at,
-                           po.name as portfolio_name, po.id as portfolio_id
-                    FROM positions p
-                    JOIN portfolios po ON p.portfolio_id = po.id
-                    WHERE p.portfolio_id IN ({placeholders})""",
+                f"""SELECT ps.portfolio_id, ps.symbol, ps.total_shares, ps.avg_cost, 
+                           ps.market_value, ps.unrealized_pnl, ps.updated_at,
+                           po.name as portfolio_name
+                    FROM position_summary ps
+                    JOIN portfolios po ON ps.portfolio_id = po.id
+                    WHERE ps.portfolio_id IN ({placeholders}) AND ps.total_shares > 0""",
                 tuple(all_ids)
             ).fetchall()
-            return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
-                                    "avg_cost": r[3], "updated_at": r[4],
-                                    "portfolio_name": r[5], "portfolio_id": r[6]} for r in rows],
+            return {"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
+                                    "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
+                                    "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_name": r[7], "portfolio_id": r[0]} for r in rows],
                     "includes_children": True,
                     "portfolio_ids": all_ids}
         else:
             rows = conn.execute(
-                "SELECT id, symbol, shares, avg_cost, updated_at FROM positions WHERE portfolio_id=?",
+                """SELECT portfolio_id, symbol, total_shares, avg_cost, 
+                           market_value, unrealized_pnl, updated_at 
+                   FROM position_summary 
+                   WHERE portfolio_id=? AND total_shares > 0""",
                 (portfolio_id,)
             ).fetchall()
-            return {"positions": [{"id": r[0], "symbol": r[1], "shares": r[2],
-                                    "avg_cost": r[3], "updated_at": r[4]} for r in rows]}
+            return {"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
+                                    "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
+                                    "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_id": r[0]} for r in rows]}
     finally:
         conn.close()
 
@@ -327,16 +333,18 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             # 获取所有后代账户ID
             all_ids = _get_all_descendants(conn, portfolio_id)
             placeholders = ','.join(['?' for _ in all_ids])
+            # 使用 position_summary 而非 positions（新lot-based系统）
             rows = conn.execute(
-                f"""SELECT p.symbol, p.shares, p.avg_cost, po.name as portfolio_name, po.id as portfolio_id
-                    FROM positions p
+                f"""SELECT p.symbol, p.total_shares as shares, p.avg_cost, po.name as portfolio_name, po.id as portfolio_id
+                    FROM position_summary p
                     JOIN portfolios po ON p.portfolio_id = po.id
                     WHERE p.portfolio_id IN ({placeholders})""",
                 tuple(all_ids)
             ).fetchall()
         else:
+            # 使用 position_summary 而非 positions（新lot-based系统）
             rows = conn.execute(
-                "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+                "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=?",
                 (portfolio_id,)
             ).fetchall()
 

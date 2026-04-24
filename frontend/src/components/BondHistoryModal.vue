@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 
 const props = defineProps({

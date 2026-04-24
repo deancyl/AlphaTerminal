@@ -2,11 +2,14 @@
 回测引擎 API
 """
 import json
+import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -273,6 +276,43 @@ async def run_backtest(req: BacktestRequest):
         annualized_return = (capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
         sharpe_ratio      = round(annualized_return / (max_drawdown / float(initial_capital)), 2) if max_drawdown > 0 else 0
 
+        # ── 保存到数据库 ─────────────────────────────────────────────
+        try:
+            conn.execute("""
+                INSERT INTO backtest_results 
+                (strategy_id, portfolio_id, start_date, end_date, 
+                 initial_capital, final_capital, total_return, annual_return,
+                 sharpe_ratio, max_drawdown, win_rate, trades_count, details, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                None,  # strategy_id - could be passed in future
+                None,  # portfolio_id - could be passed in future  
+                req.start_date,
+                req.end_date,
+                initial_capital,
+                round(capital, 2),
+                round(total_return_pct, 2),
+                round(annualized_return * 100, 2),
+                sharpe_ratio,
+                round((max_drawdown / initial_capital) * 100, 2),
+                round(win_rate, 2),
+                total_trades,
+                json.dumps({
+                    "symbol": req.symbol,
+                    "trades": trades,
+                    "equity_curve": equity_curve,
+                    "strategy_type": strategy_type,
+                    "wins": wins,
+                    "losses": losses,
+                    "benchmark_return_pct": benchmark_return_pct
+                }),
+                datetime.now().isoformat()
+            ))
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
+            # 不阻断返回，仅记录警告
+
         # ── 返回 ────────────────────────────────────────────────────
         return {
             "code": 0,
@@ -308,9 +348,9 @@ async def get_backtest_results(limit: int = 10):
     conn = _get_conn()
     try:
         rows = conn.execute("""
-            SELECT id, strategy_id, symbol, start_date, end_date, 
-                   initial_capital, final_capital, total_return_pct, 
-                   max_drawdown_pct, win_rate, trades_count, created_at
+            SELECT id, strategy_id, portfolio_id, start_date, end_date, 
+                   initial_capital, final_capital, total_return, 
+                   max_drawdown, win_rate, trades_count, created_at
             FROM backtest_results ORDER BY created_at DESC LIMIT ?
         """, (limit,)).fetchall()
         
@@ -319,13 +359,13 @@ async def get_backtest_results(limit: int = 10):
             results.append({
                 "id": r[0],
                 "strategy_id": r[1],
-                "symbol": r[2],
+                "portfolio_id": r[2],
                 "start_date": r[3],
                 "end_date": r[4],
                 "initial_capital": r[5],
                 "final_capital": r[6],
-                "total_return_pct": r[7],
-                "max_drawdown_pct": r[8],
+                "total_return": r[7],
+                "max_drawdown": r[8],
                 "win_rate": r[9],
                 "trades_count": r[10],
                 "created_at": r[11]

@@ -7,6 +7,7 @@ Phase B: 统一 API 响应格式
 - 所有响应使用标准格式: {code, message, data, timestamp}
 - code: 0 表示成功，非 0 表示错误
 """
+import asyncio
 import logging
 import os
 import re
@@ -20,7 +21,7 @@ from app.db import get_latest_prices, get_price_history
 from app.utils.market_status import is_market_open
 from app.services.fetchers import FetcherFactory, fetch_with_fallback, get_market_fetcher
 from app.services.sentiment_engine import SpotCache
-from app.services.quote_source import get_quote_with_fallback, get_source_status
+from app.services.quote_source import get_quote_with_fallback_async, get_source_status
 
 
 logger = logging.getLogger(__name__)
@@ -1474,7 +1475,7 @@ async def market_quote_detail(symbol: str):
     concepts        = []
 
     # ── 估值 ── 调用多源fallback获取PE/PB
-    quote_data = get_quote_with_fallback(norm)
+    quote_data = await get_quote_with_fallback_async(norm)
     pe_static = quote_data.get("pe_static")
     pe_ttm_val = quote_data.get("pe_ttm")
     pb_val = quote_data.get("pb")
@@ -1602,48 +1603,33 @@ async def set_proxy(config: dict):
 # ── 探测所有源状态 ───────────────────────────────────────────────────
 @router.get("/source/ping")
 async def ping_all_sources():
-    """主动探测所有数据源状态"""
+    """主动探测所有数据源状态（并发异步，不阻塞事件循环）"""
     from app.services import quote_source
-    import time
 
-    results = {}
-    test_symbol = "sh000001"
-    test_hk = "hk00700"
-    test_us = "AAPL"
-
-    # 解析器映射
-    parsers = {
-        # A股
-        "tencent": (quote_source._parse_tencent_quote, test_symbol),
-        "sina": (quote_source._parse_sina_quote, test_symbol),
-        "eastmoney": (quote_source._parse_eastmoney_quote, test_symbol),
-        "sina_kline": (quote_source._parse_sina_kline_60min, test_symbol),
-        # 港股
-        "tencent_hk": (quote_source._parse_tencent_hk_quote, test_hk),
-        # 美股
-        "alpha_vantage": (quote_source._parse_alpha_vantage_quote, test_us),
+    # 测试符号映射
+    test_map = {
+        "tencent": "sh000001",
+        "sina": "sh000001",
+        "eastmoney": "sh000001",
+        "sina_kline": "sh000001",
+        "tencent_hk": "hk00700",
+        "alpha_vantage": "AAPL",
     }
 
-    # 遍历所有配置的源
-    for source_name in quote_source.DATA_SOURCES.keys():
-        try:
-            if source_name in parsers:
-                parse_func, test_sym = parsers[source_name]
-            else:
-                results[source_name] = {"status": "unknown", "latency": None}
-                continue
+    # 并发探测所有源
+    async def probe(name: str):
+        sym = test_map.get(name, "sh000001")
+        return name, await quote_source.test_source_async(name, sym)
 
-            start = time.time()
-            result = parse_func(test_sym)
-            latency = (time.time() - start) * 1000
+    probes = [probe(name) for name in quote_source.DATA_SOURCES.keys()]
+    probe_results = await asyncio.gather(*probes, return_exceptions=True)
 
-            if result and result.get('latency_ms'):
-                results[source_name] = {"status": "ok", "latency": round(latency, 1)}
-            else:
-                results[source_name] = {"status": "fail", "latency": None}
-        except Exception as e:
-            print(f"[Ping Error] {source_name}: {type(e).__name__}: {str(e)[:50]}")
-            results[source_name] = {"status": "error", "latency": None}
+    results = {}
+    for item in probe_results:
+        if isinstance(item, Exception):
+            continue
+        name, result = item
+        results[name] = result
 
     return success_response(results)
 

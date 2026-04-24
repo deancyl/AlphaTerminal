@@ -17,6 +17,7 @@ from app.routers import market, copilot, news, sentiment, debug, bond, futures, 
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
+from app.services.watchdog import init_watchdog, stop_watchdog
 
 
 @asynccontextmanager
@@ -25,16 +26,18 @@ async def lifespan(app: FastAPI):
     # 启动时
     start_writer()         # DB 异步写入线程
     start_scheduler()
+    init_watchdog()        # 进程保活监控（从配置加载开关状态）
 
     yield
     # 关闭时：优雅退出 — 等待队列排空
     stop_writer()          # DB 写入队列 graceful shutdown（最多30s）
     stop_scheduler()
+    stop_watchdog()        # 停止 watchdog 线程
 
 
 app = FastAPI(
     title="AlphaTerminal API",
-    version="0.5.166",
+    version="0.5.167",
     lifespan=lifespan,
 )
 
