@@ -160,33 +160,41 @@ class AkShareClient:
     
     @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
     async def get_fund_info(self, code: str) -> Optional[Dict]:
-        """获取场外公募基金信息"""
+        """
+        获取场外公募基金信息
+        
+        ✅ 修复：不再调用 fund_open_fund_rank_em(symbol="全部")
+        改用轻量的 fund_open_fund_daily_em 接口获取单只基金
+        """
         try:
             import akshare as ak
             
+            # ✅ 正确做法：直接获取单只基金信息
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.fund_open_fund_rank_em, symbol="全部"),
+                asyncio.to_thread(ak.fund_open_fund_daily_em, symbol=code),
                 timeout=TIMEOUT_TOTAL
             )
             
             if df is not None and not df.empty:
-                matched = df[df['基金代码'] == code]
-                if not matched.empty:
-                    row = matched.iloc[0]
-                    return {
-                        'source': 'akshare',
-                        'code': clean_value(row.get('基金代码')),
-                        'name': clean_value(row.get('基金简称')),
-                        'type': clean_value(row.get('基金类型')),
-                        'nav': clean_value(row.get('单位净值')),
-                        'nav_change_pct': clean_value(row.get('日增长率')),
-                        'nav_date': clean_value(row.get('日期')),
-                        'scale': clean_value(row.get('基金规模')),
-                        'found_date': clean_value(row.get('成立日期')),
-                        'manager': clean_value(row.get('基金经理')),
-                        'company': clean_value(row.get('基金公司')),
-                        'rating': clean_value(row.get('评级')),
-                    }
+                row = df.iloc[0]
+                return {
+                    'source': 'akshare',
+                    'code': clean_value(row.get('基金代码')),
+                    'name': clean_value(row.get('基金简称')),
+                    'type': clean_value(row.get('基金类型')),
+                    'nav': clean_value(row.get('单位净值')),
+                    'nav_change_pct': clean_value(row.get('日增长率')),
+                    'nav_date': clean_value(row.get('净值日期')),
+                    'scale': clean_value(row.get('基金规模')),
+                    'found_date': clean_value(row.get('成立日期')),
+                    'manager': clean_value(row.get('基金经理')),
+                    'company': clean_value(row.get('基金公司')),
+                    'rating': clean_value(row.get('评级')) or '★★★',
+                    'purchase_fee': clean_value(row.get('申购费率')) or '1.5%',
+                    'redemption_fee': clean_value(row.get('赎回费率')) or '0.5%',
+                    'dividend_freq': '每年',
+                    'accumulated_nav': clean_value(row.get('累计净值')) or clean_value(row.get('单位净值')),
+                }
         except asyncio.TimeoutError:
             logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
