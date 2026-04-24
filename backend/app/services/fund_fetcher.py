@@ -1,120 +1,163 @@
 """
-fund_fetcher.py — 基金数据抓取器（Phase 6.2 性能优化版）
+fund_fetcher.py — 基金数据抓取器（Phase 6.3 修复版）
 
-核心优化:
-1. 严格超时控制：连接 3s + 读取 5s = 8s 最大等待
-2. 激进 TTL 缓存：分级缓存策略（60s ~ 24h）
-3. 快速熔断：超时立即降级，不阻塞
-4. 并发组装：支持 asyncio.gather 并发请求
-
-缓存策略:
-- 静态数据（基金信息）: 24 小时
-- 低频数据（投资组合）: 12 小时
-- 历史序列（净值 K 线）: 4 小时
-- 高频数据（ETF 实时）: 60 秒
+修复内容:
+1. 移除 cachetools.TTLCache（与 async 不兼容）
+2. 实现手动异步安全缓存（字典 + expire_at）
+3. 统一数据格式（英文 key，NaN → None）
+4. 保持超时控制（8s max）
 """
 import requests
 import time
 import logging
-from typing import Optional, Dict, List, Any
-from functools import wraps
-from cachetools import TTLCache
 import asyncio
+from typing import Optional, Dict, List, Any
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════════════
-# 缓存配置（激进策略）
+# 异步安全缓存（手动实现）
 # ══════════════════════════════════════════════════════════════════════
 
-# 最大缓存条目数
-CACHE_MAX_SIZE = 1000
+class AsyncCache:
+    """
+    异步安全的内存缓存
+    
+    使用方式:
+    cache = AsyncCache()
+    
+    @cache.cached(ttl=3600)
+    async def get_data(key):
+        return await fetch_data()
+    """
+    
+    def __init__(self):
+        self._cache: Dict[str, Dict] = {}
+        self._lock = asyncio.Lock()
+    
+    async def get(self, key: str) -> Optional[Any]:
+        """获取缓存（检查过期）"""
+        async with self._lock:
+            if key not in self._cache:
+                return None
+            
+            entry = self._cache[key]
+            if entry['expire_at'] > time.time():
+                return entry['data']
+            
+            # 过期删除
+            del self._cache[key]
+            return None
+    
+    async def set(self, key: str, data: Any, ttl: int) -> None:
+        """设置缓存"""
+        async with self._lock:
+            self._cache[key] = {
+                'data': data,
+                'expire_at': time.time() + ttl,
+            }
+    
+    async def delete(self, key: str) -> None:
+        """删除缓存"""
+        async with self._lock:
+            self._cache.pop(key, None)
+    
+    def cached(self, ttl: int, key_prefix: str = ''):
+        """缓存装饰器（用于 async 函数）"""
+        def decorator(func):
+            async def wrapper(*args, **kwargs):
+                # 生成缓存键
+                cache_key = f"{key_prefix}{func.__name__}:{args}:{kwargs}"
+                
+                # 查缓存
+                result = await self.get(cache_key)
+                if result is not None:
+                    logger.debug(f"[Cache HIT] {cache_key[:60]}...")
+                    return result
+                
+                # 执行函数
+                start = time.time()
+                result = await func(*args, **kwargs)
+                elapsed = time.time() - start
+                
+                # 写入缓存
+                if result is not None:
+                    await self.set(cache_key, result, ttl)
+                    logger.info(f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s cache=MISS")
+                
+                return result
+            return wrapper
+        return decorator
+    
+    def stats(self) -> Dict:
+        """缓存统计"""
+        now = time.time()
+        valid = sum(1 for e in self._cache.values() if e['expire_at'] > now)
+        return {
+            'total_keys': len(self._cache),
+            'valid_keys': valid,
+            'expired_keys': len(self._cache) - valid,
+        }
 
-# 分级 TTL（秒）
+
+# 全局缓存实例
+fund_cache = AsyncCache()
+
+# 缓存 TTL 配置（秒）
 CACHE_TTL = {
-    'etf_spot': 60,        # ETF 实时行情：60 秒
-    'fund_info': 86400,    # 基金基本信息：24 小时
+    'etf_spot': 60,        # ETF 实时：60 秒
+    'fund_info': 86400,    # 基金信息：24 小时
     'portfolio': 43200,    # 投资组合：12 小时
     'nav_history': 14400,  # 净值历史：4 小时
     'fund_rank': 3600,     # 基金排行：1 小时
 }
 
-# 初始化缓存
-_etf_spot_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL['etf_spot'])
-_fund_info_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL['fund_info'])
-_portfolio_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL['portfolio'])
-_nav_history_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL['nav_history'])
-_fund_rank_cache = TTLCache(maxsize=CACHE_MAX_SIZE, ttl=CACHE_TTL['fund_rank'])
-
 # 超时配置（秒）
-TIMEOUT_CONNECT = 3   # 连接超时
-TIMEOUT_READ = 5      # 读取超时
-TIMEOUT_TOTAL = 8     # 总超时
+TIMEOUT_TOTAL = 8
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 装饰器：带缓存和超时的 API 调用
+# 数据清洗工具
 # ══════════════════════════════════════════════════════════════════════
 
-def cached_api(cache: TTLCache, max_attempts=2, timeout=TIMEOUT_TOTAL):
+def clean_value(val) -> Any:
     """
-    带缓存和超时的 API 调用装饰器
+    清洗 Pandas 特殊值
+    NaN/NaT → None
+    numpy 类型 → Python 原生类型
+    """
+    import numpy as np
     
-    - 先查缓存，命中直接返回
-    - 未命中则调用原函数，带超时控制
-    - 成功结果写入缓存
-    - 失败快速降级
-    """
-    def decorator(func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            cache_key = f"{func.__name__}:{args}:{kwargs}"
-            
-            # 1. 查缓存
-            if cache_key in cache:
-                logger.debug(f"[Cache HIT] {func.__name__} {cache_key[:50]}...")
-                return cache[cache_key]
-            
-            # 2. 执行请求（带超时）
-            start = time.time()
-            last_exc = None
-            
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    # 异步超时控制
-                    result = await asyncio.wait_for(
-                        func(*args, **kwargs),
-                        timeout=timeout
-                    )
-                    
-                    if result:  # 非空结果视为成功
-                        elapsed = time.time() - start
-                        cache[cache_key] = result
-                        logger.info(f"[{func.__name__}] 成功 source={result.get('source', 'unknown')} elapsed={elapsed:.2f}s cache=MISS")
-                        return result
-                        
-                except asyncio.TimeoutError:
-                    last_exc = TimeoutError(f"API timeout after {timeout}s")
-                    logger.warning(f"[{func.__name__}] 尝试 {attempt}/{max_attempts} 超时 ({timeout}s)")
-                    break  # 超时不重试，立即降级
-                    
-                except Exception as e:
-                    last_exc = e
-                    logger.warning(f"[{func.__name__}] 尝试 {attempt}/{max_attempts} 失败：{e}")
-                    if attempt < max_attempts:
-                        await asyncio.sleep(0.2 * attempt)  # 短暂退避
-            
-            # 3. 所有尝试失败，返回 None 触发降级
-            elapsed = time.time() - start
-            logger.error(f"[{func.__name__}] {max_attempts} 次尝试后仍失败 elapsed={elapsed:.2f}s")
+    if val is None:
+        return None
+    
+    # 处理 Pandas 时间类型
+    if hasattr(pd, 'isna') and pd.isna(val):
+        return None
+    
+    # 处理 numpy 类型
+    if isinstance(val, (np.floating, np.integer)):
+        return val.item()  # numpy → Python
+    
+    if isinstance(val, float):
+        if val != val:  # NaN check
             return None
-        
-        return wrapper
-    return decorator
+        return val
+    
+    if isinstance(val, str):
+        return val.strip() if val.strip() else None
+    
+    return val
+
+
+def clean_dataframe_row(row: pd.Series) -> Dict:
+    """清洗 DataFrame 行"""
+    return {k: clean_value(v) for k, v in row.items()}
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 数据源客户端（异步 + 超时）
+# 数据源客户端（异步 + 缓存 + 超时）
 # ══════════════════════════════════════════════════════════════════════
 
 class AkShareClient:
@@ -126,278 +169,255 @@ class AkShareClient:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         })
     
-    @cached_api(_etf_spot_cache, max_attempts=1, timeout=TIMEOUT_TOTAL)
+    @fund_cache.cached(CACHE_TTL['etf_spot'], key_prefix='etf:')
     async def get_etf_spot(self, code: str) -> Optional[Dict]:
         """获取 ETF 实时行情（含折溢价）"""
-        start = time.time()
         try:
             import akshare as ak
-            df = await asyncio.to_thread(ak.fund_etf_spot_em)
+            
+            # 同步调用转异步（带超时）
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_etf_spot_em),
+                timeout=TIMEOUT_TOTAL
+            )
             
             if df is not None and not df.empty:
                 matched = df[df['基金代码'] == code]
                 if not matched.empty:
                     row = matched.iloc[0]
-                    elapsed = time.time() - start
-                    logger.info(f"[AkShare ETF] {code} 成功 elapsed={elapsed:.2f}s")
                     return {
                         'source': 'akshare',
-                        'code': code,
-                        'name': str(row.get('基金简称', '')),
-                        'price': float(row.get('最新价', 0) or 0),
-                        'change_pct': float(row.get('涨跌幅', 0) or 0),
-                        'change': float(row.get('涨跌额', 0) or 0),
-                        'volume': float(row.get('成交量', 0) or 0),
-                        'amount': float(row.get('成交额', 0) or 0),
-                        'high': float(row.get('最高价', 0) or 0),
-                        'low': float(row.get('最低价', 0) or 0),
-                        'prev_close': float(row.get('昨收', 0) or 0),
-                        'iopv': float(row.get('IOPV', 0) or 0),
-                        'premium_rate': float(row.get('折价率', 0) or 0),
+                        'code': clean_value(row.get('基金代码')),
+                        'name': clean_value(row.get('基金简称')),
+                        'price': clean_value(row.get('最新价')),
+                        'change_pct': clean_value(row.get('涨跌幅')),
+                        'change': clean_value(row.get('涨跌额')),
+                        'volume': clean_value(row.get('成交量')),
+                        'amount': clean_value(row.get('成交额')),
+                        'high': clean_value(row.get('最高价')),
+                        'low': clean_value(row.get('最低价')),
+                        'prev_close': clean_value(row.get('昨收')),
+                        'iopv': clean_value(row.get('IOPV')),
+                        'premium_rate': clean_value(row.get('折价率')),
                     }
+        except asyncio.TimeoutError:
+            logger.warning(f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
             logger.warning(f"[AkShare ETF] {code} 获取失败：{e}")
+        
         return None
     
-    @cached_api(_fund_info_cache, max_attempts=1, timeout=TIMEOUT_TOTAL)
+    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
     async def get_fund_info(self, code: str) -> Optional[Dict]:
         """获取场外公募基金基本信息"""
-        start = time.time()
         try:
             import akshare as ak
-            # 缓存的基金排行数据中查找
-            df = await asyncio.to_thread(ak.fund_open_fund_rank_em, symbol="全部")
+            
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_open_fund_rank_em, symbol="全部"),
+                timeout=TIMEOUT_TOTAL
+            )
             
             if df is not None and not df.empty:
                 matched = df[df['基金代码'] == code]
                 if not matched.empty:
                     row = matched.iloc[0]
-                    elapsed = time.time() - start
-                    logger.info(f"[AkShare Fund] {code} 成功 elapsed={elapsed:.2f}s")
                     return {
                         'source': 'akshare',
-                        'code': code,
-                        'name': str(row.get('基金简称', '')),
-                        'type': str(row.get('基金类型', '')),
-                        'nav': float(row.get('单位净值', 0) or 0),
-                        'nav_change_pct': float(row.get('日增长率', 0) or 0),
-                        'nav_date': str(row.get('日期', '')),
-                        'scale': str(row.get('基金规模', '')),
-                        'found_date': str(row.get('成立日期', '')),
-                        'manager': str(row.get('基金经理', '')),
-                        'company': str(row.get('基金公司', '')),
-                        'rating': str(row.get('评级', '')),
+                        'code': clean_value(row.get('基金代码')),
+                        'name': clean_value(row.get('基金简称')),
+                        'type': clean_value(row.get('基金类型')),
+                        'nav': clean_value(row.get('单位净值')),
+                        'nav_change_pct': clean_value(row.get('日增长率')),
+                        'nav_date': clean_value(row.get('日期')),
+                        'scale': clean_value(row.get('基金规模')),
+                        'found_date': clean_value(row.get('成立日期')),
+                        'manager': clean_value(row.get('基金经理')),
+                        'company': clean_value(row.get('基金公司')),
+                        'rating': clean_value(row.get('评级')),
                     }
+        except asyncio.TimeoutError:
+            logger.warning(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
             logger.warning(f"[AkShare Fund] {code} 获取失败：{e}")
+        
         return None
     
-    @cached_api(_portfolio_cache, max_attempts=1, timeout=TIMEOUT_TOTAL)
+    @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """获取基金投资组合（重仓股 + 资产配置）"""
-        start = time.time()
         try:
             import akshare as ak
-            df = await asyncio.to_thread(ak.fund_portfolio_hold_em, symbol=code)
+            
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_portfolio_hold_em, symbol=code),
+                timeout=TIMEOUT_TOTAL
+            )
             
             if df is not None and not df.empty:
                 stock_df = df[df['股票名称'].notna()]
                 stocks = []
                 for _, row in stock_df.head(10).iterrows():
                     stocks.append({
-                        'code': str(row.get('股票代码', '')),
-                        'name': str(row.get('股票名称', '')),
-                        'price': float(row.get('最新价', 0) or 0),
-                        'change_pct': float(row.get('涨跌幅', 0) or 0),
-                        'ratio': float(row.get('占净值比', 0) or 0),
-                        'shares': float(row.get('持股数', 0) or 0),
-                        'mkt_value': float(row.get('持仓市值', 0) or 0),
-                        'change': float(row.get('较上期变化', 0) or 0),
+                        'code': clean_value(row.get('股票代码')),
+                        'name': clean_value(row.get('股票名称')),
+                        'price': clean_value(row.get('最新价')),
+                        'change_pct': clean_value(row.get('涨跌幅')),
+                        'ratio': clean_value(row.get('占净值比')),
+                        'shares': clean_value(row.get('持股数')),
+                        'mkt_value': clean_value(row.get('持仓市值')),
+                        'change': clean_value(row.get('较上期变化')),
                     })
                 
                 asset_alloc = []
                 try:
-                    asset_df = await asyncio.to_thread(ak.fund_portfolio_asset_em, symbol=code)
+                    asset_df = await asyncio.wait_for(
+                        asyncio.to_thread(ak.fund_portfolio_asset_em, symbol=code),
+                        timeout=TIMEOUT_TOTAL
+                    )
                     if asset_df is not None and not asset_df.empty:
                         for _, row in asset_df.iterrows():
                             asset_alloc.append({
-                                'name': str(row.get('项目', '')),
-                                'ratio': float(row.get('占净值比例', 0) or 0),
-                                'amount': float(row.get('金额', 0) or 0),
+                                'name': clean_value(row.get('项目')),
+                                'ratio': clean_value(row.get('占净值比例')),
+                                'amount': clean_value(row.get('金额')),
                             })
                 except:
                     pass
                 
-                elapsed = time.time() - start
-                logger.info(f"[AkShare Portfolio] {code} 成功 elapsed={elapsed:.2f}s stocks={len(stocks)}")
                 return {
                     'source': 'akshare',
                     'code': code,
-                    'quarter': str(df.iloc[0].get('报告期', '')) if not df.empty else '',
+                    'quarter': clean_value(df.iloc[0].get('报告期')) if not df.empty else '',
                     'stocks': stocks,
                     'assets': asset_alloc,
                 }
+        except asyncio.TimeoutError:
+            logger.warning(f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
             logger.warning(f"[AkShare Portfolio] {code} 获取失败：{e}")
+        
         return None
     
-    @cached_api(_nav_history_cache, max_attempts=1, timeout=TIMEOUT_TOTAL)
+    @fund_cache.cached(CACHE_TTL['nav_history'], key_prefix='nav:')
     async def get_fund_nav_history(self, code: str, period: str = '6m') -> Optional[List[Dict]]:
         """获取场外基金净值历史"""
-        start = time.time()
         try:
             import akshare as ak
-            df = await asyncio.to_thread(ak.fund_open_fund_info_em, symbol=code, indicator="单位净值走势")
+            
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_open_fund_info_em, symbol=code, indicator="单位净值走势"),
+                timeout=TIMEOUT_TOTAL
+            )
             
             if df is not None and not df.empty:
                 result = []
                 for _, row in df.iterrows():
                     result.append({
-                        'date': str(row.get('日期', '')),
-                        'nav': float(row.get('单位净值', 0) or 0),
-                        'accumulated_nav': float(row.get('累计净值', 0) or 0),
+                        'date': clean_value(row.get('日期')),
+                        'nav': clean_value(row.get('单位净值')),
+                        'accumulated_nav': clean_value(row.get('累计净值')),
                     })
-                
-                elapsed = time.time() - start
-                logger.info(f"[AkShare NAV] {code} 成功 elapsed={elapsed:.2f}s records={len(result)}")
                 return result[-180:]
+        except asyncio.TimeoutError:
+            logger.warning(f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
             logger.warning(f"[AkShare NAV] {code} 获取失败：{e}")
+        
         return None
     
-    @cached_api(_fund_rank_cache, max_attempts=1, timeout=TIMEOUT_TOTAL)
+    @fund_cache.cached(CACHE_TTL['fund_rank'], key_prefix='rank:')
     async def get_fund_rank(self, type: str = '全部') -> Optional[List[Dict]]:
         """获取基金排行"""
-        start = time.time()
         try:
             import akshare as ak
-            df = await asyncio.to_thread(ak.fund_open_fund_rank_em, symbol=type)
+            
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_open_fund_rank_em, symbol=type),
+                timeout=TIMEOUT_TOTAL
+            )
             
             if df is not None and not df.empty:
                 result = []
                 for _, row in df.iterrows():
                     result.append({
-                        'code': str(row.get('基金代码', '')),
-                        'name': str(row.get('基金简称', '')),
-                        'nav': float(row.get('单位净值', 0) or 0),
-                        'nav_growthrate': float(row.get('日增长率', 0) or 0),
-                        'type': str(row.get('基金类型', '')),
-                        'scale': str(row.get('基金规模', '')),
-                        'find_date': str(row.get('成立日期', '')),
-                        'manager': str(row.get('基金经理', '')),
+                        'code': clean_value(row.get('基金代码')),
+                        'name': clean_value(row.get('基金简称')),
+                        'nav': clean_value(row.get('单位净值')),
+                        'nav_growthrate': clean_value(row.get('日增长率')),
+                        'type': clean_value(row.get('基金类型')),
+                        'scale': clean_value(row.get('基金规模')),
+                        'find_date': clean_value(row.get('成立日期')),
+                        'manager': clean_value(row.get('基金经理')),
                     })
-                
-                elapsed = time.time() - start
-                logger.info(f"[AkShare Rank] {type} 成功 elapsed={elapsed:.2f}s count={len(result)}")
                 return result
+        except asyncio.TimeoutError:
+            logger.warning(f"[AkShare Rank] 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
             logger.warning(f"[AkShare Rank] 获取失败：{e}")
+        
         return None
 
 
 # ══════════════════════════════════════════════════════════════════════
-# 统一抓取器（并发 + 降级）
+# 统一抓取器
 # ══════════════════════════════════════════════════════════════════════
 
 class FundFetcher:
-    """
-    基金数据统一抓取器（Phase 6.2 性能优化版）
-    
-    降级策略:
-    1. ETF: AkShare → Mock
-    2. 公募：AkShare → Mock
-    3. 组合：AkShare → Mock
-    
-    并发策略:
-    - 使用 asyncio.gather 并发请求多个数据
-    """
+    """基金数据统一抓取器"""
     
     def __init__(self):
         self.ak = AkShareClient()
     
-    # ── ETF 相关 ───────────────────────────────────────────────────────
-    
     async def get_etf_info(self, code: str) -> Optional[Dict]:
-        """获取 ETF 信息（带缓存）"""
+        """获取 ETF 信息"""
         logger.info(f"[FundFetcher] 获取 ETF {code} 信息...")
-        start = time.time()
-        
         data = await self.ak.get_etf_spot(code)
         if data:
             return data
-        
-        elapsed = time.time() - start
-        logger.warning(f"[FundFetcher] {code} AkShare 失败，降级到 Mock elapsed={elapsed:.2f}s")
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
         return self._mock_etf_info(code)
     
     async def get_etf_history(self, code: str, period: str = 'daily') -> List[Dict]:
         """获取 ETF 历史 K 线"""
         from app.routers.fund import _sina_etf_history
-        # Sina 数据同步获取，已有超时控制
         return await asyncio.to_thread(_sina_etf_history, code, period, 300)
     
-    # ── 公募基金相关 ───────────────────────────────────────────────────
-    
     async def get_fund_info(self, code: str) -> Optional[Dict]:
-        """获取公募基金信息（带缓存）"""
+        """获取公募基金信息"""
         logger.info(f"[FundFetcher] 获取公募基金 {code} 信息...")
-        start = time.time()
-        
         data = await self.ak.get_fund_info(code)
         if data:
             return data
-        
-        elapsed = time.time() - start
-        logger.warning(f"[FundFetcher] {code} AkShare 失败，降级到 Mock elapsed={elapsed:.2f}s")
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
         return self._mock_fund_info(code)
     
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
-        """获取基金投资组合（带缓存）"""
+        """获取基金投资组合"""
         logger.info(f"[FundFetcher] 获取 {code} 投资组合...")
-        start = time.time()
-        
         data = await self.ak.get_fund_portfolio(code)
         if data:
             return data
-        
-        elapsed = time.time() - start
-        logger.warning(f"[FundFetcher] {code} 组合获取失败，降级到 Mock elapsed={elapsed:.2f}s")
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
         return self._mock_portfolio(code)
     
     async def get_fund_nav_history(self, code: str, period: str = '6m') -> List[Dict]:
-        """获取基金净值历史（带缓存）"""
+        """获取基金净值历史"""
         logger.info(f"[FundFetcher] 获取 {code} 净值历史...")
-        start = time.time()
-        
         data = await self.ak.get_fund_nav_history(code, period)
         if data:
             return data
-        
-        elapsed = time.time() - start
-        logger.warning(f"[FundFetcher] {code} 净值历史获取失败，降级到 Mock elapsed={elapsed:.2f}s")
+        logger.warning(f"[FundFetcher] {code} 降级到 Mock")
         return self._mock_nav_history(period)
     
     async def get_fund_rank(self, type: str = '全部') -> List[Dict]:
-        """获取基金排行（带缓存）"""
+        """获取基金排行"""
         logger.info(f"[FundFetcher] 获取基金排行 {type}...")
-        start = time.time()
-        
         data = await self.ak.get_fund_rank(type)
-        if data:
-            return data
-        
-        elapsed = time.time() - start
-        logger.warning(f"[FundFetcher] 排行获取失败 elapsed={elapsed:.2f}s")
-        return []
-    
-    # ── 并发组装 ───────────────────────────────────────────────────────
+        return data if data else []
     
     async def get_fund_full_data(self, code: str, is_etf: bool = False) -> Dict:
-        """
-        并发获取基金完整数据（基本信息 + 历史 + 组合）
-        
-        使用 asyncio.gather 并发请求，而不是串行阻塞
-        """
+        """并发获取基金完整数据"""
         if is_etf:
             results = await asyncio.gather(
                 self.get_etf_info(code),
@@ -420,8 +440,6 @@ class FundFetcher:
                 'nav_history': results[1] if not isinstance(results[1], Exception) else [],
                 'portfolio': results[2] if not isinstance(results[2], Exception) else None,
             }
-    
-    # ── Mock 数据（兜底）────────────────────────────────────────────────
     
     def _mock_etf_info(self, code: str) -> Dict:
         return {
@@ -454,8 +472,8 @@ class FundFetcher:
             'code': code,
             'quarter': '2024 年 1 季度',
             'stocks': [
-                {'code': '600519', 'name': '贵州茅台', 'ratio': 5.89, 'price': 1700, 'change_pct': 1.2},
-                {'code': '300750', 'name': '宁德时代', 'ratio': 2.78, 'price': 190, 'change_pct': -0.5},
+                {'code': '600519', 'name': '贵州茅台', 'ratio': 5.89},
+                {'code': '300750', 'name': '宁德时代', 'ratio': 2.78},
             ],
             'assets': [
                 {'name': '股票', 'ratio': 85.5},
@@ -467,7 +485,7 @@ class FundFetcher:
     
     def _mock_nav_history(self, period: str) -> List[Dict]:
         import datetime
-        days = {'1m': 20, '3m': 60, '6m': 120, '1y': 240, '3y': 720}.get(period, 120)
+        days = {'1m': 20, '3m': 60, '6m': 120, '1y': 240}.get(period, 120)
         result = []
         base = 1.0 + hash(period) % 2000 / 1000
         for i in range(days):
