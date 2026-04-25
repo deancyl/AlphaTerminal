@@ -4,9 +4,11 @@ AlphaTerminal Backend - FastAPI Application Entry Point
 import asyncio
 import logging
 import signal
+import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 from contextlib import asynccontextmanager
@@ -132,6 +134,34 @@ try:
     app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
 except Exception as e:
     print(f"[Warning] Backtest module not loaded: {e}")
+
+
+# ── 静态文件服务（前端 dist 目录）──────────────────────────────────────────────
+# 获取前端构建目录路径（相对于 backend 目录）
+# main.py 位于 app/main.py，所以 frontend 在 ../frontend
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FRONTEND_DIST = os.path.abspath(os.path.join(BASE_DIR, "..", "frontend", "dist"))
+
+# 如果 dist 目录存在，挂载静态文件服务
+if os.path.exists(FRONTEND_DIST):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+    
+    @app.get("/")
+    async def root():
+        return FileResponse(os.path.join(FRONTEND_DIST, "index.html"))
+    
+    @app.get("/{path:path}")
+    async def catch_all(path: str):
+        # 排除 API 路径
+        if path.startswith("api/") or path.startswith("ws/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        # 其他路径返回 index.html（支持前端路由）
+        index_file = os.path.join(FRONTEND_DIST, "index.html")
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Not Found")
+else:
+    print(f"[Warning] Frontend dist not found at {FRONTEND_DIST}")
 
 
 @app.get("/health")

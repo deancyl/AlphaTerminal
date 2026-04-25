@@ -1,0 +1,31 @@
+# 基金图表修复方案
+
+## 问题总结
+
+### 1. 净值走势图 - date 字段为 null
+**原因**: AkShare 返回的字段名是 `净值日期`，代码中映射为 `日期`
+**修复**: 修改 `fund_fetcher.py` 中的字段映射
+
+### 2. 资产配置饼图 - assets 为空数组
+**原因**: `fund_portfolio_asset_em` 接口不存在
+**修复**: 使用行业配置数据 `fund_portfolio_industry_allocation_em` 转换，或基于持仓数据计算
+
+### 3. 重仓股进度条 - ratio 为 null
+**原因**: AkShare 返回的字段名是 `占净值比例`，代码中映射为 `ratio`
+**修复**: 修改字段映射
+
+## 修复文件
+
+### backend/app/services/fund_fetcher.py
+
+1. 净值历史字段映射修复 (行 ~200):
+   - `'date': clean_value(row.get('日期'))` → `'date': clean_value(row.get('净值日期'))`
+   - 添加 `accumulated_nav` 字段映射
+
+2. 资产配置数据获取修复 (行 ~230):
+   - 移除 `fund_portfolio_asset_em` 调用
+   - 改用 `fund_portfolio_industry_allocation_em` 获取行业配置
+   - 或基于持仓数据计算大类资产配置
+
+3. 重仓股字段映射修复 (行 ~215):
+   - `'ratio': clean_value(row.get('占净值比例'))` 已正确，但需确认字段名

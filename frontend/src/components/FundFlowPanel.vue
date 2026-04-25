@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
-import * as echarts from 'echarts'
+// ECharts 通过 CDN 加载，使用全局变量
+const echarts = window.echarts
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'

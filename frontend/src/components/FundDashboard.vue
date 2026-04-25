@@ -344,9 +344,11 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import * as echarts from 'echarts'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+
+// ECharts 通过 CDN 加载，使用全局变量
+const getEcharts = () => window.echarts
 
 // ── 状态 ────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -415,9 +417,9 @@ const riskMetrics = reactive({
 const klineChartRef = ref(null)
 const navChartRef = ref(null)
 const assetChartRef = ref(null)
-let klineChart = null
-let navChart = null
-let assetChart = null
+const klineChart = ref(null)
+const navChart = ref(null)
+const assetChart = ref(null)
 
 // ── API 调用 ────────────────────────────────────────────────────
 
@@ -452,6 +454,11 @@ async function selectFund(code) {
     logger.error('[FundDashboard] 加载失败:', e)
   } finally {
     loading.value = false
+    // 等待 DOM 更新完成后再渲染图表
+    await nextTick()
+    await new Promise(resolve => setTimeout(resolve, 100))
+    renderNavChart()
+    renderAssetChart()
   }
 }
 
@@ -549,7 +556,12 @@ async function loadNAVHistory(period) {
     const data = extractData(res)
     navHistory.value = Array.isArray(data) ? data : []
     
+    console.log('[NAV History] 获取成功，数据条数:', navHistory.value.length)
+    console.log('[NAV History] 第一条数据:', navHistory.value[0])
+    console.log('[NAV History] navChartRef:', !!navChartRef.value)
+    
     await nextTick()
+    console.log('[NAV History] after nextTick, navChartRef:', !!navChartRef.value)
     renderNavChart()
   } catch (e) {
     logger.warn('[NAV History] 获取失败:', e)
@@ -633,8 +645,72 @@ function renderKlineChart() {
 }
 
 function renderNavChart() {
-  if (!navChartRef.value) return
-  if (!navChart) navChart = echarts.init(navChartRef.value)
+  console.log('[renderNavChart] 开始渲染，navChartRef:', !!navChartRef.value, 'navHistory长度:', navHistory.value.length)
+  if (!navChartRef.value) {
+    console.warn('[renderNavChart] navChartRef 为空，延迟重试...')
+    setTimeout(() => {
+      console.log('[renderNavChart] 延迟重试中...')
+      if (navChartRef.value && navHistory.value.length > 0) {
+        const echarts = window.echarts
+        if (!echarts) {
+          console.warn('[renderNavChart] echarts 未加载')
+          return
+        }
+        if (!navChart.value) {
+          navChart.value = echarts.init(navChartRef.value)
+          console.log('[renderNavChart] 延迟重试 - 图表初始化成功')
+        }
+        const data = navHistory.value.map(d => ({
+          date: d.date,
+          nav: d.nav,
+          accumulated: d.accumulated_nav
+        }))
+        const option = {
+          tooltip: { trigger: 'axis' },
+          legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
+          grid: { top: 30, right: 10, bottom: 20, left: 40 },
+          xAxis: {
+            type: 'category',
+            data: data.map(d => d.date),
+            axisLine: { lineStyle: { color: '#4b5563' } },
+            axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+          },
+          yAxis: {
+            type: 'value',
+            axisLine: { lineStyle: { color: '#4b5563' } },
+            axisLabel: { color: '#9ca3af', fontSize: 10 },
+            splitLine: { lineStyle: { color: '#374151' } }
+          },
+          series: [
+            { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
+            { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
+          ]
+        }
+        navChart.value.setOption(option)
+        navChart.value.resize()
+        console.log('[renderNavChart] 延迟重试 - 渲染完成')
+      }
+    }, 500)
+    return
+  }
+  
+  const echarts = window.echarts
+  if (!echarts) {
+    console.warn('[renderNavChart] echarts 未加载')
+    return
+  }
+  
+  if (!navChart.value || navChart.value?._dom !== navChartRef.value) {
+    try {
+      navChart.value = echarts.init(navChartRef.value)
+      console.log('[renderNavChart] 图表初始化成功')
+    } catch (e) {
+      console.error('[renderNavChart] 图表初始化失败:', e.message)
+      return
+    }
+  } else {
+    console.log('[renderNavChart] navChart 已存在且 _dom 匹配，跳过初始化')
+  }
   
   const data = navHistory.value.map(d => ({
     date: d.date,
@@ -663,12 +739,78 @@ function renderNavChart() {
       { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
     ]
   }
-  navChart.setOption(option)
+  navChart.value.setOption(option)
+  navChart.value.resize()
+  console.log('[renderNavChart] 渲染完成, navChart.value:', !!navChart.value, 'setOption:', typeof navChart.value?.setOption)
+  // 检查 ECharts 内部状态
+  try {
+    const option2 = navChart.value.getOption()
+    console.log('[renderNavChart] getOption 成功, series数量:', option2.series?.length)
+    // 检查 ECharts 实例的 _dom
+    console.log('[renderNavChart] _dom:', navChart.value?._dom === navChartRef.value)
+    console.log('[renderNavChart] _dom id:', navChart.value?._dom?.id)
+    // 强制渲染
+    navChart.value.resize()
+    // 检查 DOM
+    console.log('[renderNavChart] chartDiv子元素:', navChartRef.value?.children?.length)
+    console.log('[renderNavChart] chartDiv innerHTML:', navChartRef.value?.innerHTML?.substring(0, 200))
+  } catch (e) {
+    console.error('[renderNavChart] getOption 失败:', e.message)
+  }
 }
 
 function renderAssetChart() {
-  if (!assetChartRef.value) return
-  if (!assetChart) assetChart = echarts.init(assetChartRef.value)
+  console.log('[renderAssetChart] 开始渲染，assetChartRef:', !!assetChartRef.value, 'assetAllocation长度:', assetAllocation.value.length)
+  if (!assetChartRef.value) {
+    console.warn('[renderAssetChart] assetChartRef 为空，延迟重试...')
+    setTimeout(() => {
+      console.log('[renderAssetChart] 延迟重试中...')
+      if (assetChartRef.value && assetAllocation.value.length > 0) {
+        const echarts = window.echarts
+        if (!echarts) {
+          console.warn('[renderAssetChart] echarts 未加载')
+          return
+        }
+        if (!assetChart.value) {
+          assetChart.value = echarts.init(assetChartRef.value)
+          console.log('[renderAssetChart] 延迟重试 - 图表初始化成功')
+        }
+        const option = {
+          tooltip: { trigger: 'item' },
+          series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            center: ['50%', '50%'],
+            itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
+            label: { show: false },
+            data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
+          }]
+        }
+        assetChart.value.setOption(option)
+        assetChart.value.resize()
+        console.log('[renderAssetChart] 延迟重试 - 渲染完成')
+      }
+    }, 500)
+    return
+  }
+  
+  const echarts = window.echarts
+  if (!echarts) {
+    console.warn('[renderAssetChart] echarts 未加载')
+    return
+  }
+  
+  if (!assetChart.value || assetChart.value?._dom !== assetChartRef.value) {
+    try {
+      assetChart.value = echarts.init(assetChartRef.value)
+      console.log('[renderAssetChart] 图表初始化成功')
+    } catch (e) {
+      console.error('[renderAssetChart] 图表初始化失败:', e.message)
+      return
+    }
+  } else {
+    console.log('[renderAssetChart] assetChart 已存在且 _dom 匹配，跳过初始化')
+  }
   
   const option = {
     tooltip: { trigger: 'item' },
@@ -681,7 +823,9 @@ function renderAssetChart() {
       data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
     }]
   }
-  assetChart.setOption(option)
+  assetChart.value.setOption(option)
+  assetChart.value.resize()
+  console.log('[renderAssetChart] 渲染完成, assetChart.value:', !!assetChart.value, 'setOption:', typeof assetChart.value?.setOption)
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────

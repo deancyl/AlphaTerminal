@@ -557,7 +557,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
-import * as echarts from 'echarts'
+// ECharts 通过 CDN 加载，使用全局变量
+const echarts = window.echarts
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 

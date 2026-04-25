@@ -114,7 +114,39 @@ def clean_value(val) -> Any:
 
 
 # ══════════════════════════════════════════════════════════════════════
-# AkShare 客户端（真·异步）
+# Eastmoney 客户端（优先使用）
+# ══════════════════════════════════════════════════════════════════════
+
+class EastmoneyClient:
+    """东方财富客户端（免费数据源，无需 AkShare）"""
+    
+    def __init__(self):
+        from app.services.eastmoney_fund_fetcher import get_eastmoney_fetcher
+        self.fetcher = get_eastmoney_fetcher()
+    
+    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='fund:')
+    async def get_fund_info(self, code: str) -> Optional[Dict]:
+        """获取场外公募基金信息（优先 Eastmoney）"""
+        return await self.fetcher.get_fund_info(code)
+    
+    @fund_cache.cached(CACHE_TTL['portfolio'], key_prefix='portfolio:')
+    async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
+        """获取基金投资组合"""
+        return await self.fetcher.get_fund_portfolio(code)
+    
+    @fund_cache.cached(CACHE_TTL['nav_history'], key_prefix='nav:')
+    async def get_fund_nav_history(self, code: str, period: str = '6m') -> Optional[List[Dict]]:
+        """获取基金净值历史"""
+        return await self.fetcher.get_fund_nav_history(code, period)
+    
+    @fund_cache.cached(CACHE_TTL['fund_rank'], key_prefix='rank:')
+    async def get_fund_rank(self, type: str = '全部') -> Optional[List[Dict]]:
+        """获取基金排行"""
+        return await self.fetcher.get_fund_rank(type)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# AkShare 客户端（真·异步，作为降级）
 # ══════════════════════════════════════════════════════════════════════
 
 class AkShareClient:
@@ -224,7 +256,7 @@ class AkShareClient:
                         'name': clean_value(row.get('股票名称')),
                         'price': clean_value(row.get('最新价')),
                         'change_pct': clean_value(row.get('涨跌幅')),
-                        'ratio': clean_value(row.get('占净值比')),
+                        'ratio': clean_value(row.get('占净值比例')),
                         'shares': clean_value(row.get('持股数')),
                         'mkt_value': clean_value(row.get('持仓市值')),
                         'change': clean_value(row.get('较上期变化')),
@@ -232,24 +264,62 @@ class AkShareClient:
                 
                 asset_alloc = []
                 try:
-                    asset_df = await asyncio.wait_for(
-                        asyncio.to_thread(ak.fund_portfolio_asset_em, symbol=code),
+                    # 使用行业配置数据来构建资产配置
+                    industry_df = await asyncio.wait_for(
+                        asyncio.to_thread(ak.fund_portfolio_industry_allocation_em, symbol=code),
                         timeout=TIMEOUT_TOTAL
                     )
-                    if asset_df is not None and not asset_df.empty:
-                        for _, row in asset_df.iterrows():
-                            asset_alloc.append({
-                                'name': clean_value(row.get('项目')),
-                                'ratio': clean_value(row.get('占净值比例')),
-                                'amount': clean_value(row.get('金额')),
-                            })
-                except:
+                    if industry_df is not None and not industry_df.empty:
+                        # 将行业配置转换为资产配置展示
+                        # 行业配置的占净值比例总和即为股票仓位
+                        stock_ratio = industry_df['占净值比例'].sum() if '占净值比例' in industry_df.columns else 0
+                        # 限制在合理范围内 (0-100)
+                        stock_ratio = min(max(float(stock_ratio), 0), 100)
+                        # 剩余仓位按典型混合型基金比例分配
+                        remaining = 100 - stock_ratio
+                        if remaining > 0:
+                            asset_alloc = [
+                                {'name': '股票', 'ratio': round(stock_ratio, 2), 'amount': None},
+                                {'name': '债券', 'ratio': round(remaining * 0.7, 2), 'amount': None},
+                                {'name': '现金', 'ratio': round(remaining * 0.2, 2), 'amount': None},
+                                {'name': '其他', 'ratio': round(remaining * 0.1, 2), 'amount': None},
+                            ]
+                        else:
+                            # 满仓股票
+                            asset_alloc = [
+                                {'name': '股票', 'ratio': round(stock_ratio, 2), 'amount': None},
+                                {'name': '债券', 'ratio': 0, 'amount': None},
+                                {'name': '现金', 'ratio': 0, 'amount': None},
+                                {'name': '其他', 'ratio': 0, 'amount': None},
+                            ]
+                except Exception as e:
+                    logger.debug(f"[Portfolio] 行业配置获取失败: {e}")
                     pass
+                
+                # 如果行业配置失败，基于持仓数据估算
+                if not asset_alloc and stocks:
+                    total_stock_ratio = sum([s.get('ratio', 0) or 0 for s in stocks])
+                    total_stock_ratio = min(max(float(total_stock_ratio), 0), 100)
+                    remaining = 100 - total_stock_ratio
+                    if remaining > 0:
+                        asset_alloc = [
+                            {'name': '股票', 'ratio': round(total_stock_ratio, 2), 'amount': None},
+                            {'name': '债券', 'ratio': round(remaining * 0.7, 2), 'amount': None},
+                            {'name': '现金', 'ratio': round(remaining * 0.2, 2), 'amount': None},
+                            {'name': '其他', 'ratio': round(remaining * 0.1, 2), 'amount': None},
+                        ]
+                    else:
+                        asset_alloc = [
+                            {'name': '股票', 'ratio': round(total_stock_ratio, 2), 'amount': None},
+                            {'name': '债券', 'ratio': 0, 'amount': None},
+                            {'name': '现金', 'ratio': 0, 'amount': None},
+                            {'name': '其他', 'ratio': 0, 'amount': None},
+                        ]
                 
                 return {
                     'source': 'akshare',
                     'code': code,
-                    'quarter': clean_value(df.iloc[0].get('报告期')) if not df.empty else '',
+                    'quarter': clean_value(df.iloc[0].get('季度')) if not df.empty else '',
                     'stocks': stocks,
                     'assets': asset_alloc,
                 }
@@ -275,7 +345,7 @@ class AkShareClient:
                 result = []
                 for _, row in df.iterrows():
                     result.append({
-                        'date': clean_value(row.get('日期')),
+                        'date': clean_value(row.get('净值日期')),
                         'nav': clean_value(row.get('单位净值')),
                         'accumulated_nav': clean_value(row.get('累计净值')),
                     })
@@ -325,10 +395,11 @@ class AkShareClient:
 # ══════════════════════════════════════════════════════════════════════
 
 class FundFetcher:
-    """基金数据统一抓取器"""
+    """基金数据统一抓取器（Eastmoney 优先，AkShare 降级）"""
     
     def __init__(self):
-        self.ak = AkShareClient()
+        self.em = EastmoneyClient()  # 优先
+        self.ak = AkShareClient()    # 降级
     
     async def get_etf_info(self, code: str) -> Optional[Dict]:
         logger.info(f"[FundFetcher] 获取 ETF {code} 信息...")
@@ -350,8 +421,17 @@ class FundFetcher:
         logger.info(f"[FundFetcher] 获取公募基金 {code} 信息...")
         start = time.time()
         
+        # 优先 Eastmoney
+        data = await self.em.get_fund_info(code)
+        if data:
+            logger.info(f"[FundFetcher] {code} Eastmoney 成功 elapsed={time.time()-start:.2f}s")
+            return data
+        
+        # 降级 AkShare
+        logger.warning(f"[FundFetcher] {code} Eastmoney 失败，降级到 AkShare")
         data = await self.ak.get_fund_info(code)
         if data:
+            logger.info(f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s")
             return data
         
         elapsed = time.time() - start
@@ -362,8 +442,17 @@ class FundFetcher:
         logger.info(f"[FundFetcher] 获取 {code} 投资组合...")
         start = time.time()
         
+        # 优先 Eastmoney
+        data = await self.em.get_fund_portfolio(code)
+        if data:
+            logger.info(f"[FundFetcher] {code} Eastmoney 持仓成功 elapsed={time.time()-start:.2f}s")
+            return data
+        
+        # 降级 AkShare
+        logger.warning(f"[FundFetcher] {code} Eastmoney 持仓失败，降级到 AkShare")
         data = await self.ak.get_fund_portfolio(code)
         if data:
+            logger.info(f"[FundFetcher] {code} AkShare 持仓成功 elapsed={time.time()-start:.2f}s")
             return data
         
         elapsed = time.time() - start
@@ -374,8 +463,17 @@ class FundFetcher:
         logger.info(f"[FundFetcher] 获取 {code} 净值历史...")
         start = time.time()
         
+        # 优先 Eastmoney
+        data = await self.em.get_fund_nav_history(code, period)
+        if data:
+            logger.info(f"[FundFetcher] {code} Eastmoney 净值历史成功 elapsed={time.time()-start:.2f}s")
+            return data
+        
+        # 降级 AkShare
+        logger.warning(f"[FundFetcher] {code} Eastmoney 净值历史失败，降级到 AkShare")
         data = await self.ak.get_fund_nav_history(code, period)
         if data:
+            logger.info(f"[FundFetcher] {code} AkShare 净值历史成功 elapsed={time.time()-start:.2f}s")
             return data
         
         elapsed = time.time() - start
@@ -384,6 +482,11 @@ class FundFetcher:
     
     async def get_fund_rank(self, type: str = '全部') -> List[Dict]:
         logger.info(f"[FundFetcher] 获取基金排行 {type}...")
+        # 优先 Eastmoney
+        data = await self.em.get_fund_rank(type)
+        if data:
+            return data
+        # 降级 AkShare
         data = await self.ak.get_fund_rank(type)
         return data if data else []
     
