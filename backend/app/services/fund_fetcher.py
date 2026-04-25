@@ -425,8 +425,73 @@ class FundFetcher:
         return self._mock_etf_info(code)
     
     async def get_etf_history(self, code: str, period: str = 'daily') -> List[Dict]:
-        from app.routers.fund import _sina_etf_history
-        return await asyncio.to_thread(_sina_etf_history, code, period, 300)
+        """获取 ETF 历史 K 线（使用腾讯财经 API）"""
+        try:
+            from app.services.sina_etf_fetcher import get_sina_fetcher
+            sina = get_sina_fetcher()
+            
+            # 腾讯财经 K 线 API
+            import httpx
+            from datetime import datetime, timedelta
+            
+            formatted_code = sina._format_code(code)
+            
+            # 计算日期范围（最近 300 个交易日）
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=400)  # 约 300 个交易日
+            
+            start_str = start_date.strftime('%Y-%m-%d')
+            end_str = end_date.strftime('%Y-%m-%d')
+            
+            url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={formatted_code},day,{start_str},{end_str},300,qfq"
+            
+            logger.info(f"[FundFetcher] ETF {code} K线请求 URL: {url}")
+            
+            # 使用同步请求（在异步函数中）
+            import asyncio
+            
+            def fetch_kline():
+                with httpx.Client(timeout=10) as client:
+                    resp = client.get(url)
+                    resp.raise_for_status()
+                    return resp.json()
+            
+            # 使用 run_in_executor 替代 asyncio.to_thread（兼容旧版本 Python）
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(None, fetch_kline)
+            
+            logger.info(f"[FundFetcher] ETF {code} K线返回: {data.get('code')}, msg: {data.get('msg')}")
+            
+            # 解析返回数据
+            if "data" in data and isinstance(data["data"], dict):
+                code_data = data["data"].get(formatted_code, {})
+                
+                # 尝试不同的字段名
+                kline_data = code_data.get("qfqday", []) or code_data.get("day", [])
+                
+                logger.info(f"[FundFetcher] ETF {code} K线数据条数: {len(kline_data)}")
+                
+                result = []
+                for item in kline_data:
+                    if len(item) >= 6:
+                        result.append({
+                            "date": item[0],
+                            "open": float(item[1]),
+                            "close": float(item[2]),
+                            "low": float(item[3]),
+                            "high": float(item[4]),
+                            "volume": int(float(item[5])),  # 先转 float 再转 int
+                        })
+                
+                logger.info(f"[FundFetcher] ETF {code} K线获取成功，共 {len(result)} 条")
+                return result
+            else:
+                logger.warning(f"[FundFetcher] ETF {code} K线返回格式异常: {type(data.get('data'))}")
+                return []
+            
+        except Exception as e:
+            logger.warning(f"[FundFetcher] ETF {code} K线获取失败: {e}")
+            return []
     
     async def get_fund_info(self, code: str) -> Optional[Dict]:
         logger.info(f"[FundFetcher] 获取公募基金 {code} 信息...")

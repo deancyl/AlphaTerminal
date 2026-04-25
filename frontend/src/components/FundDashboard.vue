@@ -494,8 +494,12 @@ async function selectFund(code) {
     // 等待 DOM 更新完成后再渲染图表
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 100))
-    renderNavChart()
-    renderAssetChart()
+    if (activeTab.value === 'etf') {
+      renderKlineChart()
+    } else {
+      renderNavChart()
+      renderAssetChart()
+    }
   }
 }
 
@@ -641,8 +645,17 @@ async function loadPortfolio(code) {
 // ── ECharts 渲染 ───────────────────────────────────────────────
 
 function renderKlineChart() {
-  if (!klineChartRef.value) return
-  if (!klineChart) klineChart = echarts.init(klineChartRef.value)
+  if (!klineChartRef.value || !window.echarts) return
+  
+  const echarts = window.echarts
+  
+  // 如果实例不存在或关联的 DOM 已改变，重新初始化
+  if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
+    if (klineChart.value) {
+      try { klineChart.value.dispose() } catch (e) {}
+    }
+    klineChart.value = echarts.init(klineChartRef.value)
+  }
   
   const data = klineHistory.value.map(d => ({
     date: d.date || d.trade_date,
@@ -680,7 +693,8 @@ function renderKlineChart() {
       }
     }]
   }
-  klineChart.setOption(option)
+  klineChart.value.setOption(option)
+  klineChart.value.resize()
 }
 
 function renderNavChart() {
