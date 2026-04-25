@@ -83,7 +83,7 @@
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
-            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.price)">
+            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
               {{ fundInfo?.price ?? '-' }}
             </div>
           </div>
@@ -115,6 +115,43 @@
             <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
             <div class="text-sm font-bold text-theme-primary">
               {{ formatAmount(fundInfo?.amount) }}
+            </div>
+          </div>
+        </div>
+
+        <!-- 买卖盘五档 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- 买盘 -->
+          <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-terminal-accent font-bold text-sm">📗 买盘五档</span>
+              <span class="text-[10px] text-theme-tertiary">实时</span>
+            </div>
+            <div class="space-y-1">
+              <div v-for="bid in fundInfo?.bids || []" :key="bid.level" 
+                   class="flex items-center justify-between py-1 px-2 rounded"
+                   :class="bid.level === 1 ? 'bg-red-500/10' : ''">
+                <span class="text-xs text-theme-tertiary">买{{ bid.level }}</span>
+                <span class="text-sm font-bold text-red-400">{{ bid.price }}</span>
+                <span class="text-xs text-theme-tertiary">{{ formatVolume(bid.volume) }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 卖盘 -->
+          <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-terminal-accent font-bold text-sm">📕 卖盘五档</span>
+              <span class="text-[10px] text-theme-tertiary">实时</span>
+            </div>
+            <div class="space-y-1">
+              <div v-for="ask in fundInfo?.asks || []" :key="ask.level" 
+                   class="flex items-center justify-between py-1 px-2 rounded"
+                   :class="ask.level === 1 ? 'bg-green-500/10' : ''">
+                <span class="text-xs text-theme-tertiary">卖{{ ask.level }}</span>
+                <span class="text-sm font-bold text-green-400">{{ ask.price }}</span>
+                <span class="text-xs text-theme-tertiary">{{ formatVolume(ask.volume) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -479,6 +516,8 @@ async function loadETFInfo(code) {
         amount: data.amount || 0,
         iopv: data.iopv || '-',
         premium_rate: data.premium_rate ? parseFloat(data.premium_rate).toFixed(2) : '-',
+        bids: data.bids || [],
+        asks: data.asks || [],
       }
       dataSource.value = data.source || 'unknown'
     }

@@ -405,8 +405,19 @@ class FundFetcher:
         logger.info(f"[FundFetcher] 获取 ETF {code} 信息...")
         start = time.time()
         
+        # 优先使用 Sina
+        from app.services.sina_etf_fetcher import get_sina_fetcher
+        sina = get_sina_fetcher()
+        data = await sina.get_etf_info(code)
+        if data:
+            logger.info(f"[FundFetcher] {code} Sina 成功 elapsed={time.time()-start:.2f}s")
+            return data
+        
+        # 降级 AkShare
+        logger.warning(f"[FundFetcher] {code} Sina 失败，降级到 AkShare")
         data = await self.ak.get_etf_spot(code)
         if data:
+            logger.info(f"[FundFetcher] {code} AkShare 成功 elapsed={time.time()-start:.2f}s")
             return data
         
         elapsed = time.time() - start

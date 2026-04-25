@@ -86,7 +86,45 @@ class SinaETFFetcher:
                     "amount": float(parts[9]) if parts[9] else 0,  # 成交额
                     "date": parts[30] if len(parts) > 30 else None,  # 日期
                     "time": parts[31] if len(parts) > 31 else None,  # 时间
+                    # 买卖盘五档
+                    "bids": [],  # 买盘
+                    "asks": [],  # 卖盘
                 }
+                
+                # 解析买卖盘五档
+                # 买盘：字段 10-19（买一到买五）
+                for i in range(5):
+                    volume_idx = 10 + i * 2
+                    price_idx = 11 + i * 2
+                    if len(parts) > price_idx:
+                        try:
+                            volume = int(parts[volume_idx]) if parts[volume_idx] else 0
+                            price = float(parts[price_idx]) if parts[price_idx] else None
+                            if price:
+                                result["bids"].append({
+                                    "level": i + 1,
+                                    "price": price,
+                                    "volume": volume,
+                                })
+                        except:
+                            pass
+                
+                # 卖盘：字段 20-29（卖一到卖五）
+                for i in range(5):
+                    volume_idx = 20 + i * 2
+                    price_idx = 21 + i * 2
+                    if len(parts) > price_idx:
+                        try:
+                            volume = int(parts[volume_idx]) if parts[volume_idx] else 0
+                            price = float(parts[price_idx]) if parts[price_idx] else None
+                            if price:
+                                result["asks"].append({
+                                    "level": i + 1,
+                                    "price": price,
+                                    "volume": volume,
+                                })
+                        except:
+                            pass
                 
                 # 计算涨跌幅
                 if result["price"] and result["prev_close"]:

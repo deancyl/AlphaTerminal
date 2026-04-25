@@ -62,7 +62,7 @@ async def etf_history(
     logger.info(f"[ETF History] 请求 {code} {period}")
     start = time.time()
     
-    data = await fetcher.get_etf_history(code, period, limit)
+    data = await fetcher.get_etf_history(code, period)
     
     elapsed = time.time() - start
     logger.info(f"[ETF History] {code} 完成 elapsed={elapsed:.3f}s records={len(data)}")
