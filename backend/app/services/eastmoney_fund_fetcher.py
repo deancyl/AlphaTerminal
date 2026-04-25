@@ -296,6 +296,60 @@ class EastmoneyFundFetcher:
         
         return []
     
+    async def _get_stock_names(self, stock_codes: List[str]) -> Dict[str, str]:
+        """
+        批量获取股票名称（腾讯财经 API）
+        
+        Args:
+            stock_codes: 股票代码列表（如 ['600519', '000858']）
+        
+        Returns:
+            Dict[code, name]
+        """
+        if not stock_codes:
+            return {}
+        
+        try:
+            # 构建腾讯 API 参数（添加市场前缀）
+            codes_with_prefix = []
+            for code in stock_codes:
+                if code.startswith('6'):
+                    codes_with_prefix.append(f"sh{code}")
+                elif code.startswith('0') or code.startswith('3'):
+                    codes_with_prefix.append(f"sz{code}")
+                else:
+                    codes_with_prefix.append(code)
+            
+            url = f"https://qt.gtimg.cn/q={','.join(codes_with_prefix)}"
+            
+            async with self._get_client() as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                
+                text = resp.text
+                result = {}
+                
+                # 解析返回数据
+                # 格式: v_sh600519="1~贵州茅台~600519..."
+                for line in text.strip().split(';'):
+                    if not line.strip():
+                        continue
+                    
+                    match = re.search(r'v_[^=]+="([^"]+)"', line)
+                    if match:
+                        parts = match.group(1).split('~')
+                        if len(parts) >= 3:
+                            name = parts[1]  # 股票名称
+                            code = parts[2]  # 股票代码
+                            result[code] = name
+                
+                logger.info(f"[Eastmoney] 批量获取 {len(result)} 只股票名称")
+                return result
+                
+        except Exception as e:
+            logger.warning(f"[Eastmoney] 获取股票名称失败: {e}")
+            return {}
+
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """
         获取基金持仓数据（重仓股 + 资产配置）
@@ -317,16 +371,28 @@ class EastmoneyFundFetcher:
                         stock_codes = json.loads(stock_codes_match.group(1))
                         
                         # 清理股票代码（去除市场后缀）
-                        stocks = []
+                        clean_codes = []
                         for sc in stock_codes[:10]:  # 只取前10只
                             # 代码格式如 "6005191" 或 "0008580"
                             if len(sc) >= 6:
                                 clean_code = sc[:6]
-                                stocks.append({
-                                    "code": clean_code,
-                                    "name": "-",  # 名称需要另外获取
-                                    "ratio": 0,   # 比例需要另外获取
-                                })
+                                clean_codes.append(clean_code)
+                        
+                        # 批量获取股票名称
+                        stock_names = await self._get_stock_names(clean_codes)
+                        
+                        stocks = []
+                        for clean_code in clean_codes:
+                            name = stock_names.get(clean_code, "-")
+                            # 如果腾讯 API 返回失败，尝试从已知数据推断
+                            if name == "-" and clean_code in ["007001", "099871"]:
+                                # 港股代码，尝试其他格式
+                                name = "港股"  # 简化处理
+                            stocks.append({
+                                "code": clean_code,
+                                "name": name,
+                                "ratio": 0,  # 比例需要另外获取
+                            })
                         
                         # 估算资产配置
                         total_stock_ratio = min(len(stocks) * 8, 95)  # 粗略估算
