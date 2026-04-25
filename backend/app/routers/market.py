@@ -1420,10 +1420,10 @@ async def market_quote_detail(symbol: str):
         return hist[-n:] if len(hist) >= n else hist
 
     def _period_return(hist, n):
-        """最近 n 日收益率（最新收盘/第n个收盘 - 1）*100"""
-        if len(hist) < n: return None
-        cur  = float(hist[-1].get('close', 0))
-        prev = float(hist[-n].get('close', 0))
+        """最近 n 日收益率（DESC 排序：最新在前）"""
+        if len(hist) < n + 1: return None
+        cur  = float(hist[0].get('close', 0))   # 最新 = 第一条
+        prev = float(hist[n].get('close', 0))   # n 日前 = 第 n+1 条
         if not prev: return None
         return round((cur / prev - 1) * 100, 4)
 

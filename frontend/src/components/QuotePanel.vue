@@ -47,7 +47,33 @@
         </div>
       </div>
 
-      <!-- 52周高低 -->
+      <!-- 资金流向 -->
+      <div class="border-t border-theme pt-2 mt-2">
+        <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">资金流向</div>
+        <div v-if="data.fund_main_net != null" class="grid grid-cols-3 gap-1">
+          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
+            <span class="text-[9px] text-theme-tertiary mb-0.5">主力净流入</span>
+            <span class="text-[11px] font-mono font-medium" :class="data.fund_main_net >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ data.fund_main_net >= 0 ? '+' : '' }}{{ formatAmount(data.fund_main_net) }}
+            </span>
+          </div>
+          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
+            <span class="text-[9px] text-theme-tertiary mb-0.5">主力流入</span>
+            <span class="text-[11px] font-mono font-medium text-bullish">
+              {{ formatAmount(data.fund_main_in) }}
+            </span>
+          </div>
+          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
+            <span class="text-[9px] text-theme-tertiary mb-0.5">主力流出</span>
+            <span class="text-[11px] font-mono font-medium text-bearish">
+              {{ formatAmount(data.fund_main_out) }}
+            </span>
+          </div>
+        </div>
+        <div v-else class="text-[11px] text-theme-tertiary text-center py-2">
+          暂无资金流向数据
+        </div>
+      </div>
       <div class="border-t border-theme pt-2 mt-2">
         <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">52周区间</div>
         <div class="flex items-center gap-3">

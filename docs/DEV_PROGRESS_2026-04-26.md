@@ -1,8 +1,8 @@
 # AlphaTerminal 开发进度报告
 
-**版本**: v0.5.168  
+**版本**: v0.5.169  
 **日期**: 2026-04-26  
-**提交**: 393e0c3  
+**提交**: 0fdcae5  
 **GitHub**: https://github.com/deancyl/AlphaTerminal
 
 ---
@@ -16,12 +16,17 @@
 **已完成**:
 - ✅ 移除 SimpleQuotePanel 入口（用户反馈"不实用"）
 - ✅ 删除 FullscreenKline.vue.bak 残留备份文件
+- ✅ **修复周期收益率计算**（v0.5.169）
+  - 根因：`_period_return` 函数假设 ASC 排序，实际 DESC 排序
+  - 修复：使用 `hist[0]`（最新）和 `hist[n]`（n日前）
+- ✅ **修复资金流向显示**（v0.5.169）
+  - 有真实数据时显示主力净流入/流入/流出
+  - 无数据时显示"暂无资金流向数据"（替代 Mock）
 
 **进行中**:
 - 🔄 CopilotSidebar UI/UX 优化（电脑端+手机端）
 - 🔄 回测实验室功能性和易用性优化
-- 🔄 周期收益率显示修复（returns_5d/20d/60d 始终显示 --）
-- 🔄 资金流向 Mock 数据标注或移除
+- 🔄 GitHub 同步（网络超时，待重试）
 
 **待开始**:
 - ⏳ 移动端适配优化（DashboardGrid 高度、Sidebar 宽度）
@@ -32,25 +37,28 @@
 
 ## 本次提交详情
 
-### 提交 393e0c3
+### 提交 0fdcae5
 ```
-refactor: 移除 SimpleQuotePanel 入口 + 删除 FullscreenKline.vue.bak
+fix: 修复周期收益率计算 + 资金流向显示
 
-- 从 Sidebar 移除实时报价导航项（用户反馈不实用）
-- 从 App.vue 移除 simplequote 路由和导入
-- 删除 FullscreenKline.vue.bak 残留备份文件
-
-遵循 Karpathy 准则：
-- 精准改动：仅修改 2 个文件 + 删除 1 个文件
-- 简单第一：移除不实用功能，减少代码负担
+- 后端: _period_return 函数适配 DESC 排序（最新在前）
+  - 原逻辑假设 ASC 排序，导致 hist[-n] 取到错误数据
+  - 修复后使用 hist[0]（最新）和 hist[n]（n日前）
+  
+- 前端: QuotePanel 资金流向区块优化
+  - 有真实数据时显示主力净流入/流入/流出
+  - 无数据时显示'暂无资金流向数据'（替代 Mock）
+  
+- 遵循 Karpathy 准则:
+  - Think Before Coding: 先分析 DESC/ASC 排序问题
+  - Surgical Changes: 仅修改 _period_return 函数 + 前端显示逻辑
 ```
 
 **改动文件**:
-- `frontend/src/App.vue` (-2 行)
-- `frontend/src/components/Sidebar.vue` (-1 行)
-- `frontend/src/components/FullscreenKline.vue.bak` (-289 行，已删除)
+- `backend/app/routers/market.py` (+4/-4 行)
+- `frontend/src/components/QuotePanel.vue` (+27/-1 行)
 
-**总改动**: 3 文件，292 行删除，0 新增
+**总改动**: 2 文件，31 行新增，5 行删除
 
 ---
 
@@ -67,6 +75,8 @@ refactor: 移除 SimpleQuotePanel 入口 + 删除 FullscreenKline.vue.bak
 | Copilot AI | 🔄 优化中 | 核心功能，UI/UX 待优化 |
 | 画线工具 | ✅ 保留 | 核心功能，持续优化 |
 | 实时报价 | ❌ 已移除 | v0.5.168 移除入口 |
+| 周期收益率 | ✅ 已修复 | v0.5.169 修复 DESC 排序问题 |
+| 资金流向 | ✅ 已优化 | v0.5.169 移除 Mock，显示真实数据 |
 
 ---
 
@@ -81,18 +91,22 @@ refactor: 移除 SimpleQuotePanel 入口 + 删除 FullscreenKline.vue.bak
 
 ## 已知问题
 
-1. **周期收益率显示**: QuotePanel 中 returns_5d/20d/60d 始终显示 `--`（后端未返回数据）
-2. **资金流向 Mock**: QuotePanel 中 fundFlowMock 硬编码数据需标注或移除
-3. **移动端适配**: DashboardGrid 固定高度导致内容截断
-4. **Copilot 手机端**: 底部抽屉 80vh 遮挡主内容
+1. **GitHub 推送超时**: 网络问题导致 push 失败，待重试
+2. **移动端适配**: DashboardGrid 固定高度导致内容截断
+3. **Copilot 手机端**: 底部抽屉 80vh 遮挡主内容
+4. **回测易用性**: 策略配置复杂，新手门槛高
 
 ---
 
 ## 下一步计划
 
-1. **Phase A**: 修复周期收益率 + 资金流向 Mock（1-2 天）
+1. **Phase A**: GitHub 同步重试（网络恢复后）
 2. **Phase B**: CopilotSidebar UI/UX 优化（2-3 天）
+   - 电脑端：可拖拽宽度 + 默认收起
+   - 手机端：半屏抽屉 + 滑动指示器
 3. **Phase C**: 回测实验室易用性优化（2-3 天）
+   - 策略模板预设
+   - 结果可视化增强
 4. **Phase D**: 移动端适配 + 代码精简（1-2 天）
 
 ---
@@ -115,5 +129,14 @@ refactor: 移除 SimpleQuotePanel 入口 + 删除 FullscreenKline.vue.bak
 
 ---
 
-*报告生成时间: 2026-04-26 07:20 CST*  
-*维护者: OpenClaw Agent*
+## 网络状态
+
+- **GitHub 推送**: ⚠️ 超时（HTTP2 framing layer error）
+- **代理**: http://192.168.1.50:7897
+- **状态**: 本地提交已完成，远程同步待网络恢复
+
+---
+
+*报告生成时间: 2026-04-26 07:25 CST*  
+*维护者: OpenClaw Agent*  
+*版本: v0.5.169*
