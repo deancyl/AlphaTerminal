@@ -165,8 +165,6 @@
         <FundDashboard v-else-if="currentView === 'fund'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
-        <!-- 买卖盘口 -->
-        <SimpleQuotePanel v-else-if="currentView === 'simplequote'" :symbol="currentSymbol || 'sh600519'" />
         <!-- 回测实验室 -->
         <BacktestDashboard v-else-if="currentView === 'backtest'" />
         <!-- 系统管理 -->
