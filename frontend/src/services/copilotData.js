@@ -21,14 +21,39 @@ const API_BASE = ''
 const cache = {}
 function getCached(key, fetchFn, ttl = 30000) {
   const now = Date.now()
-  if (cache[key] && (now - cache[key].time) < ttl) {
-    return Promise.resolve(cache[key].data)
+  const entry = cache[key]
+  
+  // 缓存有效：返回数据 + stale 标记
+  if (entry && (now - entry.time) < ttl) {
+    return Promise.resolve({
+      ...entry.data,
+      _stale: false,
+      _cachedAt: entry.time,
+    })
   }
+  
+  // 缓存过期但存在：标记为 stale，同时发起刷新
+  if (entry) {
+    // 后台刷新（不阻塞返回）
+    fetchFn().then(data => {
+      cache[key] = { data, time: Date.now() }
+    }).catch(e => {
+      // 刷新失败，保留旧缓存
+      logger.warn(`[getCached] ${key} refresh failed:`, e.message)
+    })
+    // 立即返回过期数据（标记 stale）
+    return Promise.resolve({
+      ...entry.data,
+      _stale: true,
+      _cachedAt: entry.time,
+    })
+  }
+  
+  // 无缓存：发起请求
   return fetchFn().then(data => {
     cache[key] = { data, time: now }
-    return data
+    return { ...data, _stale: false, _cachedAt: now }
   }).catch(e => {
-    if (cache[key]) return cache[key].data
     throw e
   })
 }

@@ -18,9 +18,19 @@ const _status  = ref('ok')       // 'ok' | 'degraded' | 'down'
 const _message = ref('')
 const _since   = ref(null)       // timestamp when last status changed
 const _listeners = new Set()
+let _listenerLock = false        // 保护迭代时的修改
 
 function _notifyListeners() {
-  _listeners.forEach(fn => fn(_status.value, _message.value))
+  // 防止迭代时 Set 被修改（组件卸载时可能删除 listener）
+  if (_listenerLock) return
+  _listenerLock = true
+  try {
+    // 复制一份避免迭代时修改
+    const snapshot = Array.from(_listeners)
+    snapshot.forEach(fn => fn(_status.value, _message.value))
+  } finally {
+    _listenerLock = false
+  }
 }
 
 /**
@@ -38,8 +48,19 @@ export function broadcastDataSourceStatus(newStatus, msg = '') {
 
 /** 监听状态变化（返回 unlisten fn） */
 export function onDataSourceStatusChange(fn) {
+  // 等待锁释放（避免在迭代时修改 Set）
+  if (_listenerLock) {
+    setTimeout(() => onDataSourceStatusChange(fn), 1)
+    return () => _listeners.delete(fn)
+  }
   _listeners.add(fn)
-  return () => _listeners.delete(fn)
+  return () => {
+    if (_listenerLock) {
+      setTimeout(() => _listeners.delete(fn), 1)
+    } else {
+      _listeners.delete(fn)
+    }
+  }
 }
 
 export function useDataSourceStatus() {
