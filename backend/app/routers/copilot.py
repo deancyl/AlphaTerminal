@@ -12,6 +12,11 @@ from typing import AsyncGenerator, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY", "")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+QIANWEN_API_KEY  = os.getenv("QIANWEN_API_KEY", "")
+MINIMAX_API_KEY  = os.getenv("MINIMAX_API_KEY", "")
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 # 添加控制台 handler（如果还没有）

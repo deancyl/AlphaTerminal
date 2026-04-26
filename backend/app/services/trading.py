@@ -466,4 +466,3 @@ def get_position_summary(
         return [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
-        conn.close()
