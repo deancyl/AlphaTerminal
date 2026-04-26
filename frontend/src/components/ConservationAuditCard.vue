@@ -103,6 +103,7 @@ function fmt(v) {
 }
 
 async function fetchConservation() {
+  loading.value = true
   try {
     const json = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/conservation`, { timeoutMs: 5000 })
     if (json?.code === 0) {
@@ -121,11 +122,19 @@ async function fetchConservation() {
   }
 }
 
+function safeRefresh() {
+  try {
+    fetchConservation()
+  } catch (e) {
+    console.error('[ConservationAuditCard] refresh error:', e)
+  }
+}
+
 watch(() => props.portfolioId, () => { fetchConservation() })
 
 onMounted(() => {
   fetchConservation()
-  refreshTimer = setInterval(fetchConservation, 10000)
+  refreshTimer = setInterval(safeRefresh, 10000)
 })
 
 onBeforeUnmount(() => {
