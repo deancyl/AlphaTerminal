@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v31 (v31确认)
+# AlphaTerminal v0.5.167 代码审计报告 v32 (v32确认)
 
 ## 版本信息
-- 审计时间: 2026-04-27 04:48 CST
+- 审计时间: 2026-04-27 05:18 CST
 - 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
-- 本次审计: v30确认 - P2-10 ConservationAuditCard 定时器异常包装修复
+- 本次审计: v32确认 - P2-19/P2-NEW-2/P2-8 修复验证
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v30确认完成
-- 确认次数: v30-confirm-count = 36
-- 最新提交: a8a62f3 (fix(audit): P2-10 ConservationAuditCard 定时器异常包装 + loading状态修复)
+- 总体进度: ✅ 全部审计完成，v32确认完成
+- 确认次数: v32-confirm-count = 37
+- 最新提交: 32d0a75 (merge: fix/audit-p2-19-p2-new2-p2-8 - P2-19/P2-NEW-2/P2-8 修复)
 
 ---
 
@@ -79,7 +79,7 @@
 | P2-16 | database.py | get_all_stocks() 中 conn.close() 在 rows 读取之前执行 |
 | P2-17 | api.js | 模块级 _consecutiveFailures 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
 | P2-18 | useDataSourceStatus.js | _listeners Set 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
-| P2-19 | useEventBus.js | emit 缺少错误收集机制，listener 失败静默 |
+| P2-19 | useEventBus.js | emit 缺少错误收集机制，listener 失败静默 | ✅ 已修复 (fix-025, 1c16813) |
 | P2-20 | useMarketStream.js | tickHistory 内存管理需确认 unsubscribe 调用路径 |
 | P2-21 | copilotData.js | getCached 返回过期数据无 stale 标记 | ✅ 已修复 (fix-023, c67f9b5) |
 
@@ -106,7 +106,7 @@
 | # | 文件 | 问题 |
 |---|------|------|
 | P2-NEW-1 | main.py | debug router 路由顺序风险，兜底路由可能拦截其他 API |
-| P2-NEW-2 | db_writer.py | WAL 模式路径检测不可靠，DELETE mode 误判 |
+| P2-NEW-2 | db_writer.py | WAL 模式路径检测不可靠，DELETE mode 误判 | ✅ 已修复 (fix-025, 1c16813) |
 | P2-NEW-3 | scheduler.py | _broadcast_realtime_ticks 中 ThreadPoolExecutor 生命周期管理错误 | ✅ 已修复 (fix-005, f1b6c81) |
 | P2-NEW-4 | database.py | get_all_stocks() conn.close() 提前执行风险（需确认是否仍存在） |
 | P2-NEW-5 | main.py | /health 端点无鉴权，内部状态探测 |
@@ -118,9 +118,9 @@
 |----------|------|--------|--------|
 | P0 - 严重 | 3 | 2 | 1 |
 | P1 - 中高风险 | 13 | 7 | 6 |
-| P2 - 中等风险 | 27 | 13 | 14 |
+| P2 - 中等风险 | 27 | 16 | 11 |
 | P3 - 低风险 | 5 | 0 | 5 |
-| **合计** | **48** | **22** | **26** |
+| **合计** | **48** | **25** | **23** |
 
 ---
 
