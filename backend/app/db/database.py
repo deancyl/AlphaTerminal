@@ -480,8 +480,7 @@ def get_all_stocks(limit=5000, offset=0, search=None):
                 ORDER BY code LIMIT ? OFFSET ?
             """, (limit, offset)).fetchall()
             total = conn.execute("SELECT COUNT(*) AS cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
-    finally:
-        conn.close()
+        # 数据处理放在 try 块内，确保连接有效
         rows_list = [dict(r) for r in rows]
         # 补充 change 字段（数据库只有 change_pct）
         for r in rows_list:
@@ -490,6 +489,8 @@ def get_all_stocks(limit=5000, offset=0, search=None):
             if 'change' not in r or r.get('change') is None:
                 r['change'] = round(price * change_pct / 100, 3)
         return total, rows_list
+    finally:
+        conn.close()
 
 
 def get_all_stocks_lite():
@@ -530,9 +531,9 @@ def get_all_stocks_count():
     conn = _get_conn()
     try:
         cnt = conn.execute("SELECT COUNT(*) as cnt FROM market_all_stocks WHERE price > 0").fetchone()['cnt']
+        return cnt
     finally:
         conn.close()
-    return cnt
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Admin 系统配置持久化
