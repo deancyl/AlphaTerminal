@@ -64,10 +64,9 @@ def _broadcast_realtime_ticks():
             finally:
                 loop.close()
 
-        import concurrent.futures
-        executor = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="ws_broadcast")
-        executor.submit(_sync_broadcast)
-        executor.shutdown(wait=False)
+        import threading
+        t = threading.Thread(target=_sync_broadcast, daemon=True)
+        t.start()
     except Exception as e:
         logger.warning(f"[Scheduler] WS 广播异常（不阻塞主循环）: {e}")
 

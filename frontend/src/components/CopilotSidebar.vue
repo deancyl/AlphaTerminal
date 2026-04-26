@@ -155,8 +155,9 @@ import {
 } from '../services/copilotResponse.js'
 
 // ── Markdown 渲染器配置 ──────────────────────────────────────
+// P1-7 Fix: html:false 防止 XSS（LLM 输出中的恶意 HTML 通过 v-html 直接渲染）
 const mdParser = new MarkdownIt({
-  html:         true,
+  html:         false,   // 禁止原始 HTML 标签，保证 v-html 渲染安全
   linkify:      true,
   typographer:  true,
   breaks:       true,    // 换行符 → <br>

@@ -93,8 +93,8 @@ async function createPortfolio(name, type = 'main') {
       const body = await res.json()
       msg = body?.message || body?.detail || msg
     } catch (_) {}
-    // 清理技术性错误信息
-    if (msg.includes('UNIQUE')) msg = '该账户名称已存在，请换一个名字'
+    // P1-12 Fix: 清理技术性错误信息（UNIQUE 可能来自任意字段，非账户名）
+    if (msg.includes('UNIQUE')) msg = '数据已存在（UNIQUE 约束冲突），请检查是否重复添加'
     throw new Error(msg)
   }
   await fetchPortfolios()
@@ -113,7 +113,8 @@ async function upsertPosition(portfolio_id, symbol, shares, avg_cost) {
       const body = await res.json()
       msg = body?.message || body?.detail || msg
     } catch (_) {}
-    if (msg.includes('UNIQUE')) msg = '该账户名称已存在，请换一个名字'
+    // P1-12 Fix: UNIQUE 可能来自 (portfolio_id, symbol) 复合约束，非账户名
+    if (msg.includes('UNIQUE')) msg = '数据已存在（UNIQUE 约束冲突），请检查是否重复添加'
     throw new Error(msg)
   }
   await fetchPnL(portfolio_id)
