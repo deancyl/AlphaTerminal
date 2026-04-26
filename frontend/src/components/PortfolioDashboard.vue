@@ -247,16 +247,20 @@ function onTradeDone() {
   loadPortfolioData();
 }
 
-// ── 树形结构（扁平化带缩进，供 select 渲染）────────────────────
-const flatTree = computed(() => {
-  // 建立 id → children map
-  const childMap = {};
+// ── 父子关系映射（共享，避免重复计算）────────────────────
+const portfolioChildMap = computed(() => {
+  const m = {};
   portfolioList.value.forEach(p => {
     const parent = p.parent_id ?? null;
-    if (!childMap[parent]) childMap[parent] = [];
-    childMap[parent].push(p);
+    if (!m[parent]) m[parent] = [];
+    m[parent].push(p);
   });
+  return m;
+});
 
+// ── 树形结构（扁平化带缩进，供 select 渲染）────────────────────
+const flatTree = computed(() => {
+  const childMap = portfolioChildMap.value; // 共享映射，避免重复计算
   const indent = (depth) => '　'.repeat(depth) + (depth > 0 ? '└─ ' : '');
 
   const result = [];
@@ -275,18 +279,9 @@ const flatTree = computed(() => {
 const isAggregated = computed(() => {
   const node = flatTree.value.find(n => n.id === selectedPortfolioId.value);
   if (!node) return false;
-  return (childMap()[node.id] || []).length > 0;
+  // 使用共享的 portfolioChildMap，避免重复计算
+  return (portfolioChildMap.value[node.id] || []).length > 0;
 });
-
-function childMap() {
-  const m = {};
-  portfolioList.value.forEach(p => {
-    const k = p.parent_id ?? null;
-    if (!m[k]) m[k] = [];
-    m[k].push(p);
-  });
-  return m;
-}
 
 const canTransfer = computed(() =>
   transfer.value.from !== null &&
