@@ -41,11 +41,13 @@ class WebSocketLogHandler(logging.Handler):
             elif record.levelno >= logging.DEBUG:
                 level = "DEBUG"
             
-            # 构造消息
+            # 构造消息（保留完整日志，前端可自行截断显示）
+            # 如果有异常信息，确保完整保留堆栈
             msg = {
                 "timestamp": int(record.created),
                 "level": level,
-                "message": log_msg[:300]
+                "message": log_msg[:2000] if len(log_msg) > 2000 else log_msg,  # 提高上限到2000字符
+                "truncated": len(log_msg) > 2000  # 标记是否被截断
             }
             
             # 推送到队列（不阻塞）

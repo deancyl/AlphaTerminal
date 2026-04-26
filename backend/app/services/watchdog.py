@@ -38,8 +38,8 @@ RESTART_DELAY = 5  # 秒，重启前等待时间
 MAX_RESTART_ATTEMPTS = 3  # 连续重启失败的最大次数
 RESTART_COOLDOWN = 300  # 秒，超过此次数后进入冷却期
 
-# 后端启动命令（相对于 backend 目录）
-BACKEND_START_CMD = [sys.executable, "start_backend.py"]
+# 后端启动命令（使用绝对路径）
+BACKEND_START_CMD = [sys.executable, str(Path(__file__).resolve().parent.parent.parent / "start_backend.py")]
 BACKEND_HEALTH_URL = "http://localhost:8002/health"  # 健康检查端点
 BACKEND_PID_FILE = "/tmp/alphaterminal_backend.pid"  # PID 文件路径
 

@@ -47,17 +47,20 @@ app = FastAPI(
 init_logging_queue()
 
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
+# 允许的来源：本地开发 + 环境变量配置（生产环境应通过 ALLOWED_ORIGINS 配置）
+_allowed_origins = [
+    "http://localhost:60100",
+    "http://127.0.0.1:60100",
+    "http://0.0.0.0:60100",
+]
+# 从环境变量添加额外的允许来源
+_extra_origins = os.environ.get("ALLOWED_ORIGINS", "")
+if _extra_origins:
+    _allowed_origins.extend([o.strip() for o in _extra_origins.split(",") if o.strip()])
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:60100",
-        "http://127.0.0.1:60100",
-        "http://0.0.0.0:60100",
-        "http://192.168.2.186:60100",
-        "http://192.168.1.50:60100",
-        "http://172.17.0.1:60100",
-        "http://172.20.0.1:60100",
-    ],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
