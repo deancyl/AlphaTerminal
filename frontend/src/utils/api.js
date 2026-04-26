@@ -13,7 +13,8 @@ import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
 
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
-const _consecutiveFailures = { count: 0 }
+// 使用对象包装确保原子性（JavaScript 单线程，但并发 Promise 可能交错读写）
+const _consecutiveFailures = { count: 0, lock: false }
 const _DEGRADE_THRESHOLD   = 3
 const _CIRCUIT_THRESHOLD   = 6
 
@@ -26,29 +27,49 @@ export const apiErrorState = reactive({
 })
 
 function _onFailure(url, status) {
-  _consecutiveFailures.count++
-  const n = _consecutiveFailures.count
-  apiErrorState.failedCount = n
-  apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
-  apiErrorState.lastFailedAt = Date.now()
-  if (n >= _CIRCUIT_THRESHOLD) {
-    apiErrorState.isDegraded = true
-    broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
-  } else if (n >= _DEGRADE_THRESHOLD) {
-    apiErrorState.isDegraded = true
-    broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
+  // 简单自旋锁保护（JavaScript 单线程，但 async 可能交错）
+  if (_consecutiveFailures.lock) {
+    // 等待锁释放后重试（最多等待 10ms）
+    setTimeout(() => _onFailure(url, status), 1)
+    return
+  }
+  _consecutiveFailures.lock = true
+  try {
+    _consecutiveFailures.count++
+    const n = _consecutiveFailures.count
+    apiErrorState.failedCount = n
+    apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
+    apiErrorState.lastFailedAt = Date.now()
+    if (n >= _CIRCUIT_THRESHOLD) {
+      apiErrorState.isDegraded = true
+      broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
+    } else if (n >= _DEGRADE_THRESHOLD) {
+      apiErrorState.isDegraded = true
+      broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
+    }
+  } finally {
+    _consecutiveFailures.lock = false
   }
 }
 
 function _onSuccess() {
-  if (_consecutiveFailures.count > 0) {
-    _consecutiveFailures.count = 0
-    apiErrorState.failedCount = 0
-    apiErrorState.lastError = null
-    if (apiErrorState.isDegraded) {
-      apiErrorState.isDegraded = false
-      broadcastDataSourceStatus('ok', '数据源已恢复正常')
+  if (_consecutiveFailures.lock) {
+    setTimeout(_onSuccess, 1)
+    return
+  }
+  _consecutiveFailures.lock = true
+  try {
+    if (_consecutiveFailures.count > 0) {
+      _consecutiveFailures.count = 0
+      apiErrorState.failedCount = 0
+      apiErrorState.lastError = null
+      if (apiErrorState.isDegraded) {
+        apiErrorState.isDegraded = false
+        broadcastDataSourceStatus('ok', '数据源已恢复正常')
+      }
     }
+  } finally {
+    _consecutiveFailures.lock = false
   }
 }
 
