@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v29 (v29确认)
+# AlphaTerminal v0.5.167 代码审计报告 v30 (v30确认)
 
 ## 版本信息
-- 审计时间: 2026-04-27 04:33 CST
+- 审计时间: 2026-04-27 04:48 CST
 - 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
-- 本次审计: v29确认 - 无新代码变更，修复验证保持
+- 本次审计: v30确认 - P2-10 ConservationAuditCard 定时器异常包装修复
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v29确认完成
-- 确认次数: v28-confirm-count = 35
-- 最新提交: ebe741f (heartbeat: progress sync - audit report update)
+- 总体进度: ✅ 全部审计完成，v30确认完成
+- 确认次数: v30-confirm-count = 36
+- 最新提交: a8a62f3 (fix(audit): P2-10 ConservationAuditCard 定时器异常包装 + loading状态修复)
 
 ---
 
@@ -70,7 +70,7 @@
 | P2-7 | main.py | CORS allow_origins 硬编码多个内网 IP | ✅ 已修复 (fix-017, 83718b2) |
 | P2-8 | DrawingCanvas.vue | convertFromPixel 异常被 catch 吞没，图形绘制静默失败 |
 | P2-9 | CopilotSidebar.vue | SSE 流式响应 JSON.parse 容错过宽，后端500错误静默 |
-| P2-10 | ConservationAuditCard.vue | setInterval 未包装 try/catch，定时器泄漏风险 |
+| P2-10 | ConservationAuditCard.vue | setInterval 未包装 try/catch，定时器泄漏风险 | ✅ 已修复 (fix-024, a8a62f3) |
 | P2-11 | stocks.py | akshare 同步调用阻塞事件循环（5-10秒） |
 | P2-12 | backtest.py | benchmark_return_pct 除零风险 (first_close <= 0) | ✅ 已修复 (fix-009, 83cee28) |
 | P2-13 | backtest.py | params JSON 无复杂度限制，可能导致 DoS |
