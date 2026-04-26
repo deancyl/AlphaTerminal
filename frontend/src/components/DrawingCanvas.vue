@@ -280,7 +280,10 @@ function toData(x, y) {
   try {
     const [idx, price] = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
     return { idx: Math.round(idx), price, timestamp: getTimestampByIndex(Math.round(idx)) }
-  } catch { return null }
+  } catch (e) {
+    logger.warn('[DrawingCanvas] toData convertFromPixel failed:', e)
+    return null
+  }
 }
 
 // 磁吸
@@ -331,7 +334,8 @@ function snapToKLine(x, y) {
       }
     }
   } catch (e) {
-    // ignore calculation errors
+    // 计算错误时记录日志，便于调试
+    logger.warn('[DrawingCanvas] snapToKLine convertFromPixel failed:', e)
   }
   
   return { x, y }

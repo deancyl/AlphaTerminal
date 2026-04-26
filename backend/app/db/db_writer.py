@@ -46,15 +46,48 @@ def _get_conn():
     """创建数据库连接（每批次新建，复用连接池不值得）"""
     conn = sqlite3.connect(_db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    if "/vol3/" in _db_path or "/tmp/" in _db_path or "/nas/" in _db_path:
-        conn.execute("PRAGMA journal_mode=DELETE")
-    else:
+    
+    # WAL 模式检测：基于文件系统类型而非路径字符串
+    # 网络文件系统（NFS/SMB/CIFS）不支持 WAL，需使用 DELETE 模式
+    import os
+    _db_dir = os.path.dirname(_db_path) or os.getcwd()
+    
+    # 检测是否为网络文件系统或特殊路径
+    _use_delete_mode = False
+    
+    # 方法1：路径特征检测（快速判断已知网络存储路径）
+    network_path_prefixes = ['/vol3/', '/nas/', '/mnt/nfs', '/mnt/smb', '/net/']
+    if any(_db_path.startswith(p) for p in network_path_prefixes):
+        _use_delete_mode = True
+    
+    # 方法2：尝试 stat 获取文件系统信息（更可靠）
+    if not _use_delete_mode:
         try:
+            # macOS/Linux: stat -f '%T' 或检查 st_dev 类型
+            # 如果无法确定，尝试启用 WAL 并检查结果
             cur = conn.execute("PRAGMA journal_mode=WAL")
-            if cur.fetchone()[0] != "wal":
-                conn.execute("PRAGMA journal_mode=DELETE")
-        except sqlite3.OperationalError:
-            conn.execute("PRAGMA journal_mode=DELETE")
+            result = cur.fetchone()
+            if result and result[0] == "wal":
+                # WAL 成功启用，验证 -wal 和 -shm 文件是否可创建
+                wal_path = _db_path + "-wal"
+                shm_path = _db_path + "-shm"
+                # 尝试写入测试，确认 WAL 文件可正常创建
+                conn.execute("CREATE TABLE IF NOT EXISTS _wal_test (id INTEGER)")
+                conn.execute("INSERT INTO _wal_test VALUES (1)")
+                conn.commit()
+                conn.execute("DROP TABLE IF EXISTS _wal_test")
+                conn.commit()
+                # 如果以上操作成功，WAL 模式可用
+            else:
+                _use_delete_mode = True
+        except (sqlite3.OperationalError, OSError, IOError) as e:
+            # WAL 启用失败（可能是网络文件系统不支持）
+            logger.warning(f"[DBWriter] WAL mode unavailable: {e}, using DELETE mode")
+            _use_delete_mode = True
+    
+    if _use_delete_mode:
+        conn.execute("PRAGMA journal_mode=DELETE")
+    
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
 
