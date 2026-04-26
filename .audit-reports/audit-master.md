@@ -1,11 +1,11 @@
-# AlphaTerminal v0.5.176 代码审计报告 v12 (Audit-Maintenance v5: 修复提交)
+# AlphaTerminal v0.5.176 代码审计报告 v14 (v8 最终确认)
 
 ## 版本信息
-- 审计时间: 2026-04-26 20:21 CST
-- 任务: AlphaTerminal-Code-Audit v4 (cron:88fda36d)
-- 本次审计: backend-core, backend-services, backend-models (Batch B-1，第4批)
-- 累计审计: 全部 12 个模块（6 个批次全部完成）
-- 总体进度: ✅ 全部 12 模块审计完成（6 个批次，100%）
+- 审计时间: 2026-04-26 21:47 CST
+- 任务: AlphaTerminal-Code-Audit v8 (cron:88fda36d)
+- 本次审计: v8 最终确认扫描
+- 累计审计: 全部 12 个模块（全部完成，allComplete=true）
+- 总体进度: ✅ 全部审计完成，无新变更
 
 ---
 
@@ -34,7 +34,7 @@
 
 | # | 文件 | 问题 | 状态 |
 |---|------|------|------|
-| P0-1 | news.py, data_fetcher.py | 同步阻塞 HTTP：requests.get() 在 async def 中，阻塞事件循环 | 已知，待修复 |
+| P0-1 | data_fetcher.py:333, 1416 | 同步阻塞 HTTP：requests.get() 在 async def 中，阻塞事件循环 | **待修复** |
 | P0-2 | copilot.py | MINIMAX_API_KEY 未定义，调用时 NameError | ✅ 已修复 (fix-003, f68d8b2) |
 
 ### P1 - 中高风险
@@ -113,11 +113,11 @@
 
 | 风险等级 | 数量 | 状态 |
 |----------|------|------|
-| P0 - 严重 | 2 | 已知，待修复 |
-| P1 - 中高风险 | 13 | 已知，待修复 |
-| P2 - 中等风险 | 27 | 建议修复 |
-| P3 - 低风险 | 5 | 可选修复 |
-| **合计** | **47** | |
+| P0 - 严重 | 2 | 1 已修复(P0-2), 1 待修复(P0-1) |
+| P1 - 中高风险 | 13 | 4 已修复(P1-2/5/6/9), 9 待修复 |
+| P2 - 中等风险 | 27 | 1 已修复(P2-NEW-3), 26 待修复 |
+| P3 - 低风险 | 5 | 0 已修复, 5 待修复 |
+| **合计** | **47** | **5 已修复, 42 待修复** |
 
 ---
 
@@ -134,6 +134,8 @@
 | partial-backend-core-services-models-20260426-2021 | 2026-04-26 20:21 | backend-core, backend-services, backend-models (新批次1/4) |
 | **v7-快扫-20260426-2049** | **2026-04-26 20:49** | **无待验证修复; 5个新提交仅文档/样式/DashboardGrid修复，不引入新风险点** |
 | **v8-re-run-20260426-2104** | **2026-04-26 21:04** | **Re-run检查: allComplete=true, f68d8b2后0新提交, 代码库未变更, 审计状态保持** |
+| **v8-确认-20260426-2141** | **2026-04-26 21:41** | **v8确认: f1b6c81后0代码变更(仅docs)，v9修复验证通过，42待修复(P0×1,P1×9,P2×26,P3×5)** |
+| **v8-最终确认-20260426-2147** | **2026-04-26 21:47** | **v8最终确认: 3813823后0代码变更，backend/frontend无变化，allComplete=true，42待修复(P0×1,P1×9,P2×26,P3×5)** |
 
 ---
 
@@ -147,7 +149,7 @@
 | 2026-04-26 21:38 | fix-004 | P1-9: news.py SSRF空hostname绕过 | backend/app/routers/news.py | f1b6c81 |
 | 2026-04-26 21:38 | fix-005 | P2-NEW-3: scheduler.py ThreadPoolExecutor生命周期错误 | backend/app/services/scheduler.py | f1b6c81 |
 
-**累计修复: 5 个问题 (P0×1, P1×3, P2×1) | 剩余待修复: 42 个 (P0×0, P1×9, P2×27, P3×5)**
+**累计修复: 5 个问题 (P0×1, P1×4, P2×1) | 剩余待修复: 42 个 (P0×1, P1×9, P2×26, P3×5)**
 
 ---
 
