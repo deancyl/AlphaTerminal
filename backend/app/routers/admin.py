@@ -32,15 +32,45 @@ logger = logging.getLogger(__name__)
 # 认证机制（必须在 router 定义之前，否则 NameError）
 # ═══════════════════════════════════════════════════════════════
 
-def verify_admin_key(api_key: str = None):
-    """Admin API 密钥校验"""
+# 简单内存速率限制器（防暴力猜解）
+_auth_failures = {}  # {ip: [timestamp1, timestamp2, ...]}
+_AUTH_RATE_LIMIT = 5  # 每分钟最多 5 次失败
+_AUTH_WINDOW_SEC = 60  # 窗口 60 秒
+
+def _check_rate_limit(client_ip: str) -> bool:
+    """检查是否超过速率限制，返回 True 表示允许继续"""
+    import time as _time
+    now = _time.time()
+    failures = _auth_failures.get(client_ip, [])
+    # 清理过期记录
+    failures = [t for t in failures if now - t < _AUTH_WINDOW_SEC]
+    _auth_failures[client_ip] = failures
+    return len(failures) < _AUTH_RATE_LIMIT
+
+def _record_failure(client_ip: str):
+    """记录一次失败"""
+    import time as _time
+    if client_ip not in _auth_failures:
+        _auth_failures[client_ip] = []
+    _auth_failures[client_ip].append(_time.time())
+
+def verify_admin_key(api_key: str = None, x_forwarded_for: str = Header(None)):
+    """Admin API 密钥校验（带速率限制）"""
+    # 获取客户端 IP（支持代理）
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    
     configured_key = os.environ.get("ADMIN_API_KEY", "")
     
     # 未配置 key 时跳过认证（本机开发环境）
     if not configured_key:
         return True
     
+    # 速率限制检查
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+    
     if api_key != configured_key:
+        _record_failure(client_ip)
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 

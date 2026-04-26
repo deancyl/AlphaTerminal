@@ -13,6 +13,53 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ── 安全限制 ─────────────────────────────────────────────────────────
+MAX_PARAMS_DEPTH = 5      # JSON 最大嵌套深度
+MAX_PARAMS_KEYS = 50      # 最大键数量
+MAX_PARAMS_SIZE = 10000   # 最大 JSON 字符串长度
+
+
+def _validate_params_depth(obj, current_depth=0):
+    """递归检查 JSON 深度，防止深层嵌套 DoS"""
+    if current_depth > MAX_PARAMS_DEPTH:
+        raise HTTPException(400, f"params 嵌套深度超过限制 ({MAX_PARAMS_DEPTH})")
+    if isinstance(obj, dict):
+        for v in obj.values():
+            _validate_params_depth(v, current_depth + 1)
+    elif isinstance(obj, list):
+        for item in obj:
+            _validate_params_depth(item, current_depth + 1)
+
+
+def _validate_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    """验证 params JSON 复杂度，防止 DoS 攻击"""
+    if params is None:
+        return {}
+    
+    # 检查序列化后大小
+    json_str = json.dumps(params)
+    if len(json_str) > MAX_PARAMS_SIZE:
+        raise HTTPException(400, f"params JSON 大小超过限制 ({MAX_PARAMS_SIZE} 字节)")
+    
+    # 检查键数量
+    def count_keys(obj, count=0):
+        if isinstance(obj, dict):
+            count += len(obj)
+            for v in obj.values():
+                count = count_keys(v, count)
+        elif isinstance(obj, list):
+            for item in obj:
+                count = count_keys(item, count)
+        return count
+    
+    if count_keys(params) > MAX_PARAMS_KEYS:
+        raise HTTPException(400, f"params 键数量超过限制 ({MAX_PARAMS_KEYS})")
+    
+    # 检查嵌套深度
+    _validate_params_depth(params)
+    
+    return params
+
 
 class BacktestRequest(BaseModel):
     symbol: str
@@ -65,6 +112,9 @@ async def get_strategies():
 @router.post("/strategies")
 async def create_strategy(req: StrategyCreateRequest):
     """创建新策略"""
+    # 验证 params 复杂度
+    params = _validate_params(req.params)
+    
     conn = _get_conn()
     try:
         now = datetime.now().isoformat()
@@ -72,7 +122,7 @@ async def create_strategy(req: StrategyCreateRequest):
             INSERT INTO backtest_strategies (name, description, type, params, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (req.name, req.description, req.strategy_type, 
-              json.dumps(req.params) if req.params else "{}", now, now))
+              json.dumps(params), now, now))
         conn.commit()
         
         strategy_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
@@ -98,8 +148,8 @@ async def run_backtest(req: BacktestRequest):
     # 显式提取 strategy_type 作为唯一判定条件
     strategy_type = req.strategy_type or "ma_crossover"
 
-    # 解析策略参数（根据 strategy_type 分支）
-    raw_params = req.params or {}
+    # 验证 params 复杂度（防止 DoS）
+    raw_params = _validate_params(req.params)
     if strategy_type == "ma_crossover":
         fast_ma = raw_params.get("fast_ma", 5)
         slow_ma = raw_params.get("slow_ma", 20)
