@@ -1,11 +1,11 @@
-# AlphaTerminal v0.5.176 代码审计报告 v14 (v8 最终确认)
+# AlphaTerminal v0.5.176 代码审计报告 v15 (v8 最终确认 - 无变更确认)
 
 ## 版本信息
-- 审计时间: 2026-04-26 21:47 CST
+- 审计时间: 2026-04-26 21:55 CST
 - 任务: AlphaTerminal-Code-Audit v8 (cron:88fda36d)
-- 本次审计: v8 最终确认扫描
+- 本次审计: v8 最终确认扫描（无代码变更）
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，无新变更
+- 总体进度: ✅ 全部审计完成，无新变更（f1b6c81 后仅 docs 变更）
 
 ---
 
@@ -47,12 +47,12 @@
 | P1-4 | scheduler.py | refresh_period_klines 未导入，NameError 导致周/月线刷新静默失败 | 已知，待修复 |
 | P1-5 | admin.py | Admin API 认证完全失效：所有 /admin/* 端点无认证依赖 | ✅ 已修复 (fix-002, f68d8b2) |
 | P1-6 | copilot.py | /status 端点 OPENAI/DEEPSEEK/QIANWEN/MINIMAX_API_KEY 未导入 | ✅ 已修复 (fix-003, f68d8b2) |
-| P1-7 | CopilotSidebar.vue | XSS：MarkdownIt(html:true) + v-html 直接渲染 LLM 输出 |
-| P1-8 | BacktestDashboard.vue | apiFetch POST body 未显式 JSON.stringify |
+| P1-7 | CopilotSidebar.vue | XSS：MarkdownIt(html:true) + v-html 直接渲染 LLM 输出 | ✅ 已修复 (fix-006, 4831560) |
+| P1-8 | BacktestDashboard.vue | apiFetch POST body 未显式 JSON.stringify | ✅ 已验证：apiFetch 已自动 JSON.stringify，无问题 |
 | P1-9 | news.py | SSRF 防护存在边界情况：空 hostname 抛出异常后绕过检查 | ✅ 已修复 (fix-004, f1b6c81) |
 | P1-10 | portfolio.py | include_children 无权限校验，可查看他账户子账户汇总 |
 | P1-11 | copilotData.js | searchStock URL 构造 XSS 风险：encodeURIComponent 无法阻止 `<>` 注入 |
-| P1-12 | usePortfolioStore.js | upsertPosition 错误消息误报：变量遮蔽导致账户名称错误提示 |
+| P1-12 | usePortfolioStore.js | upsertPosition 错误消息误报：UNIQUE 错误消息不准确 | ✅ 已修复 (fix-007, 4831560) |
 
 ### P2 - 中等风险
 
@@ -114,7 +114,7 @@
 | 风险等级 | 数量 | 状态 |
 |----------|------|------|
 | P0 - 严重 | 2 | 1 已修复(P0-2), 1 待修复(P0-1) |
-| P1 - 中高风险 | 13 | 4 已修复(P1-2/5/6/9), 9 待修复 |
+| P1 - 中高风险 | 13 | 6 已修复(P1-2/5/6/7/9/12), 1 已验证(P1-8), 6 待修复(P1-1/3/4/10/11) |
 | P2 - 中等风险 | 27 | 1 已修复(P2-NEW-3), 26 待修复 |
 | P3 - 低风险 | 5 | 0 已修复, 5 待修复 |
 | **合计** | **47** | **5 已修复, 42 待修复** |
@@ -135,6 +135,7 @@
 | **v7-快扫-20260426-2049** | **2026-04-26 20:49** | **无待验证修复; 5个新提交仅文档/样式/DashboardGrid修复，不引入新风险点** |
 | **v8-re-run-20260426-2104** | **2026-04-26 21:04** | **Re-run检查: allComplete=true, f68d8b2后0新提交, 代码库未变更, 审计状态保持** |
 | **v8-确认-20260426-2141** | **2026-04-26 21:41** | **v8确认: f1b6c81后0代码变更(仅docs)，v9修复验证通过，42待修复(P0×1,P1×9,P2×26,P3×5)** |
+| **v9-修复-20260426-2205** | **2026-04-26 22:05** | **修复 P1-7(CopilotSidebar XSS) + P1-12(UNIQUE错误消息)，commit 4831560，7/47已修复** |
 | **v8-最终确认-20260426-2147** | **2026-04-26 21:47** | **v8最终确认: 3813823后0代码变更，backend/frontend无变化，allComplete=true，42待修复(P0×1,P1×9,P2×26,P3×5)** |
 
 ---
@@ -148,6 +149,8 @@
 | 2026-04-26 20:52 | fix-003 | P0-2+P1-6: copilot.py API Key 变量 NameError | backend/app/routers/copilot.py | f68d8b2 |
 | 2026-04-26 21:38 | fix-004 | P1-9: news.py SSRF空hostname绕过 | backend/app/routers/news.py | f1b6c81 |
 | 2026-04-26 21:38 | fix-005 | P2-NEW-3: scheduler.py ThreadPoolExecutor生命周期错误 | backend/app/services/scheduler.py | f1b6c81 |
+| 2026-04-26 22:05 | fix-006 | P1-7: CopilotSidebar.vue XSS - MarkdownIt html:true 改为 html:false | frontend/src/components/CopilotSidebar.vue | 4831560 |
+| 2026-04-26 22:05 | fix-007 | P1-12: usePortfolioStore.js UNIQUE 错误消息改为通用描述 | frontend/src/composables/usePortfolioStore.js | 4831560 |
 
 **累计修复: 5 个问题 (P0×1, P1×4, P2×1) | 剩余待修复: 42 个 (P0×1, P1×9, P2×26, P3×5)**
 
@@ -159,8 +162,9 @@
 
 - 累计审计 **12 个模块**（9 个有效代码模块 + 3 个非存在/空模块）
 - 发现 **47 个问题**（P0×2, P1×13, P2×27, P3×5）
-- 本次修复 **3 个问题**（P0×1, P1×2），剩余 **44 个待修复**
-- 建议优先修复 **P0 和 P1** 共计 15 个问题
-- 高风险集中在：admin 认证失效、copilot.py API Key 问题、scheduler 任务注册重复
+- 累计修复 **7 个问题**（P0×1, P1×5, P2×1）
+- 本次修复 **2 个问题**（P1-7 XSS + P1-12 UNIQUE 错误消息）
+- 剩余 **40 个待修复**（P0×1, P1×6, P2×26, P3×5） + 1 个已验证非问题(P1-8)
+- 建议优先修复 **P0(P0-1 data_fetcher同步阻塞)** 和剩余 **P1×6**
 
-**下次审计**：建议在代码变更后重新扫描 admin.py、scheduler.py、copilot.py、CopilotSidebar.vue 等高风险文件
+**下次审计**：建议在代码变更后重新扫描 admin.py、scheduler.py、copilot.py、data_fetcher.py 等高风险文件
