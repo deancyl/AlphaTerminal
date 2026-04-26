@@ -72,7 +72,9 @@ def get_sectors() -> list[dict]:
 
 
 def is_ready() -> bool:
-    return _CACHE_READY
+    """检查缓存是否就绪（线程安全）"""
+    with _LOCK:
+        return _CACHE_READY
 
 
 def _fetch_sina_boards(param: str) -> list[dict]:

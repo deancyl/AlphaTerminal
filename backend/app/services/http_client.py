@@ -293,5 +293,12 @@ class ValidatedHTTPClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        上下文管理器退出。
+        返回 None（不抑制异常），确保异常正确传播。
+        """
         await self.close()
-        return False
+        # 返回 None 而非 False，语义更清晰：
+        # - None: 不处理异常，让异常正常传播
+        # - False: 显式表示不抑制异常（但语义不如 None 直观）
+        return None
