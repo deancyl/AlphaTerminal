@@ -259,3 +259,64 @@ NameError: name 'verify_admin_key' is not defined
 - **累计修复**: 13 个 (P0×2, P1×6, P2×5)
 - **剩余待修复**: 35 个 (P0×1, P1×7, P2×22, P3×5)
 - **唯一P0**: data_fetcher.py 同步阻塞HTTP (requests.get在async def中)
+
+---
+
+## v13 确认记录 (2026-04-27 01:13 CST)
+
+- **状态**: allComplete=true, 无新代码变更
+- **HEAD**: c36bf31 (与 v12 一致)
+- **确认次数**: v13-confirm-count = 19
+- **修复验证**: 全部 13 个修复已验证通过 ✅
+
+### 修复验证详情
+
+| 修复ID | 问题 | 验证结果 |
+|--------|------|----------|
+| fix-003 | P0-2: copilot.py API Key NameError | ✅ MINIMAX_API_KEY 已在模块顶部定义 |
+| fix-010 | P0-NEW-1: admin.py NameError | ✅ verify_admin_key 定义已移到 router 之前 |
+| fix-001 | P1-2: trading.py 双重 close | ✅ 只有 finally 块中一处 conn.close() |
+| fix-002 | P1-5: admin.py 认证失效 | ✅ router 已有 dependencies=[Depends(verify_admin_key)] |
+| fix-004 | P1-9: news.py SSRF 绕过 | ✅ 空 hostname 防护已添加 |
+| fix-006 | P1-7: CopilotSidebar XSS | ✅ MarkdownIt html:true 改为 html:false |
+| fix-009 | P2-12: backtest.py 除零 | ✅ if first_close <= 0 保护已添加 |
+| fix-011 | P2-NEW-6: admin.py 速率限制 | ✅ _check_rate_limit() + _record_failure() 已添加 |
+
+### 累计统计
+
+- **已修复**: 13 个 (P0×2, P1×6, P2×5)
+- **剩余待修复**: 35 个 (P0×1, P1×7, P2×22, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞HTTP (requests.get在async def中)
+
+### 下次审计建议
+
+1. **P0-1 优先修复**: data_fetcher.py 同步阻塞 HTTP
+2. **P1-3/P1-10**: include_children 默认值和权限问题
+3. **P2 批量修复**: 22 个中等风险问题
+
+---
+
+## v14 维护记录 (2026-04-27 01:15 CST)
+
+### 本次修复
+
+| 修复ID | 问题 | 文件 | 状态 |
+|--------|------|------|------|
+| fix-014 | P2-11: stocks.py akshare 同步阻塞事件循环 | backend/app/routers/stocks.py | ✅ 已修复 |
+| fix-015 | P2-9: CopilotSidebar SSE JSON.parse 容错过宽 | frontend/src/components/CopilotSidebar.vue | ✅ 已修复 |
+
+### 修复详情
+
+**P2-11 修复**: 将 `get_limit_up`, `get_limit_down`, `get_unusual`, `get_limit_summary` 中的 akshare 同步调用改为使用 `loop.run_in_executor(_executor, ...)` 避免阻塞事件循环。
+
+**P2-9 修复**: SSE 流式响应中 `JSON.parse` 失败时记录错误日志，后端 500 错误显示给用户而非静默吞掉。
+
+### 累计统计
+
+- **已修复**: 15 个 (P0×2, P1×6, P2×7)
+- **剩余待修复**: 33 个 (P0×1, P1×7, P2×20, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞HTTP (requests.get在async def中)
+
+### 代码验证
+
+- `python3 -c "from app.routers.stocks import router"` ✅ 通过

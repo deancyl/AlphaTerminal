@@ -908,7 +908,16 @@ async function sendToLLM(text) {
               }
             }
           } catch (e) {
-            // ignore parse errors
+            // P2-9 修复: 记录解析错误，后端500错误应显示给用户
+            if (payload && payload.length > 0) {
+              console.warn('[Copilot] SSE parse error:', payload.substring(0, 100), e.message)
+              // 如果是后端错误响应，显示给用户
+              if (payload.includes('error') || payload.includes('500') || payload.includes('Error')) {
+                messages.value[aiMsgIndex].content = `⚠️ 后端响应异常: ${payload.substring(0, 200)}`
+                messages.value[aiMsgIndex].isError = true
+                messages.value[aiMsgIndex].streaming = false
+              }
+            }
           }
         }
       }
