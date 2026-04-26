@@ -153,7 +153,11 @@ async def run_backtest(req: BacktestRequest):
         # ── 基准收益率（Buy & Hold同期）──────────────────────────────
         first_close = float(rows[0][4])
         last_close  = float(rows[-1][4])
-        benchmark_return_pct = round((last_close - first_close) / first_close * 100, 2)
+        # P2-12 Fix: 防止除零风险
+        if first_close <= 0:
+            benchmark_return_pct = 0.0
+        else:
+            benchmark_return_pct = round((last_close - first_close) / first_close * 100, 2)
 
         # ── 技术指标计算 ──────────────────────────────────────────
         closes  = [float(r[4]) for r in rows]
