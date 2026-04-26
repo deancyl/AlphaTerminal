@@ -251,10 +251,11 @@ NameError: name 'verify_admin_key' is not defined
 
 ---
 
-## v11 确认记录 (2026-04-27 00:46 CST)
+## v12 确认记录 (2026-04-27 00:55 CST)
 
 - **状态**: allComplete=true, 无新代码变更
-- **HEAD**: aef5d44 (与 v10 一致)
-- **确认次数**: v11-confirm-count = 16
+- **HEAD**: 4ca396b (仅docs更新)
+- **确认次数**: v12-confirm-count = 17
 - **累计修复**: 13 个 (P0×2, P1×6, P2×5)
 - **剩余待修复**: 35 个 (P0×1, P1×7, P2×22, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞HTTP (requests.get在async def中)
