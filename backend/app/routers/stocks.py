@@ -91,7 +91,9 @@ async def get_limit_up():
             logger.warning(f"[Stocks] limit_up fetch error: {e}")
             return []
 
-    data = _cache_or_fetch('limit_up', fetch)
+    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_up', fetch))
     return success_response({'limit_up': data, 'count': len(data)})
 
 
@@ -131,7 +133,9 @@ async def get_limit_down():
             logger.warning(f"[Stocks] limit_down fetch error: {e}")
             return []
 
-    data = _cache_or_fetch('limit_down', fetch)
+    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_down', fetch))
     return success_response({'limit_down': data, 'count': len(data)})
 
 
@@ -175,7 +179,9 @@ async def get_unusual():
             logger.warning(f"[Stocks] unusual fetch error: {e}")
             return []
 
-    data = _cache_or_fetch('unusual', fetch)
+    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('unusual', fetch))
     return success_response({'unusual': data, 'count': len(data)})
 
 
@@ -409,5 +415,7 @@ async def get_limit_summary():
             logger.warning(f"[Stocks] limit_summary error: {e}")
             return {'zt_count': 0, 'dt_count': 0, 'market_sentiment': '未知'}
 
-    data = _cache_or_fetch('limit_summary', fetch)
+    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_summary', fetch))
     return success_response(data)
