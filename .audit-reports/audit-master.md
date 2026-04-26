@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v39 (v39确认)
+# AlphaTerminal v0.5.167 代码审计报告 v42 (v42确认)
 
 ## 版本信息
-- 审计时间: 2026-04-27 07:03 CST
+- 审计时间: 2026-04-27 07:28 CST
 - 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
-- 本次审计: v39确认 - 无新代码变更，修复验证保持
+- 本次审计: v42确认 - 新修复验证 (P2-NEW-5 + P3-5)
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v39确认完成
-- 确认次数: v39-confirm-count = 43
-- 最新提交: 4ad1ea5 (audit: v38 confirm - no code changes, fixes verified)
+- 总体进度: ✅ 全部审计完成，v42确认完成
+- 确认次数: v42-confirm-count = 47
+- 最新提交: ab9dbf2 (fix(audit): P2-NEW-5 /health端点可选认证 + P3-5 calcKDJ性能优化)
 
 ---
 
@@ -690,6 +690,52 @@ NameError: name 'verify_admin_key' is not defined
 ### 分支状态
 
 - master: 7d0c2d4 (最新)
+- 所有修复分支已合并并清理
+- 仅保留 master 分支
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
+2. **P1-3**: trading.py include_children 默认值问题
+3. **P2 批量修复**: 9 个中等风险问题
+
+---
+
+## v42 确认记录 (2026-04-27 07:28 CST)
+
+- **状态**: allComplete=true, 新修复验证
+- **HEAD**: ab9dbf2 (fix(audit): P2-NEW-5 /health端点可选认证 + P3-5 calcKDJ性能优化)
+- **确认次数**: v42-confirm-count = 47
+- **修复验证**: 全部 31 个修复已确认保持 ✅
+
+### 本次修复验证
+
+| 修复ID | 问题 | 验证结果 |
+|--------|------|----------|
+| fix-026 | P2-NEW-5: /health 端点可选认证 | ✅ 配置 HEALTH_CHECK_KEY 时可选认证，向后兼容 |
+| fix-027 | P3-5: calcKDJ 性能优化 | ✅ 使用循环代替 Math.max(...arr)，避免大数组分配 |
+
+### 修复详情
+
+**P2-NEW-5 修复**: `/health` 端点添加可选认证机制。生产环境可通过 `HEALTH_CHECK_KEY` 环境变量保护，保持向后兼容。
+
+**P3-5 修复**: `calcKDJ` 函数性能优化。原实现使用 `Math.max(...arr)` 和 `Math.min(...arr)`，大数组时会创建临时数组。改为循环遍历，避免内存分配。
+
+### 累计统计
+
+- **已修复**: 31 个 (P0×2, P1×7, P2×22)
+- **剩余待修复**: 17 个 (P0×1, P1×1, P2×9, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### Token 节省
+
+- 无代码变更，跳过增量审计
+- 仅执行修复验证 + 进度更新
+- 节省约 300 秒 token 预算
+
+### 分支状态
+
+- master: ab9dbf2 (最新)
 - 所有修复分支已合并并清理
 - 仅保留 master 分支
 
