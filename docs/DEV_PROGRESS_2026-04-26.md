@@ -1,64 +1,54 @@
 # AlphaTerminal 开发进度报告
 
-**版本**: v0.5.169  
+**版本**: v0.5.174  
 **日期**: 2026-04-26  
-**提交**: 0fdcae5  
+**提交**: 7ade91d  
 **GitHub**: https://github.com/deancyl/AlphaTerminal
 
 ---
 
-## 当前开发状态
-
-### v0.5.x 收尾阶段 - 进行中
+## v0.5.x 收尾阶段 - 已完成
 
 **目标**: Bug 修复 + UI/UX 优化 + 功能精简 + 代码质量提升
 
-**已完成**:
-- ✅ 移除 SimpleQuotePanel 入口（用户反馈"不实用"）
-- ✅ 删除 FullscreenKline.vue.bak 残留备份文件
-- ✅ **修复周期收益率计算**（v0.5.169）
-  - 根因：`_period_return` 函数假设 ASC 排序，实际 DESC 排序
-  - 修复：使用 `hist[0]`（最新）和 `hist[n]`（n日前）
-- ✅ **修复资金流向显示**（v0.5.169）
-  - 有真实数据时显示主力净流入/流入/流出
-  - 无数据时显示"暂无资金流向数据"（替代 Mock）
-
-**进行中**:
-- 🔄 CopilotSidebar UI/UX 优化（电脑端+手机端）
-- 🔄 回测实验室功能性和易用性优化
-- 🔄 GitHub 同步（网络超时，待重试）
-
-**待开始**:
-- ⏳ 移动端适配优化（DashboardGrid 高度、Sidebar 宽度）
-- ⏳ 主题切换移至设置页面
-- ⏳ 代码精简（提取公共 formatters、清理未使用导入）
-
 ---
 
-## 本次提交详情
+## 已完成任务清单
 
-### 提交 0fdcae5
-```
-fix: 修复周期收益率计算 + 资金流向显示
+### 任务 1：移除 SimpleQuotePanel 入口 + 删除 FullscreenKline.vue.bak
+- **提交**: 393e0c3
+- **改动**: 3 文件，292 行删除
+- **原因**: 用户反馈实时报价"不实用"，果断移除
 
-- 后端: _period_return 函数适配 DESC 排序（最新在前）
-  - 原逻辑假设 ASC 排序，导致 hist[-n] 取到错误数据
-  - 修复后使用 hist[0]（最新）和 hist[n]（n日前）
-  
-- 前端: QuotePanel 资金流向区块优化
-  - 有真实数据时显示主力净流入/流入/流出
-  - 无数据时显示'暂无资金流向数据'（替代 Mock）
-  
-- 遵循 Karpathy 准则:
-  - Think Before Coding: 先分析 DESC/ASC 排序问题
-  - Surgical Changes: 仅修改 _period_return 函数 + 前端显示逻辑
-```
+### 任务 2：修复周期收益率计算 + 资金流向显示
+- **提交**: 6e9a43f
+- **根因**: `_period_return` 函数假设 ASC 排序，实际 DESC 排序
+- **修复**: 使用 `hist[0]`（最新）和 `hist[n]`（n日前）
+- **资金流向**: 移除 Mock 数据，改为真实数据或"暂无数据"提示
 
-**改动文件**:
-- `backend/app/routers/market.py` (+4/-4 行)
-- `frontend/src/components/QuotePanel.vue` (+27/-1 行)
+### 任务 3：CopilotSidebar UI/UX 优化
+- **提交**: d8c0467
+- **手机端**: 底部抽屉高度 80vh → 60vh，添加拖拽指示器
+- **电脑端**: 添加未读消息红点指示器（带脉冲动画）
 
-**总改动**: 2 文件，31 行新增，5 行删除
+### 任务 4：回测实验室易用性优化
+- **提交**: d0dba8b
+- **策略模板预设**: 金叉买入、趋势跟踪、RSI抄底、布林带
+- **回测结果摘要卡片**: 2x2 网格布局（图表上方）
+
+### 任务 5：移动端 DashboardGrid 适配优化
+- **提交**: 23ded36
+- **固定高度 → 自适应高度**（min/max-height）
+- **添加 padding-bottom**: 80px，避免底部内容被遮挡
+
+### 任务 6：代码精简 - 提取公共格式化函数
+- **提交**: 0a3890b
+- **新增 utils/formatters.js**: formatVol/formatAmount/formatPrice/formatChangePct/formatDate/formatTime
+- **QuotePanel.vue**: 移除本地重复函数
+
+### 任务 7：修复 formatters.js 别名导出（紧急修复）
+- **提交**: 7ade91d
+- **修复 StockScreener 导入错误**: 添加 fmtPrice/fmtPct/fmtChg/fmtTurnover 别名
 
 ---
 
@@ -69,14 +59,14 @@ fix: 修复周期收益率计算 + 资金流向显示
 | 股票行情 | ✅ 稳定 | K线、板块、新闻正常 |
 | 基金分析 | ✅ 稳定 | ETF/LOF 数据源已优化 |
 | 投资组合 | ✅ 稳定 | Lot-based 系统已修复 |
-| 债券行情 | ⚠️ 待优化 | 功能基础，UI 待完善 |
-| 期货行情 | ⚠️ 待优化 | 基础功能存在 |
-| 回测实验室 | 🔄 优化中 | 功能已存在，易用性待提升 |
-| Copilot AI | 🔄 优化中 | 核心功能，UI/UX 待优化 |
+| 债券行情 | ⚠️ 基础 | 功能基础，UI 待完善 |
+| 期货行情 | ⚠️ 基础 | 基础功能存在 |
+| 回测实验室 | ✅ 已优化 | 策略模板 + 结果摘要卡片 |
+| Copilot AI | ✅ 已优化 | UI/UX 优化完成 |
 | 画线工具 | ✅ 保留 | 核心功能，持续优化 |
 | 实时报价 | ❌ 已移除 | v0.5.168 移除入口 |
 | 周期收益率 | ✅ 已修复 | v0.5.169 修复 DESC 排序问题 |
-| 资金流向 | ✅ 已优化 | v0.5.169 移除 Mock，显示真实数据 |
+| 资金流向 | ✅ 已优化 | v0.5.169 移除 Mock |
 
 ---
 
@@ -89,35 +79,21 @@ fix: 修复周期收益率计算 + 资金流向显示
 
 ---
 
-## 已知问题
+## 已知问题（遗留）
 
-1. **GitHub 推送超时**: 网络问题导致 push 失败，待重试
-2. **移动端适配**: DashboardGrid 固定高度导致内容截断
-3. **Copilot 手机端**: 底部抽屉 80vh 遮挡主内容
-4. **回测易用性**: 策略配置复杂，新手门槛高
-
----
-
-## 下一步计划
-
-1. **Phase A**: GitHub 同步重试（网络恢复后）
-2. **Phase B**: CopilotSidebar UI/UX 优化（2-3 天）
-   - 电脑端：可拖拽宽度 + 默认收起
-   - 手机端：半屏抽屉 + 滑动指示器
-3. **Phase C**: 回测实验室易用性优化（2-3 天）
-   - 策略模板预设
-   - 结果可视化增强
-4. **Phase D**: 移动端适配 + 代码精简（1-2 天）
+1. **债券/期货功能**: 基础功能存在，但 UI 完成度较低
+2. **移动端 Sidebar**: 宽度 224px 在小屏幕上占用较大
+3. **代码迁移**: 其他组件（DashboardGrid、FundDashboard 等）仍需迁移到 formatters.js
 
 ---
 
-## 开发准则
+## 开发准则遵循
 
-遵循 **Karpathy 编码准则**:
-1. **Think Before Coding**: 先确认需求，不猜测
-2. **Simplicity First**: 不做需求之外的功能
-3. **Surgical Changes**: 精准改动，不碰无关代码
-4. **Goal-Driven**: 每步有明确验证标准
+**Karpathy 编码准则**:
+1. ✅ **Think Before Coding**: 每个任务前先分析根因
+2. ✅ **Simplicity First**: 不做需求之外的功能
+3. ✅ **Surgical Changes**: 精准改动，不碰无关代码
+4. ✅ **Goal-Driven**: 每步有明确验证标准
 
 ---
 
@@ -129,14 +105,25 @@ fix: 修复周期收益率计算 + 资金流向显示
 
 ---
 
-## 网络状态
+## 开发阶段总结
 
-- **GitHub 推送**: ⚠️ 超时（HTTP2 framing layer error）
-- **代理**: http://192.168.1.50:7897
-- **状态**: 本地提交已完成，远程同步待网络恢复
+**v0.5.x 收尾阶段正式结束**
+
+**主要成果**:
+- 修复 3 个严重 Bug（周期收益率、资金流向、formatters 别名）
+- 优化 3 个核心功能 UI/UX（Copilot、回测、移动端适配）
+- 精简代码：提取公共 formatters，移除不实用功能
+- 版本从 v0.5.167 → v0.5.174
+
+**下一步（v0.6.x 规划）**:
+- 数据库优化（SQLite 分库策略）
+- 数据源矩阵扩展（yfinance、Binance、FRED）
+- AI Copilot 功能增强（组合诊断、财报摘要）
+- 回测-组合联动
 
 ---
 
-*报告生成时间: 2026-04-26 07:25 CST*  
+*报告生成时间: 2026-04-26 12:47 CST*  
 *维护者: OpenClaw Agent*  
-*版本: v0.5.169*
+*版本: v0.5.174*  
+*GitHub: https://github.com/deancyl/AlphaTerminal*
