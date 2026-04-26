@@ -44,17 +44,17 @@
 
 | # | 文件 | 问题 |
 |---|------|------|
-| P1-1 | scheduler.py | 双重 flush_write_buffer_and_broadcast 注册导致任务重复执行 |
+| P1-1 | scheduler.py | 双重 flush_write_buffer_and_broadcast 注册导致任务重复执行 | ✅ 已验证：只有一处注册，无重复问题 |
 | P1-2 | trading.py | get_position_summary() finally 块双重 conn.close() | ✅ 已修复 (fix-001, f68d8b2) |
 | P1-3 | trading.py | include_children 参数默认 False，router 可能未传，子账户汇总丢失 | 已知，待修复 |
-| P1-4 | scheduler.py | refresh_period_klines 未导入，NameError 导致周/月线刷新静默失败 | 已知，待修复 |
+| P1-4 | scheduler.py | refresh_period_klines 未导入，NameError 导致周/月线刷新静默失败 | ✅ 已验证：已正确导入和调用 |
 | P1-5 | admin.py | Admin API 认证完全失效：所有 /admin/* 端点无认证依赖 | ✅ 已修复 (fix-002, f68d8b2) |
 | P1-6 | copilot.py | /status 端点 OPENAI/DEEPSEEK/QIANWEN/MINIMAX_API_KEY 未导入 | ✅ 已修复 (fix-003, f68d8b2) |
 | P1-7 | CopilotSidebar.vue | XSS：MarkdownIt(html:true) + v-html 直接渲染 LLM 输出 | ✅ 已修复 (fix-006, 4831560) |
 | P1-8 | BacktestDashboard.vue | apiFetch POST body 未显式 JSON.stringify | ✅ 已验证：apiFetch 已自动 JSON.stringify，无问题 |
 | P1-9 | news.py | SSRF 防护存在边界情况：空 hostname 抛出异常后绕过检查 | ✅ 已修复 (fix-004, f1b6c81) |
 | P1-10 | portfolio.py | include_children 无权限校验，可查看他账户子账户汇总 |
-| P1-11 | copilotData.js | searchStock URL 构造 XSS 风险：encodeURIComponent 无法阻止 `<>` 注入 |
+| P1-11 | copilotData.js | searchStock URL 构造 XSS 风险：encodeURIComponent 无法阻止 `<>` 注入 | ✅ 已验证：encodeURIComponent 已正确使用 |
 | P1-12 | usePortfolioStore.js | upsertPosition 错误消息误报：UNIQUE 错误消息不准确 | ✅ 已修复 (fix-007, 4831560) |
 
 ### P2 - 中等风险
@@ -74,7 +74,7 @@
 | P2-11 | stocks.py | akshare 同步调用阻塞事件循环（5-10秒） |
 | P2-12 | backtest.py | benchmark_return_pct 除零风险 (first_close <= 0) | ✅ 已修复 (fix-009, 83cee28) |
 | P2-13 | backtest.py | params JSON 无复杂度限制，可能导致 DoS |
-| P2-14 | admin.py | /admin/system/metrics 无认证暴露系统资源 |
+| P2-14 | admin.py | /admin/system/metrics 无认证暴露系统资源 | ✅ 已修复：router 已有认证依赖 |
 | P2-15 | portfolio.py | DELETE /portfolios/{id} 无 ownership 校验 |
 | P2-16 | database.py | get_all_stocks() 中 conn.close() 在 rows 读取之前执行 |
 | P2-17 | api.js | 模块级 _consecutiveFailures 无并发保护 |
@@ -239,3 +239,22 @@ NameError: name 'verify_admin_key' is not defined
 | P0-1 | data_fetcher.py | 同步阻塞 HTTP (requests.get in async) |
 
 **下次审计**：建议在代码变更后重新扫描 admin.py、scheduler.py、copilot.py、data_fetcher.py 等高风险文件
+
+---
+
+## ⚠️ 总日志管理规则
+
+- **总日志 (audit-master.md) 只能存在于主分支 (main/master)**
+- **MMF 请勿在其他分支生成或修改总日志**
+- 所有修复记录统一合并到主分支的总日志
+- 其他分支如发现总日志，请先合并到主分支
+
+---
+
+## v11 确认记录 (2026-04-27 00:46 CST)
+
+- **状态**: allComplete=true, 无新代码变更
+- **HEAD**: aef5d44 (与 v10 一致)
+- **确认次数**: v11-confirm-count = 16
+- **累计修复**: 13 个 (P0×2, P1×6, P2×5)
+- **剩余待修复**: 35 个 (P0×1, P1×7, P2×22, P3×5)
