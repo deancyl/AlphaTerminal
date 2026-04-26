@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v27 (v27确认)
+# AlphaTerminal v0.5.167 代码审计报告 v28 (v28确认)
 
 ## 版本信息
-- 审计时间: 2026-04-27 04:03 CST
+- 审计时间: 2026-04-27 04:18 CST
 - 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
-- 本次审计: v27确认 - 无新代码变更，修复验证保持
+- 本次审计: v28确认 - P2-17/P2-18/P2-21 前端并发安全修复验证
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v27确认完成
-- 确认次数: v27-confirm-count = 33
-- 最新提交: 5b61923 (docs: v26审计确认)
+- 总体进度: ✅ 全部审计完成，v28确认完成
+- 确认次数: v28-confirm-count = 34
+- 最新提交: 9ed4248 (merge: fix/audit-p2-17-18-21-frontend-concurrency)
 
 ---
 
@@ -77,11 +77,11 @@
 | P2-14 | admin.py | /admin/system/metrics 无认证暴露系统资源 | ✅ 已修复：router 已有认证依赖 |
 | P2-15 | portfolio.py | DELETE /portfolios/{id} 无 ownership 校验 | ✅ 已修复 (fix-022, ba4bb64) |
 | P2-16 | database.py | get_all_stocks() 中 conn.close() 在 rows 读取之前执行 |
-| P2-17 | api.js | 模块级 _consecutiveFailures 无并发保护 |
-| P2-18 | useDataSourceStatus.js | _listeners Set 无并发保护 |
+| P2-17 | api.js | 模块级 _consecutiveFailures 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
+| P2-18 | useDataSourceStatus.js | _listeners Set 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
 | P2-19 | useEventBus.js | emit 缺少错误收集机制，listener 失败静默 |
 | P2-20 | useMarketStream.js | tickHistory 内存管理需确认 unsubscribe 调用路径 |
-| P2-21 | copilotData.js | getCached 返回过期数据无 stale 标记 |
+| P2-21 | copilotData.js | getCached 返回过期数据无 stale 标记 | ✅ 已修复 (fix-023, c67f9b5) |
 
 ### P3 - 低风险
 
