@@ -27,14 +27,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent   # app/routers/admin.p
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
-router = APIRouter(
-    prefix="/admin", 
-    tags=["admin"],
-    dependencies=[Depends(verify_admin_key)]
-)
 
 # ═══════════════════════════════════════════════════════════════
-# 认证机制
+# 认证机制（必须在 router 定义之前，否则 NameError）
 # ═══════════════════════════════════════════════════════════════
 
 def verify_admin_key(api_key: str = None):
@@ -56,6 +51,13 @@ def admin_read_auth(api_key: str = None):
 def admin_write_auth(api_key: str = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
     return verify_admin_key(api_key)
+
+# router 定义（在 verify_admin_key 之后）
+router = APIRouter(
+    prefix="/admin", 
+    tags=["admin"],
+    dependencies=[Depends(verify_admin_key)]
+)
 
 
 # ═══════════════════════════════════════════════════════════════
