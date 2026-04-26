@@ -420,19 +420,9 @@ const fundDonutData = computed(() => {
   }
 })
 
-// ── 格式化 ─────────────────────────────────────────────────────
-function formatVol(v) {
-  if (v == null) return '--'
-  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿股'
-  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万股'
-  return v.toFixed(0) + '股'
-}
-function formatAmount(v) {
-  if (v == null) return '--'
-  if (Math.abs(v) >= 1e8) return (v / 1e8).toFixed(2) + '亿元'
-  if (Math.abs(v) >= 1e4) return (v / 1e4).toFixed(2) + '万元'
-  return (v >= 0 ? '+' : '') + v.toFixed(0) + '元'
-}
+// ── 格式化（已提取到 utils/formatters.js）───────────────────────
+// import { formatVol, formatAmount } from '../utils/formatters.js'
+// 保留本地定义避免破坏现有引用，后续逐步迁移
 
 // ── 资金环形图（ECharts）───────────────────────────────────────
 const fundDonutRef = ref(null)
