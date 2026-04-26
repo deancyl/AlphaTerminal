@@ -64,8 +64,8 @@
 | P2-1 | watchdog.py | BACKEND_START_CMD 硬编码相对路径，重启可靠性差 | ✅ 已修复 (fix-016, 83718b2) |
 | P2-2 | ws_manager.py | __del__ 在多线程环境非安全 | ✅ 已验证：无 __del__ 方法 |
 | P2-3 | circuit_breaker.py | HALF_OPEN 状态：half_open_max_calls 与 success_threshold 可能不同步 | ✅ 已验证：record_success 已重置失败计数 |
-| P2-4 | sectors_cache.py | is_ready() 无锁访问，存在竞态条件 |
-| P2-5 | http_client.py | __aexit__ 返回值 False 语义不明确 |
+| P2-4 | sectors_cache.py | is_ready() 无锁访问，存在竞态条件 | ✅ 已修复 (fix-019, 6bd9800) |
+| P2-5 | http_client.py | __aexit__ 返回值 False 语义不明确 | ✅ 已修复 (fix-020, 6bd9800) |
 | P2-6 | logging_queue.py | WebSocket 日志消息截断到300字符，完整堆栈丢失 | ✅ 已修复 (fix-018, 83718b2) |
 | P2-7 | main.py | CORS allow_origins 硬编码多个内网 IP | ✅ 已修复 (fix-017, 83718b2) |
 | P2-8 | DrawingCanvas.vue | convertFromPixel 异常被 catch 吞没，图形绘制静默失败 |
