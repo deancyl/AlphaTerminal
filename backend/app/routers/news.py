@@ -126,6 +126,10 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
         if parsed.scheme not in ("http", "https"):
             return error_response(1, "仅支持 http/https 协议", {"url": url})
 
+        # 空 hostname 防护：绕过所有后续检查（如 http:///path）
+        if not host:
+            return error_response(1, "URL 缺少有效 hostname", {"url": url})
+
         # 禁止访问内网/云元数据地址
         BLOCKED_HOSTS = {
             "localhost", "127.0.0.1", "0.0.0.0", "::1", "::",
