@@ -2,15 +2,35 @@
 P3 多账户模拟组合 - 路由层
 CRUD: 账户 / 持仓 / 净值历史
 """
+import os
 import time
 import logging
 from datetime import datetime, date
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+# ── 认证保护 ──────────────────────────────────────────────
+# 使用 PORTFOLIO_API_KEY 环境变量保护敏感操作
+# 未配置时保持开放（开发环境）
+
+def verify_portfolio_key(api_key: str = None, x_forwarded_for: str = Header(None)):
+    """Portfolio API 密钥校验（可选）"""
+    configured_key = os.environ.get("PORTFOLIO_API_KEY", "")
+    # 未配置 key 时跳过认证（本机开发环境）
+    if not configured_key:
+        return True
+    if api_key != configured_key:
+        raise HTTPException(status_code=401, detail="Invalid Portfolio API key")
+    return True
+
+def require_auth_for_sensitive_ops(api_key: str = None):
+    """敏感操作认证（DELETE、include_children）"""
+    return verify_portfolio_key(api_key)
+
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
 # ── Pydantic 模型 ──────────────────────────────────────────────
@@ -204,8 +224,8 @@ async def create_portfolio(body: PortfolioIn):
             "initial_capital": body.initial_capital, "description": body.description}
 
 @router.delete("/{portfolio_id}")
-async def delete_portfolio(portfolio_id: int):
-    """删除账户（连带持仓和快照）"""
+async def delete_portfolio(portfolio_id: int, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
+    """删除账户（连带持仓和快照）- 需认证"""
     with _lock:
         conn = _get_conn()
         cur = conn.execute("DELETE FROM portfolios WHERE id=?", (portfolio_id,))
@@ -302,8 +322,8 @@ async def upsert_position(body: PositionIn):
     return {"ok": True, "action": "upserted"}
 
 @router.delete("/{portfolio_id}/positions/{symbol}")
-async def delete_position(portfolio_id: int, symbol: str):
-    """清仓指定标的"""
+async def delete_position(portfolio_id: int, symbol: str, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
+    """清仓指定标的 - 需认证"""
     with _lock:
         conn = _get_conn()
         cur = conn.execute(
