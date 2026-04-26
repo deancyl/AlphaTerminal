@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v42 (v42确认)
+# AlphaTerminal v0.5.167 代码审计报告 v43 (v43维护)
 
 ## 版本信息
-- 审计时间: 2026-04-27 07:28 CST
-- 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
-- 本次审计: v42确认 - 新修复验证 (P2-NEW-5 + P3-5)
+- 审计时间: 2026-04-27 07:40 CST
+- 任务: Audit-Master-Maintenance (cron:f5d12b54)
+- 本次审计: v43维护 - P3-1 性能优化
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v42确认完成
-- 确认次数: v42-confirm-count = 47
-- 最新提交: ab9dbf2 (fix(audit): P2-NEW-5 /health端点可选认证 + P3-5 calcKDJ性能优化)
+- 总体进度: ✅ 全部审计完成，v43维护完成
+- 确认次数: v43-confirm-count = 48
+- 最新提交: b8ab45f (perf(audit): P3-1 PortfolioDashboard childMap 重复计算优化)
 
 ---
 
@@ -87,11 +87,11 @@
 
 | # | 文件 | 问题 |
 |---|------|------|
-| P3-1 | PortfolioDashboard.vue | isAggregated.computed 每次重新计算 childMap，列表较长时性能浪费 |
+| P3-1 | PortfolioDashboard.vue | isAggregated.computed 每次重新计算 childMap，列表较长时性能浪费 | ✅ 已修复 (fix-028, b8ab45f) |
 | P3-2 | useMarketStore.js | computed 未使用但被导入 |
-| P3-3 | useTheme.js | onThemeChange 回调无去重，可能多次执行 |
+| P3-3 | useTheme.js | onThemeChange 回调无去重，可能多次执行 | ✅ 已验证：使用 Set 存储回调，已有去重机制 |
 | P3-4 | useUiStore.js | 导出解构不完整，新增状态易遗漏 |
-| P3-5 | indicators.js | calcKDJ 中 Math.max(...Array) 大量分配，高频调用有性能问题 |
+| P3-5 | indicators.js | calcKDJ 中 Math.max(...Array) 大量分配，高频调用有性能问题 | ✅ 已修复 (fix-027, ab9dbf2) |
 
 ---
 
@@ -738,6 +738,36 @@ NameError: name 'verify_admin_key' is not defined
 - master: ab9dbf2 (最新)
 - 所有修复分支已合并并清理
 - 仅保留 master 分支
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
+2. **P1-3**: trading.py include_children 默认值问题
+3. **P2 批量修复**: 9 个中等风险问题
+
+---
+
+## v43 维护记录 (2026-04-27 07:40 CST)
+
+### 本次修复
+
+| 修复ID | 问题 | 文件 | 状态 |
+|--------|------|------|------|
+| fix-028 | P3-1: PortfolioDashboard.vue childMap 重复计算 | frontend/src/components/PortfolioDashboard.vue | ✅ 已修复 |
+
+### 修复详情
+
+**P3-1 修复**: 提取 `portfolioChildMap` computed 共享父子关系映射，`flatTree` 和 `isAggregated` 共享同一映射，避免每次重新计算。删除冗余的 `childMap()` 函数。
+
+### 累计统计
+
+- **已修复**: 32 个 (P0×2, P1×7, P2×22, P3×1)
+- **剩余待修复**: 16 个 (P0×1, P1×1, P2×9, P3×4)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### 代码验证
+
+- 前端构建验证通过 ✅
 
 ### 下次审计建议
 
