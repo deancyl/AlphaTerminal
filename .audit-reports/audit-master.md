@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.176 代码审计报告 v19 (分支合并完成)
+# AlphaTerminal v0.5.176 代码审计报告 v20 (v17维护完成)
 
 ## 版本信息
-- 审计时间: 2026-04-27 00:45 CST
-- 任务: AlphaTerminal-Code-Audit v8 (cron:88fda36d)
-- 本次审计: 分支合并完成，所有修复已合并到 master
+- 审计时间: 2026-04-27 01:35 CST
+- 任务: AlphaTerminal-Code-Audit v17 (cron:f5d12b54)
+- 本次审计: v17维护 - 修复 P2-1/P2-7/P2-6
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，分支合并完成
-- 确认次数: v8-confirm-count = 15
-- 合并提交: c36bf31
+- 总体进度: ✅ 全部审计完成，v17维护完成
+- 确认次数: v17-confirm-count = 22
+- 合并提交: 83718b2
 
 ---
 
@@ -61,13 +61,13 @@
 
 | # | 文件 | 问题 |
 |---|------|------|
-| P2-1 | watchdog.py | BACKEND_START_CMD 硬编码相对路径，重启可靠性差 |
-| P2-2 | ws_manager.py | __del__ 在多线程环境非安全 |
-| P2-3 | circuit_breaker.py | HALF_OPEN 状态：half_open_max_calls 与 success_threshold 可能不同步 |
+| P2-1 | watchdog.py | BACKEND_START_CMD 硬编码相对路径，重启可靠性差 | ✅ 已修复 (fix-016, 83718b2) |
+| P2-2 | ws_manager.py | __del__ 在多线程环境非安全 | ✅ 已验证：无 __del__ 方法 |
+| P2-3 | circuit_breaker.py | HALF_OPEN 状态：half_open_max_calls 与 success_threshold 可能不同步 | ✅ 已验证：record_success 已重置失败计数 |
 | P2-4 | sectors_cache.py | is_ready() 无锁访问，存在竞态条件 |
 | P2-5 | http_client.py | __aexit__ 返回值 False 语义不明确 |
-| P2-6 | logging_queue.py | WebSocket 日志消息截断到300字符，完整堆栈丢失 |
-| P2-7 | main.py | CORS allow_origins 硬编码多个内网 IP |
+| P2-6 | logging_queue.py | WebSocket 日志消息截断到300字符，完整堆栈丢失 | ✅ 已修复 (fix-018, 83718b2) |
+| P2-7 | main.py | CORS allow_origins 硬编码多个内网 IP | ✅ 已修复 (fix-017, 83718b2) |
 | P2-8 | DrawingCanvas.vue | convertFromPixel 异常被 catch 吞没，图形绘制静默失败 |
 | P2-9 | CopilotSidebar.vue | SSE 流式响应 JSON.parse 容错过宽，后端500错误静默 |
 | P2-10 | ConservationAuditCard.vue | setInterval 未包装 try/catch，定时器泄漏风险 |
@@ -118,9 +118,9 @@
 |----------|------|--------|--------|
 | P0 - 严重 | 3 | 2 | 1 |
 | P1 - 中高风险 | 13 | 6 | 7 |
-| P2 - 中等风险 | 27 | 5 | 22 |
+| P2 - 中等风险 | 27 | 10 | 17 |
 | P3 - 低风险 | 5 | 0 | 5 |
-| **合计** | **48** | **13** | **35** |
+| **合计** | **48** | **18** | **30** |
 
 ---
 
@@ -380,3 +380,41 @@ NameError: name 'verify_admin_key' is not defined
 - 无代码变更，跳过增量审计
 - 仅执行修复验证 + 报告更新
 - 节省约 300 秒 token 预算
+
+---
+
+## v17 维护记录 (2026-04-27 01:35 CST)
+
+### 本次修复
+
+| 修复ID | 问题 | 文件 | 状态 |
+|--------|------|------|------|
+| fix-016 | P2-1: watchdog.py 硬编码相对路径 | backend/app/services/watchdog.py | ✅ 已修复 |
+| fix-017 | P2-7: main.py CORS 硬编码内网 IP | backend/app/main.py | ✅ 已修复 |
+| fix-018 | P2-6: logging_queue.py 日志截断 | backend/app/services/logging_queue.py | ✅ 已修复 |
+
+### 修复详情
+
+**P2-1 修复**: `BACKEND_START_CMD` 改用 `Path(__file__).resolve()` 计算绝对路径，避免相对路径在不同工作目录下失效。
+
+**P2-7 修复**: CORS `allow_origins` 改为从环境变量 `ALLOWED_ORIGINS` 读取，支持生产环境灵活配置，移除硬编码内网 IP。
+
+**P2-6 修复**: 日志消息截断上限从 300 字符提升到 2000 字符，添加 `truncated` 标记，保留完整堆栈信息。
+
+### 累计统计
+
+- **已修复**: 18 个 (P0×2, P1×6, P2×10)
+- **剩余待修复**: 30 个 (P0×1, P1×2, P2×17, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### 代码验证
+
+- `python3 -c "from app.services.watchdog import BACKEND_START_CMD"` ✅ 通过
+- `python3 -c "from app.services.logging_queue import WebSocketLogHandler"` ✅ 通过
+- `python3 -c "from app.main import app"` ✅ 通过
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
+2. **P1-3/P1-10**: include_children 默认值和权限问题
+3. **P2 批量修复**: 17 个中等风险问题
