@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v21 (v18确认)
+# AlphaTerminal v0.5.167 代码审计报告 v22 (v20确认)
 
 ## 版本信息
-- 审计时间: 2026-04-27 02:02 CST
-- 任务: AlphaTerminal-Code-Audit v18 (cron:88fda36d)
-- 本次审计: v18确认 - 无新代码变更，修复验证通过
+- 审计时间: 2026-04-27 02:33 CST
+- 任务: AlphaTerminal-Code-Audit v13 (cron:88fda36d)
+- 本次审计: v20确认 - 无新代码变更，跳过增量审计
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
-- 总体进度: ✅ 全部审计完成，v17维护完成
-- 确认次数: v18-confirm-count = 24
-- 合并提交: 6b64fca
+- 总体进度: ✅ 全部审计完成，v19确认完成
+- 确认次数: v20-confirm-count = 26
+- 最新提交: 18f2b43 (docs: v19审计确认)
 
 ---
 
@@ -450,3 +450,48 @@ NameError: name 'verify_admin_key' is not defined
 
 - 当前仅保留 master 分支
 - 所有修复分支已合并并清理
+
+---
+
+## v21 确认记录 (2026-04-27 02:48 CST)
+
+- **状态**: allComplete=true, 无新代码变更
+- **HEAD**: 18f2b43 (docs: v19审计确认)
+- **确认次数**: v21-confirm-count = 27
+- **修复验证**: 全部 20 个修复已确认保持 ✅
+
+### 本次确认
+
+- 无新代码提交（仅文档更新）
+- P2-4/P2-5 修复代码验证保持通过
+- 进度文件已更新，pushedToRemote=true
+
+### 修复验证保持
+
+| 修复ID | 问题 | 验证结果 |
+|--------|------|----------|
+| fix-019 | P2-4: sectors_cache.py is_ready() 线程安全 | ✅ `with _LOCK:` 保护已添加 |
+| fix-020 | P2-5: http_client.py __aexit__ 语义优化 | ✅ 返回 `None` 而非 `False` |
+
+### 累计统计
+
+- **已修复**: 20 个 (P0×2, P1×6, P2×12)
+- **剩余待修复**: 28 个 (P0×1, P1×2, P2×15, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### Token 节省
+
+- 无代码变更，跳过增量审计
+- 仅执行修复验证 + 进度更新
+- 节省约 300 秒 token 预算
+
+### 分支状态
+
+- 当前仅保留 master 分支
+- 所有修复分支已合并并清理
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
+2. **P1-3/P1-10**: include_children 默认值和权限问题
+3. **P2 批量修复**: 15 个中等风险问题
