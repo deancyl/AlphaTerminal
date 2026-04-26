@@ -4,6 +4,23 @@
     <!-- ═══════════════ 左侧边栏 ═══════════════ -->
     <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3">
 
+      <!-- 策略模板预设（新增） -->
+      <div class="px-3 py-2 border-b border-theme">
+        <div class="text-[10px] text-theme-accent font-bold mb-2">🎯 快速预设</div>
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            v-for="preset in strategyPresets" :key="preset.name"
+            @click="applyPreset(preset)"
+            class="px-2 py-1 text-[9px] rounded border transition-colors"
+            :class="isPresetActive(preset)
+              ? 'bg-cyan-500/20 border-cyan-500/40 text-cyan-400'
+              : 'border-slate-600 text-slate-400 hover:border-cyan-500/30 hover:text-cyan-300'"
+          >
+            {{ preset.icon }} {{ preset.name }}
+          </button>
+        </div>
+      </div>
+
       <!-- 策略参数 -->
       <div class="px-3 py-2.5 border-b border-theme">
         <div class="text-[10px] text-theme-accent font-bold mb-2">⚙️ 策略参数</div>
@@ -230,6 +247,36 @@
     <!-- ═══════════════ 右侧主区 ═══════════════ -->
     <main class="flex-1 flex flex-col min-w-0 overflow-hidden">
 
+      <!-- 回测结果摘要卡片（新增） -->
+      <div v-if="backtestResult" class="shrink-0 border-b border-theme bg-terminal-panel/80">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 px-3 py-2">
+          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
+            <span class="text-[9px] text-theme-muted mb-0.5">总收益率</span>
+            <span class="text-sm font-mono font-bold" :class="(backtestResult.total_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ (backtestResult.total_return_pct||0) >= 0 ? '+' : '' }}{{ (backtestResult.total_return_pct||0).toFixed(2) }}%
+            </span>
+          </div>
+          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
+            <span class="text-[9px] text-theme-muted mb-0.5">年化收益</span>
+            <span class="text-sm font-mono" :class="(backtestResult.annualized_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ (backtestResult.annualized_return_pct||0) >= 0 ? '+' : '' }}{{ (backtestResult.annualized_return_pct||0).toFixed(2) }}%
+            </span>
+          </div>
+          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
+            <span class="text-[9px] text-theme-muted mb-0.5">最大回撤</span>
+            <span class="text-sm font-mono text-bearish">
+              {{ (backtestResult.max_drawdown_pct||0).toFixed(2) }}%
+            </span>
+          </div>
+          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
+            <span class="text-[9px] text-theme-muted mb-0.5">夏普比率</span>
+            <span class="text-sm font-mono" :class="(backtestResult.sharpe_ratio||0) >= 1 ? 'text-bullish' : 'text-theme-muted'">
+              {{ (backtestResult.sharpe_ratio||0).toFixed(2) || '—' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <!-- 图表区 -->
       <div class="flex-1 flex flex-col min-h-[50vh] md:min-h-0 relative" ref="chartWrapRef">
         <BacktestChart
@@ -407,6 +454,71 @@ const KNOWN_SYMBOLS = [
   { symbol: 'sh688981', name: '中芯国际',    industry: '半导体' },
   { symbol: 'sh601127', name: '赛力斯',      industry: '新能源汽车' },
 ]
+
+// ── 策略模板预设 ──────────────────────────────────────────────
+const strategyPresets = [
+  {
+    name: '金叉买入',
+    icon: '📈',
+    strategyType: 'ma_crossover',
+    fastMa: 5,
+    slowMa: 20,
+    windowPreset: '1y',
+    desc: '短线激进，5日上穿20日买入'
+  },
+  {
+    name: '趋势跟踪',
+    icon: '📊',
+    strategyType: 'ma_crossover',
+    fastMa: 10,
+    slowMa: 30,
+    windowPreset: '1y',
+    desc: '中线稳健，10日上穿30日买入'
+  },
+  {
+    name: 'RSI抄底',
+    icon: '🛒',
+    strategyType: 'rsi_oversold',
+    rsiPeriod: 14,
+    rsiBuy: 30,
+    rsiSell: 70,
+    windowPreset: '6m',
+    desc: 'RSI<30超卖买入，>70超买卖出'
+  },
+  {
+    name: '布林带',
+    icon: '🎯',
+    strategyType: 'bollinger_bands',
+    bbPeriod: 20,
+    bbStd: 2,
+    windowPreset: '1y',
+    desc: '触下轨买入，触上轨卖出'
+  },
+]
+
+function applyPreset(preset) {
+  strategyType.value = preset.strategyType
+  if (preset.fastMa != null) fastMa.value = preset.fastMa
+  if (preset.slowMa != null) slowMa.value = preset.slowMa
+  if (preset.rsiPeriod != null) rsiPeriod.value = preset.rsiPeriod
+  if (preset.rsiBuy != null) rsiBuy.value = preset.rsiBuy
+  if (preset.rsiSell != null) rsiSell.value = preset.rsiSell
+  if (preset.bbPeriod != null) bbPeriod.value = preset.bbPeriod
+  if (preset.bbStd != null) bbStd.value = preset.bbStd
+  if (preset.windowPreset) windowPreset.value = preset.windowPreset
+}
+
+function isPresetActive(preset) {
+  if (strategyType.value !== preset.strategyType) return false
+  if (preset.fastMa != null && fastMa.value !== preset.fastMa) return false
+  if (preset.slowMa != null && slowMa.value !== preset.slowMa) return false
+  if (preset.rsiPeriod != null && rsiPeriod.value !== preset.rsiPeriod) return false
+  if (preset.rsiBuy != null && rsiBuy.value !== preset.rsiBuy) return false
+  if (preset.rsiSell != null && rsiSell.value !== preset.rsiSell) return false
+  if (preset.bbPeriod != null && bbPeriod.value !== preset.bbPeriod) return false
+  if (preset.bbStd != null && bbStd.value !== preset.bbStd) return false
+  return true
+}
 
 // ── 标的输入模式 ────────────────────────────────────────────────
 const targetMode = ref('stock')  // 'stock' | 'portfolio'
