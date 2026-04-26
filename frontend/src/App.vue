@@ -104,11 +104,15 @@
           </button>
           <!-- Copilot 唤醒按钮 -->
           <button
-            class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs"
+            class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs relative"
             @click="toggleCopilot"
           >
             <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
             <span v-else>🤖 展开 AI 助理</span>
+            <!-- 未读消息指示器 -->
+            <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center animate-pulse">
+              {{ copilotUnreadCount > 9 ? '9+' : copilotUnreadCount }}
+            </span>
           </button>
         </div>
       </header>
@@ -177,10 +181,14 @@
     <aside
       v-show="isCopilotOpen"
       :class="isMobile 
-        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[80vh] rounded-t-2xl border-t-2 border-theme' 
+        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[60vh] rounded-t-2xl border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)]' 
         : 'flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden'"
       :style="isMobile ? { width: '100%', maxWidth: '100%' } : { width: '340px', maxWidth: '340px' }"
     >
+      <!-- 移动端拖拽指示器 -->
+      <div v-if="isMobile" class="w-full flex justify-center pt-2 pb-1 cursor-pointer" @click="toggleCopilot">
+        <div class="w-12 h-1 rounded-full bg-terminal-dim/30"></div>
+      </div>
       <CopilotSidebar
         :market-overview="marketOverview"
         :china-all-data="chinaAllData"
@@ -269,6 +277,7 @@ function openFuturesFullscreen({ symbol }) {
 }
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
+const copilotUnreadCount = ref(0) // Copilot 未读消息数
 const isLocked = ref(true)     // 网格默认锁定
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
@@ -284,6 +293,9 @@ function toggleLock() {
 
 function toggleCopilot() {
   isCopilotOpen.value = !isCopilotOpen.value
+  if (isCopilotOpen.value) {
+    copilotUnreadCount.value = 0 // 打开时清零未读
+  }
 }
 
 // Copilot 事件处理
