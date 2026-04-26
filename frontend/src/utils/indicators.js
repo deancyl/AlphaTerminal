@@ -64,13 +64,17 @@ export function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
   return { dif, dea, macd }
 }
 
-/** 计算 KDJ */
+/** 计算 KDJ（优化版：避免 spread 操作符大数组分配） */
 export function calcKDJ(closes, highs, lows, n = 9) {
   const k = [], d = [], j = []
   for (let i = 0; i < closes.length; i++) {
     if (i < n - 1) { k.push(null); d.push(null); j.push(null); continue }
-    const rh = Math.max(...highs.slice(i - n + 1, i + 1))
-    const rl = Math.min(...lows.slice(i - n + 1, i + 1))
+    // 优化：使用循环代替 Math.max(...arr) 避免大数组分配
+    let rh = highs[i - n + 1], rl = lows[i - n + 1]
+    for (let j = i - n + 2; j <= i; j++) {
+      if (highs[j] > rh) rh = highs[j]
+      if (lows[j] < rl) rl = lows[j]
+    }
     const rsv = rh === rl ? 50 : (closes[i] - rl) / (rh - rl) * 100
     const pk = k[i - 1] != null && k[i - 1] !== '-' ? k[i - 1] : 50
     const pd = d[i - 1] != null && d[i - 1] !== '-' ? d[i - 1] : 50
