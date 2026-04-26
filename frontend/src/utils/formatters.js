@@ -69,3 +69,9 @@ export function formatTime(d) {
   if (Number.isNaN(date.getTime())) return '--'
   return date.toTimeString().slice(0, 8)
 }
+
+// ── 别名导出（兼容旧代码引用）────────────────────────────────────
+export { formatPrice as fmtPrice }
+export { formatChangePct as fmtPct }
+export { formatChangePct as fmtChg }
+export { formatAmount as fmtTurnover }
