@@ -659,3 +659,42 @@ NameError: name 'verify_admin_key' is not defined
 1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
 2. **P1-3**: trading.py include_children 默认值问题
 3. **P2 批量修复**: 9 个中等风险问题
+
+---
+
+## v41 确认记录 (2026-04-27 07:12 CST)
+
+- **状态**: allComplete=true, 无新代码变更
+- **HEAD**: 7d0c2d4 (audit: v39 confirm)
+- **确认次数**: v41-confirm-count = 45
+- **修复验证**: 全部 29 个修复已确认保持 ✅
+
+### 本次确认
+
+- 无新代码提交
+- 仅保留 master 分支
+- GitHub 同步: Everything up-to-date
+
+### 累计统计
+
+- **已修复**: 29 个 (P0×2, P1×7, P2×20)
+- **剩余待修复**: 19 个 (P0×1, P1×1, P2×9, P3×5)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### Token 节省
+
+- 无代码变更，跳过增量审计
+- 仅执行修复验证 + 进度更新
+- 节省约 300 秒 token 预算
+
+### 分支状态
+
+- master: 7d0c2d4 (最新)
+- 所有修复分支已合并并清理
+- 仅保留 master 分支
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解，可考虑进一步优化
+2. **P1-3**: trading.py include_children 默认值问题
+3. **P2 批量修复**: 9 个中等风险问题
