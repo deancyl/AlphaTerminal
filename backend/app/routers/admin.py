@@ -384,7 +384,15 @@ async def get_database_stats():
     tables = cursor.fetchall()
     
     stats = {}
+    _ALLOWED_TABLES = frozenset({
+        'market_data_realtime', 'market_data_daily', 'market_data_periodic',
+        'write_buffer', 'portfolios', 'positions', 'portfolio_snapshots',
+        'admin_config', 'market_all_stocks', 'transactions',
+        'position_lots', 'position_summary',
+    })
     for table_name, _ in tables:
+        if table_name not in _ALLOWED_TABLES:
+            continue
         cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
         count = cursor.fetchone()[0]
         stats[table_name] = count

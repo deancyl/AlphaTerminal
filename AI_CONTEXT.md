@@ -10,7 +10,7 @@
 
 | 字段 | 值 |
 |------|-----|
-| **版本** | v0.5.168 (master 分支) |
+| **版本** | v0.5.169 (master 分支) |
 | **GitHub** | https://github.com/deancyl/AlphaTerminal |
 | **架构** | 前后端分离 (FastAPI + Vue 3 + SQLite) |
 | **工作目录** | `/vol3/@apphome/trim.openclaw/data/workspace/AlphaTerminal` |

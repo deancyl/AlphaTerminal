@@ -1,6 +1,6 @@
 {
   "name": "alphaterminal-frontend",
-  "version": "0.5.168",
+  "version": "0.5.169",
   "private": true,
   "type": "module",
   "scripts": {

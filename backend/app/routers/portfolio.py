@@ -555,12 +555,14 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     today = datetime.now().strftime('%Y-%m-%d')
     daily_pnl = 0.0
     try:
-        txn_rows = conn.execute(
+        _conn_txn = _get_conn()
+        txn_rows = _conn_txn.execute(
             "SELECT SUM(amount) FROM transactions "
             "WHERE portfolio_id=? AND created_at>=? AND type IN ('sell_pnl','deposit','withdraw','transfer_in','transfer_out')",
             (portfolio_id, today),
         ).fetchone()
         daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
+        _conn_txn.close()
     except Exception as e:
         logger.warning(f"[Portfolio PnL] 计算当日盈亏失败 (portfolio_id={portfolio_id}): {e}")
 

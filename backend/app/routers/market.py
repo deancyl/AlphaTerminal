@@ -591,6 +591,9 @@ def search_stocks_api(
     except Exception as e:
         logger.exception("[search_stocks] 服务端搜索失败")
         return error_response(ErrorCode.INTERNAL_ERROR, f"搜索失败: {str(e)}")
+
+
+@router.get("/market/indices")
 def market_indices():
     """A股四大指数列表"""
     try:
@@ -733,8 +736,12 @@ def _normalize_symbol(raw: str) -> str:
         suffix = upper_s[len('CNH'):]
         if suffix.isdigit() or suffix.startswith('USD'):
             return 'CNHUSD'
-    # 去掉 sh/sz/hk 前缀后判断（replace 替换所有位置，与 registry 配套）
-    clean = s.lower().replace('sh', '').replace('sz', '').replace('hk', '').replace('us', '').replace('jp', '')
+    # 去掉 sh/sz/hk/us/jp 前缀（仅去掉头部前缀，用 removeprefix 更安全）
+    clean = s.lower()
+    for pfx in ('sh', 'sz', 'hk', 'us', 'jp'):
+        if clean.startswith(pfx):
+            clean = clean[len(pfx):]
+            break
     # A股数字段判断：6开头→上海；其余（0/3开头）→深圳
     # 特殊：A股指数000001/000300/000688 → 上海；399001/399006 → 深圳
     if clean.isdigit():

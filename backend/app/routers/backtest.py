@@ -328,7 +328,25 @@ async def run_backtest(req: BacktestRequest):
 
         years             = len(rows) / 252
         annualized_return = (capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
-        sharpe_ratio      = round(annualized_return / (max_drawdown / float(initial_capital)), 2) if max_drawdown > 0 else 0
+
+        # 计算年化波动率（基于收益率序列）
+        if len(equity_curve) >= 2:
+            returns = []
+            for i in range(1, len(equity_curve)):
+                prev_val = equity_curve[i-1]["value"]
+                curr_val = equity_curve[i]["value"]
+                if prev_val > 0:
+                    ret = (curr_val - prev_val) / prev_val
+                    returns.append(ret)
+            if returns:
+                import statistics
+                daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
+                annualized_vol = daily_vol * (252 ** 0.5)
+                sharpe_ratio = round(annualized_return / annualized_vol, 2) if annualized_vol > 0 else 0
+            else:
+                sharpe_ratio = 0
+        else:
+            sharpe_ratio = 0
 
         # ── 保存到数据库 ─────────────────────────────────────────────
         try:

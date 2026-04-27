@@ -197,7 +197,7 @@ def fetch_shibor() -> list[dict]:
             df_lpr = ak.macro_china_lpr()
             df_lpr.columns = [c.strip() for c in df_lpr.columns]
             lpr_latest = df_lpr.iloc[-1]
-            lpr1y = lpr_lpr1y = None
+            lpr1y = None
             for col in lpr_latest.index:
                 if "1Y" in str(col) or "一年" in str(col):
                     lpr1y = lpr_latest[col]

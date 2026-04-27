@@ -28,6 +28,14 @@ if not logger.handlers:
     logger.addHandler(handler)
 router = APIRouter()
 
+def _mask_key(key: str) -> str:
+    """掩码处理 API Key"""
+    if not key:
+        return ""
+    if len(key) <= 8:
+        return key
+    return f"{key[:6]}...{key[-4:]}"
+
 # ═══════════════════════════════════════════════════════════════
 # LLM 配置 — 优先级：数据库 > 环境变量 > 默认值
 # ═══════════════════════════════════════════════════════════════
@@ -233,7 +241,7 @@ async def _call_deepseek(messages: list[dict], model_override: str | None = None
     import httpx
     cfg = _get_llm_config("deepseek")
     url = f"{(cfg['base_url'] or 'https://api.deepseek.com').rstrip('/')}/chat/completions"
-    logger.warning(f"[DeepSeek] 调用配置：base_url={cfg.get('base_url')}, model={cfg.get('model')}, url={url}, api_key_masked={cfg.get('api_key', '')[:10]}...")
+    logger.warning(f"[DeepSeek] 调用配置：base_url={cfg.get('base_url')}, model={cfg.get('model')}, url={url}, api_key_masked={_mask_key(cfg.get('api_key', ''))}")
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
