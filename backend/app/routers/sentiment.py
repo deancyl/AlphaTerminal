@@ -234,7 +234,7 @@ async def industry_fund_flow():
             # 尝试获取主力净流入字段
             try:
                 main_net = int(row.get("今日主力净流入-净额", 0) or 0)
-            except:
+            except (ValueError, TypeError):
                 main_net = 0
             result.append({
                 "name": str(row.get("名称", "")),

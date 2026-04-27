@@ -122,6 +122,8 @@ let   chartInst       = null
 let   intradayInst    = null
 let   refreshTimer    = null
 let   intradayTimer   = null
+let   resizeObserver  = null
+let   unsubNewsRefresh = null
 
 // 上涨家数全天走势数据（每15秒轮询追加一个点，最多240个点=1小时）
 const intradayData = ref([])   // [{time: '09:31', advance: 1234}, ...]
@@ -380,16 +382,16 @@ onMounted(async () => {
   await fetchIntraday()
   intradayTimer = setInterval(fetchIntraday, 15_000)
 
-  const ro = new ResizeObserver(() => {
+  resizeObserver = new ResizeObserver(() => {
     chartInst?.resize()
     intradayInst?.resize()
   })
-  if (chartEl.value) ro.observe(chartEl.value)
-  if (intradayEl.value) ro.observe(intradayEl.value)
+  if (chartEl.value) resizeObserver.observe(chartEl.value)
+  if (intradayEl.value) resizeObserver.observe(intradayEl.value)
   refreshTimer = setInterval(fetchHistogram, 3 * 60 * 1000)
 
   // Phase 4: 监听 NewsFeed 刷新事件，联动拉取最新情绪数据
-  busOn('news-refreshed', (payload) => {
+  unsubNewsRefresh = busOn('news-refreshed', (payload) => {
     logger.log('[SentimentGauge] news-refreshed event, re-fetching...', payload)
     fetchHistogram()
   })
@@ -398,6 +400,8 @@ onMounted(async () => {
 onUnmounted(() => {
   clearInterval(refreshTimer)
   clearInterval(intradayTimer)
+  resizeObserver?.disconnect()
+  unsubNewsRefresh?.()
   chartInst?.dispose()
   intradayInst?.dispose()
 })

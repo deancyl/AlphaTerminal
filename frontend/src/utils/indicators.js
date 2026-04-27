@@ -88,21 +88,25 @@ export function calcKDJ(closes, highs, lows, n = 9) {
 /** 计算 RSI */
 export function calcRSI(closes, period = 14) {
   const rsi = []
-  let gains = [], losses = []
-  for (let i = 1; i < closes.length; i++) {
-    const delta = closes[i] - closes[i - 1]
-    gains.push(delta > 0 ? delta : 0)
-    losses.push(delta < 0 ? -delta : 0)
+  if (closes.length < period + 1) {
+    for (let i = 0; i < closes.length; i++) rsi.push(null)
+    return rsi
   }
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period) { rsi.push(null); continue }
-    const gainSlice = gains.slice(i - period, i)
-    const lossSlice = losses.slice(i - period, i)
-    const avgGain = gainSlice.reduce((a, b) => a + b, 0) / period
-    const avgLoss = lossSlice.reduce((a, b) => a + b, 0) / period
-    if (avgLoss === 0) { rsi.push(100); continue }
-    const rs = avgGain / avgLoss
-    rsi.push(+(100 - 100 / (1 + rs)).toFixed(2))
+  let avgGain = 0, avgLoss = 0
+  for (let i = 1; i <= period; i++) {
+    const delta = closes[i] - closes[i - 1]
+    if (delta > 0) avgGain += delta
+    else avgLoss -= delta
+  }
+  avgGain /= period
+  avgLoss /= period
+  for (let i = 0; i < period; i++) rsi.push(null)
+  rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
+  for (let i = period + 1; i < closes.length; i++) {
+    const delta = closes[i] - closes[i - 1]
+    avgGain = (avgGain * (period - 1) + (delta > 0 ? delta : 0)) / period
+    avgLoss = (avgLoss * (period - 1) + (delta < 0 ? -delta : 0)) / period
+    rsi.push(avgLoss === 0 ? 100 : +(100 - 100 / (1 + avgGain / avgLoss)).toFixed(2))
   }
   return rsi
 }

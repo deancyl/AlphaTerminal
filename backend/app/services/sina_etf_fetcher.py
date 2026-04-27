@@ -106,7 +106,7 @@ class SinaETFFetcher:
                                     "price": price,
                                     "volume": volume,
                                 })
-                        except:
+                        except Exception:
                             pass
                 
                 # 卖盘：字段 20-29（卖一到卖五）
@@ -123,7 +123,7 @@ class SinaETFFetcher:
                                     "price": price,
                                     "volume": volume,
                                 })
-                        except:
+                        except Exception:
                             pass
                 
                 # 计算涨跌幅

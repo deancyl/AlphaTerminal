@@ -4,12 +4,11 @@
  */
 
 // A股：第一位判断交易所
-// 规则：6xx/9xx/00xx(上证) → sh；0xx(深证)/1xx/2xx/3xx → sz
+// 规则：6xx/9xx → sh；0xx/1xx/2xx/3xx → sz
 function _aSharePrefix(code) {
   const s = String(code).replace(/\D/g, '')
   if (s.length !== 6) return 'sz'
-  // 600/601/603/688 等 → 上交所；000xxx (上证) 也归上交所
-  if (s.startsWith('6') || s.startsWith('9') || s.startsWith('000')) return 'sh'
+  if (s.startsWith('6') || s.startsWith('9')) return 'sh'
   return 'sz'
 }
 
@@ -29,41 +28,50 @@ export const MARKET_PREFIX = {
  * 规范化任意格式的 symbol 为标准带前缀格式
  * 例如: '000001' → 'sh000001', 'NDX' → 'usNDX', 'sh000001' → 'sh000001'
  */
+const US_SYMBOLS = ['NDX', 'SPX', 'DJI', 'IXIC', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META']
+const HK_SYMBOLS = ['HSI', 'HKHSI', 'HK2000']
+const JP_SYMBOLS = ['N225', 'NI225', 'NIKKEI']
+const MACRO_SYMBOLS = ['GOLD', 'GLD', 'XAU', 'GC', 'WTIC', 'WTI', 'CL', 'VIX', 'CNHUSD', 'CNH', 'DXY', 'USDX']
+
+// 前缀映射，与后端 _normalize_symbol 保持一致
+const US_PREFIX_MAP = {}
+for (const s of US_SYMBOLS) US_PREFIX_MAP[s] = 'us' + s
+
 export function normalizeSymbol(raw) {
   const s = String(raw).trim()
   const upper = s.toUpperCase()
 
-  // 已知前缀的直接返回
   if (_lookup[s.toLowerCase()]) return s.toLowerCase()
 
-  // 美股（存储时不带前缀，DB 统一用纯小写如 'ixic'）
-  if (['NDX', 'SPX', 'DJI', 'IXIC', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META'].includes(upper)) {
-    return upper.toLowerCase()   // 'ixic', 'spx', 'dji' 等，不带 us 前缀
+  // 已带前缀的完整symbol直接返回小写
+  if (/^(sh|sz|us|hk|jp)/i.test(s)) return s.toLowerCase()
+
+  if (US_SYMBOLS.includes(upper)) {
+    return 'us' + upper
   }
 
-  // 港股（存储时不带前缀）
-  if (['HSI', 'HKHSI', 'HK2000'].includes(upper)) {
-    return 'hsi'   // 统一用 'hsi'
+  if (HK_SYMBOLS.includes(upper)) {
+    return 'hkHSI'
   }
 
-  // 日经
-  if (['N225', 'NI225', 'NIKKEI'].includes(upper)) {
+  if (JP_SYMBOLS.includes(upper)) {
     return 'jpN225'
   }
 
-  // 宏观大宗（黄金/原油/外汇/恐慌指数）
-  if (['GOLD', 'GLD', 'XAU', 'GC', 'WTIC', 'WTI', 'CL',
-       'VIX', 'CNHUSD', 'CNH', 'DXY', 'USDX'].includes(upper)) {
+  if (MACRO_SYMBOLS.includes(upper)) {
     return upper
   }
 
-  // 去掉已知前缀后，纯数字 → A股
+  // CNHUSD 特殊处理
+  if (upper === 'CNHUSD') return 'CNHUSD'
+  if (upper.startsWith('CNH')) return 'CNHUSD'
+
   const clean = s.replace(/^(sh|sz|us|hk|jp)/i, '')
+
   if (/^\d{6}$/.test(clean)) {
     return _aSharePrefix(clean) + clean
   }
 
-  // 其他：转小写原样返回
   return s.toLowerCase()
 }
 

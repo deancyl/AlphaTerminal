@@ -69,7 +69,7 @@ const props = defineProps({
   color:      { type: String, default: '#00ff88' },
   url:        { type: String, default: '/api/v1/market/history/000001' },
   indicators: { type: Array,  default: () => [] },
-  // 叠加标的
+  period:     { type: String, default: 'daily' },
   overlaySymbol: { type: String, default: '' },
   overlayName:   { type: String, default: '' },
 })
@@ -85,6 +85,9 @@ let   chartInstance = null
 let   resizeObserver = null
 let   _fetchRetryCount = 0  // 宏观品种抓取重试计数器
 const hoverBar      = ref({})   // Task 3: 动态 OHLCV 数据
+
+function _safeMin(arr) { let m = arr[0]; for (let i = 1; i < arr.length; i++) if (arr[i] < m) m = arr[i]; return m }
+function _safeMax(arr) { let m = arr[0]; for (let i = 1; i < arr.length; i++) if (arr[i] > m) m = arr[i]; return m }
 
 // ─────────────────────────────────────────────────────────────────
 // A股配色常量（从主题系统中读取）
@@ -254,8 +257,8 @@ function buildKLineOption(hist) {
   const lows    = hist.map(h => h.low)
   const volumes = hist.map(h => h.volume)
 
-  const yMin = +(Math.min(...closes) * 0.997).toFixed(2)
-  const yMax = +(Math.max(...closes) * 1.003).toFixed(2)
+  const yMin = closes.length ? +(_safeMin(closes) * 0.997).toFixed(2) : 0
+  const yMax = closes.length ? +(_safeMax(closes) * 1.003).toFixed(2) : 0
 
   const subInd = ['MACD', 'KDJ', 'WR', 'RSI', 'OBV', 'DMI'].find(i => (props.indicators || []).includes(i)) || null
   const showBOLL = (props.indicators || []).includes('BOLL')
@@ -503,8 +506,8 @@ function buildLineOption(hist) {
   const lows   = hist.map(h => Number(h.low || h.price || h.close))
 
   // Task 1: 动态 Y 轴 min/max（1% 边距，绝不从 0 开始）
-  const rawMin  = Math.min(...prices, ...lows)
-  const rawMax  = Math.max(...prices, ...highs)
+  const rawMin  = _safeMin([...prices, ...lows])
+  const rawMax  = _safeMax([...prices, ...highs])
   const pad     = (rawMax - rawMin) * 0.01
   const yMin    = +(rawMin - pad).toFixed(2)
   const yMax    = +(rawMax + pad).toFixed(2)

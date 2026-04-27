@@ -762,8 +762,8 @@ def fetch_index_minute_history(
                     "volume":   float(item.get("volume", 0)),
                     "price":    float(item.get("close", 0)),
                     "timestamp": int(
-                        __import__("time").mktime(
-                            __import__("time").strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
+                        time.mktime(
+                            time.strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
                         ) * 1000  # 毫秒时间戳
                     ),
                 })

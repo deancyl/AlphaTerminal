@@ -11,7 +11,8 @@
  *   const { status, statusLabel, statusClass, init } = useDataSourceStatus()
  *   onMounted(init)
  */
-import { ref, readonly } from 'vue'
+import { ref, readonly, computed } from 'vue'
+import { logger } from '../utils/logger.js'
 
 // ── 模块级单例状态（跨组件共享）────────────────────────────────
 const _status  = ref('ok')       // 'ok' | 'degraded' | 'down'
@@ -43,7 +44,7 @@ export function broadcastDataSourceStatus(newStatus, msg = '') {
   _message.value = msg
   _since.value = Date.now()
   _notifyListeners()
-  console.debug(`[DataSourceStatus] 🖥️  → ${newStatus}${msg ? ': ' + msg : ''}`)
+  logger.debug(`[DataSourceStatus] → ${newStatus}${msg ? ': ' + msg : ''}`)
 }
 
 /** 监听状态变化（返回 unlisten fn） */
@@ -64,24 +65,27 @@ export function onDataSourceStatusChange(fn) {
 }
 
 export function useDataSourceStatus() {
-  const statusLabel = {
+  const _labelMap = {
     ok:       '🟢 正常',
     degraded: '🟡 降级',
     down:     '🔴 熔断',
   }
 
-  const statusClass = {
+  const _classMap = {
     ok:       'text-green-400',
     degraded: 'text-yellow-400',
     down:     'text-red-400',
   }
 
+  const statusLabel = computed(() => _labelMap[_status.value] ?? '🟢 正常')
+  const statusClass = computed(() => _classMap[_status.value] ?? 'text-green-400')
+
   return {
     status:        readonly(_status),
     message:       readonly(_message),
     since:         readonly(_since),
-    statusLabel:   statusLabel[_status.value] ?? '🟢 正常',
-    statusClass:   statusClass[_status.value] ?? 'text-green-400',
+    statusLabel,
+    statusClass,
     broadcast:     broadcastDataSourceStatus,
     onStatusChange: onDataSourceStatusChange,
   }

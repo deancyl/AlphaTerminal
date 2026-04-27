@@ -69,7 +69,7 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
 
   // OBV（能量潮）
   const obvParams = indicatorParams.OBV || {}
-  subChartData.OBV = calcOBV(closes, volumes)
+  subChartData.OBV = calcOBV(closes, rawHist.map(h => h.volume))
 
   // DMI（趋向指标）
   const dmiParams = indicatorParams.DMI || { period: 14 }
@@ -96,8 +96,13 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   if (validCloses.length === 0) {
     return { isEmpty: true }
   }
-  const yMin = +(Math.min(...validCloses) * 0.997).toFixed(2)
-  const yMax = +(Math.max(...validCloses) * 1.003).toFixed(2)
+  let yMin = validCloses[0], yMax = validCloses[0]
+  for (let i = 1; i < validCloses.length; i++) {
+    if (validCloses[i] < yMin) yMin = validCloses[i]
+    if (validCloses[i] > yMax) yMax = validCloses[i]
+  }
+  yMin = +(yMin * 0.997).toFixed(2)
+  yMax = +(yMax * 1.003).toFixed(2)
 
   // 6. 叠加标的 Y 轴自适应（双 Y 轴核心）
   //    策略：若叠加数据与主图量级差异 > 10x，切换为 min-max 归一化显示（0~100 范围）
@@ -106,8 +111,11 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   if (overlayData.length > 0) {
     const ovCloses = overlayData.map(d => d.close).filter(v => v != null)
     if (ovCloses.length > 0) {
-      const ovMin = Math.min(...ovCloses)
-      const ovMax = Math.max(...ovCloses)
+      let ovMin = ovCloses[0], ovMax = ovCloses[0]
+      for (let i = 1; i < ovCloses.length; i++) {
+        if (ovCloses[i] < ovMin) ovMin = ovCloses[i]
+        if (ovCloses[i] > ovMax) ovMax = ovCloses[i]
+      }
       const mainRange = yMax - yMin
       const ovRange = ovMax - ovMin
 

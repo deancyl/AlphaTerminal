@@ -126,6 +126,7 @@ const params = computed(() => ({
 }))
 
 let chartInstance = null
+let resizeObserver = null
 
 function buildOption() {
   const hist = props.hist
@@ -232,11 +233,15 @@ function render() {
 }
 
 onMounted(() => {
+  if (!chartRef.value || !window.echarts) return
   chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+  resizeObserver = new ResizeObserver(() => chartInstance?.resize())
+  resizeObserver.observe(chartRef.value)
   render()
 })
 
 onUnmounted(() => {
+  resizeObserver?.disconnect()
   chartInstance?.dispose()
 })
 

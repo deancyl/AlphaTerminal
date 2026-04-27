@@ -3,6 +3,7 @@ import threading
 import json
 import logging
 import os
+from datetime import datetime
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
@@ -562,7 +563,7 @@ def set_admin_config(key: str, value):
         conn = _get_conn()
         conn.execute(
             "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-            (key, _json.dumps(value), __import__('datetime').datetime.now().isoformat())
+            (key, _json.dumps(value), datetime.now().isoformat())
         )
         conn.commit()
         conn.close()

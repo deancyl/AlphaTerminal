@@ -7,11 +7,13 @@ export const logger = {
   log: (...args) => {
     if (isDev) console.log(...args)
   },
+  debug: (...args) => {
+    if (isDev) console.debug(...args)
+  },
   warn: (...args) => {
     if (isDev) console.warn(...args)
   },
   error: (...args) => {
-    // Always log errors, even in production
     console.error(...args)
   },
   info: (...args) => {

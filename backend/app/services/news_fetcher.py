@@ -50,8 +50,10 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
 
     logger.info(f"[YouTube] 正在抓取字幕 video_id={video_id}")
 
-    # ── 代理配置：使用 GenericProxyConfig ──────────────────────────────
+    # ── 代理配置：使用 GenericProxyConfig（仅作用于本函数内部）──────────────
     proxy_cfg = GenericProxyConfig(PROXY_YOUTUBE)
+    _saved_http_proxy = os.environ.get("http_proxy")
+    _saved_https_proxy = os.environ.get("https_proxy")
     os.environ["http_proxy"]  = PROXY_YOUTUBE
     os.environ["https_proxy"] = PROXY_YOUTUBE
 
@@ -128,9 +130,15 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
         logger.error(f"[YouTube] 抓取失败: {type(e).__name__}: {e}", exc_info=True)
         return {**FALLBACK_TRANSCRIPT}
     finally:
-        # 恢复：清除代理环境，不影响后续国内请求
-        os.environ.pop("http_proxy",  None)
-        os.environ.pop("https_proxy", None)
+        # 恢复：还原原始代理环境，不影响后续国内请求
+        if _saved_http_proxy is not None:
+            os.environ["http_proxy"] = _saved_http_proxy
+        else:
+            os.environ.pop("http_proxy", None)
+        if _saved_https_proxy is not None:
+            os.environ["https_proxy"] = _saved_https_proxy
+        else:
+            os.environ.pop("https_proxy", None)
 
 
 def _fetch_youtube_title(video_id: str) -> Optional[str]:

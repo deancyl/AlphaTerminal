@@ -148,24 +148,18 @@ export default {
         });
         console.log('[PPC] setOption ok, canvas count=', document.querySelectorAll('canvas').length);
       } catch(e) { console.error('[PPC] setOption FAILED:', e.message); }
-
-      window.addEventListener('resize', handleResize);
     }
 
     function handleResize() {
       chartInstance?.resize();
     }
 
-    function getPnlClass(val) {
-      if (val > 0) return 'pnl-pos';
-      if (val < 0) return 'pnl-neg';
-      return 'pnl-zero';
-    }
-
-    // 监听 portfolioId 变化时重新加载
     watch(() => props.portfolioId, load);
 
-    onMounted(load);
+    onMounted(() => {
+      load();
+      window.addEventListener('resize', handleResize);
+    });
 
     onUnmounted(() => {
       window.removeEventListener('resize', handleResize);

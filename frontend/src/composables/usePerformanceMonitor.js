@@ -28,6 +28,8 @@ let globalStats = {
 let fpsRafId = null
 let fpsFrames = 0
 let fpsLastTime = performance.now()
+let fpsRefCount = 0
+const _startTime = Date.now()
 
 function measureFPS() {
   fpsFrames++
@@ -45,14 +47,41 @@ function measureFPS() {
 }
 
 function startFPSMonitoring() {
+  fpsRefCount++
   if (fpsRafId) return
   fpsRafId = requestAnimationFrame(measureFPS)
 }
 
 function stopFPSMonitoring() {
-  if (fpsRafId) {
-    cancelAnimationFrame(fpsRafId)
-    fpsRafId = null
+  fpsRefCount--
+  if (fpsRefCount <= 0) {
+    fpsRefCount = 0
+    if (fpsRafId) {
+      cancelAnimationFrame(fpsRafId)
+      fpsRafId = null
+    }
+  }
+}
+
+function getMemoryInfo() {
+  if (performance.memory) {
+    return {
+      usedJSHeapSize: performance.memory.usedJSHeapSize,
+      totalJSHeapSize: performance.memory.totalJSHeapSize,
+      jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+      usagePercent: Math.round((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100)
+    }
+  }
+  return null
+}
+
+function getStats() {
+  return {
+    fps: globalStats.fps,
+    memory: getMemoryInfo(),
+    apiMeasures: { ...globalStats.apiMeasures },
+    errorCount: globalStats.errorCount,
+    uptime: Date.now() - _startTime,
   }
 }
 
@@ -60,20 +89,6 @@ export function usePerformanceMonitor() {
   const stats = ref({ ...globalStats })
   let updateInterval = null
 
-  // 获取内存信息 (如果有权限)
-  function getMemoryInfo() {
-    if (performance.memory) {
-      return {
-        usedJSHeapSize: performance.memory.usedJSHeapSize,
-        totalJSHeapSize: performance.memory.totalJSHeapSize,
-        jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
-        usagePercent: Math.round((performance.memory.usedJSHeapSize / performance.memory.jsHeapSizeLimit) * 100)
-      }
-    }
-    return null
-  }
-
-  // 格式化字节大小
   function formatBytes(bytes) {
     if (!bytes) return 'N/A'
     if (bytes < 1024) return bytes + ' B'
@@ -105,17 +120,6 @@ export function usePerformanceMonitor() {
   // 记录错误
   function recordError() {
     globalStats.errorCount++
-  }
-
-  // 获取统计数据
-  function getStats() {
-    return {
-      fps: globalStats.fps,
-      memory: getMemoryInfo(),
-      apiMeasures: { ...globalStats.apiMeasures },
-      errorCount: globalStats.errorCount,
-      uptime: Date.now() - globalStats.lastUpdate,
-    }
   }
 
   // 性能等级评估
@@ -163,6 +167,7 @@ export function usePerformanceMonitor() {
   })
 
   onUnmounted(() => {
+    stopFPSMonitoring()
     if (updateInterval) {
       clearInterval(updateInterval)
     }

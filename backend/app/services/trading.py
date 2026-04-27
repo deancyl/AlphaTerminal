@@ -139,9 +139,14 @@ def execute_sell(
             total_realized_pnl += pnl_this
             remaining -= closed
 
-    finally:
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[Trading] execute_sell rollback due to error: {e}")
+        raise
+    else:
         conn.commit()
-        upsert_position_summary(portfolio_id, symbol)   # Phase 3: sync summary
+        upsert_position_summary(portfolio_id, symbol)
+    finally:
         conn.close()
 
     return SellResult(

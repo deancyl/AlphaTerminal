@@ -338,8 +338,9 @@ function getThemeVariable(name, fallback = '') {
  * 获取当前主题完整配色（供 ECharts / Canvas 使用）
  */
 export function getChartColors() {
+  const themeAttr = document.documentElement.getAttribute('data-theme') || THEMES.DARK
+  const isLight = themeAttr === THEMES.LIGHT
   const bgPrimary   = getThemeVariable('--bg-primary', '#0a0e17')
-  const isLight = getThemeVariable('--text-primary') === '#1a1a1a'
   const textPrimary   = getThemeVariable('--text-primary', '#f3f4f6')
   const textSecondary = getThemeVariable('--text-secondary', '#9ca3af')
   const textTertiary  = getThemeVariable('--text-tertiary', '#6b7280')

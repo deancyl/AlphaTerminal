@@ -113,7 +113,7 @@ class EastmoneyFundFetcher:
                         try:
                             num = int(rating_str)
                             result["rating"] = "★" * num + "☆" * (5 - num)
-                        except:
+                        except Exception:
                             pass
                     break
             
@@ -212,7 +212,7 @@ class EastmoneyFundFetcher:
                 try:
                     rating_num = int(rating_match.group(1))
                     result["rating"] = "★" * rating_num + "☆" * (5 - rating_num)
-                except:
+                except Exception:
                     pass
             
             # 提取申购费率（fund_sourceRate 和 fund_Rate）
