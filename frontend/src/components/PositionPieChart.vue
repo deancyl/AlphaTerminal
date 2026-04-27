@@ -154,6 +154,12 @@ export default {
       chartInstance?.resize();
     }
 
+    function getPnlClass(val) {
+      if (val > 0) return 'pnl-pos';
+      if (val < 0) return 'pnl-neg';
+      return 'pnl-zero';
+    }
+
     watch(() => props.portfolioId, load);
 
     onMounted(() => {
