@@ -1,13 +1,13 @@
-# AlphaTerminal v0.5.167 代码审计报告 v45
+# AlphaTerminal v0.5.167 代码审计报告 v46
 
 ## 版本信息
-- 审计时间: 2026-04-27 11:34 CST
+- 审计时间: 2026-04-27 12:17 CST
 - 任务: AlphaTerminal-Code-Audit (cron:88fda36d-a375-46e4-9b41-31bb01cc288a)
-- 本次审计: v45 - 发现2个新提交，已验证修复
+- 本次审计: v46 - 发现1个新提交（移动端UI优化v2），已验证修复
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
 - 总体进度: ✅ 全部审计完成，P2 问题已全部修复
-- 确认次数: v44-confirm-count = 49 → v45-confirm-count = 0 (新变更)
-- 最新提交: f9d1531 (fix(ui): 修复侧边栏默认展开 + 汉堡菜单点击区域)
+- 确认次数: v45-confirm-count = 0 → v46-confirm-count = 0 (新变更已提交)
+- 最新提交: 7f469c3 (fix(mobile): 移动端UI优化v2 - 更紧凑的字体和点击区域)
 
 ---
 
@@ -17,8 +17,24 @@
 
 | 提交 | 时间 | 作者 | 说明 |
 |------|------|------|------|
+| 7f469c3 | 2026-04-27 12:17 CST | AlphaTerminal AI | fix(mobile): 移动端UI优化v2 - 更紧凑的字体和点击区域 |
 | f9d1531 | 2026-04-27 11:45 CST | AlphaTerminal AI | fix(ui): 修复侧边栏默认展开 + 汉堡菜单点击区域 |
 | 835e234 | 2026-04-27 10:25 CST | AlphaTerminal AI | fix(mobile): 移动端UI优化 - 最小字体12px + 最小点击区域44px |
+
+### 本次修复验证 (v46)
+
+**7f469c3 - 移动端UI优化v2 详情:**
+- `style.css`: 字体从16px改为14px，更紧凑
+- `style.css`: 最小字体从12px改为11px，保留设计意图
+- `style.css`: 按钮点击区域从44px改为36px（图标按钮28px）
+- `style.css`: 表格行高从12px改为6px
+- `style.css`: 添加移动端滚动条隐藏
+- `style.css`: 图表容器最小高度200px
+
+**状态:**
+- ✅ 变更已提交 (7f469c3)
+- ✅ 已推送至 GitHub
+- ✅ 修复验证通过
 
 ### 修复验证
 
