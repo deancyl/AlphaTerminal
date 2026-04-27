@@ -287,6 +287,9 @@ async function fetchLatestQuote() {
     logger.error('[AdvancedKlinePanel] fetchLatestQuote error:', e.message)
   }
 }
+
+function startQuotePolling(intervalMs = 30_000) {
+  stopQuotePolling()
   fetchLatestQuote()
   quotePollingTimer = setInterval(fetchLatestQuote, intervalMs)
 }
