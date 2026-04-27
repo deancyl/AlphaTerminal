@@ -1,13 +1,62 @@
-# AlphaTerminal v0.5.167 代码审计报告 v46
+# AlphaTerminal v0.5.167 代码审计报告 v48
 
 ## 版本信息
-- 审计时间: 2026-04-27 12:17 CST
+- 审计时间: 2026-04-27 13:17 CST
 - 任务: AlphaTerminal-Code-Audit (cron:88fda36d-a375-46e4-9b41-31bb01cc288a)
-- 本次审计: v46 - 发现1个新提交（移动端UI优化v2），已验证修复
+- 本次审计: v48 - 发现2个新提交（QuotePanel formatVol 修复），已验证修复
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
 - 总体进度: ✅ 全部审计完成，P2 问题已全部修复
-- 确认次数: v45-confirm-count = 0 → v46-confirm-count = 0 (新变更已提交)
-- 最新提交: 7f469c3 (fix(mobile): 移动端UI优化v2 - 更紧凑的字体和点击区域)
+- 确认次数: v47-confirm-count = 0 → v48-confirm-count = 0 (新变更已提交)
+- 最新提交: 1bc1775 (docs(audit): v47 更新审计报告 - 验证 QuotePanel formatVol 修复)
+
+---
+
+## v48 确认记录 (2026-04-27 13:17 CST)
+
+- **状态**: allComplete=true, 发现2个新提交
+- **HEAD**: 1bc1775 (docs(audit): v47 更新审计报告)
+- **确认次数**: v48-confirm-count = 0
+- **修复验证**: 全部 38 个修复已确认保持 ✅
+
+### 本次新提交验证
+
+| 提交 | 时间 | 作者 | 说明 | 状态 |
+|------|------|------|------|------|
+| 1bc1775 | 2026-04-27 12:33 CST | AlphaTerminal AI | docs(audit): v47 更新审计报告 | ✅ 文档更新 |
+| 73710a2 | 2026-04-27 12:31 CST | AlphaTerminal AI | fix(QuotePanel): 导入 formatVol 函数修复未定义错误 | ✅ 修复验证通过 |
+
+### 修复验证详情 (73710a2)
+
+**问题**: `QuotePanel.vue` 第340行使用 `formatVol` 函数，但该函数未导入，导致运行时错误。
+
+**修复**:
+```diff
+-// import { formatVol, formatAmount } from '../utils/formatters.js'
++import { formatVol, formatAmount } from '../utils/formatters.js'
+```
+
+**验证**:
+- ✅ `formatVol` 已在第424行正确导入
+- ✅ 第340行 `formatter: v => formatVol(v)` 可正常调用
+- ✅ 注释更新说明本地定义已移除
+
+### 累计统计
+
+- **已修复**: 38 个 (P0×2, P1×8, P2×27, P3×1)
+- **剩余待修复**: 10 个 (P0×1, P1×5, P3×4)
+- **唯一P0**: data_fetcher.py 同步阻塞 HTTP (已通过 APScheduler 后台线程缓解)
+
+### 分支状态
+
+- master: 1bc1775 (最新)
+- 所有修复分支已合并并清理
+- 仅保留 master 分支
+
+### 下次审计建议
+
+1. **P0-1**: data_fetcher.py 同步阻塞 HTTP - 已通过 APScheduler 缓解
+2. **P1-3**: trading.py include_children 默认值问题
+3. **P1-NEW-1**: trading.py market_value 默认写死 0.0
 
 ---
 
