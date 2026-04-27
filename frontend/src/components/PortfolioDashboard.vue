@@ -112,20 +112,27 @@
         <div>
           <label class="text-gray-400 text-xs">账户类型</label>
           <select v-model="newAccount.type" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
-            <option value="main">主基金</option>
-            <option value="portfolio">投资组合</option>
+            <option value="main">主账户（顶级账户，可包含子账户）</option>
+            <option value="portfolio">子账户（隶属于主账户）</option>
           </select>
+          <div class="text-gray-500 text-xs mt-1">
+            <span v-if="newAccount.type === 'main'">🏦 主账户是顶级账户，可以创建子账户进行分组管理</span>
+            <span v-else>📂 子账户必须隶属于一个主账户，用于细分投资策略</span>
+          </div>
         </div>
         <div>
           <label class="text-gray-400 text-xs">初始本金</label>
           <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1" placeholder="0.00" />
         </div>
         <div v-if="newAccount.type !== 'main'">
-          <label class="text-gray-400 text-xs">母基金</label>
+          <label class="text-gray-400 text-xs">所属主账户</label>
           <select v-model="newAccount.parentId" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
-            <option value="">无（顶级账户）</option>
-            <option v-for="p in selectableParentList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
+            <option value="">请选择主账户...</option>
+            <option v-for="p in selectableParentList" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
+          <div v-if="selectableParentList.length === 0" class="text-yellow-500 text-xs mt-1">
+            ⚠️ 没有可用的主账户，请先创建一个主账户
+          </div>
         </div>
         <div v-if="createError" class="text-red-400 text-xs">{{ createError }}</div>
       </div>
@@ -232,7 +239,7 @@ const totalPnL  = computed(() => totalValue.value - totalCost.value);
 const sectorList = computed(() => [...new Set(positions.value.map(p => p.sector).filter(Boolean))]);
 
 const selectableParentList = computed(() =>
-  portfolioList.value.filter(p => p.type !== 'main')
+  portfolioList.value.filter(p => p.type === 'main')
 );
 
 // 当前选中账户名称（供模拟调仓弹窗显示）
@@ -266,7 +273,11 @@ const flatTree = computed(() => {
   const result = [];
   function traverse(pid, depth) {
     const nodes = childMap[pid] || [];
-    nodes.forEach(node => {
+    // 只显示主账户作为顶级节点
+    const filteredNodes = depth === 0 
+      ? nodes.filter(n => n.type === 'main')
+      : nodes;
+    filteredNodes.forEach(node => {
       result.push({ ...node, _label: indent(depth) + (depth > 0 ? '📂 ' : '🏦 ') + node.name });
       traverse(node.id, depth + 1);
     });
