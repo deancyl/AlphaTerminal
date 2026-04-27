@@ -261,7 +261,7 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Phase 5: 侧边栏与视图切换状态
-const isSidebarOpen = ref(true)    // 侧边栏默认展开（桌面端）
+const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动端）
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
