@@ -181,7 +181,7 @@
     <aside
       v-show="isCopilotOpen"
       :class="isMobile 
-        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[60vh] rounded-t-2xl border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-panel' 
+        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[70vh] rounded-t-2xl border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-panel pb-safe' 
         : 'flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden'"
       :style="isMobile ? { width: '100%', maxWidth: '100%' } : { width: '340px', maxWidth: '340px' }"
     >
