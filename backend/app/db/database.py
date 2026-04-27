@@ -128,6 +128,7 @@ def init_tables():
             ("status",         "TEXT",     "DEFAULT 'active'"),
             ("strategy",      "TEXT",     "DEFAULT NULL"),
             ("benchmark",     "TEXT",     "DEFAULT NULL"),
+            ("description",    "TEXT",     "DEFAULT NULL"),
         ]:
             try:
                 conn.execute(f"ALTER TABLE portfolios ADD COLUMN {col} {dtype} {default}")

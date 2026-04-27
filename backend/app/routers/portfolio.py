@@ -300,6 +300,7 @@ async def upsert_position(body: PositionIn):
     """
     建仓或调仓：INSERT OR REPLACE
     shares=0 表示清仓（删除持仓）
+    同时同步更新 position_summary 表（新lot-based系统）
     """
     now = datetime.now().isoformat()
     with _lock:
@@ -309,6 +310,11 @@ async def upsert_position(body: PositionIn):
                 "DELETE FROM positions WHERE portfolio_id=? AND symbol=?",
                 (body.portfolio_id, body.symbol)
             )
+            # 同步清空 position_summary
+            conn.execute(
+                "DELETE FROM position_summary WHERE portfolio_id=? AND symbol=?",
+                (body.portfolio_id, body.symbol)
+            )
             conn.commit()
             conn.close()
             return {"ok": True, "action": "cleared"}
@@ -316,6 +322,12 @@ async def upsert_position(body: PositionIn):
             "INSERT OR REPLACE INTO positions (portfolio_id, symbol, shares, avg_cost, updated_at) "
             "VALUES (?,?,?,?,?)",
             (body.portfolio_id, body.symbol, body.shares, body.avg_cost, now)
+        )
+        # 同步更新 position_summary（新lot-based系统）
+        conn.execute(
+            "INSERT OR REPLACE INTO position_summary (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, updated_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (body.portfolio_id, body.symbol, body.shares, body.avg_cost, 0, 0, now)
         )
         conn.commit()
         conn.close()
@@ -1348,7 +1360,7 @@ async def check_conservation(portfolio_id: int):
 
         # 获取主账户自身持仓市值
         parent_positions = conn.execute(
-            "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+            "SELECT portfolio_id, symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
             (portfolio_id,)
         ).fetchall()
 

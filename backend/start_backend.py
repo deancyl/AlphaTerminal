@@ -45,6 +45,5 @@ if __name__ == "__main__":
         port=8002,
         log_level="info",
     )
-    global _server
     _server = uvicorn.Server(config)
     _server.run()
