@@ -8,7 +8,8 @@
             class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-theme-accent outline-none w-32" />
         </div>
       </div>
-      <div class="flex items-center gap-3 flex-wrap">
+      <!-- 电脑端：显示所有筛选条件 -->
+      <div class="hidden md:flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">涨跌幅 ></span>
           <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
@@ -40,6 +41,30 @@
           <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
         </div>
       </div>
+      <!-- 移动端：简化筛选 -->
+      <div class="flex md:hidden items-center gap-2">
+        <button @click="showMobileFilter = !showMobileFilter" class="px-2 py-0.5 text-[10px] border border-theme-secondary rounded text-terminal-dim hover:border-theme-accent">
+          筛选
+        </button>
+      </div>
+    </div>
+    
+    <!-- 移动端筛选面板 -->
+    <div v-if="showMobileFilter" class="md:hidden px-2 py-1 border-b border-theme-secondary bg-terminal-panel">
+      <div class="grid grid-cols-3 gap-1">
+        <div class="flex items-center gap-0.5 text-[10px]">
+          <span class="text-terminal-dim">涨幅></span>
+          <input type="number" v-model="flt.change_pct.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+        </div>
+        <div class="flex items-center gap-0.5 text-[10px]">
+          <span class="text-terminal-dim">换手></span>
+          <input type="number" v-model="flt.turnover.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+        </div>
+        <div class="flex items-center gap-0.5 text-[10px]">
+          <span class="text-terminal-dim">PE<</span>
+          <input type="number" v-model="flt.pe.max" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+        </div>
+      </div>
     </div>
 
     <!-- 单表结构：Sticky 表头 + 滚动 tbody + 固定分页栏 -->
@@ -53,11 +78,12 @@
             <th class="px-2 py-1.5 text-left font-normal cursor-pointer" @click="setSort('code')">代码</th>
             <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('price')">最新价</th>
             <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change_pct')">涨跌幅</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change')">涨跌</th>
+            <!-- 电脑端显示 -->
+            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change')">涨跌</th>
             <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('turnover')">换手率</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('amount')">成交额</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pe')">PE</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pb')">PB</th>
+            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('amount')">成交额</th>
+            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pe')">PE</th>
+            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pb')">PB</th>
           </tr>
         </thead>
         <tbody>
@@ -73,13 +99,14 @@
             <td class="px-2 py-1.5 text-right" :class="getColor(stock.change_pct)">
               <span v-if="stock.change_pct > 0">+</span>{{ stock.change_pct?.toFixed(2) }}%
             </td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change)">
+            <!-- 电脑端显示 -->
+            <td class="hidden md:table-cell px-2 py-1.5 text-right" :class="getColor(stock.change)">
               <span v-if="stock.change > 0">+</span>{{ stock.change?.toFixed(2) }}
             </td>
             <td class="px-2 py-1.5 text-right">{{ stock.turnover ? stock.turnover.toFixed(2) + '%' : '-' }}</td>
-            <td class="px-2 py-1.5 text-right">{{ formatAmount(stock.amount) }}</td>
-            <td class="px-2 py-1.5 text-right">{{ stock.pe ? stock.pe.toFixed(1) : '-' }}</td>
-            <td class="px-2 py-1.5 text-right">{{ stock.pb ? stock.pb.toFixed(2) : '-' }}</td>
+            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ formatAmount(stock.amount) }}</td>
+            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ stock.pe ? stock.pe.toFixed(1) : '-' }}</td>
+            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ stock.pb ? stock.pb.toFixed(2) : '-' }}</td>
           </tr>
         </tbody>
       </table>
@@ -133,6 +160,7 @@ const totalPages  = computed(() => Math.max(1, Math.ceil(total.value / pageSize.
 const loading     = ref(false)
 const sentinelEl  = ref(null)
 const searchQuery = ref('')
+const showMobileFilter = ref(false)  // 移动端筛选面板显示状态
 const sortBy      = ref('change_pct')
 const sortDir     = ref('desc')
 
