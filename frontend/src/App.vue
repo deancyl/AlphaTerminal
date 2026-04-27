@@ -54,7 +54,7 @@
       />
     </div>
     <!-- 移动端：固定定位 sidebar -->
-    <div v-else class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-theme-panel" :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px' }">
+    <div v-else class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-theme-panel" :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px', minWidth: '224px' }">
       <Sidebar
         :is-open="isSidebarOpen"
         :active-id="currentView"
@@ -74,7 +74,7 @@
         <div class="flex items-center gap-3">
           <!-- ☰ 侧边栏展开按钮 -->
           <button
-            class="w-7 h-7 flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
+            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
             @click="isSidebarOpen = !isSidebarOpen"
             title="切换侧边栏"
           >
@@ -261,7 +261,7 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Phase 5: 侧边栏与视图切换状态
-const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面+手机）
+const isSidebarOpen = ref(true)    // 侧边栏默认展开（桌面端）
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')

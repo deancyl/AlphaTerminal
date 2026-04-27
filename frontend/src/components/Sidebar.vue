@@ -81,7 +81,7 @@
 import { useTheme, THEMES, THEME_NAMES, THEME_ICONS } from '../composables/useTheme.js'
 
 const props = defineProps({
-  isOpen:  { type: Boolean, default: false },
+  isOpen:  { type: Boolean, default: true },
   activeId: { type: String, default: 'stock' },
 })
 const emit = defineEmits(['navigate', 'close'])
