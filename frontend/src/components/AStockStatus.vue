@@ -2,8 +2,8 @@
   <div class="flex flex-col h-full min-h-0 md:min-h-0 bg-terminal-bg">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-2 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">📊 A股监测</span>
-      <span class="text-terminal-dim text-[10px]">{{ total }} 只</span>
+      <span class="text-terminal-accent font-bold text-sm md:text-base">📊 A股监测</span>
+      <span class="text-terminal-dim text-xs md:text-sm">{{ total }} 只</span>
     </div>
     <!-- 搜索过滤栏 -->
     <div class="flex items-center gap-2 mb-2 shrink-0">
@@ -11,18 +11,18 @@
         v-model="searchQuery"
         type="text"
         placeholder="代码/名称"
-        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-[11px] text-theme-primary outline-none focus:border-terminal-accent/60"
+        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary rounded px-2 py-1.5 text-sm text-theme-primary outline-none focus:border-terminal-accent/60"
       />
     </div>
     <!-- 列表：flex-1 min-h-0 确保填满剩余高度且可滚动 -->
     <div class="flex-1 min-h-0 overflow-y-auto">
-      <table class="w-full text-xs whitespace-nowrap">
+      <table class="w-full text-sm whitespace-nowrap">
         <thead class="bg-terminal-panel sticky top-0 z-10">
           <tr class="text-terminal-dim border-b border-theme">
-            <th class="px-1.5 py-1 text-left font-normal w-8">#</th>
-            <th class="px-1.5 py-1 text-left font-normal min-w-0 truncate">名称</th>
-            <th class="px-1.5 py-1 text-right font-normal">最新价</th>
-            <th class="px-1.5 py-1 text-right font-normal">涨跌幅</th>
+            <th class="px-2 py-1.5 text-left font-normal w-8">#</th>
+            <th class="px-2 py-1.5 text-left font-normal min-w-0 truncate">名称</th>
+            <th class="px-2 py-1.5 text-right font-normal">最新价</th>
+            <th class="px-2 py-1.5 text-right font-normal">涨跌幅</th>
           </tr>
         </thead>
         <tbody>
@@ -31,28 +31,28 @@
             :key="item.symbol || idx"
             class="border-b border-theme-secondary/30 hover:bg-white/5 transition-colors"
           >
-            <td class="px-1.5 py-1 text-terminal-dim text-[10px]">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
-            <td class="px-1.5 py-1 min-w-0 truncate text-theme-primary text-[11px]">{{ item.name || item.symbol }}</td>
-            <td class="px-1.5 py-1 text-right font-mono text-[11px] text-theme-primary">{{ item.price != null ? Number(item.price).toFixed(2) : '--' }}</td>
+            <td class="px-2 py-1.5 text-terminal-dim text-xs">{{ (currentPage - 1) * pageSize + idx + 1 }}</td>
+            <td class="px-2 py-1.5 min-w-0 truncate text-theme-primary text-sm">{{ item.name || item.symbol }}</td>
+            <td class="px-2 py-1.5 text-right font-mono text-sm text-theme-primary">{{ item.price != null ? Number(item.price).toFixed(2) : '--' }}</td>
             <td
-              class="px-1.5 py-1 text-right font-mono text-[11px]"
+              class="px-2 py-1.5 text-right font-mono text-sm"
               :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
             >
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
             </td>
           </tr>
           <tr v-if="!displayedItems.length">
-            <td colspan="4" class="px-1.5 py-4 text-center text-terminal-dim text-xs">暂无数据</td>
+            <td colspan="4" class="px-2 py-4 text-center text-terminal-dim text-sm">暂无数据</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <!-- 分页控制器：shrink-0 确保不被挤压出可视区 -->
-    <div v-if="totalPages > 1" class="shrink-0 bg-theme-panel pb-2 flex items-center justify-center gap-1 mt-1">
-      <button class="px-1.5 py-0.5 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === 1" @click="currentPage--">‹</button>
-      <span class="text-[9px] text-terminal-dim px-1">{{ currentPage }}/{{ totalPages }}</span>
-      <button class="px-1.5 py-0.5 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === totalPages" @click="currentPage++">›</button>
+    <div v-if="totalPages > 1" class="shrink-0 bg-theme-panel pb-2 flex items-center justify-center gap-2 mt-1">
+      <button class="px-2 py-1 text-xs rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === 1" @click="currentPage--">‹</button>
+      <span class="text-xs text-terminal-dim px-1">{{ currentPage }}/{{ totalPages }}</span>
+      <button class="px-2 py-1 text-xs rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" :disabled="currentPage === totalPages" @click="currentPage++">›</button>
     </div>
   </div>
 </template>
