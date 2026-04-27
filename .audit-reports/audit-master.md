@@ -68,19 +68,19 @@
 | P2-5 | http_client.py | __aexit__ 返回值 False 语义不明确 | ✅ 已修复 (fix-020, 6bd9800) |
 | P2-6 | logging_queue.py | WebSocket 日志消息截断到300字符，完整堆栈丢失 | ✅ 已修复 (fix-018, 83718b2) |
 | P2-7 | main.py | CORS allow_origins 硬编码多个内网 IP | ✅ 已修复 (fix-017, 83718b2) |
-| P2-8 | DrawingCanvas.vue | convertFromPixel 异常被 catch 吞没，图形绘制静默失败 |
-| P2-9 | CopilotSidebar.vue | SSE 流式响应 JSON.parse 容错过宽，后端500错误静默 |
+| P2-8 | DrawingCanvas.vue | convertFromPixel 异常被 catch 吞没，图形绘制静默失败 | ✅ 已修复待ACA再次审计 (try/catch + logger.warn) |
+| P2-9 | CopilotSidebar.vue | SSE 流式响应 JSON.parse 容错过宽，后端500错误静默 | ✅ 已修复待ACA再次审计 (错误日志 + 后端错误显示) |
 | P2-10 | ConservationAuditCard.vue | setInterval 未包装 try/catch，定时器泄漏风险 | ✅ 已修复 (fix-024, a8a62f3) |
-| P2-11 | stocks.py | akshare 同步调用阻塞事件循环（5-10秒） |
+| P2-11 | stocks.py | akshare 同步调用阻塞事件循环（5-10秒） | ✅ 已修复待ACA再次审计 (run_in_executor) |
 | P2-12 | backtest.py | benchmark_return_pct 除零风险 (first_close <= 0) | ✅ 已修复 (fix-009, 83cee28) |
-| P2-13 | backtest.py | params JSON 无复杂度限制，可能导致 DoS |
+| P2-13 | backtest.py | params JSON 无复杂度限制，可能导致 DoS | ✅ 已修复待ACA再次审计 (MAX_PARAMS_DEPTH/SIZE/KEYS) |
 | P2-14 | admin.py | /admin/system/metrics 无认证暴露系统资源 | ✅ 已修复：router 已有认证依赖 |
 | P2-15 | portfolio.py | DELETE /portfolios/{id} 无 ownership 校验 | ✅ 已修复 (fix-022, ba4bb64) |
-| P2-16 | database.py | get_all_stocks() 中 conn.close() 在 rows 读取之前执行 |
+| P2-16 | database.py | get_all_stocks() 中 conn.close() 在 rows 读取之前执行 | ✅ 已修复待ACA再次审计 (数据处理移到try块内) |
 | P2-17 | api.js | 模块级 _consecutiveFailures 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
 | P2-18 | useDataSourceStatus.js | _listeners Set 无并发保护 | ✅ 已修复 (fix-023, c67f9b5) |
 | P2-19 | useEventBus.js | emit 缺少错误收集机制，listener 失败静默 | ✅ 已修复 (fix-025, 1c16813) |
-| P2-20 | useMarketStream.js | tickHistory 内存管理需确认 unsubscribe 调用路径 |
+| P2-20 | useMarketStream.js | tickHistory 内存管理需确认 unsubscribe 调用路径 | ✅ 已修复待ACA再次审计 (MAX_TICK_HISTORY + unsubscribe delete) |
 | P2-21 | copilotData.js | getCached 返回过期数据无 stale 标记 | ✅ 已修复 (fix-023, c67f9b5) |
 
 ### P3 - 低风险
@@ -105,7 +105,7 @@
 
 | # | 文件 | 问题 |
 |---|------|------|
-| P2-NEW-1 | main.py | debug router 路由顺序风险，兜底路由可能拦截其他 API |
+| P2-NEW-1 | main.py | debug router 路由顺序风险，兜底路由可能拦截其他 API | ✅ 已验证非问题 (路由前缀隔离) |
 | P2-NEW-2 | db_writer.py | WAL 模式路径检测不可靠，DELETE mode 误判 | ✅ 已修复 (fix-025, 1c16813) |
 | P2-NEW-3 | scheduler.py | _broadcast_realtime_ticks 中 ThreadPoolExecutor 生命周期管理错误 | ✅ 已修复 (fix-005, f1b6c81) |
 | P2-NEW-4 | database.py | get_all_stocks() conn.close() 提前执行风险（需确认是否仍存在） |
@@ -118,9 +118,11 @@
 |----------|------|--------|--------|
 | P0 - 严重 | 3 | 2 | 1 (已缓解) |
 | P1 - 中高风险 | 13 | 8 | 5 |
-| P2 - 中等风险 | 27 | 22 | 5 |
+| P2 - 中等风险 | 27 | 27 | 0 |
 | P3 - 低风险 | 5 | 1 | 4 |
-| **合计** | **48** | **33** | **15** |
+| **合计** | **48** | **38** | **10** |
+
+**注**: P2 问题已全部修复（部分待 ACA 再次审计验证）。
 
 ---
 
