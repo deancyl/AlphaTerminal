@@ -1,13 +1,41 @@
-# AlphaTerminal v0.5.167 代码审计报告 v44 (cron 确认)
+# AlphaTerminal v0.5.167 代码审计报告 v45
 
 ## 版本信息
-- 审计时间: 2026-04-27 09:49 CST
-- 任务: AlphaTerminal-Code-Audit (cron:88fda36d)
-- 本次审计: v44 确认 - 无新代码变更
+- 审计时间: 2026-04-27 11:34 CST
+- 任务: AlphaTerminal-Code-Audit (cron:88fda36d-a375-46e4-9b41-31bb01cc288a)
+- 本次审计: v45 - 发现2个新提交，已验证修复
 - 累计审计: 全部 12 个模块（全部完成，allComplete=true）
 - 总体进度: ✅ 全部审计完成，P2 问题已全部修复
-- 确认次数: v44-confirm-count = 49
-- 最新提交: 2ba34b6 (audit: v44 confirm - P2全部修复，累计38个修复)
+- 确认次数: v44-confirm-count = 49 → v45-confirm-count = 0 (新变更)
+- 最新提交: f9d1531 (fix(ui): 修复侧边栏默认展开 + 汉堡菜单点击区域)
+
+---
+
+## 本次审计发现 (v45)
+
+### 新提交记录
+
+| 提交 | 时间 | 作者 | 说明 |
+|------|------|------|------|
+| f9d1531 | 2026-04-27 11:45 CST | AlphaTerminal AI | fix(ui): 修复侧边栏默认展开 + 汉堡菜单点击区域 |
+| 835e234 | 2026-04-27 10:25 CST | AlphaTerminal AI | fix(mobile): 移动端UI优化 - 最小字体12px + 最小点击区域44px |
+
+### 修复验证
+
+**f9d1531 - UI修复详情:**
+- `App.vue`: 侧边栏默认状态改为展开 (`isSidebarOpen = ref(true)`)
+- `App.vue`: 汉堡菜单点击区域扩大至 44x44px (符合移动端可访问性标准)
+- `App.vue`: 移动端侧边栏添加 `minWidth: '224px'` 防止压缩
+- `Sidebar.vue`: 同步更新默认 `isOpen` 为 `true`
+
+**835e234 - 移动端优化详情:**
+- 全局最小字体 12px (防止iOS缩放)
+- 最小点击区域 44x44px (Apple HIG标准)
+
+### 状态
+- ✅ 本地仓库已同步最新提交
+- ✅ 工作区干净，无未提交变更
+- ✅ 修复验证通过
 
 ---
 
