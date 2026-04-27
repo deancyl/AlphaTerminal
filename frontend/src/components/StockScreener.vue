@@ -1,112 +1,78 @@
 <template>
   <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono">
-    <div class="flex flex-wrap items-center justify-between p-2 gap-2 border-b border-theme-secondary shrink-0">
-      <div class="flex items-center gap-4 text-xs">
+    <div class="flex flex-wrap items-center justify-between px-2 py-1 gap-1 border-b border-theme-secondary shrink-0">
+      <div class="flex items-center gap-2 text-xs">
         <span class="text-theme-accent font-bold">全市场个股</span>
-        <div class="flex items-center gap-1">
-          <input type="text" v-model="searchQuery" placeholder="输入拼音/代码/名称"
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-theme-accent outline-none w-32" />
-        </div>
+        <input type="text" v-model="searchQuery" placeholder="搜索代码/名称"
+          class="bg-terminal-bg border border-theme-secondary rounded px-2 py-0.5 text-[11px] focus:border-theme-accent outline-none w-28 h-5" />
+        <button @click="showFilter = !showFilter" class="px-1.5 py-0.5 text-[10px] border border-theme-secondary rounded text-terminal-dim hover:border-theme-accent">
+          筛选
+        </button>
       </div>
-      <div class="flex items-center gap-3 flex-wrap">
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">涨跌幅 ></span>
-          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">%</span>
+      <!-- 可折叠的筛选条件 -->
+      <div v-if="showFilter" class="flex items-center gap-2 flex-wrap">
+        <div class="flex items-center gap-1 text-[10px]">
+          <span class="text-terminal-dim">涨幅></span>
+          <input type="number" v-model="flt.change_pct.min" class="w-10 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none text-[10px]" />
         </div>
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">换手率 ></span>
-          <input type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">%</span>
+        <div class="flex items-center gap-1 text-[10px]">
+          <span class="text-terminal-dim">换手></span>
+          <input type="number" v-model="flt.turnover.min" class="w-10 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none text-[10px]" />
         </div>
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">PE <</span>
-          <input type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-        </div>
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">PB <</span>
-          <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-        </div>
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">价格区间</span>
-          <input type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-        </div>
-        <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">市值(亿)</span>
-          <input type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+        <div class="flex items-center gap-1 text-[10px]">
+          <span class="text-terminal-dim">PE<</span>
+          <input type="number" v-model="flt.pe.max" class="w-10 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none text-[10px]" />
         </div>
       </div>
     </div>
 
-    <!-- 单表结构：Sticky 表头 + 滚动 tbody + 固定分页栏 -->
-    <div class="flex-1 min-h-0 overflow-y-auto relative">
-      <div class="overflow-x-auto scrollbar-hide">
-        <table class="w-full text-xs whitespace-nowrap">
-        <thead class="bg-terminal-panel sticky top-0 z-10 shadow-sm">
-          <tr class="text-terminal-dim border-b border-theme">
-            <th class="px-2 py-1.5 text-left font-normal w-12">#</th>
-            <th class="px-2 py-1.5 text-left font-normal cursor-pointer" @click="setSort('name')">名称</th>
-            <th class="px-2 py-1.5 text-left font-normal cursor-pointer" @click="setSort('code')">代码</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('price')">最新价</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change_pct')">涨跌幅</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change')">涨跌</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('turnover')">换手率</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('amount')">成交额</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pe')">PE</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pb')">PB</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
-              class="border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer"
-              @click="handleClick(stock)">
-            <td class="px-2 py-1.5 text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</td>
-            <td class="px-2 py-1.5">
-              <div class="font-medium group-hover:text-theme-accent transition-colors">{{ stock.name }}</div>
-            </td>
-            <td class="px-2 py-1.5 text-terminal-dim">{{ stock.code }}</td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change_pct)">{{ stock.price?.toFixed(2) }}</td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change_pct)">
-              <span v-if="stock.change_pct > 0">+</span>{{ stock.change_pct?.toFixed(2) }}%
-            </td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change)">
-              <span v-if="stock.change > 0">+</span>{{ stock.change?.toFixed(2) }}
-            </td>
-            <td class="px-2 py-1.5 text-right">{{ stock.turnover ? stock.turnover.toFixed(2) + '%' : '-' }}</td>
-            <td class="px-2 py-1.5 text-right">{{ formatAmount(stock.amount) }}</td>
-            <td class="px-2 py-1.5 text-right">{{ stock.pe ? stock.pe.toFixed(1) : '-' }}</td>
-            <td class="px-2 py-1.5 text-right">{{ stock.pb ? stock.pb.toFixed(2) : '-' }}</td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- 表头 -->
+    <div class="flex items-center px-2 py-0.5 bg-terminal-panel border-b border-theme text-[10px] text-terminal-dim shrink-0">
+      <div class="w-5 text-left" @click="setSort('seq')">#</div>
+      <div class="w-16 text-left" @click="setSort('name')">名称</div>
+      <div class="w-12 text-left" @click="setSort('code')">代码</div>
+      <div class="w-12 text-right" @click="setSort('price')">最新</div>
+      <div class="w-12 text-right" @click="setSort('change_pct')">涨跌%</div>
+      <div class="w-10 text-right" @click="setSort('turnover')">换手</div>
+    </div>
+    
+    <!-- 列表 -->
+    <div class="flex-1 overflow-y-auto">
+      <div
+        v-for="(stock, index) in stocks" 
+        :key="stock.code + '-' + index"
+        class="flex items-center px-2 py-0.5 border-b border-theme-secondary/20 hover:bg-white/5 transition-colors text-[11px]"
+        :class="index % 2 === 0 ? 'bg-terminal-bg' : 'bg-terminal-panel/30'"
+        @click="handleClick(stock)"
+      >
+        <div class="w-5 text-left text-[10px] text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</div>
+        <div class="w-16 text-left truncate text-theme-primary font-medium">{{ stock.name }}</div>
+        <div class="w-12 text-left text-[10px] text-terminal-dim">{{ stock.code }}</div>
+        <div class="w-12 text-right font-mono" :class="getColor(stock.change_pct)">{{ stock.price?.toFixed(2) }}</div>
+        <div class="w-12 text-right font-mono" :class="getColor(stock.change_pct)">
+          <span v-if="stock.change_pct > 0">+</span>{{ stock.change_pct?.toFixed(2) }}%
+        </div>
+        <div class="w-10 text-right text-[10px]">{{ stock.turnover ? stock.turnover.toFixed(1) : '-' }}</div>
       </div>
-
-      <!-- Sentinel for infinite scroll trigger -->
+      <div v-if="!stocks.length" class="px-2 py-4 text-center text-terminal-dim text-xs">
+        暂无数据
+      </div>
       <div ref="sentinelEl" class="h-px w-full"></div>
-
-      <!-- 加载中遮罩 -->
-      <div v-if="loading" class="absolute inset-0 bg-terminal-bg/50 backdrop-blur-sm flex items-center justify-center z-20">
-        <span class="text-theme-accent">检索中...</span>
-      </div>
     </div>
 
     <!-- 分页控制栏（固定在底部） -->
-    <div class="flex items-center justify-between p-2 text-xs border-t border-theme-secondary shrink-0 bg-terminal-panel">
+    <div class="flex items-center justify-between px-2 py-0.5 text-[10px] border-t border-theme-secondary shrink-0 bg-terminal-panel">
       <button
-        class="px-3 py-1 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
+        class="px-1.5 py-0 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
         :disabled="currentPage === 1"
-        @click="goPage(currentPage - 1)">上一页</button>
+        @click="goPage(currentPage - 1)">‹</button>
       <div class="text-terminal-dim">
-        第 <span class="text-terminal-fg font-bold">{{ currentPage }}</span> / {{ totalPages }} 页
+        {{ currentPage }} / {{ totalPages }}
       </div>
       <button
-        class="px-3 py-1 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
+        class="px-1.5 py-0 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
         :disabled="currentPage >= totalPages"
-        @click="goPage(currentPage + 1)">下一页</button>
+        @click="goPage(currentPage + 1)">›</button>
     </div>
   </div>
 </template>
@@ -126,13 +92,14 @@ const { setSymbol } = useMarketStore()
 const stocks       = ref([])
 const total        = ref(0)
 const currentPage  = ref(1)
-const pageSize     = ref(50)
+const pageSize     = ref(10)  // 移动端每页10个
 const totalPages  = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
 
 // ── 本地 UI 状态 ─────────────────────────────────────────────────────
 const loading     = ref(false)
 const sentinelEl  = ref(null)
 const searchQuery = ref('')
+const showFilter  = ref(false)  // 筛选面板显示状态
 const sortBy      = ref('change_pct')
 const sortDir     = ref('desc')
 
@@ -140,11 +107,7 @@ const sortDir     = ref('desc')
 const flt = ref({
   change_pct: { min: null, max: null },
   turnover:   { min: null, max: null },
-  amount:     { min: null, max: null },
-  price:      { min: null, max: null },
   pe:         { min: null, max: null },
-  pb:         { min: null, max: null },
-  mktcap:     { min: null, max: null },  // 市值（亿元）
 })
 
 // ── 核心：服务端搜索（防抖 300ms）────────────────────────────────────
@@ -154,22 +117,12 @@ async function fetchStocks() {
     const params = new URLSearchParams()
     if (searchQuery.value.trim()) params.set('keyword', searchQuery.value.trim())
     if (flt.value.change_pct.min != null) params.set('min_pct_chg', flt.value.change_pct.min)
-    if (flt.value.change_pct.max != null) params.set('max_pct_chg', flt.value.change_pct.max)
     if (flt.value.turnover.min   != null) params.set('min_turnover', flt.value.turnover.min)
-    if (flt.value.turnover.max   != null) params.set('max_turnover', flt.value.turnover.max)
-    if (flt.value.pe.min         != null) params.set('min_pe',       flt.value.pe.min)
     if (flt.value.pe.max         != null) params.set('max_pe',       flt.value.pe.max)
-    if (flt.value.pb.min         != null) params.set('min_pb',       flt.value.pb.min)
-    if (flt.value.pb.max         != null) params.set('max_pb',       flt.value.pb.max)
     params.set('sort_by',   sortBy.value)
     params.set('sort_dir',  sortDir.value)
     params.set('page',      String(currentPage.value))
     params.set('page_size', String(pageSize.value))
-
-    if (flt.value.price.min != null) params.set('min_price', flt.value.price.min)
-    if (flt.value.price.max != null) params.set('max_price', flt.value.price.max)
-    if (flt.value.mktcap.min != null) params.set('min_mktcap', flt.value.mktcap.min)
-    if (flt.value.mktcap.max != null) params.set('max_mktcap', flt.value.mktcap.max)
 
     const d = await apiFetch(`/api/v1/market/stocks/search?${params}`)
     const payload = d?.data || d || {}
