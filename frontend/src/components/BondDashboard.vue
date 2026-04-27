@@ -278,15 +278,17 @@ async function fetchBondData() {
     ])
 
     if (bc) {
-      const govCurve   = bc.yield_curve  || {}
-      const commCurve = bc.comm_yield   || {}
-      const spreadsBps = bc.spreads_bps || {}
-      const updateTime = bc.update_time  || ''
-      bondDataSource.value   = bc.source   || ''
+      // 后端返回格式: { code: 0, data: {...}, message: 'success' }
+      const data = bc.data || bc
+      const govCurve   = data.yield_curve  || {}
+      const commCurve = data.comm_yield   || {}
+      const spreadsBps = data.spreads_bps || {}
+      const updateTime = data.update_time  || ''
+      bondDataSource.value   = data.source   || ''
 
       yieldCurve.value       = govCurve
-      yieldCurve1m.value    = bc.yield_curve_1m || {}
-      yieldCurve1y.value    = bc.yield_curve_1y || {}
+      yieldCurve1m.value    = data.yield_curve_1m || {}
+      yieldCurve1y.value    = data.yield_curve_1y || {}
       yieldUpdateTime.value = updateTime
 
       const matrix = {}
