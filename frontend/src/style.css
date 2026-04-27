@@ -328,3 +328,58 @@
     border-color: var(--accent-border);
   }
 }
+
+/* ============================================
+   移动端优化 (E2E测试修复)
+   ============================================ */
+@media (max-width: 768px) {
+  /* 最小字体 12px，确保可读性 */
+  html {
+    font-size: 16px;
+  }
+  
+  * {
+    min-font-size: 12px;
+  }
+  
+  /* 小于 12px 的文字强制调整 */
+  .text-xs, [class*="text-0.5"], [class*="text-0.75"] {
+    font-size: 12px !important;
+  }
+  
+  /* 按钮最小点击区域 44x44px (Apple HIG) */
+  button, 
+  a, 
+  [role="button"],
+  .nav-item,
+  .theme-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* 小按钮增加 padding */
+  button:not([class*="p-3"]):not([class*="p-4"]):not([class*="px-3"]):not([class*="px-4"]) {
+    padding: 10px 12px;
+  }
+  
+  /* 图标按钮保持正方形 */
+  button.w-7, button.w-8, button.w-9, button.w-10 {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  /* 表格行高增加，便于触屏操作 */
+  .theme-table td, .theme-table th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  
+  /* 输入框高度增加 */
+  .theme-input, input, select, textarea {
+    min-height: 44px;
+    font-size: 16px !important; /* 防止 iOS 缩放 */
+  }
+}
