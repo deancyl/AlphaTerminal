@@ -667,6 +667,20 @@ const llmProviders = reactive({
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
   },
+  siliconflow: {
+    label: '硅基流动', icon: '💎', desc: 'SiliconFlow - DeepSeek/Qwen 等模型聚合平台',
+    default_base: 'https://api.siliconflow.cn/v1', default_model: 'deepseek-ai/DeepSeek-V3',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+  },
+  opencode: {
+    label: 'OpenCode', icon: '⚡', desc: 'OpenCode AI - 国产大模型平台',
+    default_base: 'https://api.opencode.ai/v1', default_model: 'opencode-chat',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+  },
 })
 
 async function loadLlmConfig() {

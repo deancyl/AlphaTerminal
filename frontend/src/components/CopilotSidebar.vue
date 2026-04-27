@@ -257,6 +257,9 @@ const modelOptions = [
   { label: 'DeepSeek-R1（思维链）',   value: 'deepseek-r1',  provider: 'deepseek', model: 'deepseek-reasoner' },
   { label: 'Qwen Plus',               value: 'qwen',         provider: 'qianwen',  model: 'qwen-plus' },
   { label: 'OpenAI GPT-3.5',          value: 'openai',       provider: 'openai',   model: 'gpt-3.5-turbo' },
+  { label: '硅基流动 DeepSeek-V3',     value: 'siliconflow-v3', provider: 'siliconflow', model: 'deepseek-ai/DeepSeek-V3' },
+  { label: '硅基流动 DeepSeek-R1',     value: 'siliconflow-r1', provider: 'siliconflow', model: 'deepseek-ai/DeepSeek-R1' },
+  { label: 'OpenCode',                value: 'opencode',     provider: 'opencode', model: 'opencode-chat' },
   { label: 'Mock（本地模拟）',         value: 'mock',         provider: 'mock',     model: '' },
 ]
 

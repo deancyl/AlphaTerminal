@@ -61,12 +61,14 @@ def _get_llm_config(provider: str) -> dict:
         "deepseek": {"api_key": os.getenv("DEEPSEEK_API_KEY",""), "base_url": os.getenv("DEEPSEEK_API_BASE","https://api.deepseek.com"), "model": os.getenv("DEEPSEEK_MODEL","deepseek-chat")},
         "qianwen":  {"api_key": os.getenv("QIANWEN_API_KEY",""),  "base_url": os.getenv("QIANWEN_API_BASE","https://dashscope.aliyuncs.com/compatible-mode/v1"), "model": os.getenv("QIANWEN_MODEL","qwen-plus")},
         "openai":   {"api_key": os.getenv("OPENAI_API_KEY",""),  "base_url": os.getenv("OPENAI_API_BASE","https://api.openai.com/v1"), "model": os.getenv("OPENAI_MODEL","gpt-3.5-turbo")},
+        "siliconflow": {"api_key": os.getenv("SILICONFLOW_API_KEY",""), "base_url": os.getenv("SILICONFLOW_API_BASE","https://api.siliconflow.cn/v1"), "model": os.getenv("SILICONFLOW_MODEL","deepseek-ai/DeepSeek-V3")},
+        "opencode": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://api.opencode.ai/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-chat")},
     }
     return defaults.get(provider, {})
 
 def _detect_provider() -> str:
     """按优先级检测可用的 LLM Provider（优先使用数据库配置）"""
-    for p in ["deepseek", "qianwen", "openai"]:
+    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode"]:
         if _get_llm_config(p).get("api_key"):
             return p
     return "mock"
@@ -188,6 +190,12 @@ async def _llm_stream(
             yield chunk
     elif provider == "openai":
         async for chunk in _call_openai(messages, model_override):
+            yield chunk
+    elif provider == "siliconflow":
+        async for chunk in _call_siliconflow(messages, model_override):
+            yield chunk
+    elif provider == "opencode":
+        async for chunk in _call_opencode(messages, model_override):
             yield chunk
     else:
         async for chunk in _mock_stream(messages):
@@ -353,6 +361,84 @@ async def _call_minimax(messages: list[dict]) -> AsyncGenerator[str, None]:
     except Exception as e:
         logger.error(f"[MiniMax] {e}")
         yield _sse({"error": f"MiniMax API 调用失败: {e}"})
+
+
+async def _call_siliconflow(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
+    """硅基流动 API 调用 - 兼容 OpenAI 格式"""
+    import httpx
+    cfg = _get_llm_config("siliconflow")
+    url = f"{(cfg['base_url'] or 'https://api.siliconflow.cn/v1').rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type":  "application/json",
+    }
+    payload = {
+        "model":       model_override or cfg.get("model") or "deepseek-ai/DeepSeek-V3",
+        "messages":    messages,
+        "stream":      True,
+        "temperature": 0.7,
+        "max_tokens":  4096,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    if line.startswith("data: "):
+                        try:
+                            d = json.loads(line[6:])
+                            delta = d.get("choices", [{}])[0].get("delta", {})
+                            # 硅基流动可能返回 reasoning_content（思维链）
+                            reasoning = delta.get("reasoning_content", "")
+                            content = delta.get("content", "")
+                            if reasoning:
+                                yield _sse({"reasoning": reasoning})
+                            if content:
+                                yield _sse({"content": content})
+                        except json.JSONDecodeError:
+                            continue
+    except Exception as e:
+        logger.error(f"[SiliconFlow] {e}")
+        yield _sse({"error": f"硅基流动 API 调用失败: {e}"})
+
+
+async def _call_opencode(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
+    """OpenCode API 调用 - 兼容 OpenAI 格式"""
+    import httpx
+    cfg = _get_llm_config("opencode")
+    url = f"{(cfg['base_url'] or 'https://api.opencode.ai/v1').rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type":  "application/json",
+    }
+    payload = {
+        "model":       model_override or cfg.get("model") or "opencode-chat",
+        "messages":    messages,
+        "stream":      True,
+        "temperature": 0.7,
+        "max_tokens":  4096,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    if line.startswith("data: "):
+                        try:
+                            d = json.loads(line[6:])
+                            delta = d.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield _sse({"content": content})
+                        except json.JSONDecodeError:
+                            continue
+    except Exception as e:
+        logger.error(f"[OpenCode] {e}")
+        yield _sse({"error": f"OpenCode API 调用失败: {e}"})
 
 
 async def _mock_stream(messages: list[dict]) -> AsyncGenerator[str, None]:
@@ -594,5 +680,6 @@ async def copilot_status():
         "deepseek": bool(DEEPSEEK_API_KEY),
         "qianwen":  bool(QIANWEN_API_KEY),
         "minimax":  bool(MINIMAX_API_KEY),
-        "version":  "1.1.0",
+        "siliconflow": bool(os.getenv("SILICONFLOW_API_KEY", "")),
+        "opencode": bool(os.getenv("OPENCODE_API_KEY", "")),
     }
