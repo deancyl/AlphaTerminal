@@ -66,7 +66,9 @@ function getCached(key, fetchFn, ttl = 30000) {
 export async function getMarketOverview() {
   return getCached('marketOverview', async () => {
     const res = await apiFetch(`${API_BASE}/api/v1/market/overview`, { timeoutMs: 10000 })
-    const wind = res?.wind || {}
+    // 后端返回格式: { code: 0, data: { wind: {...}, meta: {...} }, message: 'success' }
+    const data = res?.data || res
+    const wind = data?.wind || {}
     
     // 实际返回: { wind: {'000001': {name, price, change_pct, volume, status, market}, meta: {...} }
     const indices = Object.values(wind)
@@ -84,7 +86,7 @@ export async function getMarketOverview() {
     
     return {
       indices,
-      meta: res?.meta || {},
+      meta: data?.meta || {},
     }
   })
 }
@@ -95,7 +97,9 @@ export async function getMarketOverview() {
 export async function getSectors() {
   return getCached('sectors', async () => {
     const res = await apiFetch(`${API_BASE}/api/v1/market/sectors`, { timeoutMs: 10000 })
-    const sectors = Array.isArray(res) ? res : (res?.sectors || [])
+    // 后端返回格式: { code: 0, data: { sectors: [...] }, message: 'success' }
+    const data = res?.data || res
+    const sectors = data?.sectors || []
     return sectors
   })
 }
@@ -130,8 +134,9 @@ export async function getLimitUpStocks() {
   return getCached('limitUp', async () => {
     try {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_up`, { timeoutMs: 15000 })
-      const data = res?.limit_up || res || []
-      return data
+      // 后端返回格式: { code: 0, data: { limit_up: [...], count: N }, message: 'success' }
+      const data = res?.data || res
+      return data?.limit_up || []
     } catch (e) {
       logger.warn('[CopilotData] limit_up failed:', e.message)
       return []
@@ -146,8 +151,9 @@ export async function getLimitDownStocks() {
   return getCached('limitDown', async () => {
     try {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_down`, { timeoutMs: 15000 })
-      const data = res?.limit_down || res || []
-      return data
+      // 后端返回格式: { code: 0, data: { limit_down: [...], count: N }, message: 'success' }
+      const data = res?.data || res
+      return data?.limit_down || []
     } catch (e) {
       logger.warn('[CopilotData] limit_down failed:', e.message)
       return []
@@ -162,8 +168,9 @@ export async function getUnusualStocks() {
   return getCached('unusual', async () => {
     try {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/unusual`, { timeoutMs: 15000 })
-      const data = res?.unusual || res || []
-      return data
+      // 后端返回格式: { code: 0, data: { unusual: [...], count: N }, message: 'success' }
+      const data = res?.data || res
+      return data?.unusual || []
     } catch (e) {
       logger.warn('[CopilotData] unusual failed:', e.message)
       return []
@@ -178,7 +185,8 @@ export async function getLimitSummary() {
   return getCached('limitSummary', async () => {
     try {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_summary`, { timeoutMs: 15000 })
-      return res || {}
+      // 后端返回格式: { code: 0, data: {...}, message: 'success' }
+      return res?.data || res || {}
     } catch (e) {
       logger.warn('[CopilotData] limit_summary failed:', e.message)
       return {}
