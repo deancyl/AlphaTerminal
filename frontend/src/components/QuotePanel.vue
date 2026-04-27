@@ -421,8 +421,10 @@ const fundDonutData = computed(() => {
 })
 
 // ── 格式化（已提取到 utils/formatters.js）───────────────────────
-// import { formatVol, formatAmount } from '../utils/formatters.js'
+import { formatVol, formatAmount } from '../utils/formatters.js'
+
 // 保留本地定义避免破坏现有引用，后续逐步迁移
+// 本地 formatVol 定义已移除，使用 utils/formatters.js 中的版本
 
 // ── 资金环形图（ECharts）───────────────────────────────────────
 const fundDonutRef = ref(null)
