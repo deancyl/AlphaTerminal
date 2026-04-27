@@ -831,11 +831,11 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
     groups = {}
 
     for symbol, shares, avg_cost in rows:
-        info = price_map.get(symbol, {})
+        info = price_map.get(symbol, {}) or {}
         if not info and len(symbol) == 6:
-            info = price_map.get(f"sh{symbol}", {})
+            info = price_map.get(f"sh{symbol}", {}) or {}
             if not info:
-                info = price_map.get(f"sz{symbol}", {})
+                info = price_map.get(f"sz{symbol}", {}) or {}
         if not info:
             info = price_map.get(symbol[2:]) if len(symbol) > 2 else {}
 
