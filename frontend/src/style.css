@@ -330,56 +330,65 @@
 }
 
 /* ============================================
-   移动端优化 (E2E测试修复)
+   移动端优化 (E2E测试修复 - v2)
    ============================================ */
 @media (max-width: 768px) {
-  /* 最小字体 12px，确保可读性 */
+  /* 字体大小：保持 Tailwind 默认比例，不强制放大 */
   html {
-    font-size: 16px;
+    font-size: 14px; /* 从 16px 改为 14px，更紧凑 */
   }
   
+  /* 移除 min-font-size 限制，允许小字体 */
   * {
-    min-font-size: 12px;
+    min-font-size: unset;
   }
   
-  /* 小于 12px 的文字强制调整 */
-  .text-xs, [class*="text-0.5"], [class*="text-0.75"] {
-    font-size: 12px !important;
+  /* 只限制极小字体，保留设计意图 */
+  .text-xs {
+    font-size: 11px !important; /* 从 12px 改为 11px */
   }
   
-  /* 按钮最小点击区域 44x44px (Apple HIG) */
+  /* 按钮点击区域：只在必要时增加 */
   button, 
-  a, 
-  [role="button"],
+  a[role="button"],
   .nav-item,
   .theme-btn {
-    min-height: 44px;
-    min-width: 44px;
+    min-height: 36px; /* 从 44px 改为 36px */
+    min-width: 36px;
   }
   
-  /* 小按钮增加 padding */
-  button:not([class*="p-3"]):not([class*="p-4"]):not([class*="px-3"]):not([class*="px-4"]) {
-    padding: 10px 12px;
+  /* 图标按钮保持紧凑 */
+  button.w-7, button.w-8 {
+    min-width: 28px !important;
+    min-height: 28px !important;
+    padding: 4px;
   }
   
-  /* 图标按钮保持正方形 */
-  button.w-7, button.w-8, button.w-9, button.w-10 {
-    min-width: 44px !important;
-    min-height: 44px !important;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  
-  /* 表格行高增加，便于触屏操作 */
+  /* 表格行高：紧凑 */
   .theme-table td, .theme-table th {
-    padding-top: 12px;
-    padding-bottom: 12px;
+    padding-top: 6px;
+    padding-bottom: 6px;
   }
   
-  /* 输入框高度增加 */
+  /* 输入框高度：紧凑 */
   .theme-input, input, select, textarea {
-    min-height: 44px;
-    font-size: 16px !important; /* 防止 iOS 缩放 */
+    min-height: 36px; /* 从 44px 改为 36px */
+    font-size: 14px;
+  }
+  
+  /* 隐藏滚动条（移动端不需要） */
+  ::-webkit-scrollbar {
+    width: 0px !important;
+    height: 0px !important;
+  }
+  
+  /* 允许内容自然滚动 */
+  body {
+    overflow-x: hidden;
+  }
+  
+  /* 图表容器：最大化显示区域 */
+  .chart-container, [class*="chart"] {
+    min-height: 200px;
   }
 }
