@@ -29,18 +29,19 @@
 
     <!-- 上下文勾选框 -->
     <div class="px-4 py-2 border-b border-theme-secondary flex flex-wrap gap-3 text-xs shrink-0">
-      <label class="flex items-center gap-1.5 cursor-pointer select-none">
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取实时大盘指数数据作为对话上下文">
         <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded">
         <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">📊 大盘</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer select-none">
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取国债收益率曲线作为对话上下文">
         <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3.5 h-3.5 rounded">
         <span :class="ctxRates ? 'text-terminal-accent' : 'text-terminal-dim'">💰 利率</span>
       </label>
-      <label class="flex items-center gap-1.5 cursor-pointer select-none">
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取最新5条市场快讯作为对话上下文">
         <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3.5 h-3.5 rounded">
-        <span :class="ctxNews ? 'text-terminal-accent' : 'text-terminal-dim'">📰 快讯</span>
+        <span :class="ctxNews ? 'text-terminal-dim' : 'text-terminal-dim'">📰 快讯</span>
       </label>
+      <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选选项可将实时数据加入AI上下文</span>
     </div>
 
     <!-- 模型选择器 -->
