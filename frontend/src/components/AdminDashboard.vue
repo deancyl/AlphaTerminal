@@ -495,11 +495,39 @@
             </div>
             <div class="col-span-2">
               <label class="text-[11px] text-theme-muted mb-1.5 block">模型名称</label>
-              <input
-                v-model="cfg.input_model"
-                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
-                       focus:outline-none focus:border-terminal-accent/60"
-                :placeholder="cfg.default_model">
+              <div class="flex gap-3">
+                <select
+                  v-model="cfg.input_model"
+                  class="flex-1 bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                         focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
+                  <option value="">-- 选择模型 --</option>
+                  <optgroup :label="group.label" v-for="group in cfg.modelGroups" :key="group.label">
+                    <option v-for="m in group.models" :key="m.id" :value="m.id">
+                      {{ m.name }}
+                    </option>
+                  </optgroup>
+                </select>
+                <button class="text-[11px] text-theme-muted hover:text-terminal-accent px-2" @click="cfg.show_model_info = !cfg.show_model_info">
+                  {{ cfg.show_model_info ? '🔼 收起详情' : '🔽 查看详情' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 模型详情展开 -->
+          <div v-if="cfg.show_model_info" class="mt-4 p-3 bg-terminal-bg/50 rounded-lg border border-theme/50">
+            <div class="text-[11px] text-theme-muted mb-2">价格特点 & 金融适配性</div>
+            <div class="grid grid-cols-3 gap-2 text-[10px]">
+              <template v-for="group in cfg.modelGroups" :key="group.label">
+                <template v-for="m in group.models" :key="m.id">
+                  <div v-if="m.id === cfg.input_model || !cfg.input_model" class="col-span-1 p-2 rounded bg-theme-panel/50">
+                    <div class="font-medium text-theme-primary">{{ m.name }}</div>
+                    <div class="text-terminal-accent mt-1">{{ m.pricing }}</div>
+                    <div class="text-theme-secondary mt-1">{{ m.finance }}</div>
+                    <div class="text-green-400/70 mt-1" v-if="m.best_for">{{ m.best_for }}</div>
+                  </div>
+                </template>
+              </template>
             </div>
           </div>
 
@@ -652,20 +680,70 @@ const llmProviders = reactive({
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '💬 对话模型 (Chat)',
+        models: [
+          { id: 'deepseek-chat', name: 'DeepSeek V3', pricing: '¥2-6/百万Token', finance: '金融分析强，逻辑推理优秀，支持长上下文32K' },
+          { id: 'deepseek-reasoner', name: 'DeepSeek R1', pricing: '¥16-32/百万Token', finance: '深度推理能力强，适合复杂金融决策场景' },
+        ]
+      },
+      {
+        label: '🔧 专用模型',
+        models: [
+          { id: 'deepseek-coder', name: 'DeepSeek Coder', pricing: '¥2-6/百万Token', finance: '代码能力突出，可辅助量化策略开发' },
+        ]
+      }
+    ],
   },
   qianwen: {
-    label: '通义千问', icon: '🌐', desc: 'Qwen Plus / Max',
+    label: '通义千问', icon: '🌐', desc: 'Qwen Plus / Max / VL',
     default_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', default_model: 'qwen-plus',
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '💬 对话模型 (Chat)',
+        models: [
+          { id: 'qwen-plus', name: 'Qwen Plus', pricing: '¥0.04-0.12/千Token', finance: '中文理解强，股市新闻分析速度快' },
+          { id: 'qwen-max', name: 'Qwen Max', pricing: '¥0.2-0.6/千Token', finance: '旗舰模型，金融研报综合分析能力强' },
+          { id: 'qwen-turbo', name: 'Qwen Turbo', pricing: '¥0.015-0.045/千Token', finance: '快速响应，适合实时行情解读' },
+        ]
+      },
+      {
+        label: '👁️ 视觉模型 (VL)',
+        models: [
+          { id: 'qwen-vl-plus', name: 'Qwen VL Plus', pricing: '¥0.06-0.18/千Token', finance: '可解析K线图、财报图片等视觉信息' },
+        ]
+      }
+    ],
   },
   openai: {
-    label: 'OpenAI', icon: '🤖', desc: 'GPT-3.5 / GPT-4',
+    label: 'OpenAI', icon: '🤖', desc: 'GPT-3.5 / GPT-4 / GPT-4o',
     default_base: 'https://api.openai.com/v1', default_model: 'gpt-3.5-turbo',
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '💬 对话模型 (Chat)',
+        models: [
+          { id: 'gpt-4o', name: 'GPT-4o', pricing: '$6-18/百万Token', finance: '综合能力最强，多模态支持好，国际市场分析首选' },
+          { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', pricing: '$10-30/百万Token', finance: '上下文128K，适合长篇金融报告分析' },
+          { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', pricing: '$0.5-1.5/百万Token', finance: '低成本快速响应，适合简单行情查询' },
+        ]
+      },
+      {
+        label: '🎨 视觉模型 (Vision)',
+        models: [
+          { id: 'gpt-4o-mini', name: 'GPT-4o Mini', pricing: '$0.15-0.6/百万Token', finance: '性价比高，轻量级图表解析' },
+        ]
+      }
+    ],
   },
   siliconflow: {
     label: '硅基流动', icon: '💎', desc: 'SiliconFlow - DeepSeek/Qwen 等模型聚合平台',
@@ -673,13 +751,59 @@ const llmProviders = reactive({
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '🔥 热门模型',
+        models: [
+          { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (SF)', pricing: '¥1-3/百万Token', finance: '性价比极高，金融分析首选', best_for: '⭐ 性价比之选' },
+          { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1 (SF)', pricing: '¥6-18/百万Token', finance: '深度推理强，复杂量化策略分析' },
+          { id: 'Qwen/Qwen2.5-72B-Instruct', name: 'Qwen2.5-72B', pricing: '¥2-8/百万Token', finance: '中文理解出色，财报解读快速' },
+        ]
+      },
+      {
+        label: '🆓 Free模型 (硅基流动)',
+        models: [
+          { id: 'Pro/Qwen2.5-7B-Instruct', name: 'Qwen2.5-7B (Free)', pricing: '🆓 免费', finance: '免费额度充足，日常行情分析完全够用', best_for: '⭐ 免费首选' },
+          { id: 'Pro/Qwen2.5-14B-Instruct', name: 'Qwen2.5-14B (Free)', pricing: '🆓 免费', finance: '更强理解力，复杂财经新闻解读' },
+          { id: 'Pro/deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3 (Free)', pricing: '🆓 免费', finance: '免费版DeepSeek V3，金融分析无压力' },
+          { id: 'Pro/THUDM/glm-4-flash', name: 'GLM-4-Flash (Free)', pricing: '🆓 免费', finance: '极速响应，实时K线解读无延迟' },
+          { id: 'Pro/Qwen/Qwen2.5-32B-Instruct', name: 'Qwen2.5-32B (Free)', pricing: '🆓 免费', finance: '中等规模，完全免费，财报分析' },
+        ]
+      },
+      {
+        label: '💰 低价模型',
+        models: [
+          { id: 'THUDM/glm-4-flash', name: 'GLM-4-Flash', pricing: '¥0.1-0.3/百万Token', finance: '超低价格，适合高频行情查询' },
+          { id: 'Qwen/Qwen2.5-7B-Instruct', name: 'Qwen2.5-7B', pricing: '¥0.3-1/百万Token', finance: '轻量快速，实时K线解读' },
+        ]
+      }
+    ],
   },
   opencode: {
-    label: 'OpenCode', icon: '⚡', desc: 'OpenCode AI - 国产大模型平台',
+    label: 'OpenCode', icon: '⚡', desc: 'OpenCode AI - 国产大模型平台（含免费额度）',
     default_base: 'https://api.opencode.ai/v1', default_model: 'opencode-chat',
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '💬 对话模型',
+        models: [
+          { id: 'opencode-chat', name: 'OpenCode Chat', pricing: '¥3-8/百万Token', finance: '代码能力强，量化策略编写辅助' },
+          { id: 'opencode-grok', name: 'OpenCode Grok', pricing: '¥8-20/百万Token', finance: '实时信息能力强，市场动态追踪' },
+        ]
+      },
+      {
+        label: '🆓 Free模型 (OpenCode)',
+        models: [
+          { id: 'opencode-free', name: 'OpenCode Free', pricing: '🆓 免费', finance: '完全免费，日常行情查询和简单分析', best_for: '⭐ 免费无限制' },
+          { id: 'opencode-mini', name: 'OpenCode Mini', pricing: '🆓 免费', finance: '轻量模型，免费额度充足，适合K线解读' },
+          { id: 'opencode-qwen', name: 'OpenCode-Qwen (Free)', pricing: '🆓 免费', finance: '基于Qwen的免费模型，中文理解好' },
+        ]
+      }
+    ],
   },
 })
 
