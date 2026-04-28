@@ -62,13 +62,14 @@ def _get_llm_config(provider: str) -> dict:
         "qianwen":  {"api_key": os.getenv("QIANWEN_API_KEY",""),  "base_url": os.getenv("QIANWEN_API_BASE","https://dashscope.aliyuncs.com/compatible-mode/v1"), "model": os.getenv("QIANWEN_MODEL","qwen-plus")},
         "openai":   {"api_key": os.getenv("OPENAI_API_KEY",""),  "base_url": os.getenv("OPENAI_API_BASE","https://api.openai.com/v1"), "model": os.getenv("OPENAI_MODEL","gpt-3.5-turbo")},
         "siliconflow": {"api_key": os.getenv("SILICONFLOW_API_KEY",""), "base_url": os.getenv("SILICONFLOW_API_BASE","https://api.siliconflow.cn/v1"), "model": os.getenv("SILICONFLOW_MODEL","deepseek-ai/DeepSeek-V3")},
-        "opencode": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://api.opencode.ai/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-chat")},
+        "opencode_go": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/go/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-go/minimax-m2.7")},
+        "opencode_zen": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/v1"), "model": os.getenv("OPENCODE_MODEL","opencode/minimax-m2.7")},
     }
     return defaults.get(provider, {})
 
 def _detect_provider() -> str:
     """按优先级检测可用的 LLM Provider（优先使用数据库配置）"""
-    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode"]:
+    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode_go", "opencode_zen"]:
         if _get_llm_config(p).get("api_key"):
             return p
     return "mock"
@@ -194,8 +195,11 @@ async def _llm_stream(
     elif provider == "siliconflow":
         async for chunk in _call_siliconflow(messages, model_override):
             yield chunk
-    elif provider == "opencode":
-        async for chunk in _call_opencode(messages, model_override):
+    elif provider == "opencode_go":
+        async for chunk in _call_opencode_go(messages, model_override):
+            yield chunk
+    elif provider == "opencode_zen":
+        async for chunk in _call_opencode_zen(messages, model_override):
             yield chunk
     else:
         async for chunk in _mock_stream(messages):
@@ -404,17 +408,17 @@ async def _call_siliconflow(messages: list[dict], model_override: str | None = N
         yield _sse({"error": f"硅基流动 API 调用失败: {e}"})
 
 
-async def _call_opencode(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
-    """OpenCode API 调用 - 兼容 OpenAI 格式"""
+async def _call_opencode_go(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
+    """OpenCode Go API 调用 - 订阅制开源模型服务"""
     import httpx
-    cfg = _get_llm_config("opencode")
-    url = f"{(cfg['base_url'] or 'https://api.opencode.ai/v1').rstrip('/')}/chat/completions"
+    cfg = _get_llm_config("opencode_go")
+    url = f"{(cfg['base_url'] or 'https://opencode.ai/zen/go/v1').rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or cfg.get("model") or "opencode-chat",
+        "model":       model_override or cfg.get("model") or "opencode-go/minimax-m2.7",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -437,8 +441,46 @@ async def _call_opencode(messages: list[dict], model_override: str | None = None
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[OpenCode] {e}")
-        yield _sse({"error": f"OpenCode API 调用失败: {e}"})
+        logger.error(f"[OpenCode Go] {e}")
+        yield _sse({"error": f"OpenCode Go API 调用失败: {e}"})
+
+
+async def _call_opencode_zen(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
+    """OpenCode Zen API 调用 - 精选模型付费网关"""
+    import httpx
+    cfg = _get_llm_config("opencode_zen")
+    # Zen 使用 /chat/completions 端点（OpenAI兼容格式）
+    url = f"{(cfg['base_url'] or 'https://opencode.ai/zen/v1').rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type":  "application/json",
+    }
+    payload = {
+        "model":       model_override or cfg.get("model") or "opencode/minimax-m2.7",
+        "messages":    messages,
+        "stream":      True,
+        "temperature": 0.7,
+        "max_tokens":  4096,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    if line.startswith("data: "):
+                        try:
+                            d = json.loads(line[6:])
+                            delta = d.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                yield _sse({"content": content})
+                        except json.JSONDecodeError:
+                            continue
+    except Exception as e:
+        logger.error(f"[OpenCode Zen] {e}")
+        yield _sse({"error": f"OpenCode Zen API 调用失败: {e}"})
 
 
 async def _mock_stream(messages: list[dict]) -> AsyncGenerator[str, None]:
@@ -681,5 +723,6 @@ async def copilot_status():
         "qianwen":  bool(QIANWEN_API_KEY),
         "minimax":  bool(MINIMAX_API_KEY),
         "siliconflow": bool(os.getenv("SILICONFLOW_API_KEY", "")),
-        "opencode": bool(os.getenv("OPENCODE_API_KEY", "")),
+        "opencode_go": bool(os.getenv("OPENCODE_API_KEY", "")),
+        "opencode_zen": bool(os.getenv("OPENCODE_API_KEY", "")),
     }

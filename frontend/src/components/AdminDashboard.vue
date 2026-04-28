@@ -780,29 +780,122 @@ const llmProviders = reactive({
       }
     ],
   },
-  opencode: {
-    label: 'OpenCode', icon: '⚡', desc: 'OpenCode AI - 国产大模型平台（含免费额度）',
-    default_base: 'https://api.opencode.ai/v1', default_model: 'opencode-chat',
+  opencode_go: {
+    label: 'OpenCode Go', icon: '🚀', desc: 'OpenCode Go - 开源编程模型订阅服务（首月$5，之后$10/月）',
+    default_base: 'https://opencode.ai/zen/go/v1', default_model: 'opencode-go/minimax-m2.7',
     api_key: '', base_url: '', model: '', has_db_config: false,
     input_key: '', input_base: '', input_model: '',
     show_key: false, saving: false, testing: false, message: '', message_ok: false,
     show_model_info: false,
     modelGroups: [
       {
-        label: '💬 对话模型',
+        label: '🤖 旗舰模型',
         models: [
-          { id: 'opencode-chat', name: 'OpenCode Chat', pricing: '¥3-8/百万Token', finance: '代码能力强，量化策略编写辅助' },
-          { id: 'opencode-grok', name: 'OpenCode Grok', pricing: '¥8-20/百万Token', finance: '实时信息能力强，市场动态追踪' },
+          { id: 'opencode-go/glm-5.1', name: 'GLM-5.1', pricing: '$10/月订阅', finance: '最新旗舰，开源最强编程模型' },
+          { id: 'opencode-go/glm-5', name: 'GLM-5', pricing: '$10/月订阅', finance: '高性能开源编程模型' },
+          { id: 'opencode-go/kimi-k2.6', name: 'Kimi K2.6', pricing: '$10/月订阅', finance: 'Kimi旗舰，开源编程能力强' },
+          { id: 'opencode-go/kimi-k2.5', name: 'Kimi K2.5', pricing: '$10/月订阅', finance: '高性价比，编程任务首选' },
         ]
       },
       {
-        label: '🆓 Free模型 (OpenCode)',
+        label: '🔵 MiniMax 系列',
         models: [
-          { id: 'opencode-free', name: 'OpenCode Free', pricing: '🆓 免费', finance: '完全免费，日常行情查询和简单分析', best_for: '⭐ 免费无限制' },
-          { id: 'opencode-mini', name: 'OpenCode Mini', pricing: '🆓 免费', finance: '轻量模型，免费额度充足，适合K线解读' },
-          { id: 'opencode-qwen', name: 'OpenCode-Qwen (Free)', pricing: '🆓 免费', finance: '基于Qwen的免费模型，中文理解好' },
+          { id: 'opencode-go/minimax-m2.7', name: 'MiniMax M2.7', pricing: '$10/月订阅', finance: '当前模型，高性能低成本', best_for: '⭐ 推荐' },
+          { id: 'opencode-go/minimax-m2.5', name: 'MiniMax M2.5', pricing: '$10/月订阅', finance: '最高请求额度，约3.3万次/月', best_for: '⭐ 高频使用首选' },
         ]
-      }
+      },
+      {
+        label: '💚 Qwen 系列',
+        models: [
+          { id: 'opencode-go/qwen3.6-plus', name: 'Qwen3.6 Plus', pricing: '$10/月订阅', finance: '中文理解强，约1.6万次/月' },
+          { id: 'opencode-go/qwen3.5-plus', name: 'Qwen3.5 Plus', pricing: '$10/月订阅', finance: '最高请求额度，约5万次/月', best_for: '⭐ 最高性价比' },
+        ]
+      },
+      {
+        label: '🔷 MiMo 系列',
+        models: [
+          { id: 'opencode-go/mimo-v2.5', name: 'MiMo-V2.5', pricing: '$10/月订阅', finance: '高请求额度，约1万次/月' },
+          { id: 'opencode-go/mimo-v2-pro', name: 'MiMo-V2-Pro', pricing: '$10/月订阅', finance: '编程能力强' },
+          { id: 'opencode-go/mimo-v2-omni', name: 'MiMo-V2-Omni', pricing: '$10/月订阅', finance: '全能型，高请求额度' },
+          { id: 'opencode-go/mimo-v2.5-pro', name: 'MiMo-V2.5-Pro', pricing: '$10/月订阅', finance: '专业版编程模型' },
+        ]
+      },
+      {
+        label: '🟣 DeepSeek 系列',
+        models: [
+          { id: 'opencode-go/deepseek-v4-pro', name: 'DeepSeek V4 Pro', pricing: '$10/月订阅', finance: '高性能推理，约1.7万次/月' },
+          { id: 'opencode-go/deepseek-v4-flash', name: 'DeepSeek V4 Flash', pricing: '$10/月订阅', finance: '最高请求额度，约15.8万次/月', best_for: '⭐ 超高频首选' },
+        ]
+      },
+    ],
+  },
+  opencode_zen: {
+    label: 'OpenCode Zen', icon: '⚡', desc: 'OpenCode Zen - 精选模型付费网关（含大量免费额度）',
+    default_base: 'https://opencode.ai/zen/v1', default_model: 'opencode/minimax-m2.7',
+    api_key: '', base_url: '', model: '', has_db_config: false,
+    input_key: '', input_base: '', input_model: '',
+    show_key: false, saving: false, testing: false, message: '', message_ok: false,
+    show_model_info: false,
+    modelGroups: [
+      {
+        label: '🆓 免费模型 (Zen)',
+        models: [
+          { id: 'opencode/big-pickle', name: 'Big Pickle', pricing: '🆓 完全免费', finance: '限时免费，隐身模型，日常分析首选', best_for: '⭐ 完全免费首选' },
+          { id: 'opencode/minimax-m2.5-free', name: 'MiniMax M2.5 Free', pricing: '🆓 免费', finance: '限时免费，国产高性能模型' },
+          { id: 'opencode/ling-2.6-flash', name: 'Ling 2.6 Flash', pricing: '🆓 免费', finance: '限时免费，极速响应' },
+          { id: 'opencode/hy3-preview-free', name: 'Hy3 Preview', pricing: '🆓 免费', finance: '限时免费，预览版本' },
+          { id: 'opencode/nemotron-3-super-free', name: 'Nemotron 3 Super', pricing: '🆓 免费', finance: 'NVIDIA提供，免费额度' },
+          { id: 'opencode/gpt-5-nano', name: 'GPT-5 Nano', pricing: '🆓 免费', finance: 'OpenAI免费模型，轻量快速' },
+        ]
+      },
+      {
+        label: '💬 GPT-5 系列 (Zen)',
+        models: [
+          { id: 'opencode/gpt-5.5', name: 'GPT 5.5', pricing: '$5-45/百万Token', finance: '最新旗舰，≤272K: $5 in/$30 out', best_for: '⭐ 综合最强' },
+          { id: 'opencode/gpt-5.5-pro', name: 'GPT 5.5 Pro', pricing: '$30-180/百万Token', finance: 'GPT-5.5专业版，性能最强' },
+          { id: 'opencode/gpt-5.4', name: 'GPT 5.4', pricing: '$2.5-22.5/百万Token', finance: '≤272K: $2.5 in/$15 out，高性价比' },
+          { id: 'opencode/gpt-5.4-pro', name: 'GPT 5.4 Pro', pricing: '$30-180/百万Token', finance: 'GPT-5.4专业版' },
+          { id: 'opencode/gpt-5.4-mini', name: 'GPT 5.4 Mini', pricing: '$0.75-4.5/百万Token', finance: '轻量高性价比，日常分析首选' },
+          { id: 'opencode/gpt-5.4-nano', name: 'GPT 5.4 Nano', pricing: '$0.2-1.25/百万Token', finance: '超低成本，简单查询' },
+          { id: 'opencode/gpt-5.3-codex-spark', name: 'GPT 5.3 Codex Spark', pricing: '$1.75-14/百万Token', finance: '代码能力增强版' },
+          { id: 'opencode/gpt-5.3-codex', name: 'GPT 5.3 Codex', pricing: '$1.75-14/百万Token', finance: '代码专用模型' },
+          { id: 'opencode/gpt-5.2', name: 'GPT 5.2', pricing: '$1.75-14/百万Token', finance: '高性能代码模型' },
+          { id: 'opencode/gpt-5.1', name: 'GPT 5.1', pricing: '$1.07-8.5/百万Token', finance: '稳定版代码模型' },
+          { id: 'opencode/gpt-5', name: 'GPT 5', pricing: '$1.07-8.5/百万Token', finance: '基础版GPT-5' },
+        ]
+      },
+      {
+        label: '🧠 Claude 系列 (Zen)',
+        models: [
+          { id: 'opencode/claude-opus-4-7', name: 'Claude Opus 4.7', pricing: '$5-25/百万Token', finance: '最强推理，复杂金融决策', best_for: '⭐ 推理最强' },
+          { id: 'opencode/claude-opus-4-6', name: 'Claude Opus 4.6', pricing: '$5-25/百万Token', finance: '旗舰推理模型' },
+          { id: 'opencode/claude-opus-4-5', name: 'Claude Opus 4.5', pricing: '$5-25/百万Token', finance: '高性能推理' },
+          { id: 'opencode/claude-opus-4-1', name: 'Claude Opus 4.1', pricing: '$15-75/百万Token', finance: '超长上下文推理' },
+          { id: 'opencode/claude-sonnet-4-6', name: 'Claude Sonnet 4.6', pricing: '$3-15/百万Token', finance: '平衡之选，代码分析兼备' },
+          { id: 'opencode/claude-sonnet-4-5', name: 'Claude Sonnet 4.5', pricing: '$3-15/百万Token', finance: '≤200K: $3 in/$15 out' },
+          { id: 'opencode/claude-haiku-4-5', name: 'Claude Haiku 4.5', pricing: '$1-5/百万Token', finance: '快速响应，实时行情解读' },
+        ]
+      },
+      {
+        label: '🌟 Gemini 系列 (Zen)',
+        models: [
+          { id: 'opencode/gemini-3.1-pro', name: 'Gemini 3.1 Pro', pricing: '$2-18/百万Token', finance: '≤200K: $2 in/$12 out，上下文128K' },
+          { id: 'opencode/gemini-3-flash', name: 'Gemini 3 Flash', pricing: '$0.5-3/百万Token', finance: '快速低价，实时K线解读' },
+        ]
+      },
+      {
+        label: '🇨🇳 国产模型 (Zen)',
+        models: [
+          { id: 'opencode/minimax-m2.7', name: 'MiniMax M2.7', pricing: '$0.30-1.2/百万Token', finance: '当前模型，高性能低成本' },
+          { id: 'opencode/minimax-m2.5', name: 'MiniMax M2.5', pricing: '$0.30-1.2/百万Token', finance: '高性价比，国产首选' },
+          { id: 'opencode/qwen3.6-plus', name: 'Qwen3.6 Plus', pricing: '$0.50-3/百万Token', finance: '中文理解强，财报解读' },
+          { id: 'opencode/qwen3.5-plus', name: 'Qwen3.5 Plus', pricing: '$0.20-1.2/百万Token', finance: '高性价比，中文场景' },
+          { id: 'opencode/kimi-k2.6', name: 'Kimi K2.6', pricing: '$0.95-4/百万Token', finance: '长上下文优秀，旗舰模型' },
+          { id: 'opencode/kimi-k2.5', name: 'Kimi K2.5', pricing: '$0.60-3/百万Token', finance: '高性价比，编程能力强' },
+          { id: 'opencode/glm-5.1', name: 'GLM-5.1', pricing: '$1.40-4.4/百万Token', finance: '国产旗舰，开源最强编程模型' },
+          { id: 'opencode/glm-5', name: 'GLM-5', pricing: '$1.00-3.2/百万Token', finance: '国产高性能，开源模型' },
+        ]
+      },
     ],
   },
 })
@@ -1105,7 +1198,7 @@ async function refreshWatchdog() {
   watchdogError.value = null
   try {
     const data = await apiFetch('/api/v1/admin/watchdog/status')
-    console.log('[Watchdog] Raw response:', data)
+    logger.log('[Watchdog] Raw response:', data)
     // apiFetch 已经通过 extractData 提取了 response.data
     if (data && typeof data.enabled === 'boolean') {
       // 直接赋值，因为 apiFetch 已经提取了 data 字段
@@ -1116,13 +1209,13 @@ async function refreshWatchdog() {
       watchdogStatus.restart_count = data.restart_count ?? 0
       watchdogStatus.total_restarts = data.total_restarts ?? 0
       watchdogStatus.recent_errors = data.recent_errors ?? []
-      console.log('[Watchdog] Status updated:', watchdogStatus)
+      logger.log('[Watchdog] Status updated:', watchdogStatus)
     } else {
-      console.warn('[Watchdog] Invalid response format:', data)
+      logger.warn('[Watchdog] Invalid response format:', data)
       watchdogError.value = '响应格式错误: ' + JSON.stringify(data)
     }
   } catch (e) { 
-    console.error('[Watchdog] Refresh error:', e)
+    logger.error('[Watchdog] Refresh error:', e)
     watchdogError.value = e.message || '加载失败'
   } finally {
     watchdogLoading.value = false
@@ -1131,7 +1224,7 @@ async function refreshWatchdog() {
 
 async function toggleWatchdog(enabled) {
   try {
-    console.log('[Watchdog] Toggling to:', enabled)
+    logger.log('[Watchdog] Toggling to:', enabled)
     watchdogLoading.value = true
     // 乐观更新：立即更新 UI
     watchdogStatus.enabled = enabled
@@ -1140,7 +1233,7 @@ async function toggleWatchdog(enabled) {
       method: 'POST',
       body: JSON.stringify({ enabled })
     })
-    console.log('[Watchdog] Toggle response:', res)
+    logger.log('[Watchdog] Toggle response:', res)
     // apiFetch 已经提取了 data 字段，res 直接是 {enabled: true/false}
     
     // 延迟刷新，确保后端已处理
@@ -1150,7 +1243,7 @@ async function toggleWatchdog(enabled) {
     
     alert(enabled ? '进程保活已启用' : '进程保活已禁用')
   } catch (e) { 
-    console.error('[Watchdog] Toggle failed:', e)
+    logger.error('[Watchdog] Toggle failed:', e)
     watchdogError.value = e.message || '切换失败'
     // 失败时恢复原状态
     await refreshWatchdog()
@@ -1199,7 +1292,7 @@ onMounted(() => {
   refreshScheduler()
   refreshSystemMetrics()
   refreshLogs()
-  console.log('[AdminDashboard] Mounting, calling refreshWatchdog...')
-  refreshWatchdog().catch(e => console.error('[AdminDashboard] refreshWatchdog failed:', e))
+  logger.log('[AdminDashboard] Mounting, calling refreshWatchdog...')
+  refreshWatchdog().catch(e => logger.error('[AdminDashboard] refreshWatchdog failed:', e))
 })
 </script>
