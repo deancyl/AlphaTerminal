@@ -3,10 +3,12 @@ Pytest configuration and shared fixtures for AlphaTerminal backend tests.
 """
 import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from typing import Generator
 import sys
 import os
+import tempfile
+import sqlite3
 
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -18,6 +20,34 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+
+@pytest.fixture(scope="session")
+def test_db_path():
+    """Create a temporary test database."""
+    # Create temp database file
+    fd, path = tempfile.mkstemp(suffix='.db')
+    os.close(fd)
+    
+    # Initialize tables
+    from app.db.database import init_tables
+    import app.db.database as db_module
+    
+    # Save original path
+    original_path = db_module._db_path
+    
+    # Set test database path
+    db_module._db_path = path
+    
+    try:
+        init_tables()
+        yield path
+    finally:
+        # Restore original path
+        db_module._db_path = original_path
+        # Clean up
+        if os.path.exists(path):
+            os.unlink(path)
 
 
 @pytest.fixture

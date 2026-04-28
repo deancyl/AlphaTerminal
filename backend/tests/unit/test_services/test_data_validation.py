@@ -356,12 +356,31 @@ def test_http_client_circuit_breaker_integration():
 def test_alphavantage_fetcher_init():
     """AlphavantageFetcher 正确初始化"""
     print("\n[13] AlphavantageFetcher 初始化")
-    fetcher = AlphavantageFetcher(proxy="http://192.168.1.50:7897")
-    assert fetcher.name == "alphavantage"
-    assert fetcher.display_name == "Alphavantage (US/FX)"
-    assert fetcher.api_key == "4M3YTMFEMBOPM1W2"
-    assert fetcher.supports_us == True
-    pass_("AlphavantageFetcher 初始化正确")
+    # 设置环境变量用于测试
+    import os
+    # 先保存原始值
+    original_key = os.environ.get("ALPHA_VANTAGE_API_KEY", "")
+    os.environ["ALPHA_VANTAGE_API_KEY"] = "4M3YTMFEMBOPM1W2"
+    
+    # 重新导入以获取新环境变量值
+    from importlib import reload
+    import app.services.fetchers.alphavantage as av_module
+    reload(av_module)
+    from app.services.fetchers.alphavantage import AlphavantageFetcher
+    
+    try:
+        fetcher = AlphavantageFetcher(proxy="http://192.168.1.50:7897")
+        assert fetcher.name == "alphavantage"
+        assert fetcher.display_name == "Alphavantage (US/FX)"
+        assert fetcher.api_key == "4M3YTMFEMBOPM1W2"
+        assert fetcher.supports_us == True
+        pass_("AlphavantageFetcher 初始化正确")
+    finally:
+        # 恢复原始值
+        if original_key:
+            os.environ["ALPHA_VANTAGE_API_KEY"] = original_key
+        else:
+            del os.environ["ALPHA_VANTAGE_API_KEY"]
 
 
 def test_alphavantage_symbol_routing():
