@@ -1,7 +1,7 @@
-# KNOWN ISSUES & ROADMAP — Beta v0.5.171
+# KNOWN ISSUES & ROADMAP — Beta v0.5.181
 
 > 研发进度表与技术债记录。更新于 2026-04-28。
-> 涵盖 v0.5.4 → v0.5.171 共 **四轮深度审计** 的完整 Epic 记录。
+> 涵盖 v0.5.4 → v0.5.181 共 **多轮深度审计** 的完整 Epic 记录。
 
 ---
 
@@ -9,7 +9,12 @@
 
 | 版本 | 日期 | 核心成果 |
 |:---|:---:|:---|
-| v0.5.171 | 04-28 | 第四轮深度审计：OpenCode模型配置拆分(Go/Zen)、AdminDashboard console调用清理、Copilot配置同步修复 |
+| v0.5.181 | 04-28 | 模型选择下拉框 + 免费模型分组：DeepSeek/通义千问/OpenAI/硅基流动/OpenCode |
+| v0.5.180 | 04-27 | 第四轮审计：WebSocket优雅关闭、静态资源清理、安全头部增强 |
+| v0.5.179 | 04-27 | 前端构建优化：chunk分割、echarts external、版本一致性 |
+| v0.5.178 | 04-27 | 后端启动脚本优化：env加载、代理配置、SIGTERM优雅关停 |
+| v0.5.177 | 04-27 | 回测模块增强：信号可视化优化、收益率计算修复 |
+| v0.5.176 | 04-27 | 前端UI优化：GridStack响应式、Copilot侧边栏增强 |
 | v0.5.170 | 04-27 | 第三轮深度审计：SIGTERM优雅关停、连接泄漏(commit on error path)、WAL检测优化、代理环境污染修复、bare except修复、前端symbol规范化对齐、SSRF响应限制 |
 | v0.5.169 | 04-27 | 第二轮审计修复：SQL注入防护、API密钥掩码、Sharpe比率正确计算、符号规范化、前端logger统一 |
 | v0.5.168 | 04-27 | 全面代码审计 + 修复 startQuotePolling 函数定义 + 版本号统一 + console 清理 |
@@ -81,27 +86,7 @@
 
 ---
 
-### Issue #NEW6：OpenCode模型配置未区分Go/Zen
-**严重程度**：🟡 中
-**状态**：✅ 已关闭（v0.5.171）
-
-**根因**：AdminDashboard.vue 中 OpenCode 配置未区分 Go 和 Zen 两个独立服务，模型ID格式不正确。
-**修复**：
-- 拆分 `opencode` 为 `opencode_go` 和 `opencode_zen` 两个独立 provider
-- 更新前端模型列表，包含所有支持的模型（含免费模型）
-- 更新后端 copilot.py，添加 `_call_opencode_go` 和 `_call_opencode_zen` 函数
-- 修正 Base URL：Go 使用 `https://opencode.ai/zen/go/v1`，Zen 使用 `https://opencode.ai/zen/v1`
-
----
-
-### Issue #NEW7：AdminDashboard console调用未使用logger
-**严重程度**：🟢 低
-**状态**：✅ 已关闭（v0.5.171）
-
-**根因**：AdminDashboard.vue 中 Watchdog 相关代码直接使用 `console.log/warn/error`，未使用统一的 logger 工具。
-**修复**：将所有 console 调用替换为 logger 调用，保持与项目其他部分一致。
-
----
+### Issue #11：`useMarketStream` 内存泄漏
 **严重程度**：🔴 高  
 **状态**：✅ 已关闭（v0.5.92）
 
@@ -320,6 +305,7 @@
 
 | 优先级 | 功能 | 状态 |
 |:---:|:---|:---:|
+| P0 | 模型选择下拉框 + 免费模型（AdminDashboard LLM配置） | ✅ v0.5.181 已完成 |
 | P1 | 回测支持港股/美股 symbol | 待开始 |
 | P1 | 子账户持仓联动（组合选择后自动合并子账户 PnL）| 进行中 |
 | P2 | 宏观数据面板（GDP/CPI/PMI）| 待开始 |
