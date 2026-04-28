@@ -67,10 +67,15 @@ app.add_middleware(
 )
 
 # ── 全局异常处理器 ───────────────────────────────────────────────────────────
+from app.utils.exception_handlers import setup_exception_handlers
 
+# 配置新的全局异常处理器
+setup_exception_handlers(app)
+
+# 保留原有的异常处理器作为兼容（会被新的处理器覆盖）
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """422: 参数校验失败 — 返回统一格式"""
+async def validation_exception_handler_legacy(request: Request, exc: RequestValidationError):
+    """422: 参数校验失败 — 返回统一格式 (兼容旧版本)"""
     body = {}
     try:
         body = await request.body()
@@ -91,8 +96,8 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException):
-    """4xx: HTTP异常 — 返回统一格式"""
+async def http_exception_handler_legacy(request: Request, exc: HTTPException):
+    """4xx: HTTP异常 — 返回统一格式 (兼容旧版本)"""
     logger.warning(f"[HTTP {exc.status_code}] path={request.url.path} detail={exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
