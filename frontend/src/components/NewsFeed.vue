@@ -12,7 +12,7 @@
         <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
           {{ lastRefreshLabel }}
         </span>
-        <span class="text-terminal-dim text-[10px]">{{ total }} 条</span>
+        <span class="text-terminal-dim text-[10px]">{{ filteredTotal }} 条</span>
         <!-- 手动刷新按钮 -->
         <button
           class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
@@ -163,7 +163,7 @@
           </div>
         </div>
         <div v-else-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
-          暂无快讯数据
+          {{ activeSentimentFilter === 'all' ? '暂无快讯数据' : '暂无符合筛选条件的快讯' }}
         </div>
       </div>
     </div>
@@ -288,6 +288,8 @@ const sentiment = ref({
   timestamp: '',
 })
 const sentimentTimer = ref(null)
+
+const filteredTotal = computed(() => filteredItems.value.length)
 
 const sentimentTime = computed(() => {
   if (!sentiment.value.timestamp) return ''

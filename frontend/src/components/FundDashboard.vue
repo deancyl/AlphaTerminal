@@ -29,8 +29,8 @@
           >🔀 基金对比</button>
         </div>
         
-        <!-- 搜索栏 -->
-        <div class="flex items-center gap-2">
+        <!-- 搜索栏（ETF/公募基金）-->
+        <div v-if="activeTab !== 'compare'" class="flex items-center gap-2">
           <div class="relative flex-1">
             <input 
               v-model="searchQuery" 
@@ -70,8 +70,8 @@
       </div>
     </div>
 
-    <!-- 无数据 -->
-    <div v-else-if="!fundInfo && !loading" class="flex-1 flex items-center justify-center">
+    <!-- 无数据（仅 ETF/公募基金显示） -->
+    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading" class="flex-1 flex items-center justify-center">
       <div class="text-center">
         <div class="text-4xl mb-3">📭</div>
         <div class="text-theme-muted text-sm">请输入代码或从快捷列表选择</div>
@@ -81,8 +81,8 @@
       </div>
     </div>
 
-    <!-- 主内容区 -->
-    <div v-else class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <!-- 主内容区（ETF/公募基金/对比） -->
+    <div v-if="activeTab === 'compare' || fundInfo || loading" class="flex-1 p-4 space-y-4 overflow-y-auto">
       
       <!-- ETF 面板 -->
       <div v-if="activeTab === 'etf'" class="space-y-4">
@@ -184,7 +184,7 @@
       </div>
 
       <!-- 公募基金面板（专业级） -->
-      <div v-else class="space-y-4">
+      <div v-else-if="activeTab === 'open'" class="space-y-4">
         
         <!-- A. 头部概览区 -->
         <div class="bg-terminal-panel border border-theme rounded-xl p-4">
