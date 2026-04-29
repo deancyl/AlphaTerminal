@@ -208,20 +208,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, onErrorCaptured, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, onErrorCaptured, watch, computed, defineAsyncComponent } from 'vue'
 import { useDocumentVisibility, useIntervalFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import LoadingFallback from './components/LoadingFallback.vue'
+
+// ── 始终需要的组件（同步加载）──────────────────────────────────────
 import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
-import BondDashboard   from './components/BondDashboard.vue'
-import FuturesDashboard from './components/FuturesDashboard.vue'
-import PortfolioDashboard from './components/PortfolioDashboard.vue'
-import FundDashboard from './components/FundDashboard.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
-import BacktestDashboard from './components/BacktestDashboard.vue'
-import FuturesPanel       from './components/FuturesPanel.vue'
-import CopilotSidebar from './components/CopilotSidebar.vue'
-import AdminDashboard  from './components/AdminDashboard.vue'
-import FullscreenKline from './components/FullscreenKline.vue'
+
+// ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
+const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
+const FuturesDashboard = defineAsyncComponent(() => import('./components/FuturesDashboard.vue'))
+const PortfolioDashboard = defineAsyncComponent(() => import('./components/PortfolioDashboard.vue'))
+const FundDashboard   = defineAsyncComponent(() => import('./components/FundDashboard.vue'))
+const BacktestDashboard = defineAsyncComponent(() => import('./components/BacktestDashboard.vue'))
+const FuturesPanel    = defineAsyncComponent(() => import('./components/FuturesPanel.vue'))
+const CopilotSidebar  = defineAsyncComponent(() => import('./components/CopilotSidebar.vue'))
+const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
+const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
+
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
