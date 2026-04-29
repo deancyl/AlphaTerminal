@@ -178,6 +178,12 @@
       </div>
     </main>
 
+    <!-- ━━━ 快捷键帮助面板 ━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <KeyboardShortcutsHelp
+      :visible="helpVisible"
+      @close="helpVisible = false"
+    />
+
     <!-- ━━━ Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <!-- 桌面端：右侧 sidebar | 移动端：底部抽屉 (bottom sheet) -->
     <aside
@@ -218,6 +224,7 @@ import LoadingFallback from './components/LoadingFallback.vue'
 import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
+import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
@@ -234,6 +241,7 @@ const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDas
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
+import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 
@@ -284,6 +292,29 @@ function openFuturesFullscreen({ symbol }) {
   futuresFullscreen.value = true
   ui.klineFullscreen = true
 }
+
+// 键盘快捷键系统
+const { helpVisible } = useKeyboardShortcuts({
+  onViewChange: (viewId) => { currentView.value = viewId },
+  onSearch: () => { /* TODO: 打开全局搜索 */ logger.log('[Shortcut] 打开搜索') },
+  onEscape: () => {
+    if (ui.klineFullscreen) {
+      ui.klineFullscreen = false
+      futuresFullscreen.value = false
+    } else if (isCopilotOpen.value) {
+      isCopilotOpen.value = false
+    } else if (isSidebarOpen.value) {
+      isSidebarOpen.value = false
+    }
+  },
+  onFullscreen: () => {
+    // F9: 打开当前标的的深度资料（全屏K线）
+    const sym = currentSymbol.value
+    if (sym) {
+      openFullscreenKline({ symbol: sym, name: sym })
+    }
+  }
+})
 
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const copilotUnreadCount = ref(0) // Copilot 未读消息数
