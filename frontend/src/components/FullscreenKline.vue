@@ -36,9 +36,16 @@
         </div>
       </div>
 
-      <div class="header-right shrink-0">
+      <div class="header-right shrink-0 flex items-center gap-2">
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
+        <button 
+          class="text-xs px-2 py-1 rounded bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+          @click="showDetail = true"
+          title="F9 深度资料"
+        >
+          📋 F9
+        </button>
         <button class="close-btn" @click="emit('close')">✕ 关闭</button>
       </div>
     </header>
@@ -118,6 +125,20 @@
         class="quote-panel-wrapper"
       />
     </div>
+
+    <!-- F9 深度资料面板 -->
+    <Teleport to="body">
+      <div
+        v-if="showDetail"
+        class="fixed inset-0 z-[9999] bg-terminal-bg"
+      >
+        <StockDetail
+          :symbol="props.symbol"
+          :name="props.name"
+          @close="showDetail = false"
+        />
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -134,6 +155,7 @@ import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
 import CrosshairOverlay from './CrosshairOverlay.vue'
+import StockDetail from './StockDetail.vue'
 
 
 
@@ -235,6 +257,7 @@ const subChartOptions = [
   { key: 'CCI', label: 'CCI' },
 ]
 const activeSubChart = ref('VOL')
+const showDetail = ref(false)
 
 // 移动端降维：强制只保留 VOL，避免多重指标导致 Canvas 重绘卡顿
 watch(isMobile, (mobile) => {
