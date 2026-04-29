@@ -363,7 +363,19 @@ function handleKeydown(e) {
 
 // 修复F5: window 级别快捷键（Esc 关闭全屏，焦点丢失时也能响应）
 function handleWindowKeydown(e) {
+  // F9: 打开深度资料面板（仅在FullscreenKline中）
+  if (e.key === 'F9' || e.key === 'f9') {
+    e.preventDefault()
+    showDetail.value = true
+    return
+  }
+  
   if (e.key === 'Escape') {
+    // 如果StockDetail打开，先关闭它
+    if (showDetail.value) {
+      showDetail.value = false
+      return
+    }
     emit('close')
   }
 }

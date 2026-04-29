@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div
       v-if="visible"
-      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      class="fixed inset-0 z-[100001] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       @click="$emit('close')"
     >
       <div
@@ -54,6 +54,13 @@
                     <span class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim font-mono">{{ formatKey(s.key) }}</span>
                   </div>
                 </div>
+                <!-- F9深度资料（全屏K线中可用） -->
+                <div v-if="f9Shortcut" class="flex items-center justify-between py-2 px-3 rounded bg-terminal-bg/50">
+                  <span class="text-sm text-terminal-secondary">{{ f9Shortcut.description }}（全屏K线中）</span>
+                  <div class="flex items-center gap-1">
+                    <span class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim font-mono">{{ formatKey(f9Shortcut.key) }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -84,6 +91,11 @@ const viewShortcuts = computed(() =>
 
 const funcShortcuts = computed(() => 
   SHORTCUTS.filter(s => ['search', 'escape', 'fullscreen', 'help'].includes(s.action))
+)
+
+// F9深度资料需要特殊处理，确保显示在功能列表中
+const f9Shortcut = computed(() => 
+  SHORTCUTS.find(s => s.key === 'f9')
 )
 
 function formatKey(key) {

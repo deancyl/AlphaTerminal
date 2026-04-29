@@ -308,9 +308,11 @@ const { helpVisible } = useKeyboardShortcuts({
     }
   },
   onFullscreen: () => {
-    // F9: 打开当前标的的深度资料（全屏K线）
+    // F9: 打开当前标的的深度资料
+    // 如果已经在全屏K线中，由FullscreenKline组件自己处理F9打开StockDetail
+    // 如果不在全屏K线中，先打开全屏K线
     const sym = currentSymbol.value
-    if (sym) {
+    if (sym && !ui.klineFullscreen) {
       openFullscreenKline({ symbol: sym, name: sym })
     }
   }
