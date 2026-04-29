@@ -227,6 +227,14 @@
       </div>
     </div>
 
+    <!-- ━━━ Widget 8：价格预警管理（右侧3列，15起）━━━━━━━━━━━ -->
+    <div class="grid-stack-item"
+         gs-x="9" gs-y="15" gs-w="3" gs-h="6" gs-min-w="2" gs-min-h="4">
+      <div class="grid-stack-item-content terminal-panel p-3">
+        <AlertManager />
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -241,6 +249,7 @@ import SentimentGauge    from './SentimentGauge.vue'
 import HotSectors        from './HotSectors.vue'
 import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
+import AlertManager      from './AlertManager.vue'
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile

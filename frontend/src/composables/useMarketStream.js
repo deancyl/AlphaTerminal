@@ -20,6 +20,7 @@
  */
 import { ref, computed, watch, onUnmounted, shallowRef, triggerRef } from 'vue'
 import { logger } from '../utils/logger.js'
+import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -129,6 +130,17 @@ function _newConnection() {
       _tickDirty = true
       // 在 microtask 中统一触发（合并同一 event loop 内的多次更新）
       queueMicrotask(_notifyTick)
+      
+      // 检查价格预警
+      if (data.price) {
+        const triggered = checkPriceAlerts(sym, data.price)
+        for (const { rule, price } of triggered) {
+          const title = `🔔 ${rule.symbol} 价格预警`
+          const body = `${formatAlertCondition(rule)}\n当前价格: ¥${price}`
+          sendNotification(title, { body })
+          recordAlertTrigger(rule, price)
+        }
+      }
     } catch (e) {
       logger.warn('[MarketStream] parse error:', e)
     }
@@ -388,4 +400,14 @@ export function useMarketStream(initialSymbol = '') {
       wsStatus: globalWsStatus.value,
     }),
   }
+}
+
+// 格式化预警条件文本
+function formatAlertCondition(rule) {
+  const conditionMap = {
+    'above': '高于',
+    'below': '低于',
+    'equals': '等于'
+  }
+  return `价格${conditionMap[rule.condition] || rule.condition} ¥${rule.targetPrice}`
 }

@@ -99,36 +99,39 @@ async def export_portfolio(
                     p.symbol,
                     p.shares,
                     p.avg_cost,
-                    p.current_price,
-                    p.market_value,
-                    p.unrealized_pnl,
-                    p.unrealized_pnl_pct,
-                    p.weight,
                     s.name as stock_name,
-                    s.sector
+                    s.price as current_price,
+                    s.mktcap
                 FROM positions p
                 LEFT JOIN market_all_stocks s ON p.symbol = s.symbol
                 WHERE p.portfolio_id = ?
-                ORDER BY p.market_value DESC""",
+                ORDER BY p.shares * p.avg_cost DESC""",
                 (portfolio_id,)
             ).fetchall()
             
             # 转换为字典列表
             data = []
             for pos in positions:
+                # 计算衍生字段
+                shares = pos[1] or 0
+                avg_cost = pos[2] or 0
+                current_price = pos[4] or 0  # current_price is at index 4
+                market_value = shares * current_price
+                cost_basis = shares * avg_cost
+                unrealized_pnl = market_value - cost_basis if shares > 0 else 0
+                unrealized_pnl_pct = (unrealized_pnl / cost_basis) if cost_basis > 0 else 0
+                
                 data.append({
                     "组合ID": portfolio_id,
                     "组合名称": portfolio[1],
                     "股票代码": pos[0],
-                    "股票名称": pos[8] or "",
-                    "所属行业": pos[9] or "",
-                    "持仓数量": pos[1],
-                    "平均成本": pos[2],
-                    "当前价格": pos[3],
-                    "市值": pos[4],
-                    "浮动盈亏": pos[5],
-                    "盈亏比例(%)": round(pos[6] * 100, 2) if pos[6] else 0,
-                    "权重(%)": round(pos[7] * 100, 2) if pos[7] else 0,
+                    "股票名称": pos[3] or "",  # stock_name is at index 3
+                    "持仓数量": shares,
+                    "平均成本": avg_cost,
+                    "当前价格": current_price,
+                    "市值": market_value,
+                    "浮动盈亏": round(unrealized_pnl, 2),
+                    "盈亏比例(%)": round(unrealized_pnl_pct * 100, 2),
                     "导出时间": datetime.now().isoformat()
                 })
             
@@ -136,19 +139,18 @@ async def export_portfolio(
             if data:
                 total_value = sum(item["市值"] for item in data)
                 total_pnl = sum(item["浮动盈亏"] for item in data)
+                total_cost = sum(item["持仓数量"] * item["平均成本"] for item in data if item["持仓数量"])
                 data.append({
                     "组合ID": portfolio_id,
                     "组合名称": f"{portfolio[1]} - 汇总",
                     "股票代码": "",
                     "股票名称": "",
-                    "所属行业": "",
                     "持仓数量": "",
                     "平均成本": "",
                     "当前价格": "",
                     "市值": total_value,
                     "浮动盈亏": total_pnl,
-                    "盈亏比例(%)": round(total_pnl / (total_value - total_pnl) * 100, 2) if total_value != total_pnl else 0,
-                    "权重(%)": 100,
+                    "盈亏比例(%)": round(total_pnl / total_cost * 100, 2) if total_cost > 0 else 0,
                     "导出时间": datetime.now().isoformat()
                 })
             
