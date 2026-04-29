@@ -1,6 +1,8 @@
 # AlphaTerminal 文档目录
 
-> 最后更新: 2026-04-29
+> 最后更新: 2026-04-29  
+> 当前版本: v0.5.185  
+> 开发计划: [todo0429.md](../todo0429.md) - v0.7.0路线图
 
 ## 📁 文档结构
 
@@ -11,6 +13,7 @@ docs/
 ├── DEV_SETUP.md                 # 开发环境搭建指南
 ├── TESTING_GUIDE.md             # 测试编写指南
 ├── KNOWN_ISSUES_TODO.md         # 已知问题和待办
+├── todo0429.md                  # v0.7.0 开发计划 ⭐
 ├── guides/                      # 使用指南
 │   ├── QUICKSTART.md           # 快速开始
 │   ├── deployment_guide.md     # 部署指南
