@@ -1159,14 +1159,15 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
         return []
 
     try:
-        raw = subprocess.check_output(
-            ["curl", "-s", "--max-time", "8",
-             f"https://qt.gtimg.cn/q={tc}",
-             "-H", "Referer: https://gu.qq.com",
-             "-H", "User-Agent: Mozilla/5.0"],
-            stderr=subprocess.DEVNULL
+        r = httpx.get(
+            f"https://qt.gtimg.cn/q={tc}",
+            headers={
+                "Referer": "https://gu.qq.com",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+            timeout=8,
         )
-        text = raw.decode("GBK", errors="replace")
+        text = r.text
         m = re.search(rf'v_{tc}="([^"]+)"', text)
         if not m:
             return []
@@ -1237,24 +1238,16 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
     all_rows = []
 
     def _fetch_with_timeout(target, args=(), timeout=20):
-        """在后台线程执行目标函数，超时则中止"""
-        import queue, threading, socket
-        result_queue = queue.Queue()
-        def worker():
+        """在后台线程执行目标函数，超时则中止（使用线程池限制并发）"""
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(target, *args)
             try:
-                result_queue.put(target(*args))
-            except Exception as e:
-                result_queue.put(e)
-        t = threading.Thread(target=worker, daemon=True)
-        t.start()
-        t.join(timeout=timeout)
-        if t.is_alive():
-            logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过")
-            return None
-        val = result_queue.get_nowait()
-        if isinstance(val, Exception):
-            raise val
-        return val
+                return future.result(timeout=timeout)
+            except FutureTimeoutError:
+                logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过")
+                return None
 
     # 策略 1: AkShare 港股指数 (对标恒生指数 HSI)
     if clean_sym in ("hsi", "hkhsi"):

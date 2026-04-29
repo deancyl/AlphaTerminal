@@ -551,9 +551,6 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     unrealized_pnl = 0.0
     try:
         _conn_ps = _get_conn()   # fresh connection = committed view
-        # DEBUG: verify what _conn_ps is and what data it sees
-        import sys as _sys; print(f"DEBUG unrealized: _conn_ps id={id(_conn_ps)}", file=_sys.stderr)
-        _sys.stderr.flush()
         unrealized_row = _conn_ps.execute(
             "SELECT SUM(unrealized_pnl) FROM position_summary WHERE portfolio_id=?",
             (portfolio_id,),

@@ -27,49 +27,30 @@ export const apiErrorState = reactive({
 })
 
 function _onFailure(url, status) {
-  // 简单自旋锁保护（JavaScript 单线程，但 async 可能交错）
-  if (_consecutiveFailures.lock) {
-    // 等待锁释放后重试（最多等待 10ms）
-    setTimeout(() => _onFailure(url, status), 1)
-    return
-  }
-  _consecutiveFailures.lock = true
-  try {
-    _consecutiveFailures.count++
-    const n = _consecutiveFailures.count
-    apiErrorState.failedCount = n
-    apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
-    apiErrorState.lastFailedAt = Date.now()
-    if (n >= _CIRCUIT_THRESHOLD) {
-      apiErrorState.isDegraded = true
-      broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
-    } else if (n >= _DEGRADE_THRESHOLD) {
-      apiErrorState.isDegraded = true
-      broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
-    }
-  } finally {
-    _consecutiveFailures.lock = false
+  // JavaScript 单线程，直接操作即可（async/await 不会导致并发问题）
+  _consecutiveFailures.count++
+  const n = _consecutiveFailures.count
+  apiErrorState.failedCount = n
+  apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
+  apiErrorState.lastFailedAt = Date.now()
+  if (n >= _CIRCUIT_THRESHOLD) {
+    apiErrorState.isDegraded = true
+    broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
+  } else if (n >= _DEGRADE_THRESHOLD) {
+    apiErrorState.isDegraded = true
+    broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
   }
 }
 
 function _onSuccess() {
-  if (_consecutiveFailures.lock) {
-    setTimeout(_onSuccess, 1)
-    return
-  }
-  _consecutiveFailures.lock = true
-  try {
-    if (_consecutiveFailures.count > 0) {
-      _consecutiveFailures.count = 0
-      apiErrorState.failedCount = 0
-      apiErrorState.lastError = null
-      if (apiErrorState.isDegraded) {
-        apiErrorState.isDegraded = false
-        broadcastDataSourceStatus('ok', '数据源已恢复正常')
-      }
+  if (_consecutiveFailures.count > 0) {
+    _consecutiveFailures.count = 0
+    apiErrorState.failedCount = 0
+    apiErrorState.lastError = null
+    if (apiErrorState.isDegraded) {
+      apiErrorState.isDegraded = false
+      broadcastDataSourceStatus('ok', '数据源已恢复正常')
     }
-  } finally {
-    _consecutiveFailures.lock = false
   }
 }
 
@@ -235,8 +216,7 @@ export { broadcastDataSourceStatus }
  * @throws {Error} 当required=true的请求失败时抛出
  */
 export async function fetchApiBatch(requests, silent = false) {
-  // Best-Effort 模式：用 Promise.allSettled 代替 Promise.all
-  // 单个接口超时/失败不会导致整批数据被丢弃
+  // Best-Effort 模式：内部 catch 保证单个接口失败不会导致整批丢弃
   const settled = await Promise.all(
     requests.map(async ({ url, key, default: defaultValue = null, required = true }) => {
       try {
