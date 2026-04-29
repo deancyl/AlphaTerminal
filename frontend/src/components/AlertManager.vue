@@ -290,6 +290,8 @@ onMounted(() => {
 
 <style scoped>
 .alert-manager {
-  @apply p-3 bg-terminal-panel/50 rounded-lg;
+  @apply p-3 rounded-lg;
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-primary);
 }
 </style>
