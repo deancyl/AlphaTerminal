@@ -173,6 +173,8 @@
         <BacktestDashboard v-else-if="currentView === 'backtest'" />
         <!-- 系统管理 -->
         <AdminDashboard v-else-if="currentView === 'admin'" />
+        <!-- 宏观经济 -->
+        <MacroDashboard v-else-if="currentView === 'macro'" />
       </div>
     </main>
 
@@ -227,6 +229,7 @@ const FuturesPanel    = defineAsyncComponent(() => import('./components/FuturesP
 const CopilotSidebar  = defineAsyncComponent(() => import('./components/CopilotSidebar.vue'))
 const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
+const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'

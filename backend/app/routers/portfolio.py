@@ -1197,40 +1197,46 @@ async def sell_lot(portfolio_id: int, body: SellIn):
       3. 返回平仓明细和总已实现盈亏
     """
     try:
-        result = execute_sell(
-            portfolio_id = portfolio_id,
-            symbol       = body.symbol,
-            shares       = body.shares,
-            sell_price   = body.sell_price,
-            order_id     = body.order_id,
-        )
+        # ── 事务包装：确保 execute_sell + 现金更新 + 流水记录 原子性 ──
+        with get_conn() as conn:
+            conn.execute("BEGIN TRANSACTION")
+            try:
+                result = execute_sell(
+                    portfolio_id = portfolio_id,
+                    symbol       = body.symbol,
+                    shares       = body.shares,
+                    sell_price   = body.sell_price,
+                    order_id     = body.order_id,
+                )
 
-        # 平仓写流水（可选：也可在持仓路由层写）
-        conn = _get_conn()
-        try:
-            rows = conn.execute(
-                "SELECT cash_balance FROM portfolios WHERE id=?",
-                (portfolio_id,),
-            ).fetchone()
-            cash_bal = (rows[0] or 0.0) if rows else 0.0
-            new_cash = cash_bal + result.total_realized_pnl
-            conn.execute(
-                "UPDATE portfolios SET cash_balance=? WHERE id=?",
-                (new_cash, portfolio_id),
-            )
-            _insert_transaction(
-                conn,
-                portfolio_id,
-                "sell_pnl",
-                result.total_realized_pnl,
-                new_cash,
-                related_symbol = body.symbol,
-                note = f"卖出{body.symbol} × {body.shares}手",
-                operator = "user",
-            )
-            conn.commit()
-        finally:
-            conn.close()
+                # 查询并更新现金余额
+                rows = conn.execute(
+                    "SELECT cash_balance FROM portfolios WHERE id=?",
+                    (portfolio_id,),
+                ).fetchone()
+                cash_bal = (rows[0] or 0.0) if rows else 0.0
+                new_cash = cash_bal + result.total_realized_pnl
+                conn.execute(
+                    "UPDATE portfolios SET cash_balance=? WHERE id=?",
+                    (new_cash, portfolio_id),
+                )
+
+                # 写入交易流水
+                _insert_transaction(
+                    conn,
+                    portfolio_id,
+                    "sell_pnl",
+                    result.total_realized_pnl,
+                    new_cash,
+                    related_symbol = body.symbol,
+                    note = f"卖出{body.symbol} × {body.shares}手",
+                    operator = "user",
+                )
+
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
 
         return _ok({
             "symbol":              body.symbol,

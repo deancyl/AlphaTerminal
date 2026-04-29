@@ -1397,11 +1397,16 @@ async def market_quote_detail(symbol: str):
     status     = w.get('status') or ''
     market     = w.get('market') or 'AShare'
 
-    # ── 实时快照（从 DB 取最新2条算当日 OHLC）──
-    # 注意：market_data_daily 表存纯数字 symbol（无 sh/sz 前缀），所以用 db_sym 查
-    rows = get_price_history(db_sym, limit=2) if callable(get_price_history) else []
-    latest_row = rows[0] if rows else {}
-    prev_row   = rows[1] if len(rows) > 1 else latest_row
+    # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
+    # 优化：将原来的3次查询（get_price_history limit=2 + get_daily_history limit=250 + limit=9999）
+    # 合并为1次查询（limit=400），足够覆盖所有需求
+    # market_data_daily 存无前缀代码，用 db_sym 查询
+    _HIST_LIMIT = 400  # 252(52周) + 60 + 20 + 5 + buffer
+    hist_all = get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0) if callable(get_daily_history) else []
+
+    # 实时快照：从 hist_all 前2条获取（最新 + 前一日）
+    latest_row = hist_all[0] if hist_all else {}
+    prev_row   = hist_all[1] if len(hist_all) > 1 else latest_row
 
     open_  = float(latest_row.get('open')  or price)
     high_  = float(latest_row.get('high')  or price)
@@ -1417,15 +1422,6 @@ async def market_quote_detail(symbol: str):
     else:
         amplitude = round(abs(price - prev_close) / prev_close * 100, 2) if prev_close and prev_close > 0 else None
 
-    # ── 历史 K 线（计算周期收益率 + 52 周高低）──────────────────
-    # market_data_daily 存无前缀代码，用 db_sym 查询
-    hist_1y  = get_daily_history(db_sym, limit=250, offset=0) if callable(get_daily_history) else []
-    hist_all = get_daily_history(db_sym, limit=9999, offset=0) if callable(get_daily_history) else []
-
-    def _latest_n(hist, n):
-        """最近 n 条收盘价（升序）"""
-        return hist[-n:] if len(hist) >= n else hist
-
     def _period_return(hist, n):
         """最近 n 日收益率（DESC 排序：最新在前）"""
         if len(hist) < n + 1: return None
@@ -1435,21 +1431,20 @@ async def market_quote_detail(symbol: str):
         return round((cur / prev - 1) * 100, 4)
 
     def _52w_bounds(hist):
-        """52 周最高/最低（最近 252 个交易日）。hist 为 DESC 排序（最新在前），需先反转取最近的 252 条。"""
+        """52 周最高/最低（最近 252 个交易日）。hist 为 DESC 排序（最新在前）。"""
         if not hist: return None, None, None, None
-        # hist 是 DESC 排序，取最近 252 条（最后 252 个 = 最老的 252 条），需取前面的 252 条
         recent = hist[:252] if len(hist) >= 252 else hist
-        closes = [(float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close')]
-        if not closes: return None, None, None, None
-        closes.sort(key=lambda x: x[0])
-        return closes[-1][0], closes[-1][1], closes[0][0], closes[0][1]
+        # O(n) 扫描替代 O(n log n) 排序
+        max_close = max((float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close'))
+        min_close = min((float(r.get('close', 0) or 0), r.get('date', '')) for r in recent if r.get('close'))
+        return max_close[0], max_close[1], min_close[0], min_close[1]
 
     ret_5d  = _period_return(hist_all, 5)
     ret_20d = _period_return(hist_all, 20)
     ret_60d = _period_return(hist_all, 60)
     # 今年以来（累计收益率，粗略用年初至今交易日）
-    ytd_start = [r for r in hist_all if str(getattr(r, 'get', lambda x: None)('date', ''))[:4] == str(datetime.now().year)]
-    ret_ytd  = _period_return(ytd_start, len(ytd_start)) if len(ytd_start) >= 2 else None
+    ytd_start = [r for r in hist_all if str(r.get('date', ''))[:4] == str(datetime.now().year)]
+    ret_ytd  = _period_return(ytd_start, len(ytd_start) - 1) if len(ytd_start) >= 2 else None
     high_52w, h52w_date, low_52w, l52w_date = _52w_bounds(hist_all)
 
     # ── 涨跌家数（来自 SpotCache 的 Sina HQ 实时全市场数据）───

@@ -11,33 +11,76 @@ logger = logging.getLogger(__name__)
 _db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'database.db')
 _lock = threading.RLock()
 
-# 延迟导入，避免循环依赖
-from app.db.db_writer import enqueue, T_DAILY, T_PERIODIC, T_REALTIME, T_ALLSTOCKS, T_BUFFER
+# ── 线程级连接池（SQLite连接非线程安全，每个线程复用自己的连接）────────────────
+_thread_local = threading.local()
+_WAL_MODE_CHECKED = False
+_USE_WAL = True
+
+def _get_thread_conn():
+    """获取当前线程的连接（复用，不频繁创建/关闭）"""
+    global _WAL_MODE_CHECKED, _USE_WAL
+    
+    if not hasattr(_thread_local, 'conn') or _thread_local.conn is None:
+        conn = sqlite3.connect(_db_path, timeout=30, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        
+        # WAL模式检测（仅首次）
+        if not _WAL_MODE_CHECKED:
+            if "/vol3/" in _db_path or "/tmp/" in _db_path or "/nas/" in _db_path:
+                _USE_WAL = False
+            else:
+                try:
+                    cur = conn.execute("PRAGMA journal_mode=WAL")
+                    if cur.fetchone()[0] != "wal":
+                        _USE_WAL = False
+                except sqlite3.OperationalError:
+                    _USE_WAL = False
+            _WAL_MODE_CHECKED = True
+        
+        if _USE_WAL:
+            conn.execute("PRAGMA journal_mode=WAL")
+        else:
+            conn.execute("PRAGMA journal_mode=DELETE")
+        
+        conn.execute("PRAGMA busy_timeout=30000")
+        _thread_local.conn = conn
+        logger.debug(f"[DB] Created new connection for thread {threading.current_thread().name}")
+    
+    return _thread_local.conn
+
+def _close_thread_conn():
+    """关闭当前线程的连接（用于清理）"""
+    if hasattr(_thread_local, 'conn') and _thread_local.conn:
+        _thread_local.conn.close()
+        _thread_local.conn = None
 
 @contextmanager
 def get_conn():
-    """上下文管理器：确保连接在正常返回和异常时都能正确释放。"""
-    conn = _get_conn()
+    """上下文管理器：获取线程级连接（复用，不频繁关闭）"""
+    conn = _get_thread_conn()
     try:
         yield conn
-    finally:
-        conn.close()
+    except Exception:
+        # 发生异常时回滚事务
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
 
 def _get_conn():
+    """兼容旧代码：返回新连接（用于需要独立连接的场景）"""
     conn = sqlite3.connect(_db_path, timeout=30)
     conn.row_factory = sqlite3.Row
-    # 检测网络挂载路径，禁用 WAL 模式（SSHFS/FUSE 不支持 mmap）
-    if "/vol3/" in _db_path or "/tmp/" in _db_path or "/nas/" in _db_path:
-        conn.execute("PRAGMA journal_mode=DELETE")
+    if _USE_WAL:
+        conn.execute("PRAGMA journal_mode=WAL")
     else:
-        try:
-            cur = conn.execute("PRAGMA journal_mode=WAL")
-            if cur.fetchone()[0] != "wal":
-                conn.execute("PRAGMA journal_mode=DELETE")
-        except sqlite3.OperationalError:
-            conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA busy_timeout=30000")
     return conn
+
+# 延迟导入，避免循环依赖
+from app.db.db_writer import enqueue, T_DAILY, T_PERIODIC, T_REALTIME, T_ALLSTOCKS, T_BUFFER
 
 def init_tables():
     with _lock:

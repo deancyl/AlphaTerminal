@@ -94,6 +94,7 @@ const mainNavItems = [
   { id: 'fund',      label: '基金分析',   icon: '📈' },
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
+  { id: 'macro',     label: '宏观经济',   icon: '🌍' },
   { id: 'backtest',  label: '回测实验室', icon: '🔬' },
 ]
 
