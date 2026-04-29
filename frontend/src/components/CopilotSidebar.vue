@@ -31,17 +31,27 @@
     <div class="px-4 py-2 border-b border-theme-secondary flex flex-wrap gap-3 text-xs shrink-0">
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取实时大盘指数数据作为对话上下文">
         <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded">
-        <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">📊 大盘</span>
+        <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">大盘</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取国债收益率曲线作为对话上下文">
         <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3.5 h-3.5 rounded">
-        <span :class="ctxRates ? 'text-terminal-accent' : 'text-terminal-dim'">💰 利率</span>
+        <span :class="ctxRates ? 'text-terminal-accent' : 'text-terminal-dim'">利率</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取最新5条市场快讯作为对话上下文">
         <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3.5 h-3.5 rounded">
-        <span :class="ctxNews ? 'text-terminal-dim' : 'text-terminal-dim'">📰 快讯</span>
+        <span :class="ctxNews ? 'text-terminal-accent' : 'text-terminal-dim'">快讯</span>
       </label>
-      <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选选项可将实时数据加入AI上下文</span>
+      <!-- Week 3-4 新增：投资组合上下文 -->
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取您的投资组合数据作为对话上下文">
+        <input type="checkbox" v-model="ctxPortfolio" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <span :class="ctxPortfolio ? 'text-terminal-accent' : 'text-terminal-dim'">组合</span>
+      </label>
+      <!-- Week 3-4 新增：历史数据上下文 -->
+      <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取历史K线数据作为对话上下文">
+        <input type="checkbox" v-model="ctxHistorical" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <span :class="ctxHistorical ? 'text-terminal-accent' : 'text-terminal-dim'">历史</span>
+      </label>
+      <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选可将数据加入AI上下文</span>
     </div>
 
     <!-- 模型选择器 -->
@@ -51,6 +61,17 @@
               class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
                      text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
         <option v-for="m in modelOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
+      </select>
+    </div>
+
+    <!-- Week 3-4 新增：投资组合选择器（当勾选组合上下文时显示） -->
+    <div v-if="ctxPortfolio && portfolioList.length > 0" 
+         class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
+      <span class="text-[10px] text-terminal-dim shrink-0">💼 组合</span>
+      <select v-model="selectedPortfolioId"
+              class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
+                     text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
+        <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }}</option>
       </select>
     </div>
 
@@ -121,9 +142,11 @@
 
 
 <script setup>
-import { ref, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, onMounted, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { logger } from '../utils/logger.js'
+import { useMarketStore } from '../stores/market.js'
+import { apiFetch } from '../utils/api.js'
 import {
   getMarketOverview,
   getSectors,
@@ -249,6 +272,35 @@ function setCachedResponse(prompt, response) {
 const ctxMarket = ref(true)
 const ctxRates  = ref(false)
 const ctxNews   = ref(false)
+const ctxPortfolio = ref(false)  // Week 3-4 新增
+const ctxHistorical = ref(false)  // Week 3-4 新增
+
+// 当前选中的投资组合ID
+const selectedPortfolioId = ref(null)
+
+// 投资组合列表
+const portfolioList = ref([])
+
+// 获取当前选中的symbol
+const { currentSymbol } = useMarketStore()
+
+// 加载投资组合列表
+async function loadPortfolioList() {
+  try {
+    const res = await apiFetch('/api/v1/portfolio/')
+    portfolioList.value = res.portfolios || []
+    if (portfolioList.value.length > 0 && !selectedPortfolioId.value) {
+      selectedPortfolioId.value = portfolioList.value[0].id
+    }
+  } catch (e) {
+    logger.debug('[Copilot] Failed to load portfolio list:', e.message)
+  }
+}
+
+// 组件挂载时加载投资组合列表
+onMounted(() => {
+  loadPortfolioList()
+})
 
 // ── 模型选择 ──────────────────────────────────────────────────
 const selectedModel = ref('deepseek-v3')
@@ -831,6 +883,44 @@ async function sendToLLM(text) {
       })
     }
     
+    // Week 3-4 新增：投资组合上下文
+    if (ctxPortfolio.value && selectedPortfolioId.value) {
+      try {
+        const res = await fetch(`/api/v1/portfolio/${selectedPortfolioId.value}/pnl?_t=${Date.now()}`)
+        if (res.ok) {
+          const data = await res.json()
+          const portfolioData = data.data || data
+          const positions = portfolioData.positions || []
+          
+          if (positions.length > 0) {
+            const totalValue = portfolioData.total_value || 0
+            const totalPnl = portfolioData.unrealized_pnl || 0
+            
+            const positionLines = positions.slice(0, 5).map(p => {
+              const arrow = p.unrealized_pnl >= 0 ? '▲' : '▼'
+              return `  ${p.symbol} ${p.name || ''}: ${p.shares}股，成本¥${p.avg_cost?.toFixed(2) || 0}，现价¥${p.current_price?.toFixed(2) || 0}，盈亏${arrow}${Math.abs(p.unrealized_pnl_pct || 0).toFixed(2)}%`
+            }).join('\n')
+            
+            contextParts.push(`<context_portfolio>投资组合概况：
+  组合名称: ${portfolioData.name || '未命名'}
+  总市值: ¥${totalValue.toFixed(2)}
+  总盈亏: ${totalPnl >= 0 ? '+' : ''}¥${totalPnl.toFixed(2)} (${((totalPnl / (totalValue - totalPnl)) * 100).toFixed(2)}%)
+  持仓明细（前5只）：
+${positionLines}
+</context_portfolio>`)
+          }
+        }
+      } catch (e) {
+        logger.debug('[Copilot] portfolio context fetch failed:', e.message)
+      }
+    }
+    
+    // Week 3-4 新增：历史数据上下文（简化版，仅传递当前symbol）
+    if (ctxHistorical.value && currentSymbol.value) {
+      // 历史数据由后端查询，前端只需传递参数
+      // 在请求体中添加 hist_symbol 等参数
+    }
+    
     const context = contextParts.join('\n\n')
     
     if (cachedResponse) {
@@ -859,6 +949,12 @@ async function sendToLLM(text) {
           context: context || undefined,
           provider: sel.provider,
           model: sel.model || undefined,
+          // Week 3-4 新增：投资组合和历史数据参数
+          portfolio_id: ctxPortfolio.value ? selectedPortfolioId.value : undefined,
+          include_historical: ctxHistorical.value,
+          hist_symbol: ctxHistorical.value ? currentSymbol.value : undefined,
+          hist_period: 'daily',
+          hist_limit: 60,
         }),
         signal: currentAbortController.signal
       })
