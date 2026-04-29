@@ -63,7 +63,7 @@ def _get_llm_config(provider: str) -> dict:
         "openai":   {"api_key": os.getenv("OPENAI_API_KEY",""),  "base_url": os.getenv("OPENAI_API_BASE","https://api.openai.com/v1"), "model": os.getenv("OPENAI_MODEL","gpt-3.5-turbo")},
         "siliconflow": {"api_key": os.getenv("SILICONFLOW_API_KEY",""), "base_url": os.getenv("SILICONFLOW_API_BASE","https://api.siliconflow.cn/v1"), "model": os.getenv("SILICONFLOW_MODEL","deepseek-ai/DeepSeek-V3")},
         "opencode": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://api.opencode.ai/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-chat")},
-        "opencode_go": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/go/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-go/minimax-m2.7")},
+        "opencode_go": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/go/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.7")},
         "opencode_zen": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.5-free")},
     }
     return defaults.get(provider, {})
@@ -529,7 +529,7 @@ async def _call_opencode_go(messages: list[dict], model_override: str | None = N
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or cfg.get("model") or "opencode-go/minimax-m2.7",
+        "model":       model_override or cfg.get("model") or "minimax-m2.7",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,

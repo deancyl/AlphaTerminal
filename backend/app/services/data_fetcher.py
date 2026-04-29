@@ -80,26 +80,27 @@ def _parse_sina_hq(raw: str) -> dict | None:
 
 def _parse_sina_index(raw: str) -> dict | None:
     """
-    解析 Sina 指数格式（s_sh000001/s_sz399006 等）
-    字段: [name, current, prev_close, open, high, low, ?, ?, amount, amount2, ..., date, time, ?]
-    change_pct = (current - prev_close) / prev_close * 100
+    解析 Sina 指数简版格式（s_sh000001/s_sz399006 等）
+    简版字段(6个): [name, current, change_amount, change_pct, volume, amount]
+    注意：parts[2] 是涨跌额，不是昨收！昨收 = current - change_amount
     """
     m = re.search(r'"([^"]+)"', raw)
     if not m:
         return None
     parts = m.group(1).split(",")
-    if len(parts) < 6:   # Sina指数=6字段, 腾讯qt=78字段, 都满足
+    if len(parts) < 6:   # Sina指数简版=6字段
         return None
     try:
-        current    = float(parts[1])    # 当前价
-        prev_close = float(parts[2])    # 昨收
-        chg_pct    = float(parts[3]) if parts[3] else 0.0   # Sina指数直接提供涨跌幅%
+        current       = float(parts[1])    # 当前价
+        change_amount = float(parts[2])    # 涨跌额（不是昨收！）
+        chg_pct       = float(parts[3]) if parts[3] else 0.0   # 涨跌幅%
+        volume        = float(parts[4]) if len(parts) > 4 else 0  # 成交量
         return {
             "name":       parts[0],
             "price":      current,
-            "change":     round(current - prev_close, 3),
+            "change":     round(change_amount, 3),  # 涨跌额
             "change_pct": round(chg_pct, 2),
-            "volume":     0,
+            "volume":     volume,
         }
     except (ValueError, IndexError):
         return None
@@ -236,16 +237,16 @@ def fetch_global_indices() -> list[dict]:
 
     # 策略A：腾讯财经（主要数据源，直连）
     try:
-        import subprocess
         codes = "hkHSI,usIXIC,usDJI,usSPX"
-        raw = subprocess.check_output(
-            ["curl", "-s", "--max-time", "8",
-             f"https://qt.gtimg.cn/q={codes}",
-             "-H", "Referer: https://gu.qq.com",
-             "-H", "User-Agent: Mozilla/5.0"],
-            stderr=subprocess.DEVNULL
+        r = httpx.get(
+            f"https://qt.gtimg.cn/q={codes}",
+            headers={
+                "Referer": "https://gu.qq.com",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            },
+            timeout=8,
         )
-        text = raw.decode("GBK", errors="replace")
+        text = r.text
         logger.info(f"[Tencent] 全球指数响应: {text[:150]}")
 
         sym_map = {

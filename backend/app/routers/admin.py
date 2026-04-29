@@ -113,7 +113,7 @@ def get_llm_settings():
         "openai":   {"base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo"},
         "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
         "opencode": {"base_url": "https://api.opencode.ai/v1", "model": "opencode-chat"},
-        "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "opencode-go/minimax-m2.7"},
+        "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "minimax-m2.7"},
         "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "minimax-m2.5-free"},
     }
     result = {}
@@ -167,7 +167,7 @@ def test_llm_connection(body: dict = Body(...)):
         "openai": "gpt-3.5-turbo", 
         "siliconflow": "deepseek-ai/DeepSeek-V3", 
         "opencode": "opencode-chat",
-        "opencode_go": "opencode-go/minimax-m2.7",
+        "opencode_go": "minimax-m2.7",
         "opencode_zen": "minimax-m2.5-free"
     }
     test_url  = f"{base_url.rstrip('/')}/chat/completions"
