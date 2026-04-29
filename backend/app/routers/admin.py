@@ -195,10 +195,14 @@ async def get_sources_status():
     real_time = status_data.get("sources", {})
     
     # 从 SQLite 获取持久化熔断状态
-    conn = _get_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT source, state, fail_count, last_fail_time FROM circuit_breaker")
-    db_states = {row[0]: {"state": row[1], "fail_count": row[2], "last_fail_time": row[3]} for row in cursor.fetchall()}
+    try:
+        conn = _get_conn()
+        cursor = conn.cursor()
+        cursor.execute("SELECT source, state, fail_count, last_fail_time FROM circuit_breaker")
+        db_states = {row[0]: {"state": row[1], "fail_count": row[2], "last_fail_time": row[3]} for row in cursor.fetchall()}
+    except sqlite3.OperationalError:
+        # 表不存在，返回空状态
+        db_states = {}
     
     # 合并状态
     merged = {}
@@ -439,6 +443,7 @@ async def get_system_metrics():
     }
 
 @router.get("/system/logs")
+@router.get("/logs/recent")  # 兼容旧接口
 async def get_recent_logs(lines: int = 100):
     """获取最近日志"""
     log_file = _DEFAULT_LOG_DIR / "app.log"
