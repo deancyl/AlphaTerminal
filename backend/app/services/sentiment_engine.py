@@ -79,6 +79,7 @@ def _analyze_news_sentiment(news_items: list[dict]):
             "label": label,
             "bullish_count": bullish,
             "bearish_count": bearish,
+            "neutral_count": total - bullish - bearish,
             "total_count": total,
             "keywords": list(set(hit_keywords))[:10],
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

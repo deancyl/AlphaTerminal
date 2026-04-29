@@ -182,6 +182,27 @@
 
     </div>
 
+    <!-- ── 收益率曲线 & 利差图表 ──────────────────────────── -->
+    <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col min-h-[200px]">
+        <YieldCurveChart
+          :yield-curve="yieldCurve"
+          :curve1m="yieldCurve1m"
+          :curve1y="yieldCurve1y"
+          :update-time="yieldUpdateTime"
+        />
+      </div>
+      <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col min-h-[200px]">
+        <YieldSpreadChart
+          :history10y="spreadHistory10y"
+          :history2y="spreadHistory2y"
+          :loading="spreadLoading"
+          :error="spreadError"
+          :update-time="spreadUpdateTime"
+        />
+      </div>
+    </div>
+
     <!-- ── 历史分位弹窗 ───────────────────────────────── -->
     <BondHistoryModal
       :visible="historyModalVisible"

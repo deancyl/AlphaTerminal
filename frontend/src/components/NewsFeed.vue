@@ -34,32 +34,90 @@
       </div>
     </div>
 
-    <!-- ── 舆情情绪摘要栏 ──────────────────────────────────── -->
-    <div v-if="sentiment.total_count > 0"
-         class="flex items-center gap-2 mb-2 shrink-0 px-2 py-1.5 rounded-lg border transition"
-         :class="sentiment.score > 0.1
-           ? 'border-red-500/30 bg-red-500/5'
-           : sentiment.score < -0.1
-             ? 'border-green-500/30 bg-green-500/5'
-             : 'border-theme-secondary bg-theme-tertiary/5'">
-      <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
-            :class="sentiment.score > 0.1
-              ? 'bg-red-500/20 text-bullish'
-              : sentiment.score < -0.1
-                ? 'bg-green-500/20 text-bearish'
-                : 'bg-theme-tertiary/20 text-theme-secondary'">
-        {{ sentiment.label }}
-      </span>
-      <span class="text-[10px] text-terminal-dim shrink-0">
-        {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
-      </span>
-      <div class="flex-1 flex gap-1 overflow-x-auto ml-2 scrollbar-hide">
-        <span v-for="kw in sentiment.keywords.slice(0, 5)" :key="kw"
-              class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap">
-          {{ kw }}
+    <!-- ── 舆情情绪摘要栏（增强版）─────────────────────────── -->
+    <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
+    >
+      <!-- 情绪概览 -->
+      <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg border transition"
+           :class="sentiment.score > 0.1
+             ? 'border-red-500/30 bg-red-500/5'
+             : sentiment.score < -0.1
+               ? 'border-green-500/30 bg-green-500/5'
+               : 'border-theme-secondary bg-theme-tertiary/5'"
+      >
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+              :class="sentiment.score > 0.1
+                ? 'bg-red-500/20 text-bullish'
+                : sentiment.score < -0.1
+                  ? 'bg-green-500/20 text-bearish'
+                  : 'bg-theme-tertiary/20 text-theme-secondary'"
+        >
+          {{ sentiment.label }}
         </span>
+        <span class="text-[10px] text-terminal-dim shrink-0">
+          {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
+        </span>
+        <div class="flex-1 flex gap-1 overflow-x-auto ml-2 scrollbar-hide">
+          <span v-for="kw in sentiment.keywords.slice(0, 5)" :key="kw"
+                class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
+          >
+            {{ kw }}
+          </span>
+        </div>
+        <span class="text-[9px] text-terminal-dim/50 shrink-0">{{ sentimentTime }}</span>
       </div>
-      <span class="text-[9px] text-terminal-dim/50 shrink-0">{{ sentimentTime }}</span>
+
+      <!-- 情绪分布条形图 -->
+      <div class="px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
+      >
+        <div class="flex items-center justify-between mb-1"
+        >
+          <span class="text-[10px] text-terminal-dim"
+          >情绪分布</span>
+          <span class="text-[9px] text-terminal-dim"
+          >共 {{ sentiment.total_count }} 条</span>
+        </div>
+        <div class="h-2 rounded-full overflow-hidden flex"
+        >
+          <div class="h-full bg-red-500/60 transition-all"
+               :style="{ width: bullishRatio + '%' }"
+               title="看涨"
+          />
+          <div class="h-full bg-theme-tertiary/30 transition-all"
+               :style="{ width: neutralRatio + '%' }"
+               title="中性"
+          />
+          <div class="h-full bg-green-500/60 transition-all"
+               :style="{ width: bearishRatio + '%' }"
+               title="看跌"
+          />
+        </div>
+        <div class="flex justify-between mt-1"
+        >
+          <span class="text-[9px] text-red-400"
+          >{{ sentiment.bullish_count }} 看涨</span>
+          <span class="text-[9px] text-theme-tertiary"
+          >{{ sentiment.neutral_count || 0 }} 中性</span>
+          <span class="text-[9px] text-green-400"
+          >{{ sentiment.bearish_count }} 看跌</span>
+        </div>
+      </div>
+
+      <!-- 筛选标签 -->
+      <div class="flex gap-1 px-2"
+      >
+        <button
+          v-for="filter in sentimentFilters"
+          :key="filter.value"
+          class="text-[9px] px-2 py-0.5 rounded border transition"
+          :class="activeSentimentFilter === filter.value
+            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+            : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
+          @click="activeSentimentFilter = filter.value"
+        >
+          {{ filter.label }}
+        </button>
+      </div>
     </div>
 
     <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
@@ -200,7 +258,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
 
@@ -284,15 +342,61 @@ const lastRefreshLabel = computed(() => {
   return lastRefreshTime.value.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 })
 
+// ── 情绪筛选 ─────────────────────────────────────────────────────────
+const activeSentimentFilter = ref('all')
+const sentimentFilters = [
+  { label: '全部', value: 'all' },
+  { label: '利好', value: 'bullish' },
+  { label: '中性', value: 'neutral' },
+  { label: '利空', value: 'bearish' },
+]
+
+const bullishRatio = computed(() => {
+  const total = sentiment.value.total_count || 1
+  return ((sentiment.value.bullish_count || 0) / total * 100).toFixed(1)
+})
+
+const bearishRatio = computed(() => {
+  const total = sentiment.value.total_count || 1
+  return ((sentiment.value.bearish_count || 0) / total * 100).toFixed(1)
+})
+
+const neutralRatio = computed(() => {
+  const total = sentiment.value.total_count || 1
+  const neutral = sentiment.value.neutral_count ||
+    (total - (sentiment.value.bullish_count || 0) - (sentiment.value.bearish_count || 0))
+  return ((neutral / total) * 100).toFixed(1)
+})
+
+/** 根据情绪筛选过滤新闻 */
+const filteredItems = computed(() => {
+  if (activeSentimentFilter.value === 'all') return items.value
+  return items.value.filter(item => {
+    const s = getItemSentiment(item)
+    if (activeSentimentFilter.value === 'bullish') {
+      return s === '利好' || s === '偏多'
+    }
+    if (activeSentimentFilter.value === 'bearish') {
+      return s === '利空' || s === '偏空'
+    }
+    return s === ''
+  })
+})
+
+watch(activeSentimentFilter, () => {
+  currentPage.value = 1
+  if (listEl.value) listEl.value.scrollTop = 0
+})
+
 // ── 分页状态 ─────────────────────────────────────────────────────────
 const PAGE_SIZE  = 50
 const currentPage = ref(1)
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / PAGE_SIZE)))
 
 const pagedItems = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE
-  return items.value.slice(start, start + PAGE_SIZE)
+  return filteredItems.value.slice(start, start + PAGE_SIZE)
 })
 
 const visiblePages = computed(() => {

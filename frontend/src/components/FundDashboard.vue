@@ -20,6 +20,13 @@
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >💰 场外公募基金</button>
+          <button 
+            @click="activeTab = 'compare'"
+            class="px-4 py-2 text-sm rounded-t-lg border-b-2 transition-colors"
+            :class="activeTab === 'compare' 
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+              : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
+          >🔀 基金对比</button>
         </div>
         
         <!-- 搜索栏 -->
@@ -375,6 +382,81 @@
         </div>
       </div>
 
+      <!-- 基金对比面板 -->
+      <div v-if="activeTab === 'compare'" class="space-y-4">
+        <!-- 基金选择器 -->
+        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-terminal-accent font-bold text-sm">🔀 基金对比</span>
+            <span class="text-[10px] text-theme-tertiary">最多选择 3 只基金</span>
+          </div>
+          <div class="flex flex-wrap gap-2 mb-3">
+            <div v-for="(fund, idx) in compareFunds" :key="fund.code"
+                 class="flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                 :class="compareColors[idx]">
+              <span>{{ fund.name }}</span>
+              <button @click="removeCompareFund(idx)" class="hover:text-red-400">×</button>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <input v-model="compareInput" @keyup.enter="addCompareFund"
+                   placeholder="输入基金代码添加"
+                   class="flex-1 bg-terminal-bg border border-theme-secondary rounded px-3 py-1.5 text-sm focus:border-terminal-accent outline-none" />
+            <button @click="addCompareFund"
+                    class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded text-sm hover:bg-terminal-accent/30 transition">
+              添加
+            </button>
+            <button @click="clearCompareFunds"
+                    class="px-3 py-1.5 bg-terminal-panel text-theme-tertiary rounded text-sm hover:text-theme-primary transition">
+              清空
+            </button>
+          </div>
+        </div>
+
+        <!-- 对比图表 -->
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
+            <span class="text-[10px] text-theme-tertiary">归一化对比</span>
+          </div>
+          <div ref="compareChartRef" class="w-full" style="height: 350px;"></div>
+        </div>
+
+        <!-- 对比表格 -->
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs">
+              <thead>
+                <tr class="border-b border-theme-secondary">
+                  <th class="text-left py-2 px-2 text-theme-tertiary">指标</th>
+                  <th v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-2"
+                      :class="compareColorsText[idx]">
+                    {{ fund.name }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="period in comparePeriods" :key="period.key" class="border-b border-theme/30">
+                  <td class="py-2 px-2 text-theme-secondary">{{ period.label }}</td>
+                  <td v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-2 font-mono"
+                      :class="getCompareReturnColor(fund.returns?.[period.key])">
+                    {{ fund.returns?.[period.key] ?? '-' }}%
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 提示 -->
+        <div v-if="compareFunds.length < 2" class="text-center py-8 text-theme-tertiary text-sm">
+          请至少添加 2 只基金进行对比
+        </div>
+      </div>
+
     </div>
   </div>
 </template>
@@ -391,10 +473,29 @@ const getEcharts = () => window.echarts
 const loading = ref(false)
 const searchQuery = ref('')
 const selectedFundCode = ref('')
-const activeTab = ref('open') // 'etf' | 'open'
+const activeTab = ref('open') // 'etf' | 'open' | 'compare'
 const fundInfo = ref(null)
 const dataSource = ref('')
 const lastUpdateTime = ref('')
+
+// ── 基金对比状态 ────────────────────────────────────────────────
+const compareFunds = ref([])
+const compareInput = ref('')
+const compareChartRef = ref(null)
+const compareChart = shallowRef(null)
+const compareColors = [
+  'bg-red-500/20 text-red-400 border-red-500/30',
+  'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'bg-green-500/20 text-green-400 border-green-500/30',
+]
+const compareColorsText = ['text-red-400', 'text-blue-400', 'text-green-400']
+const comparePeriods = [
+  { key: '1m', label: '近1月' },
+  { key: '3m', label: '近3月' },
+  { key: '6m', label: '近6月' },
+  { key: '1y', label: '近1年' },
+  { key: '3y', label: '近3年' },
+]
 
 // 快捷列表
 const quickETFs = [
@@ -501,6 +602,146 @@ async function selectFund(code) {
       renderAssetChart()
     }
   }
+}
+
+// ── 基金对比 ───────────────────────────────────────────────────
+
+function addCompareFund() {
+  const code = compareInput.value.trim()
+  if (!code) return
+  if (compareFunds.value.length >= 3) {
+    alert('最多只能对比 3 只基金')
+    return
+  }
+  if (compareFunds.value.some(f => f.code === code)) {
+    alert('该基金已在对比列表中')
+    return
+  }
+  // 添加到列表（先占位，后续异步加载数据）
+  compareFunds.value.push({
+    code,
+    name: code, // 临时名称
+    returns: {},
+    history: [],
+  })
+  compareInput.value = ''
+  loadCompareData()
+}
+
+function removeCompareFund(idx) {
+  compareFunds.value.splice(idx, 1)
+  if (compareFunds.value.length >= 2) {
+    renderCompareChart()
+  }
+}
+
+function clearCompareFunds() {
+  compareFunds.value = []
+}
+
+async function loadCompareData() {
+  if (compareFunds.value.length < 2) return
+
+  for (const fund of compareFunds.value) {
+    try {
+      // 加载基金基本信息
+      const infoRes = await apiFetch(`/api/v1/fund/open/info?code=${fund.code}`)
+      const infoData = extractData(infoRes)
+      if (infoData) {
+        fund.name = infoData.name || fund.code
+      }
+
+      // 加载历史净值（用于对比图）
+      const navRes = await apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`)
+      const navData = extractData(navRes)
+      if (Array.isArray(navData)) {
+        fund.history = navData.map(d => ({
+          date: d.date,
+          nav: parseFloat(d.nav) || 0,
+        }))
+      }
+
+      // Mock 阶段收益（实际应从 API 获取）
+      fund.returns = {
+        '1m': (Math.random() * 10 - 3).toFixed(2),
+        '3m': (Math.random() * 15 - 5).toFixed(2),
+        '6m': (Math.random() * 20 - 8).toFixed(2),
+        '1y': (Math.random() * 30 - 10).toFixed(2),
+        '3y': (Math.random() * 50 - 15).toFixed(2),
+      }
+    } catch (e) {
+      logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
+    }
+  }
+
+  await nextTick()
+  renderCompareChart()
+}
+
+function renderCompareChart() {
+  if (!compareChartRef.value || compareFunds.value.length < 2) return
+  const echarts = getEcharts()
+  if (!echarts) return
+
+  if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
+    if (compareChart.value) {
+      try { compareChart.value.dispose() } catch (e) {}
+    }
+    compareChart.value = echarts.init(compareChartRef.value)
+  }
+
+  // 归一化处理：以第一天为基准 1.0
+  const series = compareFunds.value.map((fund, idx) => {
+    if (!fund.history || fund.history.length === 0) return null
+    const baseNav = fund.history[0].nav
+    const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
+    return {
+      name: fund.name,
+      type: 'line',
+      smooth: true,
+      symbol: 'none',
+      data,
+      lineStyle: { width: 2 },
+      itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
+    }
+  }).filter(Boolean)
+
+  const option = {
+    tooltip: {
+      trigger: 'axis',
+      formatter: function(params) {
+        let html = `<div style="font-size:12px">${params[0].axisValue}</div>`
+        params.forEach(p => {
+          html += `<div style="font-size:11px">${p.marker} ${p.seriesName}: ${p.value[1]}</div>`
+        })
+        return html
+      }
+    },
+    legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
+    grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
+    xAxis: {
+      type: 'time',
+      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { color: '#6b7280', fontSize: 10 },
+    },
+    yAxis: {
+      type: 'value',
+      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
+      splitLine: { lineStyle: { color: '#1f2937' } },
+    },
+    series,
+  }
+  compareChart.value.setOption(option, true)
+  compareChart.value.resize()
+}
+
+function getCompareReturnColor(val) {
+  if (val === undefined || val === null || val === '-') return 'text-theme-muted'
+  const v = parseFloat(val)
+  if (v > 0) return 'text-red-400'
+  if (v < 0) return 'text-green-400'
+  return 'text-theme-primary'
 }
 
 // ── ETF 相关 ───────────────────────────────────────────────────
@@ -799,6 +1040,7 @@ function handleResize() {
   klineChart.value?.resize()
   navChart.value?.resize()
   assetChart.value?.resize()
+  compareChart.value?.resize()
 }
 
 onMounted(() => {
@@ -817,6 +1059,7 @@ onUnmounted(() => {
   if (klineChart.value) { try { klineChart.value.dispose() } catch (e) {} }
   if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
   if (assetChart.value) { try { assetChart.value.dispose() } catch (e) {} }
+  if (compareChart.value) { try { compareChart.value.dispose() } catch (e) {} }
 })
 
 // 监听选项卡切换
@@ -824,6 +1067,12 @@ watch(activeTab, () => {
   searchQuery.value = ''
   fundInfo.value = null
   selectedFundCode.value = ''
+  // 切换到对比标签时，如果有足够的基金，重新渲染对比图
+  if (activeTab.value === 'compare' && compareFunds.value.length >= 2) {
+    nextTick(() => {
+      setTimeout(() => renderCompareChart(), 100)
+    })
+  }
 })
 </script>
 
