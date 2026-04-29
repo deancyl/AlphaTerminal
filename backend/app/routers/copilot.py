@@ -526,7 +526,7 @@ async def _call_opencode_zen(messages: list[dict], model_override: str | None = 
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       model_override or cfg.get("model") or "opencode/minimax-m2.7",
+        "model":       model_override or cfg.get("model") or "minimax-m2.5-free",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
@@ -543,7 +543,8 @@ async def _call_opencode_zen(messages: list[dict], model_override: str | None = 
                         try:
                             d = json.loads(line[6:])
                             delta = d.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content", "")
+                            # OpenCode Zen (minimax) 可能返回 reasoning 而不是 content
+                            content = delta.get("content") or delta.get("reasoning", "")
                             if content:
                                 yield _sse({"content": content})
                         except json.JSONDecodeError:

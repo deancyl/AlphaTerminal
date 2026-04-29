@@ -114,7 +114,7 @@ def get_llm_settings():
         "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
         "opencode": {"base_url": "https://api.opencode.ai/v1", "model": "opencode-chat"},
         "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "opencode-go/minimax-m2.7"},
-        "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "opencode/minimax-m2.7"},
+        "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "minimax-m2.5-free"},
     }
     result = {}
     for p in providers:
@@ -168,7 +168,7 @@ def test_llm_connection(body: dict = Body(...)):
         "siliconflow": "deepseek-ai/DeepSeek-V3", 
         "opencode": "opencode-chat",
         "opencode_go": "opencode-go/minimax-m2.7",
-        "opencode_zen": "opencode/minimax-m2.7"
+        "opencode_zen": "minimax-m2.5-free"
     }
     test_url  = f"{base_url.rstrip('/')}/chat/completions"
     headers   = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
