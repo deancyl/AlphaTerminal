@@ -106,13 +106,15 @@ def _mask_key(key: str) -> str:
 def get_llm_settings():
     """获取 LLM 配置（API Key 已掩码）。优先级：数据库 > .env > 默认值"""
     from app.db.database import get_admin_config
-    providers = ["deepseek", "qianwen", "openai", "siliconflow", "opencode"]
+    providers = ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen"]
     defaults = {
         "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
         "qianwen":  {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
         "openai":   {"base_url": "https://api.openai.com/v1", "model": "gpt-3.5-turbo"},
         "siliconflow": {"base_url": "https://api.siliconflow.cn/v1", "model": "deepseek-ai/DeepSeek-V3"},
         "opencode": {"base_url": "https://api.opencode.ai/v1", "model": "opencode-chat"},
+        "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "opencode-go/minimax-m2.7"},
+        "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "opencode/minimax-m2.7"},
     }
     result = {}
     for p in providers:
@@ -131,7 +133,15 @@ def save_llm_settings(body: dict = Body(...)):
     """保存 LLM 配置到数据库（永久生效）"""
     from app.db.database import get_admin_config, set_admin_config
     provider = (body.get("provider") or "").lower()
-    key_map  = {"deepseek": "llm_deepseek", "qianwen": "llm_qianwen", "openai": "llm_openai", "siliconflow": "llm_siliconflow", "opencode": "llm_opencode"}
+    key_map  = {
+        "deepseek": "llm_deepseek", 
+        "qianwen": "llm_qianwen", 
+        "openai": "llm_openai", 
+        "siliconflow": "llm_siliconflow", 
+        "opencode": "llm_opencode",
+        "opencode_go": "llm_opencode_go",
+        "opencode_zen": "llm_opencode_zen"
+    }
     if provider not in key_map:
         return {"code": 1, "error": f"Unknown provider: {provider}"}
     set_admin_config(key_map[provider], {
@@ -151,7 +161,15 @@ def test_llm_connection(body: dict = Body(...)):
     model    = (body.get("model") or "").strip()
     if not api_key:
         return {"code": 1, "error": "API Key 不能为空"}
-    defaults = {"deepseek": "deepseek-chat", "qianwen": "qwen-plus", "openai": "gpt-3.5-turbo", "siliconflow": "deepseek-ai/DeepSeek-V3", "opencode": "opencode-chat"}
+    defaults = {
+        "deepseek": "deepseek-chat", 
+        "qianwen": "qwen-plus", 
+        "openai": "gpt-3.5-turbo", 
+        "siliconflow": "deepseek-ai/DeepSeek-V3", 
+        "opencode": "opencode-chat",
+        "opencode_go": "opencode-go/minimax-m2.7",
+        "opencode_zen": "opencode/minimax-m2.7"
+    }
     test_url  = f"{base_url.rstrip('/')}/chat/completions"
     headers   = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload   = {"model": model or defaults.get(provider, "gpt-3.5-turbo"),
