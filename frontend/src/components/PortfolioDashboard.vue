@@ -6,6 +6,11 @@
       <div class="flex gap-2">
         <button
           v-if="selectedPortfolioId !== null"
+          @click="exportPortfolio"
+          class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded font-bold transition-colors"
+        >📥 导出</button>
+        <button
+          v-if="selectedPortfolioId !== null"
           @click="showTradeModal = true"
           class="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1 rounded font-bold transition-colors"
         >📋 模拟调仓</button>
@@ -402,6 +407,38 @@ async function handleTransfer() {
 function handleTransferOk() {
   showTransferModal.value = false;
   loadPortfolioData();
+}
+
+// ── Export ────────────────────────────────────────────────────
+async function exportPortfolio() {
+  if (!selectedPortfolioId.value) return;
+  
+  try {
+    const pid = selectedPortfolioId.value;
+    const response = await fetch(`/api/v1/export/portfolio/${pid}?format=excel`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `portfolio_${pid}_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch (e) {
+    console.error('[Portfolio] Export failed:', e);
+    alert('导出失败: ' + e.message);
+  }
 }
 </script>
 

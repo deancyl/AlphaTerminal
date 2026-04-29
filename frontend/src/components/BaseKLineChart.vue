@@ -5,6 +5,7 @@
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
@@ -363,5 +364,25 @@ watch(() => props.tick, (t) => {
   applyTickFast(_lastChartData, t)
 })
 
-defineExpose({ getChartInstance: () => chart })
+defineExpose({ 
+  getChartInstance: () => chart,
+  exportChart: async () => {
+    if (!chartEl.value) return
+    try {
+      const canvas = await html2canvas(chartEl.value, {
+        backgroundColor: '#0f172a',
+        scale: 2,
+        useCORS: true,
+        allowTaint: true
+      })
+      const link = document.createElement('a')
+      link.download = `chart_${props.symbol || 'unknown'}_${new Date().toISOString().slice(0,10)}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    } catch (e) {
+      console.error('[BaseKLineChart] Export failed:', e)
+      alert('图表导出失败: ' + e.message)
+    }
+  }
+})
 </script>

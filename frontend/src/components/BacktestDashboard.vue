@@ -341,6 +341,12 @@
             <span class="font-mono text-theme-primary">{{ profitFactor }}</span>
           </div>
           <button
+            class="shrink-0 text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors border border-cyan-500/40 rounded px-2 py-0.5"
+            @click="exportBacktest"
+            :disabled="!backtestResult">
+            📥 导出
+          </button>
+          <button
             class="ml-auto shrink-0 text-[9px] text-theme-muted hover:text-cyan-400 transition-colors"
             @click="showTrades = !showTrades">
             {{ showTrades ? '▲ 收起' : '▼ 交易' }} ({{ backtestResult.trades?.length||0 }})
@@ -753,4 +759,43 @@ const strategyVerdict = computed(() => {
   if (excess > -5) return `⚠️ 略输持股不动 ${Math.abs(excess).toFixed(1)}%，可调整参数`
   return `🐢 不如买入持有 ${Math.abs(excess).toFixed(1)}%，建议换策略或扩大回测窗口`
 })
+
+// ── 导出回测结果 ─────────────────────────────────────────────────
+async function exportBacktest() {
+  if (!backtestResult.value) return
+  
+  try {
+    const response = await fetch('/api/v1/export/backtest/result', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      },
+      body: JSON.stringify({
+        result: backtestResult.value,
+        strategy_type: strategyType.value,
+        symbol: symbol.value,
+        start_date: startDate.value,
+        end_date: endDate.value
+      })
+    })
+    
+    if (!response.ok) {
+      throw new Error(`Export failed: ${response.statusText}`)
+    }
+    
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `backtest_${symbol.value}_${new Date().toISOString().slice(0,10)}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+  } catch (e) {
+    console.error('[Backtest] Export failed:', e)
+    alert('导出失败: ' + e.message)
+  }
+}
 </script>
