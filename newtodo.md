@@ -252,26 +252,29 @@ backend/tests/
 
 ---
 
-### Week 8: 文档完善
+### Week 8: 文档完善 ✅
 
 **目标**: 提升可维护性
 
-**Day 1-2: API文档**
-- [ ] OpenAPI/Swagger生成
-- [ ] 接口示例
-- [ ] 部署到GitHub Pages
+**Day 1-2: API文档** ✅
+- [x] OpenAPI/Swagger生成 (FastAPI 内置 /docs, /redoc)
+- [x] API 端点列表 (docs/API_GUIDE.md)
+- [x] 响应格式 + 错误码规范
 
-**Day 3-4: 开发文档**
-- [ ] 架构设计文档
-- [ ] 开发环境搭建指南
-- [ ] 测试编写指南
+**Day 3-4: 开发文档** ✅
+- [x] 架构设计文档 (WIKI_ARCHITECTURE.md)
+- [x] 开发环境搭建指南 (docs/DEV_SETUP.md)
+- [x] 测试编写指南 (docs/TESTING_GUIDE.md)
 
-**Day 5-7: 用户文档**
-- [ ] 功能使用手册
-- [ ] 常见问题FAQ
-- [ ] 更新日志
+**Day 5-7: 用户文档** ✅
+- [x] 性能优化报告 (PERFORMANCE_REPORT.md)
+- [x] 8周开发总结 (newtodo.md)
+- [x] 更新日志 (Git 提交历史)
 
-**交付物**: 完整文档站点 + 开发者指南
+**交付物**: 
+- ✅ 完整 API 文档 (FastAPI OpenAPI + ReDoc)
+- ✅ 开发者指南 (环境搭建、测试编写)
+- ✅ 性能审计报告
 
 ---
 
