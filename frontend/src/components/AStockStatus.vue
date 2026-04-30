@@ -12,7 +12,7 @@
         v-model="searchQuery"
         type="text"
         placeholder="搜索代码/名称"
-        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary/50 rounded-sm px-3 py-2 text-xs text-theme-primary outline-none focus:border-terminal-accent/60 focus:shadow-[0_0_0_3px_rgba(15,82,186,0.15)] h-10 transition-all"
+        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary/50 rounded-sm px-3 py-1.5 text-xs text-theme-primary outline-none focus:border-terminal-accent/60 focus:shadow-[0_0_0_3px_rgba(15,82,186,0.15)] h-8 transition-all"
       />
     </div>
     
@@ -50,13 +50,13 @@
     <!-- 分页控制器 -->
     <div v-if="totalPages > 1" class="shrink-0 bg-terminal-panel/50 flex items-center justify-center gap-2 py-2">
       <button
-        class="px-3 h-10 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
+        class="px-3 h-8 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
         :disabled="currentPage === 1"
         @click="currentPage--"
       >‹</button>
       <span class="text-xs text-terminal-dim">{{ currentPage }}/{{ totalPages }}</span>
       <button
-        class="px-3 h-10 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
+        class="px-3 h-8 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
         :disabled="currentPage === totalPages"
         @click="currentPage++"
       >›</button>

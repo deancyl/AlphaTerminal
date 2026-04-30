@@ -61,7 +61,7 @@
       :style="{ width: isMobile ? '100%' : (isCopilotOpen ? 'calc(100% - 340px)' : '100%') }"
     >
       <!-- 顶部状态栏 -->
-      <header class="h-12 flex items-center justify-between px-6 border-b border-theme-secondary shrink-0 bg-terminal-panel">
+      <header class="h-10 md:h-12 flex items-center justify-between px-3 md:px-6 border-b border-theme-secondary shrink-0 bg-terminal-panel">
         <div class="flex items-center gap-3">
           <!-- ☰ 侧边栏按钮 (仅桌面端显示) -->
           <button

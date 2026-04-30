@@ -11,7 +11,7 @@
       <button
         v-for="tab in moreTabs"
         :key="tab.id"
-        class="flex flex-col items-center justify-center gap-1 py-3 rounded-sm transition-colors"
+        class="flex flex-col items-center justify-center gap-1 py-2 rounded-sm transition-colors"
         :class="activeId === tab.id ? 'bg-terminal-accent/10 text-terminal-accent' : 'text-terminal-dim hover:bg-theme-hover'"
         @click="handleNavigate(tab.id)"
       >
