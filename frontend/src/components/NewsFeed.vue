@@ -30,7 +30,7 @@
           </svg>
         </button>
         <span class="w-1.5 h-1.5 rounded-sm shrink-0"
-              :class="isRefreshing ? 'bg-yellow-400' : 'bg-[var(--color-success-light)]'"></span>
+              :class="isRefreshing ? 'bg-[var(--color-warning)]' : 'bg-[var(--color-success-light)]'"></span>
       </div>
     </div>
 
