@@ -178,6 +178,8 @@
         <AdminDashboard v-else-if="currentView === 'admin'" />
         <!-- 宏观经济 -->
         <MacroDashboard v-else-if="currentView === 'macro'" />
+        <!-- 期权分析 -->
+        <OptionsAnalysis v-else-if="currentView === 'options'" />
       </div>
     </main>
 
@@ -259,6 +261,7 @@ const CopilotSidebar  = defineAsyncComponent(() => import('./components/CopilotS
 const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
 const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
+const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'

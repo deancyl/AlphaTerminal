@@ -51,6 +51,9 @@
       <button @click="loadPortfolioData" class="text-terminal-dim hover:text-terminal-primary">↺</button>
       <div class="ml-auto flex gap-2">
         <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-[var(--text-muted)]'">持仓</button>
+        <button @click="activeTab = 'performance'" :class="activeTab==='performance'?'text-terminal-accent':'text-[var(--text-muted)]'">业绩评价</button>
+        <button @click="activeTab = 'risk'" :class="activeTab==='risk'?'text-terminal-accent':'text-[var(--text-muted)]'">风险分析</button>
+        <button @click="activeTab = 'benchmark'" :class="activeTab==='benchmark'?'text-terminal-accent':'text-[var(--text-muted)]'">基准对比</button>
         <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-[var(--text-muted)]'">归因分析</button>
       </div>
     </div>
@@ -98,6 +101,21 @@
 
     <!-- Phase 4: Open Lots 批次明细 -->
     <OpenLotsPanel v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
+
+    <!-- 业绩评价 -->
+    <div v-if="activeTab === 'performance'" class="mt-4 flex-1 min-h-0">
+      <PerformancePanel :portfolioId="selectedPortfolioId" />
+    </div>
+
+    <!-- 风险分析 -->
+    <div v-if="activeTab === 'risk'" class="mt-4 flex-1 min-h-0">
+      <RiskPanel :portfolioId="selectedPortfolioId" />
+    </div>
+
+    <!-- 基准对比 -->
+    <div v-if="activeTab === 'benchmark'" class="mt-4 flex-1 min-h-0">
+      <BenchmarkPanel :portfolioId="selectedPortfolioId" />
+    </div>
 
     <!-- 归因分析 -->
     <div v-if="activeTab === 'analysis'" class="mt-4">
@@ -196,6 +214,9 @@ import { apiFetch } from '../utils/api.js';
 import OpenLotsPanel from './OpenLotsPanel.vue';
 import PositionPieChart from './PositionPieChart.vue';
 import AttributionPanel from './AttributionPanel.vue';
+import PerformancePanel from './PerformancePanel.vue';
+import RiskPanel from './RiskPanel.vue';
+import BenchmarkPanel from './BenchmarkPanel.vue';
 import SimulatedTradeModal from './SimulatedTradeModal.vue';
 import ConservationAuditCard from './ConservationAuditCard.vue';
 

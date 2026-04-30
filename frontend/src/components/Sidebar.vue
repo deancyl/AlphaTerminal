@@ -95,6 +95,7 @@ const mainNavItems = [
   { id: 'bond',      label: '债券行情',   icon: '📉' },
   { id: 'futures',   label: '期货行情',  icon: '🛢️' },
   { id: 'macro',     label: '宏观经济',   icon: '🌍' },
+  { id: 'options',   label: '期权分析',   icon: '⚡' },
   { id: 'backtest',  label: '回测实验室', icon: '🔬' },
 ]
 
