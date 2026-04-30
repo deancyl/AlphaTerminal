@@ -2,17 +2,17 @@
   <div class="flex flex-col gap-2 h-full overflow-visible">
 
     <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
-    <div class="bg-terminal-bg rounded border border-theme p-2">
+    <div class="bg-terminal-bg rounded-sm border border-theme p-2">
       <div class="flex items-center justify-between mb-1">
         <span class="text-[10px] text-terminal-dim">📈 全市场多空对比（全天走势）</span>
-        <span class="text-[9px] text-terminal-dim">{{ intradayUpdateTime }}</span>
+        <span class="text-[10px] text-terminal-dim">{{ intradayUpdateTime }}</span>
       </div>
       <!-- ECharts 折线图：上涨家数全天走势 -->
       <div ref="intradayEl" class="w-full" :style="{ height: intradayHeight + 'px' }"></div>
     </div>
 
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
-    <div class="bg-terminal-bg rounded border border-theme p-3">
+    <div class="bg-terminal-bg rounded-sm border border-theme p-3">
       <!-- 标题栏：情绪 + 资讯面 -->
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 A股市场情绪</span>
@@ -20,7 +20,7 @@
           <!-- Phase 4: 资讯情绪徽标 -->
           <span
             v-if="newsSentiment.total_count > 0"
-            class="text-[10px] px-1.5 py-0.5 rounded border"
+            class="text-[10px] px-1.5 py-0.5 rounded-sm border"
             :class="newsSentiment.bullish_count - newsSentiment.bearish_count > 0
               ? 'border-bullish/40 bg-bullish/10 text-bullish'
               : newsSentiment.bullish_count - newsSentiment.bearish_count < 0
@@ -34,7 +34,7 @@
       </div>
 
       <!-- Phase 4: 大字汇总行 -->
-      <div class="flex items-center justify-between mb-2 px-1 py-1.5 rounded bg-terminal-panel/60 border border-theme/60">
+      <div class="flex items-center justify-between mb-2 px-1 py-1.5 rounded-sm bg-terminal-panel/60 border border-theme/60">
         <span class="text-bullish font-bold text-sm">
           🚀 上涨: <span class="font-mono text-base">{{ data.advance || 0 }}</span> 家
         </span>
@@ -50,14 +50,14 @@
       <div ref="chartEl" class="w-full" :style="{ height: chartHeight + 'px' }"></div>
 
       <!-- 涨跌标签行 -->
-      <div class="flex justify-between mt-1 text-[9px] text-terminal-dim">
+      <div class="flex justify-between mt-1 text-[10px] text-terminal-dim">
         <span>涨 {{ data.advance || 0 }} ({{ upPct }}%)</span>
         <span>平 {{ data.unchanged || 0 }}</span>
         <span>跌 {{ data.decline || 0 }} ({{ 100 - upPct }}%)</span>
       </div>
 
       <!-- 底部统计 -->
-      <div class="flex justify-between mt-2 text-[9px] border-t border-theme pt-2">
+      <div class="flex justify-between mt-2 text-[10px] border-t border-theme pt-2">
         <span class="text-bullish">🔴 涨停 {{ data.limit_up || 0 }}</span>
         <span class="text-bearish">🟢 跌停 {{ data.limit_down || 0 }}</span>
         <span class="text-terminal-dim">全市场 {{ data.total || 0 }} 只</span>
@@ -77,7 +77,7 @@
         </thead>
         <tbody>
           <tr v-for="(item, key) in allItems" :key="key"
-              class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
+              class="border-b border-theme-secondary hover:bg-theme-hover cursor-pointer transition-colors"
               @click="$emit('symbol-click', { symbol: item.key, name: item.name })">
             <td class="py-1.5 text-theme-primary">{{ item.name }}</td>
             <td class="py-1.5 text-right font-mono">{{ formatPrice(item.index || item.price) }}</td>
@@ -86,7 +86,7 @@
               {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
             </td>
             <td class="py-1.5 text-right">
-              <span class="px-1 py-0.5 rounded text-[9px]"
+              <span class="px-1 py-0.5 rounded-sm text-[10px]"
                     :class="item.status === '交易中' ? 'bg-[var(--color-success-bg)] text-bearish' : 'bg-theme-tertiary/30 text-theme-secondary'">
                 {{ item.status }}
               </span>

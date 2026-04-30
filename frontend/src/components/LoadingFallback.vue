@@ -24,8 +24,8 @@ defineProps({
 .loading-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #374151;
-  border-top-color: #3b82f6;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -35,7 +35,7 @@ defineProps({
 }
 
 .loading-text {
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 14px;
 }
 </style>

@@ -6,7 +6,7 @@
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
       <button v-for="anchor in mobileAnchors" :key="anchor.id"
         :href="`#${anchor.id}`"
-        class="shrink-0 px-3 py-1 rounded-full text-[10px] border transition-colors"
+        class="shrink-0 px-3 py-1 rounded-sm text-[10px] border transition-colors"
         :class="'bg-terminal-accent/10 border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/20'"
         @click.prevent="scrollToMobileSection(anchor.id)">
         {{ anchor.label }}
@@ -14,7 +14,7 @@
     </div>
 
     <!-- K线图：自适应高度，内部图表自适应 -->
-    <div id="section-chart" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 240px;">
+    <div id="section-chart" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 240px;">
       <div class="flex items-center justify-between mb-2 shrink-0">
         <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       </div>
@@ -22,7 +22,7 @@
     </div>
 
     <!-- A股监测：自适应高度，内部滚动 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-screener" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
       <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
       <div class="w-full overflow-y-auto" style="height: calc(100% - 32px);">
         <StockScreener :data="globalItems" @symbol-click="handleScreenerClick" />
@@ -30,17 +30,17 @@
     </div>
 
     <!-- 市场情绪 -->
-    <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 180px;">
+    <div id="section-sentiment" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 180px;">
       <SentimentGauge :market-data="{ indices: indices }" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
     <!-- 板块热度：自适应高度，内部滚动 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 280px; max-height: 45vh; overflow: hidden;">
+    <div id="section-sectors" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 280px; max-height: 45vh; overflow: hidden;">
       <HotSectors :data="sectors" class="w-full" />
     </div>
 
     <!-- 新闻快讯：自适应高度，内部滚动 -->
-    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-news" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
       <NewsFeed class="w-full" />
     </div>
   </div>
@@ -58,7 +58,7 @@
           <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
-            class="px-2 py-0.5 text-[10px] rounded border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
+            class="px-2 py-0.5 text-[10px] rounded-sm border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
             @click="handleFullscreenClick()"
             title="全屏"
           >⛶ 全屏</button>
@@ -66,10 +66,10 @@
         <!-- 指数切换行 -->
         <div class="flex items-center gap-1 mb-1 shrink-0">
           <button v-for="idx in indexOptions" :key="idx.symbol"
-                  class="px-2 py-0.5 text-[10px] rounded border transition"
+                  class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                   :class="selectedIndex === idx.symbol
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-theme-secondary'"
                   @click="switchIndex(idx)">
             {{ idx.name }}
           </button>
@@ -77,20 +77,20 @@
         <!-- Period selector -->
         <div class="flex items-center gap-1 mb-2 shrink-0">
           <button v-for="p in periods" :key="p.key"
-                  class="px-2 py-0.5 text-[10px] rounded border transition"
+                  class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                   :class="selectedPeriod === p.key
-                    ? 'bg-[var(--color-info-bg)] border-blue-500/50 text-[var(--color-info)]'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    ? 'bg-[var(--color-info-bg)] border-terminal-accent/50 text-[var(--color-info)]'
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-theme-secondary'"
                   @click="switchPeriod(p.key)">
             {{ p.label }}
           </button>
           <!-- Indicator toggles -->
-          <span class="ml-2 text-theme-tertiary text-[9px]">指标:</span>
+          <span class="ml-2 text-theme-tertiary text-[10px]">指标:</span>
           <button v-for="ind in indicators" :key="ind.key"
-                  class="px-1.5 py-0.5 text-[9px] rounded border transition"
+                  class="px-1.5 py-0.5 text-[10px] rounded-sm border transition"
                   :class="activeIndicators.includes(ind.key)
-                    ? 'bg-[var(--color-primary-bg)] border-purple-500/50 text-[var(--color-primary)]'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    ? 'bg-[var(--color-primary-bg)] border-terminal-accent/50 text-[var(--color-primary)]'
+                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-theme-secondary'"
                   @click="toggleIndicator(ind.key)">
             {{ ind.label }}
           </button>
@@ -133,22 +133,22 @@
         <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
         <div class="text-[10px] text-theme-tertiary mb-1 flex items-center justify-between">
           <span>🌐 市场风向标</span>
-          <span class="text-[9px] opacity-60">{{ windItems.length }}标的</span>
+          <span class="text-[10px] opacity-60">{{ windItems.length }}标的</span>
         </div>
         <!-- 两列卡片网格：消除垂直留白，充分利用右侧宽度（密度升级） -->
         <div class="grid grid-cols-2 gap-1 p-0.5">
           <div
             v-for="item in windItems" :key="item.symbol"
-            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors min-w-0 overflow-hidden"
+            class="bg-theme-secondary/50 rounded-sm p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors min-w-0 overflow-hidden"
             @click="handleWindClick(item)"
           >
             <!-- 标的名称（分类标签） -->
             <div class="flex items-center gap-0.5 mb-0.5">
               <span
-                class="text-[7px] px-0.5 rounded border"
+                class="text-[10px] px-0.5 rounded-sm border"
                 :class="item.category === 'macro' ? 'border-[var(--color-warning-border)] text-[var(--color-warning)]' : 'border-[var(--color-info-border)] text-[var(--color-info)]'"
               >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
-              <span class="text-[9px] text-theme-primary truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
+              <span class="text-[10px] text-theme-primary truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>
             <!-- 最新价（右对齐） -->
             <div class="text-[10px] font-mono text-theme-primary text-right w-full">
@@ -201,7 +201,7 @@
             </thead>
             <tbody>
               <tr v-for="item in chinaAllItems" :key="item.symbol"
-                  class="border-b border-theme-secondary hover:bg-white/5 cursor-pointer transition-colors"
+                  class="border-b border-theme-secondary hover:bg-theme-hover cursor-pointer transition-colors"
                   @click="handleChinaClick(item)">
                 <td class="py-1 text-theme-primary text-[11px]">{{ item.name }}</td>
                 <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>

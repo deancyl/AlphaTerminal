@@ -15,7 +15,7 @@
         <span class="text-terminal-dim text-[10px]">{{ filteredTotal }} 条</span>
         <!-- 手动刷新按钮 -->
         <button
-          class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
+          class="w-8 h-8 flex items-center justify-center rounded-sm border transition shrink-0"
           :class="isRefreshing
             ? 'border-[var(--color-warning-border)] text-[var(--color-warning)] bg-[var(--color-warning-bg)] cursor-not-allowed'
             : 'border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
@@ -38,14 +38,14 @@
     <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
     >
       <!-- 情绪概览：移动端紧凑布局 -->
-      <div class="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 rounded-lg border transition flex-wrap"
+      <div class="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 rounded-sm border transition flex-wrap"
            :class="sentiment.score > 0.1
              ? 'border-bullish/30 bg-bullish/5'
              : sentiment.score < -0.1
                ? 'border-bearish/30 bg-bearish/5'
                : 'border-theme-secondary bg-theme-tertiary/5'"
       >
-        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0"
               :class="sentiment.score > 0.1
                 ? 'bg-bullish/20 text-bullish'
                 : sentiment.score < -0.1
@@ -59,22 +59,22 @@
         </span>
         <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
           <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
-                class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
+                class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
           >
             {{ kw }}
           </span>
         </div>
-        <span class="text-[9px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
+        <span class="text-[10px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
       </div>
 
       <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
-      <div class="hidden sm:block px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
+      <div class="hidden sm:block px-2 py-1.5 rounded-sm border border-theme-secondary bg-terminal-panel/50"
       >
         <div class="flex items-center justify-between mb-1"
         >
           <span class="text-[10px] text-terminal-dim"
           >情绪分布</span>
-          <span class="text-[9px] text-terminal-dim"
+          <span class="text-[10px] text-terminal-dim"
           >共 {{ sentiment.total_count }} 条</span>
         </div>
         <div class="h-2 rounded-full overflow-hidden flex"
@@ -94,24 +94,24 @@
         </div>
         <div class="flex justify-between mt-1"
         >
-          <span class="text-[9px] text-bullish"
+          <span class="text-[10px] text-bullish"
           >{{ sentiment.bullish_count }} 看涨</span>
-          <span class="text-[9px] text-theme-tertiary"
+          <span class="text-[10px] text-theme-tertiary"
           >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[9px] text-bearish"
+          <span class="text-[10px] text-bearish"
           >{{ sentiment.bearish_count }} 看跌</span>
         </div>
       </div>
 
       <!-- 热门资讯排行 -->
-      <div v-if="hotNews.length > 0" class="px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
+      <div v-if="hotNews.length > 0" class="px-2 py-1.5 rounded-sm border border-theme-secondary bg-terminal-panel/50"
       >
         <div class="flex items-center justify-between mb-1"
         >
           <span class="text-[10px] text-terminal-dim font-bold"
           >🔥 热门资讯</span
           >
-          <span class="text-[9px] text-terminal-dim"
+          <span class="text-[10px] text-terminal-dim"
           >{{ hotNews.length }} 条</span
           >
         </div
@@ -121,7 +121,7 @@
           <button
             v-for="(item, idx) in hotNews.slice(0, 5)"
             :key="item.id || item.title"
-            class="shrink-0 text-[9px] px-2 py-1 rounded border transition text-left max-w-[140px] truncate"
+            class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
             :class="modalItem?.id === item.id
               ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
               : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/30'"
@@ -144,7 +144,7 @@
         <button
           v-for="cat in categories"
           :key="cat.value"
-          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition flex items-center gap-0.5"
+          class="text-[10px] px-1.5 md:px-2 py-0.5 rounded-sm border transition flex items-center gap-0.5"
           :class="activeCategory === cat.value
             ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
@@ -152,7 +152,7 @@
         >
           <span>{{ cat.icon }}</span>
           <span>{{ cat.label }}</span>
-          <span v-if="cat.value !== 'all'" class="text-[8px] opacity-60">({{ categoryCount(cat.value) }})</span>
+          <span v-if="cat.value !== 'all'" class="text-[10px] opacity-60">({{ categoryCount(cat.value) }})</span>
         </button>
       </div>
 
@@ -162,7 +162,7 @@
         <button
           v-for="filter in sentimentFilters"
           :key="filter.value"
-          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition"
+          class="text-[10px] px-1.5 md:px-2 py-0.5 rounded-sm border transition"
           :class="activeSentimentFilter === filter.value
             ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
@@ -183,27 +183,27 @@
         <div
           v-for="item in pagedItems"
           :key="item.id || item.title"
-          class="bg-terminal-bg rounded border border-theme p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
+          class="bg-terminal-bg rounded-sm border border-theme p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
           @click="openModal(item)"
         >
           <div class="flex items-start gap-2">
-            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
+            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm"
                   :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
             <!-- 热门标记 -->
-            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-[8px] px-1 py-0.5 rounded bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-bold"
+            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-bold"
             >HOT
             </span>
             <!-- 时间 -->
-            <span class="shrink-0 text-[9px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
+            <span class="shrink-0 text-[10px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
             <!-- 标题 + 来源 -->
             <div class="flex-1 min-w-0">
               <p class="text-xs text-theme-primary leading-snug line-clamp-2">{{ item.title }}</p>
-              <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
+              <span class="text-terminal-dim/50 text-[10px]">{{ item.source }}</span>
             </div>
             <!-- 情绪徽章 -->
-            <span v-if="getItemSentiment(item)" class="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium"
+            <span v-if="getItemSentiment(item)" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
                   :class="sentimentBadgeClass(getItemSentiment(item))">
               {{ getItemSentiment(item) }}
             </span>
@@ -212,10 +212,10 @@
         <!-- 骨架屏 -->
         <div v-if="isRefreshing && !pagedItems.length" class="space-y-2 animate-pulse">
           <div v-for="i in 5" :key="i" class="flex items-start gap-2">
-            <div class="w-8 h-4 rounded bg-terminal-panel"></div>
+            <div class="w-8 h-4 rounded-sm bg-terminal-panel"></div>
             <div class="flex-1 space-y-1">
-              <div class="h-4 rounded bg-terminal-panel w-3/4"></div>
-              <div class="h-3 rounded bg-terminal-panel w-1/2"></div>
+              <div class="h-4 rounded-sm bg-terminal-panel w-3/4"></div>
+              <div class="h-3 rounded-sm bg-terminal-panel w-1/2"></div>
             </div>
           </div>
         </div>
@@ -228,7 +228,7 @@
     <!-- ── 分页控制器 ─────────────────────────────────────────── -->
     <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-2 shrink-0">
       <button
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
         :class="currentPage === 1
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
           : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
@@ -239,7 +239,7 @@
       <button
         v-for="p in visiblePages"
         :key="p"
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
         :class="p === currentPage
           ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
           : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
@@ -247,7 +247,7 @@
         {{ p }}
       </button>
       <button
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
         :class="currentPage === totalPages
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
           : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
@@ -255,7 +255,7 @@
         @click="nextPage">
         ›
       </button>
-      <span class="text-terminal-dim text-[9px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
+      <span class="text-terminal-dim text-[10px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
     </div>
 
     <!-- ── 详情 Modal ─────────────────────────────────────────── -->
@@ -265,11 +265,11 @@
            @click.self="closeModal">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
-                    bg-[var(--bg-primary)] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
+                    bg-[var(--bg-primary)] border border-theme-secondary rounded-sm shadow-sm overflow-hidden">
           <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
             <div class="flex-1 pr-4">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-[11px] px-2 py-0.5 rounded" :class="tagClass(modalItem.tag)">
+                <span class="text-[11px] px-2 py-0.5 rounded-sm" :class="tagClass(modalItem.tag)">
                   {{ modalItem.tag }}
                 </span>
                 <span class="text-terminal-dim text-[11px]">{{ modalItem.time }}</span>
@@ -303,7 +303,7 @@
             </a>
             <span v-else class="text-xs text-theme-tertiary italic">（无原文链接）</span>
             <button
-              class="ml-4 px-3 py-1 text-[11px] rounded bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-white transition shrink-0"
+              class="ml-4 px-3 py-1 text-[11px] rounded-sm bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-theme-primary transition shrink-0"
               @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
               浏览器打开
             </button>

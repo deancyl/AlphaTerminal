@@ -10,7 +10,7 @@
       <!-- 工具栏：横向滚动，不换行 -->
       <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0 max-w-full">
         <!-- 横屏按钮：仅移动端显示，最左侧 -->
-        <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-2 py-1 rounded mr-2" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
+        <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-2 py-1 rounded-sm mr-2" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <!-- 周期选择 -->
         <div class="period-selector flex-nowrap shrink-0">
           <button
@@ -40,7 +40,7 @@
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
         <button 
-          class="text-xs px-2 py-1 rounded bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+          class="text-xs px-2 py-1 rounded-sm bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
           @click="showDetail = true"
           title="F9 深度资料"
         >
@@ -59,16 +59,16 @@
           <div class="w-full h-full flex flex-col p-4 gap-3">
             <!-- 顶部标题骨架 -->
             <div class="flex items-center justify-between mb-2">
-              <div class="skeleton h-5 w-24 rounded"></div>
-              <div class="skeleton h-5 w-16 rounded"></div>
+              <div class="skeleton h-5 w-24 rounded-sm"></div>
+              <div class="skeleton h-5 w-16 rounded-sm"></div>
             </div>
             <!-- 图表区域骨架 -->
-            <div class="flex-1 skeleton rounded-lg"></div>
+            <div class="flex-1 skeleton rounded-sm"></div>
             <!-- 底部指标骨架 -->
             <div class="flex gap-2">
-              <div class="skeleton h-3 w-20 rounded"></div>
-              <div class="skeleton h-3 w-16 rounded"></div>
-              <div class="skeleton h-3 w-24 rounded"></div>
+              <div class="skeleton h-3 w-20 rounded-sm"></div>
+              <div class="skeleton h-3 w-16 rounded-sm"></div>
+              <div class="skeleton h-3 w-24 rounded-sm"></div>
             </div>
           </div>
         </div>

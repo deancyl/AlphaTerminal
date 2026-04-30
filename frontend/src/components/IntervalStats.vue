@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-terminal-panel/95 border border-theme-secondary rounded-lg shadow-2xl p-4 min-w-64">
+  <div class="bg-terminal-panel/95 border border-theme-secondary rounded-sm shadow-sm p-4 min-w-64">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-3">
       <span class="text-[12px] font-bold text-terminal-accent">📊 区间统计</span>

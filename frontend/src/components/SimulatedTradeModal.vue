@@ -1,15 +1,15 @@
 <template>
   <div v-if="visible" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="close">
-    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-6 w-96 shadow-2xl">
+    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-96 shadow-sm">
       <!-- Header -->
       <div class="flex items-center justify-between mb-5">
-        <h3 class="text-white font-bold text-base">📋 模拟调仓</h3>
-        <button @click="close" class="text-[var(--text-secondary)] hover:text-white text-lg">×</button>
+        <h3 class="text-theme-primary font-bold text-base">📋 模拟调仓</h3>
+        <button @click="close" class="text-[var(--text-secondary)] hover:text-theme-primary text-lg">×</button>
       </div>
 
       <!-- 账户标识 -->
-      <div class="text-xs text-[var(--text-secondary)] mb-4 bg-[var(--bg-secondary)] rounded px-3 py-2">
-        账户: <span class="text-white">{{ portfolioName }}</span>
+      <div class="text-xs text-[var(--text-secondary)] mb-4 bg-[var(--bg-secondary)] rounded-sm px-3 py-2">
+        账户: <span class="text-theme-primary">{{ portfolioName }}</span>
         (ID: {{ portfolioId }})
         <span v-if="isAggregated" class="ml-2 text-[var(--color-warning)]">📂 含子账户聚合</span>
       </div>
@@ -19,18 +19,18 @@
         <button
           @click="form.direction = 'buy'"
           :class="[
-            'flex-1 py-2 rounded text-sm font-bold transition-colors',
+            'flex-1 py-2 rounded-sm text-sm font-bold transition-colors',
             form.direction === 'buy'
-              ? 'bg-green-600 text-white'
+              ? 'bg-green-600 text-theme-primary'
               : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
           ]"
         >📈 买入</button>
         <button
           @click="form.direction = 'sell'"
           :class="[
-            'flex-1 py-2 rounded text-sm font-bold transition-colors',
+            'flex-1 py-2 rounded-sm text-sm font-bold transition-colors',
             form.direction === 'sell'
-              ? 'bg-red-600 text-white'
+              ? 'bg-red-600 text-theme-primary'
               : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
           ]"
         >📉 卖出</button>
@@ -44,7 +44,7 @@
           <input
             v-model="form.symbol"
             @input="form.symbol = form.symbol.toLowerCase()"
-            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white text-sm tracking-wider"
+            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm tracking-wider"
             placeholder="sh000001 / sz000001"
           />
         </div>
@@ -57,7 +57,7 @@
             type="number"
             step="0.001"
             min="0"
-            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white text-sm"
+            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm"
             placeholder="10.00"
           />
         </div>
@@ -70,7 +70,7 @@
             type="number"
             step="1"
             min="1"
-            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white text-sm"
+            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm"
             placeholder="1000"
           />
         </div>
@@ -81,17 +81,17 @@
           <input
             v-model="form.date"
             type="date"
-            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white text-sm"
+            class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm"
           />
         </div>
 
         <!-- 错误提示 -->
-        <div v-if="error" class="text-[var(--color-danger)] text-xs bg-[var(--color-danger-light)]/10 border border-red-400/20 rounded px-3 py-2">
+        <div v-if="error" class="text-[var(--color-danger)] text-xs bg-[var(--color-danger-light)]/10 border border-[var(--color-danger-border)]/20 rounded-sm px-3 py-2">
           {{ error }}
         </div>
 
         <!-- 成功提示 -->
-        <div v-if="success" class="text-[var(--color-success)] text-xs bg-[var(--color-success-light)]/10 border border-green-400/20 rounded px-3 py-2">
+        <div v-if="success" class="text-[var(--color-success)] text-xs bg-[var(--color-success-light)]/10 border border-[var(--color-success-border)]/20 rounded-sm px-3 py-2">
           ✅ {{ success }}
         </div>
       </div>
@@ -100,18 +100,18 @@
       <div class="flex gap-3 mt-5">
         <button
           @click="close"
-          class="flex-1 py-2 text-[var(--text-secondary)] hover:text-white rounded border border-[var(--border-primary)] text-sm"
+          class="flex-1 py-2 text-[var(--text-secondary)] hover:text-theme-primary rounded-sm border border-[var(--border-primary)] text-sm"
         >取消</button>
         <button
           @click="submitTrade"
           :disabled="loading"
           :class="[
-            'flex-1 py-2 rounded text-sm font-bold transition-colors',
+            'flex-1 py-2 rounded-sm text-sm font-bold transition-colors',
             loading
               ? 'bg-gray-600 text-[var(--text-secondary)] cursor-not-allowed'
               : form.direction === 'buy'
-                ? 'bg-[var(--color-success)] hover:bg-[var(--color-success-hover)] text-white'
-                : 'bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-white'
+                ? 'bg-[var(--color-success)] hover:bg-[var(--color-success-hover)] text-theme-primary'
+                : 'bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-theme-primary'
           ]"
         >
           <span v-if="loading">提交中...</span>

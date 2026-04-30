@@ -32,7 +32,7 @@
       <h1 class="text-xl text-terminal-accent mb-2">应用出现错误</h1>
       <p class="text-terminal-dim text-sm mb-4 max-w-md">{{ errorMessage }}</p>
       <button 
-        class="px-6 py-2 bg-terminal-accent text-white rounded hover:bg-terminal-accent/80 transition"
+        class="px-6 py-2 bg-terminal-accent text-theme-primary rounded-sm hover:bg-terminal-accent/80 transition"
         @click="clearError"
       >
         重试
@@ -43,28 +43,34 @@
   <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
-    <!-- ━━━ 移动端 Sidebar 遮罩层 ━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div v-if="isMobile && isSidebarOpen" class="fixed inset-0 bg-black/50 z-[9999]" @click="isSidebarOpen = false" />
-
-    <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 桌面端：直接渲染 | 移动端：固定定位 overlay -->
-    <div v-if="!isMobile" class="flex-shrink-0">
+    <!-- ━━━ 左侧 Sidebar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <!-- 桌面端：常驻，宽度 64px/224px | 移动端：overlay 滑出 -->
+    <template v-if="!isMobile">
       <Sidebar
-        :is-open="isSidebarOpen"
+        :is-collapsed="isSidebarCollapsed"
         :active-id="currentView"
         @navigate="handleSidebarNavigate"
-        @close="isSidebarOpen = false"
+        @toggle="isSidebarCollapsed = !isSidebarCollapsed"
       />
-    </div>
-    <!-- 移动端：固定定位 sidebar -->
-    <div v-else class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-theme-panel" :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px', minWidth: '224px' }">
-      <Sidebar
-        :is-open="isSidebarOpen"
-        :active-id="currentView"
-        @navigate="(id) => { handleSidebarNavigate(id); isSidebarOpen = false }"
-        @close="isSidebarOpen = false"
+    </template>
+    <template v-else>
+      <div
+        v-if="isSidebarOpen"
+        class="fixed inset-0 bg-black/50 z-[9999]"
+        @click="isSidebarOpen = false"
       />
-    </div>
+      <div
+        class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-terminal-panel"
+        :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px' }"
+      >
+        <Sidebar
+          is-mobile
+          :active-id="currentView"
+          @navigate="(id) => { handleSidebarNavigate(id); isSidebarOpen = false }"
+          @toggle="isSidebarOpen = false"
+        />
+      </div>
+    </template>
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
     <main
@@ -75,29 +81,29 @@
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
         <div class="flex items-center gap-3">
-          <!-- ☰ 侧边栏展开按钮 -->
+          <!-- ☰ 侧边栏按钮 -->
           <button
-            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
-            @click="isSidebarOpen = !isSidebarOpen"
-            title="切换侧边栏"
+            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-sm text-terminal-dim hover:text-terminal-accent hover:bg-theme-hover transition-colors text-lg"
+            @click="isMobile ? (isSidebarOpen = !isSidebarOpen) : (isSidebarCollapsed = !isSidebarCollapsed)"
+            :title="isMobile ? '切换侧边栏' : (isSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏')"
           >
-            ☰
+            <span class="text-base">☰</span>
           </button>
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
         </div>
         <div class="flex items-center gap-3 text-xs text-terminal-dim flex-nowrap overflow-x-auto scrollbar-hide max-w-full">
           <!-- 仅桌面端显示时钟 -->
           <span v-if="!isMobile" id="clock" class="font-mono">{{ currentTime }}</span>
-          <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
+          <span class="px-2 py-0.5 rounded-sm bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
             ● LIVE
           </span>
-          <!-- 仅桌面端显示锁定按钮（手机端不需要拖拽） -->
+          <!-- 仅桌面端显示锁定按钮 -->
           <button
             v-if="!isMobile"
-            class="flex items-center gap-1 px-2.5 py-1 rounded border text-xs transition"
+            class="flex items-center gap-1 px-2.5 py-1 rounded-sm border text-xs transition"
             :class="isLocked
-              ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
-              : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'"
+              ? 'border-[var(--color-warning)]/30 bg-[var(--color-warning-bg)] text-[var(--color-warning)] hover:bg-[var(--color-warning-bg)]/80'
+              : 'border-[var(--color-success)]/30 bg-[var(--color-success-bg)] text-[var(--color-success)] hover:bg-[var(--color-success-bg)]/80'"
             @click="toggleLock"
             :title="isLocked ? '点击解锁网格（允许拖拽）' : '点击锁定网格（禁止拖拽）'"
           >
@@ -107,13 +113,13 @@
           </button>
           <!-- Copilot 唤醒按钮 -->
           <button
-            class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs relative"
+            class="flex items-center gap-1 px-2 py-1 rounded-sm border border-terminal-accent/30 bg-terminal-accent/10 text-terminal-accent hover:bg-terminal-accent/20 hover:border-terminal-accent/50 transition-all text-xs relative"
             @click="toggleCopilot"
           >
             <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
             <span v-else>🤖 展开 AI 助理</span>
             <!-- 未读消息指示器 -->
-            <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center animate-pulse">
+            <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-bearish rounded-sm text-[10px] text-theme-primary flex items-center justify-center animate-pulse">
               {{ copilotUnreadCount > 9 ? '9+' : copilotUnreadCount }}
             </span>
           </button>
@@ -126,21 +132,21 @@
         <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
           <!-- 风向标骨架 -->
           <div class="grid grid-cols-4 gap-2">
-            <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-panel border border-theme"></div>
+            <div v-for="i in 4" :key="i" class="h-16 rounded-sm bg-terminal-panel border border-theme"></div>
           </div>
           <!-- 新闻/板块骨架 -->
           <div class="grid grid-cols-2 gap-2">
-            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
-            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
+            <div class="h-32 rounded-sm bg-terminal-panel border border-theme"></div>
+            <div class="h-32 rounded-sm bg-terminal-panel border border-theme"></div>
           </div>
           <!-- K线骨架 -->
-          <div class="h-48 rounded bg-terminal-panel border border-theme"></div>
+          <div class="h-48 rounded-sm bg-terminal-panel border border-theme"></div>
           <div class="text-terminal-dim text-xs text-center">正在加载市场数据...</div>
         </div>
 
         <!-- F2修复: 加载错误提示（增强：显示重试次数 + apiErrorState） -->
         <div v-if="loadError && !isInitialLoading"
-             class="mb-2 px-3 py-2 rounded border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between gap-2">
+             class="mb-2 px-3 py-2 rounded-sm border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span>⚠️ {{ loadError }}</span>
             <span v-if="apiErrorState.failedCount > 1" class="text-bullish/70 text-[10px]">
@@ -148,8 +154,8 @@
             </span>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <button @click="Promise.all([fetchHighFreq(), fetchMedFreq(), fetchLowFreq()])" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
-            <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-panel rounded text-theme-secondary hover:text-theme-primary text-[10px]">忽略</button>
+            <button @click="Promise.all([fetchHighFreq(), fetchMedFreq(), fetchLowFreq()])" class="px-2 py-0.5 bg-bullish/30 rounded-sm text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
+            <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-panel rounded-sm text-theme-secondary hover:text-theme-primary text-[10px]">忽略</button>
           </div>
         </div>
 
@@ -180,7 +186,16 @@
         <MacroDashboard v-else-if="currentView === 'macro'" />
         <!-- 期权分析 -->
         <OptionsAnalysis v-else-if="currentView === 'options'" />
+        <!-- 全球指数 -->
+        <GlobalIndex v-else-if="currentView === 'global-index'" />
       </div>
+
+      <!-- ━━━ 底部状态栏 ━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+      <StatusBar
+        :connection-status="apiErrorState.isDegraded ? 'degraded' : 'connected'"
+        :last-update="lastUpdateTime"
+        :market-status="marketStatus"
+      />
     </main>
 
     <!-- ━━━ 快捷键帮助面板 ━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -203,7 +218,7 @@
     <aside
       v-show="isCopilotOpen"
       :class="isMobile 
-        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[70vh] rounded-t-2xl border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-panel pb-safe' 
+        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[70vh] rounded-t-sm border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-panel pb-safe' 
         : 'flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden'"
       :style="isMobile ? { width: '100%', maxWidth: '100%' } : { width: '340px', maxWidth: '340px' }"
     >
@@ -243,6 +258,7 @@ import LoadingFallback from './components/LoadingFallback.vue'
 
 // ── 始终需要的组件（同步加载）──────────────────────────────────────
 import Sidebar       from './components/Sidebar.vue'
+import StatusBar     from './components/StatusBar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
@@ -262,6 +278,7 @@ const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDas
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
 const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
 const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
+const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -305,7 +322,8 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Phase 5: 侧边栏与视图切换状态
-const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动端）
+const isSidebarOpen = ref(false)   // 移动端 sidebar 默认隐藏
+const isSidebarCollapsed = ref(true) // 默认 64px 折叠态
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
@@ -349,8 +367,10 @@ const { helpVisible } = useKeyboardShortcuts({
       futuresFullscreen.value = false
     } else if (isCopilotOpen.value) {
       isCopilotOpen.value = false
-    } else if (isSidebarOpen.value) {
+    } else if (isMobile.value && isSidebarOpen.value) {
       isSidebarOpen.value = false
+    } else if (!isMobile.value && !isSidebarCollapsed.value) {
+      isSidebarCollapsed.value = true
     }
   },
   onFullscreen: () => {
@@ -384,6 +404,28 @@ function toggleCopilot() {
   isCopilotOpen.value = !isCopilotOpen.value
   if (isCopilotOpen.value) {
     copilotUnreadCount.value = 0 // 打开时清零未读
+  }
+}
+
+// 状态栏数据
+const lastUpdateTime = ref('')
+const marketStatus = ref('closed')
+
+function updateStatusBar() {
+  const now = new Date()
+  lastUpdateTime.value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`
+  // 简化的市场状态判断（A股交易时间）
+  const hour = now.getHours()
+  const minute = now.getMinutes()
+  const isWeekday = now.getDay() >= 1 && now.getDay() <= 5
+  if (!isWeekday) {
+    marketStatus.value = 'closed'
+  } else if ((hour === 9 && minute >= 15) || (hour === 10) || (hour === 11 && minute <= 30) || (hour >= 13 && hour < 15)) {
+    marketStatus.value = 'open'
+  } else if (hour === 9 && minute >= 0 && minute < 15) {
+    marketStatus.value = 'pre'
+  } else {
+    marketStatus.value = 'closed'
   }
 }
 
@@ -448,6 +490,7 @@ async function fetchHighFreq() {
     const d = await apiFetch('/api/v1/market/overview')
     marketOverview.value = d?.wind || d || null
     loadError.value = null
+    updateStatusBar()
   } catch { /* apiErrorState 已记录 */ }
 }
 
@@ -462,6 +505,7 @@ async function fetchMedFreq() {
     sectorsData.value     = d.sectors?.sectors || d.sectors?.data?.sectors || d.sectors || []
     chinaAllData.value    = d.china_all?.china_all || d.china_all?.data?.china_all || d.china_all || []
     derivativesData.value = d.derivatives?.derivatives || d.derivatives?.data?.derivatives || d.derivatives || []
+    updateStatusBar()
   } catch { /* apiErrorState 已记录 */ }
 }
 
@@ -506,6 +550,7 @@ watch(visibility, (v) => {
 
 onMounted(() => {
   updateClock()
+  updateStatusBar()
   clockTimer = setInterval(updateClock, 1000)
 
   // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）

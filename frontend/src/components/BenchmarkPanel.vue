@@ -5,7 +5,7 @@
       <span class="text-[10px] text-theme-muted">基准指数</span>
       <select
         v-model="benchmark"
-        class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary"
+        class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary"
       >
         <option value="000300">沪深300</option>
         <option value="000001">上证指数</option>
@@ -15,7 +15,7 @@
       <button
         @click="loadBenchmark"
         :disabled="loading"
-        class="ml-auto px-3 py-0.5 rounded text-[10px] font-medium transition-colors"
+        class="ml-auto px-3 py-0.5 rounded-sm text-[10px] font-medium transition-colors"
         :class="loading
           ? 'bg-gray-600/40 text-theme-muted cursor-not-allowed'
           : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] border border-[var(--color-info-border)]'"
@@ -27,29 +27,29 @@
       
       <!-- 核心对比指标 -->
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">组合收益</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">组合收益</div>
           <div class="text-[14px] font-mono font-bold" :class="comparison.portfolio_return_pct >= 0 ? 'text-bullish' : 'text-bearish'">
             {{ comparison.portfolio_return_pct >= 0 ? '+' : '' }}{{ comparison.portfolio_return_pct }}%
           </div>
         </div>
         
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">基准收益</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">基准收益</div>
           <div class="text-[14px] font-mono font-bold" :class="comparison.benchmark_return_pct >= 0 ? 'text-bullish' : 'text-bearish'">
             {{ comparison.benchmark_return_pct >= 0 ? '+' : '' }}{{ comparison.benchmark_return_pct }}%
           </div>
         </div>
         
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">超额收益(Alpha)</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">超额收益(Alpha)</div>
           <div class="text-[14px] font-mono font-bold" :class="comparison.excess_return_pct >= 0 ? 'text-bullish' : 'text-bearish'">
             {{ comparison.excess_return_pct >= 0 ? '+' : '' }}{{ comparison.excess_return_pct }}%
           </div>
         </div>
         
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">跟踪误差</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">跟踪误差</div>
           <div class="text-[14px] font-mono font-bold" :class="comparison.tracking_error_pct < 5 ? 'text-bullish' : 'text-bearish'">
             {{ comparison.tracking_error_pct }}%
           </div>
@@ -57,16 +57,16 @@
       </div>
 
       <!-- 收益走势对比图 -->
-      <div class="rounded border border-theme bg-terminal-panel/40 p-3">
+      <div class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">📈 累计收益对比</div>
         <div ref="chartEl" class="w-full h-[200px]"></div>
       </div>
 
       <!-- 月度收益对比表 -->
-      <div v-if="comparison.monthly_returns && comparison.monthly_returns.length > 0" class="rounded border border-theme bg-terminal-panel/40 p-3">
+      <div v-if="comparison.monthly_returns && comparison.monthly_returns.length > 0" class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">📅 月度收益对比</div>
         <div class="overflow-x-auto">
-          <table class="w-full text-[9px]">
+          <table class="w-full text-[10px]">
             <thead class="bg-terminal-panel sticky top-0">
               <tr class="text-theme-muted border-b border-theme/20">
                 <th class="px-2 py-1 text-left">月份</th>
@@ -99,28 +99,28 @@
 
       <!-- 统计指标 -->
       <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">信息比率</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">信息比率</div>
           <div class="text-[14px] font-mono font-bold" :class="comparison.information_ratio >= 0.5 ? 'text-bullish' : 'text-bearish'">
             {{ comparison.information_ratio >= 0 ? '+' : '' }}{{ comparison.information_ratio }}
           </div>
         </div>
         
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">相关系数</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">相关系数</div>
           <div class="text-[14px] font-mono font-bold text-theme-primary">{{ comparison.correlation }}</div>
         </div>
         
-        <div class="rounded border border-theme bg-terminal-panel/60 px-3 py-2">
-          <div class="text-[8px] text-theme-muted">统计天数</div>
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="text-[10px] text-theme-muted">统计天数</div>
           <div class="text-[14px] font-mono font-bold text-theme-primary">{{ comparison.total_days }}天</div>
         </div>
       </div>
 
       <!-- 指标说明 -->
-      <div class="rounded border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
-        <div class="text-[9px] text-theme-muted font-bold mb-1">📊 指标说明</div>
-        <div class="text-[8px] text-theme-muted leading-relaxed">
+      <div class="rounded-sm border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
+        <div class="text-[10px] text-theme-muted font-bold mb-1">📊 指标说明</div>
+        <div class="text-[10px] text-theme-muted leading-relaxed">
           <span class="text-theme-primary">超额收益</span>: 组合收益 - 基准收益，>0跑赢市场 |
           <span class="text-theme-primary">跟踪误差</span>: 组合与基准收益差异的波动率，<5%为紧密跟踪 |
           <span class="text-theme-primary">信息比率</span>: 超额收益/跟踪误差，>0.5优秀
@@ -192,7 +192,7 @@ function renderChart() {
   
   const upColor = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B'
   const downColor = getComputedStyle(document.documentElement).getPropertyValue('--color-down').trim() || '#51CF66'
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#2E7DFF'
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
   const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
   
   chart = window.echarts.init(chartEl.value, 'dark')

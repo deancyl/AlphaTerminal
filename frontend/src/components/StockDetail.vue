@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between px-4 py-2 border-b border-theme-secondary shrink-0">
       <div class="flex items-center gap-3">
         <button 
-          class="w-8 h-8 flex items-center justify-center rounded hover:bg-theme-hover text-terminal-dim"
+          class="w-8 h-8 flex items-center justify-center rounded-sm hover:bg-theme-hover text-terminal-dim"
           @click="$emit('close')"
           title="返回"
         >
@@ -16,7 +16,7 @@
           <span class="text-lg font-bold text-terminal-accent">{{ stockInfo.name || '--' }}</span>
           <span class="text-sm text-terminal-dim font-mono">{{ stockInfo.symbol || symbol }}</span>
         </div>
-        <span class="px-2 py-0.5 rounded text-xs" :class="getIndustryClass()">
+        <span class="px-2 py-0.5 rounded-sm text-xs" :class="getIndustryClass()">
           {{ stockInfo.industry || '未知行业' }}
         </span>
       </div>
@@ -28,7 +28,7 @@
           <span class="text-sm font-mono" :class="priceColor">
             {{ stockInfo.change >= 0 ? '+' : '' }}{{ formatPrice(stockInfo.change) }}
           </span>
-          <span class="text-xs px-1.5 py-0.5 rounded" :class="changeBadgeClass">
+          <span class="text-xs px-1.5 py-0.5 rounded-sm" :class="changeBadgeClass">
             {{ stockInfo.change_pct >= 0 ? '+' : '' }}{{ formatNumber(stockInfo.change_pct) }}%
           </span>
         </div>
@@ -46,7 +46,7 @@
           <button
             v-for="tab in tabs"
             :key="tab.id"
-            class="flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors whitespace-nowrap"
+            class="flex items-center gap-2 px-3 py-2 rounded-sm text-sm transition-colors whitespace-nowrap"
             :class="activeTab === tab.id
               ? 'bg-terminal-accent/10 text-terminal-accent border-b-2 md:border-b-0 md:border-r-2 border-terminal-accent'
               : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
@@ -63,7 +63,7 @@
         <!-- 公司概况 -->
         <div v-if="activeTab === 'overview'" class="space-y-4">
           <!-- 基本信息卡片 -->
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
             <h3 class="text-sm font-bold text-terminal-accent mb-3">📋 基本信息</h3>
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div v-for="item in basicInfoItems" :key="item.label" class="space-y-1">
@@ -74,7 +74,7 @@
           </div>
 
           <!-- 行情数据卡片 -->
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
             <h3 class="text-sm font-bold text-terminal-accent mb-3">📈 行情数据</h3>
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <div class="space-y-1">
@@ -121,7 +121,7 @@
           </div>
 
           <!-- 收益率卡片 -->
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
             <h3 class="text-sm font-bold text-terminal-accent mb-3">📊 阶段收益</h3>
             <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
               <div v-for="item in returnItems" :key="item.label" class="space-y-1">
@@ -136,7 +136,7 @@
 
         <!-- 财务分析 -->
         <div v-else-if="activeTab === 'financial'" class="space-y-4">
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-8 text-center">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-8 text-center">
             <div class="text-4xl mb-3">📊</div>
             <div class="text-sm text-terminal-dim">财务分析功能开发中...</div>
             <div class="text-xs text-theme-tertiary mt-2">将包含：三大报表、财务比率、杜邦分析</div>
@@ -145,7 +145,7 @@
 
         <!-- 盈利预测 -->
         <div v-else-if="activeTab === 'forecast'" class="space-y-4">
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-8 text-center">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-8 text-center">
             <div class="text-4xl mb-3">🎯</div>
             <div class="text-sm text-terminal-dim">盈利预测功能开发中...</div>
             <div class="text-xs text-theme-tertiary mt-2">将包含：一致预期、EPS预测、评级分布</div>
@@ -154,7 +154,7 @@
 
         <!-- 股东研究 -->
         <div v-else-if="activeTab === 'shareholders'" class="space-y-4">
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-8 text-center">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-8 text-center">
             <div class="text-4xl mb-3">👥</div>
             <div class="text-sm text-terminal-dim">股东研究功能开发中...</div>
             <div class="text-xs text-theme-tertiary mt-2">将包含：十大股东、股东户数、增减持</div>
@@ -163,7 +163,7 @@
 
         <!-- 新闻舆情 -->
         <div v-else-if="activeTab === 'news'" class="space-y-4">
-          <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+          <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
             <h3 class="text-sm font-bold text-terminal-accent mb-3">📰 相关新闻</h3>
             <NewsFeed :symbol="symbol" />
           </div>

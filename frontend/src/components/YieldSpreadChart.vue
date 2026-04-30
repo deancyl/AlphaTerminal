@@ -9,11 +9,11 @@
       >{{ spread >= 0 ? '+' : '' }}{{ spread?.toFixed(1) ?? '--' }}bp</span>
       <span
         v-if="spread != null"
-        class="text-[9px] px-1 py-0.5 rounded border text-[9px]"
+        class="text-[10px] px-1 py-0.5 rounded-sm border text-[10px]"
         :class="spread >= 0 ? 'border-[var(--color-info-border)] text-[var(--color-info)]/70' : 'border-[var(--color-danger-border)] text-bullish/70'"
       >{{ spread >= 0 ? '正常' : '倒挂⚠️' }}</span>
       <div class="flex-1" />
-      <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>
+      <span class="text-[10px] text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
 
     <!-- 错误 / 加载 / 空 -->
@@ -21,11 +21,11 @@
       <span class="text-bullish text-xs">{{ errorMsg }}</span>
     </div>
     <div v-else-if="isLoading" class="flex-1 flex flex-col p-3 gap-2">
-      <div class="skeleton h-3 w-24 rounded"></div>
-      <div class="flex-1 skeleton rounded-lg"></div>
+      <div class="skeleton h-3 w-24 rounded-sm"></div>
+      <div class="flex-1 skeleton rounded-sm"></div>
       <div class="flex gap-2">
-        <div class="skeleton h-2 w-12 rounded"></div>
-        <div class="skeleton h-2 w-12 rounded"></div>
+        <div class="skeleton h-2 w-12 rounded-sm"></div>
+        <div class="skeleton h-2 w-12 rounded-sm"></div>
       </div>
     </div>
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center">

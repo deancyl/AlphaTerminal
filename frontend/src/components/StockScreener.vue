@@ -5,45 +5,45 @@
         <span class="text-terminal-accent font-bold">全市场个股</span>
         <div class="flex items-center gap-1">
           <input type="text" v-model="searchQuery" placeholder="输入拼音/代码/名称"
-             class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-terminal-accent outline-none w-32" />
+             class="bg-terminal-bg border border-theme-secondary rounded-sm px-2 py-1 focus:border-terminal-accent outline-none w-32" />
         </div>
       </div>
       <!-- 电脑端：显示所有筛选条件 -->
       <div class="hidden md:flex items-center gap-3 flex-wrap">
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">涨跌幅 ></span>
-          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">%</span>
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">换手率 ></span>
-          <input type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">%</span>
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">PE <</span>
-          <input type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">PB <</span>
-          <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">价格区间</span>
-          <input type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">市值(亿)</span>
-          <input type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded px-1 outline-none focus:border-theme-accent" />
+          <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
       </div>
       <!-- 移动端：简化筛选 -->
       <div class="flex md:hidden items-center gap-2">
-        <button @click="showMobileFilter = !showMobileFilter" class="px-2 py-0.5 text-[10px] border border-theme-secondary rounded text-terminal-dim hover:border-theme-accent">
+        <button @click="showMobileFilter = !showMobileFilter" class="px-2 py-0.5 text-[10px] border border-theme-secondary rounded-sm text-terminal-dim hover:border-theme-accent">
           筛选
         </button>
       </div>
@@ -54,15 +54,15 @@
       <div class="grid grid-cols-3 gap-1">
         <div class="flex items-center gap-0.5 text-[10px]">
           <span class="text-terminal-dim">涨幅></span>
-          <input type="number" v-model="flt.change_pct.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+          <input type="number" v-model="flt.change_pct.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded-sm px-0.5 outline-none" />
         </div>
         <div class="flex items-center gap-0.5 text-[10px]">
           <span class="text-terminal-dim">换手></span>
-          <input type="number" v-model="flt.turnover.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+          <input type="number" v-model="flt.turnover.min" class="w-8 bg-terminal-bg border border-theme-secondary rounded-sm px-0.5 outline-none" />
         </div>
         <div class="flex items-center gap-0.5 text-[10px]">
           <span class="text-terminal-dim">PE<</span>
-          <input type="number" v-model="flt.pe.max" class="w-8 bg-terminal-bg border border-theme-secondary rounded px-0.5 outline-none" />
+          <input type="number" v-model="flt.pe.max" class="w-8 bg-terminal-bg border border-theme-secondary rounded-sm px-0.5 outline-none" />
         </div>
       </div>
     </div>
@@ -119,9 +119,9 @@
       <!-- 加载中遮罩 -->
       <div v-if="loading" class="absolute inset-0 bg-terminal-bg/50 backdrop-blur-sm flex items-center justify-center z-20">
         <div class="space-y-2 w-full max-w-md px-4">
-          <div class="skeleton h-4 w-3/4 rounded"></div>
-          <div class="skeleton h-4 w-1/2 rounded"></div>
-          <div class="skeleton h-4 w-2/3 rounded"></div>
+          <div class="skeleton h-4 w-3/4 rounded-sm"></div>
+          <div class="skeleton h-4 w-1/2 rounded-sm"></div>
+          <div class="skeleton h-4 w-2/3 rounded-sm"></div>
           <div class="text-theme-accent text-xs text-center mt-2">检索中...</div>
         </div>
       </div>
@@ -130,14 +130,14 @@
     <!-- 分页控制栏（固定在底部） -->
     <div class="flex items-center justify-between p-2 text-xs border-t border-theme-secondary shrink-0 bg-terminal-panel">
       <button
-        class="px-3 py-1 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
+        class="px-3 py-1 border border-theme-secondary rounded-sm hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
         :disabled="currentPage === 1"
         @click="goPage(currentPage - 1)">上一页</button>
       <div class="text-terminal-dim">
         第 <span class="text-terminal-fg font-bold">{{ currentPage }}</span> / {{ totalPages }} 页
       </div>
       <button
-        class="px-3 py-1 border border-theme-secondary rounded hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
+        class="px-3 py-1 border border-theme-secondary rounded-sm hover:bg-theme-secondary/50 disabled:opacity-30 disabled:cursor-not-allowed"
         :disabled="currentPage >= totalPages"
         @click="goPage(currentPage + 1)">下一页</button>
     </div>

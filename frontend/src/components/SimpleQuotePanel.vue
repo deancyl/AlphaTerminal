@@ -12,14 +12,14 @@
     
     <div v-if="loading" class="loading p-4 space-y-3">
       <div class="flex justify-between">
-        <div class="skeleton h-4 w-20 rounded"></div>
-        <div class="skeleton h-4 w-12 rounded"></div>
+        <div class="skeleton h-4 w-20 rounded-sm"></div>
+        <div class="skeleton h-4 w-12 rounded-sm"></div>
       </div>
-      <div class="skeleton h-10 w-32 rounded"></div>
+      <div class="skeleton h-10 w-32 rounded-sm"></div>
       <div class="space-y-2">
         <div class="flex justify-between" v-for="n in 4" :key="n">
-          <div class="skeleton h-3 w-12 rounded"></div>
-          <div class="skeleton h-3 w-16 rounded"></div>
+          <div class="skeleton h-3 w-12 rounded-sm"></div>
+          <div class="skeleton h-3 w-16 rounded-sm"></div>
         </div>
       </div>
     </div>

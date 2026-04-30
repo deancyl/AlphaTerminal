@@ -12,8 +12,8 @@
     <div v-if="loading" class="chart-placeholder loading">
       <div class="w-full h-full flex flex-col items-center justify-center gap-3 p-4">
         <div class="w-24 h-24 rounded-full skeleton"></div>
-        <div class="skeleton h-3 w-20 rounded"></div>
-        <div class="skeleton h-2 w-16 rounded"></div>
+        <div class="skeleton h-3 w-20 rounded-sm"></div>
+        <div class="skeleton h-2 w-16 rounded-sm"></div>
       </div>
     </div>
 

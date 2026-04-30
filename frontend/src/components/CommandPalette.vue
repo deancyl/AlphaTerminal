@@ -18,7 +18,7 @@
 
         <!-- 命令面板 -->
         <div
-          class="relative w-full max-w-[560px] mx-4 rounded-lg shadow-2xl overflow-hidden flex flex-col max-h-[60vh]"
+          class="relative w-full max-w-[560px] mx-4 rounded-sm shadow-sm overflow-hidden flex flex-col max-h-[60vh]"
           style="background: var(--bg-glass); backdrop-filter: blur(12px);"
           @click.stop
         >
@@ -33,7 +33,7 @@
               class="flex-1 bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-[var(--text-placeholder)]"
               @keydown="handleInputKeydown"
             />
-            <span class="text-[10px] text-[var(--text-muted)] px-2 py-1 rounded border border-[var(--border-secondary)]">ESC</span>
+            <span class="text-[10px] text-[var(--text-muted)] px-2 py-1 rounded-sm border border-[var(--border-secondary)]">ESC</span>
           </div>
 
           <!-- 搜索结果 -->
@@ -103,7 +103,7 @@
                     <div class="text-sm text-[var(--text-primary)]">{{ item.name }}</div>
                     <div class="text-[10px] text-[var(--text-muted)]">{{ item.desc }}</div>
                   </div>
-                  <span class="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded border border-[var(--border-secondary)]">{{ item.shortcut }}</span>
+                  <span class="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded-sm border border-[var(--border-secondary)]">{{ item.shortcut }}</span>
                 </div>
               </div>
 
@@ -146,9 +146,9 @@
 
           <!-- 底部快捷键提示 -->
           <div class="px-4 py-2 border-t border-[var(--border-primary)] flex items-center gap-4 text-[10px] text-[var(--text-muted)]">
-            <span><kbd class="px-1 py-0.5 rounded border border-[var(--border-secondary)]">↑↓</kbd> 选择</span>
-            <span><kbd class="px-1 py-0.5 rounded border border-[var(--border-secondary)]">Enter</kbd> 执行</span>
-            <span><kbd class="px-1 py-0.5 rounded border border-[var(--border-secondary)]">ESC</kbd> 关闭</span>
+            <span><kbd class="px-1 py-0.5 rounded-sm border border-[var(--border-secondary)]">↑↓</kbd> 选择</span>
+            <span><kbd class="px-1 py-0.5 rounded-sm border border-[var(--border-secondary)]">Enter</kbd> 执行</span>
+            <span><kbd class="px-1 py-0.5 rounded-sm border border-[var(--border-secondary)]">ESC</kbd> 关闭</span>
           </div>
         </div>
       </div>

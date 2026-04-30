@@ -10,11 +10,11 @@
   
   :root {
     /* 默认深色主题变量（防止闪烁） */
-    --bg-primary: #0D1117;
-    --bg-secondary: #161B22;
+    --bg-primary: #121212;
+    --bg-secondary: #1E1E1E;
     --bg-tertiary: #1C2333;
     --bg-hover: rgba(255,255,255,0.05);
-    --bg-active: rgba(46,125,255,0.10);
+    --bg-active: rgba(15,82,186,0.10);
     
     --text-primary: #F0F6FC;
     --text-secondary: #C9D1D9;
@@ -22,47 +22,47 @@
     --text-muted: #6E7681;
     
     --border-primary: #30363D;
-    --border-secondary: #21262D;
+    --border-secondary: #2C2C2C;
     --border-hover: #484F58;
     
-    --color-primary: #2E7DFF;
-    --color-up: #E8554A;
-    --color-down: #3DB873;
+    --color-primary: #0F52BA;
+    --color-up: #E63946;
+    --color-down: #1A936F;
     
-    --panel-bg: #161B22;
-    --panel-bg-elevated: #21262D;
+    --panel-bg: #1E1E1E;
+    --panel-bg-elevated: #2C2C2C;
     --panel-bg-hover: #1C2333;
     
-    --bullish: #E8554A;
+    --bullish: #E63946;
     --bullish-light: #FF6B6B;
-    --bullish-bg: rgba(232,85,74,0.15);
-    --bullish-border: rgba(232,85,74,0.30);
-    --bearish: #3DB873;
+    --bullish-bg: rgba(230,57,70,0.15);
+    --bullish-border: rgba(230,57,70,0.30);
+    --bearish: #1A936F;
     --bearish-light: #5CD899;
-    --bearish-bg: rgba(61,184,115,0.15);
-    --bearish-border: rgba(61,184,115,0.30);
+    --bearish-bg: rgba(26,147,111,0.15);
+    --bearish-border: rgba(26,147,111,0.30);
     
-    --accent-primary: #2E7DFF;
+    --accent-primary: #0F52BA;
     --accent-secondary: #4A8EFF;
-    --accent-bg: rgba(46,125,255,0.10);
-    --accent-border: rgba(46,125,255,0.30);
+    --accent-bg: rgba(15,82,186,0.10);
+    --accent-border: rgba(15,82,186,0.30);
     
-    --status-live: #2E7DFF;
+    --status-live: #0F52BA;
     --status-warning: #F5A623;
     --status-error: #DC2626;
-    --status-info: #2E7DFF;
+    --status-info: #0F52BA;
     --status-success: #16A34A;
     
     --chart-grid: #1C2333;
     --chart-text: #8B949E;
-    --chart-line: #2E7DFF;
-    --chart-area: rgba(46,125,255,0.10);
+    --chart-line: #0F52BA;
+    --chart-area: rgba(15,82,186,0.10);
     
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.30);
     --shadow-md: 0 4px 8px rgba(0,0,0,0.40);
     --shadow-lg: 0 8px 16px rgba(0,0,0,0.50);
     
-    --scrollbar-track: #161B22;
+    --scrollbar-track: #1E1E1E;
     --scrollbar-thumb: #30363D;
     --scrollbar-thumb-hover: #484F58;
     
@@ -73,11 +73,11 @@
     --space-lg: 24px;
     --space-xl: 32px;
     
-    /* 圆角系统 */
-    --radius-sm: 4px;
-    --radius-md: 6px;
-    --radius-lg: 8px;
-    --radius-xl: 12px;
+    /* 圆角系统 - 万德风格：极小圆角 */
+    --radius-sm: 2px;
+    --radius-md: 2px;
+    --radius-lg: 4px;
+    --radius-xl: 4px;
     
     /* 动效 */
     --duration-micro: 150ms;
@@ -167,7 +167,7 @@
   
   /* 终端面板 */
   .terminal-panel {
-    @apply rounded-lg;
+    @apply rounded-sm;
     background-color: var(--panel-bg);
     border: 1px solid var(--border-primary);
     box-shadow: var(--shadow-sm);
@@ -182,7 +182,7 @@
   
   /* 主题按钮 - PC端规范 */
   .theme-btn {
-    @apply px-3 rounded text-xs font-medium transition-all;
+    @apply px-3 rounded-sm text-xs font-medium transition-all;
     height: var(--btn-height-sm);
     min-height: var(--btn-height-sm);
     background-color: var(--bg-tertiary);
@@ -203,7 +203,7 @@
   }
   
   .theme-btn-primary {
-    @apply px-4 rounded text-sm font-medium transition-all;
+    @apply px-4 rounded-sm text-sm font-medium transition-all;
     height: var(--btn-height);
     min-height: var(--btn-height);
     background-color: var(--color-primary);
@@ -291,7 +291,7 @@
   
   /* 输入框 - 规范高度 */
   .theme-input {
-    @apply px-3 rounded outline-none transition-all;
+    @apply px-3 rounded-sm outline-none transition-all;
     height: var(--input-height);
     min-height: var(--input-height);
     background-color: var(--bg-secondary);

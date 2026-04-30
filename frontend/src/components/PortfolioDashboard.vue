@@ -7,12 +7,12 @@
         <button
           v-if="selectedPortfolioId !== null"
           @click="exportPortfolio"
-          class="bg-[var(--color-info-bg)] hover:bg-[var(--color-info-hover)]/30 text-[var(--color-info)] border border-[var(--color-info-border)] text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-[var(--color-info-bg)] hover:bg-[var(--color-info-hover)]/30 text-[var(--color-info)] border border-[var(--color-info-border)] text-xs px-3 py-1 rounded-sm font-bold transition-colors"
         >📥 导出</button>
         <button
           v-if="selectedPortfolioId !== null"
           @click="showTradeModal = true"
-          class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] text-xs px-3 py-1 rounded-sm font-bold transition-colors"
         >📋 模拟调仓</button>
         <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
       </div>
@@ -21,29 +21,29 @@
     <!-- 树形账户选择器 + 聚合指示器 -->
     <div v-if="selectedPortfolioId !== null" class="flex items-center gap-2 mb-2">
       <span class="text-terminal-dim text-xs">账户：</span>
-      <select v-model="selectedPortfolioId" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-primary text-xs flex-1">
+      <select v-model="selectedPortfolioId" class="bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-terminal-primary text-xs flex-1">
         <template v-for="node in flatTree" :key="node.id">
           <option :value="node.id">{{ node._label }}</option>
         </template>
       </select>
-      <span v-if="isAggregated" class="text-xs text-[var(--color-warning)] bg-yellow-400/10 border border-yellow-400/30 rounded px-2 py-0.5">
+      <span v-if="isAggregated" class="text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm px-2 py-0.5">
         📂 含子账户
       </span>
     </div>
 
     <!-- 操作栏：过滤器 -->
     <div v-if="selectedPortfolioId !== null" class="flex gap-2 mb-3 items-center text-xs flex-wrap">
-      <select v-model="filterSector" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
+      <select v-model="filterSector" class="bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-terminal-secondary">
         <option value="">全部行业</option>
         <option v-for="s in sectorList" :key="s" :value="s">{{ s }}</option>
       </select>
-      <select v-model="filterPositionType" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
+      <select v-model="filterPositionType" class="bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-terminal-secondary">
         <option value="">全部类型</option>
         <option value="stock">股票</option>
         <option value="index">指数</option>
         <option value="ETF">ETF</option>
       </select>
-      <select v-model="sortBy" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
+      <select v-model="sortBy" class="bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-terminal-secondary">
         <option value="change_pct">按涨跌幅</option>
         <option value="market_value">按市值</option>
         <option value="symbol">按代码</option>
@@ -125,16 +125,16 @@
 
   <!-- 新建账户弹窗 -->
   <div v-if="showCreateModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showCreateModal = false">
-    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-6 w-full max-w-[384px] mx-4">
-      <h3 class="text-white font-bold mb-4">新建账户</h3>
+    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-full max-w-[384px] mx-4">
+      <h3 class="text-theme-primary font-bold mb-4">新建账户</h3>
       <div class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">账户名称</label>
-          <input v-model="newAccount.name" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" placeholder="如：我的子基金" />
+          <input v-model="newAccount.name" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" placeholder="如：我的子基金" />
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">账户类型</label>
-          <select v-model="newAccount.type" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
+          <select v-model="newAccount.type" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
             <option value="main">主账户（顶级账户，可包含子账户）</option>
             <option value="portfolio">子账户（隶属于主账户）</option>
           </select>
@@ -145,22 +145,22 @@
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">初始本金</label>
-          <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" placeholder="0.00" />
+          <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" placeholder="0.00" />
         </div>
         <div v-if="newAccount.type !== 'main'">
           <label class="text-[var(--text-secondary)] text-xs">所属主账户</label>
-          <select v-model="newAccount.parentId" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
+          <select v-model="newAccount.parentId" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
             <option value="">请选择主账户...</option>
             <option v-for="p in selectableParentList" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <div v-if="selectableParentList.length === 0" class="text-yellow-500 text-xs mt-1">
+          <div v-if="selectableParentList.length === 0" class="text-[var(--color-warning)] text-xs mt-1">
             ⚠️ 没有可用的主账户，请先创建一个主账户
           </div>
         </div>
         <div v-if="createError" class="text-[var(--color-danger)] text-xs">{{ createError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showCreateModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-white">取消</button>
+        <button @click="showCreateModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
         <button @click="createAccount" class="btn-primary px-4 py-2">创建</button>
       </div>
     </div>
@@ -168,29 +168,29 @@
 
   <!-- 资金划转弹窗 -->
   <div v-if="showTransferModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showTransferModal = false">
-    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-6 w-80">
-      <h3 class="text-white font-bold mb-4">资金划转</h3>
+    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-80">
+      <h3 class="text-theme-primary font-bold mb-4">资金划转</h3>
       <div class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">从账户</label>
-          <select v-model="transfer.from" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
+          <select v-model="transfer.from" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">到账户</label>
-          <select v-model="transfer.to" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
+          <select v-model="transfer.to" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">金额 (¥)</label>
-          <input v-model.number="transfer.amount" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" />
+          <input v-model.number="transfer.amount" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" />
         </div>
         <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showTransferModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-white">取消</button>
+        <button @click="showTransferModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
         <button @click="handleTransfer" class="btn-primary px-4 py-2">确认划转</button>
       </div>
     </div>

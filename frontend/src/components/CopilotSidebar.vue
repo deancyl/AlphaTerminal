@@ -19,7 +19,7 @@
       <div class="flex flex-wrap gap-1.5">
         <button
           v-for="cmd in quickCommands" :key="cmd.cmd"
-          class="px-2 py-1 text-[10px] rounded bg-terminal-bg border border-theme text-terminal-dim
+          class="px-2 py-1 text-[10px] rounded-sm bg-terminal-bg border border-theme text-terminal-dim
                  hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors whitespace-nowrap"
           :disabled="isLoading" @click="executeQuickCommand(cmd)">
           {{ cmd.icon }} {{ cmd.label }}
@@ -30,25 +30,25 @@
     <!-- 上下文勾选框 -->
     <div class="px-4 py-2 border-b border-theme-secondary flex flex-wrap gap-3 text-xs shrink-0">
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取实时大盘指数数据作为对话上下文">
-        <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
         <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">大盘</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取国债收益率曲线作为对话上下文">
-        <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
         <span :class="ctxRates ? 'text-terminal-accent' : 'text-terminal-dim'">利率</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取最新5条市场快讯作为对话上下文">
-        <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
         <span :class="ctxNews ? 'text-terminal-accent' : 'text-terminal-dim'">快讯</span>
       </label>
       <!-- Week 3-4 新增：投资组合上下文 -->
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取您的投资组合数据作为对话上下文">
-        <input type="checkbox" v-model="ctxPortfolio" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <input type="checkbox" v-model="ctxPortfolio" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
         <span :class="ctxPortfolio ? 'text-terminal-accent' : 'text-terminal-dim'">组合</span>
       </label>
       <!-- Week 3-4 新增：历史数据上下文 -->
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取历史K线数据作为对话上下文">
-        <input type="checkbox" v-model="ctxHistorical" class="accent-terminal-accent w-3.5 h-3.5 rounded">
+        <input type="checkbox" v-model="ctxHistorical" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
         <span :class="ctxHistorical ? 'text-terminal-accent' : 'text-terminal-dim'">历史</span>
       </label>
       <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选可将数据加入AI上下文</span>
@@ -58,7 +58,7 @@
     <div class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
       <span class="text-[10px] text-terminal-dim shrink-0">🤖 模型</span>
       <select v-model="selectedModel"
-              class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
+              class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
                      text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
         <option v-for="m in modelOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
       </select>
@@ -69,7 +69,7 @@
          class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
       <span class="text-[10px] text-terminal-dim shrink-0">💼 组合</span>
       <select v-model="selectedPortfolioId"
-              class="flex-1 bg-terminal-bg border border-theme rounded px-2 py-1 text-[11px]
+              class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
                      text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
         <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }}</option>
       </select>
@@ -88,7 +88,7 @@
       </div>
 
       <div v-for="(msg, i) in messages" :key="i"
-           class="rounded-lg p-3 text-sm whitespace-pre-wrap leading-relaxed"
+           class="rounded-sm p-3 text-sm whitespace-pre-wrap leading-relaxed"
            :class="msg.role === 'user'
              ? 'bg-terminal-accent/10 border border-terminal-accent/30 text-theme-primary ml-8'
              : msg.isError
@@ -97,7 +97,7 @@
         <div class="text-[10px] mb-1.5 flex items-center gap-1"
              :class="msg.role === 'user' ? 'text-terminal-accent' : 'text-terminal-dim'">
           <span>{{ msg.role === 'user' ? '你' : '🤖 AlphaTerminal' }}</span>
-          <span v-if="msg.fromCache" class="text-[9px] text-bearish">📋 缓存</span>
+          <span v-if="msg.fromCache" class="text-[10px] text-bearish">📋 缓存</span>
         </div>
         <div v-if="msg.role === 'user'" class="text-theme-primary">{{ msg.content }}</div>
         <div v-else class="text-theme-primary copilot-markdown">
@@ -112,14 +112,14 @@
       <div class="relative">
         <textarea
           ref="inputEl" v-model="inputText"
-          class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2.5 pr-12
+          class="w-full bg-terminal-bg border border-theme rounded-sm px-3 py-2.5 pr-12
                  text-sm text-theme-primary resize-none focus:outline-none focus:border-terminal-accent/60
                  placeholder:text-terminal-dim/50"
           rows="3" placeholder="输入命令或问题... (Shift+Enter 换行)"
           :disabled="isLoading" @keydown.enter.exact.prevent="sendMessage"
         ></textarea>
         <button
-          class="absolute right-2 bottom-2 w-8 h-8 rounded flex items-center justify-center transition-colors"
+          class="absolute right-2 bottom-2 w-8 h-8 rounded-sm flex items-center justify-center transition-colors"
           :class="isLoading || !inputText.trim()
             ? 'bg-terminal-bg text-terminal-dim/30 cursor-not-allowed'
             : 'bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30'"

@@ -9,7 +9,7 @@
     @click.self="close"
   >
     <!-- 弹窗主体 -->
-    <div class="terminal-panel border border-theme rounded-xl p-4 w-full max-w-[540px] flex flex-col gap-3 shadow-2xl"
+    <div class="terminal-panel border border-theme rounded-sm p-4 w-full max-w-[540px] flex flex-col gap-3 shadow-sm"
          style="max-height: 90vh; overflow-y: auto;">
 
       <!-- 头部 -->
@@ -26,13 +26,13 @@
 
       <!-- 加载 / 错误 -->
       <div v-if="isLoading" class="py-6 space-y-3 px-2">
-        <div class="skeleton h-4 w-3/4 rounded"></div>
-        <div class="skeleton h-4 w-1/2 rounded"></div>
-        <div class="skeleton h-4 w-2/3 rounded"></div>
-        <div class="skeleton h-32 rounded-lg"></div>
+        <div class="skeleton h-4 w-3/4 rounded-sm"></div>
+        <div class="skeleton h-4 w-1/2 rounded-sm"></div>
+        <div class="skeleton h-4 w-2/3 rounded-sm"></div>
+        <div class="skeleton h-32 rounded-sm"></div>
         <div class="flex gap-2">
-          <div class="skeleton h-3 w-16 rounded"></div>
-          <div class="skeleton h-3 w-12 rounded"></div>
+          <div class="skeleton h-3 w-16 rounded-sm"></div>
+          <div class="skeleton h-3 w-12 rounded-sm"></div>
         </div>
       </div>
       <div v-else-if="error" class="flex items-center justify-center py-6">
@@ -67,10 +67,10 @@
         </div>
 
         <!-- 迷你柱状图（分位分布） -->
-        <div class="text-[9px] text-terminal-dim px-1">历史分位分布</div>
-        <div class="relative h-4 rounded bg-theme-secondary overflow-hidden mx-1">
+        <div class="text-[10px] text-terminal-dim px-1">历史分位分布</div>
+        <div class="relative h-4 rounded-sm bg-theme-secondary overflow-hidden mx-1">
           <div
-            class="absolute top-0 bottom-0 rounded"
+            class="absolute top-0 bottom-0 rounded-sm"
             :style="{ left: Math.max(0, Math.min(98, percentile ?? 0)) + '%', width: '2px', background: '#60a5fa' }"
           ></div>
           <div class="absolute inset-0 flex items-center">
@@ -81,7 +81,7 @@
             ></div>
           </div>
         </div>
-        <div class="flex justify-between px-1 text-[8px] text-terminal-dim">
+        <div class="flex justify-between px-1 text-[10px] text-terminal-dim">
           <span>历史低 ({{ minYield?.toFixed(2) }}%)</span>
           <span>当前</span>
           <span>历史高 ({{ maxYield?.toFixed(2) }}%)</span>

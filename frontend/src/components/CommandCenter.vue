@@ -1,20 +1,20 @@
 <template>
   <!-- 触发区域（左下角搜索入口） -->
   <div
-    class="command-trigger flex items-center gap-2 px-3 py-1.5 rounded border border-theme bg-terminal-panel/90 text-theme-secondary hover:border-terminal-accent/40 hover:text-terminal-accent transition-colors cursor-pointer select-none"
+    class="command-trigger flex items-center gap-2 px-3 py-1.5 rounded-sm border border-theme bg-terminal-panel/90 text-theme-secondary hover:border-terminal-accent/40 hover:text-terminal-accent transition-colors cursor-pointer select-none"
     :class="isOpen ? 'border-terminal-accent/50 text-terminal-accent' : ''"
     @click="open"
     title="搜索标的 (Ctrl+K)"
   >
     <span class="text-[11px]">🔍</span>
     <span class="text-[11px]">搜索股票/指数/基金...</span>
-    <kbd class="ml-2 text-[9px] px-1 py-0.5 rounded bg-theme-secondary border border-theme-secondary">Ctrl+K</kbd>
+    <kbd class="ml-2 text-[10px] px-1 py-0.5 rounded-sm bg-theme-secondary border border-theme-secondary">Ctrl+K</kbd>
   </div>
 
   <!-- 命令面板（fixed overlay） -->
   <Teleport to="body">
     <div v-if="isOpen" class="fixed inset-0 z-[200] flex items-start justify-center pt-[15vh]" @mousedown.self="close">
-      <div class="w-full max-w-[560px] max-h-[70vh] flex flex-col rounded-lg border border-theme bg-terminal-panel shadow-2xl overflow-hidden">
+      <div class="w-full max-w-[560px] max-h-[70vh] flex flex-col rounded-sm border border-theme bg-terminal-panel shadow-sm overflow-hidden">
         <!-- 搜索框 -->
         <div class="flex items-center gap-2 px-4 py-3 border-b border-theme shrink-0">
           <span class="text-theme-secondary">🔍</span>
@@ -25,7 +25,7 @@
             placeholder="输入代码、拼音缩写或中文名称..."
             @keydown="onKeydown"
           />
-          <kbd class="text-[9px] px-1.5 py-0.5 rounded bg-theme-secondary border border-theme-secondary text-theme-secondary">ESC</kbd>
+          <kbd class="text-[10px] px-1.5 py-0.5 rounded-sm bg-theme-secondary border border-theme-secondary text-theme-secondary">ESC</kbd>
         </div>
 
         <!-- 结果列表 -->
@@ -39,7 +39,7 @@
           <template v-else-if="filtered.length > 0">
             <!-- 按市场分组 -->
             <template v-for="(group, gKey) in groupedResults" :key="gKey">
-              <div class="px-4 py-1.5 text-[9px] text-theme-tertiary uppercase tracking-wider bg-theme-secondary/50 sticky top-0">
+              <div class="px-4 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider bg-theme-secondary/50 sticky top-0">
                 {{ gKey }}
               </div>
               <div
@@ -53,7 +53,7 @@
                 @mouseenter="activeIndex = getGlobalIndex(item.symbol)"
               >
                 <!-- 类型标签 -->
-                <span class="shrink-0 text-[9px] px-1 py-0.5 rounded border text-[9px]"
+                <span class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm border text-[10px]"
                   :class="typeClass(item.type)"
                 >{{ item.type }}</span>
                 <!-- 代码 -->
@@ -68,7 +68,7 @@
 
           <!-- 默认展示（无搜索词时） -->
           <template v-else>
-            <div class="px-4 py-1.5 text-[9px] text-theme-tertiary uppercase tracking-wider bg-theme-secondary/50 sticky top-0">
+            <div class="px-4 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider bg-theme-secondary/50 sticky top-0">
               常用指数
             </div>
             <div
@@ -81,7 +81,7 @@
               @click="select(item)"
               @mouseenter="activeIndex = idx"
             >
-              <span class="shrink-0 text-[9px] px-1 py-0.5 rounded border text-[9px]"
+              <span class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm border text-[10px]"
                 :class="typeClass(item.type)"
               >{{ item.type }}</span>
               <span class="w-20 font-mono text-[11px] text-theme-secondary shrink-0">{{ item.code }}</span>
@@ -94,9 +94,9 @@
         <!-- 底部状态栏 -->
         <div class="flex items-center justify-between gap-3 px-4 py-2 border-t border-theme text-[10px] text-theme-tertiary shrink-0">
           <div class="flex items-center gap-3">
-            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">↑↓</kbd> 导航</span>
-            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Enter</kbd> 选中</span>
-            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded">Esc</kbd> 关闭</span>
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded-sm">↑↓</kbd> 导航</span>
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded-sm">Enter</kbd> 选中</span>
+            <span><kbd class="px-1 py-0.5 bg-theme-secondary rounded-sm">Esc</kbd> 关闭</span>
           </div>
           <!-- 数据源健康度指示灯 -->
           <div class="flex items-center gap-1.5 cursor-default" :title="message || statusText[status]">
@@ -118,7 +118,7 @@
     <Transition name="toast">
       <div
         v-if="toastVisible && status !== 'ok'"
-        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-4 py-2 rounded-lg border text-xs shadow-xl"
+        class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-4 py-2 rounded-sm border text-xs shadow-sm"
         :class="{
           'bg-[var(--color-warning-bg)] border-[var(--color-warning-border)] text-[var(--color-warning-light)]': status === 'degraded',
           'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] text-[var(--color-danger-light)]': status === 'down',
@@ -226,7 +226,7 @@ function typeClass(type) {
     index:  'border-[var(--color-info-border)] text-[var(--color-info)]',
     stock:  'border-[var(--color-success-border)] text-bearish',
     fund:   'border-[var(--color-warning-border)] text-[var(--color-warning)]',
-    forex:  'border-purple-500/40 text-[var(--color-primary)]',
+    forex:  'border-terminal-accent/40 text-[var(--color-primary)]',
     commodity: 'border-[var(--color-warning-border)] text-[var(--color-warning)]',
   }
   return map[type] || 'border-theme-secondary text-theme-secondary'

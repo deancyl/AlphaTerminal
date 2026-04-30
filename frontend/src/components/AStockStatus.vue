@@ -12,7 +12,7 @@
         v-model="searchQuery"
         type="text"
         placeholder="搜索代码/名称"
-        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary rounded px-2 py-0.5 text-[11px] text-theme-primary outline-none focus:border-terminal-accent/60 h-5"
+        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary rounded-sm px-2 py-0.5 text-[11px] text-theme-primary outline-none focus:border-terminal-accent/60 h-5"
       />
     </div>
     
@@ -29,7 +29,7 @@
       <div
         v-for="(item, idx) in displayedItems"
         :key="item.symbol || idx"
-        class="flex items-center px-2 py-0.5 border-b border-theme-secondary/20 hover:bg-white/5 transition-colors text-[11px]"
+        class="flex items-center px-2 py-0.5 border-b border-theme-secondary/20 hover:bg-theme-hover transition-colors text-[11px]"
         :class="idx % 2 === 0 ? 'bg-terminal-bg' : 'bg-terminal-panel/30'"
       >
         <div class="w-5 text-left text-[10px] text-terminal-dim">{{ (currentPage - 1) * pageSize + idx + 1 }}</div>
@@ -48,15 +48,15 @@
     </div>
 
     <!-- 分页控制器 -->
-    <div v-if="totalPages > 1" class="shrink-0 bg-theme-panel flex items-center justify-center gap-1 py-0.5">
+    <div v-if="totalPages > 1" class="shrink-0 bg-terminal-panel flex items-center justify-center gap-1 py-0.5">
       <button 
-        class="px-1.5 py-0 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" 
+        class="px-1.5 py-0 text-[10px] rounded-sm border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" 
         :disabled="currentPage === 1" 
         @click="currentPage--"
       >‹</button>
       <span class="text-[10px] text-terminal-dim">{{ currentPage }}/{{ totalPages }}</span>
       <button 
-        class="px-1.5 py-0 text-[10px] rounded border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" 
+        class="px-1.5 py-0 text-[10px] rounded-sm border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30" 
         :disabled="currentPage === totalPages" 
         @click="currentPage++"
       >›</button>

@@ -8,21 +8,21 @@
         <div class="flex gap-2">
           <button 
             @click="activeTab = 'etf'"
-            class="px-4 py-2 text-sm rounded-t-lg border-b-2 transition-colors"
+            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
             :class="activeTab === 'etf' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >📊 场内基金 (ETF/LOF)</button>
           <button 
             @click="activeTab = 'open'"
-            class="px-4 py-2 text-sm rounded-t-lg border-b-2 transition-colors"
+            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
             :class="activeTab === 'open' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >💰 场外公募基金</button>
           <button 
             @click="activeTab = 'compare'"
-            class="px-4 py-2 text-sm rounded-t-lg border-b-2 transition-colors"
+            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
             :class="activeTab === 'compare' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
@@ -36,11 +36,11 @@
               v-model="searchQuery" 
               @keyup.enter="searchFund"
               :placeholder="activeTab === 'etf' ? '输入 ETF 代码（如 510300）' : '输入基金代码/名称/拼音'"
-              class="w-full bg-terminal-bg border border-theme-secondary rounded px-3 py-1.5 text-sm focus:border-terminal-accent outline-none"
+              class="w-full bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none"
             />
             <button 
               @click="searchFund"
-              class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 text-xs bg-terminal-accent/20 text-terminal-accent rounded hover:bg-terminal-accent/30 transition"
+              class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 text-xs bg-terminal-accent/20 text-terminal-accent rounded-sm hover:bg-terminal-accent/30 transition"
             >🔍</button>
           </div>
           <!-- 快捷列表 -->
@@ -49,7 +49,7 @@
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)" 
               :key="f.code"
               @click="selectFund(f.code)"
-              class="px-2 py-1 text-xs rounded border transition-colors whitespace-nowrap"
+              class="px-2 py-1 text-xs rounded-sm border transition-colors whitespace-nowrap"
               :class="selectedFundCode === f.code 
                 ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                 : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
@@ -65,13 +65,13 @@
     <div v-if="loading" class="flex-1 p-4 space-y-4 overflow-y-auto">
       <!-- 顶部指标骨架 -->
       <div class="grid grid-cols-3 gap-3">
-        <div class="skeleton h-16 rounded-lg" v-for="n in 3" :key="n"></div>
+        <div class="skeleton h-16 rounded-sm" v-for="n in 3" :key="n"></div>
       </div>
       <!-- 图表骨架 -->
-      <div class="skeleton h-64 rounded-lg"></div>
+      <div class="skeleton h-64 rounded-sm"></div>
       <!-- 信息列表骨架 -->
       <div class="space-y-2">
-        <div class="skeleton h-4 w-3/4 rounded" v-for="n in 6" :key="n"></div>
+        <div class="skeleton h-4 w-3/4 rounded-sm" v-for="n in 6" :key="n"></div>
       </div>
     </div>
 
@@ -93,37 +93,37 @@
       <div v-if="activeTab === 'etf'" class="space-y-4">
         <!-- 核心指标（ETF 特有） -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
             <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
               {{ fundInfo?.price ?? '-' }}
             </div>
           </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">涨跌幅</div>
             <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
               {{ fundInfo?.change_pct ?? '-' }}%
             </div>
           </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">IOPV 净值</div>
             <div class="text-lg font-bold text-theme-primary">
               {{ fundInfo?.iopv ?? '-' }}
             </div>
           </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">折溢价率</div>
             <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
               {{ fundInfo?.premium_rate ?? '-' }}%
             </div>
           </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">成交量</div>
             <div class="text-sm font-bold text-theme-primary">
               {{ formatVolume(fundInfo?.volume) }}
             </div>
           </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-lg p-3">
+          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
             <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
             <div class="text-sm font-bold text-theme-primary">
               {{ formatAmount(fundInfo?.amount) }}
@@ -134,14 +134,14 @@
         <!-- 买卖盘五档 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- 买盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm">📗 买盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
             <div class="space-y-1">
               <div v-for="bid in fundInfo?.bids || []" :key="bid.level" 
-                   class="flex items-center justify-between py-1 px-2 rounded"
+                   class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="bid.level === 1 ? 'bg-[var(--color-danger-bg)]' : ''">
                 <span class="text-xs text-theme-tertiary">买{{ bid.level }}</span>
                 <span class="text-sm font-bold text-[var(--color-danger)]">{{ bid.price }}</span>
@@ -151,14 +151,14 @@
           </div>
           
           <!-- 卖盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm">📕 卖盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
             <div class="space-y-1">
               <div v-for="ask in fundInfo?.asks || []" :key="ask.level" 
-                   class="flex items-center justify-between py-1 px-2 rounded"
+                   class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="ask.level === 1 ? 'bg-[var(--color-success-bg)]' : ''">
                 <span class="text-xs text-theme-tertiary">卖{{ ask.level }}</span>
                 <span class="text-sm font-bold text-[var(--color-success)]">{{ ask.price }}</span>
@@ -169,7 +169,7 @@
         </div>
 
         <!-- K 线走势图 -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📈 K 线走势</span>
             <div class="flex gap-1">
@@ -177,7 +177,7 @@
                 v-for="p in klinePeriods" 
                 :key="p.key"
                 @click="loadETFHistory(p.key)"
-                class="px-2 py-0.5 text-[10px] rounded border transition"
+                class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                 :class="klinePeriod === p.key 
                   ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                   : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
@@ -192,7 +192,7 @@
       <div v-else-if="activeTab === 'open'" class="space-y-4">
         
         <!-- A. 头部概览区 -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-start justify-between mb-4">
             <div>
               <h2 class="text-xl font-bold text-theme-primary">{{ fundInfo?.name ?? '-' }}</h2>
@@ -210,35 +210,35 @@
           
           <!-- 详细指标网格 -->
           <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">累计净值</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">日涨跌</div>
               <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">基金规模</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">晨星评级</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">申购费率</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">赎回费率</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">分红频率</div>
               <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded">
+            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary">基金经理</div>
               <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
             </div>
@@ -246,7 +246,7 @@
         </div>
 
         <!-- B. 阶段收益追踪表 (Trailing Returns) -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📊 阶段收益追踪</span>
             <span class="text-[10px] text-theme-tertiary">与同类平均及基准对比</span>
@@ -285,30 +285,30 @@
         </div>
 
         <!-- C. 风险与波动指标 -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">⚠️ 风险指标</span>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="p-3 bg-terminal-bg/50 rounded-lg">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary mb-1">夏普比率</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.sharpe ?? '-' }}</div>
-              <div class="text-[9px] text-theme-muted">Sharpe Ratio</div>
+              <div class="text-[10px] text-theme-muted">Sharpe Ratio</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-lg">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary mb-1">最大回撤</div>
               <div class="text-lg font-bold text-[var(--color-danger)]">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
-              <div class="text-[9px] text-theme-muted">Max Drawdown</div>
+              <div class="text-[10px] text-theme-muted">Max Drawdown</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-lg">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary mb-1">阿尔法</div>
               <div class="text-lg font-bold" :class="getChangeColor(riskMetrics.alpha)">{{ riskMetrics.alpha ?? '-' }}</div>
-              <div class="text-[9px] text-theme-muted">Alpha</div>
+              <div class="text-[10px] text-theme-muted">Alpha</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-lg">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm">
               <div class="text-[10px] text-theme-tertiary mb-1">贝塔</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.beta ?? '-' }}</div>
-              <div class="text-[9px] text-theme-muted">Beta</div>
+              <div class="text-[10px] text-theme-muted">Beta</div>
             </div>
           </div>
         </div>
@@ -316,7 +316,7 @@
         <!-- D. 净值走势 + 资产配置 -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <!-- 净值走势图 -->
-          <div class="lg:col-span-2 bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="lg:col-span-2 bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm">📈 净值走势</span>
               <div class="flex gap-1">
@@ -324,7 +324,7 @@
                   v-for="p in navPeriods" 
                   :key="p.key"
                   @click="loadNAVHistory(p.key)"
-                  class="px-2 py-0.5 text-[10px] rounded border transition"
+                  class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                   :class="navPeriod === p.key 
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                     : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
@@ -335,7 +335,7 @@
           </div>
 
           <!-- 资产配置饼图 -->
-          <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm">🎯 资产配置</span>
               <span class="text-[10px] text-theme-tertiary">X-Ray</span>
@@ -355,7 +355,7 @@
         </div>
 
         <!-- E. 重仓股（带进度条可视化） -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📊 十大重仓股</span>
             <span class="text-[10px] text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
@@ -370,7 +370,7 @@
                 </div>
                 <!-- 进度条可视化 -->
                 <div class="w-full h-1.5 bg-terminal-bg rounded-full overflow-hidden">
-                  <div class="h-full bg-gradient-to-r from-terminal-accent to-blue-500 rounded-full" 
+                  <div class="h-full bg-gradient-to-r from-terminal-accent to-terminal-accent/70 rounded-full" 
                        :style="{ width: Math.min(stock.ratio * 3, 100) + '%' }"></div>
                 </div>
               </div>
@@ -390,14 +390,14 @@
       <!-- 基金对比面板 -->
       <div v-if="activeTab === 'compare'" class="space-y-4">
         <!-- 基金选择器 -->
-        <div class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">🔀 基金对比</span>
             <span class="text-[10px] text-theme-tertiary">最多选择 3 只基金</span>
           </div>
           <div class="flex flex-wrap gap-2 mb-3">
             <div v-for="(fund, idx) in compareFunds" :key="fund.code"
-                 class="flex items-center gap-1 px-2 py-1 rounded border text-xs"
+                 class="flex items-center gap-1 px-2 py-1 rounded-sm border text-xs"
                  :class="compareColors[idx]">
               <span>{{ fund.name }}</span>
               <button @click="removeCompareFund(idx)" class="hover:text-[var(--color-danger)]">×</button>
@@ -406,20 +406,20 @@
           <div class="flex gap-2">
             <input v-model="compareInput" @keyup.enter="addCompareFund"
                    placeholder="输入基金代码添加"
-                   class="flex-1 bg-terminal-bg border border-theme-secondary rounded px-3 py-1.5 text-sm focus:border-terminal-accent outline-none" />
+                   class="flex-1 bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none" />
             <button @click="addCompareFund"
-                    class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded text-sm hover:bg-terminal-accent/30 transition">
+                    class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition">
               添加
             </button>
             <button @click="clearCompareFunds"
-                    class="px-3 py-1.5 bg-terminal-panel text-theme-tertiary rounded text-sm hover:text-theme-primary transition">
+                    class="px-3 py-1.5 bg-terminal-panel text-theme-tertiary rounded-sm text-sm hover:text-theme-primary transition">
               清空
             </button>
           </div>
         </div>
 
         <!-- 对比图表 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
@@ -428,7 +428,7 @@
         </div>
 
         <!-- 对比表格：移动端优化 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-3 md:p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-3 md:p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
           </div>

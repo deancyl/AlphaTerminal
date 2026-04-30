@@ -11,7 +11,7 @@
         :class="curveType === 'Contango' ? 'text-bearish' : 'text-bullish'"
       >{{ curveType }}</span>
       <span class="flex-1" />
-      <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>
+      <span class="text-[10px] text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
 
     <!-- 错误 / 加载 / 空数据 -->
@@ -19,11 +19,11 @@
       <span class="text-bullish text-xs">{{ error || '加载失败' }}</span>
     </div>
     <div v-else-if="props.isLoading" class="flex-1 flex flex-col p-3 gap-2">
-      <div class="skeleton h-3 w-24 rounded"></div>
-      <div class="flex-1 skeleton rounded-lg"></div>
+      <div class="skeleton h-3 w-24 rounded-sm"></div>
+      <div class="flex-1 skeleton rounded-sm"></div>
       <div class="flex gap-2">
-        <div class="skeleton h-2 w-12 rounded"></div>
-        <div class="skeleton h-2 w-12 rounded"></div>
+        <div class="skeleton h-2 w-12 rounded-sm"></div>
+        <div class="skeleton h-2 w-12 rounded-sm"></div>
       </div>
     </div>
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center">

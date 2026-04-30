@@ -5,7 +5,7 @@
       <span class="text-[10px] text-theme-muted">基准指数</span>
       <select
         v-model="benchmark"
-        class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary"
+        class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary"
       >
         <option value="000300">沪深300</option>
         <option value="000001">上证指数</option>
@@ -15,7 +15,7 @@
       <button
         @click="loadPerformance"
         :disabled="loading"
-        class="ml-auto px-3 py-0.5 rounded text-[10px] font-medium transition-colors"
+        class="ml-auto px-3 py-0.5 rounded-sm text-[10px] font-medium transition-colors"
         :class="loading
           ? 'bg-gray-600/40 text-theme-muted cursor-not-allowed'
           : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] border border-[var(--color-info-border)]'"
@@ -30,14 +30,14 @@
         <div
           v-for="m in coreMetrics"
           :key="m.key"
-          class="rounded border border-theme bg-terminal-panel/60 px-3 py-2"
+          class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2"
         >
-          <div class="text-[8px] text-theme-muted truncate">{{ m.label }}</div>
+          <div class="text-[10px] text-theme-muted truncate">{{ m.label }}</div>
           <div
             class="text-[14px] font-mono font-bold"
             :class="m.colorClass || 'text-theme-primary'"
           >{{ m.value }}</div>
-          <div v-if="m.desc" class="text-[8px] text-theme-muted mt-0.5">{{ m.desc }}</div>
+          <div v-if="m.desc" class="text-[10px] text-theme-muted mt-0.5">{{ m.desc }}</div>
         </div>
       </div>
 
@@ -46,9 +46,9 @@
         <div
           v-for="m in riskMetrics"
           :key="m.key"
-          class="rounded border border-theme bg-terminal-panel/60 px-3 py-2"
+          class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2"
         >
-          <div class="text-[8px] text-theme-muted truncate">{{ m.label }}</div>
+          <div class="text-[10px] text-theme-muted truncate">{{ m.label }}</div>
           <div
             class="text-[14px] font-mono font-bold"
             :class="m.colorClass || 'text-theme-primary'"
@@ -61,9 +61,9 @@
         <div
           v-for="m in advancedMetrics"
           :key="m.key"
-          class="rounded border border-theme bg-terminal-panel/60 px-3 py-2"
+          class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2"
         >
-          <div class="text-[8px] text-theme-muted truncate">{{ m.label }}</div>
+          <div class="text-[10px] text-theme-muted truncate">{{ m.label }}</div>
           <div
             class="text-[14px] font-mono font-bold"
             :class="m.colorClass || 'text-theme-primary'"
@@ -72,14 +72,14 @@
       </div>
 
       <!-- 指标说明 -->
-      <div class="rounded border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
-        <div class="text-[9px] text-theme-muted font-bold mb-1">📊 指标说明</div>
-        <div class="text-[8px] text-theme-muted leading-relaxed">
+      <div class="rounded-sm border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
+        <div class="text-[10px] text-theme-muted font-bold mb-1">📊 指标说明</div>
+        <div class="text-[10px] text-theme-muted leading-relaxed">
           <span class="text-theme-primary">夏普比率</span>: 每单位总风险获得的超额收益，>1优秀，<0较差 |
           <span class="text-theme-primary">最大回撤</span>: 峰值到谷底的最大亏损幅度，越小越好 |
           <span class="text-theme-primary">胜率</span>: 正收益交易日占比
         </div>
-        <div v-if="hasBenchmark" class="text-[8px] text-theme-muted leading-relaxed">
+        <div v-if="hasBenchmark" class="text-[10px] text-theme-muted leading-relaxed">
           <span class="text-theme-primary">Beta</span>: 组合相对于市场的波动敏感度，=1同步，>1高波动 |
           <span class="text-theme-primary">Alpha</span>: 超越基准的超额收益能力，>0跑赢市场 |
           <span class="text-theme-primary">特雷诺比率</span>: 每单位系统风险(Beta)的超额收益
@@ -88,7 +88,7 @@
 
       <!-- 统计周期 -->
       <div class="text-center">
-        <span class="text-[8px] text-theme-muted">📅 {{ period }} | 共 {{ metrics.total_days }} 个交易日</span>
+        <span class="text-[10px] text-theme-muted">📅 {{ period }} | 共 {{ metrics.total_days }} 个交易日</span>
       </div>
     </div>
 
