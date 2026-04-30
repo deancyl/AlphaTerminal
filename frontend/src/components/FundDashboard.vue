@@ -52,7 +52,7 @@
               class="px-2 py-1 text-xs rounded-sm border transition-colors whitespace-nowrap"
               :class="selectedFundCode === f.code 
                 ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
-                : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
+                : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
             >
               {{ f.name }}
             </button>
@@ -180,11 +180,11 @@
                 class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                 :class="klinePeriod === p.key 
                   ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
-                  : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
+                  : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
               >{{ p.label }}</button>
             </div>
           </div>
-          <div ref="klineChartRef" class="w-full" style="height: 320px;"></div>
+          <div ref="klineChartRef" class="w-full" style="height: 280px;" class="sm:h-[320px]"></div>
         </div>
       </div>
 
@@ -327,7 +327,7 @@
                   class="px-2 py-0.5 text-[10px] rounded-sm border transition"
                   :class="navPeriod === p.key 
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
-                    : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-gray-500'"
+                    : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
                 >{{ p.label }}</button>
               </div>
             </div>
@@ -424,7 +424,7 @@
             <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
           </div>
-          <div ref="compareChartRef" class="w-full" style="height: 350px;"></div>
+          <div ref="compareChartRef" class="w-full" style="height: 280px;" class="sm:h-[350px]"></div>
         </div>
 
         <!-- 对比表格：移动端优化 -->
@@ -1082,8 +1082,5 @@ watch(activeTab, () => {
 </script>
 
 <style scoped>
-@media (max-width: 768px) {
-  .grid-cols-8 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .grid-cols-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
+/* 响应式布局已使用 Tailwind 类实现 */
 </style>

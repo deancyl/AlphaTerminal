@@ -1,20 +1,20 @@
 <template>
   <div class="p-4">
     <!-- 标题 -->
-    <div class="flex items-center justify-between mb-1">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
       <span class="text-terminal-accent font-bold text-sm">💰 投资组合</span>
-      <div class="flex gap-2">
+      <div class="flex gap-2 flex-wrap">
         <button
           v-if="selectedPortfolioId !== null"
           @click="exportPortfolio"
-          class="bg-[var(--color-info-bg)] hover:bg-[var(--color-info-hover)]/30 text-[var(--color-info)] border border-[var(--color-info-border)] text-xs px-3 py-1 rounded-sm font-bold transition-colors"
+          class="bg-[var(--color-info-bg)] hover:bg-[var(--color-info-hover)]/30 text-[var(--color-info)] border border-[var(--color-info-border)] text-xs px-3 py-1.5 rounded-sm font-bold transition-colors"
         >📥 导出</button>
         <button
           v-if="selectedPortfolioId !== null"
           @click="showTradeModal = true"
-          class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] text-xs px-3 py-1 rounded-sm font-bold transition-colors"
+          class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] text-xs px-3 py-1.5 rounded-sm font-bold transition-colors"
         >📋 模拟调仓</button>
-        <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
+        <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1.5">+ 新建</button>
       </div>
     </div>
 
@@ -49,12 +49,12 @@
         <option value="symbol">按代码</option>
       </select>
       <button @click="loadPortfolioData" class="text-terminal-dim hover:text-terminal-primary">↺</button>
-      <div class="ml-auto flex gap-2">
-        <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-[var(--text-muted)]'">持仓</button>
-        <button @click="activeTab = 'performance'" :class="activeTab==='performance'?'text-terminal-accent':'text-[var(--text-muted)]'">业绩评价</button>
-        <button @click="activeTab = 'risk'" :class="activeTab==='risk'?'text-terminal-accent':'text-[var(--text-muted)]'">风险分析</button>
-        <button @click="activeTab = 'benchmark'" :class="activeTab==='benchmark'?'text-terminal-accent':'text-[var(--text-muted)]'">基准对比</button>
-        <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-[var(--text-muted)]'">归因分析</button>
+      <div class="flex gap-2 flex-wrap w-full sm:w-auto sm:ml-auto">
+        <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">持仓</button>
+        <button @click="activeTab = 'performance'" :class="activeTab==='performance'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">业绩评价</button>
+        <button @click="activeTab = 'risk'" :class="activeTab==='risk'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">风险分析</button>
+        <button @click="activeTab = 'benchmark'" :class="activeTab==='benchmark'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">基准对比</button>
+        <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">归因分析</button>
       </div>
     </div>
 
@@ -465,18 +465,26 @@ async function exportPortfolio() {
 
 <style scoped>
 .pnl-cards-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 10px;
   padding: 0 0 12px;
-  flex-wrap: wrap;
+}
+@media (min-width: 640px) {
+  .pnl-cards-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 1024px) {
+  .pnl-cards-row {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 .pnl-card {
   background: #131a28;
   border: 1px solid #1e2535;
   border-radius: 8px;
   padding: 10px 14px;
-  flex: 1;
-  min-width: 120px;
 }
 .pnl-card.total { border-color: #2a3444; background: #1a2030; }
 .pnl-card-label { font-size: 11px; color: #4a5a6a; margin-bottom: 4px; white-space: nowrap; }
