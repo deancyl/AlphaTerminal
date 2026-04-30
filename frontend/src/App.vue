@@ -110,9 +110,9 @@
       </header>
 
       <!-- 主视图区域（Phase 5 视图切换） -->
-      <div class="flex-1 overflow-auto p-6 relative">
+      <div class="flex-1 overflow-auto p-3 md:p-6 relative">
         <!-- F1修复: 骨架屏加载状态 -->
-        <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
+        <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-3 animate-pulse">
           <!-- 风向标骨架 -->
           <div class="grid grid-cols-4 gap-2">
             <div v-for="i in 4" :key="i" class="h-16 rounded-sm bg-terminal-panel border border-theme"></div>

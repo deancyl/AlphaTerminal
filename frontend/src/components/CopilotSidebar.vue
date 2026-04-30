@@ -30,25 +30,25 @@
     <!-- 上下文勾选框 -->
     <div class="px-4 py-2 border-b border-theme-secondary flex flex-wrap gap-3 text-xs shrink-0">
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取实时大盘指数数据作为对话上下文">
-        <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
+        <input type="checkbox" v-model="ctxMarket" class="accent-terminal-accent w-3 h-3 rounded-sm">
         <span :class="ctxMarket ? 'text-terminal-accent' : 'text-terminal-dim'">大盘</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取国债收益率曲线作为对话上下文">
-        <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
+        <input type="checkbox" v-model="ctxRates" class="accent-terminal-accent w-3 h-3 rounded-sm">
         <span :class="ctxRates ? 'text-terminal-accent' : 'text-terminal-dim'">利率</span>
       </label>
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取最新5条市场快讯作为对话上下文">
-        <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
+        <input type="checkbox" v-model="ctxNews" class="accent-terminal-accent w-3 h-3 rounded-sm">
         <span :class="ctxNews ? 'text-terminal-accent' : 'text-terminal-dim'">快讯</span>
       </label>
       <!-- Week 3-4 新增：投资组合上下文 -->
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取您的投资组合数据作为对话上下文">
-        <input type="checkbox" v-model="ctxPortfolio" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
+        <input type="checkbox" v-model="ctxPortfolio" class="accent-terminal-accent w-3 h-3 rounded-sm">
         <span :class="ctxPortfolio ? 'text-terminal-accent' : 'text-terminal-dim'">组合</span>
       </label>
       <!-- Week 3-4 新增：历史数据上下文 -->
       <label class="flex items-center gap-1.5 cursor-pointer select-none" title="勾选后，AI将获取历史K线数据作为对话上下文">
-        <input type="checkbox" v-model="ctxHistorical" class="accent-terminal-accent w-3.5 h-3.5 rounded-sm">
+        <input type="checkbox" v-model="ctxHistorical" class="accent-terminal-accent w-3 h-3 rounded-sm">
         <span :class="ctxHistorical ? 'text-terminal-accent' : 'text-terminal-dim'">历史</span>
       </label>
       <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选可将数据加入AI上下文</span>
