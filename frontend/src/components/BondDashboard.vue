@@ -159,23 +159,24 @@
     </div>
 
     <!-- ── 主体：左侧曲线组 + 右侧债券列表 ─────────────── -->
-    <div class="flex gap-2 flex-1 min-h-0">
+    <!-- 移动端：垂直堆叠，桌面端：左右布局 -->
+    <div class="flex flex-col lg:flex-row gap-2 flex-1 min-h-0">
 
       <!-- 左侧：国债收益率曲线 + 期限利差图 -->
-      <div class="flex-1 flex flex-col gap-2">
+      <div class="flex-1 flex flex-col gap-2 min-w-0 order-2 lg:order-1">
 
         <!-- 收益率曲线 -->
-        <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col" style="flex: 2;">
+        <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col" style="flex: 2;">
           <div class="flex items-center justify-between mb-1.5 shrink-0">
             <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
-            <span class="text-[9px] text-terminal-dim">{{ yieldUpdateTime || '...' }}</span>
+            <span class="text-[9px] text-terminal-dim hidden sm:inline">{{ yieldUpdateTime || '...' }}</span>
           </div>
-          <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
+          <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 120px;">
             <YieldCurveChart
               v-if="Object.keys(yieldCurve).length > 0"
               :yield-curve="yieldCurve"
-              :curve-1m="yieldCurve1m"
-              :curve-1y="yieldCurve1y"
+              :curve1m="yieldCurve1m"
+              :curve1y="yieldCurve1y"
               :update-time="yieldUpdateTime"
             />
             <div v-else class="w-full h-full flex items-center justify-center">
@@ -185,7 +186,7 @@
         </div>
 
         <!-- 10Y-2Y 期限利差走势 -->
-        <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col" style="flex: 1; min-height: 130px;">
+        <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col" style="flex: 1; min-height: 100px;">
           <YieldSpreadChart
             :tenors10y="spreadHistory10y"
             :tenors2y="spreadHistory2y"
@@ -198,27 +199,31 @@
       </div>
 
       <!-- 右侧：活跃债券列表 -->
-      <div class="w-56 shrink-0 terminal-panel border border-theme-secondary rounded p-3 flex flex-col">
+      <!-- 移动端：水平滚动卡片，桌面端：固定宽度列表 -->
+      <div class="lg:w-56 shrink-0 terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col order-1 lg:order-2">
         <div class="flex items-center justify-between mb-1.5 shrink-0">
           <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
           <span class="text-[9px] px-1 py-0.5 rounded border border-amber-500/30 text-amber-400/70">LIVE</span>
         </div>
-        <div class="flex-1 overflow-y-auto">
-          <div
-            v-for="bond in bondList"
-            :key="bond.code"
-            class="flex items-center justify-between py-1 border-b border-theme hover:bg-white/5 transition-colors cursor-pointer"
-          >
-            <div class="flex flex-col min-w-0">
-              <span class="text-[10px] text-theme-primary truncate">{{ bond.name }}</span>
-              <span class="text-[9px] text-terminal-dim">{{ bond.code }}</span>
-            </div>
-            <div class="flex flex-col items-end">
-              <span class="text-[10px] font-mono text-theme-primary">{{ bond.rate }}</span>
-              <span
-                class="text-[9px] font-mono"
-                :class="bond.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
-              >{{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}bp</span>
+        <!-- 移动端：水平滚动，桌面端：垂直滚动 -->
+        <div class="flex-1 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden">
+          <div class="flex lg:flex-col gap-2 lg:gap-0 min-w-min">
+            <div
+              v-for="bond in bondList"
+              :key="bond.code"
+              class="flex lg:flex-row flex-col items-center lg:items-stretch justify-between py-1 px-2 lg:px-0 border-b border-theme hover:bg-white/5 transition-colors cursor-pointer shrink-0 lg:w-full w-24"
+            >
+              <div class="flex flex-col min-w-0 lg:flex-1">
+                <span class="text-[10px] text-theme-primary truncate">{{ bond.name }}</span>
+                <span class="text-[9px] text-terminal-dim hidden lg:inline">{{ bond.code }}</span>
+              </div>
+              <div class="flex flex-col lg:items-end items-center">
+                <span class="text-[10px] font-mono text-theme-primary">{{ bond.rate }}</span>
+                <span
+                  class="text-[9px] font-mono"
+                  :class="bond.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
+                >{{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}bp</span>
+              </div>
             </div>
           </div>
           <div v-if="!bondList.length" class="text-center py-3 text-terminal-dim text-[10px]">
@@ -230,8 +235,9 @@
     </div>
 
     <!-- ── 收益率曲线 & 利差图表 ──────────────────────────── -->
+    <!-- 移动端：垂直堆叠，高度减小 -->
     <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-2">
-      <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col min-h-[200px]">
+      <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
         <YieldCurveChart
           :yield-curve="yieldCurve"
           :curve1m="yieldCurve1m"
@@ -239,7 +245,7 @@
           :update-time="yieldUpdateTime"
         />
       </div>
-      <div class="terminal-panel border border-theme-secondary rounded p-3 flex flex-col min-h-[200px]">
+      <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
         <YieldSpreadChart
           :history10y="spreadHistory10y"
           :history2y="spreadHistory2y"

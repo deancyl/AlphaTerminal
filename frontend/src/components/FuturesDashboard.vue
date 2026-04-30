@@ -2,32 +2,33 @@
   <div class="flex flex-col h-full overflow-auto gap-3 p-4">
 
     <!-- 顶部核心卡片：股指期货主力 -->
-    <div class="flex gap-3 shrink-0">
+    <!-- 移动端：水平滚动，桌面端：等分布局 -->
+    <div class="flex gap-2 md:gap-3 shrink-0 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
       <div
         v-for="card in futuresCards"
         :key="card.symbol"
-        class="flex-1 terminal-panel border border-theme-secondary rounded px-4 py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
+        class="flex-1 min-w-[100px] md:min-w-0 terminal-panel border border-theme-secondary rounded px-2 md:px-4 py-2 md:py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
         @click="openFuturesCard(card)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
+          <span class="text-[9px] md:text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
           <span
-            class="text-[9px] px-1 py-0.5 rounded border"
+            class="text-[8px] md:text-[9px] px-1 py-0.5 rounded border"
             :class="card.change_pct >= 0
-              ? 'border-red-500/30 text-bullish'
-              : 'border-green-500/30 text-bearish'"
+              ? 'border-bullish/30 text-bullish'
+              : 'border-bearish/30 text-bearish'"
           >{{ card.change_pct >= 0 ? '多' : '空' }}</span>
         </div>
-        <div class="flex items-end gap-2">
-          <span class="text-lg font-mono text-theme-primary">{{ card.price }}</span>
+        <div class="flex items-end gap-1 md:gap-2">
+          <span class="text-base md:text-lg font-mono text-theme-primary">{{ card.price }}</span>
           <span
-            class="text-xs font-mono"
+            class="text-[10px] md:text-xs font-mono"
             :class="card.change_pct >= 0 ? 'text-bullish' : 'text-bearish'"
           >{{ card.change_pct >= 0 ? '+' : '' }}{{ card.change_pct?.toFixed(2) }}%</span>
         </div>
-        <div class="text-[9px] text-terminal-dim flex justify-between">
+        <div class="text-[8px] md:text-[9px] text-terminal-dim flex justify-between">
           <span>持仓: {{ card.position || '--' }}</span>
-          <span>{{ card.note || '' }}</span>
+          <span class="hidden md:inline">{{ card.note || '' }}</span>
         </div>
       </div>
     </div>
@@ -54,13 +55,17 @@
               {{ sector.avgChange >= 0 ? '+' : '' }}{{ sector.avgChange.toFixed(2) }}%
             </span>
           </div>
-          <!-- 板块内商品方块（超过4个用6列，否则3列） -->
-          <div class="grid gap-2" :class="sector.items.length > 4 ? 'grid-cols-6' : 'grid-cols-3'">
+          <!-- 板块内商品方块（移动端2-3列，桌面端3-6列） -->
+          <div class="grid gap-1.5 md:gap-2" 
+               :class="[
+                 sector.items.length > 4 ? 'grid-cols-3 md:grid-cols-6' : 'grid-cols-2 md:grid-cols-3',
+                 sector.items.length > 6 ? 'grid-cols-4 md:grid-cols-6' : ''
+               ]">
             <div
               v-for="item in sector.items"
               :key="item.symbol"
-              class="rounded border flex flex-col items-center justify-center py-2 px-1 cursor-default transition-all hover:brightness-125"
-              style="min-height: 52px;"
+              class="rounded border flex flex-col items-center justify-center py-1.5 md:py-2 px-1 cursor-default transition-all hover:brightness-125"
+              style="min-height: 44px;"
               :style="{
                 borderColor: (item.change_pct || 0) >= 0
                   ? 'rgba(239,68,68,0.35)'
@@ -70,9 +75,9 @@
                   : 'rgba(34,197,94,0.08)',
               }"
             >
-              <span class="text-[10px] text-theme-primary truncate w-full text-center">{{ item.name }}</span>
+              <span class="text-[9px] md:text-[10px] text-theme-primary truncate w-full text-center">{{ item.name }}</span>
               <span
-                class="text-xs font-mono mt-0.5"
+                class="text-[10px] md:text-xs font-mono mt-0.5"
                 :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
               >{{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct ?? 0).toFixed(2) }}%</span>
             </div>
@@ -86,9 +91,9 @@
 
 
       <!-- 下方：主力合约走势图（真实图表） -->
-      <div class="flex-1 terminal-panel border border-theme-secondary rounded p-4 flex flex-col">
-        <div class="text-xs text-terminal-dim mb-2">📈 期货指数走势（IF · IC · IM）</div>
-        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 160px;">
+      <div class="flex-1 terminal-panel border border-theme-secondary rounded p-2 md:p-4 flex flex-col">
+        <div class="text-xs text-terminal-dim mb-1 md:mb-2">📈 期货指数走势（IF · IC · IM）</div>
+        <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 120px;">
           <FuturesMainChart
             v-if="futuresCards.length > 0"
             :futures-data="futuresCards"
