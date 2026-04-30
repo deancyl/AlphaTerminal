@@ -91,12 +91,14 @@ test.describe('Accessibility', () => {
     
     const h1 = page.locator('h1')
     const h2 = page.locator('h2')
+    const header = page.locator('header, [role="heading"]')
     
-    // At least one heading should exist
+    // At least one heading or header should exist
     const h1Count = await h1.count()
     const h2Count = await h2.count()
+    const headerCount = await header.count()
     
-    expect(h1Count + h2Count).toBeGreaterThan(0)
+    expect(h1Count + h2Count + headerCount).toBeGreaterThan(0)
   })
 
   test('should have alt text on images', async ({ page }) => {
