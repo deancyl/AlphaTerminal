@@ -92,7 +92,7 @@
            :class="msg.role === 'user'
              ? 'bg-terminal-accent/10 border border-terminal-accent/30 text-theme-primary ml-8'
              : msg.isError
-               ? 'bg-red-500/10 border border-red-500/30 text-red-300 mr-4'
+               ? 'bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] text-red-300 mr-4'
                : 'bg-terminal-bg border border-theme mr-4'">
         <div class="text-[10px] mb-1.5 flex items-center gap-1"
              :class="msg.role === 'user' ? 'text-terminal-accent' : 'text-terminal-dim'">

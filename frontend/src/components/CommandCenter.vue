@@ -104,9 +104,9 @@
             <span
               class="text-[10px] transition-colors"
               :class="{
-                'text-green-400':   status === 'ok',
-                'text-yellow-400':  status === 'degraded',
-                'text-red-400':     status === 'down',
+                'text-[var(--color-success)]':   status === 'ok',
+                'text-[var(--color-warning)]':  status === 'degraded',
+                'text-[var(--color-danger)]':     status === 'down',
               }"
             >{{ statusText[status] ?? '数据源正常' }}</span>
           </div>
@@ -120,8 +120,8 @@
         v-if="toastVisible && status !== 'ok'"
         class="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] flex items-center gap-2 px-4 py-2 rounded-lg border text-xs shadow-xl"
         :class="{
-          'bg-yellow-950/90 border-yellow-600/50 text-yellow-300': status === 'degraded',
-          'bg-red-950/90 border-red-600/50 text-red-300': status === 'down',
+          'bg-[var(--color-warning-bg)] border-[var(--color-warning-border)] text-[var(--color-warning-light)]': status === 'degraded',
+          'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] text-[var(--color-danger-light)]': status === 'down',
         }"
       >
         <span>{{ statusIcon[status] }} {{ toastMsg || statusText[status] }}</span>
@@ -223,11 +223,11 @@ function marketLabel(market) {
 // ── 类型样式 ───────────────────────────────────────────────────
 function typeClass(type) {
   const map = {
-    index:  'border-cyan-500/40 text-cyan-400',
-    stock:  'border-green-500/40 text-bearish',
-    fund:   'border-amber-500/40 text-amber-400',
-    forex:  'border-purple-500/40 text-purple-400',
-    commodity: 'border-orange-500/40 text-orange-400',
+    index:  'border-[var(--color-info-border)] text-[var(--color-info)]',
+    stock:  'border-[var(--color-success-border)] text-bearish',
+    fund:   'border-[var(--color-warning-border)] text-[var(--color-warning)]',
+    forex:  'border-purple-500/40 text-[var(--color-primary)]',
+    commodity: 'border-[var(--color-warning-border)] text-[var(--color-warning)]',
   }
   return map[type] || 'border-theme-secondary text-theme-secondary'
 }

@@ -20,7 +20,7 @@
         {{ (quote.change ?? 0) >= 0 ? '+' : '' }}{{ quote.change != null ? quote.change.toFixed(2) : '--' }}
       </span>
       <span class="shrink-0 px-1 py-0 rounded text-[9px]"
-        :class="(quote.change_pct ?? 0) >= 0 ? 'bg-red-500/15 text-bullish' : 'bg-green-500/15 text-bearish'">
+        :class="(quote.change_pct ?? 0) >= 0 ? 'bg-[var(--color-up-bg)] text-bullish' : 'bg-[var(--color-down-bg)] text-bearish'">
         {{ (quote.change_pct ?? 0) >= 0 ? '+' : '' }}{{ quote.change_pct != null ? quote.change_pct.toFixed(2) : '--' }}%
       </span>
 
@@ -36,8 +36,8 @@
         <span class="text-gray-700 shrink-0">|</span>
         <span class="shrink-0 text-theme-secondary font-mono text-[9px]">{{ hoverData.date || hoverData.time }}</span>
         <span class="shrink-0 text-theme-secondary font-mono text-[9px]">开<span class="text-theme-primary ml-0.5">{{ hoverData.open?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">高<span class="text-red-300 ml-0.5">{{ hoverData.high?.toFixed(2) }}</span></span>
-        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">低<span class="text-green-300 ml-0.5">{{ hoverData.low?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">高<span class="text-[var(--color-danger-light)] ml-0.5">{{ hoverData.high?.toFixed(2) }}</span></span>
+        <span class="shrink-0 text-theme-secondary font-mono text-[9px]">低<span class="text-[var(--color-success-light)] ml-0.5">{{ hoverData.low?.toFixed(2) }}</span></span>
         <span class="shrink-0 text-theme-secondary font-mono text-[9px]">收<span class="text-theme-primary ml-0.5">{{ hoverData.close?.toFixed(2) }}</span></span>
         <span class="shrink-0 text-theme-secondary font-mono text-[9px]">量<span class="text-theme-primary ml-0.5">{{ hoverData.volume != null ? (hoverData.volume / 1e8).toFixed(2)+'亿股' : '' }}</span></span>
       </template>
@@ -61,7 +61,7 @@
           v-for="p in periods" :key="p.key"
           class="w-5 h-5 flex items-center justify-center rounded text-[9px] font-mono transition-colors"
           :class="period === p.key
-            ? 'bg-blue-500/20 text-blue-400'
+            ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]'
             : 'text-theme-muted hover:text-theme-primary'"
           :title="p.label"
           @click="emit('period-change', p.key)"
@@ -78,7 +78,7 @@
           <button
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="adjustment === 'qfq'
-              ? 'text-amber-400'
+              ? 'text-[var(--color-warning)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="复权"
             @click="emit('adjustment-change', adjustment === 'qfq' ? 'none' : 'qfq')"
@@ -100,7 +100,7 @@
           <button
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="yAxisType === 'log'
-              ? 'text-purple-400'
+              ? 'text-[var(--color-primary)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="Y轴坐标系"
             @click="emit('yaxis-change', yAxisType === 'linear' ? 'log' : 'linear')"
@@ -121,7 +121,7 @@
           <button
             class="w-5 h-5 flex items-center justify-center rounded transition-colors"
             :class="overlaySymbol
-              ? 'text-cyan-400'
+              ? 'text-[var(--color-info)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="叠加标的"
             @click.stop="showOverlayPanel = !showOverlayPanel"
@@ -143,7 +143,7 @@
                 v-model="overlaySearchQuery"
                 type="text"
                 placeholder="搜索股票代码/名称..."
-                class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary placeholder-theme-muted focus:outline-none focus:border-cyan-400/60"
+                class="w-full bg-theme-tertiary/30 border border-theme rounded px-2 py-1 text-[10px] text-theme-primary placeholder-theme-muted focus:outline-none focus:border-[var(--color-info)]/60"
                 @keydown.enter="applyOverlaySearch"
                 @keydown.esc="showOverlayPanel = false; overlaySearchQuery = ''"
               />
@@ -155,7 +155,7 @@
                 class="w-full px-3 py-1.5 text-left text-[10px] hover:bg-theme-tertiary/50 flex items-center gap-2"
                 @click="selectOverlayItem(item)"
               >
-                <span class="font-mono text-cyan-400 w-16 shrink-0">{{ item.symbol.toUpperCase() }}</span>
+                <span class="font-mono text-[var(--color-info)] w-16 shrink-0">{{ item.symbol.toUpperCase() }}</span>
                 <span class="text-theme-primary truncate">{{ item.name }}</span>
               </button>
             </div>

@@ -65,8 +65,8 @@
         :key="item.id"
         class="w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors border-r-2 rounded"
         :class="activeId === item.id
-          ? 'bg-red-500/20 text-red-400 border-r-2 border-red-400'
-          : 'text-theme-secondary hover:bg-red-500/10 hover:text-red-400 border-r-transparent'"
+          ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-r-2 border-red-400'
+          : 'text-theme-secondary hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] border-r-transparent'"
         @click="handleClick(item)"
       >
         <span class="text-base">{{ item.icon }}</span>

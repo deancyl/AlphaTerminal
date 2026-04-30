@@ -59,7 +59,7 @@
         class="absolute inset-0 z-30 flex flex-col items-center justify-center"
         style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);"
       >
-        <div class="text-blue-400 text-xs mb-2 font-mono">
+        <div class="text-[var(--color-info)] text-xs mb-2 font-mono">
           {{ isFetching ? '📡 首次访问，正在穿透拉取全量历史…' : '⏳ 加载中…' }}
         </div>
         <div v-if="isFetching" class="text-theme-tertiary text-[9px] font-mono">数据来源：AkShare → SQLite</div>
@@ -103,7 +103,7 @@
       <!-- 下钻返回按钮 -->
       <button
         v-if="drillDownDate"
-        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded border border-amber-500/50 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded border border-amber-500/50 bg-amber-500/20 text-[var(--color-warning)] hover:bg-amber-500/30 transition-colors"
         @click="exitDrillDown"
       >← 返回日线</button>
     </div>

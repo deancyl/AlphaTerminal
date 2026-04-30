@@ -137,9 +137,9 @@
             <div class="space-y-1">
               <div v-for="bid in fundInfo?.bids || []" :key="bid.level" 
                    class="flex items-center justify-between py-1 px-2 rounded"
-                   :class="bid.level === 1 ? 'bg-red-500/10' : ''">
+                   :class="bid.level === 1 ? 'bg-[var(--color-danger-bg)]' : ''">
                 <span class="text-xs text-theme-tertiary">买{{ bid.level }}</span>
-                <span class="text-sm font-bold text-red-400">{{ bid.price }}</span>
+                <span class="text-sm font-bold text-[var(--color-danger)]">{{ bid.price }}</span>
                 <span class="text-xs text-theme-tertiary">{{ formatVolume(bid.volume) }}</span>
               </div>
             </div>
@@ -154,9 +154,9 @@
             <div class="space-y-1">
               <div v-for="ask in fundInfo?.asks || []" :key="ask.level" 
                    class="flex items-center justify-between py-1 px-2 rounded"
-                   :class="ask.level === 1 ? 'bg-green-500/10' : ''">
+                   :class="ask.level === 1 ? 'bg-[var(--color-success-bg)]' : ''">
                 <span class="text-xs text-theme-tertiary">卖{{ ask.level }}</span>
-                <span class="text-sm font-bold text-green-400">{{ ask.price }}</span>
+                <span class="text-sm font-bold text-[var(--color-success)]">{{ ask.price }}</span>
                 <span class="text-xs text-theme-tertiary">{{ formatVolume(ask.volume) }}</span>
               </div>
             </div>
@@ -292,7 +292,7 @@
             </div>
             <div class="p-3 bg-terminal-bg/50 rounded-lg">
               <div class="text-[10px] text-theme-tertiary mb-1">最大回撤</div>
-              <div class="text-lg font-bold text-red-400">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
+              <div class="text-lg font-bold text-[var(--color-danger)]">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
               <div class="text-[9px] text-theme-muted">Max Drawdown</div>
             </div>
             <div class="p-3 bg-terminal-bg/50 rounded-lg">
@@ -395,7 +395,7 @@
                  class="flex items-center gap-1 px-2 py-1 rounded border text-xs"
                  :class="compareColors[idx]">
               <span>{{ fund.name }}</span>
-              <button @click="removeCompareFund(idx)" class="hover:text-red-400">×</button>
+              <button @click="removeCompareFund(idx)" class="hover:text-[var(--color-danger)]">×</button>
             </div>
           </div>
           <div class="flex gap-2">
@@ -484,11 +484,11 @@ const compareInput = ref('')
 const compareChartRef = ref(null)
 const compareChart = shallowRef(null)
 const compareColors = [
-  'bg-red-500/20 text-red-400 border-red-500/30',
-  'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  'bg-green-500/20 text-green-400 border-green-500/30',
+  'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-[var(--color-danger-border)]',
+  'bg-[var(--color-info-bg)] text-[var(--color-info)] border-[var(--color-info-border)]',
+  'bg-[var(--color-success-bg)] text-[var(--color-success)] border-[var(--color-success-border)]',
 ]
-const compareColorsText = ['text-red-400', 'text-blue-400', 'text-green-400']
+const compareColorsText = ['text-[var(--color-danger)]', 'text-[var(--color-info)]', 'text-[var(--color-success)]']
 const comparePeriods = [
   { key: '1m', label: '近1月' },
   { key: '3m', label: '近3月' },
@@ -739,8 +739,8 @@ function renderCompareChart() {
 function getCompareReturnColor(val) {
   if (val === undefined || val === null || val === '-') return 'text-theme-muted'
   const v = parseFloat(val)
-  if (v > 0) return 'text-red-400'
-  if (v < 0) return 'text-green-400'
+  if (v > 0) return 'text-[var(--color-danger)]'
+  if (v < 0) return 'text-[var(--color-success)]'
   return 'text-theme-primary'
 }
 
@@ -1015,8 +1015,8 @@ function renderAssetChart() {
 function getChangeColor(pct) {
   if (pct === '-' || pct === undefined || pct === null) return 'text-theme-muted'
   const v = parseFloat(pct)
-  if (v > 0) return 'text-red-400'
-  if (v < 0) return 'text-green-400'
+  if (v > 0) return 'text-[var(--color-danger)]'
+  if (v < 0) return 'text-[var(--color-success)]'
   return 'text-theme-primary'
 }
 

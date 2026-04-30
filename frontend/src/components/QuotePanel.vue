@@ -303,8 +303,8 @@ const priceColor = computed(() => {
 })
 const priceColorClass = computed(() => {
   const c = _changePct.value
-  if (c == null) return 'text-gray-400'
-  return c >= 0 ? 'text-red-400' : 'text-green-400'
+  if (c == null) return 'text-[var(--text-secondary)]'
+  return c >= 0 ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'
 })
 // ── 52周位置 ───────────────────────────────────────────────────
 const pricePosition = computed(() => {
@@ -361,8 +361,8 @@ const returnFields = [
 ]
 
 function returnColorClass(v) {
-  if (v == null) return 'text-gray-400'
-  return v >= 0 ? 'text-red-400' : 'text-green-400'
+  if (v == null) return 'text-[var(--text-secondary)]'
+  return v >= 0 ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'
 }
 
 // ── 资金流向（mock数据填充UI占位）──────────────────────────────

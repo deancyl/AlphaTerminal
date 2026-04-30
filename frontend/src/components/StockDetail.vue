@@ -205,7 +205,7 @@ const priceColor = computed(() => {
 
 const changeBadgeClass = computed(() => {
   const pct = stockInfo.value.change_pct || 0
-  return pct >= 0 ? 'bg-red-500/20 text-bullish' : 'bg-green-500/20 text-bearish'
+  return pct >= 0 ? 'bg-[var(--color-danger-bg)] text-bullish' : 'bg-[var(--color-success-bg)] text-bearish'
 })
 
 // 基本信息列表

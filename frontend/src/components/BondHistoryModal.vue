@@ -125,8 +125,8 @@ const percentileColor = computed(() => {
   const p = percentile.value
   if (p == null) return 'text-theme-secondary'
   if (p <= 20)  return 'text-bearish'     // 极度低估
-  if (p <= 50)  return 'text-blue-400'     // 偏低
-  if (p <= 80)  return 'text-amber-400'    // 偏高
+  if (p <= 50)  return 'text-[var(--color-info)]'     // 偏低
+  if (p <= 80)  return 'text-[var(--color-warning)]'    // 偏高
   return 'text-bullish'                     // 极度高估
 })
 

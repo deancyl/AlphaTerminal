@@ -7,15 +7,15 @@
         <span class="text-xs text-terminal-dim">📊 利率估值矩阵</span>
         <div class="flex items-center gap-2">
           <!-- 隐含税率图例 -->
-          <span class="text-[9px] text-purple-400/80 flex items-center gap-1">
-            <span class="w-2 h-2 rounded-full bg-purple-500/60"></span>
+          <span class="text-[9px] text-[var(--color-primary)]/80 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-[var(--color-primary)]/60"></span>
             隐含税率
           </span>
           <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
           <!-- 数据源警告（Mock 数据） -->
           <span
             v-if="bondDataSource === 'mock'"
-            class="text-[9px] px-1.5 py-0.5 rounded bg-yellow-500/20 border border-yellow-500/40 text-yellow-400"
+            class="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] text-[var(--color-warning)]"
             title="AkShare 债券数据已停更，数据截至 2021-01-22"
           >
             ⚠️ 数据截至 2021
@@ -78,7 +78,7 @@
             <!-- 隐含税率（仅国开列） -->
             <span
               v-if="activeSource === 'cdb' && getCell(tenor.key, 'gov')?.yield && getCell(tenor.key, 'cdb')?.yield"
-              class="text-[9px] px-1 py-0.5 rounded bg-purple-500/15 border border-purple-500/30 text-purple-400/90 leading-none"
+              class="text-[9px] px-1 py-0.5 rounded bg-[var(--color-primary-bg)] border border-[var(--color-primary-border)] text-[var(--color-primary)]/90 leading-none"
               :title="`隐含税率 = (国开-国债)/国开`"
             >
               税{{ impliedTaxRate(getCell(tenor.key, 'gov')?.yield, getCell(tenor.key, 'cdb')?.yield) }}
@@ -203,7 +203,7 @@
       <div class="lg:w-56 shrink-0 terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col order-1 lg:order-2">
         <div class="flex items-center justify-between mb-1.5 shrink-0">
           <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
-          <span class="text-[9px] px-1 py-0.5 rounded border border-amber-500/30 text-amber-400/70">LIVE</span>
+          <span class="text-[9px] px-1 py-0.5 rounded border border-[var(--color-warning-border)] text-[var(--color-warning)]/70">LIVE</span>
         </div>
         <!-- 移动端：水平滚动，桌面端：垂直滚动 -->
         <div class="flex-1 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden">

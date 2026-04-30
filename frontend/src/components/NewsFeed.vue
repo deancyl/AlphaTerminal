@@ -17,7 +17,7 @@
         <button
           class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
           :class="isRefreshing
-            ? 'border-yellow-500/30 text-yellow-400 bg-yellow-500/10 cursor-not-allowed'
+            ? 'border-[var(--color-warning-border)] text-[var(--color-warning)] bg-[var(--color-warning-bg)] cursor-not-allowed'
             : 'border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
           :disabled="isRefreshing"
           @click="manualRefresh"
@@ -30,7 +30,7 @@
           </svg>
         </button>
         <span class="w-1.5 h-1.5 rounded-full shrink-0"
-              :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'"></span>
+              :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-[var(--color-success-light)]'"></span>
       </div>
     </div>
 
@@ -208,7 +208,7 @@
            @click.self="closeModal">
         <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
         <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
-                    bg-[#0d1117] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
+                    bg-[var(--bg-primary)] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
           <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
             <div class="flex-1 pr-4">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
@@ -241,12 +241,12 @@
           <div class="p-3 border-t border-theme shrink-0 flex justify-between items-center">
             <a v-if="modalItem.url"
                :href="modalItem.url" target="_blank" rel="noopener"
-               class="text-xs text-blue-400 hover:text-blue-300 underline hover:no-underline transition">
+               class="text-xs text-[var(--color-info)] hover:text-[var(--color-info-light)] underline hover:no-underline transition">
               🔗 {{ modalItem.url }}
             </a>
             <span v-else class="text-xs text-theme-tertiary italic">（无原文链接）</span>
             <button
-              class="ml-4 px-3 py-1 text-[11px] rounded bg-blue-600 hover:bg-blue-500 text-white transition shrink-0"
+              class="ml-4 px-3 py-1 text-[11px] rounded bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-white transition shrink-0"
               @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
               浏览器打开
             </button>
@@ -316,8 +316,8 @@ function getItemSentiment(item) {
 }
 
 function sentimentBadgeClass(s) {
-  if (s === '利好' || s === '偏多') return 'bg-red-500/20 text-bullish border border-red-500/30'
-  if (s === '利空' || s === '偏空') return 'bg-green-500/20 text-bearish border border-green-500/30'
+  if (s === '利好' || s === '偏多') return 'bg-[var(--color-danger-bg)] text-bullish border border-[var(--color-danger-border)]'
+  if (s === '利空' || s === '偏空') return 'bg-[var(--color-success-bg)] text-bearish border border-[var(--color-success-border)]'
   return ''
 }
 
@@ -437,13 +437,13 @@ function formatTime(timeStr) {
 }
 function tagClass(tag) {
   if (!tag) return 'bg-theme-tertiary/30 text-theme-secondary'
-  if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-red-500/20 text-bullish'
-  if (tag.includes('📈') || tag.includes('上涨') || tag.includes('大涨')) return 'bg-orange-500/20 text-orange-400'
-  if (tag.includes('📉')) return 'bg-green-500/20 text-bearish'
-  if (tag.includes('🌏') || tag.includes('港股') || tag.includes('宏观')) return 'bg-blue-500/20 text-blue-400'
-  if (tag.includes('💎') || tag.includes('黄金') || tag.includes('央行') || tag.includes('美联储')) return 'bg-yellow-500/20 text-yellow-400'
-  if (tag.includes('🖥') || tag.includes('AI') || tag.includes('特朗普')) return 'bg-purple-500/20 text-purple-400'
-  if (tag.includes('🛢') || tag.includes('原油') || tag.includes('商品')) return 'bg-amber-500/20 text-amber-400'
+  if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-[var(--color-danger-bg)] text-bullish'
+  if (tag.includes('📈') || tag.includes('上涨') || tag.includes('大涨')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
+  if (tag.includes('📉')) return 'bg-[var(--color-success-bg)] text-bearish'
+  if (tag.includes('🌏') || tag.includes('港股') || tag.includes('宏观')) return 'bg-[var(--color-info-bg)] text-[var(--color-info)]'
+  if (tag.includes('💎') || tag.includes('黄金') || tag.includes('央行') || tag.includes('美联储')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
+  if (tag.includes('🖥') || tag.includes('AI') || tag.includes('特朗普')) return 'bg-[var(--color-primary-bg)] text-[var(--color-primary)]'
+  if (tag.includes('🛢') || tag.includes('原油') || tag.includes('商品')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
   return 'bg-theme-tertiary/30 text-theme-secondary'
 }
 

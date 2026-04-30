@@ -79,7 +79,7 @@
           <button v-for="p in periods" :key="p.key"
                   class="px-2 py-0.5 text-[10px] rounded border transition"
                   :class="selectedPeriod === p.key
-                    ? 'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                    ? 'bg-[var(--color-info-bg)] border-blue-500/50 text-[var(--color-info)]'
                     : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
                   @click="switchPeriod(p.key)">
             {{ p.label }}
@@ -89,7 +89,7 @@
           <button v-for="ind in indicators" :key="ind.key"
                   class="px-1.5 py-0.5 text-[9px] rounded border transition"
                   :class="activeIndicators.includes(ind.key)
-                    ? 'bg-purple-500/20 border-purple-500/50 text-purple-400'
+                    ? 'bg-[var(--color-primary-bg)] border-purple-500/50 text-[var(--color-primary)]'
                     : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
                   @click="toggleIndicator(ind.key)">
             {{ ind.label }}
@@ -146,7 +146,7 @@
             <div class="flex items-center gap-0.5 mb-0.5">
               <span
                 class="text-[7px] px-0.5 rounded border"
-                :class="item.category === 'macro' ? 'border-amber-500/40 text-amber-400' : 'border-cyan-500/40 text-cyan-400'"
+                :class="item.category === 'macro' ? 'border-[var(--color-warning-border)] text-[var(--color-warning)]' : 'border-[var(--color-info-border)] text-[var(--color-info)]'"
               >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
               <span class="text-[9px] text-theme-primary truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>

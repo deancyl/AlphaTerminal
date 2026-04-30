@@ -7,7 +7,7 @@
         <button
           v-if="notificationPermission !== 'granted'"
           @click="requestPermission"
-          class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 text-xs px-2 py-1 rounded transition-colors"
+          class="bg-[var(--color-warning-bg)] hover:bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)] text-xs px-2 py-1 rounded transition-colors"
         >
           启用通知
         </button>
@@ -21,13 +21,13 @@
     </div>
 
     <!-- 权限状态 -->
-    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-red-900/30 border border-red-500/30 rounded text-xs text-red-300">
+    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded text-xs text-[var(--color-danger-light)]">
       ⚠️ 浏览器通知权限被拒绝，请手动启用通知权限以接收预警
     </div>
 
     <!-- 预警规则列表 -->
     <div class="space-y-2 max-h-60 overflow-y-auto">
-      <div v-if="alertRules.length === 0" class="text-center text-gray-500 text-xs py-4">
+      <div v-if="alertRules.length === 0" class="text-center text-[var(--text-muted)] text-xs py-4">
         暂无预警规则，点击"添加"创建
       </div>
       
@@ -39,11 +39,11 @@
       >
         <div class="flex items-center justify-between">
           <div class="flex-1">
-            <div class="font-medium text-cyan-400">{{ rule.symbol }}</div>
-            <div class="text-gray-400 mt-0.5">
+            <div class="font-medium text-[var(--color-info)]">{{ rule.symbol }}</div>
+            <div class="text-[var(--text-secondary)] mt-0.5">
               {{ formatCondition(rule) }}
             </div>
-            <div v-if="rule.triggeredAt" class="text-yellow-400 text-[10px] mt-0.5">
+            <div v-if="rule.triggeredAt" class="text-[var(--color-warning)] text-[10px] mt-0.5">
               上次触发: {{ formatTime(rule.triggeredAt) }}
               <span v-if="rule.triggerCount > 1">({{ rule.triggerCount }}次)</span>
             </div>
@@ -52,13 +52,13 @@
             <button
               @click="toggleRule(rule.id)"
               class="w-6 h-6 rounded flex items-center justify-center transition-colors"
-              :class="rule.enabled ? 'bg-green-600/30 text-green-400' : 'bg-gray-600/30 text-gray-400'"
+              :class="rule.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'"
             >
               {{ rule.enabled ? '✓' : '○' }}
             </button>
             <button
               @click="deleteRule(rule.id)"
-              class="w-6 h-6 rounded flex items-center justify-center bg-red-600/30 text-red-400 hover:bg-red-600/50 transition-colors"
+              class="w-6 h-6 rounded flex items-center justify-center bg-[var(--color-danger-bg)] text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
             >
               ×
             </button>
@@ -74,20 +74,20 @@
         
         <div class="space-y-3">
           <div>
-            <label class="block text-xs text-gray-400 mb-1">股票代码</label>
+            <label class="block text-xs text-[var(--text-secondary)] mb-1">股票代码</label>
             <input
               v-model="newRule.symbol"
               type="text"
               placeholder="如: sh600519"
-              class="w-full bg-black/40 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
             />
           </div>
           
           <div>
-            <label class="block text-xs text-gray-400 mb-1">预警条件</label>
+            <label class="block text-xs text-[var(--text-secondary)] mb-1">预警条件</label>
             <select
               v-model="newRule.condition"
-              class="w-full bg-black/40 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
             >
               <option value="above">价格高于</option>
               <option value="below">价格低于</option>
@@ -96,23 +96,23 @@
           </div>
           
           <div>
-            <label class="block text-xs text-gray-400 mb-1">目标价格</label>
+            <label class="block text-xs text-[var(--text-secondary)] mb-1">目标价格</label>
             <input
               v-model.number="newRule.targetPrice"
               type="number"
               step="0.01"
               placeholder="输入目标价格"
-              class="w-full bg-black/40 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
             />
           </div>
           
           <div>
-            <label class="block text-xs text-gray-400 mb-1">备注（可选）</label>
+            <label class="block text-xs text-[var(--text-secondary)] mb-1">备注（可选）</label>
             <input
               v-model="newRule.note"
               type="text"
               placeholder="添加备注说明"
-              class="w-full bg-black/40 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
             />
           </div>
         </div>
@@ -120,14 +120,14 @@
         <div class="flex justify-end gap-2 mt-4">
           <button
             @click="showAddModal = false"
-            class="px-3 py-1 text-xs text-gray-400 hover:text-white transition-colors"
+            class="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-white transition-colors"
           >
             取消
           </button>
           <button
             @click="addRule"
             :disabled="!canAdd"
-            class="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-3 py-1 text-xs bg-[var(--color-info)] text-white rounded hover:bg-[var(--color-info-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             添加
           </button>
@@ -138,10 +138,10 @@
     <!-- 预警历史 -->
     <div v-if="alertHistory.length > 0" class="mt-4 pt-3 border-t border-theme">
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-gray-400">预警历史</span>
+        <span class="text-xs text-[var(--text-secondary)]">预警历史</span>
         <button
           @click="clearHistory"
-          class="text-[10px] text-red-400 hover:text-red-300"
+          class="text-[10px] text-[var(--color-danger)] hover:text-[var(--color-danger-light)]"
         >
           清空
         </button>
@@ -153,10 +153,10 @@
           class="text-[10px] p-1.5 bg-black/20 rounded"
         >
           <div class="flex items-center justify-between">
-            <span class="text-cyan-400">{{ record.symbol }}</span>
-            <span class="text-gray-500">{{ formatTime(record.triggeredAt) }}</span>
+            <span class="text-[var(--color-info)]">{{ record.symbol }}</span>
+            <span class="text-[var(--text-muted)]">{{ formatTime(record.triggeredAt) }}</span>
           </div>
-          <div class="text-gray-400 mt-0.5">
+          <div class="text-[var(--text-secondary)] mt-0.5">
             {{ formatCondition(record) }} → ¥{{ record.triggeredPrice }}
           </div>
         </div>

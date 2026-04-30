@@ -17,7 +17,7 @@
         class="ml-auto px-3 py-0.5 rounded text-[10px] font-medium transition-colors"
         :class="loading
           ? 'bg-gray-600/40 text-theme-muted cursor-not-allowed'
-          : 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30 border border-blue-500/40'"
+          : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] border border-[var(--color-info-border)]'"
       >{{ loading ? '⏳ 加载中...' : '🔄 刷新' }}</button>
     </div>
 
@@ -155,7 +155,7 @@ const riskCards = computed(() => {
   const m = data.value?.risk_metrics
   if (!m) return []
   return [
-    { label: '日VaR(95%)', value: `${fmtYuan(m.var_daily_95)} (${m.var_daily_95_pct}%)`, colorClass: 'text-amber-400' },
+    { label: '日VaR(95%)', value: `${fmtYuan(m.var_daily_95)} (${m.var_daily_95_pct}%)`, colorClass: 'text-[var(--color-warning)]' },
     { label: '年化波动率', value: `${m.annual_volatility}%`, colorClass: m.annual_volatility > 20 ? 'text-bearish' : 'text-theme-primary' },
     { label: '夏普比率',   value: m.sharpe_ratio > 0 ? `+${m.sharpe_ratio}` : m.sharpe_ratio, colorClass: m.sharpe_ratio >= 1 ? 'text-bullish' : m.sharpe_ratio < 0 ? 'text-bearish' : 'text-theme-muted' },
     { label: '年化收益',  value: `${m.annual_return_pct >= 0 ? '+' : ''}${m.annual_return_pct}%`, colorClass: m.annual_return_pct >= 0 ? 'text-bullish' : 'text-bearish' },

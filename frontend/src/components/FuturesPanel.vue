@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col w-full h-full overflow-hidden bg-[#0a0e17]">
+  <div class="flex flex-col w-full h-full overflow-hidden bg-[var(--bg-primary)]">
     <!-- 顶部工具栏 -->
     <div class="flex items-center gap-2 px-3 py-1 border-b border-theme-secondary shrink-0">
       <!-- 合约代码输入 -->

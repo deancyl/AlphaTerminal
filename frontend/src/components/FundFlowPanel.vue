@@ -99,7 +99,7 @@ onUnmounted(() => {
     <!-- Loading 骨架：v-show 保持 DOM 存在 -->
     <div v-show="isLoading" class="flex-1 flex items-center justify-center text-xs text-theme-muted">📡 数据加载中...</div>
     <!-- 空状态：也用 v-show，不销毁图表宿主 DOM -->
-    <div v-show="!isLoading && !hasData" class="flex-1 flex items-center justify-center text-xs text-red-400">⚠️ 接口数据为空</div>
+    <div v-show="!isLoading && !hasData" class="flex-1 flex items-center justify-center text-xs text-[var(--color-danger)]">⚠️ 接口数据为空</div>
     <!-- 图表容器：始终存在于文档树（v-show 控制显隐），不被 v-if 销毁 -->
     <div v-show="hasData" ref="chartRef" class="flex-1 w-full" style="min-height: 150px;"></div>
   </div>

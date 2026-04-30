@@ -5,7 +5,7 @@
       <div class="flex items-center gap-2">
         <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
         <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
-          class="text-[9px] text-cyan-400 hover:text-cyan-300 transition-colors">
+          class="text-[9px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors">
           {{ showAllSectors ? '收起' : `更多(${sectors.length})` }}
         </button>
       </div>
@@ -22,8 +22,8 @@
           :key="sec.name"
           class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 min-w-0 overflow-hidden"
           :class="(sec.change_pct || 0) >= 0
-            ? 'bg-red-500/10 border-red-500/30 hover:border-red-400/60'
-            : 'bg-green-500/10 border-green-500/30 hover:border-green-400/60'"
+            ? 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] hover:border-red-400/60'
+            : 'bg-[var(--color-success-bg)] border-[var(--color-success-border)] hover:border-green-400/60'"
           @click="handleClick(sec)"
           :title="`${sec.name} (点击查看领涨股 ${sec.top_stock?.name || '无'})`"
         >

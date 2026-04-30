@@ -6,7 +6,7 @@
         v-for="tab in tabs" :key="tab"
         class="relative px-2 py-0.5 text-[10px] font-medium tracking-wide transition-colors"
         :class="activeTab === tab
-          ? 'text-blue-400'
+          ? 'text-[var(--color-info)]'
           : 'text-theme-muted hover:text-theme-primary'"
         @click="emit('tab-change', tab)"
       >

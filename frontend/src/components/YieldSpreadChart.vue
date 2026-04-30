@@ -5,12 +5,12 @@
       <span class="text-[10px] font-mono text-terminal-dim">📐 期限利差 (10Y-2Y)</span>
       <span
         class="text-[10px] font-mono font-medium"
-        :class="spread >= 0 ? 'text-blue-400' : 'text-bullish'"
+        :class="spread >= 0 ? 'text-[var(--color-info)]' : 'text-bullish'"
       >{{ spread >= 0 ? '+' : '' }}{{ spread?.toFixed(1) ?? '--' }}bp</span>
       <span
         v-if="spread != null"
         class="text-[9px] px-1 py-0.5 rounded border text-[9px]"
-        :class="spread >= 0 ? 'border-blue-500/30 text-blue-400/70' : 'border-red-500/30 text-bullish/70'"
+        :class="spread >= 0 ? 'border-[var(--color-info-border)] text-[var(--color-info)]/70' : 'border-[var(--color-danger-border)] text-bullish/70'"
       >{{ spread >= 0 ? '正常' : '倒挂⚠️' }}</span>
       <div class="flex-1" />
       <span class="text-[9px] text-terminal-dim">{{ updateTime || '...' }}</span>

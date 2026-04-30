@@ -424,8 +424,8 @@ function getPMIColor(val) {
 
 function getStatusClass(status) {
   return status === 'released' 
-    ? 'bg-green-500/20 text-green-400' 
-    : 'bg-yellow-500/20 text-yellow-400'
+    ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' 
+    : 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
 }
 
 // 初始化图表

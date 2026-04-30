@@ -7,12 +7,12 @@
         <button
           v-if="selectedPortfolioId !== null"
           @click="exportPortfolio"
-          class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-[var(--color-info-bg)] hover:bg-[var(--color-info-hover)]/30 text-[var(--color-info)] border border-[var(--color-info-border)] text-xs px-3 py-1 rounded font-bold transition-colors"
         >📥 导出</button>
         <button
           v-if="selectedPortfolioId !== null"
           @click="showTradeModal = true"
-          class="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] text-xs px-3 py-1 rounded font-bold transition-colors"
         >📋 模拟调仓</button>
         <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
       </div>
@@ -26,7 +26,7 @@
           <option :value="node.id">{{ node._label }}</option>
         </template>
       </select>
-      <span v-if="isAggregated" class="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/30 rounded px-2 py-0.5">
+      <span v-if="isAggregated" class="text-xs text-[var(--color-warning)] bg-yellow-400/10 border border-yellow-400/30 rounded px-2 py-0.5">
         📂 含子账户
       </span>
     </div>
@@ -50,8 +50,8 @@
       </select>
       <button @click="loadPortfolioData" class="text-terminal-dim hover:text-terminal-primary">↺</button>
       <div class="ml-auto flex gap-2">
-        <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-gray-500'">持仓</button>
-        <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-gray-500'">归因分析</button>
+        <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-[var(--text-muted)]'">持仓</button>
+        <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-[var(--text-muted)]'">归因分析</button>
       </div>
     </div>
 
@@ -107,31 +107,31 @@
 
   <!-- 新建账户弹窗 -->
   <div v-if="showCreateModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showCreateModal = false">
-    <div class="bg-gray-900 border border-gray-700 rounded-lg p-6 w-full max-w-[384px] mx-4">
+    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-6 w-full max-w-[384px] mx-4">
       <h3 class="text-white font-bold mb-4">新建账户</h3>
       <div class="space-y-3">
         <div>
-          <label class="text-gray-400 text-xs">账户名称</label>
-          <input v-model="newAccount.name" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1" placeholder="如：我的子基金" />
+          <label class="text-[var(--text-secondary)] text-xs">账户名称</label>
+          <input v-model="newAccount.name" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" placeholder="如：我的子基金" />
         </div>
         <div>
-          <label class="text-gray-400 text-xs">账户类型</label>
-          <select v-model="newAccount.type" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
+          <label class="text-[var(--text-secondary)] text-xs">账户类型</label>
+          <select v-model="newAccount.type" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
             <option value="main">主账户（顶级账户，可包含子账户）</option>
             <option value="portfolio">子账户（隶属于主账户）</option>
           </select>
-          <div class="text-gray-500 text-xs mt-1">
+          <div class="text-[var(--text-muted)] text-xs mt-1">
             <span v-if="newAccount.type === 'main'">🏦 主账户是顶级账户，可以创建子账户进行分组管理</span>
             <span v-else>📂 子账户必须隶属于一个主账户，用于细分投资策略</span>
           </div>
         </div>
         <div>
-          <label class="text-gray-400 text-xs">初始本金</label>
-          <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1" placeholder="0.00" />
+          <label class="text-[var(--text-secondary)] text-xs">初始本金</label>
+          <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" placeholder="0.00" />
         </div>
         <div v-if="newAccount.type !== 'main'">
-          <label class="text-gray-400 text-xs">所属主账户</label>
-          <select v-model="newAccount.parentId" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
+          <label class="text-[var(--text-secondary)] text-xs">所属主账户</label>
+          <select v-model="newAccount.parentId" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
             <option value="">请选择主账户...</option>
             <option v-for="p in selectableParentList" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
@@ -139,10 +139,10 @@
             ⚠️ 没有可用的主账户，请先创建一个主账户
           </div>
         </div>
-        <div v-if="createError" class="text-red-400 text-xs">{{ createError }}</div>
+        <div v-if="createError" class="text-[var(--color-danger)] text-xs">{{ createError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showCreateModal = false" class="px-4 py-2 text-gray-400 hover:text-white">取消</button>
+        <button @click="showCreateModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-white">取消</button>
         <button @click="createAccount" class="btn-primary px-4 py-2">创建</button>
       </div>
     </div>
@@ -150,29 +150,29 @@
 
   <!-- 资金划转弹窗 -->
   <div v-if="showTransferModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showTransferModal = false">
-    <div class="bg-gray-900 border border-gray-700 rounded-lg p-6 w-80">
+    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-lg p-6 w-80">
       <h3 class="text-white font-bold mb-4">资金划转</h3>
       <div class="space-y-3">
         <div>
-          <label class="text-gray-400 text-xs">从账户</label>
-          <select v-model="transfer.from" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
+          <label class="text-[var(--text-secondary)] text-xs">从账户</label>
+          <select v-model="transfer.from" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
         </div>
         <div>
-          <label class="text-gray-400 text-xs">到账户</label>
-          <select v-model="transfer.to" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1">
+          <label class="text-[var(--text-secondary)] text-xs">到账户</label>
+          <select v-model="transfer.to" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1">
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
         </div>
         <div>
-          <label class="text-gray-400 text-xs">金额 (¥)</label>
-          <input v-model.number="transfer.amount" type="number" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white mt-1" />
+          <label class="text-[var(--text-secondary)] text-xs">金额 (¥)</label>
+          <input v-model.number="transfer.amount" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded px-3 py-2 text-white mt-1" />
         </div>
-        <div v-if="transferError" class="text-red-400 text-xs">{{ transferError }}</div>
+        <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showTransferModal = false" class="px-4 py-2 text-gray-400 hover:text-white">取消</button>
+        <button @click="showTransferModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-white">取消</button>
         <button @click="handleTransfer" class="btn-primary px-4 py-2">确认划转</button>
       </div>
     </div>

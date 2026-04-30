@@ -38,7 +38,7 @@
         <span class="text-bullish font-bold text-sm">
           🚀 上涨: <span class="font-mono text-base">{{ data.advance || 0 }}</span> 家
         </span>
-        <span class="text-yellow-400 font-bold text-sm">
+        <span class="text-[var(--color-warning)] font-bold text-sm">
           ➖ 平盘: <span class="font-mono text-base">{{ data.unchanged || 0 }}</span> 家
         </span>
         <span class="text-bearish font-bold text-sm">
@@ -87,7 +87,7 @@
             </td>
             <td class="py-1.5 text-right">
               <span class="px-1 py-0.5 rounded text-[9px]"
-                    :class="item.status === '交易中' ? 'bg-green-500/20 text-bearish' : 'bg-theme-tertiary/30 text-theme-secondary'">
+                    :class="item.status === '交易中' ? 'bg-[var(--color-success-bg)] text-bearish' : 'bg-theme-tertiary/30 text-theme-secondary'">
                 {{ item.status }}
               </span>
             </td>
