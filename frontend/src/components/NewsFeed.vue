@@ -43,18 +43,20 @@
       </div>
     </div>
 
-    <!-- ── 舆情情绪摘要栏（增强版）─────────────────────────── -->
-    <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
-    >
-      <!-- 情绪概览：移动端紧凑布局 -->
-      <div class="flex items-center gap-2 md:gap-3 px-2 py-1.5 rounded-sm border transition flex-wrap"
+    
+    <!-- ── 顶部控制 & 数据摘要栏 ─────────────────────────── -->
+    <div class="mb-2 shrink-0 flex flex-col gap-1.5">
+      
+      <!-- 第一行：情绪概览 (移动端单行滚动) -->
+      <div v-if="sentiment.total_count > 0" 
+           class="flex items-center gap-2 px-2 py-1 rounded-sm border transition overflow-x-auto scrollbar-hide whitespace-nowrap"
            :class="sentiment.score > 0.1
              ? 'border-bearish/30 bg-bearish/5'
              : sentiment.score < -0.1
                ? 'border-bullish/30 bg-bullish/5'
                : 'border-theme-secondary bg-theme-tertiary/5'"
       >
-        <span class="text-xs font-bold px-2 py-1 rounded-sm shrink-0"
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0"
               :class="sentiment.score > 0.1
                 ? 'bg-bearish/15 text-bearish'
                 : sentiment.score < -0.1
@@ -63,181 +65,56 @@
         >
           {{ sentiment.label }}
         </span>
-        <div class="flex items-center gap-1.5 shrink-0">
-          <span class="text-xs text-bearish font-medium">{{ sentiment.bullish_count }}</span>
-          <span class="text-xs text-theme-tertiary">:</span>
-          <span class="text-xs text-bullish font-medium">{{ sentiment.bearish_count }}</span>
-        </div>
-        <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
-          <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
-                class="shrink-0 text-xs px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10 text-theme-tertiary whitespace-nowrap"
-          >
-            {{ kw }}
-          </span>
-        </div>
-        <span class="text-xs text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
-      </div>
-
-      <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
-      <div class="hidden sm:block px-2 py-1.5 rounded-sm border border-theme-secondary bg-terminal-panel/50"
-      >
-        <div class="flex items-center justify-between mb-1"
-        >
-          <span class="text-[11px] text-terminal-dim uppercase tracking-wider"
-          >情绪分布</span>
-          <span class="text-[11px] text-terminal-dim"
-          >共 {{ sentiment.total_count }} 条</span>
-        </div>
-        <div class="h-1.5 rounded-sm overflow-hidden flex"
-        >
-          <div class="h-full bg-bearish/60 transition-all duration-500"
-               :style="{ width: bullishRatio + '%' }"
-               title="看涨"
-          />
-          <div class="h-full bg-theme-tertiary/20 transition-all duration-500"
-               :style="{ width: neutralRatio + '%' }"
-               title="中性"
-          />
-          <div class="h-full bg-bullish/60 transition-all duration-500"
-               :style="{ width: bearishRatio + '%' }"
-               title="看跌"
-          />
-        </div>
-        <div class="flex justify-between mt-1"
-        >
-          <span class="text-[11px] text-bearish"
-          >{{ sentiment.bullish_count }} 看涨</span>
-          <span class="text-[11px] text-theme-tertiary"
-          >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[11px] text-bullish"
-          >{{ sentiment.bearish_count }} 看跌</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── 舆情情绪摘要栏（增强版）─────────────────────────── -->
-    <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
-    >
-      <!-- 情绪概览：移动端紧凑布局 -->
-      <div class="flex items-center gap-2 md:gap-3 px-2 py-1.5 rounded-sm border transition flex-wrap"
-           :class="sentiment.score > 0.1
-             ? 'border-bearish/30 bg-bearish/5'
-             : sentiment.score < -0.1
-               ? 'border-bullish/30 bg-bullish/5'
-               : 'border-theme-secondary bg-theme-tertiary/5'"
-      >
-        <span class="text-[10px] font-bold px-2 py-1 rounded-sm shrink-0"
-              :class="sentiment.score > 0.1
-                ? 'bg-bearish/15 text-bearish'
-                : sentiment.score < -0.1
-                  ? 'bg-bullish/15 text-bullish'
-                  : 'bg-theme-tertiary/20 text-theme-secondary'"
-        >
-          {{ sentiment.label }}
-        </span>
-        <div class="flex items-center gap-1.5 shrink-0">
+        <div class="flex items-center gap-1 shrink-0">
           <span class="text-[10px] text-bearish font-medium">{{ sentiment.bullish_count }}</span>
           <span class="text-[10px] text-theme-tertiary">:</span>
           <span class="text-[10px] text-bullish font-medium">{{ sentiment.bearish_count }}</span>
         </div>
-        <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
+        <div class="flex items-center gap-1 shrink-0 ml-1">
           <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
-                class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10 text-theme-tertiary whitespace-nowrap"
+                class="text-[10px] px-1 py-0.5 rounded-sm bg-theme-tertiary/10 text-theme-tertiary"
           >
             {{ kw }}
           </span>
         </div>
-        <span class="text-[10px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
       </div>
 
-      <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
-      <div class="hidden sm:block px-2 py-1.5 rounded-sm border border-theme-secondary bg-terminal-panel/50"
-      >
-        <div class="flex items-center justify-between mb-1"
+      <!-- 第二行：热门资讯 (单行滚动) -->
+      <div v-if="hotNews.length > 0" class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide whitespace-nowrap">
+        <span class="text-[10px] text-terminal-dim/70 font-medium shrink-0 bg-theme-tertiary/10 px-1.5 py-1 rounded-sm">HOT</span>
+        <button
+          v-for="(item, idx) in hotNews.slice(0, 5)"
+          :key="item.id || item.title"
+          class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
+          :class="modalItem?.id === item.id
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+            : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
+          @click="openModal(item)"
+          :title="item.title"
         >
-          <span class="text-[10px] text-terminal-dim uppercase tracking-wider"
-          >情绪分布</span>
-          <span class="text-[10px] text-terminal-dim"
-          >共 {{ sentiment.total_count }} 条</span>
-        </div>
-        <div class="h-1.5 rounded-sm overflow-hidden flex"
-        >
-          <div class="h-full bg-bearish/50 transition-all duration-500"
-               :style="{ width: bullishRatio + '%' }"
-               title="看涨"
-          />
-          <div class="h-full bg-theme-tertiary/20 transition-all duration-500"
-               :style="{ width: neutralRatio + '%' }"
-               title="中性"
-          />
-          <div class="h-full bg-bullish/50 transition-all duration-500"
-               :style="{ width: bearishRatio + '%' }"
-               title="看跌"
-          />
-        </div>
-        <div class="flex justify-between mt-1"
-        >
-          <span class="text-[10px] text-bearish"
-          >{{ sentiment.bullish_count }} 看涨</span>
-          <span class="text-[10px] text-theme-tertiary"
-          >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[10px] text-bullish"
-          >{{ sentiment.bearish_count }} 看跌</span>
-        </div>
+          <span class="text-theme-primary/60 mr-0.5">{{ idx + 1 }}.</span>{{ item.title }}
+        </button>
       </div>
 
-      <!-- 热门资讯排行 -->
-      <div v-if="hotNews.length > 0" class="px-2 py-1.5 rounded-sm border border-theme-secondary bg-terminal-panel/50"
-      >
-        <div class="flex items-center justify-between mb-1.5"
-        >
-          <span class="text-[10px] text-terminal-dim uppercase tracking-wider font-medium"
-          >热门资讯</span>
-          <span class="text-[10px] text-theme-tertiary"
-          >{{ hotNews.length }} 条</span>
-        </div>
-        <div class="flex gap-1 overflow-x-auto scrollbar-hide"
-        >
-          <button
-            v-for="(item, idx) in hotNews.slice(0, 5)"
-            :key="item.id || item.title"
-            class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[160px] truncate"
-            :class="modalItem?.id === item.id
-              ? 'bg-theme-hover border-theme-secondary text-theme-primary'
-              : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
-            @click="openModal(item)"
-            :title="item.title"
-          >
-            <span class="text-theme-primary/70 font-mono"
-            >{{ idx + 1 }}.</span>
-            {{ item.title }}
-          </button>
-        </div>
-      </div>
-
-      <!-- 筛选栏：分类 + 情绪（合并为一行） -->
-      <div class="flex items-center gap-1 px-2 flex-wrap"
-      >
-        <span class="text-[10px] text-terminal-dim/50 mr-1"
-        >筛选:</span>
+      <!-- 第三行：分类与情绪筛选 (单行横向滚动，不换行) -->
+      <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide whitespace-nowrap pb-0.5">
         <button
           v-for="cat in categories"
           :key="cat.value"
-          class="text-[10px] px-1.5 md:px-2 py-1 rounded-sm border transition flex items-center gap-0.5"
+          class="text-[10px] px-2 py-1 rounded-sm border transition shrink-0 flex items-center gap-0.5"
           :class="activeCategory === cat.value
             ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
           @click="activeCategory = cat.value"
         >
           <span>{{ cat.label }}</span>
-          <span v-if="cat.value !== 'all'" class="opacity-50 text-[9px]">{{ categoryCount(cat.value) }}</span>
+          <span v-if="cat.value !== 'all'" class="opacity-50 text-[9px]">({{ categoryCount(cat.value) }})</span>
         </button>
-        <div class="w-px h-3 bg-theme-secondary mx-1"
-        ></div>
+        <div class="w-px h-3 bg-theme-secondary mx-0.5 shrink-0"></div>
         <button
           v-for="filter in sentimentFilters"
           :key="filter.value"
-          class="text-[10px] px-1.5 md:px-2 py-1 rounded-sm border transition"
+          class="text-[10px] px-2 py-1 rounded-sm border transition shrink-0"
           :class="activeSentimentFilter === filter.value
             ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
