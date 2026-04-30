@@ -9,14 +9,47 @@
 
 ## 快速开始
 
-### 1. 克隆仓库
+### 方式一：一键启动（推荐）
+
+我们提供了一键启动脚本，自动完成环境检查、依赖安装和服务启动：
+
+#### Linux / macOS
+```bash
+git clone https://github.com/deancyl/AlphaTerminal.git
+cd AlphaTerminal
+./start.sh
+```
+
+#### Windows
+```powershell
+git clone https://github.com/deancyl/AlphaTerminal.git
+cd AlphaTerminal
+.\start.ps1
+```
+
+#### 常用命令
+
+| 命令 | Linux/macOS | Windows | 说明 |
+|------|-------------|---------|------|
+| 启动全部 | `./start.sh` | `.\start.ps1` | 启动前后端 |
+| 仅后端 | `./start.sh backend` | `.\start.ps1 backend` | 仅启动后端 |
+| 仅前端 | `./start.sh frontend` | `.\start.ps1 frontend` | 仅启动前端 |
+| 停止服务 | `./start.sh stop` | `.\start.ps1 stop` | 停止所有服务 |
+| 查看状态 | `./start.sh status` | `.\start.ps1 status` | 查看运行状态 |
+| 仅安装依赖 | `./start.sh install` | `.\start.ps1 install` | 仅安装依赖 |
+
+### 方式二：手动配置
+
+如果需要手动控制启动过程：
+
+#### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/deancyl/AlphaTerminal.git
 cd AlphaTerminal
 ```
 
-### 2. 后端配置
+#### 2. 后端配置
 
 ```bash
 cd backend
@@ -29,6 +62,7 @@ source .venv/bin/activate  # Linux/Mac
 # 安装依赖
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install psutil  # 额外依赖
 
 # 启动服务
 uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
@@ -37,7 +71,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8002 --reload
 后端运行在: `http://localhost:8002`
 API文档: `http://localhost:8002/docs`
 
-### 3. 前端配置
+#### 3. 前端配置
 
 ```bash
 cd frontend
@@ -46,7 +80,7 @@ cd frontend
 npm install
 
 # 启动开发服务器
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 60100
 ```
 
 前端运行在: `http://localhost:60100`
