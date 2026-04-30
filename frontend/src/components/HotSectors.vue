@@ -30,7 +30,7 @@
           <!-- 板块名称：强制截断 -->
           <span
             class="text-[10px] font-medium leading-tight text-center w-full block overflow-hidden whitespace-nowrap text-overflow-ellipsis"
-            :class="(sec.change_pct || 0) >= 0 ? 'text-red-300' : 'text-green-300'"
+            :class="(sec.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
           >
             {{ sec.name }}
           </span>

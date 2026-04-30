@@ -21,10 +21,10 @@
           <span
             v-if="newsSentiment.total_count > 0"
             class="text-[10px] px-1.5 py-0.5 rounded border"
-            :class="newsSentiment.bullish - newsSentiment.bearish > 0
-              ? 'border-red-500/40 bg-red-500/10 text-bullish'
-              : newsSentiment.bullish - newsSentiment.bearish < 0
-                ? 'border-green-500/40 bg-green-500/10 text-bearish'
+            :class="newsSentiment.bullish_count - newsSentiment.bearish_count > 0
+              ? 'border-bullish/40 bg-bullish/10 text-bullish'
+              : newsSentiment.bullish_count - newsSentiment.bearish_count < 0
+                ? 'border-bearish/40 bg-bearish/10 text-bearish'
                 : 'border-theme-secondary bg-theme-tertiary/10 text-theme-secondary'"
           >
             📰 资讯面: {{ newsSentiment.label }} ({{ newsSentiment.bullish_count }}:{{ newsSentiment.bearish_count }})

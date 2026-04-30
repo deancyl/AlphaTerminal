@@ -2,10 +2,10 @@
   <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono">
     <div class="flex flex-wrap items-center justify-between p-2 gap-2 border-b border-theme-secondary shrink-0">
       <div class="flex items-center gap-4 text-xs">
-        <span class="text-theme-accent font-bold">全市场个股</span>
+        <span class="text-terminal-accent font-bold">全市场个股</span>
         <div class="flex items-center gap-1">
           <input type="text" v-model="searchQuery" placeholder="输入拼音/代码/名称"
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-theme-accent outline-none w-32" />
+             class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 focus:border-terminal-accent outline-none w-32" />
         </div>
       </div>
       <!-- 电脑端：显示所有筛选条件 -->

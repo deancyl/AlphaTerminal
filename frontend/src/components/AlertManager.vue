@@ -7,13 +7,13 @@
         <button
           v-if="notificationPermission !== 'granted'"
           @click="requestPermission"
-          class="bg-yellow-600 hover:bg-yellow-500 text-white text-xs px-2 py-1 rounded transition-colors"
+          class="bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 text-xs px-2 py-1 rounded transition-colors"
         >
           启用通知
         </button>
         <button
           @click="showAddModal = true"
-          class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded transition-colors"
+          class="bg-terminal-accent/20 hover:bg-terminal-accent/30 text-terminal-accent border border-terminal-accent/30 text-xs px-2 py-1 rounded transition-colors"
         >
           + 添加
         </button>

@@ -7,12 +7,12 @@
         <button
           v-if="selectedPortfolioId !== null"
           @click="exportPortfolio"
-          class="bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 border border-blue-500/30 text-xs px-3 py-1 rounded font-bold transition-colors"
         >📥 导出</button>
         <button
           v-if="selectedPortfolioId !== null"
           @click="showTradeModal = true"
-          class="bg-green-700 hover:bg-green-600 text-white text-xs px-3 py-1 rounded font-bold transition-colors"
+          class="bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 text-xs px-3 py-1 rounded font-bold transition-colors"
         >📋 模拟调仓</button>
         <button @click="showCreateModal = true" class="btn-primary text-xs px-3 py-1">+ 新建</button>
       </div>
@@ -20,8 +20,8 @@
 
     <!-- 树形账户选择器 + 聚合指示器 -->
     <div v-if="selectedPortfolioId !== null" class="flex items-center gap-2 mb-2">
-      <span class="text-gray-400 text-xs">账户：</span>
-      <select v-model="selectedPortfolioId" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs flex-1">
+      <span class="text-terminal-dim text-xs">账户：</span>
+      <select v-model="selectedPortfolioId" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-primary text-xs flex-1">
         <template v-for="node in flatTree" :key="node.id">
           <option :value="node.id">{{ node._label }}</option>
         </template>
@@ -33,22 +33,22 @@
 
     <!-- 操作栏：过滤器 -->
     <div v-if="selectedPortfolioId !== null" class="flex gap-2 mb-3 items-center text-xs flex-wrap">
-      <select v-model="filterSector" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-200">
+      <select v-model="filterSector" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
         <option value="">全部行业</option>
         <option v-for="s in sectorList" :key="s" :value="s">{{ s }}</option>
       </select>
-      <select v-model="filterPositionType" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-200">
+      <select v-model="filterPositionType" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
         <option value="">全部类型</option>
         <option value="stock">股票</option>
         <option value="index">指数</option>
         <option value="ETF">ETF</option>
       </select>
-      <select v-model="sortBy" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-200">
+      <select v-model="sortBy" class="bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-terminal-secondary">
         <option value="change_pct">按涨跌幅</option>
         <option value="market_value">按市值</option>
         <option value="symbol">按代码</option>
       </select>
-      <button @click="loadPortfolioData" class="text-gray-400 hover:text-white">↺</button>
+      <button @click="loadPortfolioData" class="text-terminal-dim hover:text-terminal-primary">↺</button>
       <div class="ml-auto flex gap-2">
         <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-gray-500'">持仓</button>
         <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-gray-500'">归因分析</button>
@@ -56,10 +56,10 @@
     </div>
 
     <!-- 无持仓时显示 -->
-    <div v-if="positions.length === 0 && !loading" class="text-center text-gray-500 py-8">
+    <div v-if="positions.length === 0 && !loading" class="text-center text-terminal-dim py-8">
       <div class="text-2xl mb-2">📭</div>
       <div>暂无持仓</div>
-      <div class="text-xs text-gray-600 mt-1">买入标的后将显示在这里</div>
+      <div class="text-xs text-theme-tertiary mt-1">买入标的后将显示在这里</div>
     </div>
 
     <!-- Phase 4: PnL 三分卡片 -->
