@@ -1,23 +1,23 @@
 <template>
   <div class="flex flex-col h-full min-h-0 bg-terminal-bg">
     <!-- 标题栏 -->
-    <div class="flex items-center justify-between mb-1 shrink-0 px-2 py-1">
-      <span class="text-terminal-accent font-bold text-xs">📊 A股监测</span>
+    <div class="flex items-center justify-between mb-2 shrink-0 px-3 py-2">
+      <span class="text-terminal-accent font-bold text-sm">📊 A股监测</span>
       <span class="text-terminal-dim text-xs">{{ total }} 只</span>
     </div>
     
     <!-- 搜索过滤栏 -->
-    <div class="flex items-center gap-1 mb-1 shrink-0 px-2">
+    <div class="flex items-center gap-2 mb-2 shrink-0 px-3">
       <input
         v-model="searchQuery"
         type="text"
         placeholder="搜索代码/名称"
-        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary rounded-sm px-2 py-1 text-xs text-theme-primary outline-none focus:border-terminal-accent/60 h-10"
+        class="flex-1 min-w-0 bg-terminal-bg border border-theme-secondary/50 rounded-sm px-3 py-2 text-xs text-theme-primary outline-none focus:border-terminal-accent/60 focus:shadow-[0_0_0_3px_rgba(15,82,186,0.15)] h-10 transition-all"
       />
     </div>
     
     <!-- 表头 -->
-    <div class="flex items-center px-2 py-0.5 bg-terminal-panel border-b border-theme text-xs text-terminal-dim shrink-0">
+    <div class="flex items-center px-3 py-2 bg-terminal-panel/50 border-b border-theme-secondary/30 text-xs text-terminal-dim shrink-0">
       <div class="w-5 text-left">#</div>
       <div class="flex-1 min-w-0 truncate">名称</div>
       <div class="w-12 text-right">最新价</div>
@@ -29,8 +29,8 @@
       <div
         v-for="(item, idx) in displayedItems"
         :key="item.symbol || idx"
-        class="flex items-center px-2 py-0.5 border-b border-theme-secondary/20 hover:bg-theme-hover transition-colors text-[11px]"
-        :class="idx % 2 === 0 ? 'bg-terminal-bg' : 'bg-terminal-panel/30'"
+        class="flex items-center px-3 py-2 border-b border-theme-secondary/10 hover:bg-theme-hover/60 transition-all duration-200 text-xs"
+        :class="idx % 2 === 0 ? 'bg-terminal-bg' : 'bg-terminal-panel/20'"
       >
         <div class="w-5 text-left text-xs text-terminal-dim">{{ (currentPage - 1) * pageSize + idx + 1 }}</div>
         <div class="flex-1 min-w-0 truncate text-theme-primary">{{ item.name || item.symbol }}</div>
@@ -42,21 +42,21 @@
           {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
         </div>
       </div>
-      <div v-if="!displayedItems.length" class="px-2 py-4 text-center text-terminal-dim text-xs">
+      <div v-if="!displayedItems.length" class="px-3 py-6 text-center text-terminal-dim text-xs">
         暂无数据
       </div>
     </div>
 
     <!-- 分页控制器 -->
-    <div v-if="totalPages > 1" class="shrink-0 bg-terminal-panel flex items-center justify-center gap-1 py-0.5">
+    <div v-if="totalPages > 1" class="shrink-0 bg-terminal-panel/50 flex items-center justify-center gap-2 py-2">
       <button
-        class="px-2 h-10 text-xs rounded-sm border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30 flex items-center justify-center"
+        class="px-3 h-10 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
         :disabled="currentPage === 1"
         @click="currentPage--"
       >‹</button>
       <span class="text-xs text-terminal-dim">{{ currentPage }}/{{ totalPages }}</span>
       <button
-        class="px-2 h-10 text-xs rounded-sm border border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 disabled:opacity-30 flex items-center justify-center"
+        class="px-3 h-10 text-xs rounded-sm border border-theme-secondary/50 text-terminal-dim hover:border-terminal-accent/50 hover:bg-theme-hover/50 disabled:opacity-30 flex items-center justify-center transition-all"
         :disabled="currentPage === totalPages"
         @click="currentPage++"
       >›</button>
