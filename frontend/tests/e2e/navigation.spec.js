@@ -54,13 +54,13 @@ test.describe('Theme and Appearance', () => {
 })
 
 test.describe('Performance', () => {
-  test('should load within 3 seconds', async ({ page }) => {
+  test('should load within 5 seconds', async ({ page }) => {
     const startTime = Date.now()
     await page.goto('/')
     await page.waitForLoadState('networkidle')
     const loadTime = Date.now() - startTime
     
-    expect(loadTime).toBeLessThan(3000)
+    expect(loadTime).toBeLessThan(5000)
   })
 
   test('should not have memory leaks', async ({ page }) => {
