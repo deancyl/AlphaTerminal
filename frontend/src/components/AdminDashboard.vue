@@ -1,12 +1,24 @@
 <template>
   <div class="flex h-full">
+    <!-- 移动端遮罩 -->
+    <div
+      v-if="mobileNavOpen"
+      class="fixed inset-0 bg-black/50 z-[9998] md:hidden"
+      @click="mobileNavOpen = false"
+    />
     <!-- 左侧导航 -->
-    <aside class="w-64 border-r border-theme bg-terminal-panel flex-shrink-0">
-      <div class="p-4 border-b border-theme">
-        <span class="text-sm font-bold text-terminal-accent">⚙️ 系统管理</span>
-        <div class="text-[10px] text-theme-muted mt-1">v{{ version }}</div>
-        <div class="text-[10px] text-[var(--color-warning)] mt-2">⚠️ 以下功能会影响系统运行，请谨慎操作</div>
+    <aside
+      class="border-r border-theme bg-terminal-panel flex-shrink-0 transition-all duration-300 z-[9999] md:relative fixed left-0 top-0 h-full"
+      :class="mobileNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 w-64'"
+    >
+      <div class="p-4 border-b border-theme flex items-center justify-between">
+        <div>
+          <span class="text-sm font-bold text-terminal-accent">⚙️ 系统管理</span>
+          <div class="text-xs text-theme-muted mt-1">v{{ version }}</div>
+        </div>
+        <button class="md:hidden text-theme-secondary hover:text-theme-primary" @click="mobileNavOpen = false">✕</button>
       </div>
+      <div class="px-4 py-2 text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)]/30">⚠️ 以下功能会影响系统运行，请谨慎操作</div>
       <nav class="py-2">
         <button
           v-for="item in navItems"
@@ -15,12 +27,12 @@
           :class="activeTab === item.id
             ? 'bg-terminal-accent/15 text-terminal-accent border-r-2 border-terminal-accent'
             : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
-          @click="activeTab = item.id"
+          @click="activeTab = item.id; mobileNavOpen = false"
         >
           <span class="text-base">{{ item.icon }}</span>
           <div class="flex-1">
             <div class="font-medium">{{ item.label }}</div>
-            <div class="text-[10px] text-theme-muted leading-tight">{{ item.desc }}</div>
+            <div class="text-xs text-theme-muted leading-tight">{{ item.desc }}</div>
           </div>
           <span v-if="item.status" class="w-2 h-2 rounded-full flex-shrink-0" :class="item.statusClass"></span>
         </button>
@@ -28,8 +40,15 @@
     </aside>
 
     <!-- 右侧内容 -->
-    <main class="flex-1 overflow-auto p-6">
-      
+    <main class="flex-1 overflow-auto p-4 md:p-6">
+      <!-- 移动端菜单按钮 -->
+      <button
+        class="md:hidden mb-4 flex items-center gap-2 px-3 py-2 rounded-sm bg-terminal-panel border border-theme-secondary text-theme-primary text-sm"
+        @click="mobileNavOpen = true"
+      >
+        <span>☰</span> 菜单
+      </button>
+
       <!-- 数据源控制 -->
       <div v-if="activeTab === 'sources'" class="space-y-6">
         <div class="flex items-center justify-between">
@@ -592,6 +611,7 @@ import { apiFetch } from '../utils/api.js'
 
 const version = __APP_VERSION__
 const activeTab = ref('sources')
+const mobileNavOpen = ref(false)
 const logContainer = ref(null)
 
 const navItems = [

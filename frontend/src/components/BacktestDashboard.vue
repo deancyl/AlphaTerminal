@@ -383,18 +383,18 @@
 
         <!-- 交易记录表格 -->
         <div v-if="showTrades && backtestResult.trades?.length"
-          class="border-t border-theme/30">
-          <table class="w-full text-[10px]">
+          class="border-t border-theme/30 overflow-x-auto">
+          <table class="w-full text-xs min-w-[600px]">
             <thead class="sticky top-0 bg-terminal-panel">
               <tr class="text-theme-muted border-b border-theme/20">
-                <th class="px-2 py-0.5 text-left">方向</th>
-                <th class="px-2 py-0.5 text-right">买日期</th>
-                <th class="px-2 py-0.5 text-right">买价</th>
-                <th class="px-2 py-0.5 text-right">卖日期</th>
-                <th class="px-2 py-0.5 text-right">卖价</th>
-                <th class="px-2 py-0.5 text-right">数量</th>
-                <th class="px-2 py-0.5 text-right">盈亏额</th>
-                <th class="px-2 py-0.5 text-right">盈亏%</th>
+                <th class="px-2 py-1 text-left">方向</th>
+                <th class="px-2 py-1 text-right">买日期</th>
+                <th class="px-2 py-1 text-right">买价</th>
+                <th class="px-2 py-1 text-right">卖日期</th>
+                <th class="px-2 py-1 text-right">卖价</th>
+                <th class="px-2 py-1 text-right">数量</th>
+                <th class="px-2 py-1 text-right">盈亏额</th>
+                <th class="px-2 py-1 text-right">盈亏%</th>
               </tr>
             </thead>
             <tbody>
@@ -406,16 +406,16 @@
                     {{ (t.pnl||0) >= 0 ? '多' : '空' }}
                   </span>
                 </td>
-                <td class="px-2 py-0.5 text-right text-theme-secondary font-mono">{{ t.entry_date }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ (t.entry_price||0).toFixed(2) }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-secondary font-mono">{{ t.exit_date || '持仓中' }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ t.exit_price != null ? t.exit_price.toFixed(2) : '—' }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ t.shares }}</td>
-                <td class="px-2 py-0.5 text-right font-mono font-bold"
+                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.entry_date }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ (t.entry_price||0).toFixed(2) }}</td>
+                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.exit_date || '持仓中' }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.exit_price != null ? t.exit_price.toFixed(2) : '—' }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.shares }}</td>
+                <td class="px-2 py-1 text-right font-mono font-bold"
                   :class="(t.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
                   {{ (t.pnl||0) >= 0 ? '+' : '' }}{{ (t.pnl||0).toFixed(2) }}
                 </td>
-                <td class="px-2 py-0.5 text-right font-mono"
+                <td class="px-2 py-1 text-right font-mono"
                   :class="(t.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
                   {{ (t.pnl_pct||0) >= 0 ? '+' : '' }}{{ (t.pnl_pct||0).toFixed(2) }}%
                 </td>
