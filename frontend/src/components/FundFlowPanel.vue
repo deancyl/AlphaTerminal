@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
-// ECharts 通过 CDN 加载，使用全局变量
-const echarts = window.echarts
+// ECharts 通过 CDN 加载，使用全局变量（延迟取值，避免模块加载时 CDN 尚未就绪）
+const getEcharts = () => window.echarts
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -27,6 +27,11 @@ const renderChart = async (dataList) => {
     await new Promise(resolve => requestAnimationFrame(resolve))
   }
 
+  const echarts = getEcharts()
+  if (!echarts) {
+    logger.warn('[FundFlow] ECharts CDN 未加载，跳过渲染')
+    return
+  }
   if (!chartInstance.value) {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }

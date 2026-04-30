@@ -788,7 +788,14 @@ watch(wsStatus, (status) => {
 })
 
 watch(() => props.symbol, (newSym) => { 
-  if (newSym) { fetchData(); fetchQuote(); connectStream(newSym) } 
+  if (newSym) {
+    // 切换标的时先销毁旧 ECharts 实例，避免 DOM 污染 / 事件泄漏
+    if (chart) {
+      chart.dispose()
+      chart = null
+    }
+    fetchData(); fetchQuote(); connectStream(newSym)
+  } 
   else { console.warn('[FullscreenKline] symbol 变空，关闭全屏'); emit('close') }
 }, { immediate: true })
 

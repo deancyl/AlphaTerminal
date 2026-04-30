@@ -186,7 +186,6 @@ const props = defineProps({
 defineEmits(['close'])
 
 const activeTab = ref('overview')
-const loading = ref(false)
 const stockInfo = ref({})
 
 const tabs = [
@@ -233,7 +232,6 @@ const returnItems = computed(() => [
 async function fetchStockDetail() {
   if (!props.symbol) return
   
-  loading.value = true
   try {
     const data = await apiFetch(`/api/v1/market/quote/${props.symbol}`)
     if (data) {
@@ -244,8 +242,6 @@ async function fetchStockDetail() {
     }
   } catch (e) {
     console.error('[StockDetail] Fetch error:', e)
-  } finally {
-    loading.value = false
   }
 }
 

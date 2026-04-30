@@ -38,7 +38,7 @@ async def api_exception_handler(request: Request, exc: APIException) -> JSONResp
     )
     
     return JSONResponse(
-        status_code=200,  # 业务错误使用200，通过code区分
+        status_code=exc.status_code or 400,  # 保留原始 HTTP 状态码
         content=exc.to_dict()
     )
 
@@ -55,7 +55,7 @@ async def http_exception_handler_wrapper(request: Request, exc: HTTPException) -
     )
     
     return JSONResponse(
-        status_code=200,
+        status_code=exc.status_code,
         content=http_exception_handler(exc)
     )
 
@@ -80,7 +80,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
     
     return JSONResponse(
-        status_code=200,
+        status_code=422,
         content=error_response(
             code=ErrorCode.VALIDATION_ERROR,
             message="请求参数验证失败",

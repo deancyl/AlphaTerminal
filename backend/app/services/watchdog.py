@@ -206,9 +206,15 @@ def _restart_backend() -> bool:
                     if not _is_process_running(old_pid):
                         break
                 else:
-                    # 强制终止
-                    os.kill(old_pid, signal.SIGKILL)
-                    time.sleep(1)
+                    # SIGTERM 超时，再次确认 PID 仍属于后端进程后才 SIGKILL
+                    if _is_process_running(old_pid):
+                        try:
+                            os.kill(old_pid, signal.SIGKILL)
+                            time.sleep(1)
+                        except ProcessLookupError:
+                            pass  # 进程已在 SIGKILL 前退出
+            except ProcessLookupError:
+                logger.info(f"[Watchdog] 旧进程 {old_pid} 已退出")
             except Exception as e:
                 logger.warning(f"[Watchdog] 终止旧进程失败: {e}")
         

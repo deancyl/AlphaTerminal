@@ -51,7 +51,7 @@ OVERSEAS_HOSTS = frozenset([
     "twelvedata.com",
     "polygon.io",
     "yahoo.com", "yahooapis.com",
-    "fRED.stlouisfed.org", "fred.stlouisfed.org",
+    "fred.stlouisfed.org",
     "api.nasdaq.com",
     "stooq.com",
 ])

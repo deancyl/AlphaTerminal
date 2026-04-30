@@ -290,7 +290,6 @@ const props = defineProps({
 
 const items        = ref(props.initialItems)
 const total        = ref(0)
-const loading      = ref(false)
 const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
@@ -403,11 +402,6 @@ function classifyNews(item) {
 function getCategoryLabel(category) {
   const cat = categories.find(c => c.value === category)
   return cat ? cat.label : '其他'
-}
-
-function getCategoryIcon(category) {
-  const cat = categories.find(c => c.value === category)
-  return cat ? cat.icon : '📄'
 }
 
 const bullishRatio = computed(() => {

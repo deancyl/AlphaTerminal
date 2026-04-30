@@ -196,13 +196,12 @@ async def fetch_with_fallback(
         try:
             with CircuitContext(cb):
                 result = await fetch_func(fetcher, symbol)
-                cb.record_success()
+                # record_success/failure 已由 CircuitContext.__exit__ 自动处理
                 return result
         except CircuitBreakerOpen:
             raise
         except Exception as e:
             logger.warning(f"Fetcher {fetcher_name} failed: {e}")
-            cb.record_failure()
             last_error = e
             continue
     

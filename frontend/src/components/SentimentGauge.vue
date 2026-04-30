@@ -87,7 +87,7 @@
             </td>
             <td class="py-1.5 text-right">
               <span class="px-1 py-0.5 rounded-sm text-[10px]"
-                    :class="item.status === '交易中' ? 'bg-[var(--color-success-bg)] text-bearish' : 'bg-theme-tertiary/30 text-theme-secondary'">
+                    :class="item.status === '交易中' ? 'bg-theme-tertiary/40 text-theme-accent' : 'bg-theme-tertiary/30 text-theme-secondary'">
                 {{ item.status }}
               </span>
             </td>
