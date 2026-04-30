@@ -184,7 +184,7 @@
               >{{ p.label }}</button>
             </div>
           </div>
-          <div ref="klineChartRef" class="w-full" style="height: 280px;" class="sm:h-[320px]"></div>
+          <div ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
         </div>
       </div>
 
@@ -424,7 +424,7 @@
             <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
           </div>
-          <div ref="compareChartRef" class="w-full" style="height: 280px;" class="sm:h-[350px]"></div>
+          <div ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
         </div>
 
         <!-- 对比表格：移动端优化 -->

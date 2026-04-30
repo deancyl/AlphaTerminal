@@ -349,7 +349,7 @@ const { helpVisible } = useKeyboardShortcuts({
       futuresFullscreen.value = false
     } else if (isCopilotOpen.value) {
       isCopilotOpen.value = false
-    } } else if (!isMobile.value && !isSidebarCollapsed.value) {
+    } else if (!isMobile.value && !isSidebarCollapsed.value) {
       isSidebarCollapsed.value = true
     }
   },
