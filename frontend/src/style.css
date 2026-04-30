@@ -3,60 +3,95 @@
 @tailwind utilities;
 
 @layer base {
-  /* 基础样式 - 使用 CSS 变量 */
+  /* ============================================
+     AlphaTerminal 全局基础样式 v2.0
+     遵循万德金融终端UI/UX设计规范
+     ============================================ */
+  
   :root {
     /* 默认深色主题变量（防止闪烁） */
-    --bg-primary: #0a0e17;
-    --bg-secondary: #111827;
-    --bg-tertiary: #1f2937;
+    --bg-primary: #0D1117;
+    --bg-secondary: #161B22;
+    --bg-tertiary: #1C2333;
     --bg-hover: rgba(255,255,255,0.05);
-    --bg-active: rgba(0,255,136,0.10);
+    --bg-active: rgba(46,125,255,0.10);
     
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --text-tertiary: #6b7280;
-    --text-muted: #4b5563;
+    --text-primary: #F0F6FC;
+    --text-secondary: #C9D1D9;
+    --text-tertiary: #8B949E;
+    --text-muted: #6E7681;
     
-    --border-primary: #374151;
-    --border-secondary: #1f2937;
-    --border-hover: #4b5563;
+    --border-primary: #30363D;
+    --border-secondary: #21262D;
+    --border-hover: #484F58;
     
-    --accent-primary: #00ff88;
-    --accent-secondary: #00cc6a;
-    --accent-bg: rgba(0,255,136,0.10);
-    --accent-border: rgba(0,255,136,0.30);
+    --color-primary: #2E7DFF;
+    --color-up: #E8554A;
+    --color-down: #3DB873;
     
-    --panel-bg: #111827;
-    --panel-bg-elevated: #1f2937;
-    --panel-bg-hover: #1f2937;
+    --panel-bg: #161B22;
+    --panel-bg-elevated: #21262D;
+    --panel-bg-hover: #1C2333;
     
-    --bullish: #ef232a;
-    --bullish-light: #f87171;
-    --bullish-bg: rgba(239,35,42,0.15);
-    --bullish-border: rgba(239,35,42,0.30);
-    --bearish: #14b143;
-    --bearish-light: #4ade80;
-    --bearish-bg: rgba(20,177,67,0.15);
-    --bearish-border: rgba(20,177,67,0.30);
+    --bullish: #E8554A;
+    --bullish-light: #FF6B6B;
+    --bullish-bg: rgba(232,85,74,0.15);
+    --bullish-border: rgba(232,85,74,0.30);
+    --bearish: #3DB873;
+    --bearish-light: #5CD899;
+    --bearish-bg: rgba(61,184,115,0.15);
+    --bearish-border: rgba(61,184,115,0.30);
     
-    --status-live: #00ff88;
-    --status-warning: #fbbf24;
-    --status-error: #ef4444;
-    --status-info: #60a5fa;
-    --status-success: #22c55e;
+    --accent-primary: #2E7DFF;
+    --accent-secondary: #4A8EFF;
+    --accent-bg: rgba(46,125,255,0.10);
+    --accent-border: rgba(46,125,255,0.30);
     
-    --chart-grid: #1f2937;
-    --chart-text: #6b7280;
-    --chart-line: #00ff88;
-    --chart-area: rgba(0,255,136,0.1);
+    --status-live: #2E7DFF;
+    --status-warning: #F5A623;
+    --status-error: #DC2626;
+    --status-info: #2E7DFF;
+    --status-success: #16A34A;
     
-    --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
-    --shadow-md: 0 4px 6px rgba(0,0,0,0.4);
-    --shadow-lg: 0 10px 15px rgba(0,0,0,0.5);
+    --chart-grid: #1C2333;
+    --chart-text: #8B949E;
+    --chart-line: #2E7DFF;
+    --chart-area: rgba(46,125,255,0.10);
     
-    --scrollbar-track: #111827;
-    --scrollbar-thumb: #374151;
-    --scrollbar-thumb-hover: #4b5563;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.40);
+    --shadow-lg: 0 8px 16px rgba(0,0,0,0.50);
+    
+    --scrollbar-track: #161B22;
+    --scrollbar-thumb: #30363D;
+    --scrollbar-thumb-hover: #484F58;
+    
+    /* 间距系统 */
+    --space-xs: 4px;
+    --space-sm: 8px;
+    --space-md: 16px;
+    --space-lg: 24px;
+    --space-xl: 32px;
+    
+    /* 圆角系统 */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    
+    /* 动效 */
+    --duration-micro: 150ms;
+    --duration-fast: 200ms;
+    --duration-normal: 250ms;
+    --duration-slow: 300ms;
+  }
+  
+  /* 全局字体设置 */
+  html {
+    font-family: var(--font-sans, '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif');
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   
   html, body {
@@ -67,31 +102,77 @@
     padding: 0;
   }
   
-  /* 平滑主题过渡 - 仅对颜色和背景生效，限制范围避免图表卡顿 */
+  /* 数字等宽特性 - 金融终端必须 */
+  .font-mono, .font-number, code, pre,
+  [class*="price"], [class*="change"], [class*="pct"],
+  td, th {
+    font-feature-settings: "tnum" 1;
+    font-variant-numeric: tabular-nums;
+  }
+  
+  /* 平滑主题过渡 */
   :root, .theme-transition, .theme-transition * {
-    transition: background-color 0.2s ease,
-                border-color 0.2s ease,
-                color 0.2s ease,
-                box-shadow 0.2s ease;
+    transition: background-color var(--duration-fast) ease,
+                border-color var(--duration-fast) ease,
+                color var(--duration-fast) ease,
+                box-shadow var(--duration-fast) ease;
   }
 
-  /* 禁用某些元素的过渡以优化性能 */
+  /* 禁用过渡优化性能 */
   .no-transition, .no-transition * {
     transition: none !important;
+  }
+  
+  /* 最小字号保护 - 合规要求 */
+  html {
+    font-size: 14px;
+  }
+  
+  /* 触控热区规范 */
+  @media (pointer: coarse) {
+    /* 移动端最小触控区域 48px */
+    button, a, input, select, textarea,
+    [role="button"], [tabindex]:not([tabindex="-1"]) {
+      min-height: 48px;
+      min-width: 48px;
+    }
+    
+    /* 表格行高增加 */
+    td, th {
+      min-height: 48px;
+    }
+  }
+  
+  @media (pointer: fine) {
+    /* PC端最小触控区域 44px */
+    button, a, input, select, textarea,
+    [role="button"], [tabindex]:not([tabindex="-1"]) {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+  
+  /* 特殊情况：小按钮允许更小尺寸 */
+  .btn-icon, .btn-xs, .icon-btn,
+  button.w-6, button.w-7, button.w-8 {
+    min-height: 28px;
+    min-width: 28px;
   }
 }
 
 @layer components {
   /* ============================================
-     主题感知组件 - 使用 CSS 变量
+     主题感知组件
      ============================================ */
   
-  /* 终端面板 - 主要卡片容器 */
+  /* 终端面板 */
   .terminal-panel {
     @apply rounded-lg;
     background-color: var(--panel-bg);
     border: 1px solid var(--border-primary);
     box-shadow: var(--shadow-sm);
+    transition: border-color var(--duration-fast) ease,
+                box-shadow var(--duration-fast) ease;
   }
   
   .terminal-panel:hover {
@@ -99,9 +180,11 @@
     box-shadow: var(--shadow-md);
   }
   
-  /* 主题按钮 */
+  /* 主题按钮 - PC端规范 */
   .theme-btn {
-    @apply px-2 py-1 rounded text-xs transition-all duration-200;
+    @apply px-3 rounded text-xs font-medium transition-all;
+    height: var(--btn-height-sm);
+    min-height: var(--btn-height-sm);
     background-color: var(--bg-tertiary);
     color: var(--text-secondary);
     border: 1px solid var(--border-primary);
@@ -114,52 +197,44 @@
   }
   
   .theme-btn.active {
-    background-color: var(--accent-bg);
-    color: var(--accent-primary);
-    border-color: var(--accent-border);
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+    border-color: var(--color-primary-border);
+  }
+  
+  .theme-btn-primary {
+    @apply px-4 rounded text-sm font-medium transition-all;
+    height: var(--btn-height);
+    min-height: var(--btn-height);
+    background-color: var(--color-primary);
+    color: white;
+    border: 1px solid var(--color-primary);
+  }
+  
+  .theme-btn-primary:hover {
+    background-color: var(--color-primary-hover);
+    border-color: var(--color-primary-hover);
   }
   
   /* 涨跌标签 */
   .bullish-tag {
-    background-color: var(--bullish-bg);
-    color: var(--bullish);
-    border: 1px solid var(--bullish-border);
+    background-color: var(--color-up-bg);
+    color: var(--color-up);
+    border: 1px solid var(--color-up-border);
   }
   
   .bearish-tag {
-    background-color: var(--bearish-bg);
-    color: var(--bearish);
-    border: 1px solid var(--bearish-border);
-  }
-  
-  /* 强调按钮 */
-  .accent-btn {
-    background-color: var(--accent-bg);
-    color: var(--accent-primary);
-    border: 1px solid var(--accent-border);
-  }
-  
-  .accent-btn:hover {
-    background-color: var(--accent-primary);
-    color: var(--bg-primary);
+    background-color: var(--color-down-bg);
+    color: var(--color-down);
+    border: 1px solid var(--color-down-border);
   }
   
   /* 状态指示器 */
-  .status-live {
-    color: var(--status-live);
-  }
-  
-  .status-warning {
-    color: var(--status-warning);
-  }
-  
-  .status-error {
-    color: var(--status-error);
-  }
-  
-  .status-info {
-    color: var(--status-info);
-  }
+  .status-live { color: var(--color-primary); }
+  .status-warning { color: var(--color-warning); }
+  .status-error { color: var(--color-danger); }
+  .status-info { color: var(--color-info); }
+  .status-success { color: var(--color-success); }
   
   /* 导航项 */
   .nav-item {
@@ -174,45 +249,64 @@
   }
   
   .nav-item.active {
-    background-color: var(--accent-bg);
-    color: var(--accent-primary);
-    border-color: var(--accent-primary);
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
   }
   
-  /* 表格样式 */
+  /* 表格样式 - 规范行高 */
   .theme-table {
-    @apply w-full text-xs;
+    @apply w-full;
   }
   
   .theme-table th {
+    height: var(--table-header);
+    min-height: var(--table-header);
     color: var(--text-tertiary);
     border-bottom: 1px solid var(--border-primary);
+    font-weight: 500;
+    font-size: 12px;
   }
   
   .theme-table td {
+    height: var(--table-row);
+    min-height: var(--table-row);
     color: var(--text-primary);
     border-bottom: 1px solid var(--border-secondary);
+    font-size: 12px;
   }
   
   .theme-table tr:hover td {
-    background-color: var(--bg-hover);
+    background-color: var(--panel-bg-active);
   }
   
-  /* 输入框 */
+  .theme-table tr:nth-child(even) td {
+    background-color: var(--bg-secondary);
+  }
+  
+  /* 斑马纹 - 规范色差 */
+  .theme-table.striped tr:nth-child(even) td {
+    background-color: rgba(255,255,255,0.02);
+  }
+  
+  /* 输入框 - 规范高度 */
   .theme-input {
-    @apply px-3 py-2 rounded text-sm outline-none transition-all;
+    @apply px-3 rounded outline-none transition-all;
+    height: var(--input-height);
+    min-height: var(--input-height);
     background-color: var(--bg-secondary);
     color: var(--text-primary);
     border: 1px solid var(--border-primary);
+    font-size: 14px;
   }
   
   .theme-input:focus {
-    border-color: var(--accent-primary);
-    box-shadow: 0 0 0 2px var(--accent-bg);
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-bg);
   }
   
   .theme-input::placeholder {
-    color: var(--text-muted);
+    color: var(--text-placeholder);
   }
   
   /* 分隔线 */
@@ -220,7 +314,7 @@
     border-color: var(--border-primary);
   }
   
-  /* 滚动条样式 */
+  /* 滚动条 */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -239,14 +333,54 @@
     background: var(--scrollbar-thumb-hover);
   }
   
-  /* 选中文字样式 */
+  /* 选中文字 */
   ::selection {
-    background-color: var(--accent-bg);
-    color: var(--accent-primary);
+    background-color: var(--color-primary-bg);
+    color: var(--color-primary);
+  }
+  
+  /* 行情刷新闪烁动效 */
+  @keyframes price-flash-up {
+    0% { background-color: var(--color-up-bg); }
+    100% { background-color: transparent; }
+  }
+  
+  @keyframes price-flash-down {
+    0% { background-color: var(--color-down-bg); }
+    100% { background-color: transparent; }
+  }
+  
+  .price-flash-up {
+    animation: price-flash-up 300ms ease-out;
+  }
+  
+  .price-flash-down {
+    animation: price-flash-down 300ms ease-out;
+  }
+  
+  /* 骨架屏 */
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--bg-secondary) 25%,
+      var(--bg-tertiary) 50%,
+      var(--bg-secondary) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+  }
+  
+  @keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }
 
 @layer utilities {
+  /* ============================================
+     工具类
+     ============================================ */
+  
   /* 文字截断 */
   .line-clamp-2 {
     display: -webkit-box;
@@ -262,133 +396,183 @@
     overflow: hidden;
   }
   
-  /* 禁用过渡动画 */
+  /* 禁用过渡 */
   .no-transition {
     transition: none !important;
   }
   
-  /* 主题切换时的特殊处理 */
-  .theme-switching {
-    pointer-events: none;
+  /* 涨跌颜色 */
+  .text-bullish { color: var(--color-up); }
+  .text-bearish { color: var(--color-down); }
+  .text-neutral { color: var(--color-neutral); }
+  
+  /* 背景涨跌色 */
+  .bg-bullish { background-color: var(--color-up-bg); }
+  .bg-bearish { background-color: var(--color-down-bg); }
+  .bg-neutral { background-color: var(--color-neutral-bg); }
+  
+  /* 边框涨跌色 */
+  .border-bullish { border-color: var(--color-up-border); }
+  .border-bearish { border-color: var(--color-down-border); }
+  .border-neutral { border-color: var(--color-neutral-border); }
+  
+  /* 主题快捷色 */
+  .text-theme { color: var(--text-primary); }
+  .text-theme-secondary { color: var(--text-secondary); }
+  .text-theme-tertiary { color: var(--text-tertiary); }
+  .text-theme-muted { color: var(--text-muted); }
+  .text-theme-accent { color: var(--color-primary); }
+  
+  .bg-theme { background-color: var(--bg-primary); }
+  .bg-theme-secondary { background-color: var(--bg-secondary); }
+  .bg-theme-tertiary { background-color: var(--bg-tertiary); }
+  .bg-theme-panel { background-color: var(--panel-bg); }
+  .bg-theme-accent { background-color: var(--color-primary-bg); }
+  .bg-theme-hover { background-color: var(--bg-hover); }
+  
+  .border-theme { border-color: var(--border-primary); }
+  .border-theme-secondary { border-color: var(--border-secondary); }
+  .border-theme-hover { border-color: var(--border-hover); }
+  .border-theme-accent { border-color: var(--color-primary-border); }
+  
+  /* 终端风格文字 */
+  .text-terminal { color: var(--text-primary); }
+  .text-terminal-dim { color: var(--text-secondary); }
+  .text-terminal-accent { color: var(--color-primary); }
+  .text-terminal-primary { color: var(--text-primary); }
+  .text-terminal-secondary { color: var(--text-secondary); }
+  .bg-terminal-bg { background-color: var(--bg-primary); }
+  .bg-terminal-panel { background-color: var(--panel-bg); }
+  
+  /* 触控热区 */
+  .touch-target {
+    min-height: var(--touch-min);
+    min-width: var(--touch-min);
   }
   
-  /* 涨跌文字颜色 */
-  .text-bullish {
-    color: var(--bullish);
+  /* 隐藏滚动条但保持滚动 */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
   
-  .text-bearish {
-    color: var(--bearish);
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
   }
-
-  /* 主题快捷色（补充在tailwind未覆盖时） */
-  .text-theme {
-    color: var(--text-primary);
+  
+  /* 玻璃效果 */
+  .glass {
+    background: var(--bg-glass);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
-  .text-theme-secondary {
-    color: var(--text-secondary);
+  
+  /* 行情数据样式 */
+  .price-up {
+    color: var(--color-up);
   }
-  .text-theme-tertiary {
-    color: var(--text-tertiary);
+  
+  .price-down {
+    color: var(--color-down);
   }
-  .text-theme-muted {
-    color: var(--text-muted);
-  }
-  .text-theme-accent {
-    color: var(--accent-primary);
-  }
-  .bg-theme {
-    background-color: var(--bg-primary);
-  }
-  .bg-theme-secondary {
-    background-color: var(--bg-secondary);
-  }
-  .bg-theme-tertiary {
-    background-color: var(--bg-tertiary);
-  }
-  .bg-theme-panel {
-    background-color: var(--panel-bg);
-  }
-  .bg-theme-accent {
-    background-color: var(--accent-bg);
-  }
-  .bg-theme-hover {
-    background-color: var(--bg-hover);
-  }
-  .border-theme {
-    border-color: var(--border-primary);
-  }
-  .border-theme-secondary {
-    border-color: var(--border-secondary);
-  }
-  .border-theme-hover {
-    border-color: var(--border-hover);
-  }
-  .border-theme-accent {
-    border-color: var(--accent-border);
+  
+  .price-flat {
+    color: var(--color-neutral);
   }
 }
 
 /* ============================================
-   移动端优化 (E2E测试修复 - v2)
+   响应式断点
    ============================================ */
-@media (max-width: 768px) {
-  /* 字体大小：保持 Tailwind 默认比例，不强制放大 */
+@media (max-width: 599px) {
+  /* Phone 移动端 */
   html {
-    font-size: 14px; /* 从 16px 改为 14px，更紧凑 */
-  }
-  
-  /* 移除 min-font-size 限制，允许小字体 */
-  * {
-    min-font-size: unset;
-  }
-  
-  /* 只限制极小字体，保留设计意图 */
-  .text-xs {
-    font-size: 11px !important; /* 从 12px 改为 11px */
-  }
-  
-  /* 按钮点击区域：只在必要时增加 */
-  button, 
-  a[role="button"],
-  .nav-item,
-  .theme-btn {
-    min-height: 36px; /* 从 44px 改为 36px */
-    min-width: 36px;
-  }
-  
-  /* 图标按钮保持紧凑 */
-  button.w-7, button.w-8 {
-    min-width: 28px !important;
-    min-height: 28px !important;
-    padding: 4px;
-  }
-  
-  /* 表格行高：紧凑 */
-  .theme-table td, .theme-table th {
-    padding-top: 6px;
-    padding-bottom: 6px;
-  }
-  
-  /* 输入框高度：紧凑 */
-  .theme-input, input, select, textarea {
-    min-height: 36px; /* 从 44px 改为 36px */
     font-size: 14px;
   }
   
-  /* 隐藏滚动条（移动端不需要） */
+  /* 触控热区 ≥48px */
+  .touch-min {
+    min-height: 48px;
+    min-width: 48px;
+  }
+  
+  /* 移动端隐藏滚动条 */
   ::-webkit-scrollbar {
     width: 0px !important;
     height: 0px !important;
   }
   
-  /* 允许内容自然滚动 */
-  body {
-    overflow-x: hidden;
+  /* 按钮高度 */
+  .btn-mobile {
+    height: 48px;
+    min-height: 48px;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 959px) {
+  /* Pad竖屏 */
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 960px) and (max-width: 1279px) {
+  /* Pad横屏 / 小屏笔记本 */
+  html {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 1280px) {
+  /* PC显示器 */
+  html {
+    font-size: 14px;
   }
   
-  /* 图表容器：最大化显示区域 */
-  .chart-container, [class*="chart"] {
-    min-height: 200px;
+  /* PC端触控热区 ≥44px */
+  .touch-min {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* ============================================
+   无障碍支持
+   ============================================ */
+
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  
+  .price-flash-up,
+  .price-flash-down {
+    animation: none !important;
+  }
+}
+
+/* 焦点状态 */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 键盘导航 */
+.keyboard-nav :focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  :root {
+    --border-primary: #808080;
+    --text-secondary: #D0D0D0;
+    --text-tertiary: #B0B0B0;
   }
 }

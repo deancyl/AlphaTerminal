@@ -1,18 +1,24 @@
 /**
- * useTheme.js — 四主题管理系统
+ * useTheme.js — AlphaTerminal 主题管理系统 v2.0
  * 
- * 主题列表：
- * 1. DARK (dark) - 原始深色主题（默认）
- * 2. BLACK (black) - 全黑 OLED 主题
- * 3. WIND (wind) - Wind 金融终端风格
- * 4. LIGHT (light) - 专业亮色主题
+ * 遵循万德金融终端UI/UX设计规范 v1.0
+ * 支持：DARK(默认深色) / BLACK(OLED纯黑) / WIND(Wind风格) / LIGHT(专业亮色)
  * 
- * 使用 CSS 变量实现，localStorage 持久化
+ * 设计规范：
+ * - 品牌主色：#0F52BA（万德蓝）
+ * - 上涨色：#E63946（红涨 - A股合规）
+ * - 下跌色：#1A936F（绿跌 - A股合规）
+ * - 基础间距：4px
+ * - PC触控区域：≥44px
+ * - 移动端触控区域：≥48px
+ * - 对比度：≥4.5:1 (WCAG AA)
  */
 import { ref, watch, onMounted, readonly } from 'vue'
 import { logger } from '../utils/logger.js'
 
-// 主题类型
+// ============================================
+// 主题定义
+// ============================================
 export const THEMES = {
   DARK: 'dark',
   BLACK: 'black',
@@ -20,7 +26,6 @@ export const THEMES = {
   LIGHT: 'light'
 }
 
-// 主题显示名称
 export const THEME_NAMES = {
   [THEMES.DARK]: '深色',
   [THEMES.BLACK]: '全黑',
@@ -28,7 +33,6 @@ export const THEME_NAMES = {
   [THEMES.LIGHT]: '亮色'
 }
 
-// 主题图标
 export const THEME_ICONS = {
   [THEMES.DARK]: '🌙',
   [THEMES.BLACK]: '⚫',
@@ -36,291 +40,679 @@ export const THEME_ICONS = {
   [THEMES.LIGHT]: '☀️'
 }
 
-// 当前主题状态
-const currentTheme = ref(THEMES.DARK)
-const isInitialized = ref(false)
+// ============================================
+// 规范色彩定义
+// ============================================
+const BRAND_COLORS = {
+  primary: '#2E7DFF',
+  primaryHover: '#4A8EFF',
+  primaryLight: '#5C9DFF',
+  primaryDark: '#1A6AE8',
+}
 
-/**
- * 主题配色配置
- * 每个主题定义完整的 CSS 变量集
- */
+const MARKET_COLORS = {
+  up: '#E8554A',
+  down: '#3DB873',
+  neutral: '#B0B8CC',
+}
+
+const STATUS_COLORS = {
+  warning: '#F5A623',
+  danger: '#DC2626',
+  success: '#16A34A',
+  info: '#2E7DFF',
+}
+
+// ============================================
+// 主题配置（完整版）
+// ============================================
 const THEME_CONFIG = {
   // ============================================
-  // 1. 原始深色主题 (DARK) - 默认
+  // 1. 专业深色主题 (DARK) - 默认
   // ============================================
   [THEMES.DARK]: {
-    // 背景色
-    '--bg-primary': '#0a0e17',
-    '--bg-secondary': '#111827',
-    '--bg-tertiary': '#1f2937',
+    // ── 品牌色 ──
+    '--color-primary': BRAND_COLORS.primary,
+    '--color-primary-hover': BRAND_COLORS.primaryHover,
+    '--color-primary-light': BRAND_COLORS.primaryLight,
+    '--color-primary-dark': BRAND_COLORS.primaryDark,
+    '--color-primary-bg': 'rgba(46,125,255,0.10)',
+    '--color-primary-border': 'rgba(46,125,255,0.30)',
+    
+    // ── 语义色（涨跌）──
+    '--color-up': MARKET_COLORS.up,
+    '--color-up-light': '#FF6B6B',
+    '--color-up-bg': 'rgba(232,85,74,0.15)',
+    '--color-up-border': 'rgba(232,85,74,0.30)',
+    '--color-down': MARKET_COLORS.down,
+    '--color-down-light': '#5CD899',
+    '--color-down-bg': 'rgba(61,184,115,0.15)',
+    '--color-down-border': 'rgba(61,184,115,0.30)',
+    '--color-neutral': MARKET_COLORS.neutral,
+    '--color-neutral-bg': 'rgba(176,184,204,0.10)',
+    '--color-neutral-border': 'rgba(176,184,204,0.25)',
+    
+    // ── 功能状态色 ──
+    '--color-warning': STATUS_COLORS.warning,
+    '--color-warning-bg': 'rgba(245,166,35,0.15)',
+    '--color-warning-border': 'rgba(245,166,35,0.30)',
+    '--color-danger': STATUS_COLORS.danger,
+    '--color-danger-bg': 'rgba(220,38,38,0.15)',
+    '--color-danger-border': 'rgba(220,38,38,0.30)',
+    '--color-success': STATUS_COLORS.success,
+    '--color-success-bg': 'rgba(22,163,74,0.15)',
+    '--color-success-border': 'rgba(22,163,74,0.30)',
+    '--color-info': STATUS_COLORS.info,
+    '--color-info-bg': 'rgba(46,125,255,0.15)',
+    '--color-info-border': 'rgba(46,125,255,0.30)',
+    
+    // ── 中性色（背景）──
+    '--bg-primary': '#0D1117',
+    '--bg-secondary': '#161B22',
+    '--bg-tertiary': '#1C2333',
+    '--bg-elevated': '#21262D',
     '--bg-hover': 'rgba(255,255,255,0.05)',
-    '--bg-active': 'rgba(0,255,136,0.10)',
+    '--bg-active': 'rgba(46,125,255,0.10)',
+    '--bg-overlay': 'rgba(0,0,0,0.60)',
+    '--bg-glass': 'rgba(22,27,34,0.95)',
     
-    // 文字色
-    '--text-primary': '#f3f4f6',
-    '--text-secondary': '#9ca3af',
-    '--text-tertiary': '#6b7280',
-    '--text-muted': '#4b5563',
+    // ── 中性色（文字）──
+    '--text-primary': '#F0F6FC',
+    '--text-secondary': '#C9D1D9',
+    '--text-tertiary': '#8B949E',
+    '--text-muted': '#6E7681',
+    '--text-disabled': '#484F58',
+    '--text-placeholder': '#6E7681',
+    '--text-inverse': '#0D1117',
     
-    // 边框色
-    '--border-primary': '#374151',
-    '--border-secondary': '#1f2937',
-    '--border-hover': '#4b5563',
+    // ── 中性色（边框）──
+    '--border-primary': '#30363D',
+    '--border-secondary': '#21262D',
+    '--border-focus': BRAND_COLORS.primary,
+    '--border-hover': '#484F58',
     
-    // 强调色（终端绿）
-    '--accent-primary': '#00ff88',
-    '--accent-secondary': '#00cc6a',
-    '--accent-bg': 'rgba(0,255,136,0.10)',
-    '--accent-border': 'rgba(0,255,136,0.30)',
+    // ── 面板背景 ──
+    '--panel-bg': '#161B22',
+    '--panel-bg-elevated': '#21262D',
+    '--panel-bg-hover': '#1C2333',
+    '--panel-bg-active': 'rgba(46,125,255,0.08)',
     
-    // 面板背景
-    '--panel-bg': '#111827',
-    '--panel-bg-elevated': '#1f2937',
-    '--panel-bg-hover': '#1f2937',
+    // ── 图表配色 ──
+    '--chart-grid': '#1C2333',
+    '--chart-text': '#8B949E',
+    '--chart-line': BRAND_COLORS.primary,
+    '--chart-area': 'rgba(46,125,255,0.10)',
+    '--chart-crosshair': 'rgba(240,246,252,0.20)',
     
-    // 涨跌色（A股传统：红涨绿跌）
-    '--bullish': '#ef232a',
-    '--bullish-light': '#f87171',
-    '--bullish-bg': 'rgba(239,35,42,0.15)',
-    '--bullish-border': 'rgba(239,35,42,0.30)',
-    '--bearish': '#14b143',
-    '--bearish-light': '#4ade80',
-    '--bearish-bg': 'rgba(20,177,67,0.15)',
-    '--bearish-border': 'rgba(20,177,67,0.30)',
+    // ── 阴影 ──
+    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.30)',
+    '--shadow-md': '0 4px 8px rgba(0,0,0,0.40)',
+    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.50)',
+    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.60)',
+    '--shadow-glow': `0 0 20px ${BRAND_COLORS.primary}20`,
     
-    // 状态色
-    '--status-live': '#00ff88',
-    '--status-warning': '#fbbf24',
-    '--status-error': '#ef4444',
-    '--status-info': '#60a5fa',
-    '--status-success': '#22c55e',
+    // ── 滚动条 ──
+    '--scrollbar-track': '#161B22',
+    '--scrollbar-thumb': '#30363D',
+    '--scrollbar-thumb-hover': '#484F58',
     
-    // 图表配色
-    '--chart-grid': '#1f2937',
-    '--chart-text': '#6b7280',
-    '--chart-line': '#00ff88',
-    '--chart-area': 'rgba(0,255,136,0.1)',
+    // ── 间距系统（4px基础单位）──
+    '--space-xs': '4px',
+    '--space-sm': '8px',
+    '--space-md': '16px',
+    '--space-lg': '24px',
+    '--space-xl': '32px',
+    '--space-2xl': '48px',
     
-    // 阴影
-    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.3)',
-    '--shadow-md': '0 4px 6px rgba(0,0,0,0.4)',
-    '--shadow-lg': '0 10px 15px rgba(0,0,0,0.5)',
+    // ── 圆角系统 ──
+    '--radius-sm': '4px',
+    '--radius-md': '6px',
+    '--radius-lg': '8px',
+    '--radius-xl': '12px',
+    '--radius-full': '9999px',
     
-    // 滚动条
-    '--scrollbar-track': '#111827',
-    '--scrollbar-thumb': '#374151',
-    '--scrollbar-thumb-hover': '#4b5563',
+    // ── 动效时长 ──
+    '--duration-micro': '150ms',
+    '--duration-fast': '200ms',
+    '--duration-normal': '250ms',
+    '--duration-slow': '300ms',
+    '--easing-default': 'cubic-bezier(0.2,0,0,1)',
+    '--easing-smooth': 'cubic-bezier(0.23,1,0.32,1)',
+    '--easing-bounce': 'cubic-bezier(0.4,0,0.2,1)',
+    
+    // ── 层级系统 ──
+    '--z-base': '0',
+    '--z-dropdown': '100',
+    '--z-sticky': '200',
+    '--z-fixed': '300',
+    '--z-modal-backdrop': '400',
+    '--z-modal': '500',
+    '--z-popover': '600',
+    '--z-tooltip': '700',
+    '--z-toast': '800',
+    '--z-max': '9999',
+    
+    // ── 组件尺寸 ──
+    '--btn-height': '36px',
+    '--btn-height-sm': '32px',
+    '--btn-height-lg': '40px',
+    '--input-height': '32px',
+    '--input-height-lg': '36px',
+    '--table-row': '32px',
+    '--table-row-sm': '24px',
+    '--table-row-lg': '40px',
+    '--table-header': '36px',
+    '--tab-height': '36px',
+    '--nav-height': '48px',
+    '--sidebar-width': '220px',
+    '--sidebar-collapsed': '64px',
+    '--panel-width': '280px',
+    '--touch-min': '44px',
+    
+    // ── 字体 ──
+    '--font-mono': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-sans': '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+    '--font-number': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-feature-tnum': '"tnum"',
+    
+    // ── 旧版兼容变量（将逐步迁移）──
+    '--accent-primary': BRAND_COLORS.primary,
+    '--accent-secondary': BRAND_COLORS.primaryHover,
+    '--accent-bg': 'rgba(46,125,255,0.10)',
+    '--accent-border': 'rgba(46,125,255,0.30)',
+    '--bullish': MARKET_COLORS.up,
+    '--bullish-light': '#FF6B6B',
+    '--bullish-bg': 'rgba(232,85,74,0.15)',
+    '--bullish-border': 'rgba(232,85,74,0.30)',
+    '--bearish': MARKET_COLORS.down,
+    '--bearish-light': '#5CD899',
+    '--bearish-bg': 'rgba(61,184,115,0.15)',
+    '--bearish-border': 'rgba(61,184,115,0.30)',
+    '--status-live': BRAND_COLORS.primary,
+    '--status-warning': STATUS_COLORS.warning,
+    '--status-error': STATUS_COLORS.danger,
+    '--status-info': STATUS_COLORS.info,
+    '--status-success': STATUS_COLORS.success,
   },
   
   // ============================================
-  // 2. 全黑 OLED 主题 (BLACK)
+  // 2. OLED 纯黑主题 (BLACK)
   // ============================================
   [THEMES.BLACK]: {
-    // 背景色 - 纯黑节省 OLED 电量
-    '--bg-primary': '#000000',
-    '--bg-secondary': '#0a0a0a',
-    '--bg-tertiary': '#141414',
-    '--bg-hover': 'rgba(255,255,255,0.08)',
-    '--bg-active': 'rgba(0,255,136,0.15)',
+    // 品牌色
+    '--color-primary': '#2E7DFF',
+    '--color-primary-hover': '#4A8EFF',
+    '--color-primary-light': '#5C9DFF',
+    '--color-primary-dark': '#1A6AE8',
+    '--color-primary-bg': 'rgba(46,125,255,0.12)',
+    '--color-primary-border': 'rgba(46,125,255,0.35)',
     
-    // 文字色 - 高对比度
-    '--text-primary': '#ffffff',
-    '--text-secondary': '#b0b0b0',
+    // 语义色
+    '--color-up': '#FF4D4F',
+    '--color-up-light': '#FF7875',
+    '--color-up-bg': 'rgba(255,77,79,0.20)',
+    '--color-up-border': 'rgba(255,77,79,0.40)',
+    '--color-down': '#52C41A',
+    '--color-down-light': '#73D13D',
+    '--color-down-bg': 'rgba(82,196,26,0.20)',
+    '--color-down-border': 'rgba(82,196,26,0.40)',
+    '--color-neutral': '#B0B8CC',
+    '--color-neutral-bg': 'rgba(176,184,204,0.12)',
+    '--color-neutral-border': 'rgba(176,184,204,0.28)',
+    
+    // 功能状态色
+    '--color-warning': '#FFCC00',
+    '--color-warning-bg': 'rgba(255,204,0,0.18)',
+    '--color-warning-border': 'rgba(255,204,0,0.35)',
+    '--color-danger': '#FF4444',
+    '--color-danger-bg': 'rgba(255,68,68,0.18)',
+    '--color-danger-border': 'rgba(255,68,68,0.35)',
+    '--color-success': '#44FF66',
+    '--color-success-bg': 'rgba(68,255,102,0.18)',
+    '--color-success-border': 'rgba(68,255,102,0.35)',
+    '--color-info': '#44AAFF',
+    '--color-info-bg': 'rgba(68,170,255,0.18)',
+    '--color-info-border': 'rgba(68,170,255,0.35)',
+    
+    // 中性色
+    '--bg-primary': '#000000',
+    '--bg-secondary': '#0A0A0A',
+    '--bg-tertiary': '#141414',
+    '--bg-elevated': '#1A1A1A',
+    '--bg-hover': 'rgba(255,255,255,0.08)',
+    '--bg-active': 'rgba(46,125,255,0.12)',
+    '--bg-overlay': 'rgba(0,0,0,0.70)',
+    '--bg-glass': 'rgba(10,10,10,0.95)',
+    
+    '--text-primary': '#FFFFFF',
+    '--text-secondary': '#B0B0B0',
     '--text-tertiary': '#808080',
     '--text-muted': '#505050',
+    '--text-disabled': '#404040',
+    '--text-placeholder': '#505050',
+    '--text-inverse': '#000000',
     
-    // 边框色 - 极细边框
-    '--border-primary': '#2a2a2a',
-    '--border-secondary': '#1a1a1a',
-    '--border-hover': '#3a3a3a',
+    '--border-primary': '#2A2A2A',
+    '--border-secondary': '#1A1A1A',
+    '--border-focus': '#2E7DFF',
+    '--border-hover': '#3A3A3A',
     
-    // 强调色（更亮的终端绿）
-    '--accent-primary': '#00ff88',
-    '--accent-secondary': '#00ffaa',
-    '--accent-bg': 'rgba(0,255,136,0.15)',
-    '--accent-border': 'rgba(0,255,136,0.40)',
-    
-    // 面板背景
-    '--panel-bg': '#0a0a0a',
+    // 面板
+    '--panel-bg': '#0A0A0A',
     '--panel-bg-elevated': '#141414',
-    '--panel-bg-hover': '#1a1a1a',
+    '--panel-bg-hover': '#1A1A1A',
+    '--panel-bg-active': 'rgba(46,125,255,0.10)',
     
-    // 涨跌色（更鲜艳）
-    '--bullish': '#ff3333',
-    '--bullish-light': '#ff6666',
-    '--bullish-bg': 'rgba(255,51,51,0.20)',
-    '--bullish-border': 'rgba(255,51,51,0.40)',
-    '--bearish': '#33ff66',
-    '--bearish-light': '#66ff88',
-    '--bearish-bg': 'rgba(51,255,102,0.20)',
-    '--bearish-border': 'rgba(51,255,102,0.40)',
-    
-    // 状态色
-    '--status-live': '#00ff88',
-    '--status-warning': '#ffcc00',
-    '--status-error': '#ff4444',
-    '--status-info': '#44aaff',
-    '--status-success': '#44ff66',
-    
-    // 图表配色
-    '--chart-grid': '#1a1a1a',
+    // 图表
+    '--chart-grid': '#1A1A1A',
     '--chart-text': '#606060',
-    '--chart-line': '#00ff88',
-    '--chart-area': 'rgba(0,255,136,0.15)',
+    '--chart-line': '#2E7DFF',
+    '--chart-area': 'rgba(46,125,255,0.12)',
+    '--chart-crosshair': 'rgba(255,255,255,0.15)',
     
     // 阴影
-    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.5)',
-    '--shadow-md': '0 4px 6px rgba(0,0,0,0.6)',
-    '--shadow-lg': '0 10px 15px rgba(0,0,0,0.7)',
+    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.50)',
+    '--shadow-md': '0 4px 8px rgba(0,0,0,0.60)',
+    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.70)',
+    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.80)',
+    '--shadow-glow': '0 0 20px rgba(46,125,255,0.15)',
     
     // 滚动条
-    '--scrollbar-track': '#0a0a0a',
-    '--scrollbar-thumb': '#2a2a2a',
-    '--scrollbar-thumb-hover': '#3a3a3a',
+    '--scrollbar-track': '#0A0A0A',
+    '--scrollbar-thumb': '#2A2A2A',
+    '--scrollbar-thumb-hover': '#3A3A3A',
+    
+    // 间距（继承）
+    '--space-xs': '4px',
+    '--space-sm': '8px',
+    '--space-md': '16px',
+    '--space-lg': '24px',
+    '--space-xl': '32px',
+    '--space-2xl': '48px',
+    
+    // 圆角（继承）
+    '--radius-sm': '4px',
+    '--radius-md': '6px',
+    '--radius-lg': '8px',
+    '--radius-xl': '12px',
+    '--radius-full': '9999px',
+    
+    // 动效（继承）
+    '--duration-micro': '150ms',
+    '--duration-fast': '200ms',
+    '--duration-normal': '250ms',
+    '--duration-slow': '300ms',
+    '--easing-default': 'cubic-bezier(0.2,0,0,1)',
+    '--easing-smooth': 'cubic-bezier(0.23,1,0.32,1)',
+    '--easing-bounce': 'cubic-bezier(0.4,0,0.2,1)',
+    
+    // 层级（继承）
+    '--z-base': '0',
+    '--z-dropdown': '100',
+    '--z-sticky': '200',
+    '--z-fixed': '300',
+    '--z-modal-backdrop': '400',
+    '--z-modal': '500',
+    '--z-popover': '600',
+    '--z-tooltip': '700',
+    '--z-toast': '800',
+    '--z-max': '9999',
+    
+    // 组件尺寸（继承）
+    '--btn-height': '36px',
+    '--btn-height-sm': '32px',
+    '--btn-height-lg': '40px',
+    '--input-height': '32px',
+    '--input-height-lg': '36px',
+    '--table-row': '32px',
+    '--table-row-sm': '24px',
+    '--table-row-lg': '40px',
+    '--table-header': '36px',
+    '--tab-height': '36px',
+    '--nav-height': '48px',
+    '--sidebar-width': '220px',
+    '--sidebar-collapsed': '64px',
+    '--panel-width': '280px',
+    '--touch-min': '44px',
+    
+    // 字体（继承）
+    '--font-mono': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-sans': '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+    '--font-number': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-feature-tnum': '"tnum"',
+    
+    // 旧版兼容
+    '--accent-primary': '#2E7DFF',
+    '--accent-secondary': '#4A8EFF',
+    '--accent-bg': 'rgba(46,125,255,0.12)',
+    '--accent-border': 'rgba(46,125,255,0.35)',
+    '--bullish': '#FF4D4F',
+    '--bullish-light': '#FF7875',
+    '--bullish-bg': 'rgba(255,77,79,0.20)',
+    '--bullish-border': 'rgba(255,77,79,0.40)',
+    '--bearish': '#52C41A',
+    '--bearish-light': '#73D13D',
+    '--bearish-bg': 'rgba(82,196,26,0.20)',
+    '--bearish-border': 'rgba(82,196,26,0.40)',
+    '--status-live': '#2E7DFF',
+    '--status-warning': '#FFCC00',
+    '--status-error': '#FF4444',
+    '--status-info': '#44AAFF',
+    '--status-success': '#44FF66',
   },
   
   // ============================================
   // 3. Wind 金融终端风格 (WIND)
   // ============================================
   [THEMES.WIND]: {
-    // 背景色 - Wind 经典深蓝灰
-    '--bg-primary': '#1a1f2e',
+    '--color-primary': '#1890FF',
+    '--color-primary-hover': '#40A9FF',
+    '--color-primary-light': '#69C0FF',
+    '--color-primary-dark': '#096DD9',
+    '--color-primary-bg': 'rgba(24,144,255,0.10)',
+    '--color-primary-border': 'rgba(24,144,255,0.30)',
+    
+    '--color-up': '#FF4D4F',
+    '--color-up-light': '#FF7875',
+    '--color-up-bg': 'rgba(255,77,79,0.15)',
+    '--color-up-border': 'rgba(255,77,79,0.35)',
+    '--color-down': '#52C41A',
+    '--color-down-light': '#73D13D',
+    '--color-down-bg': 'rgba(82,196,26,0.15)',
+    '--color-down-border': 'rgba(82,196,26,0.35)',
+    '--color-neutral': '#B0B8CC',
+    '--color-neutral-bg': 'rgba(176,184,204,0.10)',
+    '--color-neutral-border': 'rgba(176,184,204,0.25)',
+    
+    '--color-warning': '#FAAD14',
+    '--color-warning-bg': 'rgba(250,173,20,0.15)',
+    '--color-warning-border': 'rgba(250,173,20,0.30)',
+    '--color-danger': '#FF4D4F',
+    '--color-danger-bg': 'rgba(255,77,79,0.15)',
+    '--color-danger-border': 'rgba(255,77,79,0.30)',
+    '--color-success': '#52C41A',
+    '--color-success-bg': 'rgba(82,196,26,0.15)',
+    '--color-success-border': 'rgba(82,196,26,0.30)',
+    '--color-info': '#1890FF',
+    '--color-info-bg': 'rgba(24,144,255,0.15)',
+    '--color-info-border': 'rgba(24,144,255,0.30)',
+    
+    '--bg-primary': '#1A1F2E',
     '--bg-secondary': '#232838',
-    '--bg-tertiary': '#2d3447',
+    '--bg-tertiary': '#2D3447',
+    '--bg-elevated': '#353D52',
     '--bg-hover': 'rgba(255,255,255,0.06)',
     '--bg-active': 'rgba(255,193,7,0.15)',
+    '--bg-overlay': 'rgba(0,0,0,0.60)',
+    '--bg-glass': 'rgba(35,40,56,0.95)',
     
-    // 文字色
-    '--text-primary': '#e8eaed',
-    '--text-secondary': '#a8adb5',
-    '--text-tertiary': '#7a8194',
-    '--text-muted': '#5a6270',
+    '--text-primary': '#E8EAED',
+    '--text-secondary': '#A8ADB5',
+    '--text-tertiary': '#7A8194',
+    '--text-muted': '#5A6270',
+    '--text-disabled': '#4A5060',
+    '--text-placeholder': '#5A6270',
+    '--text-inverse': '#1A1F2E',
     
-    // 边框色
-    '--border-primary': '#3d4559',
-    '--border-secondary': '#2a3142',
-    '--border-hover': '#4d5669',
+    '--border-primary': '#3D4559',
+    '--border-secondary': '#2A3142',
+    '--border-focus': '#1890FF',
+    '--border-hover': '#4D5669',
     
-    // 强调色（Wind 金橙色）
-    '--accent-primary': '#ffc107',
-    '--accent-secondary': '#ffb300',
+    '--panel-bg': '#232838',
+    '--panel-bg-elevated': '#2D3447',
+    '--panel-bg-hover': '#353D52',
+    '--panel-bg-active': 'rgba(255,193,7,0.10)',
+    
+    '--chart-grid': '#2A3142',
+    '--chart-text': '#7A8194',
+    '--chart-line': '#FFC107',
+    '--chart-area': 'rgba(255,193,7,0.12)',
+    '--chart-crosshair': 'rgba(232,234,237,0.20)',
+    
+    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.30)',
+    '--shadow-md': '0 4px 8px rgba(0,0,0,0.40)',
+    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.50)',
+    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.60)',
+    '--shadow-glow': '0 0 20px rgba(24,144,255,0.15)',
+    
+    '--scrollbar-track': '#232838',
+    '--scrollbar-thumb': '#3D4559',
+    '--scrollbar-thumb-hover': '#4D5669',
+    
+    '--space-xs': '4px',
+    '--space-sm': '8px',
+    '--space-md': '16px',
+    '--space-lg': '24px',
+    '--space-xl': '32px',
+    '--space-2xl': '48px',
+    
+    '--radius-sm': '4px',
+    '--radius-md': '6px',
+    '--radius-lg': '8px',
+    '--radius-xl': '12px',
+    '--radius-full': '9999px',
+    
+    '--duration-micro': '150ms',
+    '--duration-fast': '200ms',
+    '--duration-normal': '250ms',
+    '--duration-slow': '300ms',
+    '--easing-default': 'cubic-bezier(0.2,0,0,1)',
+    '--easing-smooth': 'cubic-bezier(0.23,1,0.32,1)',
+    '--easing-bounce': 'cubic-bezier(0.4,0,0.2,1)',
+    
+    '--z-base': '0',
+    '--z-dropdown': '100',
+    '--z-sticky': '200',
+    '--z-fixed': '300',
+    '--z-modal-backdrop': '400',
+    '--z-modal': '500',
+    '--z-popover': '600',
+    '--z-tooltip': '700',
+    '--z-toast': '800',
+    '--z-max': '9999',
+    
+    '--btn-height': '36px',
+    '--btn-height-sm': '32px',
+    '--btn-height-lg': '40px',
+    '--input-height': '32px',
+    '--input-height-lg': '36px',
+    '--table-row': '32px',
+    '--table-row-sm': '24px',
+    '--table-row-lg': '40px',
+    '--table-header': '36px',
+    '--tab-height': '36px',
+    '--nav-height': '48px',
+    '--sidebar-width': '220px',
+    '--sidebar-collapsed': '64px',
+    '--panel-width': '280px',
+    '--touch-min': '44px',
+    
+    '--font-mono': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-sans': '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+    '--font-number': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-feature-tnum': '"tnum"',
+    
+    '--accent-primary': '#FFC107',
+    '--accent-secondary': '#FFB300',
     '--accent-bg': 'rgba(255,193,7,0.15)',
     '--accent-border': 'rgba(255,193,7,0.35)',
-    
-    // 面板背景
-    '--panel-bg': '#232838',
-    '--panel-bg-elevated': '#2d3447',
-    '--panel-bg-hover': '#353d52',
-    
-    // 涨跌色（Wind 风格：红涨绿跌，更饱和）
-    '--bullish': '#ff4d4f',
-    '--bullish-light': '#ff7875',
+    '--bullish': '#FF4D4F',
+    '--bullish-light': '#FF7875',
     '--bullish-bg': 'rgba(255,77,79,0.15)',
     '--bullish-border': 'rgba(255,77,79,0.35)',
-    '--bearish': '#52c41a',
-    '--bearish-light': '#73d13d',
+    '--bearish': '#52C41A',
+    '--bearish-light': '#73D13D',
     '--bearish-bg': 'rgba(82,196,26,0.15)',
     '--bearish-border': 'rgba(82,196,26,0.35)',
-    
-    // 状态色
-    '--status-live': '#ffc107',
-    '--status-warning': '#faad14',
-    '--status-error': '#ff4d4f',
-    '--status-info': '#1890ff',
-    '--status-success': '#52c41a',
-    
-    // 图表配色
-    '--chart-grid': '#2a3142',
-    '--chart-text': '#7a8194',
-    '--chart-line': '#ffc107',
-    '--chart-area': 'rgba(255,193,7,0.12)',
-    
-    // 阴影
-    '--shadow-sm': '0 1px 2px rgba(0,0,0,0.3)',
-    '--shadow-md': '0 4px 8px rgba(0,0,0,0.4)',
-    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.5)',
-    
-    // 滚动条
-    '--scrollbar-track': '#232838',
-    '--scrollbar-thumb': '#3d4559',
-    '--scrollbar-thumb-hover': '#4d5669',
+    '--status-live': '#FFC107',
+    '--status-warning': '#FAAD14',
+    '--status-error': '#FF4D4F',
+    '--status-info': '#1890FF',
+    '--status-success': '#52C41A',
   },
   
   // ============================================
   // 4. 专业亮色主题 (LIGHT)
   // ============================================
   [THEMES.LIGHT]: {
-    // 背景色 - 专业金融白
-    '--bg-primary': '#f5f6f8',
-    '--bg-secondary': '#ffffff',
-    '--bg-tertiary': '#f0f1f3',
+    '--color-primary': '#2E7DFF',
+    '--color-primary-hover': '#1A6AE8',
+    '--color-primary-light': '#4A8EFF',
+    '--color-primary-dark': '#0F52BA',
+    '--color-primary-bg': 'rgba(46,125,255,0.10)',
+    '--color-primary-border': 'rgba(46,125,255,0.25)',
+    
+    '--color-up': '#CF1322',
+    '--color-up-light': '#FF4D4F',
+    '--color-up-bg': 'rgba(207,19,34,0.08)',
+    '--color-up-border': 'rgba(207,19,34,0.25)',
+    '--color-down': '#389E0D',
+    '--color-down-light': '#52C41A',
+    '--color-down-bg': 'rgba(56,158,13,0.08)',
+    '--color-down-border': 'rgba(56,158,13,0.25)',
+    '--color-neutral': '#868E96',
+    '--color-neutral-bg': 'rgba(134,142,150,0.08)',
+    '--color-neutral-border': 'rgba(134,142,150,0.20)',
+    
+    '--color-warning': '#FF7D00',
+    '--color-warning-bg': 'rgba(255,125,0,0.10)',
+    '--color-warning-border': 'rgba(255,125,0,0.25)',
+    '--color-danger': '#DC2626',
+    '--color-danger-bg': 'rgba(220,38,38,0.10)',
+    '--color-danger-border': 'rgba(220,38,38,0.25)',
+    '--color-success': '#16A34A',
+    '--color-success-bg': 'rgba(22,163,74,0.10)',
+    '--color-success-border': 'rgba(22,163,74,0.25)',
+    '--color-info': '#2E7DFF',
+    '--color-info-bg': 'rgba(46,125,255,0.10)',
+    '--color-info-border': 'rgba(46,125,255,0.25)',
+    
+    '--bg-primary': '#F8F9FA',
+    '--bg-secondary': '#FFFFFF',
+    '--bg-tertiary': '#F0F1F3',
+    '--bg-elevated': '#FFFFFF',
     '--bg-hover': 'rgba(0,0,0,0.04)',
-    '--bg-active': 'rgba(24,144,255,0.10)',
+    '--bg-active': 'rgba(46,125,255,0.08)',
+    '--bg-overlay': 'rgba(0,0,0,0.40)',
+    '--bg-glass': 'rgba(255,255,255,0.95)',
     
-    // 文字色 - 层次分明的灰度
-    '--text-primary': '#1a1a1a',
-    '--text-secondary': '#4a4a4a',
-    '--text-tertiary': '#7a7a7a',
-    '--text-muted': '#a0a0a0',
+    '--text-primary': '#1A1A1A',
+    '--text-secondary': '#4A4A4A',
+    '--text-tertiary': '#7A7A7A',
+    '--text-muted': '#A0A0A0',
+    '--text-disabled': '#C0C0C0',
+    '--text-placeholder': '#A0A0A0',
+    '--text-inverse': '#FFFFFF',
     
-    // 边框色
-    '--border-primary': '#d9d9d9',
-    '--border-secondary': '#e8e8e8',
-    '--border-hover': '#bfbfbf',
+    '--border-primary': '#D9D9D9',
+    '--border-secondary': '#E8E8E8',
+    '--border-focus': '#2E7DFF',
+    '--border-hover': '#BFBFBF',
     
-    // 强调色（专业蓝）
-    '--accent-primary': '#1890ff',
-    '--accent-secondary': '#096dd9',
-    '--accent-bg': 'rgba(24,144,255,0.10)',
-    '--accent-border': 'rgba(24,144,255,0.30)',
+    '--panel-bg': '#FFFFFF',
+    '--panel-bg-elevated': '#FAFAFA',
+    '--panel-bg-hover': '#F5F5F5',
+    '--panel-bg-active': 'rgba(46,125,255,0.06)',
     
-    // 面板背景
-    '--panel-bg': '#ffffff',
-    '--panel-bg-elevated': '#fafafa',
-    '--panel-bg-hover': '#f5f5f5',
+    '--chart-grid': '#E8E8E8',
+    '--chart-text': '#A0A0A0',
+    '--chart-line': '#2E7DFF',
+    '--chart-area': 'rgba(46,125,255,0.10)',
+    '--chart-crosshair': 'rgba(26,26,26,0.10)',
     
-    // 涨跌色（亮色主题使用更克制的颜色）
-    '--bullish': '#cf1322',
-    '--bullish-light': '#ff4d4f',
-    '--bullish-bg': 'rgba(207,19,34,0.08)',
-    '--bullish-border': 'rgba(207,19,34,0.25)',
-    '--bearish': '#389e0d',
-    '--bearish-light': '#52c41a',
-    '--bearish-bg': 'rgba(56,158,13,0.08)',
-    '--bearish-border': 'rgba(56,158,13,0.25)',
-    
-    // 状态色
-    '--status-live': '#1890ff',
-    '--status-warning': '#faad14',
-    '--status-error': '#cf1322',
-    '--status-info': '#1890ff',
-    '--status-success': '#389e0d',
-    
-    // 图表配色
-    '--chart-grid': '#e8e8e8',
-    '--chart-text': '#a0a0a0',
-    '--chart-line': '#1890ff',
-    '--chart-area': 'rgba(24,144,255,0.1)',
-    
-    // 阴影
     '--shadow-sm': '0 1px 2px rgba(0,0,0,0.08)',
     '--shadow-md': '0 4px 8px rgba(0,0,0,0.10)',
     '--shadow-lg': '0 8px 16px rgba(0,0,0,0.12)',
+    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.15)',
+    '--shadow-glow': '0 0 20px rgba(46,125,255,0.10)',
     
-    // 滚动条
-    '--scrollbar-track': '#f0f1f3',
-    '--scrollbar-thumb': '#d9d9d9',
-    '--scrollbar-thumb-hover': '#bfbfbf',
+    '--scrollbar-track': '#F0F1F3',
+    '--scrollbar-thumb': '#D9D9D9',
+    '--scrollbar-thumb-hover': '#BFBFBF',
+    
+    '--space-xs': '4px',
+    '--space-sm': '8px',
+    '--space-md': '16px',
+    '--space-lg': '24px',
+    '--space-xl': '32px',
+    '--space-2xl': '48px',
+    
+    '--radius-sm': '4px',
+    '--radius-md': '6px',
+    '--radius-lg': '8px',
+    '--radius-xl': '12px',
+    '--radius-full': '9999px',
+    
+    '--duration-micro': '150ms',
+    '--duration-fast': '200ms',
+    '--duration-normal': '250ms',
+    '--duration-slow': '300ms',
+    '--easing-default': 'cubic-bezier(0.2,0,0,1)',
+    '--easing-smooth': 'cubic-bezier(0.23,1,0.32,1)',
+    '--easing-bounce': 'cubic-bezier(0.4,0,0.2,1)',
+    
+    '--z-base': '0',
+    '--z-dropdown': '100',
+    '--z-sticky': '200',
+    '--z-fixed': '300',
+    '--z-modal-backdrop': '400',
+    '--z-modal': '500',
+    '--z-popover': '600',
+    '--z-tooltip': '700',
+    '--z-toast': '800',
+    '--z-max': '9999',
+    
+    '--btn-height': '36px',
+    '--btn-height-sm': '32px',
+    '--btn-height-lg': '40px',
+    '--input-height': '32px',
+    '--input-height-lg': '36px',
+    '--table-row': '32px',
+    '--table-row-sm': '24px',
+    '--table-row-lg': '40px',
+    '--table-header': '36px',
+    '--tab-height': '36px',
+    '--nav-height': '48px',
+    '--sidebar-width': '220px',
+    '--sidebar-collapsed': '64px',
+    '--panel-width': '280px',
+    '--touch-min': '44px',
+    
+    '--font-mono': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-sans': '"PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif',
+    '--font-number': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
+    '--font-feature-tnum': '"tnum"',
+    
+    '--accent-primary': '#2E7DFF',
+    '--accent-secondary': '#1A6AE8',
+    '--accent-bg': 'rgba(46,125,255,0.10)',
+    '--accent-border': 'rgba(46,125,255,0.25)',
+    '--bullish': '#CF1322',
+    '--bullish-light': '#FF4D4F',
+    '--bullish-bg': 'rgba(207,19,34,0.08)',
+    '--bullish-border': 'rgba(207,19,34,0.25)',
+    '--bearish': '#389E0D',
+    '--bearish-light': '#52C41A',
+    '--bearish-bg': 'rgba(56,158,13,0.08)',
+    '--bearish-border': 'rgba(56,158,13,0.25)',
+    '--status-live': '#2E7DFF',
+    '--status-warning': '#FF7D00',
+    '--status-error': '#DC2626',
+    '--status-info': '#2E7DFF',
+    '--status-success': '#16A34A',
   }
 }
 
-// 主题变化监听器
+// ============================================
+// 主题管理逻辑
+// ============================================
+const currentTheme = ref(THEMES.DARK)
+const isInitialized = ref(false)
 const themeChangeCallbacks = new Set()
 
 /**
- * 订阅主题变化（供图表等组件使用）
- * @param {Function} cb - callback(theme)
- * @returns {Function} unsubscribe
+ * 订阅主题变化
  */
 export function onThemeChange(cb) {
   themeChangeCallbacks.add(cb)
@@ -328,71 +720,51 @@ export function onThemeChange(cb) {
 }
 
 /**
- * 获取当前主题的 CSS 变量原始值
+ * 获取主题CSS变量
  */
 function getThemeVariable(name, fallback = '') {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
 /**
- * 获取当前主题完整配色（供 ECharts / Canvas 使用）
+ * 获取图表配色（供 ECharts / Canvas 使用）
  */
 export function getChartColors() {
   const themeAttr = document.documentElement.getAttribute('data-theme') || THEMES.DARK
   const isLight = themeAttr === THEMES.LIGHT
-  const bgPrimary   = getThemeVariable('--bg-primary', '#0a0e17')
-  const textPrimary   = getThemeVariable('--text-primary', '#f3f4f6')
-  const textSecondary = getThemeVariable('--text-secondary', '#9ca3af')
-  const textTertiary  = getThemeVariable('--text-tertiary', '#6b7280')
-  const borderPrimary = getThemeVariable('--border-primary', '#374151')
-  const borderSecondary = getThemeVariable('--border-secondary', '#1f2937')
-  const chartGrid     = getThemeVariable('--chart-grid', '#1f2937')
-  const chartText     = getThemeVariable('--chart-text', '#6b7280')
-  const chartLine     = getThemeVariable('--chart-line', '#00ff88')
-  const accentPrimary = getThemeVariable('--accent-primary', '#00ff88')
-  const bullish       = getThemeVariable('--bullish', '#ef232a')
-  const bullishLight  = getThemeVariable('--bullish-light', '#f87171')
-  const bearish       = getThemeVariable('--bearish', '#14b143')
-  const bearishLight  = getThemeVariable('--bearish-light', '#4ade80')
-  const panelBg       = getThemeVariable('--panel-bg', '#111827')
-
-  // 根据主题调整 tooltip / overlay 透明度
-  const tooltipBg = isLight
-    ? 'rgba(255,255,255,0.96)'
-    : 'rgba(10,14,23,0.95)'
-  const tooltipBorder = borderPrimary
-  const tooltipText = textPrimary
-
+  
+  const get = (name, fallback) => getThemeVariable(name, fallback)
+  
   return {
-    bgPrimary,
+    bgPrimary: get('--bg-primary', '#0D1117'),
     isLight,
-    textPrimary,
-    textSecondary,
-    textTertiary,
-    borderPrimary,
-    borderSecondary,
-    chartGrid,
-    chartText,
-    chartLine,
-    accentPrimary,
-    bullish,
-    bullishLight,
-    bearish,
-    bearishLight,
-    panelBg,
-    tooltipBg,
-    tooltipBorder,
-    tooltipText,
-    // 辅助色（指标线颜色固定但会根据主题微调亮度）
-    ma5:  '#fbbf24',
-    ma10: '#60a5fa',
-    ma20: '#c084fc',
-    ma60: '#f472b6',
+    textPrimary: get('--text-primary', '#F0F6FC'),
+    textSecondary: get('--text-secondary', '#C9D1D9'),
+    textTertiary: get('--text-tertiary', '#8B949E'),
+    borderPrimary: get('--border-primary', '#30363D'),
+    borderSecondary: get('--border-secondary', '#21262D'),
+    chartGrid: get('--chart-grid', '#1C2333'),
+    chartText: get('--chart-text', '#8B949E'),
+    chartLine: get('--chart-line', '#2E7DFF'),
+    accentPrimary: get('--color-primary', '#2E7DFF'),
+    bullish: get('--color-up', '#E8554A'),
+    bullishLight: get('--color-up-light', '#FF6B6B'),
+    bearish: get('--color-down', '#3DB873'),
+    bearishLight: get('--color-down-light', '#5CD899'),
+    panelBg: get('--panel-bg', '#161B22'),
+    tooltipBg: isLight ? 'rgba(255,255,255,0.96)' : 'rgba(13,17,23,0.95)',
+    tooltipBorder: get('--border-primary', '#30363D'),
+    tooltipText: get('--text-primary', '#F0F6FC'),
+    // 辅助色
+    ma5: '#F5A623',
+    ma10: '#2E7DFF',
+    ma20: '#A855F7',
+    ma60: '#EC4899',
   }
 }
 
 /**
- * 应用主题到 DOM
+ * 应用主题到DOM
  */
 function applyTheme(theme) {
   const root = document.documentElement
@@ -403,16 +775,19 @@ function applyTheme(theme) {
     return
   }
 
-  // 设置 CSS 变量
+  // 设置CSS变量
   Object.entries(config).forEach(([key, value]) => {
     root.style.setProperty(key, value)
   })
 
-  // 设置 data-theme 属性
+  // 设置data-theme属性
   root.setAttribute('data-theme', theme)
 
-  // 更新 body 类名
+  // 更新body类名 - 添加font-feature-settings支持
   document.body.className = `theme-${theme} font-mono antialiased`
+  
+  // 设置数字等宽特性
+  root.style.setProperty('font-feature-settings', '"tnum"')
 
   // 通知监听者
   themeChangeCallbacks.forEach(cb => {
@@ -428,14 +803,11 @@ function applyTheme(theme) {
 function initTheme() {
   if (isInitialized.value) return
 
-  // 从 localStorage 读取保存的主题
   const savedTheme = localStorage.getItem('alphaterminal-theme')
-
-  // 验证并应用主题
+  
   if (savedTheme && Object.values(THEMES).includes(savedTheme)) {
     currentTheme.value = savedTheme
   } else {
-    // 默认使用深色主题
     currentTheme.value = THEMES.DARK
   }
 
@@ -444,7 +816,7 @@ function initTheme() {
 }
 
 /**
- * 切换到指定主题
+ * 设置主题
  */
 function setTheme(theme) {
   if (Object.values(THEMES).includes(theme)) {
@@ -454,7 +826,7 @@ function setTheme(theme) {
 }
 
 /**
- * 切换到下一个主题（循环）
+ * 循环切换主题
  */
 function cycleTheme() {
   const themeList = Object.values(THEMES)
@@ -463,9 +835,12 @@ function cycleTheme() {
   setTheme(themeList[nextIndex])
 }
 
-// 监听主题变化
+// 监听标记
 let watchInitialized = false
 
+/**
+ * Composable - 主题管理
+ */
 export function useTheme() {
   onMounted(() => {
     initTheme()
@@ -481,7 +856,7 @@ export function useTheme() {
   return {
     theme: readonly(currentTheme),
     currentTheme,
-    isDark: () => currentTheme.value === THEMES.DARK || currentTheme.value === THEMES.BLACK,
+    isDark: () => currentTheme.value === THEMES.DARK || currentTheme.value === THEMES.BLACK || currentTheme.value === THEMES.WIND,
     isLight: () => currentTheme.value === THEMES.LIGHT,
     isWind: () => currentTheme.value === THEMES.WIND,
     setTheme,
