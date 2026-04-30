@@ -460,11 +460,6 @@ function getItemSentiment(item) {
   return ''
 }
 
-function sentimentBadgeClass(s) {
-  if (s === '利好' || s === '偏多') return 'bg-bearish/15 text-bearish border border-bearish/30'
-  if (s === '利空' || s === '偏空') return 'bg-bullish/15 text-bullish border border-bullish/30'
-  return ''
-}
 
 async function fetchSentiment() {
   try {
@@ -672,51 +667,39 @@ const modalItem    = ref(null)
 const modalContent = ref('')
 const modalLoading = ref(false)
 
+
 // ── 标签颜色映射 ──────────────────────────────────────────────────────
 function formatTime(timeStr) {
   if (!timeStr) return '--:--'
   const parts = timeStr.split(' ')
   return parts.length >= 2 ? parts[1].slice(0, 5) : (timeStr.slice(0, 5))
 }
+
 function tagClass(tag) {
   if (!tag) return 'bg-theme-tertiary/20 text-theme-tertiary'
   const t = tag.toLowerCase()
   
-  // 突发/重要
   if (t.includes('突发') || t.includes('重要') || t.includes('紧急') || t.includes('公告')) {
     return 'bg-bullish/15 text-bullish'
   }
-  
-  // 上涨/利好
   if (t.includes('上涨') || t.includes('大涨') || t.includes('涨停') || t.includes('利好') || t.includes('突破')) {
     return 'bg-bullish/15 text-bullish'
   }
-  
-  // 下跌/利空
   if (t.includes('下跌') || t.includes('大跌') || t.includes('跌停') || t.includes('利空') || t.includes('跳水')) {
     return 'bg-bearish/15 text-bearish'
   }
-  
-  // 宏观/政策
   if (t.includes('宏观') || t.includes('政策') || t.includes('央行') || t.includes('美联储') || t.includes('降准') || t.includes('降息')) {
     return 'bg-theme-tertiary/20 text-theme-secondary'
   }
-  
-  // 行业/板块
   if (t.includes('行业') || t.includes('板块') || t.includes('概念') || t.includes('题材')) {
     return 'bg-theme-tertiary/20 text-theme-secondary'
   }
-  
-  // 港股/美股/外围
   if (t.includes('港股') || t.includes('美股') || t.includes('外围') || t.includes('全球')) {
     return 'bg-theme-tertiary/20 text-theme-secondary'
   }
-  
-  // 商品/期货
   if (t.includes('原油') || t.includes('黄金') || t.includes('商品') || t.includes('期货')) {
     return 'bg-theme-tertiary/20 text-theme-secondary'
   }
-  
   return 'bg-theme-tertiary/20 text-theme-tertiary'
 }
 
@@ -725,41 +708,9 @@ function sentimentBadgeClass(s) {
   if (s === '利空' || s === '偏空') return 'bg-bearish/10 text-bearish border border-bearish/20'
   return 'bg-theme-tertiary/10 text-theme-tertiary border border-theme-tertiary/20'
 }
-  
-  // 上涨/利好
-  if (t.includes('上涨') || t.includes('大涨') || t.includes('涨停') || t.includes('利好') || t.includes('突破')) {
-    return 'bg-bearish/15 text-bearish'
-  }
-  
-  // 下跌/利空
-  if (t.includes('下跌') || t.includes('大跌') || t.includes('跌停') || t.includes('利空') || t.includes('跳水')) {
-    return 'bg-bullish/15 text-bullish'
-  }
-  
-  // 宏观/政策
-  if (t.includes('宏观') || t.includes('政策') || t.includes('央行') || t.includes('美联储') || t.includes('降准') || t.includes('降息')) {
-    return 'bg-terminal-accent/15 text-terminal-accent'
-  }
-  
-  // 行业/板块
-  if (t.includes('行业') || t.includes('板块') || t.includes('概念') || t.includes('题材')) {
-    return 'bg-theme-accent/15 text-theme-accent'
-  }
-  
-  // 港股/美股/外围
-  if (t.includes('港股') || t.includes('美股') || t.includes('外围') || t.includes('全球')) {
-    return 'bg-[theme-primary]/15 text-[theme-primary]'
-  }
-  
-  // 商品/期货
-  if (t.includes('原油') || t.includes('黄金') || t.includes('商品') || t.includes('期货')) {
-    return 'bg-theme-accent/15 text-theme-accent'
-  }
-  
-  return 'bg-theme-tertiary/20 text-theme-tertiary'
-}
 
 // ── Modal 异步加载正文 ────────────────────────────────────────────────
+
 async function openModal(item) {
   modalItem.value    = item
   modalContent.value = ''
