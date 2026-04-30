@@ -7,12 +7,12 @@
       <button
         v-for="tab in tabs"
         :key="tab.id"
-        class="flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors"
+        class="flex flex-col items-center justify-center gap-0.5 flex-1 h-full min-h-[48px] transition-colors"
         :class="activeId === tab.id ? 'text-terminal-accent' : 'text-terminal-dim'"
         @click="$emit('navigate', tab.id)"
       >
         <span class="text-lg">{{ tab.icon }}</span>
-        <span class="text-[10px] font-medium">{{ tab.label }}</span>
+        <span class="text-xs font-medium">{{ tab.label }}</span>
       </button>
     </div>
   </nav>

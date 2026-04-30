@@ -125,7 +125,7 @@
 
   <!-- 新建账户弹窗 -->
   <div v-if="showCreateModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showCreateModal = false">
-    <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-full max-w-[384px] mx-4">
+    <div role="dialog" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-full max-w-[384px] mx-4">
       <h3 class="text-theme-primary font-bold mb-4">新建账户</h3>
       <div class="space-y-3">
         <div>

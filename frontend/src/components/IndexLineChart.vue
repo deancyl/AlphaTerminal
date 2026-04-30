@@ -7,7 +7,7 @@
         <span class="text-[11px] font-bold text-theme-primary tracking-wider">{{ currentName }}</span>
         <!-- 移动端全屏按钮 -->
         <button
-          class="md:hidden ml-auto mr-1 px-1.5 py-0.5 text-[10px] rounded-sm border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors"
+          class="md:hidden ml-auto mr-1 px-2 h-10 text-xs rounded-sm border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors flex items-center"
           title="横屏全屏"
           @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
         >⛶ 全屏</button>
