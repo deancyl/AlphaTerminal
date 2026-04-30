@@ -3,22 +3,22 @@
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
+      <span class="text-theme-primary font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
         <!-- 刷新成功提示 -->
-        <span v-if="showRefreshed && refreshMsg" class="text-bearish text-[10px] animate-pulse">
+        <span v-if="showRefreshed && refreshMsg" class="text-bearish text-xs">
           {{ refreshMsg }}
         </span>
-        <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
+        <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-xs">
           {{ lastRefreshLabel }}
         </span>
-        <span class="text-terminal-dim text-[10px]">{{ filteredTotal }} 条</span>
+        <span class="text-terminal-dim text-xs">{{ filteredTotal }} 条</span>
         <!-- 手动刷新按钮 -->
         <button
           class="w-8 h-8 flex items-center justify-center rounded-sm border transition shrink-0"
           :class="isRefreshing
             ? 'border-[var(--color-warning-border)] text-[var(--color-warning)] bg-[var(--color-warning-bg)] cursor-not-allowed'
-            : 'border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
+            : 'border-theme-secondary text-terminal-dim hover:border-theme-secondary hover:text-theme-primary bg-terminal-bg'"
           :disabled="isRefreshing"
           @click="manualRefresh"
           title="刷新快讯"
@@ -29,8 +29,8 @@
             <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
           </svg>
         </button>
-        <span class="w-1.5 h-1.5 rounded-full shrink-0"
-              :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-[var(--color-success-light)]'"></span>
+        <span class="w-1.5 h-1.5 rounded-sm shrink-0"
+              :class="isRefreshing ? 'bg-yellow-400' : 'bg-[var(--color-success-light)]'"></span>
       </div>
     </div>
 
@@ -38,14 +38,14 @@
     <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
     >
       <!-- 情绪概览：移动端紧凑布局 -->
-      <div class="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 rounded-sm border transition flex-wrap"
+      <div class="flex items-center gap-1.5 md:gap-3 px-2 py-1.5 rounded-sm border transition flex-wrap"
            :class="sentiment.score > 0.1
-             ? 'border-bullish/30 bg-bullish/5'
+             ? 'border-bullish/30 bg-theme-secondary/30'
              : sentiment.score < -0.1
-               ? 'border-bearish/30 bg-bearish/5'
+               ? 'border-bearish/30 bg-theme-secondary/30'
                : 'border-theme-secondary bg-theme-tertiary/5'"
       >
-        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0"
+        <span class="text-xs font-bold px-2 py-1 rounded-sm shrink-0"
               :class="sentiment.score > 0.1
                 ? 'bg-bullish/20 text-bullish'
                 : sentiment.score < -0.1
@@ -54,17 +54,17 @@
         >
           {{ sentiment.label }}
         </span>
-        <span class="text-[10px] text-terminal-dim shrink-0">
+        <span class="text-xs text-terminal-dim shrink-0">
           {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
         </span>
         <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
           <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
-                class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
+                class="shrink-0 text-xs px-1 py-0.5 rounded-sm bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
           >
             {{ kw }}
           </span>
         </div>
-        <span class="text-[10px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
+        <span class="text-xs text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
       </div>
 
       <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
@@ -72,12 +72,12 @@
       >
         <div class="flex items-center justify-between mb-1"
         >
-          <span class="text-[10px] text-terminal-dim"
+          <span class="text-xs text-terminal-dim"
           >情绪分布</span>
-          <span class="text-[10px] text-terminal-dim"
+          <span class="text-xs text-terminal-dim"
           >共 {{ sentiment.total_count }} 条</span>
         </div>
-        <div class="h-2 rounded-full overflow-hidden flex"
+        <div class="h-2 rounded-sm overflow-hidden flex"
         >
           <div class="h-full bg-bullish/60 transition-all"
                :style="{ width: bullishRatio + '%' }"
@@ -94,11 +94,11 @@
         </div>
         <div class="flex justify-between mt-1"
         >
-          <span class="text-[10px] text-bullish"
+          <span class="text-xs text-bullish"
           >{{ sentiment.bullish_count }} 看涨</span>
-          <span class="text-[10px] text-theme-tertiary"
+          <span class="text-xs text-theme-tertiary"
           >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[10px] text-bearish"
+          <span class="text-xs text-bearish"
           >{{ sentiment.bearish_count }} 看跌</span>
         </div>
       </div>
@@ -108,10 +108,10 @@
       >
         <div class="flex items-center justify-between mb-1"
         >
-          <span class="text-[10px] text-terminal-dim font-bold"
+          <span class="text-xs text-terminal-dim font-bold"
           >🔥 热门资讯</span
           >
-          <span class="text-[10px] text-terminal-dim"
+          <span class="text-xs text-terminal-dim"
           >{{ hotNews.length }} 条</span
           >
         </div
@@ -121,14 +121,14 @@
           <button
             v-for="(item, idx) in hotNews.slice(0, 5)"
             :key="item.id || item.title"
-            class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
+            class="shrink-0 text-xs px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
             :class="modalItem?.id === item.id
-              ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-              : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/30'"
+              ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+              : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
             @click="openModal(item)"
             :title="item.title"
           >
-            <span class="text-terminal-accent font-bold"
+            <span class="text-theme-primary font-bold"
             >{{ idx + 1 }}.</span
             > {{ item.title }}
           </button
@@ -144,15 +144,15 @@
         <button
           v-for="cat in categories"
           :key="cat.value"
-          class="text-[10px] px-1.5 md:px-2 py-0.5 rounded-sm border transition flex items-center gap-0.5"
+          class="text-xs px-1.5 md:px-3 py-1.5 rounded-sm border transition flex items-center gap-0.5"
           :class="activeCategory === cat.value
-            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
           @click="activeCategory = cat.value"
         >
           <span>{{ cat.icon }}</span>
           <span>{{ cat.label }}</span>
-          <span v-if="cat.value !== 'all'" class="text-[10px] opacity-60">({{ categoryCount(cat.value) }})</span>
+          <span v-if="cat.value !== 'all'" class="text-xs opacity-60">({{ categoryCount(cat.value) }})</span>
         </button>
       </div>
 
@@ -162,9 +162,9 @@
         <button
           v-for="filter in sentimentFilters"
           :key="filter.value"
-          class="text-[10px] px-1.5 md:px-2 py-0.5 rounded-sm border transition"
+          class="text-xs px-1.5 md:px-3 py-1.5 rounded-sm border transition"
           :class="activeSentimentFilter === filter.value
-            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
           @click="activeSentimentFilter = filter.value"
         >
@@ -179,38 +179,38 @@
       class="flex-1 overflow-y-auto"
       style="height: 0; min-height: 200px;"
     >
-      <div class="space-y-1.5">
+      <div class="space-y-2">
         <div
           v-for="item in pagedItems"
           :key="item.id || item.title"
-          class="bg-terminal-bg rounded-sm border border-theme p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
+          class="bg-terminal-bg rounded-sm border border-theme p-3 hover:border-theme-secondary transition-colors cursor-pointer"
           @click="openModal(item)"
         >
           <div class="flex items-start gap-2">
-            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm"
+            <span class="shrink-0 text-xs px-2 py-1 rounded-sm"
                   :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
             <!-- 热门标记 -->
-            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-[10px] px-1 py-0.5 rounded-sm bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-bold"
+            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-xs px-1 py-0.5 rounded-sm bg-theme-tertiary/20 text-theme-tertiary font-bold"
             >HOT
             </span>
             <!-- 时间 -->
-            <span class="shrink-0 text-[10px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
+            <span class="shrink-0 text-xs text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
             <!-- 标题 + 来源 -->
             <div class="flex-1 min-w-0">
               <p class="text-xs text-theme-primary leading-snug line-clamp-2">{{ item.title }}</p>
-              <span class="text-terminal-dim/50 text-[10px]">{{ item.source }}</span>
+              <span class="text-terminal-dim/50 text-xs">{{ item.source }}</span>
             </div>
             <!-- 情绪徽章 -->
-            <span v-if="getItemSentiment(item)" class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
+            <span v-if="getItemSentiment(item)" class="shrink-0 text-xs px-2 py-1 rounded-sm font-medium"
                   :class="sentimentBadgeClass(getItemSentiment(item))">
               {{ getItemSentiment(item) }}
             </span>
           </div>
         </div>
         <!-- 骨架屏 -->
-        <div v-if="isRefreshing && !pagedItems.length" class="space-y-2 animate-pulse">
+        <div v-if="isRefreshing && !pagedItems.length" class="space-y-2">
           <div v-for="i in 5" :key="i" class="flex items-start gap-2">
             <div class="w-8 h-4 rounded-sm bg-terminal-panel"></div>
             <div class="flex-1 space-y-1">
@@ -226,12 +226,12 @@
     </div>
 
     <!-- ── 分页控制器 ─────────────────────────────────────────── -->
-    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-2 shrink-0">
+    <div v-if="totalPages > 1" class="flex items-center justify-center gap-3 mt-2 shrink-0">
       <button
-        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="currentPage === 1
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         :disabled="currentPage === 1"
         @click="prevPage">
         ‹
@@ -239,23 +239,23 @@
       <button
         v-for="p in visiblePages"
         :key="p"
-        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="p === currentPage
-          ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         @click="goToPage(p)">
         {{ p }}
       </button>
       <button
-        class="px-2 py-0.5 text-[10px] rounded-sm border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="currentPage === totalPages
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         :disabled="currentPage === totalPages"
         @click="nextPage">
         ›
       </button>
-      <span class="text-terminal-dim text-[10px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
+      <span class="text-terminal-dim text-xs ml-1">{{ currentPage }}/{{ totalPages }}</span>
     </div>
 
     <!-- ── 详情 Modal ─────────────────────────────────────────── -->
@@ -263,22 +263,22 @@
       <div v-if="modalItem"
            class="fixed inset-0 z-50 flex items-center justify-center p-4"
            @click.self="closeModal">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="absolute inset-0 bg-black/60"></div>
         <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
                     bg-[var(--bg-primary)] border border-theme-secondary rounded-sm shadow-sm overflow-hidden">
           <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
             <div class="flex-1 pr-4">
-              <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-[11px] px-2 py-0.5 rounded-sm" :class="tagClass(modalItem.tag)">
+              <div class="flex items-center gap-3 mb-2 flex-wrap">
+                <span class="text-xs px-3 py-1.5 rounded-sm" :class="tagClass(modalItem.tag)">
                   {{ modalItem.tag }}
                 </span>
-                <span class="text-terminal-dim text-[11px]">{{ modalItem.time }}</span>
-                <span class="text-terminal-dim/50 text-[11px]">{{ modalItem.source }}</span>
+                <span class="text-terminal-dim text-xs">{{ modalItem.time }}</span>
+                <span class="text-terminal-dim/50 text-xs">{{ modalItem.source }}</span>
               </div>
               <h2 class="text-sm font-medium text-theme-primary leading-snug">{{ modalItem.title }}</h2>
             </div>
             <button
-              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full
+              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-sm
                      bg-theme-tertiary hover:bg-theme-tertiary text-theme-secondary hover:text-theme-primary transition"
               @click="closeModal">
               ✕
@@ -303,7 +303,7 @@
             </a>
             <span v-else class="text-xs text-theme-tertiary italic">（无原文链接）</span>
             <button
-              class="ml-4 px-3 py-1 text-[11px] rounded-sm bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-theme-primary transition shrink-0"
+              class="ml-4 px-3 py-1 text-xs rounded-sm bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-theme-primary transition shrink-0"
               @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
               浏览器打开
             </button>
@@ -733,7 +733,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.line-clamp-2 {
+.line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
