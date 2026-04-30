@@ -1,15 +1,15 @@
 <template>
   <aside
-    class="flex-shrink-0 flex flex-col bg-terminal-panel/80 border-r border-theme-secondary/30 transition-all duration-300 ease-in-out overflow-hidden h-full backdrop-blur-sm"
+    class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden h-full"
     :class="isMobile ? '' : (isCollapsed ? 'items-center' : '')"
     :style="isMobile ? { width: '220px' } : { width: isCollapsed ? '64px' : '220px' }"
   >
     <!-- 顶部：Logo + 切换按钮 -->
     <div
-      class="flex items-center h-12 border-b border-theme-secondary/30 shrink-0 w-full"
+      class="flex items-center h-12 border-b border-theme-secondary shrink-0 w-full"
       :class="isMobile || !isCollapsed ? 'justify-between px-4' : 'justify-center px-2'"
     >
-      <span v-if="isMobile || !isCollapsed" class="text-terminal-accent font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
+      <span v-if="isMobile || !isCollapsed" class="text-theme-primary font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
       <button
         class="flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
         :class="isMobile ? 'w-12 h-12' : 'w-11 h-11'"
@@ -33,8 +33,8 @@
         :class="[
           isCollapsed && !isMobile ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2.5',
           activeId === item.id
-            ? 'bg-terminal-accent/10 text-terminal-accent border-r-2 border-terminal-accent'
-            : 'text-theme-secondary hover:bg-theme-hover/80 hover:text-theme-primary border-r-transparent'
+            ? 'bg-theme-hover text-theme-primary border-r-2 border-theme-secondary'
+            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
         ]"
         @click="handleClick(item)"
       >
