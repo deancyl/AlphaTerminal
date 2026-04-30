@@ -113,8 +113,22 @@
     <div v-else-if="error" class="flex-1 flex flex-col items-center justify-center text-bearish text-[10px] gap-1">
       <span>⚠️ {{ error }}</span>
     </div>
-    <div v-else-if="loading" class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px] gap-1">
-      <span class="animate-pulse">⏳ 加载盘口...</span>
+    <div v-else-if="loading" class="flex-1 p-2 space-y-1">
+      <div class="flex justify-between items-center mb-1">
+        <div class="skeleton h-3 w-16 rounded"></div>
+        <div class="skeleton h-3 w-12 rounded"></div>
+      </div>
+      <div v-for="n in 5" :key="n" class="flex justify-between">
+        <div class="skeleton h-3 w-10 rounded"></div>
+        <div class="skeleton h-3 w-12 rounded"></div>
+        <div class="skeleton h-3 w-10 rounded"></div>
+      </div>
+      <div class="skeleton h-px my-1"></div>
+      <div v-for="n in 5" :key="n" class="flex justify-between">
+        <div class="skeleton h-3 w-10 rounded"></div>
+        <div class="skeleton h-3 w-12 rounded"></div>
+        <div class="skeleton h-3 w-10 rounded"></div>
+      </div>
     </div>
     <div v-else class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px] gap-1">
       <span>📭 暂无盘口数据</span>

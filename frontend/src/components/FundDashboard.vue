@@ -62,11 +62,16 @@
     </div>
 
     <!-- 加载中 -->
-    <div v-if="loading" class="flex-1 flex items-center justify-center">
-      <div class="text-center">
-        <div class="text-2xl mb-2 animate-pulse">⏳</div>
-        <div class="text-theme-muted text-sm">正在加载{{ activeTab === 'etf' ? 'ETF' : '基金' }}数据...</div>
-        <div v-if="dataSource" class="text-xs text-theme-tertiary mt-1">数据源：{{ dataSource }}</div>
+    <div v-if="loading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+      <!-- 顶部指标骨架 -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="skeleton h-16 rounded-lg" v-for="n in 3" :key="n"></div>
+      </div>
+      <!-- 图表骨架 -->
+      <div class="skeleton h-64 rounded-lg"></div>
+      <!-- 信息列表骨架 -->
+      <div class="space-y-2">
+        <div class="skeleton h-4 w-3/4 rounded" v-for="n in 6" :key="n"></div>
       </div>
     </div>
 

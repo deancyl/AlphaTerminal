@@ -98,8 +98,13 @@
             v-if="futuresCards.length > 0"
             :futures-data="futuresCards"
           />
-          <div v-else class="w-full h-full flex items-center justify-center">
-            <span class="text-terminal-dim text-xs">加载中...</span>
+          <div v-else class="w-full h-full flex flex-col p-3 gap-2">
+            <div class="skeleton h-3 w-24 rounded"></div>
+            <div class="flex-1 skeleton rounded-lg"></div>
+            <div class="flex gap-2">
+              <div class="skeleton h-2 w-12 rounded"></div>
+              <div class="skeleton h-2 w-12 rounded"></div>
+            </div>
           </div>
         </div>
       </div>

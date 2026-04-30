@@ -34,7 +34,7 @@
       >
         <div class="w-5 text-left text-[10px] text-terminal-dim">{{ (currentPage - 1) * pageSize + idx + 1 }}</div>
         <div class="flex-1 min-w-0 truncate text-theme-primary">{{ item.name || item.symbol }}</div>
-        <div class="w-12 text-right font-mono text-theme-primary">{{ item.price != null ? Number(item.price).toFixed(2) : '--' }}</div>
+        <div class="w-12 text-right font-mono text-theme-primary" :class="getFlashClass(item.symbol)">{{ item.price != null ? Number(item.price).toFixed(2) : '--' }}</div>
         <div
           class="w-10 text-right font-mono"
           :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
@@ -65,7 +65,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { usePriceFlashMap } from '../composables/usePriceFlashMap.js'
 
 const props = defineProps({
   data: { type: Array, default: () => [] }
@@ -74,6 +75,17 @@ const props = defineProps({
 const searchQuery = ref('')
 const currentPage = ref(1)
 const pageSize = 10  // 每页10个，确保默认能看到10个
+
+const { getFlashClass, updatePrice } = usePriceFlashMap()
+
+// 监听数据变化，更新价格闪烁
+watch(() => props.data, (newData) => {
+  newData.forEach(item => {
+    if (item.symbol && item.price !== undefined) {
+      updatePrice(item.symbol, item.price)
+    }
+  })
+}, { deep: true })
 
 const filtered = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()

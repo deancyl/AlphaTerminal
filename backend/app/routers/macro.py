@@ -282,6 +282,133 @@ async def get_economic_calendar():
         logger.error(f"[Macro] Calendar fetch error: {e}")
         return error_response(f"经济日历获取失败: {str(e)}")
 
+# ── M2货币供应量 ───────────────────────────────────────────────────
+@router.get("/m2")
+async def get_m2_data(limit: int = 24):
+    """
+    获取中国M2货币供应量数据
+    
+    - **limit**: 返回最近N个月（默认24，即2年）
+    """
+    try:
+        df = ak.macro_china_m2_yearly()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "month": row["月份"],
+                "m2_yoy": float(row["M2-同比增长"]) if pd.notna(row["M2-同比增长"]) else None,
+                "m2_amount": float(row["M2-数量(亿元)"]) if pd.notna(row["M2-数量(亿元)"]) else None,
+            })
+        
+        return success_response({
+            "indicator": "M2",
+            "name": "广义货币供应量",
+            "unit": "%",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Macro] M2 fetch error: {e}")
+        return error_response(f"M2数据获取失败: {str(e)}")
+
+# ── 社会融资规模 ───────────────────────────────────────────────────
+@router.get("/social_financing")
+async def get_social_financing_data(limit: int = 24):
+    """
+    获取中国社会融资规模数据
+    
+    - **limit**: 返回最近N个月（默认24，即2年）
+    """
+    try:
+        df = ak.macro_china_bank_financing()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "month": row["月份"],
+                "total": float(row["社会融资规模增量"]) if pd.notna(row["社会融资规模增量"]) else None,
+                "yoy": float(row["社会融资规模增量-同比增长"]) if pd.notna(row["社会融资规模增量-同比增长"]) else None,
+            })
+        
+        return success_response({
+            "indicator": "SocialFinancing",
+            "name": "社会融资规模",
+            "unit": "亿元",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Macro] Social financing fetch error: {e}")
+        return error_response(f"社融数据获取失败: {str(e)}")
+
+# ── 工业增加值 ─────────────────────────────────────────────────────
+@router.get("/industrial_production")
+async def get_industrial_production_data(limit: int = 24):
+    """
+    获取中国工业增加值数据
+    
+    - **limit**: 返回最近N个月（默认24，即2年）
+    """
+    try:
+        df = ak.macro_china_gyzjz()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "month": row["月份"],
+                "yoy": float(row["同比增长"]) if pd.notna(row["同比增长"]) else None,
+                "mom": float(row["环比增长"]) if pd.notna(row["环比增长"]) else None,
+            })
+        
+        return success_response({
+            "indicator": "IndustrialProduction",
+            "name": "工业增加值",
+            "unit": "%",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Macro] Industrial production fetch error: {e}")
+        return error_response(f"工业增加值数据获取失败: {str(e)}")
+
+# ── 失业率 ─────────────────────────────────────────────────────────
+@router.get("/unemployment")
+async def get_unemployment_data(limit: int = 24):
+    """
+    获取中国城镇调查失业率数据
+    
+    - **limit**: 返回最近N个月（默认24，即2年）
+    """
+    try:
+        df = ak.macro_china_urban_unemployment()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "month": row["月份"],
+                "rate": float(row["失业率"]) if pd.notna(row["失业率"]) else None,
+            })
+        
+        return success_response({
+            "indicator": "Unemployment",
+            "name": "城镇调查失业率",
+            "unit": "%",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"[Macro] Unemployment fetch error: {e}")
+        return error_response(f"失业率数据获取失败: {str(e)}")
+
 # ── 批量获取 ────────────────────────────────────────────────────────
 @router.get("/batch")
 async def get_macro_batch(
@@ -291,7 +418,7 @@ async def get_macro_batch(
     """
     批量获取宏观经济指标
     
-    - **indicators**: 逗号分隔的指标代码（gdp,cpi,ppi,pmi）
+    - **indicators**: 逗号分隔的指标代码（gdp,cpi,ppi,pmi,m2,social_financing,industrial_production,unemployment）
     - **limit**: 每个指标返回最近N期数据
     """
     try:
@@ -327,6 +454,38 @@ async def get_macro_batch(
             result["pmi"] = {
                 "data": [{"month": r["月份"], "index": float(r["制造业-指数"]) if pd.notna(r["制造业-指数"]) else None} for _, r in df.iterrows()],
                 "unit": "",
+                "frequency": "月度"
+            }
+        
+        if "m2" in indicator_list:
+            df = ak.macro_china_m2_yearly().tail(limit)
+            result["m2"] = {
+                "data": [{"month": r["月份"], "yoy": float(r["M2-同比增长"]) if pd.notna(r["M2-同比增长"]) else None} for _, r in df.iterrows()],
+                "unit": "%",
+                "frequency": "月度"
+            }
+        
+        if "social_financing" in indicator_list:
+            df = ak.macro_china_bank_financing().tail(limit)
+            result["social_financing"] = {
+                "data": [{"month": r["月份"], "total": float(r["社会融资规模增量"]) if pd.notna(r["社会融资规模增量"]) else None} for _, r in df.iterrows()],
+                "unit": "亿元",
+                "frequency": "月度"
+            }
+        
+        if "industrial_production" in indicator_list:
+            df = ak.macro_china_gyzjz().tail(limit)
+            result["industrial_production"] = {
+                "data": [{"month": r["月份"], "yoy": float(r["同比增长"]) if pd.notna(r["同比增长"]) else None} for _, r in df.iterrows()],
+                "unit": "%",
+                "frequency": "月度"
+            }
+        
+        if "unemployment" in indicator_list:
+            df = ak.macro_china_urban_unemployment().tail(limit)
+            result["unemployment"] = {
+                "data": [{"month": r["月份"], "rate": float(r["失业率"]) if pd.notna(r["失业率"]) else None} for _, r in df.iterrows()],
+                "unit": "%",
                 "frequency": "月度"
             }
         

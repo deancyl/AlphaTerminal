@@ -25,8 +25,15 @@
       </div>
 
       <!-- 加载 / 错误 -->
-      <div v-if="isLoading" class="flex items-center justify-center py-6">
-        <span class="text-terminal-dim text-xs">加载中…</span>
+      <div v-if="isLoading" class="py-6 space-y-3 px-2">
+        <div class="skeleton h-4 w-3/4 rounded"></div>
+        <div class="skeleton h-4 w-1/2 rounded"></div>
+        <div class="skeleton h-4 w-2/3 rounded"></div>
+        <div class="skeleton h-32 rounded-lg"></div>
+        <div class="flex gap-2">
+          <div class="skeleton h-3 w-16 rounded"></div>
+          <div class="skeleton h-3 w-12 rounded"></div>
+        </div>
       </div>
       <div v-else-if="error" class="flex items-center justify-center py-6">
         <span class="text-bullish text-xs">{{ error }}</span>

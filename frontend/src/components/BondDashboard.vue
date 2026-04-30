@@ -152,9 +152,14 @@
         </div>
       </div>
 
-      <!-- 无数据提示 -->
-      <div v-if="!hasData" class="text-center py-3 text-terminal-dim text-[10px]">
-        利率矩阵数据加载中...
+      <!-- 无数据骨架屏 -->
+      <div v-if="!hasData" class="py-3 space-y-2">
+        <div class="flex gap-2" v-for="n in 4" :key="n">
+          <div class="skeleton h-6 flex-1 rounded"></div>
+          <div class="skeleton h-6 w-12 rounded"></div>
+          <div class="skeleton h-6 w-12 rounded"></div>
+          <div class="skeleton h-6 w-12 rounded"></div>
+        </div>
       </div>
     </div>
 
@@ -179,8 +184,14 @@
               :curve1y="yieldCurve1y"
               :update-time="yieldUpdateTime"
             />
-            <div v-else class="w-full h-full flex items-center justify-center">
-              <span class="text-terminal-dim text-[10px]">加载中...</span>
+            <div v-else class="w-full h-full flex flex-col p-3 gap-2">
+              <div class="skeleton h-3 w-24 rounded"></div>
+              <div class="flex-1 skeleton rounded-lg"></div>
+              <div class="flex gap-2">
+                <div class="skeleton h-2 w-12 rounded"></div>
+                <div class="skeleton h-2 w-12 rounded"></div>
+                <div class="skeleton h-2 w-12 rounded"></div>
+              </div>
             </div>
           </div>
         </div>

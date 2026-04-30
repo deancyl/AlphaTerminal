@@ -20,8 +20,13 @@
     <div v-if="hasError" class="flex-1 flex items-center justify-center">
       <span class="text-bullish text-xs">{{ errorMsg }}</span>
     </div>
-    <div v-else-if="isLoading" class="flex-1 flex items-center justify-center">
-      <span class="text-terminal-dim text-xs">加载中…</span>
+    <div v-else-if="isLoading" class="flex-1 flex flex-col p-3 gap-2">
+      <div class="skeleton h-3 w-24 rounded"></div>
+      <div class="flex-1 skeleton rounded-lg"></div>
+      <div class="flex gap-2">
+        <div class="skeleton h-2 w-12 rounded"></div>
+        <div class="skeleton h-2 w-12 rounded"></div>
+      </div>
     </div>
     <div v-else-if="!hasData" class="flex-1 flex items-center justify-center">
       <span class="text-terminal-dim text-xs">暂无利差数据</span>

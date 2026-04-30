@@ -10,8 +10,11 @@
 
     <!-- 加载中占位 -->
     <div v-if="loading" class="chart-placeholder loading">
-      <div class="spinner">⟳</div>
-      <div class="loading-text">加载图表...</div>
+      <div class="w-full h-full flex flex-col items-center justify-center gap-3 p-4">
+        <div class="w-24 h-24 rounded-full skeleton"></div>
+        <div class="skeleton h-3 w-20 rounded"></div>
+        <div class="skeleton h-2 w-16 rounded"></div>
+      </div>
     </div>
 
     <!-- 空状态 -->

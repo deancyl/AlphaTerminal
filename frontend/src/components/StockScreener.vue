@@ -89,7 +89,8 @@
         <tbody>
           <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
               class="border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer"
-              @click="handleClick(stock)">
+              @click="handleClick(stock)"
+              @contextmenu.prevent="handleContextMenu($event, stock)">
             <td class="px-2 py-1.5 text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</td>
             <td class="px-2 py-1.5">
               <div class="font-medium group-hover:text-theme-accent transition-colors">{{ stock.name }}</div>
@@ -117,7 +118,12 @@
 
       <!-- 加载中遮罩 -->
       <div v-if="loading" class="absolute inset-0 bg-terminal-bg/50 backdrop-blur-sm flex items-center justify-center z-20">
-        <span class="text-theme-accent">检索中...</span>
+        <div class="space-y-2 w-full max-w-md px-4">
+          <div class="skeleton h-4 w-3/4 rounded"></div>
+          <div class="skeleton h-4 w-1/2 rounded"></div>
+          <div class="skeleton h-4 w-2/3 rounded"></div>
+          <div class="text-theme-accent text-xs text-center mt-2">检索中...</div>
+        </div>
       </div>
     </div>
 
@@ -135,7 +141,16 @@
         :disabled="currentPage >= totalPages"
         @click="goPage(currentPage + 1)">下一页</button>
     </div>
-  </div>
+  <!-- 右键菜单 -->
+  <ContextMenu
+    :visible="contextMenu.visible"
+    :x="contextMenu.x"
+    :y="contextMenu.y"
+    :items="contextMenuItems"
+    @select="handleMenuSelect"
+    @close="contextMenu.visible = false"
+  />
+</div>
 </template>
 
 <script setup>
@@ -145,9 +160,71 @@ import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
 import { apiFetch } from '../utils/api.js'
+import ContextMenu from './ContextMenu.vue'
+import { useToast } from '../composables/useToast.js'
 
 const emit = defineEmits(['symbol-click'])
 const { setSymbol } = useMarketStore()
+const { success: toastSuccess, info: toastInfo } = useToast()
+
+// ── 右键菜单状态 ───────────────────────────────────────────────────
+const contextMenu = ref({ visible: false, x: 0, y: 0, stock: null })
+
+const contextMenuItems = [
+  { id: 'copy', label: '复制代码', icon: '📋', shortcut: 'Ctrl+C' },
+  { id: 'f9', label: 'F9 深度资料', icon: '📊', shortcut: 'F9' },
+  { id: 'watchlist', label: '加入自选', icon: '⭐', shortcut: '' },
+  { id: 'kline', label: '打开K线', icon: '📈', shortcut: '' },
+]
+
+function handleContextMenu(event, stock) {
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    stock
+  }
+}
+
+function handleMenuSelect(item) {
+  const stock = contextMenu.value.stock
+  if (!stock) return
+
+  switch (item.id) {
+    case 'copy':
+      navigator.clipboard.writeText(stock.code).then(() => {
+        toastSuccess('已复制', `股票代码 ${stock.code} 已复制到剪贴板`)
+      }).catch(() => {
+        toastInfo('复制代码', stock.code)
+      })
+      break
+    case 'f9':
+      emit('symbol-click', { symbol: stock.code, name: stock.name, action: 'f9' })
+      break
+    case 'watchlist':
+      toastSuccess('加入自选', `${stock.name} (${stock.code}) 已添加到自选股`)
+      break
+    case 'kline':
+      emit('symbol-click', { symbol: stock.code, name: stock.name, action: 'kline' })
+      break
+  }
+  contextMenu.value.visible = false
+}
+
+// 点击其他地方关闭右键菜单
+function handleClickOutside(event) {
+  if (contextMenu.value.visible) {
+    contextMenu.value.visible = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 
 // ── 服务端分页数据状态 ─────────────────────────────────────────────
 const stocks       = ref([])

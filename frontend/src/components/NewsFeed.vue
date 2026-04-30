@@ -103,7 +103,60 @@
         </div>
       </div>
 
-      <!-- 筛选标签：移动端紧凑 -->
+      <!-- 热门资讯排行 -->
+      <div v-if="hotNews.length > 0" class="px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
+      >
+        <div class="flex items-center justify-between mb-1"
+        >
+          <span class="text-[10px] text-terminal-dim font-bold"
+          >🔥 热门资讯</span
+          >
+          <span class="text-[9px] text-terminal-dim"
+          >{{ hotNews.length }} 条</span
+          >
+        </div
+        >
+        <div class="flex gap-1 overflow-x-auto scrollbar-hide"
+        >
+          <button
+            v-for="(item, idx) in hotNews.slice(0, 5)"
+            :key="item.id || item.title"
+            class="shrink-0 text-[9px] px-2 py-1 rounded border transition text-left max-w-[140px] truncate"
+            :class="modalItem?.id === item.id
+              ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+              : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/30'"
+            @click="openModal(item)"
+            :title="item.title"
+          >
+            <span class="text-terminal-accent font-bold"
+            >{{ idx + 1 }}.</span
+            > {{ item.title }}
+          </button
+          >
+        </div
+        >
+      </div
+      >
+
+      <!-- 分类筛选标签 -->
+      <div class="flex gap-1 px-2 flex-wrap mb-1"
+      >
+        <button
+          v-for="cat in categories"
+          :key="cat.value"
+          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition flex items-center gap-0.5"
+          :class="activeCategory === cat.value
+            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+            : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
+          @click="activeCategory = cat.value"
+        >
+          <span>{{ cat.icon }}</span>
+          <span>{{ cat.label }}</span>
+          <span v-if="cat.value !== 'all'" class="text-[8px] opacity-60">({{ categoryCount(cat.value) }})</span>
+        </button>
+      </div>
+
+      <!-- 情绪筛选标签：移动端紧凑 -->
       <div class="flex gap-1 px-2 flex-wrap"
       >
         <button
@@ -138,6 +191,10 @@
                   :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
+            <!-- 热门标记 -->
+            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-[8px] px-1 py-0.5 rounded bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-bold"
+            >HOT
+            </span>
             <!-- 时间 -->
             <span class="shrink-0 text-[9px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
             <!-- 标题 + 来源 -->
@@ -163,7 +220,7 @@
           </div>
         </div>
         <div v-else-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
-          {{ activeSentimentFilter === 'all' ? '暂无快讯数据' : '暂无符合筛选条件的快讯' }}
+          {{ activeCategory === 'all' && activeSentimentFilter === 'all' ? '暂无快讯数据' : '暂无符合筛选条件的快讯' }}
         </div>
       </div>
     </div>
@@ -353,6 +410,46 @@ const sentimentFilters = [
   { label: '利空', value: 'bearish' },
 ]
 
+// ── 新闻分类 ─────────────────────────────────────────────────────────
+const activeCategory = ref('all')
+const categories = [
+  { label: '全部', value: 'all', icon: '📰' },
+  { label: '宏观', value: 'macro', icon: '🌍' },
+  { label: '股市', value: 'stock', icon: '📈' },
+  { label: '行业', value: 'industry', icon: '🏭' },
+  { label: '债券', value: 'bond', icon: '📉' },
+]
+
+const categoryKeywords = {
+  macro: ['GDP', 'CPI', 'PPI', 'PMI', '央行', '美联储', '货币政策', '财政政策', '降准', '降息', '利率', '通胀', '通缩', '经济', '宏观'],
+  stock: ['A股', '沪深', '涨停', '跌停', '板块', '个股', '指数', '上证', '深证', '创业板', '科创板', '北交所', '成交量', '市值'],
+  industry: ['新能源', '半导体', '芯片', '医药', '医疗', '消费', '汽车', '房地产', '基建', '光伏', '锂电', 'AI', '人工智能', '机器人', '5G', '通信'],
+  bond: ['国债', '利率债', '信用债', '城投', '可转债', '债券', '收益率', '利差', '久期', '凸性', '回购', 'SHIBOR'],
+}
+
+function classifyNews(item) {
+  const title = (item.title || '').toLowerCase()
+  const tag = (item.tag || '').toLowerCase()
+  const text = title + ' ' + tag
+  
+  for (const [category, keywords] of Object.entries(categoryKeywords)) {
+    if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
+      return category
+    }
+  }
+  return 'other'
+}
+
+function getCategoryLabel(category) {
+  const cat = categories.find(c => c.value === category)
+  return cat ? cat.label : '其他'
+}
+
+function getCategoryIcon(category) {
+  const cat = categories.find(c => c.value === category)
+  return cat ? cat.icon : '📄'
+}
+
 const bullishRatio = computed(() => {
   const total = sentiment.value.total_count || 1
   return ((sentiment.value.bullish_count || 0) / total * 100).toFixed(1)
@@ -370,24 +467,82 @@ const neutralRatio = computed(() => {
   return ((neutral / total) * 100).toFixed(1)
 })
 
-/** 根据情绪筛选过滤新闻 */
+/** 根据分类和情绪筛选过滤新闻 */
 const filteredItems = computed(() => {
-  if (activeSentimentFilter.value === 'all') return items.value
-  return items.value.filter(item => {
-    const s = getItemSentiment(item)
-    if (activeSentimentFilter.value === 'bullish') {
-      return s === '利好' || s === '偏多'
-    }
-    if (activeSentimentFilter.value === 'bearish') {
-      return s === '利空' || s === '偏空'
-    }
-    return s === ''
-  })
+  let result = items.value
+  
+  // 分类筛选
+  if (activeCategory.value !== 'all') {
+    result = result.filter(item => classifyNews(item) === activeCategory.value)
+  }
+  
+  // 情绪筛选
+  if (activeSentimentFilter.value !== 'all') {
+    result = result.filter(item => {
+      const s = getItemSentiment(item)
+      if (activeSentimentFilter.value === 'bullish') {
+        return s === '利好' || s === '偏多'
+      }
+      if (activeSentimentFilter.value === 'bearish') {
+        return s === '利空' || s === '偏空'
+      }
+      return s === ''
+    })
+  }
+  
+  return result
 })
 
 watch(activeSentimentFilter, () => {
   currentPage.value = 1
   if (listEl.value) listEl.value.scrollTop = 0
+})
+
+watch(activeCategory, () => {
+  currentPage.value = 1
+  if (listEl.value) listEl.value.scrollTop = 0
+})
+
+function categoryCount(category) {
+  return items.value.filter(item => classifyNews(item) === category).length
+}
+
+// ── 热门资讯排行 ──────────────────────────────────────────────────────
+const hotNews = computed(() => {
+  // 根据情绪强度和重要性排序
+  return [...items.value]
+    .map(item => {
+      const sentiment = getItemSentiment(item)
+      const category = classifyNews(item)
+      let score = 0
+      
+      // 情绪强度加分
+      if (sentiment === '利好' || sentiment === '利空') score += 3
+      else if (sentiment === '偏多' || sentiment === '偏空') score += 2
+      
+      // 重要标签加分
+      const tag = (item.tag || '').toLowerCase()
+      if (tag.includes('突发') || tag.includes('🔴')) score += 5
+      if (tag.includes('📈') || tag.includes('📉')) score += 2
+      
+      // 宏观新闻加分
+      if (category === 'macro') score += 1
+      
+      // 时间越近越重要
+      const timeStr = item.time || ''
+      if (timeStr.includes(':')) {
+        const parts = timeStr.split(' ')
+        if (parts.length >= 2) {
+          const time = parts[1]
+          const hour = parseInt(time.split(':')[0])
+          if (hour >= 9 && hour <= 15) score += 1  // 交易时间
+        }
+      }
+      
+      return { ...item, hotScore: score }
+    })
+    .sort((a, b) => b.hotScore - a.hotScore)
+    .filter(item => item.hotScore > 0)
 })
 
 // ── 分页状态 ─────────────────────────────────────────────────────────

@@ -1139,7 +1139,7 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
     symbol: 'usIXIC', 'usNDX', 'usSPX', 'usDJI', 'hkHSI', 'jpN225'
     返回格式同 market_data_daily 单条记录。
     """
-    import subprocess, re, time
+    import re, time
 
     tencent_codes = {
         # 全球指数（key = clean_sym，即 lowercase 规范化后的 symbol）

@@ -56,7 +56,21 @@
       <div class="chart-container">
         <!-- 加载状态 -->
         <div v-if="loading" class="loading-overlay">
-          <div class="loading-text">加载中...</div>
+          <div class="w-full h-full flex flex-col p-4 gap-3">
+            <!-- 顶部标题骨架 -->
+            <div class="flex items-center justify-between mb-2">
+              <div class="skeleton h-5 w-24 rounded"></div>
+              <div class="skeleton h-5 w-16 rounded"></div>
+            </div>
+            <!-- 图表区域骨架 -->
+            <div class="flex-1 skeleton rounded-lg"></div>
+            <!-- 底部指标骨架 -->
+            <div class="flex gap-2">
+              <div class="skeleton h-3 w-20 rounded"></div>
+              <div class="skeleton h-3 w-16 rounded"></div>
+              <div class="skeleton h-3 w-24 rounded"></div>
+            </div>
+          </div>
         </div>
 
         <!-- 错误状态 -->

@@ -56,13 +56,22 @@
       <!-- 加载/穿透中遮罩 -->
       <div
         v-if="isLoading || isFetching"
-        class="absolute inset-0 z-30 flex flex-col items-center justify-center"
+        class="absolute inset-0 z-30 flex flex-col p-4 gap-2"
         style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);"
       >
-        <div class="text-[var(--color-info)] text-xs mb-2 font-mono">
-          {{ isFetching ? '📡 首次访问，正在穿透拉取全量历史…' : '⏳ 加载中…' }}
+        <div class="flex justify-between mb-2">
+          <div class="skeleton h-3 w-32 rounded"></div>
+          <div class="skeleton h-3 w-16 rounded"></div>
         </div>
-        <div v-if="isFetching" class="text-theme-tertiary text-[9px] font-mono">数据来源：AkShare → SQLite</div>
+        <div class="flex-1 skeleton rounded-lg"></div>
+        <div class="flex gap-2">
+          <div class="skeleton h-2 w-12 rounded"></div>
+          <div class="skeleton h-2 w-12 rounded"></div>
+          <div class="skeleton h-2 w-12 rounded"></div>
+        </div>
+        <div v-if="isFetching" class="text-theme-tertiary text-[9px] font-mono text-center mt-1">
+          📡 首次访问，正在穿透拉取全量历史…
+        </div>
       </div>
 
       <!-- 右键上下文菜单 -->

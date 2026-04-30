@@ -10,7 +10,19 @@
       />
     </div>
     
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading p-4 space-y-3">
+      <div class="flex justify-between">
+        <div class="skeleton h-4 w-20 rounded"></div>
+        <div class="skeleton h-4 w-12 rounded"></div>
+      </div>
+      <div class="skeleton h-10 w-32 rounded"></div>
+      <div class="space-y-2">
+        <div class="flex justify-between" v-for="n in 4" :key="n">
+          <div class="skeleton h-3 w-12 rounded"></div>
+          <div class="skeleton h-3 w-16 rounded"></div>
+        </div>
+      </div>
+    </div>
     <div v-else-if="error" class="error">{{ error }}</div>
     <div v-else class="quote-content">
       <div class="symbol-info">
@@ -18,7 +30,7 @@
         <span class="status" :class="marketStatus">{{ statusText }}</span>
       </div>
       
-      <div class="price-display" :class="priceDirection">
+      <div class="price-display" :class="[priceDirection, flashClass]">
         <span class="current-price">{{ formatPrice(data?.price || 0) }}</span>
         <span class="change">{{ formatChange(data?.change_pct || 0) }}</span>
       </div>
@@ -53,6 +65,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { usePriceFlash } from '../composables/usePriceFlash.js'
 
 const props = defineProps({
   symbol: { type: String, required: true }
@@ -68,6 +81,8 @@ const lastPrice = ref(0)
 const priceDirection = ref('') // 'up', 'down', ''
 let prevPrice = 0
 let timer = null
+
+const { flashClass, triggerFlash } = usePriceFlash()
 
 const marketStatus = computed(() => {
   const pct = data.value?.change_pct || 0
@@ -117,6 +132,7 @@ async function fetchQuote() {
     const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`)
     
     if (json) {
+      const oldPrice = data.value?.price || 0
       data.value = json
       
       // 检测价格方向
@@ -129,6 +145,9 @@ async function fetchQuote() {
       }
       prevPrice = json.price
       lastPrice.value = json.price
+      
+      // 触发价格闪烁动画
+      triggerFlash(json.price, oldPrice)
     }
   } catch (e) {
     logger.error('[SimpleQuote] fetch error:', e)

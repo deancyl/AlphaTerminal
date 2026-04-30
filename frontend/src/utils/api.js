@@ -11,10 +11,11 @@
 import { logger } from './logger.js'
 import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
+import { toast } from '../composables/useToast.js'
 
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
-// 使用对象包装确保原子性（JavaScript 单线程，但并发 Promise 可能交错读写）
-const _consecutiveFailures = { count: 0, lock: false }
+// 使用对象包装确保原子性（JavaScript 单线程，async/await 不会导致并发问题）
+const _consecutiveFailures = { count: 0 }
 const _DEGRADE_THRESHOLD   = 3
 const _CIRCUIT_THRESHOLD   = 6
 
@@ -36,9 +37,11 @@ function _onFailure(url, status) {
   if (n >= _CIRCUIT_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
+    toast.error('数据源异常', `API 连续${n}次失败，已触发熔断保护`)
   } else if (n >= _DEGRADE_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
+    toast.warning('数据源降级', '主数据源响应异常，已切换备用数据源')
   }
 }
 
@@ -50,6 +53,7 @@ function _onSuccess() {
     if (apiErrorState.isDegraded) {
       apiErrorState.isDegraded = false
       broadcastDataSourceStatus('ok', '数据源已恢复正常')
+      toast.success('数据源恢复', '主数据源已恢复正常')
     }
   }
 }
@@ -221,11 +225,15 @@ export async function fetchApiBatch(requests, silent = false) {
     requests.map(async ({ url, key, default: defaultValue = null, required = true }) => {
       try {
         const data = await apiFetch(url)
-        return { key, data, error: null }
+        return { key, data, error: null, required }
       } catch (e) {
         logger.warn(`[fetchApiBatch] ${url} failed (key=${key}): ${e.message}`)
-        // 即使失败也返回默认值，保证其他正常接口的数据能正常渲染
-        return { key, data: defaultValue, error: e.message }
+        // required=true 且 silent=false 时抛出错误（与文档一致）
+        if (required && !silent) {
+          throw new Error(`[${key}] ${e.message}`)
+        }
+        // 否则返回默认值，保证其他正常接口的数据能正常渲染
+        return { key, data: defaultValue, error: e.message, required }
       }
     })
   )

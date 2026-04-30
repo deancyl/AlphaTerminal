@@ -22,6 +22,9 @@
     </div>
   </Teleport>
 
+  <!-- ━━━ Toast 通知容器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <ToastContainer />
+
   <!-- 全局错误遮罩 -->
   <div v-if="hasError" class="fixed inset-0 z-[99999] flex items-center justify-center bg-terminal-bg">
     <div class="text-center p-8">
@@ -184,6 +187,15 @@
       @close="helpVisible = false"
     />
 
+    <!-- ━━━ 全局命令面板 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <CommandPalette
+      :visible="commandPaletteOpen"
+      @close="commandPaletteOpen = false"
+      @select-stock="handlePaletteSelectStock"
+      @change-view="handlePaletteChangeView"
+      @open-f9="handlePaletteOpenF9"
+    />
+
     <!-- ━━━ Copilot 抽屉 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <!-- 桌面端：右侧 sidebar | 移动端：底部抽屉 (bottom sheet) -->
     <aside
@@ -212,6 +224,13 @@
       />
     </aside>
 
+    <!-- ━━━ 移动端底部导航栏 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <MobileBottomNav
+      v-if="isMobile"
+      :active-id="currentView"
+      @navigate="handleMobileNav"
+    />
+
   </div>
 </template>
 
@@ -225,6 +244,9 @@ import Sidebar       from './components/Sidebar.vue'
 import DashboardGrid from './components/DashboardGrid.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
+import CommandPalette from './components/CommandPalette.vue'
+import ToastContainer from './components/ToastContainer.vue'
+import MobileBottomNav from './components/MobileBottomNav.vue'
 
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
@@ -242,11 +264,13 @@ import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
+import { useToast } from './composables/useToast.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 
 const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
+const { success: toastSuccess, info: toastInfo } = useToast()
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark } = useTheme()
@@ -285,6 +309,25 @@ const futuresFullscreenSymbol = ref('IF0')
 
 function handleSidebarNavigate(viewId) {
   currentView.value = viewId
+  toastInfo('视图切换', `已切换到 ${getViewName(viewId)}`)
+}
+
+function getViewName(viewId) {
+  const names = {
+    stock: '股票行情', bond: '债券行情', futures: '期货行情',
+    fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
+    backtest: '回测实验室', admin: '系统管理'
+  }
+  return names[viewId] || viewId
+}
+
+function handleMobileNav(viewId) {
+  if (viewId === 'copilot') {
+    toggleCopilot()
+  } else {
+    currentView.value = viewId
+    toastInfo('视图切换', `已切换到 ${getViewName(viewId)}`)
+  }
 }
 
 function openFuturesFullscreen({ symbol }) {
@@ -296,7 +339,7 @@ function openFuturesFullscreen({ symbol }) {
 // 键盘快捷键系统
 const { helpVisible } = useKeyboardShortcuts({
   onViewChange: (viewId) => { currentView.value = viewId },
-  onSearch: () => { /* TODO: 打开全局搜索 */ logger.log('[Shortcut] 打开搜索') },
+  onSearch: () => { commandPaletteOpen.value = true },
   onEscape: () => {
     if (ui.klineFullscreen) {
       ui.klineFullscreen = false
@@ -318,6 +361,7 @@ const { helpVisible } = useKeyboardShortcuts({
   }
 })
 
+const commandPaletteOpen = ref(false) // 全局命令面板
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const copilotUnreadCount = ref(0) // Copilot 未读消息数
 const isLocked = ref(true)     // 网格默认锁定
@@ -337,6 +381,25 @@ function toggleCopilot() {
   isCopilotOpen.value = !isCopilotOpen.value
   if (isCopilotOpen.value) {
     copilotUnreadCount.value = 0 // 打开时清零未读
+  }
+}
+
+// 命令面板事件处理
+function handlePaletteSelectStock({ symbol, name }) {
+  openFullscreenKline({ symbol, name })
+}
+
+function handlePaletteChangeView(viewId) {
+  currentView.value = viewId
+}
+
+function handlePaletteOpenF9() {
+  const sym = currentSymbol.value
+  if (sym) {
+    ui.klineFullscreen = true
+    futuresFullscreen.value = false
+    ui.fullscreenSymbol = sym
+    ui.fullscreenName = sym
   }
 }
 
