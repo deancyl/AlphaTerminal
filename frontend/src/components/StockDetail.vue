@@ -37,15 +37,18 @@
 
     <!-- 内容区：左侧导航 + 右侧内容 -->
     <div class="flex-1 flex overflow-hidden">
-      <!-- 左侧导航 -->
-      <div class="w-40 border-r border-theme-secondary flex flex-col shrink-0">
-        <nav class="p-2 space-y-1">
+      <!-- 左侧导航：移动端水平滚动，桌面端固定宽度 -->
+      <div class="shrink-0 border-r border-theme-secondary flex flex-col
+                  w-full md:w-40 
+                  md:flex-col
+                  flex-row md:overflow-hidden overflow-x-auto">
+        <nav class="p-2 space-y-0 md:space-y-1 flex md:flex-col gap-1 md:gap-0">
           <button
             v-for="tab in tabs"
             :key="tab.id"
-            class="w-full flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors"
+            class="flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors whitespace-nowrap"
             :class="activeTab === tab.id
-              ? 'bg-terminal-accent/10 text-terminal-accent border-r-2 border-terminal-accent'
+              ? 'bg-terminal-accent/10 text-terminal-accent border-b-2 md:border-b-0 md:border-r-2 border-terminal-accent'
               : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
             @click="activeTab = tab.id"
           >
@@ -55,8 +58,8 @@
         </nav>
       </div>
 
-      <!-- 右侧内容 -->
-      <div class="flex-1 overflow-y-auto p-4">
+      <!-- 右侧内容：移动端全宽，桌面端自适应 -->
+      <div class="flex-1 overflow-y-auto p-2 md:p-4 min-w-0">
         <!-- 公司概况 -->
         <div v-if="activeTab === 'overview'" class="space-y-4">
           <!-- 基本信息卡片 -->

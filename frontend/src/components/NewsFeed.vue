@@ -37,19 +37,19 @@
     <!-- ── 舆情情绪摘要栏（增强版）─────────────────────────── -->
     <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
     >
-      <!-- 情绪概览 -->
-      <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg border transition"
+      <!-- 情绪概览：移动端紧凑布局 -->
+      <div class="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 rounded-lg border transition flex-wrap"
            :class="sentiment.score > 0.1
-             ? 'border-red-500/30 bg-red-500/5'
+             ? 'border-bullish/30 bg-bullish/5'
              : sentiment.score < -0.1
-               ? 'border-green-500/30 bg-green-500/5'
+               ? 'border-bearish/30 bg-bearish/5'
                : 'border-theme-secondary bg-theme-tertiary/5'"
       >
         <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
               :class="sentiment.score > 0.1
-                ? 'bg-red-500/20 text-bullish'
+                ? 'bg-bullish/20 text-bullish'
                 : sentiment.score < -0.1
-                  ? 'bg-green-500/20 text-bearish'
+                  ? 'bg-bearish/20 text-bearish'
                   : 'bg-theme-tertiary/20 text-theme-secondary'"
         >
           {{ sentiment.label }}
@@ -57,18 +57,18 @@
         <span class="text-[10px] text-terminal-dim shrink-0">
           {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
         </span>
-        <div class="flex-1 flex gap-1 overflow-x-auto ml-2 scrollbar-hide">
-          <span v-for="kw in sentiment.keywords.slice(0, 5)" :key="kw"
+        <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
+          <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
                 class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
           >
             {{ kw }}
           </span>
         </div>
-        <span class="text-[9px] text-terminal-dim/50 shrink-0">{{ sentimentTime }}</span>
+        <span class="text-[9px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
       </div>
 
-      <!-- 情绪分布条形图 -->
-      <div class="px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
+      <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
+      <div class="hidden sm:block px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
       >
         <div class="flex items-center justify-between mb-1"
         >
@@ -79,7 +79,7 @@
         </div>
         <div class="h-2 rounded-full overflow-hidden flex"
         >
-          <div class="h-full bg-red-500/60 transition-all"
+          <div class="h-full bg-bullish/60 transition-all"
                :style="{ width: bullishRatio + '%' }"
                title="看涨"
           />
@@ -87,29 +87,29 @@
                :style="{ width: neutralRatio + '%' }"
                title="中性"
           />
-          <div class="h-full bg-green-500/60 transition-all"
+          <div class="h-full bg-bearish/60 transition-all"
                :style="{ width: bearishRatio + '%' }"
                title="看跌"
           />
         </div>
         <div class="flex justify-between mt-1"
         >
-          <span class="text-[9px] text-red-400"
+          <span class="text-[9px] text-bullish"
           >{{ sentiment.bullish_count }} 看涨</span>
           <span class="text-[9px] text-theme-tertiary"
           >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[9px] text-green-400"
+          <span class="text-[9px] text-bearish"
           >{{ sentiment.bearish_count }} 看跌</span>
         </div>
       </div>
 
-      <!-- 筛选标签 -->
-      <div class="flex gap-1 px-2"
+      <!-- 筛选标签：移动端紧凑 -->
+      <div class="flex gap-1 px-2 flex-wrap"
       >
         <button
           v-for="filter in sentimentFilters"
           :key="filter.value"
-          class="text-[9px] px-2 py-0.5 rounded border transition"
+          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition"
           :class="activeSentimentFilter === filter.value
             ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"

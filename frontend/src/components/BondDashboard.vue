@@ -38,21 +38,27 @@
         </button>
       </div>
 
-      <!-- 矩阵表头 -->
-      <div class="grid" :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }">
+      <!-- 矩阵表头：桌面端 -->
+      <div class="hidden sm:grid" :style="{ gridTemplateColumns: '56px 1fr 1fr', gap: '2px' }">
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">
           {{ SOURCES.find(s => s.key === activeSource)?.label }}
         </div>
         <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">基点变化</div>
       </div>
+      <!-- 移动端简化表头 -->
+      <div class="grid sm:hidden" :style="{ gridTemplateColumns: '48px 1fr 1fr', gap: '2px' }">
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">收益率</div>
+        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">变化</div>
+      </div>
 
-      <!-- 矩阵数据行 -->
+      <!-- 矩阵数据行：桌面端 -->
       <div
         v-for="tenor in TENORS"
         :key="`${activeSource}-${tenor.key}`"
-        class="grid hover:bg-white/5 transition-colors rounded cursor-pointer"
-        :style="{ gridTemplateColumns: '64px 1fr 1fr', gap: '2px' }"
+        class="hidden sm:grid hover:bg-white/5 transition-colors rounded cursor-pointer"
+        :style="{ gridTemplateColumns: '56px 1fr 1fr', gap: '2px' }"
         @click="openHistory(tenor)"
       >
         <!-- 期限标签 -->
@@ -98,9 +104,50 @@
             </span>
             <div
               class="h-0.5 rounded-full mt-0.5"
-              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'bg-red-400/40' : 'bg-green-400/40'"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'bg-bullish' : 'bg-bearish'"
+              :style="{ width: Math.min(Math.abs(getCell(tenor.key, activeSource)?.change_bps || 0), 20) + 'px' }"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 矩阵数据行：移动端简化 -->
+      <div
+        v-for="tenor in TENORS"
+        :key="`mobile-${activeSource}-${tenor.key}`"
+        class="sm:hidden grid hover:bg-white/5 transition-colors rounded cursor-pointer"
+        :style="{ gridTemplateColumns: '48px 1fr 1fr', gap: '2px' }"
+        @click="openHistory(tenor)"
+      >
+        <!-- 期限标签 -->
+        <div class="py-1 px-1 flex items-center">
+          <span class="text-[9px] text-terminal-dim">{{ tenor.label }}</span>
+        </div>
+
+        <!-- 收益率 -->
+        <div class="py-1 px-1 border-l border-theme flex items-center justify-center">
+          <span
+            class="text-[10px] font-mono font-semibold"
+            :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish' : 'text-bearish'"
+          >
+            {{ formatYield(getCell(tenor.key, activeSource)?.yield) }}
+          </span>
+        </div>
+
+        <!-- 基点变化 -->
+        <div class="py-1 px-1 border-l border-theme flex items-center justify-end">
+          <div class="flex flex-col items-end">
+             <span
+              class="text-[9px] font-mono"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
+            >
+              {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
+            </span>
+            <div
+              class="h-0.5 rounded-full mt-0.5"
+              :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'bg-bullish/40' : 'bg-bearish/40'"
               :style="{ width: Math.min(40, Math.abs(getCell(tenor.key, activeSource)?.change_bps || 0) * 4) + 'px' }"
-            ></div>
+             ></div>
           </div>
         </div>
       </div>

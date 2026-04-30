@@ -422,26 +422,26 @@
           <div ref="compareChartRef" class="w-full" style="height: 350px;"></div>
         </div>
 
-        <!-- 对比表格 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-4">
+        <!-- 对比表格：移动端优化 -->
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-xl p-3 md:p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-xs">
+          <div class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
+            <table class="w-full text-xs min-w-[300px]">
               <thead>
                 <tr class="border-b border-theme-secondary">
-                  <th class="text-left py-2 px-2 text-theme-tertiary">指标</th>
-                  <th v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-2"
+                  <th class="text-left py-2 px-1 md:px-2 text-theme-tertiary">指标</th>
+                  <th v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2"
                       :class="compareColorsText[idx]">
-                    {{ fund.name }}
+                    <span class="truncate max-w-[80px] inline-block">{{ fund.name }}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="period in comparePeriods" :key="period.key" class="border-b border-theme/30">
-                  <td class="py-2 px-2 text-theme-secondary">{{ period.label }}</td>
-                  <td v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-2 font-mono"
+                  <td class="py-2 px-1 md:px-2 text-theme-secondary">{{ period.label }}</td>
+                  <td v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2 font-mono"
                       :class="getCompareReturnColor(fund.returns?.[period.key])">
                     {{ fund.returns?.[period.key] ?? '-' }}%
                   </td>
