@@ -1,13 +1,13 @@
 <template>
   <aside
-    class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme transition-all duration-300 ease-in-out overflow-hidden h-full"
+    class="flex-shrink-0 flex flex-col bg-terminal-panel/80 border-r border-theme-secondary/30 transition-all duration-300 ease-in-out overflow-hidden h-full backdrop-blur-sm"
     :class="isMobile ? '' : (isCollapsed ? 'items-center' : '')"
     :style="isMobile ? { width: '220px' } : { width: isCollapsed ? '64px' : '220px' }"
   >
     <!-- 顶部：Logo + 切换按钮 -->
     <div
-      class="flex items-center h-12 border-b border-theme shrink-0 w-full"
-      :class="isMobile || !isCollapsed ? 'justify-between px-3' : 'justify-center px-2'"
+      class="flex items-center h-12 border-b border-theme-secondary/30 shrink-0 w-full"
+      :class="isMobile || !isCollapsed ? 'justify-between px-4' : 'justify-center px-2'"
     >
       <span v-if="isMobile || !isCollapsed" class="text-terminal-accent font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
       <button
@@ -29,12 +29,12 @@
       <button
         v-for="item in mainNavItems"
         :key="item.id"
-        class="w-full flex items-center transition-colors border-r-2 relative group"
+        class="w-full flex items-center transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
         :class="[
-          isCollapsed && !isMobile ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2',
+          isCollapsed && !isMobile ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2.5',
           activeId === item.id
             ? 'bg-terminal-accent/10 text-terminal-accent border-r-2 border-terminal-accent'
-            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
+            : 'text-theme-secondary hover:bg-theme-hover/80 hover:text-theme-primary border-r-transparent'
         ]"
         @click="handleClick(item)"
       >

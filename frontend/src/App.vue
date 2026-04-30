@@ -79,7 +79,7 @@
       :style="{ width: isMobile ? '100%' : (isCopilotOpen ? 'calc(100% - 340px)' : '100%') }"
     >
       <!-- 顶部状态栏 -->
-      <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
+      <header class="h-12 flex items-center justify-between px-6 border-b border-theme-secondary/30 bg-terminal-panel/60 backdrop-blur-md shrink-0">
         <div class="flex items-center gap-3">
           <!-- ☰ 侧边栏按钮 -->
           <button
@@ -127,7 +127,7 @@
       </header>
 
       <!-- 主视图区域（Phase 5 视图切换） -->
-      <div class="flex-1 overflow-auto p-4 relative">
+      <div class="flex-1 overflow-auto p-6 relative">
         <!-- F1修复: 骨架屏加载状态 -->
         <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
           <!-- 风向标骨架 -->

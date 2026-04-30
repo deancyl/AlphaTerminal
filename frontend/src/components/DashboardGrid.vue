@@ -1,9 +1,9 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-3 px-4 py-3 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;">
+  <div v-if="isMobile" class="flex flex-col gap-4 px-5 py-4 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;">
 
     <!-- 快捷导航胶囊 -->
-    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
+    <div class="flex gap-3 overflow-x-auto pb-2 scrollbar-hide shrink-0">
       <button v-for="anchor in mobileAnchors" :key="anchor.id"
         :href="`#${anchor.id}`"
         class="shrink-0 px-3 py-2 rounded-sm text-xs border transition-colors h-12 flex items-center"
@@ -14,7 +14,7 @@
     </div>
 
     <!-- K线图：自适应高度，内部图表自适应 -->
-    <div id="section-chart" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 240px;">
+    <div id="section-chart" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 240px;">
       <div class="flex items-center justify-between mb-2 shrink-0">
         <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       </div>
@@ -22,7 +22,7 @@
     </div>
 
     <!-- A股监测：自适应高度，内部滚动 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-screener" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
       <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
       <div class="w-full overflow-y-auto" style="height: calc(100% - 32px);">
         <StockScreener :data="globalItems" @symbol-click="handleScreenerClick" />
@@ -30,17 +30,17 @@
     </div>
 
     <!-- 市场情绪 -->
-    <div id="section-sentiment" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 180px;">
+    <div id="section-sentiment" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 180px;">
       <SentimentGauge :market-data="{ indices: indices }" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
     <!-- 板块热度：自适应高度，内部滚动 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 280px; max-height: 45vh; overflow: hidden;">
+    <div id="section-sectors" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 280px; max-height: 45vh; overflow: hidden;">
       <HotSectors :data="sectors" class="w-full" />
     </div>
 
     <!-- 新闻快讯：自适应高度，内部滚动 -->
-    <div id="section-news" class="terminal-panel p-4 rounded-sm shadow-sm border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-news" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
       <NewsFeed class="w-full" />
     </div>
   </div>

@@ -1,6 +1,6 @@
 <template>
   <footer
-    class="h-6 flex items-center justify-between px-3 border-t border-theme-secondary bg-terminal-panel text-[10px] text-terminal-dim shrink-0 select-none"
+    class="h-8 flex items-center justify-between px-4 border-t border-theme-secondary/50 bg-terminal-panel/80 text-xs text-terminal-dim shrink-0 select-none backdrop-blur-sm"
   >
     <!-- 左侧：数据连接状态 -->
     <div class="flex items-center gap-3">
