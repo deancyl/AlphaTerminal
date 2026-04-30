@@ -44,7 +44,7 @@
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
     <!-- ━━━ 左侧 Sidebar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 桌面端：常驻，宽度 64px/220px | 移动端：overlay 滑出 -->
+    <!-- 桌面端：常驻，宽度 64px/220px | 移动端：完全由底部导航栏接管 -->
     <template v-if="!isMobile">
       <Sidebar
         :is-collapsed="isSidebarCollapsed"
@@ -52,24 +52,6 @@
         @navigate="handleSidebarNavigate"
         @toggle="isSidebarCollapsed = !isSidebarCollapsed"
       />
-    </template>
-    <template v-else>
-      <div
-        v-if="isSidebarOpen"
-        class="fixed inset-0 bg-black/50 z-[9999]"
-        @click="isSidebarOpen = false"
-      />
-      <div
-        class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-terminal-panel"
-        :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '220px' }"
-      >
-        <Sidebar
-          is-mobile
-          :active-id="currentView"
-          @navigate="(id) => { handleSidebarNavigate(id); isSidebarOpen = false }"
-          @toggle="isSidebarOpen = false"
-        />
-      </div>
     </template>
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -81,11 +63,12 @@
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-6 border-b border-theme-secondary shrink-0 bg-terminal-panel">
         <div class="flex items-center gap-3">
-          <!-- ☰ 侧边栏按钮 -->
+          <!-- ☰ 侧边栏按钮 (仅桌面端显示) -->
           <button
+            v-if="!isMobile"
             class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded-sm text-terminal-dim hover:text-terminal-accent hover:bg-theme-hover transition-colors text-lg"
-            @click="isMobile ? (isSidebarOpen = !isSidebarOpen) : (isSidebarCollapsed = !isSidebarCollapsed)"
-            :title="isMobile ? '切换侧边栏' : (isSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏')"
+            @click="isSidebarCollapsed = !isSidebarCollapsed"
+            :title="isSidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
           >
             <span class="text-base">☰</span>
           </button>
@@ -322,7 +305,6 @@ onErrorCaptured((err, instance, info) => {
 })
 
 // Phase 5: 侧边栏与视图切换状态
-const isSidebarOpen = ref(false)   // 移动端 sidebar 默认隐藏
 const isSidebarCollapsed = ref(true) // 默认 64px 折叠态
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
@@ -367,9 +349,7 @@ const { helpVisible } = useKeyboardShortcuts({
       futuresFullscreen.value = false
     } else if (isCopilotOpen.value) {
       isCopilotOpen.value = false
-    } else if (isMobile.value && isSidebarOpen.value) {
-      isSidebarOpen.value = false
-    } else if (!isMobile.value && !isSidebarCollapsed.value) {
+    } } else if (!isMobile.value && !isSidebarCollapsed.value) {
       isSidebarCollapsed.value = true
     }
   },

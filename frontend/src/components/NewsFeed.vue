@@ -135,24 +135,24 @@
         <div
           v-for="item in pagedItems"
           :key="item.id || item.title"
-          class="group flex flex-col gap-1.5 py-2.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
+          class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
           @click="openModal(item)"
         >
           <!-- 第一行：时间 + 标签 + 情绪 + 来源 -->
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-theme-tertiary font-mono w-11 shrink-0">{{ formatTime(item.time) }}</span>
-            <span v-if="item.tag" class="text-[11px] px-1.5 py-0.5 rounded-sm font-medium shrink-0" :class="tagClass(item.tag)">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-theme-tertiary font-mono w-10 shrink-0">{{ formatTime(item.time) }}</span>
+            <span v-if="item.tag" class="text-[10px] px-1 py-0.5 rounded-sm font-medium shrink-0" :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
-            <span v-if="getItemSentiment(item)" class="text-[11px] px-1.5 py-0.5 rounded-sm font-medium shrink-0"
+            <span v-if="getItemSentiment(item)" class="text-[10px] px-1 py-0.5 rounded-sm font-medium shrink-0"
                   :class="sentimentBadgeClass(getItemSentiment(item))">
               {{ getItemSentiment(item) }}
             </span>
             <div class="flex-1"></div>
-            <span class="text-xs text-terminal-dim/60 shrink-0">{{ item.source }}</span>
+            <span class="text-[11px] text-terminal-dim/60 shrink-0">{{ item.source }}</span>
           </div>
           <!-- 第二行：标题 -->
-          <p class="text-sm text-theme-primary leading-relaxed group-hover:text-theme-accent transition-colors">
+          <p class="text-[13px] text-theme-primary leading-snug group-hover:text-theme-accent transition-colors line-clamp-2">
             {{ item.title }}
           </p>
         </div>

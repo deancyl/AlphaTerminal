@@ -40,7 +40,7 @@
     </div>
 
     <!-- 新闻快讯：自适应高度，内部滚动 -->
-    <div id="section-news" class="terminal-panel p-5 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-news" class="terminal-panel p-3 rounded-sm border border-theme-secondary/50 shrink-0 transition-all duration-300 hover:border-theme-secondary" style="min-height: 350px; max-height: 65vh; overflow: hidden;">
       <NewsFeed class="w-full" />
     </div>
   </div>
@@ -120,7 +120,7 @@
 
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
-         gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+         gs-x="0" gs-y="16" gs-w="8" gs-h="8" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
       </div>
