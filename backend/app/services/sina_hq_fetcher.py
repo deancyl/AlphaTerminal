@@ -3,10 +3,10 @@ Sina HQ 行情抓取器 v3 - Phase 3
 数据源：腾讯 qt.gtimg.cn（个股）+ 新浪行业板块 Sina Industry Board
 """
 import logging
-import subprocess
 import time as time_module
 from datetime import datetime
 
+import httpx
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -100,14 +100,15 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
         batch = codes[i:i + batch_size]
         joined = ",".join(batch)
         try:
-            raw = subprocess.check_output(
-                ["curl", "-s", "--max-time", "15", "--noproxy", "*",
-                 f"https://qt.gtimg.cn/q={joined}",
-                 "-H", "Referer: https://gu.qq.com",
-                 "-H", "User-Agent: Mozilla/5.0"],
-                stderr=subprocess.DEVNULL,
+            r = httpx.get(
+                f"https://qt.gtimg.cn/q={joined}",
+                headers={
+                    "Referer": "https://gu.qq.com",
+                    "User-Agent": "Mozilla/5.0",
+                },
+                timeout=15,
             )
-            text = raw.decode("gbk", errors="replace")
+            text = r.text
             for line in text.strip().split("\n"):
                 if "=" not in line or "v_" not in line:
                     continue
@@ -174,14 +175,15 @@ def fetch_sina_industry_board() -> list[dict]:
     从新浪行业板块接口抓取真实行业数据
     """
     try:
-        raw = subprocess.check_output(
-            ["curl", "-s", "--max-time", "10", "--noproxy", "*",
-             "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param=class2",
-             "-H", "Referer: https://finance.sina.com.cn",
-             "-H", "User-Agent: Mozilla/5.0"],
-            stderr=subprocess.DEVNULL,
+        r = httpx.get(
+            "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param=class2",
+            headers={
+                "Referer": "https://finance.sina.com.cn",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=10,
         )
-        text = raw.decode("gbk", errors="replace")
+        text = r.text
         sectors = []
 
         for line in text.strip().split("\n"):

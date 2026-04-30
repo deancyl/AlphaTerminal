@@ -143,7 +143,7 @@ try:
     from app.routers import backtest
     app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
 except Exception as e:
-    print(f"[Warning] Backtest module not loaded: {e}")
+    logger.warning(f"Backtest module not loaded: {e}")
 
 
 # ── 静态文件服务（前端 dist 目录）──────────────────────────────────────────────
@@ -171,7 +171,7 @@ if os.path.exists(FRONTEND_DIST):
             return FileResponse(index_file)
         raise HTTPException(status_code=404, detail="Not Found")
 else:
-    print(f"[Warning] Frontend dist not found at {FRONTEND_DIST}")
+    logger.warning(f"Frontend dist not found at {FRONTEND_DIST}")
 
 
 @app.get("/health")

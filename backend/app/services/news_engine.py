@@ -215,16 +215,15 @@ def refresh_news_cache(background: bool = True):
             _NEWS_CACHE.extend(final)
             _NEWS_CACHE_READY = True
 
-        # ── 审计日志：打印最新一条新闻 ────────────────────────────────
+        # ── 审计日志：记录最新一条新闻 ────────────────────────────────
         if final:
             latest = final[0]
-            print(
+            logger.info(
                 f"[News Fetch] 抓取完成，共 {len(final)} 条。"
-                f"最新新闻时间：{latest['time']}，标题：{latest['title'][:40]}",
-                flush=True
+                f"最新新闻时间：{latest['time']}，标题：{latest['title'][:40]}"
             )
         else:
-            print("[News Fetch] 抓取完成，缓存为空。", flush=True)
+            logger.info("[News Fetch] 抓取完成，缓存为空。")
 
         logger.info(
             f"[SCHEDULER] Successfully pushed {len(final)} items to cache. "

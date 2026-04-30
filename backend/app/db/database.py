@@ -237,7 +237,7 @@ def init_tables():
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────
         init_all_stocks_table()
-    print(f"✅ DB Ready: {_db_path}")
+    logger.info(f"DB Ready: {_db_path}")
 
 def buffer_insert(data_list):
     """写入 write_buffer（生产者：立即入队，不持有锁）"""

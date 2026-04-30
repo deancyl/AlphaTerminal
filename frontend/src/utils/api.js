@@ -14,8 +14,8 @@ import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js
 import { toast } from '../composables/useToast.js'
 
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
-// 使用对象包装确保原子性（JavaScript 单线程，async/await 不会导致并发问题）
-const _consecutiveFailures = { count: 0 }
+// JavaScript 单线程，使用简单变量即可
+let _consecutiveFailures = 0
 const _DEGRADE_THRESHOLD   = 3
 const _CIRCUIT_THRESHOLD   = 6
 
@@ -28,9 +28,9 @@ export const apiErrorState = reactive({
 })
 
 function _onFailure(url, status) {
-  // JavaScript 单线程，直接操作即可（async/await 不会导致并发问题）
-  _consecutiveFailures.count++
-  const n = _consecutiveFailures.count
+  // JavaScript 单线程，直接操作即可
+  _consecutiveFailures++
+  const n = _consecutiveFailures
   apiErrorState.failedCount = n
   apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
   apiErrorState.lastFailedAt = Date.now()
@@ -46,8 +46,8 @@ function _onFailure(url, status) {
 }
 
 function _onSuccess() {
-  if (_consecutiveFailures.count > 0) {
-    _consecutiveFailures.count = 0
+  if (_consecutiveFailures > 0) {
+    _consecutiveFailures = 0
     apiErrorState.failedCount = 0
     apiErrorState.lastError = null
     if (apiErrorState.isDegraded) {
@@ -215,9 +215,9 @@ export { broadcastDataSourceStatus }
 /**
  * 批量获取 API 数据
  * @param {Array<{url: string, key: string, default?: any, required?: boolean}>} requests 
- * @param {boolean} silent - 如果为true，则返回defaultValue而非抛出（不推荐）
+ * @param {boolean} silent - 如果为true，则即使required=true也不抛出错误，而是返回defaultValue
  * @returns {Promise<Object>}
- * @throws {Error} 当required=true的请求失败时抛出
+ * @throws {Error} 当required=true且silent=false的请求失败时抛出
  */
 export async function fetchApiBatch(requests, silent = false) {
   // Best-Effort 模式：内部 catch 保证单个接口失败不会导致整批丢弃
@@ -228,7 +228,7 @@ export async function fetchApiBatch(requests, silent = false) {
         return { key, data, error: null, required }
       } catch (e) {
         logger.warn(`[fetchApiBatch] ${url} failed (key=${key}): ${e.message}`)
-        // required=true 且 silent=false 时抛出错误（与文档一致）
+        // required=true 且 silent=false 时抛出错误
         if (required && !silent) {
           throw new Error(`[${key}] ${e.message}`)
         }

@@ -18,37 +18,127 @@
 
 ---
 
-## 🚀 快速启动
+## 🚀 快速启动（一键启动）
 
+### 方式一：一键启动脚本（推荐）
+
+我们提供了一键启动脚本，自动完成环境检查、依赖安装和服务启动：
+
+#### Linux / macOS
 ```bash
 # 1. 克隆仓库
 git clone https://github.com/deancyl/AlphaTerminal.git
 cd AlphaTerminal
 
-# 2. 一键初始化环境（自动安装 Python + Node 依赖）
-bash scripts/init_env.sh
+# 2. 一键启动（自动安装依赖 + 启动前后端）
+./start.sh
+
+# 3. 访问 http://localhost:60100
+```
+
+#### Windows
+```powershell
+# 1. 克隆仓库
+git clone https://github.com/deancyl/AlphaTerminal.git
+cd AlphaTerminal
+
+# 2. 一键启动（自动安装依赖 + 启动前后端）
+.\start.ps1
+
+# 3. 访问 http://localhost:60100
+```
+
+### 常用命令
+
+| 命令 | Linux/macOS | Windows | 说明 |
+|------|-------------|---------|------|
+| 启动全部 | `./start.sh` | `.\start.ps1` | 启动前后端 |
+| 仅后端 | `./start.sh backend` | `.\start.ps1 backend` | 仅启动后端 |
+| 仅前端 | `./start.sh frontend` | `.\start.ps1 frontend` | 仅启动前端 |
+| 停止服务 | `./start.sh stop` | `.\start.ps1 stop` | 停止所有服务 |
+| 查看状态 | `./start.sh status` | `.\start.ps1 status` | 查看运行状态 |
+| 仅安装依赖 | `./start.sh install` | `.\start.ps1 install` | 仅安装依赖 |
+
+### 方式二：手动启动
+
+如果需要手动控制启动过程：
+
+```bash
+# 1. 安装后端依赖
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+pip install psutil  # 额外依赖
+
+# 2. 安装前端依赖
+cd ../frontend
+npm install
 
 # 3. 启动后端（端口 8002）
-cd backend && source .venv/bin/activate
+cd ../backend
 python start_backend.py
 
 # 4. 启动前端（端口 60100，另一终端窗口）
-cd frontend && npm run dev -- --host 0.0.0.0 --port 60100
+cd ../frontend
+npm run dev -- --host 0.0.0.0 --port 60100
 
 # 5. 访问 http://localhost:60100
 ```
 
-> 💡 **初始化脚本** (`scripts/init_env.sh`) 会自动完成：
-> - Python 虚拟环境创建 + 依赖安装
-> - SQLite 数据库初始化
-> - 前端 `node_modules` 安装
-> - 启动命令说明
+### 环境要求
 
-> ⚠️ 若数据接口连接失败，请设置代理环境变量：
-> ```bash
-> export HTTP_PROXY=http://你的代理IP:端口
-> export HTTPS_PROXY=http://你的代理IP:端口
-> ```
+- **Python**: 3.11+（推荐 3.11 或 3.12）
+- **Node.js**: 20+（推荐 20.x LTS）
+- **操作系统**: Linux / macOS / Windows
+- **内存**: 至少 2GB 可用内存
+- **磁盘**: 至少 1GB 可用空间
+
+### 常见问题
+
+#### 1. Python externally-managed-environment 错误
+如果看到此错误，请使用虚拟环境：
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### 2. Node.js / npm 未找到
+请安装 Node.js 20+：
+- **官方下载**: https://nodejs.org/
+- **macOS**: `brew install node`
+- **Ubuntu/Debian**: `sudo apt install nodejs npm`
+
+#### 3. 端口被占用
+启动脚本会自动检测并尝试释放端口。如果失败，请手动停止占用进程：
+```bash
+# Linux/macOS
+lsof -ti:8002 | xargs kill -9  # 后端端口
+lsof -ti:60100 | xargs kill -9  # 前端端口
+
+# Windows
+Get-Process -Id (Get-NetTCPConnection -LocalPort 8002).OwningProcess | Stop-Process
+```
+
+#### 4. 数据接口连接失败
+如果数据接口无法连接，请设置代理环境变量：
+```bash
+export HTTP_PROXY=http://你的代理IP:端口
+export HTTPS_PROXY=http://你的代理IP:端口
+```
+
+#### 5. Rollup native module 错误（Linux）
+如果遇到 `@rollup/rollup-linux-x64-gnu` 错误，启动脚本会自动修复。如果手动修复：
+```bash
+cd frontend
+mkdir -p node_modules/@rollup
+cd node_modules/@rollup
+curl -L -o rollup-linux-x64-gnu.tgz https://registry.npmjs.org/@rollup/rollup-linux-x64-gnu/-/rollup-linux-x64-gnu-4.34.8.tgz
+tar xzf rollup-linux-x64-gnu.tgz
+mv package rollup-linux-x64-gnu
+rm rollup-linux-x64-gnu.tgz
+```
 
 ---
 

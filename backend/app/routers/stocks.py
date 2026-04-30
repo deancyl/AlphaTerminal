@@ -295,7 +295,6 @@ async def search_stocks(q: str = ""):
     """
     搜索股票代码和名称
     """
-    print(f"[Stocks] SEARCH CALLED with q='{q}'", flush=True)
     logger.info(f"[Stocks] search called with q='{q}'")
     
     if not q or len(q) < 1:
