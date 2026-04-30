@@ -2,7 +2,7 @@
   <aside
     class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme transition-all duration-300 ease-in-out overflow-hidden h-full"
     :class="isMobile ? '' : (isCollapsed ? 'items-center' : '')"
-    :style="isMobile ? { width: '224px' } : { width: isCollapsed ? '64px' : '224px' }"
+    :style="isMobile ? { width: '220px' } : { width: isCollapsed ? '64px' : '220px' }"
   >
     <!-- 顶部：Logo + 切换按钮 -->
     <div
@@ -11,7 +11,8 @@
     >
       <span v-if="isMobile || !isCollapsed" class="text-terminal-accent font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
       <button
-        class="w-8 h-8 flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
+        class="flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
+        :class="isMobile ? 'w-12 h-12' : 'w-11 h-11'"
         @click="$emit('toggle')"
         :title="isMobile ? '关闭' : (isCollapsed ? '展开' : '折叠')"
       >

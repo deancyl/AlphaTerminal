@@ -44,7 +44,7 @@
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
     <!-- ━━━ 左侧 Sidebar ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 桌面端：常驻，宽度 64px/224px | 移动端：overlay 滑出 -->
+    <!-- 桌面端：常驻，宽度 64px/220px | 移动端：overlay 滑出 -->
     <template v-if="!isMobile">
       <Sidebar
         :is-collapsed="isSidebarCollapsed"
@@ -61,7 +61,7 @@
       />
       <div
         class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-terminal-panel"
-        :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px' }"
+        :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '220px' }"
       >
         <Sidebar
           is-mobile

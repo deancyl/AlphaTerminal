@@ -6,7 +6,7 @@
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
       <button v-for="anchor in mobileAnchors" :key="anchor.id"
         :href="`#${anchor.id}`"
-        class="shrink-0 px-3 py-1 rounded-sm text-[10px] border transition-colors"
+        class="shrink-0 px-3 py-2 rounded-sm text-xs border transition-colors h-10 flex items-center"
         :class="'bg-terminal-accent/10 border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/20'"
         @click.prevent="scrollToMobileSection(anchor.id)">
         {{ anchor.label }}

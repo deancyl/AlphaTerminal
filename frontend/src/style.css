@@ -73,11 +73,11 @@
     --space-lg: 24px;
     --space-xl: 32px;
     
-    /* 圆角系统 - 万德风格：极小圆角 */
-    --radius-sm: 2px;
-    --radius-md: 2px;
-    --radius-lg: 4px;
-    --radius-xl: 4px;
+    /* 圆角系统 - 万德规范 v1.0 */
+    --radius-sm: 4px;    /* PC 默认圆角 */
+    --radius-md: 4px;
+    --radius-lg: 8px;    /* 移动端按钮 */
+    --radius-xl: 8px;
     
     /* 动效 */
     --duration-micro: 150ms;
