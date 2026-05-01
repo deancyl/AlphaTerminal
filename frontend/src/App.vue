@@ -77,7 +77,7 @@
         <div class="flex items-center gap-3 text-xs text-terminal-dim flex-nowrap overflow-x-auto scrollbar-hide max-w-full">
           <!-- 仅桌面端显示时钟 -->
           <span v-if="!isMobile" id="clock" class="font-mono">{{ currentTime }}</span>
-          <span class="px-2 py-0.5 rounded-sm text-theme-tertiary border border-theme-secondary text-[10px] tracking-wider">
+          <span class="px-2 py-0 leading-none rounded-sm text-theme-tertiary border border-theme-secondary text-[10px] tracking-wider h-5 flex items-center">
             LIVE
           </span>
           <!-- 仅桌面端显示锁定按钮 -->
@@ -96,11 +96,11 @@
           </button>
           <!-- Copilot 唤醒按钮 -->
           <button
-            class="flex items-center gap-1 px-2 py-1 rounded-sm border border-terminal-accent/30 bg-terminal-accent/10 text-terminal-accent hover:bg-terminal-accent/20 hover:border-terminal-accent/50 transition-all text-xs relative"
+            class="flex items-center gap-1 px-2 py-0 leading-none rounded-sm border border-terminal-accent/30 bg-terminal-accent/10 text-terminal-accent hover:bg-terminal-accent/20 hover:border-terminal-accent/50 transition-all text-[10px] h-5 relative"
             @click="toggleCopilot"
           >
-            <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
-            <span v-else>🤖 展开 AI 助理</span>
+            <span v-if="isCopilotOpen">⏭ 收起</span>
+            <span v-else>🤖 AI</span>
             <!-- 未读消息指示器 -->
             <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-bearish rounded-sm text-[10px] text-theme-primary flex items-center justify-center animate-pulse">
               {{ copilotUnreadCount > 9 ? '9+' : copilotUnreadCount }}
