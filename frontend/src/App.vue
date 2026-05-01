@@ -107,11 +107,11 @@
           </button>
           <!-- Copilot 唤醒按钮 -->
           <button
-            class="flex items-center gap-1 px-2 py-1 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs relative"
+            class="flex items-center gap-1 px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-[10px] h-6 relative"
             @click="toggleCopilot"
           >
-            <span v-if="isCopilotOpen">⏭ 收起 AI 助理</span>
-            <span v-else>🤖 展开 AI 助理</span>
+            <span v-if="isCopilotOpen">⏭ 收起</span>
+            <span v-else>🤖 AI</span>
             <!-- 未读消息指示器 -->
             <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center animate-pulse">
               {{ copilotUnreadCount > 9 ? '9+' : copilotUnreadCount }}
