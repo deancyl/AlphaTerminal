@@ -107,7 +107,7 @@
           </button>
           <!-- Copilot 唤醒按钮 -->
           <button
-            class="flex items-center gap-1 px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-[10px] h-6 relative"
+            class="flex items-center gap-1 px-1.5 py-0 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs h-5 leading-none relative"
             @click="toggleCopilot"
           >
             <span v-if="isCopilotOpen">⏭ 收起</span>
