@@ -41,18 +41,18 @@ export const THEME_ICONS = {
 }
 
 // ============================================
-// 规范色彩定义
+// 规范色彩定义（遵循万德金融终端UI/UX设计规范 v1.0）
 // ============================================
 const BRAND_COLORS = {
-  primary: '#2E7DFF',
-  primaryHover: '#4A8EFF',
-  primaryLight: '#5C9DFF',
-  primaryDark: '#1A6AE8',
+  primary: '#0F52BA',        // 万德蓝
+  primaryHover: '#1A6AD8',
+  primaryLight: '#3A7BD8',
+  primaryDark: '#0A3D8C',
 }
 
 const MARKET_COLORS = {
-  up: '#E8554A',
-  down: '#3DB873',
+  up: '#E63946',             // A股上涨色（红）
+  down: '#1A936F',           // A股下跌色（绿）
   neutral: '#B0B8CC',
 }
 
@@ -60,7 +60,7 @@ const STATUS_COLORS = {
   warning: '#F5A623',
   danger: '#DC2626',
   success: '#16A34A',
-  info: '#2E7DFF',
+  info: '#0F52BA',
 }
 
 // ============================================
@@ -76,18 +76,18 @@ const THEME_CONFIG = {
     '--color-primary-hover': BRAND_COLORS.primaryHover,
     '--color-primary-light': BRAND_COLORS.primaryLight,
     '--color-primary-dark': BRAND_COLORS.primaryDark,
-    '--color-primary-bg': 'rgba(46,125,255,0.10)',
-    '--color-primary-border': 'rgba(46,125,255,0.30)',
+    '--color-primary-bg': 'rgba(15,82,186,0.10)',
+    '--color-primary-border': 'rgba(15,82,186,0.30)',
     
     // ── 语义色（涨跌）──
     '--color-up': MARKET_COLORS.up,
     '--color-up-light': '#FF6B6B',
-    '--color-up-bg': 'rgba(232,85,74,0.15)',
-    '--color-up-border': 'rgba(232,85,74,0.30)',
+    '--color-up-bg': 'rgba(230,57,70,0.15)',
+    '--color-up-border': 'rgba(230,57,70,0.30)',
     '--color-down': MARKET_COLORS.down,
     '--color-down-light': '#5CD899',
-    '--color-down-bg': 'rgba(61,184,115,0.15)',
-    '--color-down-border': 'rgba(61,184,115,0.30)',
+    '--color-down-bg': 'rgba(26,147,111,0.15)',
+    '--color-down-border': 'rgba(26,147,111,0.30)',
     '--color-neutral': MARKET_COLORS.neutral,
     '--color-neutral-bg': 'rgba(176,184,204,0.10)',
     '--color-neutral-border': 'rgba(176,184,204,0.25)',
@@ -103,16 +103,16 @@ const THEME_CONFIG = {
     '--color-success-bg': 'rgba(22,163,74,0.15)',
     '--color-success-border': 'rgba(22,163,74,0.30)',
     '--color-info': STATUS_COLORS.info,
-    '--color-info-bg': 'rgba(46,125,255,0.15)',
-    '--color-info-border': 'rgba(46,125,255,0.30)',
+    '--color-info-bg': 'rgba(15,82,186,0.15)',
+    '--color-info-border': 'rgba(15,82,186,0.30)',
     
     // ── 中性色（背景）──
-    '--bg-primary': '#0D1117',
-    '--bg-secondary': '#161B22',
-    '--bg-tertiary': '#1C2333',
-    '--bg-elevated': '#21262D',
+    '--bg-primary': '#121212',
+    '--bg-secondary': '#1E1E1E',
+    '--bg-tertiary': '#252525',
+    '--bg-elevated': '#2C2C2C',
     '--bg-hover': 'rgba(255,255,255,0.05)',
-    '--bg-active': 'rgba(46,125,255,0.10)',
+    '--bg-active': 'rgba(15,82,186,0.10)',
     '--bg-overlay': 'rgba(0,0,0,0.60)',
     '--bg-glass': 'rgba(22,27,34,0.95)',
     
@@ -123,36 +123,36 @@ const THEME_CONFIG = {
     '--text-muted': '#6E7681',
     '--text-disabled': '#484F58',
     '--text-placeholder': '#6E7681',
-    '--text-inverse': '#0D1117',
+    '--text-inverse': '#121212',
     
     // ── 中性色（边框）──
     '--border-primary': '#30363D',
-    '--border-secondary': '#21262D',
+    '--border-secondary': '#2C2C2C',
     '--border-focus': BRAND_COLORS.primary,
     '--border-hover': '#484F58',
     
     // ── 面板背景 ──
-    '--panel-bg': '#161B22',
-    '--panel-bg-elevated': '#21262D',
-    '--panel-bg-hover': '#1C2333',
-    '--panel-bg-active': 'rgba(46,125,255,0.08)',
+    '--panel-bg': '#1E1E1E',
+    '--panel-bg-elevated': '#2C2C2C',
+    '--panel-bg-hover': '#252525',
+    '--panel-bg-active': 'rgba(15,82,186,0.08)',
     
     // ── 图表配色 ──
     '--chart-grid': '#1C2333',
     '--chart-text': '#8B949E',
     '--chart-line': BRAND_COLORS.primary,
-    '--chart-area': 'rgba(46,125,255,0.10)',
+    '--chart-area': 'rgba(15,82,186,0.10)',
     '--chart-crosshair': 'rgba(240,246,252,0.20)',
     
     // ── 阴影 ──
     '--shadow-sm': '0 1px 2px rgba(0,0,0,0.30)',
     '--shadow-md': '0 4px 8px rgba(0,0,0,0.40)',
-    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.50)',
-    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.60)',
+    '--shadow-sm': '0 8px 16px rgba(0,0,0,0.50)',
+    '--shadow-sm': '0 12px 24px rgba(0,0,0,0.60)',
     '--shadow-glow': `0 0 20px ${BRAND_COLORS.primary}20`,
     
     // ── 滚动条 ──
-    '--scrollbar-track': '#161B22',
+    '--scrollbar-track': '#1E1E1E',
     '--scrollbar-thumb': '#30363D',
     '--scrollbar-thumb-hover': '#484F58',
     
@@ -218,16 +218,16 @@ const THEME_CONFIG = {
     // ── 旧版兼容变量（将逐步迁移）──
     '--accent-primary': BRAND_COLORS.primary,
     '--accent-secondary': BRAND_COLORS.primaryHover,
-    '--accent-bg': 'rgba(46,125,255,0.10)',
-    '--accent-border': 'rgba(46,125,255,0.30)',
+    '--accent-bg': 'rgba(15,82,186,0.10)',
+    '--accent-border': 'rgba(15,82,186,0.30)',
     '--bullish': MARKET_COLORS.up,
-    '--bullish-light': '#FF6B6B',
-    '--bullish-bg': 'rgba(232,85,74,0.15)',
-    '--bullish-border': 'rgba(232,85,74,0.30)',
+    '--bullish-light': '#FF5252',
+    '--bullish-bg': 'rgba(230,57,70,0.15)',
+    '--bullish-border': 'rgba(230,57,70,0.30)',
     '--bearish': MARKET_COLORS.down,
-    '--bearish-light': '#5CD899',
-    '--bearish-bg': 'rgba(61,184,115,0.15)',
-    '--bearish-border': 'rgba(61,184,115,0.30)',
+    '--bearish-light': '#5CD8A8',
+    '--bearish-bg': 'rgba(26,147,111,0.15)',
+    '--bearish-border': 'rgba(26,147,111,0.30)',
     '--status-live': BRAND_COLORS.primary,
     '--status-warning': STATUS_COLORS.warning,
     '--status-error': STATUS_COLORS.danger,
@@ -240,12 +240,12 @@ const THEME_CONFIG = {
   // ============================================
   [THEMES.BLACK]: {
     // 品牌色
-    '--color-primary': '#2E7DFF',
+    '--color-primary': '#0F52BA',
     '--color-primary-hover': '#4A8EFF',
     '--color-primary-light': '#5C9DFF',
     '--color-primary-dark': '#1A6AE8',
-    '--color-primary-bg': 'rgba(46,125,255,0.12)',
-    '--color-primary-border': 'rgba(46,125,255,0.35)',
+    '--color-primary-bg': 'rgba(15,82,186,0.12)',
+    '--color-primary-border': 'rgba(15,82,186,0.35)',
     
     // 语义色
     '--color-up': '#FF4D4F',
@@ -280,7 +280,7 @@ const THEME_CONFIG = {
     '--bg-tertiary': '#141414',
     '--bg-elevated': '#1A1A1A',
     '--bg-hover': 'rgba(255,255,255,0.08)',
-    '--bg-active': 'rgba(46,125,255,0.12)',
+    '--bg-active': 'rgba(15,82,186,0.12)',
     '--bg-overlay': 'rgba(0,0,0,0.70)',
     '--bg-glass': 'rgba(10,10,10,0.95)',
     
@@ -294,28 +294,28 @@ const THEME_CONFIG = {
     
     '--border-primary': '#2A2A2A',
     '--border-secondary': '#1A1A1A',
-    '--border-focus': '#2E7DFF',
+    '--border-focus': '#0F52BA',
     '--border-hover': '#3A3A3A',
     
     // 面板
     '--panel-bg': '#0A0A0A',
     '--panel-bg-elevated': '#141414',
     '--panel-bg-hover': '#1A1A1A',
-    '--panel-bg-active': 'rgba(46,125,255,0.10)',
+    '--panel-bg-active': 'rgba(15,82,186,0.10)',
     
     // 图表
     '--chart-grid': '#1A1A1A',
     '--chart-text': '#606060',
-    '--chart-line': '#2E7DFF',
-    '--chart-area': 'rgba(46,125,255,0.12)',
+    '--chart-line': '#0F52BA',
+    '--chart-area': 'rgba(15,82,186,0.12)',
     '--chart-crosshair': 'rgba(255,255,255,0.15)',
     
     // 阴影
     '--shadow-sm': '0 1px 2px rgba(0,0,0,0.50)',
     '--shadow-md': '0 4px 8px rgba(0,0,0,0.60)',
-    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.70)',
-    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.80)',
-    '--shadow-glow': '0 0 20px rgba(46,125,255,0.15)',
+    '--shadow-sm': '0 8px 16px rgba(0,0,0,0.70)',
+    '--shadow-sm': '0 12px 24px rgba(0,0,0,0.80)',
+    '--shadow-glow': '0 0 20px rgba(15,82,186,0.15)',
     
     // 滚动条
     '--scrollbar-track': '#0A0A0A',
@@ -382,10 +382,10 @@ const THEME_CONFIG = {
     '--font-feature-tnum': '"tnum"',
     
     // 旧版兼容
-    '--accent-primary': '#2E7DFF',
+    '--accent-primary': '#0F52BA',
     '--accent-secondary': '#4A8EFF',
-    '--accent-bg': 'rgba(46,125,255,0.12)',
-    '--accent-border': 'rgba(46,125,255,0.35)',
+    '--accent-bg': 'rgba(15,82,186,0.12)',
+    '--accent-border': 'rgba(15,82,186,0.35)',
     '--bullish': '#FF4D4F',
     '--bullish-light': '#FF7875',
     '--bullish-bg': 'rgba(255,77,79,0.20)',
@@ -394,7 +394,7 @@ const THEME_CONFIG = {
     '--bearish-light': '#73D13D',
     '--bearish-bg': 'rgba(82,196,26,0.20)',
     '--bearish-border': 'rgba(82,196,26,0.40)',
-    '--status-live': '#2E7DFF',
+    '--status-live': '#0F52BA',
     '--status-warning': '#FFCC00',
     '--status-error': '#FF4444',
     '--status-info': '#44AAFF',
@@ -472,8 +472,8 @@ const THEME_CONFIG = {
     
     '--shadow-sm': '0 1px 2px rgba(0,0,0,0.30)',
     '--shadow-md': '0 4px 8px rgba(0,0,0,0.40)',
-    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.50)',
-    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.60)',
+    '--shadow-sm': '0 8px 16px rgba(0,0,0,0.50)',
+    '--shadow-sm': '0 12px 24px rgba(0,0,0,0.60)',
     '--shadow-glow': '0 0 20px rgba(24,144,255,0.15)',
     
     '--scrollbar-track': '#232838',
@@ -556,12 +556,12 @@ const THEME_CONFIG = {
   // 4. 专业亮色主题 (LIGHT)
   // ============================================
   [THEMES.LIGHT]: {
-    '--color-primary': '#2E7DFF',
+    '--color-primary': '#0F52BA',
     '--color-primary-hover': '#1A6AE8',
     '--color-primary-light': '#4A8EFF',
     '--color-primary-dark': '#0F52BA',
-    '--color-primary-bg': 'rgba(46,125,255,0.10)',
-    '--color-primary-border': 'rgba(46,125,255,0.25)',
+    '--color-primary-bg': 'rgba(15,82,186,0.10)',
+    '--color-primary-border': 'rgba(15,82,186,0.25)',
     
     '--color-up': '#CF1322',
     '--color-up-light': '#FF4D4F',
@@ -584,16 +584,16 @@ const THEME_CONFIG = {
     '--color-success': '#16A34A',
     '--color-success-bg': 'rgba(22,163,74,0.10)',
     '--color-success-border': 'rgba(22,163,74,0.25)',
-    '--color-info': '#2E7DFF',
-    '--color-info-bg': 'rgba(46,125,255,0.10)',
-    '--color-info-border': 'rgba(46,125,255,0.25)',
+    '--color-info': '#0F52BA',
+    '--color-info-bg': 'rgba(15,82,186,0.10)',
+    '--color-info-border': 'rgba(15,82,186,0.25)',
     
     '--bg-primary': '#F8F9FA',
     '--bg-secondary': '#FFFFFF',
     '--bg-tertiary': '#F0F1F3',
     '--bg-elevated': '#FFFFFF',
     '--bg-hover': 'rgba(0,0,0,0.04)',
-    '--bg-active': 'rgba(46,125,255,0.08)',
+    '--bg-active': 'rgba(15,82,186,0.08)',
     '--bg-overlay': 'rgba(0,0,0,0.40)',
     '--bg-glass': 'rgba(255,255,255,0.95)',
     
@@ -607,25 +607,25 @@ const THEME_CONFIG = {
     
     '--border-primary': '#D9D9D9',
     '--border-secondary': '#E8E8E8',
-    '--border-focus': '#2E7DFF',
+    '--border-focus': '#0F52BA',
     '--border-hover': '#BFBFBF',
     
     '--panel-bg': '#FFFFFF',
     '--panel-bg-elevated': '#FAFAFA',
     '--panel-bg-hover': '#F5F5F5',
-    '--panel-bg-active': 'rgba(46,125,255,0.06)',
+    '--panel-bg-active': 'rgba(15,82,186,0.06)',
     
     '--chart-grid': '#E8E8E8',
     '--chart-text': '#A0A0A0',
-    '--chart-line': '#2E7DFF',
-    '--chart-area': 'rgba(46,125,255,0.10)',
+    '--chart-line': '#0F52BA',
+    '--chart-area': 'rgba(15,82,186,0.10)',
     '--chart-crosshair': 'rgba(26,26,26,0.10)',
     
     '--shadow-sm': '0 1px 2px rgba(0,0,0,0.08)',
     '--shadow-md': '0 4px 8px rgba(0,0,0,0.10)',
-    '--shadow-lg': '0 8px 16px rgba(0,0,0,0.12)',
-    '--shadow-xl': '0 12px 24px rgba(0,0,0,0.15)',
-    '--shadow-glow': '0 0 20px rgba(46,125,255,0.10)',
+    '--shadow-sm': '0 8px 16px rgba(0,0,0,0.12)',
+    '--shadow-sm': '0 12px 24px rgba(0,0,0,0.15)',
+    '--shadow-glow': '0 0 20px rgba(15,82,186,0.10)',
     
     '--scrollbar-track': '#F0F1F3',
     '--scrollbar-thumb': '#D9D9D9',
@@ -684,10 +684,10 @@ const THEME_CONFIG = {
     '--font-number': '"JetBrains Mono", "Roboto Mono", "Consolas", monospace',
     '--font-feature-tnum': '"tnum"',
     
-    '--accent-primary': '#2E7DFF',
+    '--accent-primary': '#0F52BA',
     '--accent-secondary': '#1A6AE8',
-    '--accent-bg': 'rgba(46,125,255,0.10)',
-    '--accent-border': 'rgba(46,125,255,0.25)',
+    '--accent-bg': 'rgba(15,82,186,0.10)',
+    '--accent-border': 'rgba(15,82,186,0.25)',
     '--bullish': '#CF1322',
     '--bullish-light': '#FF4D4F',
     '--bullish-bg': 'rgba(207,19,34,0.08)',
@@ -696,10 +696,10 @@ const THEME_CONFIG = {
     '--bearish-light': '#52C41A',
     '--bearish-bg': 'rgba(56,158,13,0.08)',
     '--bearish-border': 'rgba(56,158,13,0.25)',
-    '--status-live': '#2E7DFF',
+    '--status-live': '#0F52BA',
     '--status-warning': '#FF7D00',
     '--status-error': '#DC2626',
-    '--status-info': '#2E7DFF',
+    '--status-info': '#0F52BA',
     '--status-success': '#16A34A',
   }
 }
@@ -736,28 +736,28 @@ export function getChartColors() {
   const get = (name, fallback) => getThemeVariable(name, fallback)
   
   return {
-    bgPrimary: get('--bg-primary', '#0D1117'),
+    bgPrimary: get('--bg-primary', '#121212'),
     isLight,
     textPrimary: get('--text-primary', '#F0F6FC'),
     textSecondary: get('--text-secondary', '#C9D1D9'),
     textTertiary: get('--text-tertiary', '#8B949E'),
     borderPrimary: get('--border-primary', '#30363D'),
-    borderSecondary: get('--border-secondary', '#21262D'),
+    borderSecondary: get('--border-secondary', '#2C2C2C'),
     chartGrid: get('--chart-grid', '#1C2333'),
     chartText: get('--chart-text', '#8B949E'),
-    chartLine: get('--chart-line', '#2E7DFF'),
-    accentPrimary: get('--color-primary', '#2E7DFF'),
-    bullish: get('--color-up', '#E8554A'),
+    chartLine: get('--chart-line', '#0F52BA'),
+    accentPrimary: get('--color-primary', '#0F52BA'),
+    bullish: get('--color-up', '#E63946'),
     bullishLight: get('--color-up-light', '#FF6B6B'),
-    bearish: get('--color-down', '#3DB873'),
+    bearish: get('--color-down', '#1A936F'),
     bearishLight: get('--color-down-light', '#5CD899'),
-    panelBg: get('--panel-bg', '#161B22'),
+    panelBg: get('--panel-bg', '#1E1E1E'),
     tooltipBg: isLight ? 'rgba(255,255,255,0.96)' : 'rgba(13,17,23,0.95)',
     tooltipBorder: get('--border-primary', '#30363D'),
     tooltipText: get('--text-primary', '#F0F6FC'),
     // 辅助色
     ma5: '#F5A623',
-    ma10: '#2E7DFF',
+    ma10: '#0F52BA',
     ma20: '#A855F7',
     ma60: '#EC4899',
   }

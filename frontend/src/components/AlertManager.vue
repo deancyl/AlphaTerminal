@@ -7,13 +7,13 @@
         <button
           v-if="notificationPermission !== 'granted'"
           @click="requestPermission"
-          class="bg-[var(--color-warning-bg)] hover:bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)] text-xs px-2 py-1 rounded transition-colors"
+          class="bg-[var(--color-warning-bg)] hover:bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)] text-xs px-2 py-1 rounded-sm transition-colors"
         >
           启用通知
         </button>
         <button
           @click="showAddModal = true"
-          class="bg-terminal-accent/20 hover:bg-terminal-accent/30 text-terminal-accent border border-terminal-accent/30 text-xs px-2 py-1 rounded transition-colors"
+          class="bg-terminal-accent/20 hover:bg-terminal-accent/30 text-terminal-accent border border-terminal-accent/30 text-xs px-2 py-1 rounded-sm transition-colors"
         >
           + 添加
         </button>
@@ -21,7 +21,7 @@
     </div>
 
     <!-- 权限状态 -->
-    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded text-xs text-[var(--color-danger-light)]">
+    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-sm text-xs text-[var(--color-danger-light)]">
       ⚠️ 浏览器通知权限被拒绝，请手动启用通知权限以接收预警
     </div>
 
@@ -34,7 +34,7 @@
       <div
         v-for="rule in alertRules"
         :key="rule.id"
-        class="p-2 bg-terminal-panel border border-theme rounded text-xs"
+        class="p-2 bg-terminal-panel border border-theme rounded-sm text-xs"
         :class="{ 'opacity-50': !rule.enabled }"
       >
         <div class="flex items-center justify-between">
@@ -51,14 +51,14 @@
           <div class="flex items-center gap-1">
             <button
               @click="toggleRule(rule.id)"
-              class="w-6 h-6 rounded flex items-center justify-center transition-colors"
+              class="w-6 h-6 rounded-sm flex items-center justify-center transition-colors"
               :class="rule.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'"
             >
               {{ rule.enabled ? '✓' : '○' }}
             </button>
             <button
               @click="deleteRule(rule.id)"
-              class="w-6 h-6 rounded flex items-center justify-center bg-[var(--color-danger-bg)] text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
+              class="w-6 h-6 rounded-sm flex items-center justify-center bg-[var(--color-danger-bg)] text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
             >
               ×
             </button>
@@ -69,7 +69,7 @@
 
     <!-- 添加预警弹窗 -->
     <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddModal = false">
-      <div class="bg-terminal-panel border border-theme rounded-lg p-4 w-80 max-w-[90vw]">
+      <div class="bg-terminal-panel border border-theme rounded-sm p-4 w-80 max-w-[90vw]">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">添加价格预警</h3>
         
         <div class="space-y-3">
@@ -79,7 +79,7 @@
               v-model="newRule.symbol"
               type="text"
               placeholder="如: sh600519"
-              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-terminal-bg/60 border border-[var(--border-primary)] rounded-sm px-2 py-1 text-xs text-theme-primary focus:border-terminal-accent/60 focus:outline-none"
             />
           </div>
           
@@ -87,7 +87,7 @@
             <label class="block text-xs text-[var(--text-secondary)] mb-1">预警条件</label>
             <select
               v-model="newRule.condition"
-              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-terminal-bg/60 border border-[var(--border-primary)] rounded-sm px-2 py-1 text-xs text-theme-primary focus:border-terminal-accent/60 focus:outline-none"
             >
               <option value="above">价格高于</option>
               <option value="below">价格低于</option>
@@ -102,7 +102,7 @@
               type="number"
               step="0.01"
               placeholder="输入目标价格"
-              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-terminal-bg/60 border border-[var(--border-primary)] rounded-sm px-2 py-1 text-xs text-theme-primary focus:border-terminal-accent/60 focus:outline-none"
             />
           </div>
           
@@ -112,7 +112,7 @@
               v-model="newRule.note"
               type="text"
               placeholder="添加备注说明"
-              class="w-full bg-black/40 border border-[var(--border-primary)] rounded px-2 py-1 text-xs text-white focus:border-cyan-400 focus:outline-none"
+              class="w-full bg-terminal-bg/60 border border-[var(--border-primary)] rounded-sm px-2 py-1 text-xs text-theme-primary focus:border-terminal-accent/60 focus:outline-none"
             />
           </div>
         </div>
@@ -120,14 +120,14 @@
         <div class="flex justify-end gap-2 mt-4">
           <button
             @click="showAddModal = false"
-            class="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-white transition-colors"
+            class="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-theme-primary transition-colors"
           >
             取消
           </button>
           <button
             @click="addRule"
             :disabled="!canAdd"
-            class="px-3 py-1 text-xs bg-[var(--color-info)] text-white rounded hover:bg-[var(--color-info-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            class="px-3 py-1 text-xs bg-[var(--color-info)] text-theme-primary rounded-sm hover:bg-[var(--color-info-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             添加
           </button>
@@ -150,7 +150,7 @@
         <div
           v-for="record in recentHistory"
           :key="record.id"
-          class="text-[10px] p-1.5 bg-black/20 rounded"
+          class="text-[10px] p-1.5 bg-theme-secondary/20 rounded-sm"
         >
           <div class="flex items-center justify-between">
             <span class="text-[var(--color-info)]">{{ record.symbol }}</span>
@@ -290,7 +290,7 @@ onMounted(() => {
 
 <style scoped>
 .alert-manager {
-  @apply p-3 rounded-lg;
+  @apply p-3 rounded-sm;
   background-color: var(--panel-bg);
   border: 1px solid var(--border-primary);
 }

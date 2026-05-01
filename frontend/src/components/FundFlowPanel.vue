@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
-// ECharts 通过 CDN 加载，使用全局变量
-const echarts = window.echarts
+// ECharts 通过 CDN 加载，使用全局变量（延迟取值，避免模块加载时 CDN 尚未就绪）
+const getEcharts = () => window.echarts
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -27,6 +27,11 @@ const renderChart = async (dataList) => {
     await new Promise(resolve => requestAnimationFrame(resolve))
   }
 
+  const echarts = getEcharts()
+  if (!echarts) {
+    logger.warn('[FundFlow] ECharts CDN 未加载，跳过渲染')
+    return
+  }
   if (!chartInstance.value) {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }
@@ -98,12 +103,12 @@ onUnmounted(() => {
     <div class="p-2 text-xs font-bold text-theme-accent border-b border-theme-secondary shrink-0">资金流向 (近30日)</div>
     <!-- Loading 骨架屏：v-show 保持 DOM 存在 -->
     <div v-show="isLoading" class="flex-1 p-3 space-y-3">
-      <div class="skeleton h-4 w-3/4 rounded"></div>
-      <div class="skeleton h-32 rounded-lg"></div>
+      <div class="skeleton h-4 w-3/4 rounded-sm"></div>
+      <div class="skeleton h-32 rounded-sm"></div>
       <div class="flex gap-2">
-        <div class="skeleton h-3 w-16 rounded"></div>
-        <div class="skeleton h-3 w-12 rounded"></div>
-        <div class="skeleton h-3 w-20 rounded"></div>
+        <div class="skeleton h-3 w-16 rounded-sm"></div>
+        <div class="skeleton h-3 w-12 rounded-sm"></div>
+        <div class="skeleton h-3 w-20 rounded-sm"></div>
       </div>
     </div>
     <!-- 空状态：也用 v-show，不销毁图表宿主 DOM -->

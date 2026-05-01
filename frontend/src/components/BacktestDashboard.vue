@@ -11,10 +11,10 @@
           <button
             v-for="preset in strategyPresets" :key="preset.name"
             @click="applyPreset(preset)"
-            class="px-2 py-1 text-[9px] rounded border transition-colors"
+            class="px-2 py-1 text-[10px] rounded-sm border transition-colors"
             :class="isPresetActive(preset)
               ? 'bg-[var(--color-info-bg)] border-[var(--color-info-border)] text-[var(--color-info)]'
-              : 'border-slate-600 text-slate-400 hover:border-[var(--color-info-border)] hover:text-[var(--color-info-light)]'"
+              : 'border-theme-secondary text-theme-secondary hover:border-[var(--color-info-border)] hover:text-[var(--color-info-light)]'"
           >
             {{ preset.icon }} {{ preset.name }}
           </button>
@@ -28,9 +28,9 @@
         <div class="space-y-1.5">
           <!-- 策略选择 -->
           <div class="flex items-center justify-between">
-            <span class="text-[9px] text-theme-muted w-8">策略</span>
+            <span class="text-[10px] text-theme-muted w-8">策略</span>
             <select v-model="strategyType"
-              class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
+              class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
               <option value="ma_crossover">双均线</option>
               <option value="rsi_oversold">RSI超卖</option>
               <option value="bollinger_bands">布林带</option>
@@ -41,67 +41,67 @@
           <template v-if="strategyType === 'ma_crossover'">
             <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">快线</span>
+                <span class="text-[10px] text-theme-muted w-8">快线</span>
                 <input v-model.number="fastMa" type="number" min="2" max="60"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">慢线</span>
+                <span class="text-[10px] text-theme-muted w-8">慢线</span>
                 <input v-model.number="slowMa" type="number" min="5" max="250"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
             </div>
-            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
-            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">短期趋势（如 5 日），反应近期价格敏感变化</div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">长期趋势（如 20 日），代表中长线支撑与阻力</div>
           </template>
 
           <!-- RSI 参数 -->
           <template v-if="strategyType === 'rsi_oversold'">
             <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">周期</span>
+                <span class="text-[10px] text-theme-muted w-8">周期</span>
                 <input v-model.number="rsiPeriod" type="number" min="7" max="30"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">买入</span>
+                <span class="text-[10px] text-theme-muted w-8">买入</span>
                 <input v-model.number="rsiBuy" type="number" min="10" max="50"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
             </div>
-            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">RSI &lt; 此值买入（默认30超卖）</div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">RSI &lt; 此值买入（默认30超卖）</div>
             <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">卖出</span>
+                <span class="text-[10px] text-theme-muted w-8">卖出</span>
                 <input v-model.number="rsiSell" type="number" min="50" max="90"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
             </div>
-            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">RSI &gt; 此值卖出（默认70超买）</div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">RSI &gt; 此值卖出（默认70超买）</div>
           </template>
 
           <!-- 布林带参数 -->
           <template v-if="strategyType === 'bollinger_bands'">
             <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">周期</span>
+                <span class="text-[10px] text-theme-muted w-8">周期</span>
                 <input v-model.number="bbPeriod" type="number" min="10" max="60"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
               <div class="flex items-center justify-between">
-                <span class="text-[9px] text-theme-muted w-8">倍数</span>
+                <span class="text-[10px] text-theme-muted w-8">倍数</span>
                 <input v-model.number="bbStd" type="number" min="1" max="4" step="0.5"
-                  class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
               </div>
             </div>
-            <div class="hidden md:block text-[9px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
           </template>
 
           <!-- 窗口 -->
           <div class="flex items-center justify-between">
-            <span class="text-[9px] text-theme-muted w-8">窗口</span>
+            <span class="text-[10px] text-theme-muted w-8">窗口</span>
             <select v-model="windowPreset"
-              class="bg-black/40 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
+              class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
               <option value="1m">近1月</option>
               <option value="3m">近3月</option>
               <option value="6m">近6月</option>
@@ -112,12 +112,12 @@
           </div>
           <!-- 初始资金 -->
           <div class="flex items-center justify-between">
-            <span class="text-[9px] text-theme-muted w-8">资金</span>
+            <span class="text-[10px] text-theme-muted w-8">资金</span>
             <span class="text-[10px] font-mono text-theme-secondary">{{ (initialCapital / 10000).toFixed(0) }}万</span>
           </div>
 
           <!-- 策略规则提示（根据所选策略动态切换） -->
-          <div class="hidden md:block mt-2 px-2 py-1.5 rounded bg-[var(--color-info-bg)] border border-[var(--color-info-border)] text-[9px] leading-snug">
+          <div class="hidden md:block mt-2 px-2 py-1.5 rounded-sm bg-[var(--color-info-bg)] border border-[var(--color-info-border)] text-[10px] leading-snug">
             <template v-if="strategyType === 'ma_crossover'">
               💡 <span class="text-[var(--color-info-light)] font-medium">双均线策略：</span>
               <span class="text-[var(--color-info-light)]/70">快线向上穿越慢线时<span class="text-[var(--color-success)]">金叉→全仓买入</span>；</span>
@@ -142,20 +142,20 @@
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] text-theme-accent font-bold">🎯 标的</div>
           <!-- 股票/组合切换 -->
-          <div class="flex rounded border border-slate-600 overflow-hidden text-[9px]">
+          <div class="flex rounded-sm border border-theme-secondary overflow-hidden text-[10px]">
             <button
               @click="targetMode = 'stock'"
-              :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-slate-600' : 'text-slate-400'"
+              :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-theme-secondary' : 'text-theme-secondary'"
               class="px-2 py-0.5">股票</button>
             <button
               @click="targetMode = 'portfolio'"
-              :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-slate-400'"
+              :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-theme-secondary'"
               class="px-2 py-0.5">组合</button>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
           <input v-model="symbol"
-            class="flex-1 bg-black/40 border border-slate-600 rounded px-2 py-1 text-[10px] text-[var(--color-info)] focus:outline-none focus:border-cyan-400 placeholder:text-slate-600"
+            class="flex-1 bg-terminal-bg/60 border border-theme-secondary rounded-sm px-2 py-1 text-[10px] text-[var(--color-info)] focus:outline-none focus:border-terminal-accent/60 placeholder:text-theme-tertiary"
             placeholder="输入代码 (例: sh600519)"
             @keyup.enter="runBacktest" />
           <!-- 格式校验 -->
@@ -166,13 +166,13 @@
         </div>
         <!-- 名称+行业显示 -->
         <div v-if="symbolInfo"
-          class="mt-1 text-[9px] text-[var(--color-info-light)] truncate">
+          class="mt-1 text-[10px] text-[var(--color-info-light)] truncate">
           {{ symbolInfo.name }}<span class="text-cyan-500 ml-1">[{{ symbolInfo.industry }}]</span>
         </div>
         <div v-else-if="symbolValid && symbolNoData"
-          class="mt-1 text-[9px] text-[var(--color-warning)] italic">本地无此标的历史数据</div>
+          class="mt-1 text-[10px] text-[var(--color-warning)] italic">本地无此标的历史数据</div>
         <div v-else-if="symbolValid"
-          class="mt-1 text-[9px] text-slate-500 italic">回车执行回测</div>
+          class="mt-1 text-[10px] text-theme-tertiary italic">回车执行回测</div>
       </div>
 
       <!-- 投资组合模式 -->
@@ -180,14 +180,14 @@
         <div class="flex items-center justify-between mb-2">
           <div class="text-[10px] text-theme-accent font-bold">📦 组合回测</div>
           <!-- 股票/组合切换 -->
-          <div class="flex rounded border border-slate-600 overflow-hidden text-[9px]">
+          <div class="flex rounded-sm border border-theme-secondary overflow-hidden text-[10px]">
             <button
               @click="targetMode = 'stock'"
-              :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-slate-600' : 'text-slate-400'"
+              :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-theme-secondary' : 'text-theme-secondary'"
               class="px-2 py-0.5">股票</button>
             <button
               @click="targetMode = 'portfolio'"
-              :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-slate-400'"
+              :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-theme-secondary'"
               class="px-2 py-0.5">组合</button>
           </div>
         </div>
@@ -195,7 +195,7 @@
         <!-- 组合下拉 -->
         <select v-model="selectedPortfolioId"
           @change="onPortfolioChange"
-          class="w-full bg-black/40 border border-slate-600 rounded px-2 py-1 text-[10px] text-[var(--color-info)] mb-2 focus:outline-none">
+          class="w-full bg-terminal-bg/60 border border-theme-secondary rounded-sm px-2 py-1 text-[10px] text-[var(--color-info)] mb-2 focus:outline-none">
           <option value="">— 选择组合账户 —</option>
           <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
             {{ p.parent_id ? '  └ ' : '' }}{{ p.name }}
@@ -209,7 +209,7 @@
             :key="pos.symbol"
             @click="runBacktestWithSymbol(pos.symbol)"
             :disabled="running"
-            class="px-1.5 py-0.5 text-[9px] rounded border transition-colors"
+            class="px-1.5 py-0.5 text-[10px] rounded-sm border transition-colors"
             :class="running
               ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
               : 'border-[var(--color-info-border)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] cursor-pointer'"
@@ -218,10 +218,10 @@
           </button>
         </div>
         <div v-else-if="selectedPortfolioId && positionTagsLoading"
-          class="text-[9px] text-theme-muted italic">加载中...</div>
+          class="text-[10px] text-theme-muted italic">加载中...</div>
         <div v-else-if="selectedPortfolioId"
-          class="text-[9px] text-theme-muted italic">该组合暂无持仓</div>
-        <div v-else class="text-[9px] text-theme-muted italic">选择组合后，点击持仓标签即可回测</div>
+          class="text-[10px] text-theme-muted italic">该组合暂无持仓</div>
+        <div v-else class="text-[10px] text-theme-muted italic">选择组合后，点击持仓标签即可回测</div>
       </div>
 
       <!-- 执行按钮（底部撑满） -->
@@ -229,7 +229,7 @@
         <button
           @click="runBacktest"
           :disabled="running"
-          class="w-full py-1.5 rounded text-[11px] font-medium transition-colors"
+          class="w-full py-1.5 rounded-sm text-[11px] font-medium transition-colors"
           :class="running
             ? 'bg-[var(--color-neutral-bg)] text-theme-muted cursor-not-allowed'
             : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-hover)]/30 border border-[var(--color-info-border)]'"
@@ -237,7 +237,7 @@
           {{ running ? '⏳ 回测中...' : '▶ 执行回测' }}
         </button>
         <!-- 状态行 -->
-        <div v-if="statusMsg" class="mt-1.5 text-[9px] text-center"
+        <div v-if="statusMsg" class="mt-1.5 text-[10px] text-center"
           :class="statusMsg.startsWith('❌') ? 'text-[var(--color-danger)]' : statusMsg.startsWith('⚠️') ? 'text-[var(--color-warning)]' : 'text-theme-muted'">
           {{ statusMsg }}
         </div>
@@ -250,26 +250,26 @@
       <!-- 回测结果摘要卡片（新增） -->
       <div v-if="backtestResult" class="shrink-0 border-b border-theme bg-terminal-panel/80">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 px-3 py-2">
-          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
-            <span class="text-[9px] text-theme-muted mb-0.5">总收益率</span>
+          <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
+            <span class="text-[10px] text-theme-muted mb-0.5">总收益率</span>
             <span class="text-sm font-mono font-bold" :class="(backtestResult.total_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ (backtestResult.total_return_pct||0) >= 0 ? '+' : '' }}{{ (backtestResult.total_return_pct||0).toFixed(2) }}%
             </span>
           </div>
-          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
-            <span class="text-[9px] text-theme-muted mb-0.5">年化收益</span>
+          <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
+            <span class="text-[10px] text-theme-muted mb-0.5">年化收益</span>
             <span class="text-sm font-mono" :class="(backtestResult.annualized_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ (backtestResult.annualized_return_pct||0) >= 0 ? '+' : '' }}{{ (backtestResult.annualized_return_pct||0).toFixed(2) }}%
             </span>
           </div>
-          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
-            <span class="text-[9px] text-theme-muted mb-0.5">最大回撤</span>
+          <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
+            <span class="text-[10px] text-theme-muted mb-0.5">最大回撤</span>
             <span class="text-sm font-mono text-bearish">
               {{ (backtestResult.max_drawdown_pct||0).toFixed(2) }}%
             </span>
           </div>
-          <div class="flex flex-col items-center bg-terminal-bg rounded p-2 border border-theme">
-            <span class="text-[9px] text-theme-muted mb-0.5">夏普比率</span>
+          <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
+            <span class="text-[10px] text-theme-muted mb-0.5">夏普比率</span>
             <span class="text-sm font-mono" :class="(backtestResult.sharpe_ratio||0) >= 1 ? 'text-bullish' : 'text-theme-muted'">
               {{ (backtestResult.sharpe_ratio||0).toFixed(2) || '—' }}
             </span>
@@ -305,7 +305,7 @@
       <div v-if="backtestResult" class="shrink-0 border-t border-theme bg-terminal-panel/80 max-h-48 overflow-y-auto">
 
         <!-- 核心指标行 -->
-        <div class="flex items-center gap-3 px-3 py-1.5 overflow-x-auto text-[9px]">
+        <div class="flex items-center gap-3 px-3 py-1.5 overflow-x-auto text-[10px]">
           <div class="shrink-0 flex items-center gap-1">
             <span class="text-theme-muted">收益率</span>
             <span class="font-mono font-bold" :class="(backtestResult.total_return_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
@@ -341,13 +341,13 @@
             <span class="font-mono text-theme-primary">{{ profitFactor }}</span>
           </div>
           <button
-            class="shrink-0 text-[9px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors border border-[var(--color-info-border)] rounded px-2 py-0.5"
+            class="shrink-0 text-[10px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors border border-[var(--color-info-border)] rounded-sm px-2 py-0.5"
             @click="exportBacktest"
             :disabled="!backtestResult">
             📥 导出
           </button>
           <button
-            class="ml-auto shrink-0 text-[9px] text-theme-muted hover:text-[var(--color-info)] transition-colors"
+            class="ml-auto shrink-0 text-[10px] text-theme-muted hover:text-[var(--color-info)] transition-colors"
             @click="showTrades = !showTrades">
             {{ showTrades ? '▲ 收起' : '▼ 交易' }} ({{ backtestResult.trades?.length||0 }})
           </button>
@@ -355,7 +355,7 @@
 
         <!-- ═══ 策略体检报告 ═══ -->
         <div class="border-t border-theme/30 px-3 py-1.5">
-          <div class="flex items-center gap-4 text-[9px]">
+          <div class="flex items-center gap-4 text-[10px]">
             <!-- 策略 vs 基准对比 -->
             <div class="flex items-center gap-1.5 shrink-0">
               <span class="text-theme-muted">策略</span>
@@ -383,18 +383,18 @@
 
         <!-- 交易记录表格 -->
         <div v-if="showTrades && backtestResult.trades?.length"
-          class="border-t border-theme/30">
-          <table class="w-full text-[9px]">
+          class="border-t border-theme/30 overflow-x-auto">
+          <table class="w-full text-xs min-w-[600px]">
             <thead class="sticky top-0 bg-terminal-panel">
               <tr class="text-theme-muted border-b border-theme/20">
-                <th class="px-2 py-0.5 text-left">方向</th>
-                <th class="px-2 py-0.5 text-right">买日期</th>
-                <th class="px-2 py-0.5 text-right">买价</th>
-                <th class="px-2 py-0.5 text-right">卖日期</th>
-                <th class="px-2 py-0.5 text-right">卖价</th>
-                <th class="px-2 py-0.5 text-right">数量</th>
-                <th class="px-2 py-0.5 text-right">盈亏额</th>
-                <th class="px-2 py-0.5 text-right">盈亏%</th>
+                <th class="px-2 py-1 text-left">方向</th>
+                <th class="px-2 py-1 text-right">买日期</th>
+                <th class="px-2 py-1 text-right">买价</th>
+                <th class="px-2 py-1 text-right">卖日期</th>
+                <th class="px-2 py-1 text-right">卖价</th>
+                <th class="px-2 py-1 text-right">数量</th>
+                <th class="px-2 py-1 text-right">盈亏额</th>
+                <th class="px-2 py-1 text-right">盈亏%</th>
               </tr>
             </thead>
             <tbody>
@@ -406,16 +406,16 @@
                     {{ (t.pnl||0) >= 0 ? '多' : '空' }}
                   </span>
                 </td>
-                <td class="px-2 py-0.5 text-right text-theme-secondary font-mono">{{ t.entry_date }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ (t.entry_price||0).toFixed(2) }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-secondary font-mono">{{ t.exit_date || '持仓中' }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ t.exit_price != null ? t.exit_price.toFixed(2) : '—' }}</td>
-                <td class="px-2 py-0.5 text-right text-theme-primary font-mono">{{ t.shares }}</td>
-                <td class="px-2 py-0.5 text-right font-mono font-bold"
+                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.entry_date }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ (t.entry_price||0).toFixed(2) }}</td>
+                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.exit_date || '持仓中' }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.exit_price != null ? t.exit_price.toFixed(2) : '—' }}</td>
+                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.shares }}</td>
+                <td class="px-2 py-1 text-right font-mono font-bold"
                   :class="(t.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
                   {{ (t.pnl||0) >= 0 ? '+' : '' }}{{ (t.pnl||0).toFixed(2) }}
                 </td>
-                <td class="px-2 py-0.5 text-right font-mono"
+                <td class="px-2 py-1 text-right font-mono"
                   :class="(t.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
                   {{ (t.pnl_pct||0) >= 0 ? '+' : '' }}{{ (t.pnl_pct||0).toFixed(2) }}%
                 </td>

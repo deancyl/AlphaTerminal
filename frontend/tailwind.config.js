@@ -130,6 +130,14 @@ export default {
       borderColor: {
         'theme': 'var(--border-primary)',
         'theme-secondary': 'var(--border-secondary)',
+      },
+      
+      // 圆角系统 - 万德规范
+      borderRadius: {
+        'sm': 'var(--radius-sm)',    // 4px PC默认
+        'md': 'var(--radius-md)',    // 4px
+        'lg': 'var(--radius-lg)',    // 8px 移动端
+        'xl': 'var(--radius-xl)',    // 8px
       }
     },
   },

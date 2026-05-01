@@ -1,5 +1,5 @@
 <template>
-  <div class="bg-terminal-panel/95 border border-theme/60 rounded px-3 py-1.5 text-[10px] font-mono">
+  <div class="bg-terminal-panel/95 border border-theme/60 rounded-sm px-3 py-1.5 text-[10px] font-mono">
     <!-- 日期时间 -->
     <div class="text-theme-tertiary mb-0.5">{{ data.date || data.time || '--' }} {{ data.time ? data.time.slice(11, 16) : '' }}</div>
     <!-- OHLCV -->

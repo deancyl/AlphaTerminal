@@ -8,7 +8,7 @@
       </div>
       <div class="flex items-center gap-2">
         <button 
-          class="px-3 py-1.5 rounded text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+          class="px-3 py-1.5 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
           @click="refreshAll"
           :disabled="loading"
         >
@@ -22,7 +22,7 @@
       <button
         v-for="region in regions"
         :key="region.id"
-        class="text-xs px-3 py-1 rounded border transition"
+        class="text-xs px-3 py-1 rounded-sm border transition"
         :class="activeRegion === region.id
           ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
           : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
@@ -38,7 +38,7 @@
         <div
           v-for="index in filteredIndexes"
           :key="index.symbol"
-          class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 hover:border-terminal-accent/30 transition cursor-pointer"
+          class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 hover:border-terminal-accent/30 transition cursor-pointer"
           @click="selectIndex(index)"
         >
           <div class="flex items-center justify-between mb-2">
@@ -80,7 +80,7 @@
       </div>
 
       <!-- 选中指数的详细图表 -->
-      <div v-if="selectedIndex" class="mt-4 rounded border border-theme bg-terminal-panel p-4">
+      <div v-if="selectedIndex" class="mt-4 rounded-sm border border-theme bg-terminal-panel p-4">
         <div class="flex items-center justify-between mb-3">
           <div class="flex items-center gap-2">
             <span class="text-xl">{{ selectedIndex.flag }}</span>
@@ -190,7 +190,7 @@ function renderDetailChart() {
     return d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
   })
   
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#2E7DFF'
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
   const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
   
   chart = window.echarts.init(detailChart.value, 'dark')

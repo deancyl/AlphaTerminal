@@ -1,12 +1,24 @@
 <template>
   <div class="flex h-full">
+    <!-- 移动端遮罩 -->
+    <div
+      v-if="mobileNavOpen"
+      class="fixed inset-0 bg-black/50 z-[9998] md:hidden"
+      @click="mobileNavOpen = false"
+    />
     <!-- 左侧导航 -->
-    <aside class="w-64 border-r border-theme bg-theme-panel flex-shrink-0">
-      <div class="p-4 border-b border-theme">
-        <span class="text-sm font-bold text-terminal-accent">⚙️ 系统管理</span>
-        <div class="text-[10px] text-theme-muted mt-1">v{{ version }}</div>
-        <div class="text-[10px] text-[var(--color-warning)] mt-2">⚠️ 以下功能会影响系统运行，请谨慎操作</div>
+    <aside
+      class="border-r border-theme bg-terminal-panel flex-shrink-0 transition-all duration-300 z-[9999] md:relative fixed left-0 top-0 h-full"
+      :class="mobileNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0 w-64'"
+    >
+      <div class="p-4 border-b border-theme flex items-center justify-between">
+        <div>
+          <span class="text-sm font-bold text-terminal-accent">⚙️ 系统管理</span>
+          <div class="text-xs text-theme-muted mt-1">v{{ version }}</div>
+        </div>
+        <button class="md:hidden text-theme-secondary hover:text-theme-primary" @click="mobileNavOpen = false">✕</button>
       </div>
+      <div class="px-4 py-2 text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)]/30">⚠️ 以下功能会影响系统运行，请谨慎操作</div>
       <nav class="py-2">
         <button
           v-for="item in navItems"
@@ -15,12 +27,12 @@
           :class="activeTab === item.id
             ? 'bg-terminal-accent/15 text-terminal-accent border-r-2 border-terminal-accent'
             : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
-          @click="activeTab = item.id"
+          @click="activeTab = item.id; mobileNavOpen = false"
         >
           <span class="text-base">{{ item.icon }}</span>
           <div class="flex-1">
             <div class="font-medium">{{ item.label }}</div>
-            <div class="text-[10px] text-theme-muted leading-tight">{{ item.desc }}</div>
+            <div class="text-xs text-theme-muted leading-tight">{{ item.desc }}</div>
           </div>
           <span v-if="item.status" class="w-2 h-2 rounded-full flex-shrink-0" :class="item.statusClass"></span>
         </button>
@@ -28,8 +40,15 @@
     </aside>
 
     <!-- 右侧内容 -->
-    <main class="flex-1 overflow-auto p-6">
-      
+    <main class="flex-1 overflow-auto p-4 md:p-6">
+      <!-- 移动端菜单按钮 -->
+      <button
+        class="md:hidden mb-4 flex items-center gap-2 px-3 py-2 rounded-sm bg-terminal-panel border border-theme-secondary text-theme-primary text-sm"
+        @click="mobileNavOpen = true"
+      >
+        <span>☰</span> 菜单
+      </button>
+
       <!-- 数据源控制 -->
       <div v-if="activeTab === 'sources'" class="space-y-6">
         <div class="flex items-center justify-between">
@@ -37,10 +56,10 @@
             <h2 class="text-lg font-bold text-theme-primary">📡 数据源控制</h2>
             <p class="text-xs text-theme-muted mt-1">管理股票行情数据的来源，控制数据质量和系统稳定性</p>
           </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSourceStatus">🔄 刷新状态</button>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshSourceStatus">🔄 刷新状态</button>
         </div>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             系统从多个数据源（腾讯、新浪、东方财富）获取股票行情。当某个数据源出现故障时，
@@ -50,13 +69,13 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div v-for="(source, key) in sourceStatus.sources" :key="key" class="p-4 rounded-lg border" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)]'">
+          <div v-for="(source, key) in sourceStatus.sources" :key="key" class="p-4 rounded-sm border" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)]'">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
                 <span class="w-3 h-3 rounded-full" :class="source.state === 'closed' ? 'bg-[var(--color-success-light)]' : 'bg-[var(--color-danger-light)]'"></span>
                 <span class="font-medium text-theme-primary">{{ key }}</span>
               </div>
-              <span class="text-[10px] px-2 py-0.5 rounded" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+              <span class="text-[10px] px-2 py-0.5 rounded-sm" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
                 {{ source.health === 'healthy' ? '健康' : '异常' }}
               </span>
             </div>
@@ -65,13 +84,13 @@
               <div class="flex justify-between"><span class="text-theme-muted">连续失败</span><span :class="source.fail_count === 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'">{{ source.fail_count }} 次</span></div>
             </div>
             <div class="flex gap-2 mt-4 pt-3 border-t border-theme/50">
-              <button v-if="source.state !== 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-xs" @click="confirmAction(`熔断 ${key}`, `系统将停止从 ${key} 获取数据，转到其他数据源。确定？`, () => controlCircuit(key, 'open'))">⚠️ 熔断</button>
-              <button v-if="source.state === 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded text-xs" @click="confirmAction(`恢复 ${key}`, `系统将重新从 ${key} 获取数据。确定？`, () => controlCircuit(key, 'close'))">✅ 恢复</button>
+              <button v-if="source.state !== 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-xs" @click="confirmAction(`熔断 ${key}`, `系统将停止从 ${key} 获取数据，转到其他数据源。确定？`, () => controlCircuit(key, 'open'))">⚠️ 熔断</button>
+              <button v-if="source.state === 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-xs" @click="confirmAction(`恢复 ${key}`, `系统将重新从 ${key} 获取数据。确定？`, () => controlCircuit(key, 'close'))">✅ 恢复</button>
             </div>
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">操作后果说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>熔断</strong>：立即停止从该数据源获取数据，系统自动切换到其他可用源</li>
@@ -87,10 +106,10 @@
             <h2 class="text-lg font-bold text-theme-primary">⏱️ 定时任务管理</h2>
             <p class="text-xs text-theme-muted mt-1">控制系统后台的自动数据更新任务</p>
           </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshScheduler">🔄 刷新</button>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshScheduler">🔄 刷新</button>
         </div>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             系统通过<strong class="text-terminal-accent">定时任务</strong>自动更新股票行情、板块数据、新闻快讯等。
@@ -99,7 +118,7 @@
         </div>
 
         <div class="space-y-3">
-          <div v-for="job in schedulerJobs" :key="job.id" class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div v-for="job in schedulerJobs" :key="job.id" class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-3">
                 <span class="w-2 h-2 rounded-full" :class="job.state === 'running' ? 'bg-[var(--color-success-light)] animate-pulse' : 'bg-yellow-400'"></span>
@@ -109,9 +128,9 @@
                 </div>
               </div>
               <div class="flex gap-2">
-                <button v-if="job.state === 'running'" class="px-3 py-1.5 bg-[var(--color-warning-bg)] text-[var(--color-warning)] rounded text-xs" @click="confirmAction(`暂停 ${job.name}`, `该任务将停止自动执行，相关数据不再更新。确定？`, () => controlJob(job.id, 'pause'))">⏸️ 暂停</button>
-                <button v-else class="px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded text-xs" @click="controlJob(job.id, 'resume')">▶️ 恢复</button>
-                <button class="px-3 py-1.5 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded text-xs" @click="confirmAction(`立即执行 ${job.name}`, `立即执行一次该任务，不影响定时计划。确定？`, () => controlJob(job.id, 'trigger_now'))">⚡ 立即执行</button>
+                <button v-if="job.state === 'running'" class="px-3 py-1.5 bg-[var(--color-warning-bg)] text-[var(--color-warning)] rounded-sm text-xs" @click="confirmAction(`暂停 ${job.name}`, `该任务将停止自动执行，相关数据不再更新。确定？`, () => controlJob(job.id, 'pause'))">⏸️ 暂停</button>
+                <button v-else class="px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-xs" @click="controlJob(job.id, 'resume')">▶️ 恢复</button>
+                <button class="px-3 py-1.5 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-xs" @click="confirmAction(`立即执行 ${job.name}`, `立即执行一次该任务，不影响定时计划。确定？`, () => controlJob(job.id, 'trigger_now'))">⚡ 立即执行</button>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-4 text-xs text-theme-muted">
@@ -121,7 +140,7 @@
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">常用任务说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>data_fetch</strong>：每30秒拉取股票实时行情，暂停后行情不再更新</li>
@@ -140,16 +159,16 @@
           </div>
           <div class="flex items-center gap-2">
             <span v-if="watchdogLoading" class="text-xs text-theme-muted">加载中...</span>
-            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshWatchdog">🔄 刷新状态</button>
+            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshWatchdog">🔄 刷新状态</button>
           </div>
         </div>
 
         <!-- 错误提示 -->
-        <div v-if="watchdogError" class="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded text-xs text-[var(--color-danger)]">
+        <div v-if="watchdogError" class="p-3 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-sm text-xs text-[var(--color-danger)]">
           <strong>加载失败:</strong> {{ watchdogError }}
         </div>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             <strong class="text-terminal-accent">进程保活</strong>会每30秒检查一次后端服务是否正常运行。
@@ -160,7 +179,7 @@
 
         <!-- 状态卡片 -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="p-4 rounded-lg border" :class="watchdogStatus.enabled ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : 'bg-[var(--color-neutral-bg)] border-[var(--border-secondary)]'">
+          <div class="p-4 rounded-sm border" :class="watchdogStatus.enabled ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : 'bg-[var(--color-neutral-bg)] border-[var(--border-secondary)]'">
             <div class="flex items-center justify-between mb-3">
               <span class="font-medium text-theme-primary">保活开关</span>
               <span class="w-3 h-3 rounded-full" :class="watchdogStatus.enabled ? 'bg-[var(--color-success-light)] animate-pulse' : 'bg-gray-400'"></span>
@@ -172,12 +191,12 @@
               {{ watchdogStatus.enabled ? '后端崩溃时将自动重启' : '后端崩溃后需手动重启' }}
             </div>
             <div class="flex gap-2 mt-4 pt-3 border-t border-theme/50">
-              <button v-if="!watchdogStatus.enabled" class="flex-1 px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded text-xs" @click="toggleWatchdog(true)">✅ 启用保活</button>
-              <button v-else class="flex-1 px-3 py-1.5 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-xs" @click="toggleWatchdog(false)">⏹️ 禁用保活</button>
+              <button v-if="!watchdogStatus.enabled" class="flex-1 px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-xs" @click="toggleWatchdog(true)">✅ 启用保活</button>
+              <button v-else class="flex-1 px-3 py-1.5 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-xs" @click="toggleWatchdog(false)">⏹️ 禁用保活</button>
             </div>
           </div>
 
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">监控状态</div>
             <div class="text-xl font-bold" :class="watchdogStatus.running ? 'text-terminal-accent' : 'text-[var(--color-warning)]'">
               {{ watchdogStatus.running ? '运行中' : '未运行' }}
@@ -187,7 +206,7 @@
             </div>
           </div>
 
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">重启统计</div>
             <div class="text-xl font-bold" :class="watchdogStatus.total_restarts > 0 ? 'text-[var(--color-warning)]' : 'text-[var(--color-success)]'">
               {{ watchdogStatus.total_restarts }} 次
@@ -199,16 +218,16 @@
         </div>
 
         <!-- 手动操作 -->
-        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
           <h3 class="text-sm font-bold text-theme-primary mb-4">紧急操作</h3>
           <div class="flex flex-wrap gap-3">
-            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-sm" @click="confirmAction('手动重启后端', '这将立即终止当前后端进程并启动新实例，所有连接将中断5-10秒。确定？', manualRestart)">🔄 手动重启后端</button>
-            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded text-sm" @click="refreshWatchdog">📊 刷新状态</button>
+            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-sm" @click="confirmAction('手动重启后端', '这将立即终止当前后端进程并启动新实例，所有连接将中断5-10秒。确定？', manualRestart)">🔄 手动重启后端</button>
+            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-sm" @click="refreshWatchdog">📊 刷新状态</button>
           </div>
         </div>
 
         <!-- 最近错误 -->
-        <div v-if="watchdogStatus.recent_errors && watchdogStatus.recent_errors.length > 0" class="p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-lg">
+        <div v-if="watchdogStatus.recent_errors && watchdogStatus.recent_errors.length > 0" class="p-4 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-danger)] mb-3">最近错误记录</h3>
           <div class="space-y-2 text-xs">
             <div v-for="(err, i) in watchdogStatus.recent_errors" :key="i" class="flex gap-3">
@@ -218,7 +237,7 @@
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">使用说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>启用保活</strong>：后端崩溃后自动重启，适合长期运行场景</li>
@@ -234,7 +253,7 @@
         <h2 class="text-lg font-bold text-theme-primary">💾 缓存管理</h2>
         <p class="text-xs text-theme-muted">清理和预热系统缓存，优化数据加载速度</p>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             系统使用<strong class="text-terminal-accent">缓存</strong>加速数据加载。<strong class="text-terminal-accent">预热</strong>是提前加载常用数据，提升首次访问速度。
@@ -242,38 +261,38 @@
         </div>
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">行情数据缓存</div>
             <div class="text-xl font-bold text-terminal-accent">{{ cacheStatus.market || 5497 }}</div>
             <div class="text-[10px] text-theme-muted">只股票</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">板块数据缓存</div>
             <div class="text-xl font-bold text-terminal-accent">{{ cacheStatus.sectors || 20 }}</div>
             <div class="text-[10px] text-theme-muted">个板块</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">新闻缓存</div>
             <div class="text-xl font-bold text-terminal-accent">{{ cacheStatus.news || 150 }}</div>
             <div class="text-[10px] text-theme-muted">条快讯</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">数据库缓存</div>
             <div class="text-xl font-bold text-terminal-accent">{{ cacheStatus.db || 22 }}</div>
             <div class="text-[10px] text-theme-muted">条实时数据</div>
           </div>
         </div>
 
-        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
           <h3 class="text-sm font-bold text-theme-primary mb-4">缓存操作</h3>
           <div class="flex flex-wrap gap-3">
-            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-sm" @click="confirmAction('清空行情缓存', '清空后系统会重新从数据源获取，可能有短暂延迟。确定？', () => invalidateCache('market'))">🗑️ 清空行情缓存</button>
-            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-sm" @click="confirmAction('清空板块缓存', '板块列表可能需要几秒重新加载。确定？', () => invalidateCache('sectors'))">🗑️ 清空板块缓存</button>
-            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded text-sm" @click="confirmAction('预热板块缓存', '提前加载板块数据，提升访问速度。确定？', () => warmupCache('sectors'))">🔥 预热板块缓存</button>
+            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-sm" @click="confirmAction('清空行情缓存', '清空后系统会重新从数据源获取，可能有短暂延迟。确定？', () => invalidateCache('market'))">🗑️ 清空行情缓存</button>
+            <button class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-sm" @click="confirmAction('清空板块缓存', '板块列表可能需要几秒重新加载。确定？', () => invalidateCache('sectors'))">🗑️ 清空板块缓存</button>
+            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-sm" @click="confirmAction('预热板块缓存', '提前加载板块数据，提升访问速度。确定？', () => warmupCache('sectors'))">🔥 预热板块缓存</button>
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">操作后果说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>清空缓存</strong>：删除已缓存的数据，下次访问时重新获取，可能有短暂延迟</li>
@@ -287,7 +306,7 @@
         <h2 class="text-lg font-bold text-theme-primary">🗄️ 数据库管理</h2>
         <p class="text-xs text-theme-muted">SQLite数据库维护和优化</p>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             系统使用<strong class="text-terminal-accent">SQLite数据库</strong>存储股票历史数据、投资组合等。长期使用后通过维护操作可以优化性能。
@@ -295,37 +314,37 @@
         </div>
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">数据库大小</div>
             <div class="text-xl font-bold text-terminal-accent">{{ dbStatus.size || '12.5' }} MB</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">实时数据表</div>
             <div class="text-xl font-bold text-terminal-accent">{{ dbStatus.realtime || 22 }}</div>
             <div class="text-[10px] text-theme-muted">行</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">日K数据表</div>
             <div class="text-xl font-bold text-terminal-accent">{{ dbStatus.daily || 12500 }}</div>
             <div class="text-[10px] text-theme-muted">行</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">股票列表</div>
             <div class="text-xl font-bold text-terminal-accent">{{ dbStatus.stocks || 5497 }}</div>
             <div class="text-[10px] text-theme-muted">只</div>
           </div>
         </div>
 
-        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
           <h3 class="text-sm font-bold text-theme-primary mb-4">数据库维护</h3>
           <div class="flex flex-wrap gap-3">
-            <button class="px-4 py-2 bg-terminal-accent/20 text-terminal-accent rounded text-sm" @click="confirmAction('VACUUM 优化', '重组数据库文件，释放空间，优化性能。可能需要几秒到几分钟。确定？', () => dbMaintenance('vacuum'))">🔧 VACUUM 优化</button>
-            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded text-sm" @click="confirmAction('ANALYZE 分析', '分析表结构，更新查询优化器统计信息。操作快速安全。确定？', () => dbMaintenance('analyze'))">📊 ANALYZE 分析</button>
-            <button class="px-4 py-2 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded text-sm" @click="confirmAction('WAL 检查点', '把内存日志写入磁盘，确保数据持久化。安全快速。确定？', () => dbMaintenance('wal_checkpoint'))">💾 WAL检查点</button>
+            <button class="px-4 py-2 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm" @click="confirmAction('VACUUM 优化', '重组数据库文件，释放空间，优化性能。可能需要几秒到几分钟。确定？', () => dbMaintenance('vacuum'))">🔧 VACUUM 优化</button>
+            <button class="px-4 py-2 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-sm" @click="confirmAction('ANALYZE 分析', '分析表结构，更新查询优化器统计信息。操作快速安全。确定？', () => dbMaintenance('analyze'))">📊 ANALYZE 分析</button>
+            <button class="px-4 py-2 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-sm" @click="confirmAction('WAL 检查点', '把内存日志写入磁盘，确保数据持久化。安全快速。确定？', () => dbMaintenance('wal_checkpoint'))">💾 WAL检查点</button>
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">维护操作说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>VACUUM</strong>：清理数据库碎片，释放空间。建议在系统空闲时执行</li>
@@ -339,10 +358,10 @@
       <div v-else-if="activeTab === 'monitor'" class="space-y-6">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold text-theme-primary">📊 系统监控</h2>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSystemMetrics">🔄 刷新</button>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshSystemMetrics">🔄 刷新</button>
         </div>
 
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
             显示运行系统的服务器的<strong class="text-terminal-accent">实时资源使用情况</strong>。当系统变慢时，可以查看这些指标判断原因。
@@ -350,29 +369,29 @@
         </div>
 
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">CPU 使用率</div>
             <div class="text-2xl font-bold" :class="getCpuColor(systemMetrics.cpu_percent)">{{ systemMetrics.cpu_percent?.toFixed(1) || 0 }}%</div>
             <div class="text-[10px] text-theme-muted mt-1">{{ getCpuStatus(systemMetrics.cpu_percent) }}</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">内存使用</div>
             <div class="text-2xl font-bold" :class="getMemoryColor(systemMetrics.memory?.percent)">{{ systemMetrics.memory?.percent?.toFixed(1) || 0 }}%</div>
             <div class="text-[10px] text-theme-muted mt-1">{{ systemMetrics.memory?.used_gb?.toFixed(1) || 0 }} / {{ systemMetrics.memory?.total_gb?.toFixed(1) || 0 }} GB</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">磁盘使用</div>
             <div class="text-2xl font-bold" :class="getDiskColor(systemMetrics.disk?.percent)">{{ systemMetrics.disk?.percent?.toFixed(1) || 0 }}%</div>
             <div class="text-[10px] text-theme-muted mt-1">{{ systemMetrics.disk?.used_gb?.toFixed(1) || 0 }} / {{ systemMetrics.disk?.total_gb?.toFixed(1) || 0 }} GB</div>
           </div>
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-[10px] text-theme-muted mb-1">后端进程内存</div>
             <div class="text-2xl font-bold text-terminal-accent">{{ systemMetrics.process?.memory_mb?.toFixed(0) || 0 }} MB</div>
             <div class="text-[10px] text-theme-muted mt-1">{{ systemMetrics.process?.threads || 0 }} 线程</div>
           </div>
         </div>
 
-        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
           <h3 class="text-sm font-bold text-theme-primary mb-3">🌐 网络状态</h3>
           <div class="grid grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
             <div><span class="text-theme-muted">活跃连接：</span><span class="text-terminal-accent font-bold">{{ systemMetrics.network?.connections || 0 }}</span></div>
@@ -381,7 +400,7 @@
           </div>
         </div>
 
-        <div class="p-3 bg-[var(--color-success-bg)] border border-green-500/20 rounded text-xs text-theme-muted">
+        <div class="p-3 bg-[var(--color-success-bg)] border border-[var(--color-success)]/20 rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-success)]">指标说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
             <li><strong>CPU</strong>：处理器使用率，持续高于80%可能导致系统响应变慢</li>
@@ -399,18 +418,18 @@
             <h2 class="text-lg font-bold text-theme-primary">📡 数据源健康度</h2>
             <p class="text-xs text-theme-muted mt-1">实时监测各数据源连通性与响应速度</p>
           </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
         </div>
 
         <!-- 代理配置 -->
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">🌐 代理配置</h3>
           <div v-if="proxyConfig" class="mt-2 flex items-center gap-4 text-xs">
             <div class="flex items-center gap-2">
               <span class="text-theme-muted">代理地址：</span>
               <span class="text-terminal-accent font-mono">{{ proxyConfig.proxy_url || '未配置' }}</span>
             </div>
-            <span class="px-2 py-0.5 rounded text-[10px]" :class="proxyConfig.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'">
+            <span class="px-2 py-0.5 rounded-sm text-[10px]" :class="proxyConfig.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'">
               {{ proxyConfig.enabled ? '● 已启用' : '○ 已禁用' }}
             </span>
           </div>
@@ -419,22 +438,22 @@
         <!-- 饼图 + 卡片 -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- ECharts 饼图 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
             <div ref="sourceChartRef" style="width:100%;height:220px"></div>
           </div>
           <!-- 状态列表 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme">
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
             <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
             <div class="space-y-2">
-              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded bg-theme-panel/50">
+              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded-sm bg-terminal-panel/50">
                 <div class="flex items-center gap-2">
                   <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-[var(--color-success-light)]' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-[var(--color-danger-light)]'"></span>
                   <span class="text-sm text-theme-primary">{{ key }}</span>
                 </div>
                 <div class="flex items-center gap-3 text-xs">
                   <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
-                  <span class="px-1.5 py-0.5 rounded text-[10px]" :class="info.status === 'ok' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.status === 'slow' ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+                  <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="info.status === 'ok' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.status === 'slow' ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
                     {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
                   </span>
                 </div>
@@ -452,11 +471,11 @@
             <h2 class="text-lg font-bold text-theme-primary">🤖 模型服务配置</h2>
             <p class="text-xs text-theme-muted mt-1">配置 LLM API Key 和 Base URL，数据库配置优先于 .env</p>
           </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="loadLlmConfig">🔄 刷新</button>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="loadLlmConfig">🔄 刷新</button>
         </div>
 
         <div v-for="(cfg, provider) in llmProviders" :key="provider"
-             class="bg-theme-panel border border-theme rounded-xl p-5">
+             class="bg-terminal-panel border border-theme rounded-sm p-5">
           <div class="flex items-center gap-3 mb-4">
             <div class="text-lg">{{ cfg.icon }}</div>
             <div>
@@ -464,7 +483,7 @@
               <div class="text-[11px] text-theme-muted">{{ cfg.desc }}</div>
             </div>
             <span v-if="cfg.has_db_config"
-                  class="ml-auto px-2 py-0.5 rounded text-[10px] bg-[var(--color-info-bg)] text-[var(--color-info)] border border-[var(--color-info-border)]">
+                  class="ml-auto px-2 py-0.5 rounded-sm text-[10px] bg-[var(--color-info-bg)] text-[var(--color-info)] border border-[var(--color-info-border)]">
               数据库已配置
             </span>
           </div>
@@ -476,7 +495,7 @@
                 <input
                   v-model="cfg.input_key"
                   :type="cfg.show_key ? 'text' : 'password'"
-                  class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                  class="w-full bg-terminal-bg border border-theme rounded-sm px-3 py-2 text-sm text-theme-primary
                          focus:outline-none focus:border-terminal-accent/60 pr-10"
                   placeholder="sk-...">
                 <button class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-theme-muted hover:text-terminal-accent"
@@ -489,7 +508,7 @@
               <label class="text-[11px] text-theme-muted mb-1.5 block">Base URL</label>
               <input
                 v-model="cfg.input_base"
-                class="w-full bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                class="w-full bg-terminal-bg border border-theme rounded-sm px-3 py-2 text-sm text-theme-primary
                        focus:outline-none focus:border-terminal-accent/60"
                 :placeholder="cfg.default_base">
             </div>
@@ -498,7 +517,7 @@
               <div class="flex gap-3">
                 <select
                   v-model="cfg.input_model"
-                  class="flex-1 bg-terminal-bg border border-theme rounded-lg px-3 py-2 text-sm text-theme-primary
+                  class="flex-1 bg-terminal-bg border border-theme rounded-sm px-3 py-2 text-sm text-theme-primary
                          focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
                   <option value="">-- 选择模型 --</option>
                   <optgroup :label="group.label" v-for="group in cfg.modelGroups" :key="group.label">
@@ -515,12 +534,12 @@
           </div>
 
           <!-- 模型详情展开 -->
-          <div v-if="cfg.show_model_info" class="mt-4 p-3 bg-terminal-bg/50 rounded-lg border border-theme/50">
+          <div v-if="cfg.show_model_info" class="mt-4 p-3 bg-terminal-bg/50 rounded-sm border border-theme/50">
             <div class="text-[11px] text-theme-muted mb-2">价格特点 & 金融适配性</div>
             <div class="grid grid-cols-3 gap-2 text-[10px]">
               <template v-for="group in cfg.modelGroups" :key="group.label">
                 <template v-for="m in group.models" :key="m.id">
-                  <div v-if="m.id === cfg.input_model || !cfg.input_model" class="col-span-1 p-2 rounded bg-theme-panel/50">
+                  <div v-if="m.id === cfg.input_model || !cfg.input_model" class="col-span-1 p-2 rounded-sm bg-terminal-panel/50">
                     <div class="font-medium text-theme-primary">{{ m.name }}</div>
                     <div class="text-terminal-accent mt-1">{{ m.pricing }}</div>
                     <div class="text-theme-secondary mt-1">{{ m.finance }}</div>
@@ -533,13 +552,13 @@
 
           <div class="flex gap-3 mt-4">
             <button
-              class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm hover:bg-terminal-accent/25 transition-colors"
+              class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/25 transition-colors"
               :disabled="cfg.testing"
               @click="testLlmConnection(provider)">
               {{ cfg.testing ? '⏳ 测试中...' : '🔗 测试连接' }}
             </button>
             <button
-              class="px-4 py-2 bg-terminal-accent rounded-lg text-sm text-white hover:bg-terminal-accent/80 transition-colors"
+              class="px-4 py-2 bg-terminal-accent rounded-sm text-sm text-theme-primary hover:bg-terminal-accent/80 transition-colors"
               :disabled="cfg.saving"
               @click="saveLlmConfig(provider)">
               {{ cfg.saving ? '💾 保存中...' : '💾 保存全局配置' }}
@@ -552,24 +571,24 @@
       </div>
 
       <!-- 日志管理 -->
-      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-theme-panel border border-theme rounded text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-lg text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-lg">          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-lg border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded text-xs text-theme-muted">          <strong class="text-[var(--color-warning)]">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
+      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-terminal-panel border border-theme rounded-sm text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded-sm text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">          <strong class="text-[var(--color-warning)]">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
     </main>
 
     <!-- 确认对话框 -->
     <div v-if="showConfirm" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-theme-panel border border-theme rounded-lg p-6 max-w-md w-full mx-4">
+      <div class="bg-terminal-panel border border-theme rounded-sm p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-bold text-theme-primary mb-2">⚠️ 确认操作</h3>
         <p class="text-sm text-theme-secondary mb-4">{{ confirmMessage }}</p>
         <div class="flex gap-3 justify-end">
           <button
-            class="px-4 py-2 bg-theme-secondary/50 text-theme-secondary rounded text-sm cursor-not-allowed"
+            class="px-4 py-2 bg-theme-secondary/50 text-theme-secondary rounded-sm text-sm cursor-not-allowed"
             :class="{ 'opacity-50': isSubmitting }"
             :disabled="isSubmitting"
             @click="showConfirm = false"
           >取消</button>
           <button
-            class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded text-sm"
+            class="px-4 py-2 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-sm"
             :class="{ 'opacity-50 cursor-not-allowed': isSubmitting }"
             :disabled="isSubmitting"
             @click="executeConfirm"
@@ -592,6 +611,7 @@ import { apiFetch } from '../utils/api.js'
 
 const version = __APP_VERSION__
 const activeTab = ref('sources')
+const mobileNavOpen = ref(false)
 const logContainer = ref(null)
 
 const navItems = [

@@ -38,8 +38,8 @@
         <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">周期收益率</div>
         <div class="grid grid-cols-3 gap-1">
           <div v-for="item in returnFields" :key="item.key"
-               class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
-            <span class="text-[9px] text-theme-tertiary mb-0.5">{{ item.label }}</span>
+               class="flex flex-col items-center bg-theme-secondary rounded-sm py-1 px-1">
+            <span class="text-[10px] text-theme-tertiary mb-0.5">{{ item.label }}</span>
             <span class="text-[11px] font-mono font-medium" :class="returnColorClass(data[item.key])">
               {{ data[item.key] != null ? (data[item.key] >= 0 ? '+' : '') + data[item.key].toFixed(2) + '%' : '--' }}
             </span>
@@ -51,20 +51,20 @@
       <div class="border-t border-theme pt-2 mt-2">
         <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">资金流向</div>
         <div v-if="data.fund_main_net != null" class="grid grid-cols-3 gap-1">
-          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
-            <span class="text-[9px] text-theme-tertiary mb-0.5">主力净流入</span>
+          <div class="flex flex-col items-center bg-theme-secondary rounded-sm py-1 px-1">
+            <span class="text-[10px] text-theme-tertiary mb-0.5">主力净流入</span>
             <span class="text-[11px] font-mono font-medium" :class="data.fund_main_net >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ data.fund_main_net >= 0 ? '+' : '' }}{{ formatAmount(data.fund_main_net) }}
             </span>
           </div>
-          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
-            <span class="text-[9px] text-theme-tertiary mb-0.5">主力流入</span>
+          <div class="flex flex-col items-center bg-theme-secondary rounded-sm py-1 px-1">
+            <span class="text-[10px] text-theme-tertiary mb-0.5">主力流入</span>
             <span class="text-[11px] font-mono font-medium text-bullish">
               {{ formatAmount(data.fund_main_in) }}
             </span>
           </div>
-          <div class="flex flex-col items-center bg-theme-secondary rounded py-1 px-1">
-            <span class="text-[9px] text-theme-tertiary mb-0.5">主力流出</span>
+          <div class="flex flex-col items-center bg-theme-secondary rounded-sm py-1 px-1">
+            <span class="text-[10px] text-theme-tertiary mb-0.5">主力流出</span>
             <span class="text-[11px] font-mono font-medium text-bearish">
               {{ formatAmount(data.fund_main_out) }}
             </span>
@@ -78,14 +78,14 @@
         <div class="text-[10px] text-theme-tertiary mb-1.5 uppercase tracking-wider">52周区间</div>
         <div class="flex items-center gap-3">
           <div class="flex-1">
-            <div class="text-[9px] text-theme-tertiary">高</div>
+            <div class="text-[10px] text-theme-tertiary">高</div>
             <div class="text-[12px] font-mono text-bullish">{{ data.high_52w?.toFixed(2) ?? '--' }}</div>
-            <div class="text-[9px] text-theme-muted">{{ data.high_52w_date ?? '' }}</div>
+            <div class="text-[10px] text-theme-muted">{{ data.high_52w_date ?? '' }}</div>
           </div>
           <!-- 可视化区间条 -->
           <div class="flex-1 flex flex-col items-center">
             <div class="relative w-full h-4 flex items-center">
-              <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-theme-secondary rounded"></div>
+              <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-theme-secondary rounded-sm"></div>
               <div
                 class="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full border-2 border-white shadow"
                 :style="{ left: pricePosition + '%', backgroundColor: priceColor }"
@@ -93,9 +93,9 @@
             </div>
           </div>
           <div class="flex-1 text-right">
-            <div class="text-[9px] text-theme-tertiary">低</div>
+            <div class="text-[10px] text-theme-tertiary">低</div>
             <div class="text-[12px] font-mono text-bearish">{{ data.low_52w?.toFixed(2) ?? '--' }}</div>
-            <div class="text-[9px] text-theme-muted">{{ data.low_52w_date ?? '' }}</div>
+            <div class="text-[10px] text-theme-muted">{{ data.low_52w_date ?? '' }}</div>
           </div>
         </div>
       </div>
@@ -108,17 +108,17 @@
         <div v-if="(data.advance_count ?? data.advance) != null" class="flex items-stretch gap-1 h-14">
           <!-- 跌 -->
           <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bearish/20">
-            <div class="text-center text-[9px] text-bearish py-0.5">{{ (data.decline_count ?? data.decline) }}家</div>
+            <div class="text-center text-[10px] text-bearish py-0.5">{{ (data.decline_count ?? data.decline) }}家</div>
             <div class="bg-bearish rounded-sm" :style="{ height: ((data.decline_count ?? data.decline) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 平 -->
           <div v-if="(data.unchanged_count ?? data.unchanged) > 0" class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-theme-secondary">
-            <div class="text-center text-[9px] text-theme-secondary py-0.5">{{ (data.unchanged_count ?? data.unchanged) }}家</div>
+            <div class="text-center text-[10px] text-theme-secondary py-0.5">{{ (data.unchanged_count ?? data.unchanged) }}家</div>
             <div class="bg-theme-tertiary rounded-sm" :style="{ height: ((data.unchanged_count ?? data.unchanged) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
           <!-- 涨 -->
           <div class="flex-1 flex flex-col justify-end rounded-sm overflow-hidden bg-bullish/20">
-            <div class="text-center text-[9px] text-bullish py-0.5">{{ (data.advance_count ?? data.advance) }}家</div>
+            <div class="text-center text-[10px] text-bullish py-0.5">{{ (data.advance_count ?? data.advance) }}家</div>
             <div class="bg-bullish rounded-sm" :style="{ height: ((data.advance_count ?? data.advance) / totalStocks * 100) + '%', minHeight: '2px' }"></div>
           </div>
         </div>
@@ -148,7 +148,7 @@
     <div class="px-3 py-2.5 border-b border-theme">
       <div class="flex items-center justify-between mb-2">
         <div class="text-[10px] text-theme-tertiary uppercase tracking-wider">资金流向</div>
-        <div v-if="fundDonutData.isMock" class="text-[9px] text-theme-muted italic">模拟数据</div>
+        <div v-if="fundDonutData.isMock" class="text-[10px] text-theme-muted italic">模拟数据</div>
       </div>
 
       <!-- 主环路：环形图 -->
@@ -178,7 +178,7 @@
             <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ level.inAmt >= 0 ? '+' : '' }}{{ formatAmount(level.inAmt) }}
             </span>
-            <span class="text-[9px] font-mono" :class="level.outAmt >= 0 ? 'text-bullish' : 'text-bearish'">
+            <span class="text-[10px] font-mono" :class="level.outAmt >= 0 ? 'text-bullish' : 'text-bearish'">
               {{ level.outAmt >= 0 ? '+' : '' }}{{ formatAmount(level.outAmt) }}
             </span>
           </div>
@@ -202,7 +202,7 @@
       <template v-if="data.concepts && data.concepts.length">
         <div class="flex flex-wrap gap-1 mt-2">
           <span v-for="c in data.concepts" :key="c.name"
-                class="px-1.5 py-0.5 text-[10px] rounded border"
+                class="px-1.5 py-0.5 text-[10px] rounded-sm border"
                 :class="(c.change_pct ?? 0) >= 0
                   ? 'border-bullish/30 text-bullish bg-bullish/10'
                   : 'border-bearish/30 text-bearish bg-bearish/10'">
@@ -223,7 +223,7 @@
 
     <!-- ═══ 数据时间戳 ═══════════════════════════════════════════════ -->
     <div class="px-3 py-2 mt-auto">
-      <div class="text-[9px] text-theme-muted text-center">
+      <div class="text-[10px] text-theme-muted text-center">
         {{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}
       </div>
     </div>

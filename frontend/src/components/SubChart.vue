@@ -20,34 +20,34 @@
 
       <!-- 参数设置按钮 -->
       <button
-        class="ml-2 px-1.5 py-0.5 text-[10px] text-theme-tertiary hover:text-theme-primary border border-transparent hover:border-theme-secondary rounded transition"
+        class="ml-2 px-1.5 py-0.5 text-[10px] text-theme-tertiary hover:text-theme-primary border border-transparent hover:border-theme-secondary rounded-sm transition"
         @click="showParams = !showParams"
         title="指标参数设置"
       >⚙️ 设置</button>
 
       <!-- 参数设置浮窗 -->
-      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded border border-theme-secondary bg-terminal-panel shadow-xl z-20 w-52">
+      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded-sm border border-theme-secondary bg-terminal-panel shadow-sm z-20 w-52">
         <div class="text-[10px] text-theme-secondary mb-2 uppercase tracking-wider">指标参数</div>
         <!-- MACD -->
         <template v-if="activeTab === 'MACD'">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-[10px] text-theme-secondary w-10">快线</span>
             <input type="number" :value="params.MACD.fast" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, fast: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-[10px] text-theme-secondary w-10">慢线</span>
             <input type="number" :value="params.MACD.slow" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, slow: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">信号</span>
             <input type="number" :value="params.MACD.signal" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { MACD: { ...params.MACD, signal: +e.target.value } })"
             />
           </div>
@@ -57,7 +57,7 @@
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.KDJ.n" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { KDJ: { ...params.KDJ, n: +e.target.value } })"
             />
           </div>
@@ -67,7 +67,7 @@
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.RSI.period" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { RSI: { ...params.RSI, period: +e.target.value } })"
             />
           </div>
@@ -77,14 +77,14 @@
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.BOLL.period" min="1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { BOLL: { ...params.BOLL, period: +e.target.value } })"
             />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">倍</span>
             <input type="number" :value="params.BOLL.stdDev" min="0.1" step="0.1"
-              class="flex-1 bg-theme-secondary border border-theme-secondary rounded px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
+              class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
               @change="e => emit('params-change', { BOLL: { ...params.BOLL, stdDev: +e.target.value } })"
             />
           </div>

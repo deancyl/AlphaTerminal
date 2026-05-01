@@ -10,7 +10,7 @@
     >
       <div
         v-if="visible"
-        class="fixed z-[var(--z-popover)] bg-terminal-panel border border-theme-secondary rounded-lg shadow-2xl py-1 min-w-[160px]"
+        class="fixed z-[var(--z-popover)] bg-terminal-panel border border-theme-secondary rounded-sm shadow-sm py-1 min-w-[160px]"
         :style="{ left: x + 'px', top: y + 'px' }"
         @click.stop
       >

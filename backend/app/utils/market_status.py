@@ -28,7 +28,9 @@ def is_market_open(market_type: str = "A_SHARE") -> tuple[bool, str]:
     返回 (is_open: bool, status: str)
     status: "交易中" | "已休市" | "盘前" | "盘后"
     """
-    now = datetime.now()
+    # 使用显式时区，避免依赖服务器本地时区
+    cst = ZoneInfo("Asia/Shanghai")
+    now = datetime.now(cst)
     weekday = now.weekday()  # 0=周一, 6=周日
 
     if market_type == "A_SHARE":

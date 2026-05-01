@@ -60,16 +60,16 @@
         style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);"
       >
         <div class="flex justify-between mb-2">
-          <div class="skeleton h-3 w-32 rounded"></div>
-          <div class="skeleton h-3 w-16 rounded"></div>
+          <div class="skeleton h-3 w-32 rounded-sm"></div>
+          <div class="skeleton h-3 w-16 rounded-sm"></div>
         </div>
-        <div class="flex-1 skeleton rounded-lg"></div>
+        <div class="flex-1 skeleton rounded-sm"></div>
         <div class="flex gap-2">
-          <div class="skeleton h-2 w-12 rounded"></div>
-          <div class="skeleton h-2 w-12 rounded"></div>
-          <div class="skeleton h-2 w-12 rounded"></div>
+          <div class="skeleton h-2 w-12 rounded-sm"></div>
+          <div class="skeleton h-2 w-12 rounded-sm"></div>
+          <div class="skeleton h-2 w-12 rounded-sm"></div>
         </div>
-        <div v-if="isFetching" class="text-theme-tertiary text-[9px] font-mono text-center mt-1">
+        <div v-if="isFetching" class="text-theme-tertiary text-[10px] font-mono text-center mt-1">
           📡 首次访问，正在穿透拉取全量历史…
         </div>
       </div>
@@ -77,7 +77,7 @@
       <!-- 右键上下文菜单 -->
       <div
         v-if="ctxMenu.visible"
-        class="absolute z-50 bg-terminal-panel border border-theme-secondary rounded-lg shadow-2xl py-1 min-w-44"
+        class="absolute z-50 bg-terminal-panel border border-theme-secondary rounded-sm shadow-sm py-1 min-w-44"
         :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
       >
         <button
@@ -85,7 +85,7 @@
           @click="onDrillDown"
         >
           <span>📊</span><span>查看历史分时</span>
-          <span class="text-theme-muted ml-auto text-[9px]">{{ ctxMenu.date || '' }}</span>
+          <span class="text-theme-muted ml-auto text-[10px]">{{ ctxMenu.date || '' }}</span>
         </button>
         <button
           class="w-full px-3 py-1.5 text-[11px] text-left text-theme-primary hover:bg-theme-tertiary/60 flex items-center gap-2"
@@ -112,7 +112,7 @@
       <!-- 下钻返回按钮 -->
       <button
         v-if="drillDownDate"
-        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded border border-amber-500/50 bg-amber-500/20 text-[var(--color-warning)] hover:bg-amber-500/30 transition-colors"
+        class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded-sm border border-[var(--color-warning)]/50 bg-[var(--color-warning-bg)] text-[var(--color-warning)] hover:bg-[var(--color-warning-bg)]/80 transition-colors"
         @click="exitDrillDown"
       >← 返回日线</button>
     </div>

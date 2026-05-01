@@ -11,7 +11,7 @@
           更新于 {{ formatTime(lastUpdate) }}
         </span>
         <button 
-          class="px-3 py-1.5 rounded text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+          class="px-3 py-1.5 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
           @click="refreshAll"
           :disabled="loading"
         >
@@ -23,7 +23,7 @@
     <!-- 核心指标卡片 -->
     <div v-if="overview" class="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4">
       <!-- GDP卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">GDP</span>
           <span class="text-xs text-terminal-dim">{{ overview.gdp?.period }}</span>
@@ -35,7 +35,7 @@
       </div>
 
       <!-- CPI卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">CPI</span>
           <span class="text-xs text-terminal-dim">{{ overview.cpi?.period }}</span>
@@ -47,7 +47,7 @@
       </div>
 
       <!-- PPI卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">PPI</span>
           <span class="text-xs text-terminal-dim">{{ overview.ppi?.period }}</span>
@@ -59,7 +59,7 @@
       </div>
 
       <!-- PMI卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">PMI</span>
           <span class="text-xs text-terminal-dim">{{ overview.pmi?.period }}</span>
@@ -71,7 +71,7 @@
       </div>
 
       <!-- M2卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">M2</span>
           <span class="text-xs text-terminal-dim">{{ overview.m2?.period }}</span>
@@ -83,7 +83,7 @@
       </div>
 
       <!-- 社融卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">社融</span>
           <span class="text-xs text-terminal-dim">{{ overview.social_financing?.period }}</span>
@@ -95,7 +95,7 @@
       </div>
 
       <!-- 工业增加值卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">工业增加值</span>
           <span class="text-xs text-terminal-dim">{{ overview.industrial_production?.period }}</span>
@@ -107,7 +107,7 @@
       </div>
 
       <!-- 失业率卡片 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
           <span class="text-xs text-terminal-dim">失业率</span>
           <span class="text-xs text-terminal-dim">{{ overview.unemployment?.period }}</span>
@@ -122,49 +122,49 @@
     <!-- 图表区域 -->
     <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 min-h-0 overflow-y-auto">
       <!-- GDP趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">GDP同比增长率</h3>
         <div ref="gdpChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- CPI趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">CPI同比/环比</h3>
         <div ref="cpiChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- PMI趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">PMI制造业/非制造业</h3>
         <div ref="pmiChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- PPI趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">PPI同比</h3>
         <div ref="ppiChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- M2趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">M2货币供应量同比</h3>
         <div ref="m2Chart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- 社融趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">社会融资规模</h3>
         <div ref="socialFinancingChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- 工业增加值趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">工业增加值同比</h3>
         <div ref="industrialProductionChart" class="flex-1 min-h-[200px]"></div>
       </div>
 
       <!-- 失业率趋势图 -->
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4 flex flex-col">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">城镇调查失业率</h3>
         <div ref="unemploymentChart" class="flex-1 min-h-[200px]"></div>
       </div>
@@ -172,12 +172,12 @@
 
     <!-- 经济日历 -->
     <div class="px-4 pb-4">
-      <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-4">
+      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <h3 class="text-sm font-bold text-terminal-accent mb-3">📅 近期数据发布</h3>
         <div class="space-y-2">
           <div v-for="(item, index) in calendar" :key="index" class="flex items-center justify-between py-2 border-b border-theme/10 last:border-0">
             <div class="flex items-center gap-3">
-              <span class="text-xs px-2 py-0.5 rounded" :class="getStatusClass(item.status)">
+              <span class="text-xs px-2 py-0.5 rounded-sm" :class="getStatusClass(item.status)">
                 {{ item.status === 'released' ? '已发布' : '待发布' }}
               </span>
               <span class="text-sm text-terminal-primary">{{ item.name }}</span>
@@ -353,7 +353,7 @@ function drawGDPChart(data) {
   const quarters = data.map(d => d.quarter)
   const yoyData = data.map(d => d.gdp_yoy)
   
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#2E7DFF'
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
   const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
   
   gdpChartInstance.setOption({
@@ -444,7 +444,7 @@ function drawPMIChart(data) {
   const nonManufacturingData = data.map(d => d.non_manufacturing_index)
   
   const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#2E7DFF'
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
   const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#FF7D00'
   const successColor = getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#51CF66'
   
@@ -539,7 +539,7 @@ function drawM2Chart(data) {
   const yoyData = data.map(d => d.m2_yoy)
   
   const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#2E7DFF'
+  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
   
   m2ChartInstance.setOption({
     tooltip: { trigger: 'axis' },

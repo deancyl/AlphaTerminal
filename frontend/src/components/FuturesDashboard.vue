@@ -7,13 +7,13 @@
       <div
         v-for="card in futuresCards"
         :key="card.symbol"
-        class="flex-1 min-w-[100px] md:min-w-0 terminal-panel border border-theme-secondary rounded px-2 md:px-4 py-2 md:py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
+        class="flex-1 min-w-[100px] md:min-w-0 terminal-panel border border-theme-secondary rounded-sm px-2 md:px-4 py-2 md:py-3 flex flex-col gap-1 cursor-pointer hover:border-terminal-accent/40 transition"
         @click="openFuturesCard(card)"
       >
         <div class="flex items-center justify-between">
-          <span class="text-[9px] md:text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
+          <span class="text-[10px] md:text-[10px] text-terminal-dim uppercase tracking-wider">{{ card.name }}</span>
           <span
-            class="text-[8px] md:text-[9px] px-1 py-0.5 rounded border"
+            class="text-[10px] md:text-[10px] px-1 py-0.5 rounded-sm border"
             :class="card.change_pct >= 0
               ? 'border-bullish/30 text-bullish'
               : 'border-bearish/30 text-bearish'"
@@ -26,7 +26,7 @@
             :class="card.change_pct >= 0 ? 'text-bullish' : 'text-bearish'"
           >{{ card.change_pct >= 0 ? '+' : '' }}{{ card.change_pct?.toFixed(2) }}%</span>
         </div>
-        <div class="text-[8px] md:text-[9px] text-terminal-dim flex justify-between">
+        <div class="text-[10px] md:text-[10px] text-terminal-dim flex justify-between">
           <span>持仓: {{ card.position || '--' }}</span>
           <span class="hidden md:inline">{{ card.note || '' }}</span>
         </div>
@@ -37,10 +37,10 @@
     <div class="flex flex-col gap-3 flex-1 min-h-0">
 
       <!-- 大宗商品板块分组热力图 -->
-      <div class="terminal-panel border border-theme-secondary rounded p-4">
+      <div class="terminal-panel border border-theme-secondary rounded-sm p-4">
         <div class="flex items-center justify-between mb-3">
           <span class="text-xs text-terminal-dim">🛢️ 国内大宗商品主力合约</span>
-          <span class="text-[9px] text-terminal-dim">{{ commodityUpdateTime || '...' }}</span>
+          <span class="text-[10px] text-terminal-dim">{{ commodityUpdateTime || '...' }}</span>
         </div>
 
         <!-- 按板块分组渲染 -->
@@ -49,7 +49,7 @@
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-[10px]">{{ sector.emoji }} {{ sector.name }}</span>
             <span
-              class="text-[10px] font-mono px-1.5 py-0.5 rounded"
+              class="text-[10px] font-mono px-1.5 py-0.5 rounded-sm"
               :class="sector.avgChange >= 0 ? 'bg-red-900/40 text-bullish' : 'bg-green-900/40 text-bearish'"
             >
               {{ sector.avgChange >= 0 ? '+' : '' }}{{ sector.avgChange.toFixed(2) }}%
@@ -64,7 +64,7 @@
             <div
               v-for="item in sector.items"
               :key="item.symbol"
-              class="rounded border flex flex-col items-center justify-center py-1.5 md:py-2 px-1 cursor-default transition-all hover:brightness-125"
+              class="rounded-sm border flex flex-col items-center justify-center py-1.5 md:py-2 px-1 cursor-default transition-all hover:brightness-125"
               style="min-height: 44px;"
               :style="{
                 borderColor: (item.change_pct || 0) >= 0
@@ -75,7 +75,7 @@
                   : 'rgba(34,197,94,0.08)',
               }"
             >
-              <span class="text-[9px] md:text-[10px] text-theme-primary truncate w-full text-center">{{ item.name }}</span>
+              <span class="text-[10px] md:text-[10px] text-theme-primary truncate w-full text-center">{{ item.name }}</span>
               <span
                 class="text-[10px] md:text-xs font-mono mt-0.5"
                 :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
@@ -91,7 +91,7 @@
 
 
       <!-- 下方：主力合约走势图（真实图表） -->
-      <div class="flex-1 terminal-panel border border-theme-secondary rounded p-2 md:p-4 flex flex-col">
+      <div class="flex-1 terminal-panel border border-theme-secondary rounded-sm p-2 md:p-4 flex flex-col">
         <div class="text-xs text-terminal-dim mb-1 md:mb-2">📈 期货指数走势（IF · IC · IM）</div>
         <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 120px;">
           <FuturesMainChart
@@ -99,11 +99,11 @@
             :futures-data="futuresCards"
           />
           <div v-else class="w-full h-full flex flex-col p-3 gap-2">
-            <div class="skeleton h-3 w-24 rounded"></div>
-            <div class="flex-1 skeleton rounded-lg"></div>
+            <div class="skeleton h-3 w-24 rounded-sm"></div>
+            <div class="flex-1 skeleton rounded-sm"></div>
             <div class="flex gap-2">
-              <div class="skeleton h-2 w-12 rounded"></div>
-              <div class="skeleton h-2 w-12 rounded"></div>
+              <div class="skeleton h-2 w-12 rounded-sm"></div>
+              <div class="skeleton h-2 w-12 rounded-sm"></div>
             </div>
           </div>
         </div>

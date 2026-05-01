@@ -2,20 +2,20 @@
   <div class="flex flex-col h-full overflow-auto gap-2 p-3">
 
     <!-- ── 顶部：收益率矩阵（利率估值表）────────────────────────── -->
-    <div class="terminal-panel border border-theme-secondary rounded p-3 shrink-0">
+    <div class="terminal-panel border border-theme-secondary rounded-sm p-3 shrink-0">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs text-terminal-dim">📊 利率估值矩阵</span>
         <div class="flex items-center gap-2">
           <!-- 隐含税率图例 -->
-          <span class="text-[9px] text-[var(--color-primary)]/80 flex items-center gap-1">
+          <span class="text-[10px] text-[var(--color-primary)]/80 flex items-center gap-1">
             <span class="w-2 h-2 rounded-full bg-[var(--color-primary)]/60"></span>
             隐含税率
           </span>
-          <span class="text-[9px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
+          <span class="text-[10px] text-terminal-dim">{{ matrixUpdateTime || '...' }}</span>
           <!-- 数据源警告（Mock 数据） -->
           <span
             v-if="bondDataSource === 'mock'"
-            class="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] text-[var(--color-warning)]"
+            class="text-[10px] px-1.5 py-0.5 rounded-sm bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] text-[var(--color-warning)]"
             title="AkShare 债券数据已停更，数据截至 2021-01-22"
           >
             ⚠️ 数据截至 2021
@@ -28,7 +28,7 @@
         <button
           v-for="src in SOURCES"
           :key="src.key"
-          class="flex-1 py-1 text-[9px] font-medium text-center border-b-2 transition-colors"
+          class="flex-1 py-1 text-[10px] font-medium text-center border-b-2 transition-colors"
           :class="activeSource === src.key
             ? 'border-bullish text-bullish'
             : 'border-transparent text-terminal-dim hover:text-theme-primary'"
@@ -40,24 +40,24 @@
 
       <!-- 矩阵表头：桌面端 -->
       <div class="hidden sm:grid" :style="{ gridTemplateColumns: '56px 1fr 1fr', gap: '2px' }">
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-1">期限</div>
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">
           {{ SOURCES.find(s => s.key === activeSource)?.label }}
         </div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">基点变化</div>
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-2 text-center border-l border-theme">基点变化</div>
       </div>
       <!-- 移动端简化表头 -->
       <div class="grid sm:hidden" :style="{ gridTemplateColumns: '48px 1fr 1fr', gap: '2px' }">
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1">期限</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">收益率</div>
-        <div class="text-[9px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">变化</div>
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-1">期限</div>
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">收益率</div>
+        <div class="text-[10px] text-terminal-dim font-medium py-1 px-1 text-center border-l border-theme">变化</div>
       </div>
 
       <!-- 矩阵数据行：桌面端 -->
       <div
         v-for="tenor in TENORS"
         :key="`${activeSource}-${tenor.key}`"
-        class="hidden sm:grid hover:bg-white/5 transition-colors rounded cursor-pointer"
+        class="hidden sm:grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer"
         :style="{ gridTemplateColumns: '56px 1fr 1fr', gap: '2px' }"
         @click="openHistory(tenor)"
       >
@@ -78,7 +78,7 @@
             <!-- 隐含税率（仅国开列） -->
             <span
               v-if="activeSource === 'cdb' && getCell(tenor.key, 'gov')?.yield && getCell(tenor.key, 'cdb')?.yield"
-              class="text-[9px] px-1 py-0.5 rounded bg-[var(--color-primary-bg)] border border-[var(--color-primary-border)] text-[var(--color-primary)]/90 leading-none"
+              class="text-[10px] px-1 py-0.5 rounded-sm bg-[var(--color-primary-bg)] border border-[var(--color-primary-border)] text-[var(--color-primary)]/90 leading-none"
               :title="`隐含税率 = (国开-国债)/国开`"
             >
               税{{ impliedTaxRate(getCell(tenor.key, 'gov')?.yield, getCell(tenor.key, 'cdb')?.yield) }}
@@ -87,7 +87,7 @@
           <!-- 利差标注：国开/商A-AAA 显示相对国债的利差 -->
           <span
             v-if="getCell(tenor.key, activeSource)?.spread_bps != null"
-            class="text-[9px] text-terminal-dim leading-none"
+            class="text-[10px] text-terminal-dim leading-none"
           >
             {{ getCell(tenor.key, activeSource)?.spread_bps >= 0 ? '+' : '' }}{{ getCell(tenor.key, activeSource)?.spread_bps.toFixed(1) }}bp
           </span>
@@ -97,7 +97,7 @@
         <div class="py-1.5 px-2 border-l border-theme flex items-center justify-between">
           <div class="flex flex-col items-end">
             <span
-              class="text-[9px] font-mono"
+              class="text-[10px] font-mono"
               :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
             >
               {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
@@ -115,13 +115,13 @@
       <div
         v-for="tenor in TENORS"
         :key="`mobile-${activeSource}-${tenor.key}`"
-        class="sm:hidden grid hover:bg-white/5 transition-colors rounded cursor-pointer"
+        class="sm:hidden grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer"
         :style="{ gridTemplateColumns: '48px 1fr 1fr', gap: '2px' }"
         @click="openHistory(tenor)"
       >
         <!-- 期限标签 -->
         <div class="py-1 px-1 flex items-center">
-          <span class="text-[9px] text-terminal-dim">{{ tenor.label }}</span>
+          <span class="text-[10px] text-terminal-dim">{{ tenor.label }}</span>
         </div>
 
         <!-- 收益率 -->
@@ -138,7 +138,7 @@
         <div class="py-1 px-1 border-l border-theme flex items-center justify-end">
           <div class="flex flex-col items-end">
              <span
-              class="text-[9px] font-mono"
+              class="text-[10px] font-mono"
               :class="getCell(tenor.key, activeSource)?.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
             >
               {{ formatBps(getCell(tenor.key, activeSource)?.change_bps) }}
@@ -155,10 +155,10 @@
       <!-- 无数据骨架屏 -->
       <div v-if="!hasData" class="py-3 space-y-2">
         <div class="flex gap-2" v-for="n in 4" :key="n">
-          <div class="skeleton h-6 flex-1 rounded"></div>
-          <div class="skeleton h-6 w-12 rounded"></div>
-          <div class="skeleton h-6 w-12 rounded"></div>
-          <div class="skeleton h-6 w-12 rounded"></div>
+          <div class="skeleton h-6 flex-1 rounded-sm"></div>
+          <div class="skeleton h-6 w-12 rounded-sm"></div>
+          <div class="skeleton h-6 w-12 rounded-sm"></div>
+          <div class="skeleton h-6 w-12 rounded-sm"></div>
         </div>
       </div>
     </div>
@@ -171,10 +171,10 @@
       <div class="flex-1 flex flex-col gap-2 min-w-0 order-2 lg:order-1">
 
         <!-- 收益率曲线 -->
-        <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col" style="flex: 2;">
+        <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col" style="flex: 2;">
           <div class="flex items-center justify-between mb-1.5 shrink-0">
             <span class="text-[10px] text-terminal-dim">📈 收益率曲线</span>
-            <span class="text-[9px] text-terminal-dim hidden sm:inline">{{ yieldUpdateTime || '...' }}</span>
+            <span class="text-[10px] text-terminal-dim hidden sm:inline">{{ yieldUpdateTime || '...' }}</span>
           </div>
           <div class="flex-1 min-h-0 overflow-hidden relative" style="min-height: 120px;">
             <YieldCurveChart
@@ -185,19 +185,19 @@
               :update-time="yieldUpdateTime"
             />
             <div v-else class="w-full h-full flex flex-col p-3 gap-2">
-              <div class="skeleton h-3 w-24 rounded"></div>
-              <div class="flex-1 skeleton rounded-lg"></div>
+              <div class="skeleton h-3 w-24 rounded-sm"></div>
+              <div class="flex-1 skeleton rounded-sm"></div>
               <div class="flex gap-2">
-                <div class="skeleton h-2 w-12 rounded"></div>
-                <div class="skeleton h-2 w-12 rounded"></div>
-                <div class="skeleton h-2 w-12 rounded"></div>
+                <div class="skeleton h-2 w-12 rounded-sm"></div>
+                <div class="skeleton h-2 w-12 rounded-sm"></div>
+                <div class="skeleton h-2 w-12 rounded-sm"></div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 10Y-2Y 期限利差走势 -->
-        <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col" style="flex: 1; min-height: 100px;">
+        <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col" style="flex: 1; min-height: 100px;">
           <YieldSpreadChart
             :tenors10y="spreadHistory10y"
             :tenors2y="spreadHistory2y"
@@ -211,10 +211,10 @@
 
       <!-- 右侧：活跃债券列表 -->
       <!-- 移动端：水平滚动卡片，桌面端：固定宽度列表 -->
-      <div class="lg:w-56 shrink-0 terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col order-1 lg:order-2">
+      <div class="lg:w-56 shrink-0 terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col order-1 lg:order-2">
         <div class="flex items-center justify-between mb-1.5 shrink-0">
           <span class="text-[10px] text-terminal-dim">📋 活跃债券</span>
-          <span class="text-[9px] px-1 py-0.5 rounded border border-[var(--color-warning-border)] text-[var(--color-warning)]/70">LIVE</span>
+          <span class="text-[10px] px-1 py-0.5 rounded-sm border border-[var(--color-warning-border)] text-[var(--color-warning)]/70">LIVE</span>
         </div>
         <!-- 移动端：水平滚动，桌面端：垂直滚动 -->
         <div class="flex-1 overflow-x-auto lg:overflow-y-auto lg:overflow-x-hidden">
@@ -222,16 +222,16 @@
             <div
               v-for="bond in bondList"
               :key="bond.code"
-              class="flex lg:flex-row flex-col items-center lg:items-stretch justify-between py-1 px-2 lg:px-0 border-b border-theme hover:bg-white/5 transition-colors cursor-pointer shrink-0 lg:w-full w-24"
+              class="flex lg:flex-row flex-col items-center lg:items-stretch justify-between py-1 px-2 lg:px-0 border-b border-theme hover:bg-theme-hover transition-colors cursor-pointer shrink-0 lg:w-full w-24"
             >
               <div class="flex flex-col min-w-0 lg:flex-1">
                 <span class="text-[10px] text-theme-primary truncate">{{ bond.name }}</span>
-                <span class="text-[9px] text-terminal-dim hidden lg:inline">{{ bond.code }}</span>
+                <span class="text-[10px] text-terminal-dim hidden lg:inline">{{ bond.code }}</span>
               </div>
               <div class="flex flex-col lg:items-end items-center">
                 <span class="text-[10px] font-mono text-theme-primary">{{ bond.rate }}</span>
                 <span
-                  class="text-[9px] font-mono"
+                  class="text-[10px] font-mono"
                   :class="bond.change_bps >= 0 ? 'text-bullish/70' : 'text-bearish/70'"
                 >{{ bond.change_bps >= 0 ? '+' : '' }}{{ bond.change_bps }}bp</span>
               </div>
@@ -248,7 +248,7 @@
     <!-- ── 收益率曲线 & 利差图表 ──────────────────────────── -->
     <!-- 移动端：垂直堆叠，高度减小 -->
     <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-2">
-      <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
+      <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
         <YieldCurveChart
           :yield-curve="yieldCurve"
           :curve1m="yieldCurve1m"
@@ -256,7 +256,7 @@
           :update-time="yieldUpdateTime"
         />
       </div>
-      <div class="terminal-panel border border-theme-secondary rounded p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
+      <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
         <YieldSpreadChart
           :history10y="spreadHistory10y"
           :history2y="spreadHistory2y"

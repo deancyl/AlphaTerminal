@@ -215,9 +215,12 @@ async def get_sources_status():
     # 从 SQLite 获取持久化熔断状态
     try:
         conn = _get_conn()
-        cursor = conn.cursor()
-        cursor.execute("SELECT source, state, fail_count, last_fail_time FROM circuit_breaker")
-        db_states = {row[0]: {"state": row[1], "fail_count": row[2], "last_fail_time": row[3]} for row in cursor.fetchall()}
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT source, state, fail_count, last_fail_time FROM circuit_breaker")
+            db_states = {row[0]: {"state": row[1], "fail_count": row[2], "last_fail_time": row[3]} for row in cursor.fetchall()}
+        finally:
+            conn.close()
     except sqlite3.OperationalError:
         # 表不存在，返回空状态
         db_states = {}
@@ -244,23 +247,29 @@ async def control_circuit_breaker(control: CircuitBreakerControl):
         quote_source.open_circuit(control.source)
         # 持久化到 SQLite
         conn = _get_conn()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
-            (control.source, "open", datetime.now().isoformat())
-        )
-        conn.commit()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
+                (control.source, "open", datetime.now().isoformat())
+            )
+            conn.commit()
+        finally:
+            conn.close()
         return {"message": f"已熔断 {control.source}", "state": "open"}
     
     elif control.action == "close":
         quote_source.close_circuit(control.source)
         conn = _get_conn()
-        cursor = conn.cursor()
-        cursor.execute(
-            "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
-            (control.source, "closed", datetime.now().isoformat())
-        )
-        conn.commit()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
+                (control.source, "closed", datetime.now().isoformat())
+            )
+            conn.commit()
+        finally:
+            conn.close()
         return {"message": f"已恢复 {control.source}", "state": "closed"}
     
     else:
@@ -270,9 +279,12 @@ async def control_circuit_breaker(control: CircuitBreakerControl):
 async def get_balance_config():
     """获取负载均衡配置"""
     conn = _get_conn()
-    cursor = conn.cursor()
-    cursor.execute("SELECT config_value FROM system_config WHERE config_key = 'source_balance'")
-    row = cursor.fetchone()
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT config_value FROM system_config WHERE config_key = 'source_balance'")
+        row = cursor.fetchone()
+    finally:
+        conn.close()
     if row:
         import json
         return json.loads(row[0])
@@ -283,12 +295,15 @@ async def set_balance_config(config: SourceBalanceConfig):
     """设置负载均衡配置"""
     import json
     conn = _get_conn()
-    cursor = conn.cursor()
-    cursor.execute(
-        "INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) VALUES (?, ?, ?)",
-        ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
-    )
-    conn.commit()
+    try:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) VALUES (?, ?, ?)",
+            ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
+        )
+        conn.commit()
+    finally:
+        conn.close()
     return {"message": "负载均衡配置已更新", "config": config.dict()}
 
 
@@ -378,51 +393,59 @@ async def warmup_cache(data_type: str = Body(..., embed=True)):
 async def database_maintenance(action: str = Body(..., embed=True)):
     """数据库维护操作"""
     conn = _get_conn()
-    
-    if action == "vacuum":
-        conn.execute("VACUUM")
-        return {"message": "数据库已优化 (VACUUM)"}
-    elif action == "analyze":
-        conn.execute("ANALYZE")
-        return {"message": "数据库统计信息已更新 (ANALYZE)"}
-    elif action == "integrity_check":
-        cursor = conn.execute("PRAGMA integrity_check")
-        result = cursor.fetchone()[0]
-        return {"message": f"完整性检查结果: {result}", "status": result}
-    else:
-        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+    try:
+        if action == "vacuum":
+            conn.execute("VACUUM")
+            return {"message": "数据库已优化 (VACUUM)"}
+        elif action == "analyze":
+            conn.execute("ANALYZE")
+            return {"message": "数据库统计信息已更新 (ANALYZE)"}
+        elif action == "integrity_check":
+            cursor = conn.execute("PRAGMA integrity_check")
+            result = cursor.fetchone()[0]
+            return {"message": f"完整性检查结果: {result}", "status": result}
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+    finally:
+        conn.close()
 
 @router.get("/database/stats")
 async def get_database_stats():
     """获取数据库统计信息"""
     conn = _get_conn()
-    cursor = conn.cursor()
-    
-    # 获取所有表的大小
-    cursor.execute("""
-        SELECT name, 
-               (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=name) as count
-        FROM sqlite_master 
-        WHERE type='table'
-    """)
-    tables = cursor.fetchall()
-    
-    stats = {}
-    _ALLOWED_TABLES = frozenset({
-        'market_data_realtime', 'market_data_daily', 'market_data_periodic',
-        'write_buffer', 'portfolios', 'positions', 'portfolio_snapshots',
-        'admin_config', 'market_all_stocks', 'transactions',
-        'position_lots', 'position_summary',
-    })
-    for table_name, _ in tables:
-        if table_name not in _ALLOWED_TABLES:
-            continue
-        cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
-        count = cursor.fetchone()[0]
-        stats[table_name] = count
-    
-    # 获取数据库文件大小
-    db_size = os.path.getsize(_db_path) if os.path.exists(_db_path) else 0
+    try:
+        cursor = conn.cursor()
+        
+        # 获取所有表的大小
+        cursor.execute("""
+            SELECT name, 
+                   (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=name) as count
+            FROM sqlite_master 
+            WHERE type='table'
+        """)
+        tables = cursor.fetchall()
+        
+        stats = {}
+        _ALLOWED_TABLES = frozenset({
+            'market_data_realtime', 'market_data_daily', 'market_data_periodic',
+            'write_buffer', 'portfolios', 'positions', 'portfolio_snapshots',
+            'admin_config', 'market_all_stocks', 'transactions',
+            'position_lots', 'position_summary',
+        })
+        for table_name, _ in tables:
+            if table_name not in _ALLOWED_TABLES:
+                continue
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
+                count = cursor.fetchone()[0]
+                stats[table_name] = count
+            except sqlite3.OperationalError:
+                stats[table_name] = -1  # 表存在于 master 但无法查询
+        
+        # 获取数据库文件大小
+        db_size = os.path.getsize(_db_path) if os.path.exists(_db_path) else 0
+    finally:
+        conn.close()
     
     return {
         "tables": stats,

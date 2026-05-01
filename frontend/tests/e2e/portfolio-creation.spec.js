@@ -19,12 +19,21 @@ test.describe('Portfolio Creation', () => {
 
   test('should open create portfolio dialog', async ({ page }) => {
     await page.goto('/')
+    await page.waitForTimeout(1000)
+    
+    // Navigate to portfolio view first (click portfolio sidebar item)
+    const portfolioNav = page.locator('button:has-text("💰"), button:has-text("组合"), button:has-text("portfolio"), [data-testid="nav-portfolio"]').first()
+    if (await portfolioNav.count() > 0) {
+      await portfolioNav.click()
+      await page.waitForTimeout(500)
+    }
     
     // Look for create portfolio button
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), button:has-text("New Portfolio"), button:has-text("+"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("+"), [data-testid="create-portfolio-btn"]').first()
     
     if (await createButton.count() > 0) {
-      await createButton.first().click()
+      await createButton.click()
+      await page.waitForTimeout(500)
       
       // Check if dialog/modal appeared
       const dialog = page.locator('.dialog, .modal, [role="dialog"], [data-testid="portfolio-dialog"]')
@@ -36,7 +45,7 @@ test.describe('Portfolio Creation', () => {
     await page.goto('/')
     
     // Try to open create dialog first
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -55,7 +64,7 @@ test.describe('Portfolio Creation', () => {
   test('should fill portfolio description', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -74,7 +83,7 @@ test.describe('Portfolio Creation', () => {
   test('should fill initial capital', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -93,7 +102,7 @@ test.describe('Portfolio Creation', () => {
   test('should select portfolio type', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -117,7 +126,7 @@ test.describe('Portfolio Creation', () => {
   test('should cancel portfolio creation', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -139,7 +148,7 @@ test.describe('Portfolio Creation', () => {
   test('should submit portfolio creation', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)
@@ -169,7 +178,7 @@ test.describe('Portfolio Creation', () => {
   test('should validate required fields', async ({ page }) => {
     await page.goto('/')
     
-    const createButton = page.locator('button:has-text("新建组合"), button:has-text("创建组合"), [data-testid="create-portfolio-btn"]')
+    const createButton = page.locator('button:has-text("新建"), button:has-text("创建"), [data-testid="create-portfolio-btn"]')
     if (await createButton.count() > 0) {
       await createButton.first().click()
       await page.waitForTimeout(500)

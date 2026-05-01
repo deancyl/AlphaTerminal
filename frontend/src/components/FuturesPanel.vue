@@ -5,22 +5,22 @@
       <!-- 合约代码输入 -->
       <input
         v-model="inputSymbol"
-        class="w-20 px-2 py-0.5 text-[11px] rounded bg-theme-secondary border border-theme-secondary text-theme-primary focus:border-terminal-accent outline-none"
+        class="w-20 px-2 py-0.5 text-[11px] rounded-sm bg-theme-secondary border border-theme-secondary text-theme-primary focus:border-terminal-accent outline-none"
         placeholder="RB / I / SC"
         @keydown.enter="loadSymbol"
       />
-      <button class="px-2 py-0.5 text-[10px] rounded bg-terminal-accent text-white hover:opacity-80" @click="loadSymbol">切换</button>
+      <button class="px-2 py-0.5 text-[10px] rounded-sm bg-terminal-accent text-theme-primary hover:opacity-80" @click="loadSymbol">切换</button>
 
       <!-- 视图切换：K线 / 期限结构 -->
-      <div class="flex gap-1 ml-2 border border-theme rounded">
+      <div class="flex gap-1 ml-2 border border-theme rounded-sm">
         <button
-          class="px-2 py-0.5 text-[9px] rounded transition"
-          :class="viewMode === 'kline' ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
+          class="px-2 py-0.5 text-[10px] rounded-sm transition"
+          :class="viewMode === 'kline' ? 'bg-terminal-accent text-theme-primary' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="viewMode = 'kline'"
         >K线图</button>
         <button
-          class="px-2 py-0.5 text-[9px] rounded transition"
-          :class="viewMode === 'term' ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
+          class="px-2 py-0.5 text-[10px] rounded-sm transition"
+          :class="viewMode === 'term' ? 'bg-terminal-accent text-theme-primary' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="switchToTerm"
         >期限结构</button>
       </div>
@@ -29,8 +29,8 @@
       <div v-if="viewMode === 'kline'" class="flex gap-1">
         <button
           v-for="p in periods" :key="p.value"
-          class="px-2 py-0.5 text-[10px] rounded transition"
-          :class="period === p.value ? 'bg-terminal-accent text-white' : 'text-theme-tertiary hover:text-theme-primary'"
+          class="px-2 py-0.5 text-[10px] rounded-sm transition"
+          :class="period === p.value ? 'bg-terminal-accent text-theme-primary' : 'text-theme-tertiary hover:text-theme-primary'"
           @click="period = p.value"
         >{{ p.label }}</button>
       </div>
@@ -39,10 +39,10 @@
       <div v-if="viewMode === 'kline'" class="flex gap-1">
         <button
           v-for="ind in subChartOptions" :key="ind.key"
-          class="px-1.5 py-0.5 text-[9px] rounded border transition"
+          class="px-1.5 py-0.5 text-[10px] rounded-sm border transition"
           :class="activeSubChart === ind.key
             ? 'border-terminal-accent text-terminal-accent'
-            : 'border-theme text-theme-muted hover:border-gray-500'"
+            : 'border-theme text-theme-muted hover:border-theme-secondary'"
           @click="activeSubChart = ind.key"
         >{{ ind.label }}</button>
       </div>

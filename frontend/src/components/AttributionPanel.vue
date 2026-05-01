@@ -6,7 +6,7 @@
       <span class="text-[10px] text-theme-muted">归因周期</span>
       <select
         v-model="includeChildren"
-        class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[10px] text-theme-primary"
+        class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary"
       >
         <option :value="false">仅本账户</option>
         <option :value="true">包含子账户</option>
@@ -14,7 +14,7 @@
       <button
         @click="loadAttribution"
         :disabled="loading"
-        class="ml-auto px-3 py-0.5 rounded text-[10px] font-medium transition-colors"
+        class="ml-auto px-3 py-0.5 rounded-sm text-[10px] font-medium transition-colors"
         :class="loading
           ? 'bg-gray-600/40 text-theme-muted cursor-not-allowed'
           : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] border border-[var(--color-info-border)]'"
@@ -29,9 +29,9 @@
         <div
           v-for="m in riskCards"
           :key="m.label"
-          class="rounded border border-theme bg-terminal-panel/60 px-2 py-1"
+          class="rounded-sm border border-theme bg-terminal-panel/60 px-2 py-1"
         >
-          <div class="text-[8px] text-theme-muted truncate">{{ m.label }}</div>
+          <div class="text-[10px] text-theme-muted truncate">{{ m.label }}</div>
           <div
             class="text-[11px] font-mono font-bold"
             :class="m.colorClass || 'text-theme-primary'"
@@ -44,24 +44,24 @@
 
         <!-- 资产配置饼图 -->
         <div class="flex-1 min-w-0 flex flex-col">
-          <div class="text-[9px] text-theme-muted mb-1 shrink-0">🕯️ 底层资产配置</div>
+          <div class="text-[10px] text-theme-muted mb-1 shrink-0">🕯️ 底层资产配置</div>
           <div ref="pieEl" class="flex-1 min-h-0" style="min-height: 160px;"></div>
         </div>
 
         <!-- 绩效归因柱状图 -->
         <div class="flex-1 min-w-0 flex flex-col">
-          <div class="text-[9px] text-theme-muted mb-1 shrink-0">📊 盈亏贡献 (红=盈利, 绿=亏损)</div>
+          <div class="text-[10px] text-theme-muted mb-1 shrink-0">📊 盈亏贡献 (红=盈利, 绿=亏损)</div>
           <div ref="barEl" class="flex-1 min-h-0" style="min-height: 160px;"></div>
         </div>
       </div>
 
       <!-- 归因明细表 -->
-      <div class="shrink-0 text-[9px]">
+      <div class="shrink-0 text-[10px]">
         <div class="flex items-center gap-1 mb-1">
           <span class="text-theme-muted">📋 归因明细</span>
           <span class="text-theme-muted">({{ data.attribution?.length || 0 }} 类底层资产)</span>
         </div>
-        <div class="overflow-x-auto border border-theme/30 rounded">
+        <div class="overflow-x-auto border border-theme/30 rounded-sm">
           <table class="w-full">
             <thead class="bg-terminal-panel sticky top-0">
               <tr class="text-theme-muted border-b border-theme/20">
@@ -80,7 +80,7 @@
               >
                 <td class="px-2 py-0.5">
                   <span class="text-theme-primary font-medium">{{ a.sub_category }}</span>
-                  <span class="ml-1 text-[8px] text-theme-muted">{{ a.category }}</span>
+                  <span class="ml-1 text-[10px] text-theme-muted">{{ a.category }}</span>
                 </td>
                 <td class="px-2 py-0.5 text-right font-mono text-theme-primary">
                   {{ fmtYuan(a.market_value) }}

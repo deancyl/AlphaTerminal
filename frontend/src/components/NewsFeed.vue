@@ -3,168 +3,120 @@
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">📰 快讯</span>
       <div class="flex items-center gap-2">
-        <!-- 刷新成功提示 -->
-        <span v-if="showRefreshed && refreshMsg" class="text-bearish text-[10px] animate-pulse">
+        <span class="text-theme-primary font-semibold text-sm">快讯</span>
+        <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10">
+          {{ filteredTotal }} 条
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- 刷新状态提示 -->
+        <span v-if="showRefreshed && refreshMsg" 
+              class="text-[10px] px-2 py-0.5 rounded-sm bg-bearish/10 text-bearish"
+              :class="refreshMsg.includes('⚠️') ? 'bg-theme-accent/10 text-theme-accent' : ''"
+        >
           {{ refreshMsg }}
         </span>
-        <span v-else-if="lastRefreshLabel" class="text-terminal-dim text-[10px]">
+        <span v-else-if="lastRefreshLabel" class="text-[10px] text-terminal-dim/50">
           {{ lastRefreshLabel }}
         </span>
-        <span class="text-terminal-dim text-[10px]">{{ filteredTotal }} 条</span>
         <!-- 手动刷新按钮 -->
         <button
-          class="w-8 h-8 flex items-center justify-center rounded border transition shrink-0"
+          class="w-7 h-7 flex items-center justify-center rounded-sm border transition shrink-0"
           :class="isRefreshing
-            ? 'border-[var(--color-warning-border)] text-[var(--color-warning)] bg-[var(--color-warning-bg)] cursor-not-allowed'
-            : 'border-theme-secondary text-terminal-dim hover:border-terminal-accent/50 hover:text-terminal-accent bg-terminal-bg'"
+            ? 'border-theme-accent/40 text-theme-accent bg-theme-accent/10 cursor-not-allowed'
+            : 'border-theme-secondary text-terminal-dim hover:text-theme-primary hover:border-theme-secondary bg-terminal-bg'"
           :disabled="isRefreshing"
           @click="manualRefresh"
           title="刷新快讯"
         >
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"
-               class="w-4 h-4 transition-all"
+               class="w-3.5 h-3.5 transition-all"
                :class="isRefreshing ? 'animate-spin' : ''">
             <path fill-rule="evenodd" d="M4.755 10.059a7.5 7.5 0 0110.138-5.133A7.501 7.501 0 1019.8 13.71a7 7 0 01-14.046 3.293l-1.207.855.002.001zm-.9 1.865l1.207-.856a7.501 7.501 0 0112.237-4.384A7.5 7.5 0 014.26 17.32l-1.15.67.001-.001zm3.163-3.018l.708 1.228a9 9 0 0010.725 3.658l.578-1.117-1.414.818a7.5 7.5 0 01-10.596-2.93zM12 2.25a.75.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM5.166 6.036a8.963 8.963 0 0111.668.156 8.964 8.964 0 01-11.668-.156z" clip-rule="evenodd" />
           </svg>
         </button>
         <span class="w-1.5 h-1.5 rounded-full shrink-0"
-              :class="isRefreshing ? 'bg-yellow-400 animate-pulse' : 'bg-[var(--color-success-light)]'"></span>
+              :class="isRefreshing ? 'bg-theme-accent' : 'bg-bearish'"
+              title="数据状态"
+        ></span>
       </div>
     </div>
 
-    <!-- ── 舆情情绪摘要栏（增强版）─────────────────────────── -->
-    <div v-if="sentiment.total_count > 0" class="mb-2 shrink-0 space-y-2"
-    >
-      <!-- 情绪概览：移动端紧凑布局 -->
-      <div class="flex items-center gap-1.5 md:gap-2 px-2 py-1.5 rounded-lg border transition flex-wrap"
+    
+    <!-- ── 顶部控制 & 数据摘要栏 ─────────────────────────── -->
+    <div class="mb-2 shrink-0 flex flex-col gap-1.5">
+      
+      <!-- 第一行：情绪概览 (移动端单行滚动) -->
+      <div v-if="sentiment.total_count > 0" 
+           class="flex items-center gap-2 px-2 py-1 rounded-sm border transition overflow-x-auto scrollbar-hide whitespace-nowrap"
            :class="sentiment.score > 0.1
-             ? 'border-bullish/30 bg-bullish/5'
+             ? 'border-bearish/30 bg-bearish/5'
              : sentiment.score < -0.1
-               ? 'border-bearish/30 bg-bearish/5'
+               ? 'border-bullish/30 bg-bullish/5'
                : 'border-theme-secondary bg-theme-tertiary/5'"
       >
-        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0"
+        <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-sm shrink-0"
               :class="sentiment.score > 0.1
-                ? 'bg-bullish/20 text-bullish'
+                ? 'bg-bearish/15 text-bearish'
                 : sentiment.score < -0.1
-                  ? 'bg-bearish/20 text-bearish'
+                  ? 'bg-bullish/15 text-bullish'
                   : 'bg-theme-tertiary/20 text-theme-secondary'"
         >
           {{ sentiment.label }}
         </span>
-        <span class="text-[10px] text-terminal-dim shrink-0">
-          {{ sentiment.bullish_count }}🔴:{{ sentiment.bearish_count }}🟢
-        </span>
-        <div class="flex-1 flex gap-1 overflow-x-auto ml-1 md:ml-2 scrollbar-hide min-w-0">
+        <div class="flex items-center gap-1 shrink-0">
+          <span class="text-[10px] text-bearish font-medium">{{ sentiment.bullish_count }}</span>
+          <span class="text-[10px] text-theme-tertiary">:</span>
+          <span class="text-[10px] text-bullish font-medium">{{ sentiment.bearish_count }}</span>
+        </div>
+        <div class="flex items-center gap-1 shrink-0 ml-1">
           <span v-for="kw in sentiment.keywords.slice(0, 3)" :key="kw"
-                class="shrink-0 text-[9px] px-1 py-0.5 rounded bg-theme-tertiary/15 text-theme-tertiary whitespace-nowrap"
+                class="text-[10px] px-1 py-0.5 rounded-sm bg-theme-tertiary/10 text-theme-tertiary"
           >
             {{ kw }}
           </span>
         </div>
-        <span class="text-[9px] text-terminal-dim/50 shrink-0 hidden sm:inline">{{ sentimentTime }}</span>
       </div>
 
-      <!-- 情绪分布条形图：移动端隐藏，节省空间 -->
-      <div class="hidden sm:block px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
-      >
-        <div class="flex items-center justify-between mb-1"
-        >
-          <span class="text-[10px] text-terminal-dim"
-          >情绪分布</span>
-          <span class="text-[9px] text-terminal-dim"
-          >共 {{ sentiment.total_count }} 条</span>
-        </div>
-        <div class="h-2 rounded-full overflow-hidden flex"
-        >
-          <div class="h-full bg-bullish/60 transition-all"
-               :style="{ width: bullishRatio + '%' }"
-               title="看涨"
-          />
-          <div class="h-full bg-theme-tertiary/30 transition-all"
-               :style="{ width: neutralRatio + '%' }"
-               title="中性"
-          />
-          <div class="h-full bg-bearish/60 transition-all"
-               :style="{ width: bearishRatio + '%' }"
-               title="看跌"
-          />
-        </div>
-        <div class="flex justify-between mt-1"
-        >
-          <span class="text-[9px] text-bullish"
-          >{{ sentiment.bullish_count }} 看涨</span>
-          <span class="text-[9px] text-theme-tertiary"
-          >{{ sentiment.neutral_count || 0 }} 中性</span>
-          <span class="text-[9px] text-bearish"
-          >{{ sentiment.bearish_count }} 看跌</span>
-        </div>
-      </div>
-
-      <!-- 热门资讯排行 -->
-      <div v-if="hotNews.length > 0" class="px-2 py-1.5 rounded-lg border border-theme-secondary bg-terminal-panel/50"
-      >
-        <div class="flex items-center justify-between mb-1"
-        >
-          <span class="text-[10px] text-terminal-dim font-bold"
-          >🔥 热门资讯</span
-          >
-          <span class="text-[9px] text-terminal-dim"
-          >{{ hotNews.length }} 条</span
-          >
-        </div
-        >
-        <div class="flex gap-1 overflow-x-auto scrollbar-hide"
-        >
-          <button
-            v-for="(item, idx) in hotNews.slice(0, 5)"
-            :key="item.id || item.title"
-            class="shrink-0 text-[9px] px-2 py-1 rounded border transition text-left max-w-[140px] truncate"
-            :class="modalItem?.id === item.id
-              ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-              : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/30'"
-            @click="openModal(item)"
-            :title="item.title"
-          >
-            <span class="text-terminal-accent font-bold"
-            >{{ idx + 1 }}.</span
-            > {{ item.title }}
-          </button
-          >
-        </div
-        >
-      </div
-      >
-
-      <!-- 分类筛选标签 -->
-      <div class="flex gap-1 px-2 flex-wrap mb-1"
-      >
+      <!-- 第二行：热门资讯 (单行滚动) -->
+      <div v-if="hotNews.length > 0" class="flex items-center gap-1.5 overflow-x-auto scrollbar-hide whitespace-nowrap">
+        <span class="text-[10px] text-terminal-dim/70 font-medium shrink-0 bg-theme-tertiary/10 px-1.5 py-1 rounded-sm">HOT</span>
         <button
-          v-for="cat in categories"
-          :key="cat.value"
-          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition flex items-center gap-0.5"
-          :class="activeCategory === cat.value
-            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-            : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
-          @click="activeCategory = cat.value"
+          v-for="(item, idx) in hotNews.slice(0, 5)"
+          :key="item.id || item.title"
+          class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
+          :class="modalItem?.id === item.id
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+            : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
+          @click="openModal(item)"
+          :title="item.title"
         >
-          <span>{{ cat.icon }}</span>
-          <span>{{ cat.label }}</span>
-          <span v-if="cat.value !== 'all'" class="text-[8px] opacity-60">({{ categoryCount(cat.value) }})</span>
+          <span class="text-theme-primary/60 mr-0.5">{{ idx + 1 }}.</span>{{ item.title }}
         </button>
       </div>
 
-      <!-- 情绪筛选标签：移动端紧凑 -->
-      <div class="flex gap-1 px-2 flex-wrap"
-      >
+      <!-- 第三行：分类与情绪筛选 (单行横向滚动，不换行) -->
+      <div class="flex items-center gap-1 overflow-x-auto scrollbar-hide whitespace-nowrap pb-0.5">
+        <button
+          v-for="cat in categories"
+          :key="cat.value"
+          class="text-[10px] px-2 py-1 rounded-sm border transition shrink-0 flex items-center gap-0.5"
+          :class="activeCategory === cat.value
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+            : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
+          @click="activeCategory = cat.value"
+        >
+          <span>{{ cat.label }}</span>
+          <span v-if="cat.value !== 'all'" class="opacity-50 text-[9px]">({{ categoryCount(cat.value) }})</span>
+        </button>
+        <div class="w-px h-3 bg-theme-secondary mx-0.5 shrink-0"></div>
         <button
           v-for="filter in sentimentFilters"
           :key="filter.value"
-          class="text-[9px] px-1.5 md:px-2 py-0.5 rounded border transition"
+          class="text-[10px] px-2 py-1 rounded-sm border transition shrink-0"
           :class="activeSentimentFilter === filter.value
-            ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+            ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
           @click="activeSentimentFilter = filter.value"
         >
@@ -176,62 +128,58 @@
     <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
     <div
       ref="listEl"
-      class="flex-1 overflow-y-auto"
+      class="flex-1 overflow-y-auto mt-2"
       style="height: 0; min-height: 200px;"
     >
-      <div class="space-y-1.5">
+      <div class="flex flex-col">
         <div
           v-for="item in pagedItems"
           :key="item.id || item.title"
-          class="bg-terminal-bg rounded border border-theme p-2 hover:border-terminal-accent/40 transition-colors cursor-pointer"
+          class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
           @click="openModal(item)"
         >
-          <div class="flex items-start gap-2">
-            <span class="shrink-0 text-[10px] px-1.5 py-0.5 rounded"
-                  :class="tagClass(item.tag)">
+          <!-- 第一行：时间 + 标签 + 情绪 + 来源 -->
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-theme-tertiary font-mono w-10 shrink-0">{{ formatTime(item.time) }}</span>
+            <span v-if="item.tag" class="text-[10px] px-1 py-0.5 rounded-sm font-medium shrink-0" :class="tagClass(item.tag)">
               {{ item.tag }}
             </span>
-            <!-- 热门标记 -->
-            <span v-if="hotNews.slice(0, 5).some(h => h.id === item.id)" class="shrink-0 text-[8px] px-1 py-0.5 rounded bg-[var(--color-danger-bg)] text-[var(--color-danger)] font-bold"
-            >HOT
-            </span>
-            <!-- 时间 -->
-            <span class="shrink-0 text-[9px] text-theme-tertiary w-12 text-right">{{ formatTime(item.time) }}</span>
-            <!-- 标题 + 来源 -->
-            <div class="flex-1 min-w-0">
-              <p class="text-xs text-theme-primary leading-snug line-clamp-2">{{ item.title }}</p>
-              <span class="text-terminal-dim/50 text-[9px]">{{ item.source }}</span>
-            </div>
-            <!-- 情绪徽章 -->
-            <span v-if="getItemSentiment(item)" class="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium"
+            <span v-if="getItemSentiment(item)" class="text-[10px] px-1 py-0.5 rounded-sm font-medium shrink-0"
                   :class="sentimentBadgeClass(getItemSentiment(item))">
               {{ getItemSentiment(item) }}
             </span>
+            <div class="flex-1"></div>
+            <span class="text-[11px] text-terminal-dim/60 shrink-0">{{ item.source }}</span>
           </div>
+          <!-- 第二行：标题 -->
+          <p class="text-[13px] text-theme-primary leading-snug group-hover:text-theme-accent transition-colors line-clamp-2">
+            {{ item.title }}
+          </p>
         </div>
         <!-- 骨架屏 -->
-        <div v-if="isRefreshing && !pagedItems.length" class="space-y-2 animate-pulse">
-          <div v-for="i in 5" :key="i" class="flex items-start gap-2">
-            <div class="w-8 h-4 rounded bg-terminal-panel"></div>
-            <div class="flex-1 space-y-1">
-              <div class="h-4 rounded bg-terminal-panel w-3/4"></div>
-              <div class="h-3 rounded bg-terminal-panel w-1/2"></div>
+        <div v-if="isRefreshing && !pagedItems.length" class="flex flex-col">
+          <div v-for="i in 5" :key="i" class="py-3 px-2 -mx-2 border-b border-theme-secondary">
+            <div class="flex items-center gap-2 mb-2">
+              <div class="w-10 h-3.5 rounded-sm bg-terminal-panel"></div>
+              <div class="w-12 h-3 rounded-sm bg-terminal-panel"></div>
             </div>
+            <div class="h-4 rounded-sm bg-terminal-panel w-full mb-1.5"></div>
+            <div class="h-4 rounded-sm bg-terminal-panel w-2/3"></div>
           </div>
         </div>
-        <div v-else-if="!pagedItems.length" class="text-center py-8 text-terminal-dim text-xs">
-          {{ activeCategory === 'all' && activeSentimentFilter === 'all' ? '暂无快讯数据' : '暂无符合筛选条件的快讯' }}
+        <div v-else-if="!pagedItems.length" class="text-center py-12 text-theme-tertiary text-sm">
+          暂无符合条件的快讯
         </div>
       </div>
     </div>
 
     <!-- ── 分页控制器 ─────────────────────────────────────────── -->
-    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-2 shrink-0">
+    <div v-if="totalPages > 1" class="flex items-center justify-center gap-3 mt-2 shrink-0">
       <button
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="currentPage === 1
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         :disabled="currentPage === 1"
         @click="prevPage">
         ‹
@@ -239,23 +187,23 @@
       <button
         v-for="p in visiblePages"
         :key="p"
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="p === currentPage
-          ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          ? 'bg-theme-hover border-theme-secondary text-theme-primary'
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         @click="goToPage(p)">
         {{ p }}
       </button>
       <button
-        class="px-2 py-0.5 text-[10px] rounded border transition"
+        class="px-3 py-1.5 text-xs rounded-sm border transition"
         :class="currentPage === totalPages
           ? 'bg-theme-tertiary border-theme-secondary text-theme-tertiary cursor-not-allowed'
-          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-terminal-accent/50'"
+          : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
         :disabled="currentPage === totalPages"
         @click="nextPage">
         ›
       </button>
-      <span class="text-terminal-dim text-[9px] ml-1">{{ currentPage }}/{{ totalPages }}</span>
+      <span class="text-terminal-dim text-xs ml-1">{{ currentPage }}/{{ totalPages }}</span>
     </div>
 
     <!-- ── 详情 Modal ─────────────────────────────────────────── -->
@@ -263,48 +211,65 @@
       <div v-if="modalItem"
            class="fixed inset-0 z-50 flex items-center justify-center p-4"
            @click.self="closeModal">
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
-        <div class="relative z-10 w-full max-w-2xl max-h-[80vh] flex flex-col
-                    bg-[var(--bg-primary)] border border-theme-secondary rounded-xl shadow-2xl overflow-hidden">
-          <div class="flex items-start justify-between p-4 border-b border-theme shrink-0">
-            <div class="flex-1 pr-4">
+        <div class="absolute inset-0 bg-black/70"></div>
+        <div class="relative z-10 w-full max-w-2xl max-h-[85vh] flex flex-col
+                    bg-[var(--bg-primary)] border border-theme-secondary rounded-sm shadow-lg overflow-hidden">
+          <!-- Modal Header -->
+          <div class="flex items-start justify-between p-4 border-b border-theme shrink-0 bg-theme-hover/20">
+            <div class="flex-1 pr-4 min-w-0">
               <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <span class="text-[11px] px-2 py-0.5 rounded" :class="tagClass(modalItem.tag)">
+                <span class="text-[10px] px-2 py-0.5 rounded-sm font-medium" :class="tagClass(modalItem.tag)">
                   {{ modalItem.tag }}
                 </span>
-                <span class="text-terminal-dim text-[11px]">{{ modalItem.time }}</span>
-                <span class="text-terminal-dim/50 text-[11px]">{{ modalItem.source }}</span>
+                <span class="text-[10px] text-theme-tertiary font-mono">{{ modalItem.time }}</span>
+                <span class="text-[10px] text-terminal-dim/60">{{ modalItem.source }}</span>
+                <span v-if="getItemSentiment(modalItem)" 
+                      class="text-[10px] px-1.5 py-0.5 rounded-sm font-medium"
+                      :class="sentimentBadgeClass(getItemSentiment(modalItem))">
+                  {{ getItemSentiment(modalItem) }}
+                </span>
               </div>
-              <h2 class="text-sm font-medium text-theme-primary leading-snug">{{ modalItem.title }}</h2>
+              <h2 class="text-sm font-semibold text-theme-primary leading-snug">{{ modalItem.title }}</h2>
             </div>
             <button
-              class="shrink-0 w-8 h-8 flex items-center justify-center rounded-full
-                     bg-theme-tertiary hover:bg-theme-tertiary text-theme-secondary hover:text-theme-primary transition"
+              class="shrink-0 w-7 h-7 flex items-center justify-center rounded-sm
+                     bg-theme-tertiary/30 hover:bg-theme-tertiary/50 text-theme-tertiary hover:text-theme-primary transition"
               @click="closeModal">
-              ✕
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clip-rule="evenodd" />
+              </svg>
             </button>
           </div>
+          <!-- Modal Body -->
           <div class="flex-1 overflow-y-auto p-4">
-            <p v-if="modalLoading" class="text-xs text-terminal-dim italic leading-relaxed">
-              正文努力提取中...
-            </p>
+            <div v-if="modalLoading" class="flex items-center gap-2 text-xs text-terminal-dim italic">
+              <svg class="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              正文加载中...
+            </div>
             <p v-else-if="modalContent" class="text-xs text-theme-primary leading-relaxed whitespace-pre-wrap">
               {{ modalContent }}
             </p>
-            <p v-else class="text-xs text-theme-tertiary leading-relaxed italic">
-              （暂无正文内容，请点击来源链接查看原文）
-            </p>
+            <div v-else class="text-xs text-theme-tertiary italic text-center py-8">
+              <div class="mb-2 text-2xl opacity-20">📄</div>
+              暂无正文内容
+            </div>
           </div>
-          <div class="p-3 border-t border-theme shrink-0 flex justify-between items-center">
+          <!-- Modal Footer -->
+          <div class="p-3 border-t border-theme shrink-0 flex justify-between items-center bg-theme-hover/10">
             <a v-if="modalItem.url"
                :href="modalItem.url" target="_blank" rel="noopener"
-               class="text-xs text-[var(--color-info)] hover:text-[var(--color-info-light)] underline hover:no-underline transition">
-              🔗 {{ modalItem.url }}
+               class="text-[11px] text-theme-accent hover:text-theme-primary underline hover:no-underline transition truncate max-w-[60%]">
+              {{ modalItem.url }}
             </a>
-            <span v-else class="text-xs text-theme-tertiary italic">（无原文链接）</span>
+            <span v-else class="text-[11px] text-theme-tertiary italic">无原文链接</span>
             <button
-              class="ml-4 px-3 py-1 text-[11px] rounded bg-[var(--color-info)] hover:bg-[var(--color-info-hover)] text-white transition shrink-0"
-              @click="modalItem.url ? window.open(modalItem.url, '_blank') : null">
+              v-if="modalItem.url"
+              class="ml-4 px-3 py-1.5 text-[11px] rounded-sm bg-theme-accent/10 hover:bg-theme-accent/20 
+                     text-theme-accent border border-theme-accent/20 transition shrink-0"
+              @click="window.open(modalItem.url, '_blank')">
               浏览器打开
             </button>
           </div>
@@ -325,7 +290,6 @@ const props = defineProps({
 
 const items        = ref(props.initialItems)
 const total        = ref(0)
-const loading      = ref(false)
 const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
@@ -372,11 +336,6 @@ function getItemSentiment(item) {
   return ''
 }
 
-function sentimentBadgeClass(s) {
-  if (s === '利好' || s === '偏多') return 'bg-[var(--color-danger-bg)] text-bullish border border-[var(--color-danger-border)]'
-  if (s === '利空' || s === '偏空') return 'bg-[var(--color-success-bg)] text-bearish border border-[var(--color-success-border)]'
-  return ''
-}
 
 async function fetchSentiment() {
   try {
@@ -413,11 +372,11 @@ const sentimentFilters = [
 // ── 新闻分类 ─────────────────────────────────────────────────────────
 const activeCategory = ref('all')
 const categories = [
-  { label: '全部', value: 'all', icon: '📰' },
-  { label: '宏观', value: 'macro', icon: '🌍' },
-  { label: '股市', value: 'stock', icon: '📈' },
-  { label: '行业', value: 'industry', icon: '🏭' },
-  { label: '债券', value: 'bond', icon: '📉' },
+  { label: '全部', value: 'all' },
+  { label: '宏观', value: 'macro' },
+  { label: '股市', value: 'stock' },
+  { label: '行业', value: 'industry' },
+  { label: '债券', value: 'bond' },
 ]
 
 const categoryKeywords = {
@@ -443,11 +402,6 @@ function classifyNews(item) {
 function getCategoryLabel(category) {
   const cat = categories.find(c => c.value === category)
   return cat ? cat.label : '其他'
-}
-
-function getCategoryIcon(category) {
-  const cat = categories.find(c => c.value === category)
-  return cat ? cat.icon : '📄'
 }
 
 const bullishRatio = computed(() => {
@@ -522,8 +476,8 @@ const hotNews = computed(() => {
       
       // 重要标签加分
       const tag = (item.tag || '').toLowerCase()
-      if (tag.includes('突发') || tag.includes('🔴')) score += 5
-      if (tag.includes('📈') || tag.includes('📉')) score += 2
+      if (tag.includes('突发') || tag.includes('重要') || tag.includes('紧急')) score += 5
+      if (tag.includes('公告') || tag.includes('通知')) score += 3
       
       // 宏观新闻加分
       if (category === 'macro') score += 1
@@ -584,25 +538,50 @@ const modalItem    = ref(null)
 const modalContent = ref('')
 const modalLoading = ref(false)
 
+
 // ── 标签颜色映射 ──────────────────────────────────────────────────────
 function formatTime(timeStr) {
   if (!timeStr) return '--:--'
   const parts = timeStr.split(' ')
   return parts.length >= 2 ? parts[1].slice(0, 5) : (timeStr.slice(0, 5))
 }
+
 function tagClass(tag) {
-  if (!tag) return 'bg-theme-tertiary/30 text-theme-secondary'
-  if (tag.includes('🔴') || tag.includes('突发') || tag.includes('暴跌')) return 'bg-[var(--color-danger-bg)] text-bullish'
-  if (tag.includes('📈') || tag.includes('上涨') || tag.includes('大涨')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
-  if (tag.includes('📉')) return 'bg-[var(--color-success-bg)] text-bearish'
-  if (tag.includes('🌏') || tag.includes('港股') || tag.includes('宏观')) return 'bg-[var(--color-info-bg)] text-[var(--color-info)]'
-  if (tag.includes('💎') || tag.includes('黄金') || tag.includes('央行') || tag.includes('美联储')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
-  if (tag.includes('🖥') || tag.includes('AI') || tag.includes('特朗普')) return 'bg-[var(--color-primary-bg)] text-[var(--color-primary)]'
-  if (tag.includes('🛢') || tag.includes('原油') || tag.includes('商品')) return 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
-  return 'bg-theme-tertiary/30 text-theme-secondary'
+  if (!tag) return 'bg-theme-tertiary/20 text-theme-tertiary'
+  const t = tag.toLowerCase()
+  
+  if (t.includes('突发') || t.includes('重要') || t.includes('紧急') || t.includes('公告')) {
+    return 'bg-bullish/15 text-bullish'
+  }
+  if (t.includes('上涨') || t.includes('大涨') || t.includes('涨停') || t.includes('利好') || t.includes('突破')) {
+    return 'bg-bullish/15 text-bullish'
+  }
+  if (t.includes('下跌') || t.includes('大跌') || t.includes('跌停') || t.includes('利空') || t.includes('跳水')) {
+    return 'bg-bearish/15 text-bearish'
+  }
+  if (t.includes('宏观') || t.includes('政策') || t.includes('央行') || t.includes('美联储') || t.includes('降准') || t.includes('降息')) {
+    return 'bg-theme-tertiary/20 text-theme-secondary'
+  }
+  if (t.includes('行业') || t.includes('板块') || t.includes('概念') || t.includes('题材')) {
+    return 'bg-theme-tertiary/20 text-theme-secondary'
+  }
+  if (t.includes('港股') || t.includes('美股') || t.includes('外围') || t.includes('全球')) {
+    return 'bg-theme-tertiary/20 text-theme-secondary'
+  }
+  if (t.includes('原油') || t.includes('黄金') || t.includes('商品') || t.includes('期货')) {
+    return 'bg-theme-tertiary/20 text-theme-secondary'
+  }
+  return 'bg-theme-tertiary/20 text-theme-tertiary'
+}
+
+function sentimentBadgeClass(s) {
+  if (s === '利好' || s === '偏多') return 'bg-bullish/10 text-bullish border border-bullish/20'
+  if (s === '利空' || s === '偏空') return 'bg-bearish/10 text-bearish border border-bearish/20'
+  return 'bg-theme-tertiary/10 text-theme-tertiary border border-theme-tertiary/20'
 }
 
 // ── Modal 异步加载正文 ────────────────────────────────────────────────
+
 async function openModal(item) {
   modalItem.value    = item
   modalContent.value = ''
@@ -648,16 +627,16 @@ async function fetchNews(quiet = false, isTimer = false) {
         if (detail.error) {
           errMsg = `抓取失败: ${detail.error}`
           if (detail.stale_count > 0) {
-            refreshMsg.value = `⚠️ ${errMsg}（显示 ${detail.stale_count} 条旧数据）`
+            refreshMsg.value = `${errMsg}（显示 ${detail.stale_count} 条旧数据）`
           } else {
-            refreshMsg.value = `🔴 ${errMsg}`
+            refreshMsg.value = `${errMsg}`
           }
         }
       } catch (e) {
         logger.error('[NewsFeed] parse error:', e.message)
       }
       if (!useForce || !refreshMsg.value) {
-        refreshMsg.value = `⚠️ ${errMsg}`
+        refreshMsg.value = `${errMsg}`
       }
       if (!quiet) { showRefreshed.value = true; setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000) }
       return
@@ -667,7 +646,7 @@ async function fetchNews(quiet = false, isTimer = false) {
     const incoming = payload.news || []
 
     if (!quiet && payload.items_stale && !incoming.length) {
-      refreshMsg.value = `⚠️ 网络异常，显示 ${payload.stale_count || 0} 条旧数据`
+      refreshMsg.value = `网络异常，显示 ${payload.stale_count || 0} 条旧数据`
       showRefreshed.value = true
       setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 6000)
       return
@@ -695,9 +674,9 @@ async function fetchNews(quiet = false, isTimer = false) {
     if (!quiet) {
       if (newItems.length > 0) {
         const sources = [...new Set(newItems.map(it => it.source))].join('、')
-        refreshMsg.value = `✅ 获取到 ${newItems.length} 条新资讯（来源: ${sources}）`
+        refreshMsg.value = `获取到 ${newItems.length} 条新资讯（来源: ${sources}）`
       } else {
-        refreshMsg.value = `✅ 当前已是最新数据`
+        refreshMsg.value = `当前已是最新数据`
       }
       showRefreshed.value = true
       setTimeout(() => { showRefreshed.value = false; refreshMsg.value = '' }, 4000)
@@ -706,7 +685,7 @@ async function fetchNews(quiet = false, isTimer = false) {
     }
   } catch (e) {
     logger.warn('[NewsFeed] fetch failed:', e.message)
-    if (!quiet) refreshMsg.value = `⚠️ 抓取失败: ${e.message}`
+    if (!quiet) refreshMsg.value = `抓取失败: ${e.message}`
   } finally {
     if (!quiet) isRefreshing.value = false
   }
@@ -733,7 +712,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.line-clamp-2 {
+.line-clamp-3 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

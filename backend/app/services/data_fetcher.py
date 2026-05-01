@@ -765,7 +765,7 @@ def fetch_index_minute_history(
                     "timestamp": int(
                         time.mktime(
                             time.strptime(item.get("day", ""), "%Y-%m-%d %H:%M:%S")
-                        ) * 1000  # 毫秒时间戳
+                        )
                     ),
                 })
             except (ValueError, IndexError, OSError, TypeError):

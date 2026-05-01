@@ -15,7 +15,7 @@
         <div
           v-for="toast in toasts"
           :key="toast.id"
-          class="pointer-events-auto w-full max-w-[360px] rounded-lg border shadow-lg backdrop-blur-sm overflow-hidden"
+          class="pointer-events-auto w-full max-w-[360px] rounded-sm border shadow-sm backdrop-blur-sm overflow-hidden"
           :class="getToastClass(toast.type)"
           @mouseenter="pauseToast(toast.id)"
           @mouseleave="resumeToast(toast.id)"
@@ -27,7 +27,7 @@
               <div v-if="toast.message" class="text-xs mt-0.5 opacity-80 leading-relaxed">{{ toast.message }}</div>
             </div>
             <button
-              class="shrink-0 w-5 h-5 flex items-center justify-center rounded opacity-50 hover:opacity-100 transition-opacity text-xs"
+              class="shrink-0 w-5 h-5 flex items-center justify-center rounded-sm opacity-50 hover:opacity-100 transition-opacity text-xs"
               @click="remove(toast.id)"
             >
               ✕

@@ -5,7 +5,7 @@
       <div class="flex items-center gap-2">
         <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
         <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
-          class="text-[9px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors">
+          class="text-[10px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors">
           {{ showAllSectors ? '收起' : `更多(${sectors.length})` }}
         </button>
       </div>
@@ -20,10 +20,10 @@
         <div
           v-for="sec in displaySectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded border cursor-pointer transition-all hover:opacity-80 min-w-0 overflow-hidden"
+          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded-sm border cursor-pointer transition-all hover:opacity-80 min-w-0 overflow-hidden"
           :class="(sec.change_pct || 0) >= 0
-            ? 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] hover:border-red-400/60'
-            : 'bg-[var(--color-success-bg)] border-[var(--color-success-border)] hover:border-green-400/60'"
+            ? 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] hover:border-bullish/60'
+            : 'bg-[var(--color-success-bg)] border-[var(--color-success-border)] hover:border-bearish/60'"
           @click="handleClick(sec)"
           :title="`${sec.name} (点击查看领涨股 ${sec.top_stock?.name || '无'})`"
         >
@@ -44,7 +44,7 @@
           <!-- 领涨股 -->
           <span
             v-if="sec.top_stock?.name"
-            class="text-[9px] leading-tight mt-0.5 truncate w-full text-center text-theme-tertiary"
+            class="text-[10px] leading-tight mt-0.5 truncate w-full text-center text-theme-tertiary"
           >
             {{ sec.top_stock.name }}
           </span>
@@ -58,7 +58,7 @@
       
       <!-- 加载中骨架屏 -->
       <div v-if="isLoading" class="grid gap-1" :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }">
-        <div v-for="i in 10" :key="i" class="h-12 rounded border bg-terminal-panel animate-pulse"></div>
+        <div v-for="i in 10" :key="i" class="h-12 rounded-sm border bg-terminal-panel animate-pulse"></div>
       </div>
     </div>
   </div>

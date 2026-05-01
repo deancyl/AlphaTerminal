@@ -16,7 +16,7 @@
           <input
             v-model.number="params.S"
             type="number"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="100.00"
           />
         </div>
@@ -26,7 +26,7 @@
           <input
             v-model.number="params.K"
             type="number"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="100.00"
           />
         </div>
@@ -37,7 +37,7 @@
             v-model.number="params.T"
             type="number"
             step="0.01"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="0.25"
           />
         </div>
@@ -48,7 +48,7 @@
             v-model.number="params.sigma"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="20.0"
           />
         </div>
@@ -59,7 +59,7 @@
             v-model.number="params.r"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="3.0"
           />
         </div>
@@ -70,7 +70,7 @@
             v-model.number="params.q"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded px-2 py-1 text-sm text-terminal-primary"
+            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
             placeholder="0.0"
           />
         </div>
@@ -79,7 +79,7 @@
       <!-- 计算结果 -->
       <div v-if="results" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <!-- 期权价格 -->
-        <div class="rounded border border-theme bg-terminal-panel/60 p-3">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">看涨期权价格</div>
           <div class="text-xl font-mono font-bold text-bullish">{{ results.callPrice.toFixed(4) }}</div>
           <div class="text-[10px] text-theme-muted mt-1">看跌期权价格</div>
@@ -87,44 +87,44 @@
         </div>
 
         <!-- Delta -->
-        <div class="rounded border border-theme bg-terminal-panel/60 p-3">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">Delta (Δ)</div>
           <div class="text-lg font-mono font-bold">{{ results.callDelta.toFixed(4) }}</div>
-          <div class="text-[8px] text-theme-muted">看涨 | 看跌: {{ results.putDelta.toFixed(4) }}</div>
-          <div class="text-[8px] text-terminal-dim mt-1">价格对标的敏感度</div>
+          <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putDelta.toFixed(4) }}</div>
+          <div class="text-[10px] text-terminal-dim mt-1">价格对标的敏感度</div>
         </div>
 
         <!-- Gamma -->
-        <div class="rounded border border-theme bg-terminal-panel/60 p-3">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">Gamma (Γ)</div>
           <div class="text-lg font-mono font-bold text-terminal-accent">{{ results.gamma.toFixed(4) }}</div>
-          <div class="text-[8px] text-terminal-dim mt-1">Delta对标的二阶敏感度</div>
+          <div class="text-[10px] text-terminal-dim mt-1">Delta对标的二阶敏感度</div>
         </div>
 
         <!-- Theta -->
-        <div class="rounded border border-theme bg-terminal-panel/60 p-3">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">Theta (Θ)</div>
           <div class="text-lg font-mono font-bold">{{ results.callTheta.toFixed(4) }}</div>
-          <div class="text-[8px] text-theme-muted">看涨 | 看跌: {{ results.putTheta.toFixed(4) }}</div>
-          <div class="text-[8px] text-terminal-dim mt-1">时间衰减（每日）</div>
+          <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putTheta.toFixed(4) }}</div>
+          <div class="text-[10px] text-terminal-dim mt-1">时间衰减（每日）</div>
         </div>
 
         <!-- Vega -->
-        <div class="rounded border border-theme bg-terminal-panel/60 p-3">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">Vega (V)</div>
           <div class="text-lg font-mono font-bold text-[var(--color-warning)]">{{ results.vega.toFixed(4) }}</div>
-          <div class="text-[8px] text-terminal-dim mt-1">对波动率的敏感度</div>
+          <div class="text-[10px] text-terminal-dim mt-1">对波动率的敏感度</div>
         </div>
       </div>
 
       <!-- 策略盈亏图 -->
-      <div v-if="results" class="rounded border border-theme bg-terminal-panel/40 p-3">
+      <div v-if="results" class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">📈 策略盈亏分析</div>
         <div class="flex gap-2 mb-3">
           <button
             v-for="s in strategies"
             :key="s.id"
-            class="text-[9px] px-2 py-1 rounded border transition"
+            class="text-[10px] px-2 py-1 rounded-sm border transition"
             :class="activeStrategy === s.id
               ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
               : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
@@ -137,9 +137,9 @@
       </div>
 
       <!-- 希腊值说明 -->
-      <div class="rounded border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
-        <div class="text-[9px] text-theme-muted font-bold mb-1">📊 希腊值说明</div>
-        <div class="text-[8px] text-theme-muted leading-relaxed">
+      <div class="rounded-sm border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
+        <div class="text-[10px] text-theme-muted font-bold mb-1">📊 希腊值说明</div>
+        <div class="text-[10px] text-theme-muted leading-relaxed">
           <span class="text-theme-primary">Delta</span>: 标的价格变动1元，期权价格变动Δ元 |
           <span class="text-theme-primary">Gamma</span>: 标的价格变动1元，Delta变动Γ |
           <span class="text-theme-primary">Theta</span>: 每过1天，期权价格衰减Θ |

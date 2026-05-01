@@ -4,10 +4,10 @@
     <div class="shrink-0 flex items-center justify-between px-2 py-1 border-b border-theme bg-terminal-panel/80">
       <span class="text-[10px] text-cyan-400 font-bold">⚖️ 对账审计</span>
       <div class="flex items-center gap-1">
-        <span class="text-[8px]" :class="ok ? 'text-bullish' : 'text-bearish'">
+        <span class="text-[10px]" :class="ok ? 'text-bullish' : 'text-bearish'">
           {{ ok ? '✅ 平衡' : '❌ 偏差' }}
         </span>
-        <span class="text-[8px] text-theme-muted">{{ lastUpdate }}</span>
+        <span class="text-[10px] text-theme-muted">{{ lastUpdate }}</span>
       </div>
     </div>
 
@@ -25,9 +25,9 @@
     <div v-else-if="data" class="flex-1 min-h-0 overflow-y-auto px-2 py-1 space-y-1">
 
       <!-- 主账户汇总 -->
-      <div class="bg-theme-tertiary/20 rounded border border-theme/20 p-1.5">
-        <div class="text-[9px] text-cyan-400 font-bold mb-0.5">{{ data.parent_name }} (主账户)</div>
-        <div class="grid grid-cols-3 gap-x-1 gap-y-0.5 text-[9px]">
+      <div class="bg-theme-tertiary/20 rounded-sm border border-theme/20 p-1.5">
+        <div class="text-[10px] text-cyan-400 font-bold mb-0.5">{{ data.parent_name }} (主账户)</div>
+        <div class="grid grid-cols-3 gap-x-1 gap-y-0.5 text-[10px]">
           <span class="text-theme-muted">现金</span>
           <span class="text-right font-mono text-theme-primary">{{ fmt(data.parent.cash) }}</span>
           <span class="text-right text-theme-muted">元</span>
@@ -42,11 +42,11 @@
 
       <!-- 子账户列表 -->
       <div v-if="data.children && data.children.length" class="space-y-0.5">
-        <div class="text-[8px] text-theme-muted font-bold">子账户 ({{ data.children.length }})</div>
+        <div class="text-[10px] text-theme-muted font-bold">子账户 ({{ data.children.length }})</div>
         <div
           v-for="child in data.children"
           :key="child.id"
-          class="flex items-center justify-between bg-theme-tertiary/10 rounded px-1.5 py-0.5 text-[9px]"
+          class="flex items-center justify-between bg-theme-tertiary/10 rounded-sm px-1.5 py-0.5 text-[10px]"
         >
           <span class="text-theme-primary truncate flex-1">{{ child.name }}</span>
           <span class="font-mono text-theme-primary ml-1">{{ fmt(child.cash) }}</span>
@@ -55,7 +55,7 @@
 
       <!-- 守恒校验结果 -->
       <div
-        class="mt-1 rounded p-1.5 border text-[9px]"
+        class="mt-1 rounded-sm p-1.5 border text-[10px]"
         :class="ok ? 'border-bullish/30 bg-bullish/5' : 'border-bearish/30 bg-bearish/5'"
       >
         <div class="flex items-center justify-between mb-0.5">
@@ -66,7 +66,7 @@
             Δ {{ fmt(data.conservation_delta) }}
           </span>
         </div>
-        <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[8px] text-theme-muted">
+        <div class="grid grid-cols-2 gap-x-1 gap-y-0.5 text-[10px] text-theme-muted">
           <span>子账户现金</span>
           <span class="text-right font-mono">{{ fmt(data.children_cash) }}</span>
           <span>子账户持仓</span>

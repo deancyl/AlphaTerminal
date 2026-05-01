@@ -7,7 +7,7 @@
         <span class="text-[11px] font-bold text-theme-primary tracking-wider">{{ currentName }}</span>
         <!-- 移动端全屏按钮 -->
         <button
-          class="md:hidden ml-auto mr-1 px-1.5 py-0.5 text-[10px] rounded border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors"
+          class="md:hidden ml-auto mr-1 px-2 h-7 text-[10px] rounded-sm border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors flex items-center"
           title="横屏全屏"
           @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
         >⛶ 全屏</button>
@@ -40,14 +40,14 @@
 
     <!-- ── Chart Area ─────────────────────────────────────────── -->
     <div class="flex-1 relative min-h-0">
-      <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-theme/90 rounded">
+      <div v-if="chartError" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-theme/90 rounded-sm">
         <div class="text-2xl mb-2">📊</div>
         <div class="text-theme-tertiary text-xs text-center px-4">{{ chartError }}</div>
-        <button class="mt-2 px-3 py-1 text-[10px] rounded border border-theme text-theme-tertiary hover:border-theme-accent transition" @click="retryChart">重试</button>
+        <button class="mt-2 px-3 py-1 text-[10px] rounded-sm border border-theme text-theme-tertiary hover:border-theme-accent transition" @click="retryChart">重试</button>
       </div>
       <div v-if="isLoading" class="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
         <div class="flex gap-1 items-end opacity-40">
-          <div v-for="i in 24" :key="i" class="w-1 bg-theme-accent rounded-t animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
+          <div v-for="i in 24" :key="i" class="w-1 bg-theme-accent rounded-t-sm animate-pulse" :style="{ height: `${30 + ((i * 37) % 60)}%` }"></div>
         </div>
       </div>
       <div ref="chartRef" class="w-full h-full"></div>

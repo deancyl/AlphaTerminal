@@ -8,11 +8,11 @@
         <input
           v-model="localSymbol"
           @keyup.enter="changeSymbol"
-          class="bg-theme-tertiary/30 border border-theme rounded px-1.5 py-0.5 text-[9px] text-theme-primary w-20 focus:outline-none focus:border-cyan-400/60"
+          class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary w-20 focus:outline-none focus:border-cyan-400/60"
           placeholder="sh600519"
         />
-        <span class="text-[8px] text-theme-muted">5档</span>
-        <span class="text-[8px] text-theme-muted">{{ lastUpdateTime }}</span>
+        <span class="text-[10px] text-theme-muted">5档</span>
+        <span class="text-[10px] text-theme-muted">{{ lastUpdateTime }}</span>
       </div>
     </div>
 
@@ -20,7 +20,7 @@
     <div v-if="data && (data.asks?.length || data.bids?.length)" class="flex-1 min-h-0 flex flex-col justify-between">
 
       <!-- 委比 / 委差 -->
-      <div class="flex items-center gap-2 px-2 py-0.5 bg-terminal-panel/40 text-[9px]">
+      <div class="flex items-center gap-2 px-2 py-0.5 bg-terminal-panel/40 text-[10px]">
         <span class="text-theme-muted">委比</span>
         <span class="font-mono" :class="weibi >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ weibi >= 0 ? '+' : '' }}{{ weibi?.toFixed(2) }}%
@@ -33,7 +33,7 @@
 
       <!-- 卖盘 5 档（价格从高到低排列） -->
       <div class="flex-1 flex flex-col justify-content-end">
-        <div class="grid grid-cols-3 gap-0.5 px-1 py-0.5 text-[8px] text-theme-muted border-b border-theme/20">
+        <div class="grid grid-cols-3 gap-0.5 px-1 py-0.5 text-[10px] text-theme-muted border-b border-theme/20">
           <span class="text-left">卖盘</span>
           <span class="text-right">价格</span>
           <span class="text-right">挂单量</span>
@@ -41,11 +41,11 @@
         <div
           v-for="(ask, i) in displayAsks"
           :key="'a' + i"
-          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[9px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
+          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
         >
           <!-- 深度条：右侧延伸，绿色=卖盘压力（绿色背景） -->
           <div
-            class="absolute inset-y-0 right-0 bg-bearish/10 rounded-l transition-all"
+            class="absolute inset-y-0 right-0 bg-bearish/10 rounded-l-sm transition-all"
             :style="{ width: getDepthWidth(ask.volume, maxAskVol) + '%' }"
           ></div>
           <!-- 档位标签 -->
@@ -55,7 +55,7 @@
           <!-- 挂单量 + 深度条叠加 -->
           <div class="relative z-10 flex items-center justify-end gap-0.5">
             <div
-              class="absolute right-0 top-0 bottom-0 bg-bearish/20 rounded-l"
+              class="absolute right-0 top-0 bottom-0 bg-bearish/20 rounded-l-sm"
               :style="{ width: getDepthWidth(ask.volume, maxAskVol) + '%' }"
             ></div>
             <span class="font-mono text-theme-primary relative z-10">{{ formatVol(ask.volume) }}</span>
@@ -65,7 +65,7 @@
 
       <!-- 当前价分隔线 -->
       <div
-        class="flex items-center justify-center py-1 mx-1 my-0.5 rounded border"
+        class="flex items-center justify-center py-1 mx-1 my-0.5 rounded-sm border"
         :class="priceDir === 'up' ? 'border-bullish/40 bg-bullish/5' : priceDir === 'down' ? 'border-bearish/40 bg-bearish/5' : 'border-theme/30'"
       >
         <span
@@ -80,18 +80,18 @@
         <div
           v-for="(bid, i) in displayBids"
           :key="'b' + i"
-          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[9px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
+          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
         >
           <!-- 深度条：右侧延伸，红色=买盘支撑（红色背景） -->
           <div
-            class="absolute inset-y-0 right-0 bg-bullish/10 rounded-l transition-all"
+            class="absolute inset-y-0 right-0 bg-bullish/10 rounded-l-sm transition-all"
             :style="{ width: getDepthWidth(bid.volume, maxBidVol) + '%' }"
           ></div>
           <span class="text-theme-muted relative z-10">{{ i + 1 }}</span>
           <span class="text-right font-mono text-bullish relative z-10">{{ formatPrice(bid.price) }}</span>
           <div class="relative z-10 flex items-center justify-end gap-0.5">
             <div
-              class="absolute right-0 top-0 bottom-0 bg-bullish/20 rounded-l"
+              class="absolute right-0 top-0 bottom-0 bg-bullish/20 rounded-l-sm"
               :style="{ width: getDepthWidth(bid.volume, maxBidVol) + '%' }"
             ></div>
             <span class="font-mono text-theme-primary relative z-10">{{ formatVol(bid.volume) }}</span>
@@ -100,7 +100,7 @@
       </div>
 
       <!-- 盘口统计数据 -->
-      <div class="flex items-center justify-between px-2 py-0.5 border-t border-theme/20 text-[8px] text-theme-muted">
+      <div class="flex items-center justify-between px-2 py-0.5 border-t border-theme/20 text-[10px] text-theme-muted">
         <span>卖 {{ data.asks?.length || 0 }} 档 / 买 {{ data.bids?.length || 0 }} 档</span>
         <span :class="totalBidVol >= totalAskVol ? 'text-bullish' : 'text-bearish'">
           {{ totalBidVol >= totalAskVol ? '买强' : '卖强' }}
@@ -115,19 +115,19 @@
     </div>
     <div v-else-if="loading" class="flex-1 p-2 space-y-1">
       <div class="flex justify-between items-center mb-1">
-        <div class="skeleton h-3 w-16 rounded"></div>
-        <div class="skeleton h-3 w-12 rounded"></div>
+        <div class="skeleton h-3 w-16 rounded-sm"></div>
+        <div class="skeleton h-3 w-12 rounded-sm"></div>
       </div>
       <div v-for="n in 5" :key="n" class="flex justify-between">
-        <div class="skeleton h-3 w-10 rounded"></div>
-        <div class="skeleton h-3 w-12 rounded"></div>
-        <div class="skeleton h-3 w-10 rounded"></div>
+        <div class="skeleton h-3 w-10 rounded-sm"></div>
+        <div class="skeleton h-3 w-12 rounded-sm"></div>
+        <div class="skeleton h-3 w-10 rounded-sm"></div>
       </div>
       <div class="skeleton h-px my-1"></div>
       <div v-for="n in 5" :key="n" class="flex justify-between">
-        <div class="skeleton h-3 w-10 rounded"></div>
-        <div class="skeleton h-3 w-12 rounded"></div>
-        <div class="skeleton h-3 w-10 rounded"></div>
+        <div class="skeleton h-3 w-10 rounded-sm"></div>
+        <div class="skeleton h-3 w-12 rounded-sm"></div>
+        <div class="skeleton h-3 w-10 rounded-sm"></div>
       </div>
     </div>
     <div v-else class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[10px] gap-1">

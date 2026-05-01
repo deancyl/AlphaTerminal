@@ -334,103 +334,27 @@ _MACRO_NEWS_SYMBOLS = [
 
 
 def trigger_news_fetch():
-    t = threading.Thread(target=_do_news_fetch, daemon=True, name="news-multi-source")
-    t.start()
-    logger.info("[News] 多源新闻刷新已触发")
-
-
-def _do_news_fetch():
-    global _NEWS_LAST_SUCCESS
-    try:
-        import akshare as ak
-        import time as time_module
-
-        all_news = []
-        sources = []
-
-        # 主源：akshare stock_news_em（东方财富，每只股票返回真实 发布时间）
-        for sym in _MACRO_NEWS_SYMBOLS:
-            try:
-                df = ak.stock_news_em(symbol=sym)
-                if df is not None and not df.empty:
-                    for _, row in df.iterrows():
-                        try:
-                            title  = str(row.get("新闻标题", "") or "")
-                            time_  = str(row.get("发布时间", "") or "")[:16]
-                            source = str(row.get("文章来源", "东财") or "东财")
-                            url    = str(row.get("新闻链接", "") or "")
-                            if title and len(title) > 5:
-                                all_news.append({
-                                    "title":  title.strip(),
-                                    "time":   time_,
-                                    "publish_time": time_,
-                                    "source": source,
-                                    "url":    url,
-                                })
-                        except Exception:
-                            continue
-                    sources.append(f"em:{sym}")
-            except Exception as e:
-                logger.warning(f"[News] stock_news_em({sym}) failed: {e}")
-            time_module.sleep(0.05)
-
-        # 补充：从源 Sina 个股新闻（东方财富 stock_news_em）
+    """委托 news_engine 统一刷新缓存，然后在结果上运行情感分析"""
+    def _fetch_and_analyze():
+        global _NEWS_LAST_SUCCESS
         try:
-            from app.services.sina_hq_fetcher import get_stock_pool
-            pool = get_stock_pool()
-            for sym in pool[:15]:  # 最多15只
-                try:
-                    df2 = ak.stock_news_em(symbol=sym)
-                    if df2 is not None and not df2.empty:
-                        for _, row in df2.iterrows():
-                            try:
-                                url     = str(row.get("新闻链接", "") or "")
-                                title   = str(row.get("新闻标题", "") or "")
-                                time_   = str(row.get("发布时间", "") or "")[:16]
-                                source2 = str(row.get("文章来源", "东方财富") or "东方财富")
-                                if title and url and len(title) > 5:
-                                    all_news.append({"title": title.strip(), "time": time_, "publish_time": time_,
-                                                     "source": source2, "url": url})
-                            except Exception:
-                                continue
-                except Exception:
-                    pass
-                time_module.sleep(0.15)
+            from app.services.news_engine import refresh_news_cache, get_cached_news
+            # 同步刷新（news_engine 内部已有锁保护 _NEWS_CACHE）
+            refresh_news_cache(background=False)
+            # 读取刷新后的缓存，运行情感分析
+            cached = get_cached_news(limit=200)
+            if cached:
+                _analyze_news_sentiment(cached)
+                _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                logger.info(f"[HEARTBEAT] News+Sentiment refreshed: {len(cached)} items")
+            else:
+                logger.warning("[News] 缓存为空，跳过情感分析")
         except Exception as e:
-            logger.warning(f"[News] Sina 个股失败: {e}")
+            logger.error(f"[News] 刷新+情感分析失败: {type(e).__name__}: {e}", exc_info=True)
 
-        if not all_news:
-            logger.warning("[News] 所有来源无数据")
-            return
-
-        # 去重
-        seen = set()
-        unique = []
-        for item in all_news:
-            import hashlib
-            h = hashlib.md5(item["url"].encode()).hexdigest()
-            if h not in seen:
-                seen.add(h)
-                item["tag"] = _tag_news_fallback(item["title"], item["source"])
-                item["id"]  = h[:12]
-                unique.append(item)
-
-        unique.sort(key=lambda x: x.get("time", ""), reverse=True)
-        final = unique[:200]
-
-        from app.services.news_engine import _NEWS_CACHE, _NEWS_CACHE_READY, _CACHE_LOCK
-        with _CACHE_LOCK:
-            _NEWS_CACHE.clear()
-            _NEWS_CACHE.extend(final)
-            _NEWS_CACHE_READY = True
-
-        _NEWS_LAST_SUCCESS = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        logger.info(f"[HEARTBEAT] News refreshed: {len(final)} items, sources={sources}")
-
-        # Phase 4: 抓取完成后，异步分析情感倾向并联动情绪面板
-        _analyze_news_sentiment(final)
-    except Exception as e:
-        logger.error(f"[News] 多源刷新失败: {type(e).__name__}: {e}", exc_info=True)
+    t = threading.Thread(target=_fetch_and_analyze, daemon=True, name="news-sentiment-fetch")
+    t.start()
+    logger.info("[News] 新闻+情感刷新已触发")
 
 
 def _tag_news_fallback(title, source):
