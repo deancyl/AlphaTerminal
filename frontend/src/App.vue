@@ -340,11 +340,18 @@ function openFuturesFullscreen({ symbol }) {
 }
 
 // 键盘快捷键系统
-const { helpVisible } = useKeyboardShortcuts({
-  onViewChange: (viewId) => { currentView.value = viewId },
-  onSearch: () => { commandPaletteOpen.value = true },
+const { helpVisible, searchVisible } = useKeyboardShortcuts({
+  onViewChange: (viewId) => { 
+    currentView.value = viewId
+    toastInfo('视图切换', `已切换到 ${getViewName(viewId)}`)
+  },
+  onSearch: () => { 
+    commandPaletteOpen.value = true 
+  },
   onEscape: () => {
-    if (ui.klineFullscreen) {
+    if (commandPaletteOpen.value) {
+      commandPaletteOpen.value = false
+    } else if (ui.klineFullscreen) {
       ui.klineFullscreen = false
       futuresFullscreen.value = false
     } else if (isCopilotOpen.value) {
@@ -354,13 +361,34 @@ const { helpVisible } = useKeyboardShortcuts({
     }
   },
   onFullscreen: () => {
-    // F9: 打开当前标的的深度资料
-    // 如果已经在全屏K线中，由FullscreenKline组件自己处理F9打开StockDetail
-    // 如果不在全屏K线中，先打开全屏K线
-    const sym = currentSymbol.value
-    if (sym && !ui.klineFullscreen) {
-      openFullscreenKline({ symbol: sym, name: sym })
+    // F11: 切换全屏
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen()
+    } else {
+      document.exitFullscreen()
     }
+  },
+  onRefresh: () => {
+    // F5: 刷新数据
+    fetchHighFreq()
+    fetchMedFreq()
+    toastSuccess('刷新', '正在刷新市场数据...')
+  },
+  onWatchlist: () => {
+    // F6: 自选股
+    currentView.value = 'stock'
+    toastInfo('自选股', '已切换到自选股视图')
+  },
+  onSettings: () => {
+    // Ctrl+,: 系统设置
+    currentView.value = 'admin'
+    toastInfo('设置', '已打开系统设置')
+  },
+  onToggleTheme: () => {
+    // Ctrl+Shift+D: 切换主题
+    const newTheme = isDark.value ? 'light' : 'dark'
+    localStorage.setItem('theme', newTheme)
+    location.reload()
   }
 })
 
@@ -470,7 +498,7 @@ async function fetchMedFreq() {
 // ── 计数：两个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
 let _loadedCount = 0
 let _hasAnyError = false
-const _骨架屏超时 = setTimeout(() => {
+let _骨架屏超时 = setTimeout(() => {
   isInitialLoading.value = false
   console.warn('[App] 骨架屏超时强制关闭（3秒）')
 }, 3000)
@@ -519,6 +547,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  clearTimeout(_骨架屏超时)
   clearInterval(clockTimer)
   pauseHigh(); pauseMed()
 })

@@ -13,6 +13,11 @@ import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
 import { toast } from '../composables/useToast.js'
 
+// ── API 基础 URL ─────────────────────────────────────────────────
+// 始终使用相对路径，让前端代理（Vite proxy）转发到后端
+// 这样可以确保所有环境（开发/生产）都通过前端服务器访问API
+const API_BASE_URL = ''
+
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
 // JavaScript 单线程，使用简单变量即可
 let _consecutiveFailures = 0
@@ -151,7 +156,9 @@ export async function apiFetch(url, options = {}) {
           fetchOptions.headers['Content-Type'] = 'application/json'
         }
       }
-      const res = await fetch(url, fetchOptions)
+      // 构建完整 URL（生产环境添加基础 URL）
+      const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`
+      const res = await fetch(fullUrl, fetchOptions)
       clearTimeout(timer)
       
       // 仅对5xx服务器错误和超时应试重试，4xx客户端错误立即失败
@@ -220,7 +227,6 @@ export { broadcastDataSourceStatus }
  * @throws {Error} 当required=true且silent=false的请求失败时抛出
  */
 export async function fetchApiBatch(requests, silent = false) {
-  // Best-Effort 模式：内部 catch 保证单个接口失败不会导致整批丢弃
   const settled = await Promise.all(
     requests.map(async ({ url, key, default: defaultValue = null, required = true }) => {
       try {
@@ -228,17 +234,11 @@ export async function fetchApiBatch(requests, silent = false) {
         return { key, data, error: null, required }
       } catch (e) {
         logger.warn(`[fetchApiBatch] ${url} failed (key=${key}): ${e.message}`)
-        // required=true 且 silent=false 时抛出错误
-        if (required && !silent) {
-          throw new Error(`[${key}] ${e.message}`)
-        }
-        // 否则返回默认值，保证其他正常接口的数据能正常渲染
         return { key, data: defaultValue, error: e.message, required }
       }
     })
   )
 
-  // 构建结果对象（只聚合成功的部分）
   const errors = settled.filter(r => r.error).map(r => ({ key: r.key, error: r.error }))
   const data = settled.reduce((acc, { key, data }) => {
     acc[key] = data
@@ -248,6 +248,11 @@ export async function fetchApiBatch(requests, silent = false) {
   if (errors.length > 0) {
     data._errors = errors
     data._stale = true
+    // required=true 且 silent=false 时抛出错误
+    const requiredErrors = errors.filter(e => settled.find(s => s.key === e.key)?.required)
+    if (requiredErrors.length > 0 && !silent) {
+      throw new Error(`必需接口失败: ${requiredErrors.map(e => `[${e.key}] ${e.error}`).join(', ')}`)
+    }
   }
   return data
 }

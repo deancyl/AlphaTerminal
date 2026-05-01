@@ -391,21 +391,19 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
         except:
             pass
+
+        # ── 获取现金余额 ──────────────────────────────────────────────
+        cash_balance = 0.0
+        try:
+            cb = conn.execute(
+                "SELECT cash_balance FROM portfolios WHERE id=?",
+                (portfolio_id,),
+            ).fetchone()
+            cash_balance = cb[0] or 0.0 if cb else 0.0
+        except Exception as e:
+            logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}")
     finally:
         conn.close()
-
-    # ── 获取现金余额 ──────────────────────────────────────────────
-    cash_balance = 0.0
-    try:
-        conn3 = _get_conn()
-        cb = conn3.execute(
-            "SELECT cash_balance FROM portfolios WHERE id=?",
-            (portfolio_id,),
-        ).fetchone()
-        cash_balance = cb[0] or 0.0 if cb else 0.0
-        conn3.close()
-    except Exception as e:
-        logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}")
 
     if not rows:
         return _ok({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
@@ -535,45 +533,38 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     total_pnl = total_value - total_cost
     total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
 
-    # ── 从 position_lots 读取已实现 PnL ────────────────────────────
-    conn2 = _get_conn()
-    realized_pnl = 0.0
+    # ── 使用单一连接读取所有数据，避免竞态条件 ────────────────────────────
+    conn = _get_conn()
     try:
-        closed_rows = conn2.execute(
+        # 从 position_lots 读取已实现 PnL
+        closed_rows = conn.execute(
             "SELECT SUM(realized_pnl) FROM position_lots WHERE portfolio_id=? AND status='closed'",
             (portfolio_id,),
         ).fetchone()
         realized_pnl = closed_rows[0] or 0.0
-    finally:
-        conn2.close()
 
-    # ── 从 position_summary 读取浮动盈亏（用独立连接，读取已已提交数据）────────
-    unrealized_pnl = 0.0
-    try:
-        _conn_ps = _get_conn()   # fresh connection = committed view
-        unrealized_row = _conn_ps.execute(
+        # 从 position_summary 读取浮动盈亏
+        unrealized_row = conn.execute(
             "SELECT SUM(unrealized_pnl) FROM position_summary WHERE portfolio_id=?",
             (portfolio_id,),
         ).fetchone()
         unrealized_pnl = float(unrealized_row[0]) if unrealized_row and unrealized_row[0] is not None else 0.0
-        _conn_ps.close()
-    except Exception as e:
-        logger.warning(f"[Portfolio PnL] 读取 unrealized_pnl 失败 (portfolio_id={portfolio_id}): {e}")
 
-    # ── 从 transactions 计算当日盈亏 ───────────────────────────────────
-    today = datetime.now().strftime('%Y-%m-%d')
-    daily_pnl = 0.0
-    try:
-        _conn_txn = _get_conn()
-        txn_rows = _conn_txn.execute(
+        # 从 transactions 计算当日盈亏
+        today = datetime.now().strftime('%Y-%m-%d')
+        txn_rows = conn.execute(
             "SELECT SUM(amount) FROM transactions "
             "WHERE portfolio_id=? AND created_at>=? AND type IN ('sell_pnl','deposit','withdraw','transfer_in','transfer_out')",
             (portfolio_id, today),
         ).fetchone()
         daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
-        _conn_txn.close()
     except Exception as e:
-        logger.warning(f"[Portfolio PnL] 计算当日盈亏失败 (portfolio_id={portfolio_id}): {e}")
+        logger.warning(f"[Portfolio PnL] 读取盈亏数据失败 (portfolio_id={portfolio_id}): {e}")
+        realized_pnl = 0.0
+        unrealized_pnl = 0.0
+        daily_pnl = 0.0
+    finally:
+        conn.close()
 
     response = {
         # ── 三分 PnL ──────────────────────────────────────────

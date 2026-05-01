@@ -171,8 +171,48 @@ const query = ref('')
 const inputRef = ref(null)
 const selectedIndex = ref(0)
 const recentSearches = ref([])
+const stockData = ref([]) // 从API加载的股票数据
+const isLoadingStocks = ref(false)
 
-// ── 模拟股票数据（实际应从API获取）──
+// ── 加载股票列表 ──
+async function loadStockList() {
+  if (stockData.value.length > 0) return // 已加载
+  
+  isLoadingStocks.value = true
+  try {
+    const response = await fetch('/api/v1/market/symbols')
+    const data = await response.json()
+    if (data?.data?.symbols) {
+      stockData.value = data.data.symbols.map(s => ({
+        symbol: s.code || s.symbol,
+        name: s.name,
+        pinyin: s.pinyin || generatePinyin(s.name)
+      }))
+      logger.log(`[CommandPalette] Loaded ${stockData.value.length} stocks`)
+    }
+  } catch (error) {
+    logger.error('[CommandPalette] Failed to load stock list:', error)
+    // 使用备用数据
+    stockData.value = STOCK_DATA
+  } finally {
+    isLoadingStocks.value = false
+  }
+}
+
+// ── 简单拼音首字母生成（备用）──
+function generatePinyin(name) {
+  // 这是一个简化版本，实际应该使用完整的拼音库
+  return name.split('').map(c => {
+    const code = c.charCodeAt(0)
+    if (code >= 0x4e00 && code <= 0x9fa5) {
+      // 简单映射（实际应该使用pinyin库）
+      return 'X'
+    }
+    return c
+  }).join('')
+}
+
+// ── 模拟股票数据（备用）──
 const STOCK_DATA = [
   { symbol: '000001', name: '平安银行', pinyin: 'PAYH' },
   { symbol: '000002', name: '万科A', pinyin: 'WKA' },
@@ -218,12 +258,17 @@ const VIEWS = [
 // ── 计算属性 ──
 const stockResults = computed(() => {
   if (!query.value) return []
-  const q = query.value.toLowerCase()
-  return STOCK_DATA.filter(s =>
-    s.symbol.includes(q) ||
-    s.name.includes(query.value) ||
-    s.pinyin.toLowerCase().includes(q)
-  ).slice(0, 8)
+  const q = query.value.toLowerCase().trim()
+  const dataSource = stockData.value.length > 0 ? stockData.value : STOCK_DATA
+  
+  return dataSource.filter(s => {
+    // 支持代码、名称、拼音首字母搜索
+    const symbolMatch = s.symbol.toLowerCase().includes(q)
+    const nameMatch = s.name.includes(query.value)
+    const pinyinMatch = s.pinyin && s.pinyin.toLowerCase().includes(q)
+    
+    return symbolMatch || nameMatch || pinyinMatch
+  }).slice(0, 10) // 限制显示10条结果
 })
 
 const commandResults = computed(() => {
@@ -347,7 +392,7 @@ function removeRecent(item) {
   localStorage.setItem('alphaterminal-recent-searches', JSON.stringify(recentSearches.value))
 }
 
-// ── 加载最近搜索 ──
+// ── 加载最近搜索和股票数据 ──
 onMounted(() => {
   try {
     const saved = localStorage.getItem('alphaterminal-recent-searches')
@@ -357,6 +402,9 @@ onMounted(() => {
   } catch (e) {
     logger.warn('[CommandPalette] Failed to load recent searches')
   }
+  
+  // 预加载股票列表
+  loadStockList()
 })
 
 // ── 监听visible变化 ──

@@ -52,19 +52,12 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiFetch } from '../utils/api.js';
 
-// 动态引入 echarts（SSR 友好）
-let echarts = null;
+// 使用 index.html CDN 加载的全局 echarts
 async function getEcharts() {
-  // 优先使用 index.html CDN 加载的全局 echarts（100% 可用）
   if (typeof window !== 'undefined' && window.echarts) {
     return window.echarts;
   }
-  // fallback: Vite 动态 import（仅在 CDN 未注入时尝试）
-  if (!echarts) {
-    echarts = await import('echarts').catch(() => null);
-  }
-  if (echarts) return echarts;
-  throw new Error('ECharts 不可用（window.echarts 未注入且 import 失败）');
+  throw new Error('ECharts 不可用（window.echarts 未注入，请检查 CDN 是否加载）');
 }
 
 export default {

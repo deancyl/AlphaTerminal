@@ -812,7 +812,7 @@ async def market_quote(symbol: str):
         'change_pct':   round(chg_pct, 2),
         'volume':       float(latest.get('volume') or 0),
         'amount':       float(latest.get('amount') or 0),
-        'amplitude':    round((float(latest.get('high') or 0) - float(latest.get('low') or 0)) / prev_c * 100, 2) if latest.get('high') and latest.get('low') and prev_c else 0,
+        'amplitude':    round((float(latest.get('high') or 0) - float(latest.get('low') or 0)) / prev_c * 100, 2) if latest.get('high') and latest.get('low') and prev_c and prev_c != 0 else 0,
         'turnover_rate': float(latest.get('turnover_rate') or 0),
         'timestamp':     datetime.now().isoformat(),
     })

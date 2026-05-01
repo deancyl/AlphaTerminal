@@ -374,8 +374,12 @@ async function loadPortfolios() {
 }
 
 onMounted(async () => {
-  await loadPortfolios();
-  await loadPortfolioData();
+  try {
+    await loadPortfolios();
+    await loadPortfolioData();
+  } catch (e) {
+    console.error('[Portfolio] Mount failed:', e);
+  }
 });
 
 watch(selectedPortfolioId, loadPortfolioData);

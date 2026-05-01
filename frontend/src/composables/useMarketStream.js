@@ -225,7 +225,7 @@ function _scheduleRetry() {
   logger.log(`[MarketStream] ${(jitter / 1000).toFixed(1)}s后第${_retryCount}次重连（jitter ±25%）...`)
 
   _retryTimer = setTimeout(() => {
-    if (subscribedSymRefCount.size > 0) _newConnection()
+    if (subscribedSymRefCount.size > 0 && !_ws) _newConnection()
   }, jitter)
 
   _retryDelay = Math.min(_retryDelay * 1.5, _MAX_DELAY)

@@ -197,8 +197,10 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import * as echarts from 'echarts'
 import { apiFetch } from '../utils/api.js'
+
+// 使用 CDN 加载的 echarts（index.html 中已注入）
+const echarts = window.echarts
 
 const loading = ref(false)
 const overview = ref(null)
@@ -226,7 +228,7 @@ let unemploymentChartInstance = null
 // 获取概览数据
 async function fetchOverview() {
   try {
-    const data = await apiFetch('/api/v1/macro/overview')
+    const data = await apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 })
     if (data?.overview) {
       overview.value = data.overview
       lastUpdate.value = data.last_update
@@ -239,7 +241,7 @@ async function fetchOverview() {
 // 获取经济日历
 async function fetchCalendar() {
   try {
-    const data = await apiFetch('/api/v1/macro/calendar')
+    const data = await apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 })
     if (data?.calendar) {
       calendar.value = data.calendar
     }
@@ -251,7 +253,7 @@ async function fetchCalendar() {
 // 获取GDP数据并绘制图表
 async function fetchGDP() {
   try {
-    const data = await apiFetch('/api/v1/macro/gdp?limit=20')
+    const data = await apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawGDPChart(data.data.data)
     }
@@ -263,7 +265,7 @@ async function fetchGDP() {
 // 获取CPI数据并绘制图表
 async function fetchCPI() {
   try {
-    const data = await apiFetch('/api/v1/macro/cpi?limit=24')
+    const data = await apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawCPIChart(data.data.data)
     }
@@ -275,7 +277,7 @@ async function fetchCPI() {
 // 获取PMI数据并绘制图表
 async function fetchPMI() {
   try {
-    const data = await apiFetch('/api/v1/macro/pmi?limit=24')
+    const data = await apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawPMIChart(data.data.data)
     }
@@ -287,7 +289,7 @@ async function fetchPMI() {
 // 获取PPI数据并绘制图表
 async function fetchPPI() {
   try {
-    const data = await apiFetch('/api/v1/macro/ppi?limit=24')
+    const data = await apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawPPIChart(data.data.data)
     }
@@ -299,7 +301,7 @@ async function fetchPPI() {
 // 获取M2数据并绘制图表
 async function fetchM2() {
   try {
-    const data = await apiFetch('/api/v1/macro/m2?limit=24')
+    const data = await apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawM2Chart(data.data.data)
     }
@@ -311,7 +313,7 @@ async function fetchM2() {
 // 获取社融数据并绘制图表
 async function fetchSocialFinancing() {
   try {
-    const data = await apiFetch('/api/v1/macro/social_financing?limit=24')
+    const data = await apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawSocialFinancingChart(data.data.data)
     }
@@ -323,7 +325,7 @@ async function fetchSocialFinancing() {
 // 获取工业增加值数据并绘制图表
 async function fetchIndustrialProduction() {
   try {
-    const data = await apiFetch('/api/v1/macro/industrial_production?limit=24')
+    const data = await apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawIndustrialProductionChart(data.data.data)
     }
@@ -335,7 +337,7 @@ async function fetchIndustrialProduction() {
 // 获取失业率数据并绘制图表
 async function fetchUnemployment() {
   try {
-    const data = await apiFetch('/api/v1/macro/unemployment?limit=24')
+    const data = await apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 })
     if (data?.data?.data) {
       drawUnemploymentChart(data.data.data)
     }

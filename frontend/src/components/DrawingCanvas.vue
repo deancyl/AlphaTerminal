@@ -1126,22 +1126,25 @@ onMounted(() => {
   resizeCanvas()
   loadFromStorage()
   
-  window.addEventListener('resize', resizeCanvas)
-  document.addEventListener('click', (e) => {
+  const handleDocClick = (e) => {
     if (!e.target.closest('.context-menu') && !e.target.closest('.style-editor')) {
       ctxMenu.value.show = false
     }
-  })
+  }
+  
+  window.addEventListener('resize', resizeCanvas)
+  document.addEventListener('click', handleDocClick)
   
   if (canvasRef.value?.parentElement) {
     const ro = new ResizeObserver(() => resizeCanvas())
     ro.observe(canvasRef.value.parentElement)
   }
-})
-
-onUnmounted(() => {
-  cancelAnimationFrame(animationFrame)
-  window.removeEventListener('resize', resizeCanvas)
+  
+  onUnmounted(() => {
+    cancelAnimationFrame(animationFrame)
+    window.removeEventListener('resize', resizeCanvas)
+    document.removeEventListener('click', handleDocClick)
+  })
 })
 
 watch(() => [props.symbol, props.period], () => loadFromStorage(), { immediate: true })

@@ -97,6 +97,7 @@ class CircuitBreaker:
             if self._opened_at and (time.time() - self._opened_at) >= self.config.timeout:
                 self._state = CircuitState.HALF_OPEN
                 self._half_open_calls = 0
+                self._stats.consecutive_failures = 0
                 self._record_state_change(CircuitState.HALF_OPEN)
         return self._state
     

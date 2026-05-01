@@ -15,6 +15,7 @@
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 
+// 始终使用相对路径，让前端代理转发到后端
 const API_BASE = ''
 
 // 30秒缓存

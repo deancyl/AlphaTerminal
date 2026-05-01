@@ -834,9 +834,16 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  clearTimeout(_leaveTimer)
+  _leaveTimer = null
   resizeObserver?.disconnect()
-  chartInstance?.dispose()
-  chartInstance = null
+  if (chartInstance) {
+    chartInstance.off('mousemove')
+    chartInstance.getZr()?.off('mouseleave')
+    chartInstance.getZr()?.off('mouseenter')
+    chartInstance.dispose()
+    chartInstance = null
+  }
   unsubscribeTheme?.()
   unsubscribeTheme = null
 })

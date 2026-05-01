@@ -452,7 +452,7 @@ def search_stocks(
         }
         order_col = ORDER_FIELDS.get(sort_by, 'change_pct')
         # 严格验证排序方向，防止 SQL 注入
-        order_dir = 'DESC' if sort_dir.lower() in ('desc', 'descending', 'down') else 'ASC'
+        order_dir = 'DESC' if sort_dir.upper() == 'DESC' else 'ASC'
 
         where_clause = " AND ".join(conditions)
 
@@ -588,41 +588,47 @@ def get_admin_config(key: str, default=None):
     """读取 admin 配置项（JSON 字符串），不存在则返回 default"""
     with _lock:
         conn = _get_conn()
-        row = conn.execute(
-            "SELECT value FROM admin_config WHERE key = ?", (key,)
-        ).fetchone()
-        conn.close()
-        if row is None:
-            return default
         try:
-            import json as _json
-            return _json.loads(row['value'])
-        except Exception:
-            return row['value']
+            row = conn.execute(
+                "SELECT value FROM admin_config WHERE key = ?", (key,)
+            ).fetchone()
+            if row is None:
+                return default
+            try:
+                import json as _json
+                return _json.loads(row['value'])
+            except Exception:
+                return row['value']
+        finally:
+            conn.close()
 
 def set_admin_config(key: str, value):
     """写入 admin 配置项（自动 JSON 序列化）"""
     import json as _json
     with _lock:
         conn = _get_conn()
-        conn.execute(
-            "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
-            (key, _json.dumps(value), datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
+        try:
+            conn.execute(
+                "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
+                (key, _json.dumps(value), datetime.now().isoformat())
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
 def get_all_admin_configs():
     """读取所有 admin 配置项"""
     with _lock:
         conn = _get_conn()
-        rows = conn.execute("SELECT key, value FROM admin_config").fetchall()
-        conn.close()
-        import json as _json
-        result = {}
-        for r in rows:
-            try:
-                result[r['key']] = _json.loads(r['value'])
-            except Exception:
-                result[r['key']] = r['value']
-        return result
+        try:
+            rows = conn.execute("SELECT key, value FROM admin_config").fetchall()
+            import json as _json
+            result = {}
+            for r in rows:
+                try:
+                    result[r['key']] = _json.loads(r['value'])
+                except Exception:
+                    result[r['key']] = r['value']
+            return result
+        finally:
+            conn.close()

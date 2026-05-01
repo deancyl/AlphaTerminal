@@ -28,37 +28,18 @@
         <!-- 快捷键列表 -->
         <div class="flex-1 overflow-y-auto p-6">
           <div class="space-y-6">
-            <!-- 视图切换 -->
-            <div>
-              <h3 class="text-sm font-bold text-terminal-primary mb-3">视图导航</h3>
+            <!-- 按分类显示快捷键 -->
+            <div v-for="category in categories" :key="category">
+              <h3 class="text-sm font-bold text-terminal-primary mb-3">{{ category }}</h3>
               <div class="space-y-2">
-                <div v-for="s in viewShortcuts" :key="s.key" class="flex items-center justify-between py-2 px-3 rounded bg-terminal-bg/50">
-                  <span class="text-sm text-terminal-secondary">{{ s.description }}</span>
-                  <div class="flex items-center gap-1">
-                    <span v-if="s.ctrl" class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim">Ctrl</span>
-                    <span class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim font-mono">{{ formatKey(s.key) }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 功能操作 -->
-            <div>
-              <h3 class="text-sm font-bold text-terminal-primary mb-3">功能操作</h3>
-              <div class="space-y-2">
-                <div v-for="s in funcShortcuts" :key="s.key" class="flex items-center justify-between py-2 px-3 rounded bg-terminal-bg/50">
+                <div v-for="s in getShortcutsByCategory(category)" :key="s.key + s.ctrl + s.shift" 
+                     class="flex items-center justify-between py-2 px-3 rounded bg-terminal-bg/50">
                   <span class="text-sm text-terminal-secondary">{{ s.description }}</span>
                   <div class="flex items-center gap-1">
                     <span v-if="s.ctrl" class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim">Ctrl</span>
                     <span v-if="s.shift" class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim">Shift</span>
+                    <span v-if="s.alt" class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim">Alt</span>
                     <span class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim font-mono">{{ formatKey(s.key) }}</span>
-                  </div>
-                </div>
-                <!-- F9深度资料（全屏K线中可用） -->
-                <div v-if="f9Shortcut" class="flex items-center justify-between py-2 px-3 rounded bg-terminal-bg/50">
-                  <span class="text-sm text-terminal-secondary">{{ f9Shortcut.description }}（全屏K线中）</span>
-                  <div class="flex items-center gap-1">
-                    <span class="px-2 py-0.5 rounded bg-theme-secondary text-xs text-terminal-dim font-mono">{{ formatKey(f9Shortcut.key) }}</span>
                   </div>
                 </div>
               </div>
@@ -85,33 +66,34 @@ const props = defineProps({
 
 defineEmits(['close'])
 
-const viewShortcuts = computed(() => 
-  SHORTCUTS.filter(s => s.action === 'view')
-)
+// 获取所有分类
+const categories = computed(() => {
+  const cats = new Set()
+  SHORTCUTS.forEach(s => {
+    if (s.category) cats.add(s.category)
+  })
+  return Array.from(cats)
+})
 
-const funcShortcuts = computed(() => 
-  SHORTCUTS.filter(s => ['search', 'escape', 'fullscreen', 'help'].includes(s.action))
-)
-
-// F9深度资料需要特殊处理，确保显示在功能列表中
-const f9Shortcut = computed(() => 
-  SHORTCUTS.find(s => s.key === 'f9')
-)
+// 按分类获取快捷键
+function getShortcutsByCategory(category) {
+  return SHORTCUTS.filter(s => s.category === category)
+}
 
 function formatKey(key) {
   const map = {
     'escape': 'Esc',
     '/': '/',
-    'k': 'K',
-    'b': 'B',
-    'f': 'F',
-    'p': 'P',
-    'm': 'M',
-    'r': 'R',
     '?': '?',
+    ',': ',',
+    'k': 'K',
+    'd': 'D',
+    'f1': 'F1',
+    'f5': 'F5',
     'f6': 'F6',
     'f9': 'F9',
+    'f11': 'F11',
   }
-  return map[key] || key.toUpperCase()
+  return map[key.toLowerCase()] || key.toUpperCase()
 }
 </script>

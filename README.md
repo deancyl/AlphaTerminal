@@ -31,7 +31,7 @@ git clone https://github.com/deancyl/AlphaTerminal.git
 cd AlphaTerminal
 
 # 2. 一键启动（自动安装依赖 + 启动前后端）
-./start.sh
+./start-services.sh all
 
 # 3. 访问 http://localhost:60100
 ```
@@ -43,7 +43,7 @@ git clone https://github.com/deancyl/AlphaTerminal.git
 cd AlphaTerminal
 
 # 2. 一键启动（自动安装依赖 + 启动前后端）
-.\start.ps1
+.\start-services.ps1 all
 
 # 3. 访问 http://localhost:60100
 ```
@@ -52,12 +52,28 @@ cd AlphaTerminal
 
 | 命令 | Linux/macOS | Windows | 说明 |
 |------|-------------|---------|------|
-| 启动全部 | `./start.sh` | `.\start.ps1` | 启动前后端 |
-| 仅后端 | `./start.sh backend` | `.\start.ps1 backend` | 仅启动后端 |
-| 仅前端 | `./start.sh frontend` | `.\start.ps1 frontend` | 仅启动前端 |
-| 停止服务 | `./start.sh stop` | `.\start.ps1 stop` | 停止所有服务 |
-| 查看状态 | `./start.sh status` | `.\start.ps1 status` | 查看运行状态 |
-| 仅安装依赖 | `./start.sh install` | `.\start.ps1 install` | 仅安装依赖 |
+| 启动全部 | `./start-services.sh all` | `.\start-services.ps1 all` | 启动前后端 |
+| 仅后端 | `./start-services.sh backend` | `.\start-services.ps1 backend` | 仅启动后端 |
+| 仅前端 | `./start-services.sh frontend` | `.\start-services.ps1 frontend` | 仅启动前端 |
+| 重启服务 | `./start-services.sh restart` | `.\start-services.ps1 restart` | 重启所有服务 |
+| 停止服务 | `./start-services.sh stop` | `.\start-services.ps1 stop` | 停止所有服务 |
+| 查看状态 | `./start-services.sh status` | `.\start-services.ps1 status` | 查看运行状态 |
+
+### 服务架构
+
+```
+用户浏览器 → 前端服务器(60100) → [API代理] → 后端服务器(8002)
+            → [静态文件] → dist/
+```
+
+- **前端**: Vite Preview 模式（端口 60100）
+  - 提供静态文件（Vue 3 构建产物）
+  - 代理 `/api/*` 请求到后端 8002 端口
+  
+- **后端**: FastAPI + Uvicorn（端口 8002）
+  - 所有业务API
+  - 宏观经济数据（akshare）
+  - 5分钟缓存机制
 
 ### 方式二：手动启动
 
@@ -121,7 +137,24 @@ lsof -ti:60100 | xargs kill -9  # 前端端口
 Get-Process -Id (Get-NetTCPConnection -LocalPort 8002).OwningProcess | Stop-Process
 ```
 
-#### 4. 数据接口连接失败
+#### 4. 宏观经济面板显示错误
+如果宏观经济面板显示"应用出现错误"或echarts相关错误：
+- 确保使用 `./start-services.sh restart` 重启服务
+- 脚本会自动重新构建前端并清理缓存
+- 第一次加载可能需要10-15秒（akshare获取数据）
+
+#### 5. 前端请求直接访问localhost:8002导致连接失败
+**症状**: 浏览器控制台显示 `net::ERR_CONNECTION_REFUSED localhost:8002`
+
+**原因**: 前端代码直接访问 `localhost:8002` 而不是通过前端代理
+
+**解决**: 
+- 确保所有API请求使用相对路径（如 `/api/v1/...`）
+- 检查 `frontend/src/utils/api.js` 和 `frontend/src/services/copilotData.js` 中的 `API_BASE_URL` 配置
+- 正确配置应为 `const API_BASE_URL = ''`（空字符串，使用相对路径）
+- 重启服务：`./start-services.sh restart`
+
+#### 6. 数据接口连接失败
 如果数据接口无法连接，请设置代理环境变量：
 ```bash
 export HTTP_PROXY=http://你的代理IP:端口
