@@ -25,6 +25,20 @@ from app.utils.errors import (
 logger = logging.getLogger(__name__)
 
 
+# API错误码到HTTP状态码的映射
+_HTTP_STATUS_MAP = {
+    # 客户端错误 -> 4xx
+    100: 400, 101: 401, 102: 403, 104: 404, 105: 405,
+    110: 422, 120: 429,
+    # 服务端错误 -> 5xx
+    200: 500, 210: 500, 220: 500, 230: 500,
+    # 第三方错误 -> 502/504
+    302: 502, 310: 504, 320: 502, 330: 502,
+    # 业务错误 -> 400
+    400: 400, 410: 400, 420: 400, 430: 400,
+}
+
+
 async def api_exception_handler(request: Request, exc: APIException) -> JSONResponse:
     """处理自定义API异常"""
     logger.error(
@@ -37,8 +51,11 @@ async def api_exception_handler(request: Request, exc: APIException) -> JSONResp
         }
     )
     
+    # 使用映射表获取正确的HTTP状态码，避免AttributeError
+    http_status = _HTTP_STATUS_MAP.get(exc.code, 500)
+    
     return JSONResponse(
-        status_code=exc.status_code or 400,  # 保留原始 HTTP 状态码
+        status_code=http_status,
         content=exc.to_dict()
     )
 

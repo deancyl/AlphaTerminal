@@ -31,6 +31,18 @@ def _validate_params_depth(obj, current_depth=0):
             _validate_params_depth(item, current_depth + 1)
 
 
+def _count_keys(obj, count=0):
+    """递归计算 JSON 对象中的键数量"""
+    if isinstance(obj, dict):
+        count += len(obj)
+        for v in obj.values():
+            count = _count_keys(v, count)
+    elif isinstance(obj, list):
+        for item in obj:
+            count = _count_keys(item, count)
+    return count
+
+
 def _validate_params(params: Dict[str, Any]) -> Dict[str, Any]:
     """验证 params JSON 复杂度，防止 DoS 攻击"""
     if params is None:
@@ -42,23 +54,268 @@ def _validate_params(params: Dict[str, Any]) -> Dict[str, Any]:
         raise HTTPException(400, f"params JSON 大小超过限制 ({MAX_PARAMS_SIZE} 字节)")
     
     # 检查键数量
-    def count_keys(obj, count=0):
-        if isinstance(obj, dict):
-            count += len(obj)
-            for v in obj.values():
-                count = count_keys(v, count)
-        elif isinstance(obj, list):
-            for item in obj:
-                count = count_keys(item, count)
-        return count
-    
-    if count_keys(params) > MAX_PARAMS_KEYS:
+    if _count_keys(params) > MAX_PARAMS_KEYS:
         raise HTTPException(400, f"params 键数量超过限制 ({MAX_PARAMS_KEYS})")
     
     # 检查嵌套深度
     _validate_params_depth(params)
     
     return params
+
+
+def _extract_strategy_params(strategy_type: str, raw_params: Dict[str, Any]) -> tuple:
+    """根据策略类型提取参数，返回 (fast_ma, slow_ma)"""
+    defaults = {
+        "ma_crossover": ("fast_ma", 5, "slow_ma", 20),
+        "rsi_oversold": ("rsi_period", 14, "rsi_buy", 30),
+        "bollinger_bands": ("bb_period", 20, "bb_std", 2),
+    }
+    if strategy_type in defaults:
+        k1, v1, k2, v2 = defaults[strategy_type]
+        return raw_params.get(k1, v1), raw_params.get(k2, v2)
+    return raw_params.get("fast_ma", 5), raw_params.get("slow_ma", 20)
+
+
+def _validate_dates(start_date: str, end_date: str) -> tuple:
+    """验证日期范围，返回 (is_valid, error_message, days_span)"""
+    from datetime import datetime as dt
+    MAX_YEARS = 10
+    try:
+        start = dt.strptime(start_date, "%Y-%m-%d")
+        end = dt.strptime(end_date, "%Y-%m-%d")
+        days_span = (end - start).days
+        if days_span < 0:
+            return False, "start_date 不能晚于 end_date", 0
+        if days_span > MAX_YEARS * 365:
+            return False, f"时间跨度不能超过 {MAX_YEARS} 年（约 {MAX_YEARS*365} 天），当前跨度 {days_span} 天", days_span
+        return True, "", days_span
+    except ValueError:
+        return False, "日期格式错误，请使用 YYYY-MM-DD", 0
+
+
+def _validate_capital(initial_capital: float) -> tuple:
+    """验证初始资金，返回 (is_valid, error_message, capital)"""
+    MIN_CAPITAL = 100.0
+    MAX_CAPITAL = 1e9
+    try:
+        capital = float(initial_capital)
+        if not (MIN_CAPITAL <= capital <= MAX_CAPITAL):
+            return False, f"initial_capital 必须介于 {MIN_CAPITAL} ~ {MAX_CAPITAL}，当前 {capital}", 0.0
+        return True, "", capital
+    except (TypeError, ValueError):
+        return False, f"initial_capital 必须是有效数字，当前 {initial_capital}", 0.0
+
+
+def _calc_ma(data, period):
+    """计算移动平均线"""
+    return [None] * (period - 1) + [
+        round(sum(data[i-period+1:i+1]) / period, 2) for i in range(period - 1, len(data))
+    ]
+
+
+def _calc_rsi(closes, period=14):
+    """计算 RSI 指标"""
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i] - closes[i-1]
+        gains.append(max(d, 0))
+        losses.append(max(-d, 0))
+    
+    if sum(losses[:period]) == 0:
+        return [50.0] * len(closes)
+    
+    ag = sum(gains[:period]) / period
+    al = sum(losses[:period]) / period
+    rs = ag / al if al != 0 else 0
+    
+    avg_gain = [None] * period + [100 - 100/(1+rs)]
+    avg_loss = [None] * period + [0]
+    
+    for i in range(period, len(gains)):
+        ag = (ag*(period-1) + gains[i]) / period
+        al = (al*(period-1) + losses[i]) / period
+        rs = ag / al if al != 0 else 0
+        avg_gain.append(100 - 100/(1+rs) if al != 0 else 50.0)
+        avg_loss.append(0)
+    
+    return avg_gain + [None] * (len(closes) - len(avg_gain))
+
+
+def _calc_bollinger(closes, period=20, multiplier=2):
+    """计算布林带指标"""
+    mid = _calc_ma(closes, period)
+    upper, lower = [None] * len(closes), [None] * len(closes)
+    for i in range(period - 1, len(closes)):
+        if mid[i] is not None:
+            std = (sum((closes[j] - mid[i])**2 for j in range(i-period+1, i+1)) / period) ** 0.5
+            upper[i] = round(mid[i] + multiplier * std, 2)
+            lower[i] = round(mid[i] - multiplier * std, 2)
+    return mid, upper, lower
+
+
+def _generate_signals(strategy_type: str, closes: list, raw_params: dict) -> list:
+    """根据策略类型生成交易信号"""
+    signals = [0] * len(closes)
+    
+    if strategy_type == "ma_crossover":
+        fast_ma = raw_params.get("fast_ma", 5)
+        slow_ma = raw_params.get("slow_ma", 20)
+        fast_ma_vals = _calc_ma(closes, fast_ma)
+        slow_ma_vals = _calc_ma(closes, slow_ma)
+        for i in range(slow_ma, len(closes)):
+            if fast_ma_vals[i] is None:
+                continue
+            if fast_ma_vals[i] > slow_ma_vals[i] and fast_ma_vals[i-1] <= slow_ma_vals[i-1]:
+                signals[i] = 1
+            elif fast_ma_vals[i] < slow_ma_vals[i] and fast_ma_vals[i-1] >= slow_ma_vals[i-1]:
+                signals[i] = -1
+    
+    elif strategy_type == "rsi_oversold":
+        rsi_period = raw_params.get("rsi_period", 14)
+        rsi_buy = raw_params.get("rsi_buy", 30)
+        rsi_sell = raw_params.get("rsi_sell", 70)
+        rsi_vals = _calc_rsi(closes, rsi_period)
+        in_position = False
+        for i in range(1, len(closes)):
+            if rsi_vals[i] is None:
+                continue
+            if not in_position and rsi_vals[i] < rsi_buy:
+                signals[i] = 1
+                in_position = True
+            elif in_position and rsi_vals[i] > rsi_sell:
+                signals[i] = -1
+                in_position = False
+    
+    elif strategy_type == "bollinger_bands":
+        mid, upper, lower = _calc_bollinger(closes, 20, 2)
+        for i in range(1, len(closes)):
+            if lower[i] is None:
+                continue
+            if closes[i-1] <= lower[i-1] and closes[i] > lower[i]:
+                signals[i] = 1
+            elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
+                signals[i] = -1
+    
+    return signals
+
+
+def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: float) -> tuple:
+    """模拟交易，返回 (trades, wins, losses, final_capital)"""
+    capital = float(initial_capital)
+    position = 0
+    entry_price = 0.0
+    trades = []
+    wins = 0
+    losses = 0
+    
+    for i in range(1, len(closes)):
+        if signals[i] == 1 and position == 0 and capital > 0:
+            shares = int(capital * 0.9 / closes[i])
+            if shares > 0:
+                position = shares
+                entry_price = closes[i]
+                capital -= shares * entry_price
+                trades.append({
+                    "entry_date": rows[i][0],
+                    "entry_price": round(entry_price, 2),
+                    "shares": shares,
+                    "type": "long"
+                })
+        elif signals[i] == -1 and position > 0:
+            exit_price = closes[i]
+            pnl = (exit_price - entry_price) * position
+            if pnl > 0:
+                wins += 1
+            else:
+                losses += 1
+            capital += position * exit_price
+            trades[-1].update({
+                "exit_date": rows[i][0],
+                "exit_price": round(exit_price, 2),
+                "pnl": round(pnl, 2),
+                "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
+            })
+            position = 0
+    
+    # 平仓剩余持仓
+    if position > 0:
+        exit_price = closes[-1]
+        pnl = (exit_price - entry_price) * position
+        if pnl > 0:
+            wins += 1
+        else:
+            losses += 1
+        capital += position * exit_price
+        trades[-1].update({
+            "exit_date": rows[-1][0],
+            "exit_price": round(exit_price, 2),
+            "pnl": round(pnl, 2),
+            "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
+        })
+    
+    return trades, wins, losses, capital
+
+
+def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: float, 
+                       initial_capital: float, row_count: int, benchmark_return_pct: float) -> dict:
+    """计算回测统计指标"""
+    total_return = final_capital - float(initial_capital)
+    total_return_pct = round(total_return / float(initial_capital) * 100, 2)
+    total_trades = wins + losses
+    win_rate = round(wins / total_trades * 100, 2) if total_trades > 0 else 0
+    
+    # 计算权益曲线和最大回撤
+    equity = float(initial_capital)
+    peak = equity
+    max_drawdown = 0.0
+    equity_curve = []
+    
+    for t in trades:
+        equity += t["pnl"]
+        equity_curve.append({
+            "date": t.get("exit_date", t.get("entry_date")),
+            "value": round(equity, 2)
+        })
+        if equity > peak:
+            peak = equity
+        dd = peak - equity
+        if dd > max_drawdown:
+            max_drawdown = dd
+    
+    # 计算年化收益
+    years = row_count / 252
+    annualized_return = (final_capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
+    
+    # 计算夏普比率
+    sharpe_ratio = 0
+    if len(equity_curve) >= 2:
+        returns = []
+        for i in range(1, len(equity_curve)):
+            prev_val = equity_curve[i-1]["value"]
+            curr_val = equity_curve[i]["value"]
+            if prev_val > 0:
+                ret = (curr_val - prev_val) / prev_val
+                returns.append(ret)
+        if returns:
+            import statistics
+            daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
+            annualized_vol = daily_vol * (252 ** 0.5)
+            sharpe_ratio = round(annualized_return / annualized_vol, 2) if annualized_vol > 0 else 0
+    
+    return {
+        "total_return": round(total_return, 2),
+        "total_return_pct": total_return_pct,
+        "win_rate": round(win_rate, 2),
+        "max_drawdown": round(max_drawdown, 2),
+        "max_drawdown_pct": round((max_drawdown / initial_capital) * 100, 2),
+        "sharpe_ratio": sharpe_ratio,
+        "annualized_return_pct": round(annualized_return * 100, 2),
+        "wins": wins,
+        "losses": losses,
+        "total_trades": total_trades,
+        "equity_curve": equity_curve,
+        "benchmark_return_pct": benchmark_return_pct
+    }
 
 
 class BacktestRequest(BaseModel):
@@ -139,53 +396,23 @@ async def create_strategy(req: StrategyCreateRequest):
 @router.post("/run")
 async def run_backtest(req: BacktestRequest):
     """执行回测"""
-    import sqlite3
-    from datetime import datetime as dt
-
-    # ── 第一步：入参解析（优先于一切校验）───────────────────────────
+    # ── 第一步：入参解析与校验 ───────────────────────────────────
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
-
-    # 显式提取 strategy_type 作为唯一判定条件
     strategy_type = req.strategy_type or "ma_crossover"
-
-    # 验证 params 复杂度（防止 DoS）
     raw_params = _validate_params(req.params)
-    if strategy_type == "ma_crossover":
-        fast_ma = raw_params.get("fast_ma", 5)
-        slow_ma = raw_params.get("slow_ma", 20)
-    elif strategy_type == "rsi_oversold":
-        fast_ma = raw_params.get("rsi_period", 14)
-        slow_ma = raw_params.get("rsi_buy", 30)
-    elif strategy_type == "bollinger_bands":
-        fast_ma = raw_params.get("bb_period", 20)
-        slow_ma = raw_params.get("bb_std", 2)
-    else:
-        fast_ma = raw_params.get("fast_ma", 5)
-        slow_ma = raw_params.get("slow_ma", 20)
-
-    # ── 第二步：入参安全校验 ─────────────────────────────────────
-    MAX_YEARS = 10
-    try:
-        start = dt.strptime(req.start_date, "%Y-%m-%d")
-        end   = dt.strptime(req.end_date,   "%Y-%m-%d")
-        days_span = (end - start).days
-        if days_span < 0:
-            return {"code": 1, "message": "start_date 不能晚于 end_date"}
-        if days_span > MAX_YEARS * 365:
-            return {"code": 1, "message": f"时间跨度不能超过 {MAX_YEARS} 年（约 {MAX_YEARS*365} 天），当前跨度 {days_span} 天"}
-    except ValueError:
-        return {"code": 1, "message": "日期格式错误，请使用 YYYY-MM-DD"}
-
-    MIN_CAPITAL = 100.0
-    MAX_CAPITAL = 1e9
-    try:
-        initial_capital = float(req.initial_capital)
-        if not (MIN_CAPITAL <= initial_capital <= MAX_CAPITAL):
-            return {"code": 1, "message": f"initial_capital 必须介于 {MIN_CAPITAL} ~ {MAX_CAPITAL}，当前 {initial_capital}"}
-    except (TypeError, ValueError):
-        return {"code": 1, "message": f"initial_capital 必须是有效数字，当前 {req.initial_capital}"}
-
-    # ── 第三步：获取历史数据 ──────────────────────────────────────
+    fast_ma, slow_ma = _extract_strategy_params(strategy_type, raw_params)
+    
+    # 日期校验
+    dates_valid, dates_error, _ = _validate_dates(req.start_date, req.end_date)
+    if not dates_valid:
+        return {"code": 1, "message": dates_error}
+    
+    # 资金校验
+    capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
+    if not capital_valid:
+        return {"code": 1, "message": capital_error}
+    
+    # ── 第二步：获取历史数据 ──────────────────────────────────────
     conn = _get_conn()
     try:
         rows = conn.execute("""
@@ -194,161 +421,37 @@ async def run_backtest(req: BacktestRequest):
             WHERE symbol = ? AND date >= ? AND date <= ?
             ORDER BY date ASC
         """, (db_symbol, req.start_date, req.end_date)).fetchall()
-
+        
         if len(rows) == 0:
             return {"code": 1, "message": f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。"}
         if len(rows) < slow_ma:
             return {"code": 1, "message": f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。"}
-
-        # ── 基准收益率（Buy & Hold同期）──────────────────────────────
+        
+        # ── 基准收益率 ────────────────────────────────────────────
         first_close = float(rows[0][4])
-        last_close  = float(rows[-1][4])
-        # P2-12 Fix: 防止除零风险
-        if first_close <= 0:
-            benchmark_return_pct = 0.0
-        else:
-            benchmark_return_pct = round((last_close - first_close) / first_close * 100, 2)
-
-        # ── 技术指标计算 ──────────────────────────────────────────
-        closes  = [float(r[4]) for r in rows]
-        highs   = [float(r[2]) for r in rows]
-        lows    = [float(r[3]) for r in rows]
-        volumes = [float(r[5]) for r in rows]
-
-        def calc_ma(data, period):
-            return [None] * (period - 1) + [
-                round(sum(data[i-period+1:i+1]) / period, 2) for i in range(period - 1, len(data))
-            ]
-
-        def calc_rsi(closes, period=14):
-            gains, losses = [], []
-            for i in range(1, len(closes)):
-                d = closes[i] - closes[i-1]
-                gains.append(max(d, 0)); losses.append(max(-d, 0))
-            avg_gain = [None] * period; avg_loss = [None] * period
-            if sum(losses[:period]) == 0:
-                return [50.0] * len(closes)
-            ag = sum(gains[:period]) / period; al = sum(losses[:period]) / period
-            rs = ag / al if al != 0 else 0
-            avg_gain.append(100 - 100/(1+rs)); avg_loss.append(0)
-            for i in range(period+1, len(gains)):
-                ag = (ag*(period-1) + gains[i-1]) / period
-                al = (al*(period-1) + losses[i-1]) / period
-                rs = ag / al if al != 0 else 0
-                avg_gain.append(100 - 100/(1+rs) if al != 0 else 50.0); avg_loss.append(0)
-            return avg_gain + [None] * (len(closes) - len(avg_gain))
-
-        def calc_bollinger(closes, period=20, multiplier=2):
-            mid = calc_ma(closes, period)
-            upper, lower = [None] * len(closes), [None] * len(closes)
-            for i in range(period - 1, len(closes)):
-                if mid[i] is not None:
-                    std = (sum((closes[j] - mid[i])**2 for j in range(i-period+1, i+1)) / period) ** 0.5
-                    upper[i] = round(mid[i] + multiplier * std, 2)
-                    lower[i] = round(mid[i] - multiplier * std, 2)
-            return mid, upper, lower
-
-        # ── 策略信号生成（统一使用 strategy_type）────────────────────
-        signals = [0] * len(closes)  # 1=买入, -1=卖出, 0=持仓
-
-        if strategy_type == "ma_crossover":
-            fast_ma_vals = calc_ma(closes, fast_ma)
-            slow_ma_vals = calc_ma(closes, slow_ma)
-            for i in range(slow_ma, len(closes)):
-                if fast_ma_vals[i] is None: continue
-                if fast_ma_vals[i] > slow_ma_vals[i] and fast_ma_vals[i-1] <= slow_ma_vals[i-1]:
-                    signals[i] = 1
-                elif fast_ma_vals[i] < slow_ma_vals[i] and fast_ma_vals[i-1] >= slow_ma_vals[i-1]:
-                    signals[i] = -1
-
-        elif strategy_type == "rsi_oversold":
-            rsi_period = raw_params.get("rsi_period", 14)
-            rsi_buy    = raw_params.get("rsi_buy", 30)
-            rsi_sell   = raw_params.get("rsi_sell", 70)
-            rsi_vals   = calc_rsi(closes, rsi_period)
-            in_position = False
-            for i in range(1, len(closes)):
-                if rsi_vals[i] is None: continue
-                if not in_position and rsi_vals[i] < rsi_buy:
-                    signals[i] = 1; in_position = True
-                elif in_position and rsi_vals[i] > rsi_sell:
-                    signals[i] = -1; in_position = False
-
-        elif strategy_type == "bollinger_bands":
-            mid, upper, lower = calc_bollinger(closes, 20, 2)
-            for i in range(1, len(closes)):
-                if lower[i] is None: continue
-                if closes[i-1] <= lower[i-1] and closes[i] > lower[i]:
-                    signals[i] = 1
-                elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
-                    signals[i] = -1
-
-        # ── 模拟交易 ───────────────────────────────────────────────
-        capital = float(initial_capital)
-        position = 0; entry_price = 0.0
-        trades = []; wins = 0; losses = 0
-
-        for i in range(1, len(closes)):
-            if signals[i] == 1 and position == 0 and capital > 0:
-                shares = int(capital * 0.9 / closes[i])
-                if shares > 0:
-                    position = shares; entry_price = closes[i]
-                    capital -= shares * entry_price
-                    trades.append({"entry_date": rows[i][0], "entry_price": round(entry_price, 2), "shares": shares, "type": "long"})
-            elif signals[i] == -1 and position > 0:
-                exit_price = closes[i]
-                pnl = (exit_price - entry_price) * position
-                if pnl > 0: wins += 1
-                else: losses += 1
-                capital += position * exit_price
-                trades[-1].update({"exit_date": rows[i][0], "exit_price": round(exit_price, 2), "pnl": round(pnl, 2), "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)})
-                position = 0
-
-        if position > 0:
-            exit_price = closes[-1]
-            pnl = (exit_price - entry_price) * position
-            if pnl > 0: wins += 1
-            else: losses += 1
-            capital += position * exit_price
-            trades[-1].update({"exit_date": rows[-1][0], "exit_price": round(exit_price, 2), "pnl": round(pnl, 2), "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)})
-
-        # ── 统计指标 ───────────────────────────────────────────────
-        total_return      = capital - float(initial_capital)
-        total_return_pct  = round(total_return / float(initial_capital) * 100, 2)
-        total_trades      = wins + losses
-        win_rate          = round(wins / total_trades * 100, 2) if total_trades > 0 else 0
-
-        equity = float(initial_capital); peak = equity; max_drawdown = 0.0; equity_curve = []
-        for t in trades:
-            equity += t["pnl"]
-            equity_curve.append({"date": t.get("exit_date", t.get("entry_date")), "value": round(equity, 2)})
-            if equity > peak: peak = equity
-            dd = peak - equity
-            if dd > max_drawdown: max_drawdown = dd
-
-        years             = len(rows) / 252
-        annualized_return = (capital / float(initial_capital)) ** (1 / years) - 1 if years > 0 else 0
-
-        # 计算年化波动率（基于收益率序列）
-        if len(equity_curve) >= 2:
-            returns = []
-            for i in range(1, len(equity_curve)):
-                prev_val = equity_curve[i-1]["value"]
-                curr_val = equity_curve[i]["value"]
-                if prev_val > 0:
-                    ret = (curr_val - prev_val) / prev_val
-                    returns.append(ret)
-            if returns:
-                import statistics
-                daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
-                annualized_vol = daily_vol * (252 ** 0.5)
-                sharpe_ratio = round(annualized_return / annualized_vol, 2) if annualized_vol > 0 else 0
-            else:
-                sharpe_ratio = 0
-        else:
-            sharpe_ratio = 0
-
-        # ── 保存到数据库 ─────────────────────────────────────────────
+        last_close = float(rows[-1][4])
+        benchmark_return_pct = 0.0 if first_close <= 0 else round(
+            (last_close - first_close) / first_close * 100, 2
+        )
+        
+        # ── 提取价格序列 ──────────────────────────────────────────
+        closes = [float(r[4]) for r in rows]
+        
+        # ── 策略信号生成 ──────────────────────────────────────────
+        signals = _generate_signals(strategy_type, closes, raw_params)
+        
+        # ── 模拟交易 ──────────────────────────────────────────────
+        trades, wins, losses, final_capital = _simulate_trades(
+            signals, closes, rows, initial_capital
+        )
+        
+        # ── 统计指标 ──────────────────────────────────────────────
+        metrics = _calculate_metrics(
+            trades, wins, losses, final_capital,
+            initial_capital, len(rows), benchmark_return_pct
+        )
+        
+        # ── 保存到数据库 ──────────────────────────────────────────
         try:
             conn.execute("""
                 INSERT INTO backtest_results 
@@ -357,22 +460,20 @@ async def run_backtest(req: BacktestRequest):
                  sharpe_ratio, max_drawdown, win_rate, trades_count, details, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                None,  # strategy_id - could be passed in future
-                None,  # portfolio_id - could be passed in future  
-                req.start_date,
-                req.end_date,
+                None, None,
+                req.start_date, req.end_date,
                 initial_capital,
-                round(capital, 2),
-                round(total_return_pct, 2),
-                round(annualized_return * 100, 2),
-                sharpe_ratio,
-                round((max_drawdown / initial_capital) * 100, 2),
-                round(win_rate, 2),
-                total_trades,
+                round(final_capital, 2),
+                metrics["total_return_pct"],
+                metrics["annualized_return_pct"],
+                metrics["sharpe_ratio"],
+                metrics["max_drawdown_pct"],
+                metrics["win_rate"],
+                metrics["total_trades"],
                 json.dumps({
                     "symbol": req.symbol,
                     "trades": trades,
-                    "equity_curve": equity_curve,
+                    "equity_curve": metrics["equity_curve"],
                     "strategy_type": strategy_type,
                     "wins": wins,
                     "losses": losses,
@@ -383,9 +484,8 @@ async def run_backtest(req: BacktestRequest):
             conn.commit()
         except Exception as e:
             logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
-            # 不阻断返回，仅记录警告
-
-        # ── 返回 ────────────────────────────────────────────────────
+        
+        # ── 返回结果 ──────────────────────────────────────────────
         return {
             "code": 0,
             "data": {
@@ -393,21 +493,21 @@ async def run_backtest(req: BacktestRequest):
                 "start_date": req.start_date,
                 "end_date": req.end_date,
                 "initial_capital": initial_capital,
-                "final_capital": round(capital, 2),
-                "total_return": round(total_return, 2),
-                "total_return_pct": round(total_return_pct, 2),
-                "max_drawdown": round(max_drawdown, 2),
-                "max_drawdown_pct": round((max_drawdown / initial_capital) * 100, 2),
+                "final_capital": round(final_capital, 2),
+                "total_return": metrics["total_return"],
+                "total_return_pct": metrics["total_return_pct"],
+                "max_drawdown": metrics["max_drawdown"],
+                "max_drawdown_pct": metrics["max_drawdown_pct"],
                 "wins": wins,
                 "losses": losses,
-                "win_rate": round(win_rate, 2),
-                "trades_count": total_trades,
-                "sharpe_ratio": sharpe_ratio,
-                "annualized_return_pct": round(annualized_return * 100, 2),
+                "win_rate": metrics["win_rate"],
+                "trades_count": metrics["total_trades"],
+                "sharpe_ratio": metrics["sharpe_ratio"],
+                "annualized_return_pct": metrics["annualized_return_pct"],
                 "benchmark_return_pct": benchmark_return_pct,
                 "strategy_type": strategy_type,
                 "trades": trades,
-                "equity_curve": equity_curve,
+                "equity_curve": metrics["equity_curve"],
             }
         }
     finally:

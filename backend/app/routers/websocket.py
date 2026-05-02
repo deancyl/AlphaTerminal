@@ -84,7 +84,7 @@ async def ws_market(ws: WebSocket):
 
     except WebSocketDisconnect:
         pass
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"WebSocket error: {type(e).__name__}: {e}")
     finally:
         await ws_manager.disconnect(conn)

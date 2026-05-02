@@ -13,6 +13,7 @@ data_validator.py — Pydantic 字段契约 & 行情数据强校验
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 from enum import Enum
 from typing import Optional, List

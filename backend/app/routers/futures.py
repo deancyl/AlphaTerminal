@@ -208,6 +208,7 @@ async def futures_main_indexes():
         return success_response({
             "index_futures": cache.get("index_futures", []),
             "update_time":  cache.get("update_time", ""),
+            "source": "mock",
         })
     except Exception as e:
         logger.error(f"[futures_main_indexes] 错误: {e}")

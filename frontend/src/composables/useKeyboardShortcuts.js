@@ -116,8 +116,8 @@ export function useKeyboardShortcuts(options = {}) {
         onWatchlist()
         break
       case 'deep-info':
-        // 预留：F9深度资料功能
-        console.log('[Shortcuts] F9 深度资料功能开发中...')
+        // F9 深度资料
+        onViewChange('f9')
         break
       case 'settings':
         onSettings()

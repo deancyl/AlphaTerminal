@@ -77,18 +77,31 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install bandit safety
+        pip install bandit safety semgrep
 
     - name: Run bandit security check
       run: |
         bandit -r app/ -f json -o bandit-report.json || true
-        bandit -r app/ || true
-      continue-on-error: true
+        bandit -r app/ -ll -ii || true
 
     - name: Check for known security vulnerabilities
       run: |
-        safety check || true
-      continue-on-error: true
+        safety check --full-report || true
+
+    - name: Run Semgrep SAST
+      run: |
+        semgrep --config=auto app/ --json -o semgrep-report.json || true
+        semgrep --config=auto app/ --severity=ERROR || true
+
+    - name: Upload security reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: security-reports
+        path: |
+          backend/bandit-report.json
+          backend/semgrep-report.json
+        retention-days: 30
 
   type-check:
     runs-on: ubuntu-latest

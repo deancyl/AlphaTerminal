@@ -180,6 +180,8 @@
         <MacroDashboard v-else-if="currentView === 'macro'" />
         <!-- 期权分析 -->
         <OptionsAnalysis v-else-if="currentView === 'options'" />
+        <!-- F9 深度资料 -->
+        <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
       </div>
     </main>
 
@@ -262,6 +264,7 @@ const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDas
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
 const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
 const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
+const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -309,6 +312,7 @@ const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动�
 const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
+const f9Symbol = ref('') // F9深度资料当前股票代码
 
 function handleSidebarNavigate(viewId) {
   currentView.value = viewId
@@ -319,7 +323,7 @@ function getViewName(viewId) {
   const names = {
     stock: '股票行情', bond: '债券行情', futures: '期货行情',
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
-    backtest: '回测实验室', admin: '系统管理'
+    backtest: '回测实验室', admin: '系统管理', f9: '深度资料'
   }
   return names[viewId] || viewId
 }
@@ -427,10 +431,9 @@ function handlePaletteChangeView(viewId) {
 function handlePaletteOpenF9() {
   const sym = currentSymbol.value
   if (sym) {
-    ui.klineFullscreen = true
-    futuresFullscreen.value = false
-    ui.fullscreenSymbol = sym
-    ui.fullscreenName = sym
+    f9Symbol.value = sym
+    currentView.value = 'f9'
+    toastInfo('深度资料', `查看 ${sym} 的深度资料`)
   }
 }
 

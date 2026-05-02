@@ -118,9 +118,13 @@ def _transfer_between_accounts(
                 "SELECT id, cash_balance FROM portfolios WHERE id IN (?,?)",
                 (from_pid, to_pid),
             ).fetchall()
+            # 验证两个账户都存在
+            if len(rows) != 2:
+                raise ValueError("账户不存在")
+            
             balance_map = {r[0]: r[1] for r in rows}
-            bal_from = balance_map.get(from_pid, 0.0)
-            bal_to   = balance_map.get(to_pid, 0.0)
+            bal_from = balance_map[from_pid]
+            bal_to   = balance_map[to_pid]
 
             if bal_from < amount:
                 raise ValueError(f"账户 {from_pid} 现金余额 ({bal_from}) 不足")
@@ -216,7 +220,8 @@ async def create_portfolio(body: PortfolioIn):
             raise
         except Exception as e:
             raise HTTPException(400, f"创建账户失败: {e}")
-        conn.close()
+        finally:
+            conn.close()
     return {"id": pid, "name": body.name, "type": body.type, "parent_id": body.parent_id,
             "created_at": now, "total_cost": 0.0, "currency": body.currency,
             "asset_class": body.asset_class, "strategy": body.strategy,

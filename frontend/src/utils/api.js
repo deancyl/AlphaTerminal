@@ -149,6 +149,12 @@ export async function apiFetch(url, options = {}) {
           ...headers,
         },
       }
+      
+      // 添加 Debug API Key（如果配置了）
+      const debugApiKey = import.meta.env.VITE_DEBUG_API_KEY || ''
+      if (debugApiKey && url.startsWith('/debug')) {
+        fetchOptions.headers['X-API-Key'] = debugApiKey
+      }
       if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
         fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body)
         // 自动设置 Content-Type 为 application/json

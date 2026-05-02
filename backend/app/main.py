@@ -58,9 +58,21 @@ _extra_origins = os.environ.get("ALLOWED_ORIGINS", "")
 if _extra_origins:
     _allowed_origins.extend([o.strip() for o in _extra_origins.split(",") if o.strip()])
 
+# ── CORS 配置：开发环境允许所有来源，生产环境使用白名单 ─────────────────
+_is_production = os.environ.get("ENV", "development") == "production"
+
+if _is_production:
+    _cors_origins = _allowed_origins.copy()
+    # 生产环境必须配置 ALLOWED_ORIGINS，否则只允许 localhost
+    if not _cors_origins:
+        _cors_origins = ["http://localhost:60100"]
+else:
+    # 开发环境允许所有来源（便于调试）
+    _cors_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 开发环境允许所有来源
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

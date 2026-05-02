@@ -570,8 +570,116 @@
         </div>
       </div>
 
-      <!-- 日志管理 -->
-      <div v-else-if="activeTab === 'logs'" class="space-y-6">        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-terminal-panel border border-theme rounded-sm text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded-sm text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">          <strong class="text-[var(--color-warning)]">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
+      <!-- Debug诊断 -->
+      <div v-else-if="activeTab === 'debug'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">🐛 Debug诊断控制台</h2>
+            <p class="text-xs text-theme-muted">系统诊断工具、API测试、性能分析</p>
+          </div>
+          <div class="flex gap-2">
+            <button 
+              class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" 
+              @click="refreshDebugHealth"
+              :disabled="debugLoading"
+            >
+              🔄 刷新状态
+            </button>
+          </div>
+        </div>
+
+        <!-- 健康状态卡片 -->
+        <div v-if="debugHealth" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="p-4 rounded-sm border" :class="getHealthCardClass(debugHealth.overall_status)">
+            <div class="text-xs text-theme-muted mb-1">整体状态</div>
+            <div class="text-lg font-bold">{{ debugHealth.overall_status.toUpperCase() }}</div>
+            <div class="text-xs mt-1" v-if="debugHealth.issues.length > 0">
+              {{ debugHealth.issues.length }} 个问题
+            </div>
+          </div>
+          <div class="p-4 rounded-sm border" :class="getHealthCardClass(debugHealth.backend_status)">
+            <div class="text-xs text-theme-muted mb-1">后端服务</div>
+            <div class="text-lg font-bold">{{ debugHealth.backend_status.toUpperCase() }}</div>
+          </div>
+          <div class="p-4 rounded-sm border" :class="getHealthCardClass(debugHealth.database_status)">
+            <div class="text-xs text-theme-muted mb-1">数据库</div>
+            <div class="text-lg font-bold">{{ debugHealth.database_status.toUpperCase() }}</div>
+          </div>
+        </div>
+
+        <!-- 问题列表 -->
+        <div v-if="debugHealth && debugHealth.issues.length > 0" class="p-4 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm">
+          <h3 class="text-sm font-bold text-[var(--color-warning)] mb-2">⚠️ 发现问题</h3>
+          <ul class="space-y-2">
+            <li v-for="(issue, i) in debugHealth.issues" :key="i" class="text-xs text-theme-secondary">
+              <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="getIssueClass(issue.severity)">{{ issue.severity }}</span>
+              <span class="ml-2">{{ issue.message }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- 诊断工具列表 -->
+        <div>
+          <h3 class="text-sm font-bold text-theme-primary mb-3">诊断工具</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div v-for="tool in debugTools" :key="tool.id" class="p-4 bg-terminal-panel border border-theme rounded-sm hover:border-terminal-accent/50 transition-colors">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-lg">{{ tool.icon }}</span>
+                <span class="font-medium text-sm">{{ tool.name }}</span>
+              </div>
+              <p class="text-xs text-theme-muted mb-3">{{ tool.description }}</p>
+              <button 
+                class="w-full px-3 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/25 transition-colors"
+                @click="runDebugTool(tool.id)"
+                :disabled="debugLoading"
+              >
+                <span v-if="currentTool === tool.id && debugLoading">⏳ 执行中...</span>
+                <span v-else>▶️ 执行</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 执行结果 -->
+        <div v-if="debugResult" class="space-y-3">
+          <h3 class="text-sm font-bold text-theme-primary">执行结果</h3>
+          <div class="p-3 bg-terminal-panel border border-theme rounded-sm">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-theme-muted">工具: {{ debugResult.tool_id }}</span>
+              <span class="text-xs" :class="debugResult.status === 'success' ? 'text-green-400' : 'text-red-400'">
+                {{ debugResult.status.toUpperCase() }}
+              </span>
+            </div>
+            <div class="text-xs text-theme-muted mb-2">耗时: {{ debugResult.duration_ms }}ms</div>
+            <div v-if="debugResult.json_output" class="p-2 bg-theme-secondary/20 rounded-sm overflow-auto max-h-64">
+              <pre class="text-xs text-theme-secondary">{{ JSON.stringify(debugResult.json_output, null, 2) }}</pre>
+            </div>
+            <div v-else-if="debugResult.output" class="p-2 bg-theme-secondary/20 rounded-sm overflow-auto max-h-64">
+              <pre class="text-xs text-theme-secondary">{{ debugResult.output }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- 执行历史 -->
+        <div v-if="debugExecutions.length > 0" class="space-y-3">
+          <h3 class="text-sm font-bold text-theme-primary">最近执行记录</h3>
+          <div class="space-y-2">
+            <div v-for="exec in debugExecutions" :key="exec.id" class="p-3 bg-terminal-panel border border-theme rounded-sm flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium">{{ exec.tool_id }}</div>
+                <div class="text-xs text-theme-muted">{{ formatTime(exec.start_time) }}</div>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs" :class="exec.status === 'success' ? 'text-green-400' : 'text-red-400'">{{ exec.status }}</span>
+                <span class="text-xs text-theme-muted">{{ exec.duration_ms }}ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="activeTab === 'logs'" class="space-y-6">
+        <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-terminal-panel border border-theme rounded-sm text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded-sm text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">          <strong class="text-[var(--color-warning)]">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
     </main>
 
@@ -624,6 +732,7 @@ const navItems = [
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'llm', label: '模型配置', desc: 'LLM API Key 和连接配置', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'logs', label: '日志查看', desc: '查看系统运行日志和错误信息', icon: '📝', status: false, statusClass: 'bg-gray-400' },
+  { id: 'debug', label: 'Debug诊断', desc: '系统诊断、API测试、性能分析', icon: '🐛', status: true, statusClass: 'bg-[var(--color-success-light)]' },
 ]
 
 const showConfirm = ref(false)
@@ -653,6 +762,101 @@ function formatTime(isoTime) {
   if (!isoTime) return null
   const date = new Date(isoTime)
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Debug诊断功能
+// ═══════════════════════════════════════════════════════════════
+const debugHealth = ref(null)
+const debugTools = ref([])
+const debugExecutions = ref([])
+const debugResult = ref(null)
+const debugLoading = ref(false)
+const currentTool = ref('')
+
+function getHealthCardClass(status) {
+  switch (status) {
+    case 'healthy': return 'bg-green-500/10 border-green-500/30 text-green-400'
+    case 'degraded': return 'bg-yellow-500/10 border-yellow-500/30 text-yellow-400'
+    case 'critical': return 'bg-red-500/10 border-red-500/30 text-red-400'
+    default: return 'bg-theme-secondary/20 border-theme text-theme-muted'
+  }
+}
+
+function getIssueClass(severity) {
+  switch (severity) {
+    case 'error': return 'bg-red-500/20 text-red-400'
+    case 'warning': return 'bg-yellow-500/20 text-yellow-400'
+    default: return 'bg-theme-secondary/20 text-theme-muted'
+  }
+}
+
+async function refreshDebugHealth() {
+  debugLoading.value = true
+  try {
+    const response = await apiFetch('/api/v1/debug/health/aggregate', {
+      timeoutMs: 15000
+    })
+    debugHealth.value = response
+  } catch (error) {
+    logger.error('Failed to fetch debug health:', error)
+    debugHealth.value = {
+      overall_status: 'error',
+      backend_status: 'error',
+      frontend_status: 'unknown',
+      database_status: 'unknown',
+      issues: [{ component: 'frontend', severity: 'error', message: '无法连接到Debug API' }]
+    }
+  } finally {
+    debugLoading.value = false
+  }
+}
+
+async function loadDebugTools() {
+  try {
+    const response = await apiFetch('/api/v1/debug/tools')
+    debugTools.value = response
+  } catch (error) {
+    logger.error('Failed to load debug tools:', error)
+  }
+}
+
+async function runDebugTool(toolId) {
+  debugLoading.value = true
+  currentTool.value = toolId
+  debugResult.value = null
+  
+  try {
+      const response = await apiFetch('/api/v1/debug/execute', {
+      method: 'POST',
+      body: JSON.stringify({ tool_id: toolId, options: {} }),
+      timeoutMs: 60000  // Debug工具可能需要更长时间
+    })
+    debugResult.value = response
+    
+    // 刷新执行历史
+    await loadDebugExecutions()
+  } catch (error) {
+    logger.error('Failed to run debug tool:', error)
+    debugResult.value = {
+      tool_id: toolId,
+      status: 'error',
+      output: error.message,
+      duration_ms: 0
+    }
+  } finally {
+    debugLoading.value = false
+    currentTool.value = ''
+  }
+}
+
+async function loadDebugExecutions() {
+  try {
+    const response = await apiFetch('/api/v1/debug/executions?limit=5')
+    debugExecutions.value = response
+  } catch (error) {
+    logger.error('Failed to load debug executions:', error)
+  }
 }
 
 function formatBytes(bytes) {
@@ -1038,6 +1242,9 @@ function updateSourceChart(sources) {
 // 监听窗口变化
 onMounted(() => {
   refreshSourceHealth()
+  loadDebugTools()
+  refreshDebugHealth()
+  loadDebugExecutions()
   window.addEventListener('resize', () => sourceChart?.resize())
 })
 onUnmounted(() => {
@@ -1314,5 +1521,19 @@ onMounted(() => {
   refreshLogs()
   logger.log('[AdminDashboard] Mounting, calling refreshWatchdog...')
   refreshWatchdog().catch(e => logger.error('[AdminDashboard] refreshWatchdog failed:', e))
+  
+  // 初始化Debug诊断数据
+  loadDebugTools()
+  refreshDebugHealth()
+  loadDebugExecutions()
+})
+
+// 当切换到Debug标签时，自动刷新数据
+watch(activeTab, (tab) => {
+  if (tab === 'debug') {
+    loadDebugTools()
+    refreshDebugHealth()
+    loadDebugExecutions()
+  }
 })
 </script>
