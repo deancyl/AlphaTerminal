@@ -10,7 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.6.5-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.7-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
@@ -217,6 +217,13 @@ rm rollup-linux-x64-gnu.tgz
 - **持仓自动前缀补全**：投资组合中的 `"600519"` 自动转为 `"sh600519"`
 - **策略体检报告**：收益率、年化、夏普比率、最大回撤、胜率、盈亏比
 - **基准对比**：策略 vs 持股不动，超额收益一目了然
+
+### Debug 诊断控制台（v0.6.7+）
+- **10 个诊断工具**：快速健康检查、API 测试、数据库诊断、安全审计、性能分析、WebSocket 测试、日志分析、前端调试等
+- **Web UI 集成**：管理面板一键执行诊断工具，实时查看执行结果
+- **健康仪表盘**：实时监控后端服务、数据库、前端状态
+- **执行历史**：保留最近 50 次执行记录，支持报告导出
+- **命令行支持**：`./scripts/debug/debug.sh full` 一键完整诊断
 
 ---
 
