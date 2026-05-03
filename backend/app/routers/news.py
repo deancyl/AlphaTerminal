@@ -160,11 +160,10 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
             "Accept-Language": "zh-CN,zh;q=0.9",
             "Accept-Encoding": "gzip, deflate",
         }
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True, stream=True)
+        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
         r.encoding = r.apparent_encoding or "utf-8"
-        content_raw = r.raw.read(100 * 1024)  # 最多读取 100KB
+        text_content = r.text[:100 * 1024]  # 最多读取 100KB
         r.close()
-        text_content = content_raw.decode(r.encoding or "utf-8", errors="replace")
 
         soup = BeautifulSoup(text_content, "html.parser")
 
