@@ -1,12 +1,12 @@
 <template>
   <nav
     v-if="isMobile"
-    class="fixed bottom-0 left-0 right-0 z-[9997] bg-terminal-panel/95 backdrop-blur-md border-t border-theme-secondary/50 safe-area-pb"
+    class="fixed bottom-0 left-0 right-0 z-[9997] bg-terminal-panel border-t border-theme-secondary/50 safe-area-pb"
   >
     <!-- 更多菜单展开面板 -->
     <div
       v-if="showMore"
-      class="absolute bottom-full left-0 right-0 bg-terminal-panel/95 backdrop-blur-md border-t border-theme-secondary/50 p-4 grid grid-cols-4 gap-3 transition-all duration-200"
+      class="absolute bottom-full left-0 right-0 bg-terminal-panel border-t border-theme-secondary/50 p-4 grid grid-cols-4 gap-3 transition-all duration-200"
     >
       <button
         v-for="tab in moreTabs"
