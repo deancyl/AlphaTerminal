@@ -5,6 +5,28 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8] - 2026-05-03
+
+### Fixes
+
+- **数据库诊断工具** — 安装sqlite3依赖，修复数据库完整性检查失败的问题
+- **Backtest API 500错误** — 修复`backtest_strategies`表不存在时的崩溃，现在返回空列表
+- **WebSocket连接失败** — 添加`ws.accept()`修复HTTP 500错误，WebSocket测试现在通过
+- **API测试端点** — 更新`api_debug.sh`使用正确的API路径（`/api/v1/news/flash`和`/api/v1/admin/sources/status`）
+- **内存优化** — 延迟加载akshare/pandas/numpy，后端内存从334MB降至225MB（节省33%）
+- **缓存限制** — 为macro、fund_fetcher、stocks添加缓存过期清理和大小限制
+- **Playwright缓存清理** — 清理631MB未使用的Chromium浏览器缓存
+- **内存监控** — 添加定时内存监控任务，超过512MB自动执行gc
+
+### Metrics
+
+- **Files changed**: 15
+- **Lines changed**: +428 / -128
+- **Tests**: 所有110个后端测试通过
+- **Debug工具**: 7/7 全部通过
+
+---
+
 ## [0.6.7] - 2026-05-03
 
 ### Features
