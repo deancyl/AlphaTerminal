@@ -1,57 +1,43 @@
 <template>
   <aside
-    class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden h-full"
-    :class="isMobile ? '' : (isCollapsed ? 'items-center' : '')"
-    :style="isMobile ? { width: '220px' } : { width: isCollapsed ? '64px' : '220px' }"
+    v-if="isOpen"
+    class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme-secondary overflow-hidden h-full w-[220px]"
   >
-    <!-- 顶部：Logo + 切换按钮 -->
-    <div
-      class="flex items-center h-12 border-b border-theme-secondary shrink-0 w-full"
-      :class="isMobile || !isCollapsed ? 'justify-between px-4' : 'justify-center px-2'"
+    <!-- 顶部：Logo + 关闭按钮 -->
+    <div class="flex items-center justify-between h-12 border-b border-theme-secondary shrink-0 px-4"
     >
-      <span v-if="isMobile || !isCollapsed" class="text-theme-primary font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
+      <span class="text-theme-primary font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
       <button
-        class="flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
-        :class="isMobile ? 'w-12 h-12' : 'w-11 h-11'"
-        @click="$emit('toggle')"
-        :title="isMobile ? '关闭' : (isCollapsed ? '展开' : '折叠')"
+        class="w-10 h-10 flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
+        @click="$emit('close')"
+        title="关闭侧边栏"
       >
-        <span class="text-sm">{{ isCollapsed && !isMobile ? '☰' : '◀' }}</span>
+        <span class="text-sm">◀</span>
       </button>
     </div>
 
     <!-- 导航列表 -->
     <nav class="flex-1 overflow-y-auto py-2 w-full">
-      <!-- 分类标题 -->
-      <div v-if="isMobile || !isCollapsed" class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider">📂 市场行情</div>
+      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider">📂 市场行情</div>
 
-      <!-- 主导航项 -->
       <button
         v-for="item in mainNavItems"
         :key="item.id"
-        class="w-full flex items-center transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
+        class="w-full flex items-center gap-2.5 px-3 py-2.5 transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
         :class="[
-          isCollapsed && !isMobile ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2.5',
           activeId === item.id
             ? 'bg-theme-hover text-theme-primary border-r-2 border-theme-secondary'
             : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
         ]"
         @click="handleClick(item)"
       >
-        <span :class="isCollapsed && !isMobile ? 'text-lg' : 'text-base'">{{ item.icon }}</span>
-        <span v-if="isMobile || !isCollapsed" class="whitespace-nowrap text-xs">{{ item.label }}</span>
-        <!-- 折叠态 tooltip -->
-        <span
-          v-if="!isMobile && isCollapsed"
-          class="absolute left-full ml-2 px-2 py-1 rounded-sm bg-terminal-panel border border-theme-secondary text-xs text-theme-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-sm"
-        >
-          {{ item.label }}
-        </span>
+        <span class="text-base">{{ item.icon }}</span>
+        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
     </nav>
 
-    <!-- 主题切换区域（仅展开时显示） -->
-    <div v-if="isMobile || !isCollapsed" class="px-3 py-3 border-t border-theme shrink-0 w-full">
+    <!-- 主题切换区域 -->
+    <div class="px-3 py-3 border-t border-theme shrink-0 w-full">
       <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2">🎨 主题切换</div>
       <div class="grid grid-cols-4 gap-1">
         <button
@@ -71,31 +57,20 @@
     </div>
 
     <!-- 系统管理 -->
-    <div
-      class="border-t border-theme shrink-0 w-full"
-      :class="isCollapsed && !isMobile ? 'py-1 flex flex-col items-center' : 'px-3 py-2'"
-    >
+    <div class="border-t border-theme shrink-0 px-3 py-2 w-full">
       <button
         v-for="item in adminNavItems"
         :key="item.id"
-        class="w-full flex items-center transition-colors border-r-2 rounded-sm relative group"
+        class="w-full flex items-center gap-2.5 px-3 py-2 transition-colors border-r-2 rounded-sm relative group"
         :class="[
-          isCollapsed && !isMobile ? 'justify-center px-0 py-3' : 'gap-2.5 px-3 py-2',
           activeId === item.id
             ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-r-2 border-[var(--color-danger)]'
             : 'text-theme-secondary hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] border-r-transparent'
         ]"
         @click="handleClick(item)"
       >
-        <span :class="isCollapsed && !isMobile ? 'text-lg' : 'text-base'">{{ item.icon }}</span>
-        <span v-if="isMobile || !isCollapsed" class="whitespace-nowrap text-xs">{{ item.label }}</span>
-        <!-- 折叠态 tooltip -->
-        <span
-          v-if="!isMobile && isCollapsed"
-          class="absolute left-full ml-2 px-2 py-1 rounded-sm bg-terminal-panel border border-theme-secondary text-xs text-theme-primary whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-sm"
-        >
-          {{ item.label }}
-        </span>
+        <span class="text-base">{{ item.icon }}</span>
+        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
     </div>
   </aside>
@@ -105,11 +80,10 @@
 import { useTheme, THEMES, THEME_NAMES, THEME_ICONS } from '../composables/useTheme.js'
 
 const props = defineProps({
-  isMobile:   { type: Boolean, default: false },
-  isCollapsed:{ type: Boolean, default: true },
-  activeId:   { type: String,  default: 'stock' },
+  isOpen:   { type: Boolean, default: false },
+  activeId: { type: String,  default: 'stock' },
 })
-const emit = defineEmits(['navigate', 'toggle'])
+const emit = defineEmits(['navigate', 'close'])
 
 const { theme: currentTheme, setTheme } = useTheme()
 
@@ -138,5 +112,6 @@ const themeList = [
 
 function handleClick(item) {
   emit('navigate', item.id)
+  emit('close')
 }
 </script>

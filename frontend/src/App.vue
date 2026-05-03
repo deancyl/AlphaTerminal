@@ -43,28 +43,20 @@
   <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
   <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
 
-    <!-- ━━━ 移动端 Sidebar 遮罩层 ━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <div v-if="isMobile && isSidebarOpen" class="fixed inset-0 bg-black/50 z-[9999]" @click="isSidebarOpen = false" />
-
-    <!-- ━━━ 左侧 Sidebar（Phase 5 新增）━━━━━━━━━━━━━━━━━━━━━ -->
-    <!-- 桌面端：直接渲染 | 移动端：固定定位 overlay -->
-    <div v-if="!isMobile" class="flex-shrink-0">
-      <Sidebar
-        :is-open="isSidebarOpen"
-        :active-id="currentView"
-        @navigate="handleSidebarNavigate"
-        @close="isSidebarOpen = false"
-      />
-    </div>
-    <!-- 移动端：固定定位 sidebar -->
-    <div v-else class="fixed left-0 top-0 h-full z-[10000] transition-transform bg-theme-panel" :style="{ transform: isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)', width: '224px', minWidth: '224px' }">
-      <Sidebar
-        :is-open="isSidebarOpen"
-        :active-id="currentView"
-        @navigate="(id) => { handleSidebarNavigate(id); isSidebarOpen = false }"
-        @close="isSidebarOpen = false"
-      />
-    </div>
+    <!-- ━━━ 桌面端 Sidebar（默认隐藏，点击☰展开）━━━━━━━━━━━━━━ -->
+    <template v-if="!isMobile">
+      <!-- 遮罩层 -->
+      <div v-if="isSidebarOpen" class="fixed inset-0 bg-black/30 z-[9998]" @click="isSidebarOpen = false" />
+      <!-- 侧边栏 -->
+      <div v-show="isSidebarOpen" class="flex-shrink-0 z-[9999]">
+        <Sidebar
+          :is-open="isSidebarOpen"
+          :active-id="currentView"
+          @navigate="handleSidebarNavigate"
+          @close="isSidebarOpen = false"
+        />
+      </div>
+    </template>
 
     <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
     <main
