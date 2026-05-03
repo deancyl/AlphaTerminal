@@ -265,13 +265,16 @@
               {{ modalItem.url }}
             </a>
             <span v-else class="text-[11px] text-theme-tertiary italic">无原文链接</span>
-            <button
+            <a
               v-if="modalItem.url"
+              :href="modalItem.url"
+              target="_blank"
+              rel="noopener noreferrer"
               class="ml-4 px-3 py-1.5 text-[11px] rounded-sm bg-theme-accent/10 hover:bg-theme-accent/20 
-                     text-theme-accent border border-theme-accent/20 transition shrink-0"
-              @click="window.open(modalItem.url, '_blank')">
+                     text-theme-accent border border-theme-accent/20 transition shrink-0 inline-block no-underline"
+            >
               浏览器打开
-            </button>
+            </a>
           </div>
         </div>
       </div>
