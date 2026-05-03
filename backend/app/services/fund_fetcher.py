@@ -20,11 +20,29 @@ logger = logging.getLogger(__name__)
 # ══════════════════════════════════════════════════════════════════════
 
 class AsyncCache:
-    """异步安全的内存缓存"""
+    """异步安全的内存缓存（带大小限制和过期清理）"""
     
-    def __init__(self):
+    def __init__(self, max_size: int = 100):
         self._cache: Dict[str, Dict] = {}
         self._lock = asyncio.Lock()
+        self._max_size = max_size
+        self._access_count = 0
+    
+    def _cleanup_expired(self):
+        """清理过期缓存（同步方法，需在锁内调用）"""
+        now = time.time()
+        expired = [k for k, v in self._cache.items() if v['expire_at'] <= now]
+        for k in expired:
+            del self._cache[k]
+        if expired:
+            logger.info(f"[Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
+    
+    def _evict_oldest(self):
+        """淘汰最旧的缓存（同步方法，需在锁内调用）"""
+        if len(self._cache) >= self._max_size:
+            oldest_key = min(self._cache, key=lambda k: self._cache[k]['expire_at'])
+            del self._cache[oldest_key]
+            logger.info(f"[Cache EVICT] 移除缓存: {oldest_key[:50]}...")
     
     async def get(self, key: str) -> Optional[Any]:
         async with self._lock:
@@ -38,6 +56,8 @@ class AsyncCache:
     
     async def set(self, key: str, data: Any, ttl: int) -> None:
         async with self._lock:
+            self._cleanup_expired()
+            self._evict_oldest()
             self._cache[key] = {
                 'data': data,
                 'expire_at': time.time() + ttl,
@@ -46,6 +66,13 @@ class AsyncCache:
     async def delete(self, key: str) -> None:
         async with self._lock:
             self._cache.pop(key, None)
+    
+    async def clear(self) -> None:
+        """清空所有缓存"""
+        async with self._lock:
+            count = len(self._cache)
+            self._cache.clear()
+            logger.info(f"[Cache CLEAR] 清空 {count} 条缓存")
     
     def cached(self, ttl: int, key_prefix: str = ''):
         def decorator(func):

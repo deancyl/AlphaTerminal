@@ -12,6 +12,10 @@ scheduler = BackgroundScheduler()
 # 历史K线需要回填的指数列表
 HISTORY_SYMBOLS = ["000001", "000300", "399001", "399006", "000688"]
 
+# 内存监控配置
+MEMORY_CHECK_INTERVAL = 300  # 每5分钟检查一次
+MEMORY_THRESHOLD_MB = 512    # 内存阈值（MB），超过则强制gc
+
 
 def flush_write_buffer():
     """将 write_buffer 批量刷入 market_data_realtime"""
@@ -311,11 +315,41 @@ def start_scheduler():
         name="WriteBufferFlush",
         replace_existing=True,
     )
+    # 内存监控任务（每5分钟检查一次）
+    scheduler.add_job(
+        _memory_monitor,
+        "interval",
+        seconds=MEMORY_CHECK_INTERVAL,
+        id="memory_monitor",
+        name="MemoryMonitor",
+        replace_existing=True,
+    )
+    
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")
 
     # 启动时立即预热新闻缓存（非阻塞后台运行，20分钟后再由 NewsRefresh 任务接管）
     prefetch_news()
+
+
+def _memory_monitor():
+    """内存监控：定期检查和清理"""
+    try:
+        import gc
+        import psutil
+        process = psutil.Process()
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        
+        if mem_mb > MEMORY_THRESHOLD_MB:
+            logger.warning(f"[MemoryMonitor] 内存使用 {mem_mb:.1f}MB 超过阈值 {MEMORY_THRESHOLD_MB}MB，执行强制gc")
+            gc.collect()
+            # 再次检查
+            new_mem_mb = process.memory_info().rss / 1024 / 1024
+            logger.info(f"[MemoryMonitor] 强制gc后内存: {new_mem_mb:.1f}MB (释放 {mem_mb - new_mem_mb:.1f}MB)")
+        else:
+            logger.debug(f"[MemoryMonitor] 内存使用正常: {mem_mb:.1f}MB")
+    except Exception as e:
+        logger.warning(f"[MemoryMonitor] 监控异常: {e}")
 
 
 def stop_scheduler():

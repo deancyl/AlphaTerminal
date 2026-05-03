@@ -20,20 +20,45 @@ router = APIRouter()
 # 线程池执行器用于运行阻塞代码
 _executor = ThreadPoolExecutor(max_workers=2)
 
-# 缓存配置
+# 缓存配置（带大小限制和过期清理）
 _CACHE = {}
 _CACHE_TTL = 300  # 5分钟
+_MAX_CACHE_SIZE = 30  # 最大缓存条目数
+
+
+def _cleanup_expired():
+    """清理过期缓存"""
+    now = time.time()
+    expired = [k for k, v in _CACHE.items() if (now - v['time']) >= _CACHE_TTL]
+    for k in expired:
+        del _CACHE[k]
+    if expired:
+        logger.info(f"[Stocks Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
+
+
+def _evict_oldest():
+    """淘汰最旧的缓存"""
+    if len(_CACHE) >= _MAX_CACHE_SIZE:
+        oldest_key = min(_CACHE, key=lambda k: _CACHE[k]['time'])
+        del _CACHE[oldest_key]
+        logger.info(f"[Stocks Cache EVICT] 移除缓存: {oldest_key}")
 
 
 def _cache_or_fetch(key, fetch_fn, ttl=_CACHE_TTL):
-    """缓存装饰器"""
+    """缓存装饰器（带过期清理和大小限制）"""
     now = time.time()
+    
+    # 定期清理（每10次访问清理一次）
+    if len(_CACHE) > 0 and now % 10 < 1:
+        _cleanup_expired()
+    
     if key in _CACHE and (now - _CACHE[key]['time']) < ttl:
         return _CACHE[key]['data']
     try:
         data = fetch_fn()
         # 不缓存空结果，只缓存有效数据
         if data:
+            _evict_oldest()
             _CACHE[key] = {'data': data, 'time': now}
         return data
     except Exception as e:

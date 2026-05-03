@@ -52,9 +52,9 @@ endpoints=(
     "GET:/health:200:Health"
     "GET:/api/v1/market/overview:200:Market"
     "GET:/api/v1/macro/overview:200:Macro"
-    "GET:/api/v1/news/latest:200:News"
+    "GET:/api/v1/news/flash:200:News"
     "GET:/api/v1/backtest/strategies:200:Backtest"
-    "GET:/api/v1/sentiment/overview:200:Sentiment"
+    "GET:/api/v1/admin/sources/status:200:Admin"
     "GET:/api/v1/nonexistent:404:404"
 )
 

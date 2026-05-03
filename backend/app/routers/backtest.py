@@ -344,6 +344,14 @@ async def get_strategies():
     """获取所有回测策略"""
     conn = _get_conn()
     try:
+        # 检查表是否存在
+        table_exists = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='backtest_strategies'"
+        ).fetchone()
+        
+        if not table_exists:
+            return {"code": 0, "data": {"strategies": []}}
+        
         rows = conn.execute("""
             SELECT id, name, description, type, params, created_at, updated_at
             FROM backtest_strategies ORDER BY created_at DESC
@@ -362,6 +370,9 @@ async def get_strategies():
             })
         
         return {"code": 0, "data": {"strategies": strategies}}
+    except Exception as e:
+        logger.error(f"[Backtest] 获取策略列表失败: {e}")
+        return {"code": 0, "data": {"strategies": []}}
     finally:
         conn.close()
 

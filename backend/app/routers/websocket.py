@@ -28,6 +28,9 @@ async def ws_market(ws: WebSocket):
        "chg_pct": 1.23, "volume": 123456, "amount": 98765432,
        "timestamp": 1712467200}
     """
+    # 接受WebSocket连接
+    await ws.accept()
+    
     # 注册连接
     conn = await ws_manager.connect(ws)
 

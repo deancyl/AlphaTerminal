@@ -11,9 +11,18 @@ from datetime import datetime
 
 # ── 代理由 proxy_config.py 统一管理，从环境变量读取 ──────────────
 
-import akshare as ak
-
 logger = logging.getLogger(__name__)
+
+# ── 延迟导入akshare（减少启动内存）────────────────────────────────────
+_akshare_module = None
+
+def _get_ak():
+    """延迟加载akshare"""
+    global _akshare_module
+    if _akshare_module is None:
+        import akshare as ak
+        _akshare_module = ak
+    return _akshare_module
 
 # ── 全局新闻缓存（进程内存，uvicorn 常驻）──────────────────────────────
 # 结构: list[dict]，由后台刷新线程维护，API 只读不写
@@ -65,7 +74,7 @@ def _url_md5(url: str) -> str:
 def _fetch_news_for_symbol(symbol: str) -> list[dict]:
     """针对单个标的拉取新闻"""
     try:
-        df = ak.stock_news_em(symbol=symbol)
+        df = _get_ak().stock_news_em(symbol=symbol)
         if df is None or df.empty:
             return []
         rows = []
@@ -95,7 +104,7 @@ def _fetch_7x24_news() -> list[dict]:
     这是兜底数据源，不受个股新闻数量限制
     """
     try:
-        df = ak.news_economic_baidu()
+        df = _get_ak().news_economic_baidu()
         if df is None or df.empty:
             return []
         rows = []
@@ -146,10 +155,10 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            # ① 宏观快讯：ak.stock_news_em（东方财富，真实发布时间）
+            # ① 宏观快讯：_get_ak().stock_news_em（东方财富，真实发布时间）
             for sym in _MACRO_SYMBOLS:
                 try:
-                    df = ak.stock_news_em(symbol=sym)
+                    df = _get_ak().stock_news_em(symbol=sym)
                     if df is not None and not df.empty:
                         for _, row in df.iterrows():
                             try:

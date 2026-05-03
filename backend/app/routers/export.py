@@ -10,7 +10,6 @@ from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-import pandas as pd
 
 from ..db.database import get_conn
 
@@ -40,6 +39,7 @@ def _generate_excel(data: List[Dict[str, Any]], filename: str) -> StreamingRespo
     if not data:
         raise HTTPException(status_code=404, detail="No data to export")
     
+    import pandas as pd
     df = pd.DataFrame(data)
     output = io.BytesIO()
     

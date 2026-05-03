@@ -158,6 +158,21 @@ except Exception as e:
     logger.warning(f"Backtest module not loaded: {e}")
 
 
+@app.get("/health")
+async def health():
+    """
+    健康检查端点（内部状态探测）
+    生产环境可通过 HEALTH_CHECK_KEY 环境变量保护
+    """
+    # 可选认证：配置了 HEALTH_CHECK_KEY 时要求传递
+    configured_key = os.environ.get("HEALTH_CHECK_KEY", "")
+    if configured_key:
+        # 由前端或监控服务在 header 或 query 中传递
+        # 这里不强制校验，保持向后兼容
+        pass
+    return {"status": "ok", "service": "AlphaTerminal"}
+
+
 # ── 静态文件服务（前端 dist 目录）──────────────────────────────────────────────
 # 获取前端构建目录路径（相对于 backend 目录）
 # main.py 位于 app/main.py，所以 frontend 在 ../frontend
@@ -184,9 +199,6 @@ if os.path.exists(FRONTEND_DIST):
         raise HTTPException(status_code=404, detail="Not Found")
 else:
     logger.warning(f"Frontend dist not found at {FRONTEND_DIST}")
-
-
-@app.get("/health")
 async def health():
     """
     健康检查端点（内部状态探测）

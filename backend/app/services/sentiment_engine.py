@@ -7,8 +7,6 @@ import os
 import threading
 from datetime import datetime
 
-import numpy as np
-
 # ── 代理由 proxy_config.py 统一管理，从环境变量读取 ──────────────
 
 logger = logging.getLogger(__name__)
@@ -215,13 +213,13 @@ class SpotCache:
             return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
                     "unchanged": 0, "limit_up": 0, "limit_down": 0,
                     "up_ratio": 0.0, "timestamp": ""}
-        pcts   = np.array([s["chg_pct"] for s in stocks], dtype=float)
-        total  = len(stocks)
-        advance   = int((pcts > 0).sum())
-        decline   = int((pcts < 0).sum())
-        unchanged = int((pcts == 0).sum())
-        limit_up   = int((pcts >= 9.9).sum())
-        limit_down = int((pcts <= -9.9).sum())
+        pcts = [float(s["chg_pct"]) for s in stocks]
+        total = len(stocks)
+        advance = sum(1 for p in pcts if p > 0)
+        decline = sum(1 for p in pcts if p < 0)
+        unchanged = sum(1 for p in pcts if p == 0)
+        limit_up = sum(1 for p in pcts if p >= 9.9)
+        limit_down = sum(1 for p in pcts if p <= -9.9)
         buckets = []
         for label, lo, hi in cls.BUCKET_THRESHOLDS:
             if label == "平盘(0%)":

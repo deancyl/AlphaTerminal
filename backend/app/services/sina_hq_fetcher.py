@@ -7,8 +7,6 @@ import time as time_module
 from datetime import datetime
 
 import httpx
-import numpy as np
-
 logger = logging.getLogger(__name__)
 
 
@@ -239,20 +237,20 @@ def build_histogram_from_rows(rows: list[dict]) -> dict:
                 "unchanged": 0, "limit_up": 0, "limit_down": 0,
                 "up_ratio": 0.0, "timestamp": ""}
 
-    pcts  = np.array([r["chg_pct"] for r in rows], dtype=float)
+    pcts = [float(r["chg_pct"]) for r in rows]
     total = len(rows)
-    advance   = int((pcts > 0).sum())
-    decline   = int((pcts < 0).sum())
-    unchanged = int((pcts == 0).sum())
-    limit_up   = int((pcts >= 9.9).sum())
-    limit_down = int((pcts <= -9.9).sum())
+    advance = sum(1 for p in pcts if p > 0)
+    decline = sum(1 for p in pcts if p < 0)
+    unchanged = sum(1 for p in pcts if p == 0)
+    limit_up = sum(1 for p in pcts if p >= 9.9)
+    limit_down = sum(1 for p in pcts if p <= -9.9)
 
     buckets = []
     for label, lo, hi in BUCKETS:
         if label == "平盘(0%)":
-            count = int((pcts == 0.0).sum())
+            count = sum(1 for p in pcts if p == 0.0)
         else:
-            count = int(((pcts > lo) & (pcts <= hi)).sum())
+            count = sum(1 for p in pcts if lo < p <= hi)
         color = "#14b143" if lo < 0 else "#ef232a" if lo >= 0 else "#6b7280"
         buckets.append({
             "label": label,

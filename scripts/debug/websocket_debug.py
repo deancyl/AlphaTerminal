@@ -46,7 +46,7 @@ class WebSocketDebugger:
         try:
             # 测试连接
             conn_start = time.time()
-            async with websockets.connect(self.url, timeout=5) as ws:
+            async with websockets.connect(self.url, ping_timeout=5, close_timeout=5) as ws:
                 conn_latency = (time.time() - conn_start) * 1000
                 results["connection"]["success"] = True
                 results["connection"]["latency_ms"] = round(conn_latency, 2)
