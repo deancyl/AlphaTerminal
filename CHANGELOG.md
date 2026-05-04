@@ -9,10 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixes
 
-- **数据库诊断工具** — 安装sqlite3依赖，修复数据库完整性检查失败的问题
 - **Backtest API 500错误** — 修复`backtest_strategies`表不存在时的崩溃，现在返回空列表
-- **WebSocket连接失败** — 添加`ws.accept()`修复HTTP 500错误，WebSocket测试现在通过
-- **API测试端点** — 更新`api_debug.sh`使用正确的API路径（`/api/v1/news/flash`和`/api/v1/admin/sources/status`）
+- **WebSocket连接失败** — 添加`ws.accept()`修复HTTP 500错误
 - **内存优化** — 延迟加载akshare/pandas/numpy，后端内存从334MB降至225MB（节省33%）
 - **缓存限制** — 为macro、fund_fetcher、stocks添加缓存过期清理和大小限制
 - **Playwright缓存清理** — 清理631MB未使用的Chromium浏览器缓存
@@ -23,46 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Files changed**: 15
 - **Lines changed**: +428 / -128
 - **Tests**: 所有110个后端测试通过
-- **Debug工具**: 7/7 全部通过
 
 ---
 
 ## [0.6.7] - 2026-05-03
 
-### Features
-
-- **Debug诊断面板** — 新增系统诊断控制台，集成10个诊断工具：
-  - 快速健康检查、API测试、数据库诊断、安全审计
-  - 性能分析、WebSocket测试、日志分析、前端调试
-  - 支持命令行和Web UI两种方式执行
-- **Debug API路由** — 后端新增9个Debug端点：
-  - `GET /api/v1/debug/tools` — 获取可用工具列表
-  - `POST /api/v1/debug/execute` — 执行诊断工具
-  - `GET /api/v1/debug/executions` — 获取执行历史
-  - `GET /api/v1/debug/health/aggregate` — 聚合健康状态
-  - `GET /api/v1/debug/reports` — 获取报告列表
-  - `DELETE /api/v1/debug/reports/{id}` — 删除报告
-  - `WS /api/v1/debug/ws` — WebSocket实时通信
-  - `GET /api/v1/debug/system/info` — 系统信息
-- **管理面板集成** — 前端AdminDashboard新增"Debug诊断"标签页：
-  - 健康状态仪表盘（整体/后端/数据库）
-  - 诊断工具网格（一键执行）
-  - 执行结果展示（JSON格式化输出）
-  - 执行历史记录
-
 ### Fixes
 
-- **api_debug.sh参数解析** — 修复`--json`被误识别为base URL的问题
-- **database_debug.sh路径解析** — 修复SQLite数据库文件查找逻辑，支持多路径搜索
-- **quick_check.sh JSON输出** — 修复associative array声明位置导致的JSON生成错误
 - **AdminDashboard模板结构** — 修复Vue模板中缺失的结束标签和重复section问题
-- **Debug面板初始化** — 添加`onMounted`和`watch`自动加载Debug数据，避免页面卡住
-
-### Documentation
-
-- 更新`AGENTS.md` — 添加完整的Debug工作流文档
-- 新增`scripts/debug/README.md` — Debug工具使用说明
-- 新增`scripts/debug/WORKFLOW.md` — Debug架构设计文档
 
 ### Metrics
 
