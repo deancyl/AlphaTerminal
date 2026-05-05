@@ -5,6 +5,33 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.9] - 2026-05-05
+
+### Features
+
+- **Copilot 两级模型选择器** — Provider → Model 二级选择，支持 DeepSeek/硅基流动/通义千问/OpenAI/OpenCode/MiniMax
+- **Copilot 对话历史持久化** — 对话记录存入 SQLite `copilot_conversations` 表，支持 session 续接
+- **数据源探测增强** — 增强数据源健康检查和管理能力
+
+### Fixes
+
+- **Copilot MiniMax 配置统一** — 修复 opencode 检测逻辑，配置来源统一为 DB > .env > 默认值
+- **后台管理面板修复** — 修复多处 AdminDashboard 模板结构问题
+- **快讯浏览器打开按钮** — 修复 NewsFeed 浏览器打开按钮报错问题
+- **Debug 工具卸载** — 卸载所有 Debug 诊断工具及相关组件，简化代码库
+
+### Refactor
+
+- **启动脚本优化** — start-services.sh 重构，增强错误处理和日志记录
+
+### Metrics
+
+- **Files changed**: 25
+- **Lines changed**: +402 / -4363
+- **主要变更**: 移除 debug 目录（-700+ 行），Copilot 功能增强，AdminDashboard 精简
+
+---
+
 ## [0.6.8] - 2026-05-03
 
 ### Fixes
