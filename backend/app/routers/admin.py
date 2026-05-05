@@ -242,38 +242,44 @@ async def get_sources_status():
 async def control_circuit_breaker(control: CircuitBreakerControl):
     """手动控制熔断器"""
     from app.services import quote_source
-    
+
     if control.action == "open":
         quote_source.open_circuit(control.source)
-        # 持久化到 SQLite
-        conn = _get_conn()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
-                (control.source, "open", datetime.now().isoformat())
-            )
-            conn.commit()
-        finally:
-            conn.close()
         return {"message": f"已熔断 {control.source}", "state": "open"}
-    
+
     elif control.action == "close":
         quote_source.close_circuit(control.source)
-        conn = _get_conn()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO circuit_breaker (source, state, updated_at) VALUES (?, ?, ?)",
-                (control.source, "closed", datetime.now().isoformat())
-            )
-            conn.commit()
-        finally:
-            conn.close()
         return {"message": f"已恢复 {control.source}", "state": "closed"}
-    
+
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {control.action}")
+
+@router.post("/sources/probe")
+async def probe_all_sources():
+    """主动探测所有数据源并返回实时延迟（包含熔断状态、主源标记和历史）"""
+    import asyncio
+    from app.services import quote_source
+
+    sources = quote_source.DATA_SOURCES.keys()
+    results = {}
+    current_source = quote_source._current_source
+
+    for name in sources:
+        try:
+            result = await quote_source.test_source_async(name)
+            current_state = quote_source._source_status.get(name, {})
+            history = current_state.get("history", [])
+            results[name] = {
+                **result,
+                "state": current_state.get("state", "unknown"),
+                "fail_count": current_state.get("fail_count", 0),
+                "is_primary": name == current_source,
+                "history": history[-5:] if history else []
+            }
+        except Exception as e:
+            results[name] = {"status": "error", "latency": None, "state": "unknown", "fail_count": 0, "is_primary": name == current_source, "history": [], "error": str(e)}
+
+    return {"sources": results, "current_source": current_source, "timestamp": int(time.time())}
 
 @router.get("/sources/balance")
 async def get_balance_config():

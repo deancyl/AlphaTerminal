@@ -15,6 +15,15 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# 延迟导入避免循环依赖
+_proxy_config = None
+def _get_proxy_config():
+    global _proxy_config
+    if _proxy_config is None:
+        from app.services import proxy_config
+        _proxy_config = proxy_config
+    return _proxy_config
+
 # ========== 数据源配置 ==========
 DATA_SOURCES = {
     "tencent": {
@@ -75,14 +84,15 @@ DATA_SOURCES = {
         "proxy": False,
         "timeout": 30,
         "weight": 20,
-        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY", ""),
+        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY") or "demo",
         "has_pepb": True,
         "has_realtime": True,
     },
 }
 
 _current_source = "tencent"
-_source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0} for k in DATA_SOURCES}
+MAX_HISTORY = 5
+_source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0, "history": [], "state": "closed"} for k in DATA_SOURCES}
 
 
 def _get_proxy(source_name: str) -> dict | None:
@@ -243,9 +253,14 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
 
 
 def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
-    """Alpha Vantage - 美股数据（同步，带重试）"""
+    """Alpha Vantage - 美股数据（同步，带重试和代理支持）"""
     api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "demo")
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
+
+    # 获取代理配置
+    proxy_cfg = _get_proxy_config()
+    proxy_url = DATA_SOURCES.get("alpha_vantage", {}).get("proxy_url") or proxy_cfg.get_proxy_url()
+    proxies = proxy_cfg.build_httpx_proxies(proxy_url) if proxy_url else None
 
     # 重试1次，超时缩短到5秒（避免阻塞ping）
     r = None
@@ -253,7 +268,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
     for attempt in range(2):
         try:
             start = time.time()
-            with httpx.Client(timeout=5.0, headers={"User-Agent": "Mozilla/5.0"}) as client:
+            client_kwargs = {"timeout": 5.0, "headers": {"User-Agent": "Mozilla/5.0"}}
+            if proxies:
+                client_kwargs["proxies"] = proxies
+            with httpx.Client(**client_kwargs) as client:
                 r = client.get(url)
             latency = (time.time() - start) * 1000
             break
@@ -369,8 +387,20 @@ async def get_quote_with_fallback_async(symbol: str) -> dict:
     return {"source": "none", "error": "所有数据源均失败", "pe_static": None, "pe_ttm": None, "pb": None}
 
 
-async def test_source_async(source_name: str, symbol: str = "sh000001") -> dict:
+async def test_source_async(source_name: str, symbol: str = None) -> dict:
     """异步探测单个数据源（用于 /source/ping）"""
+    # 根据数据源类型选择合适的探测符号
+    default_symbols = {
+        "tencent": "sh000001",
+        "sina": "sh000001",
+        "eastmoney": "sh000001",
+        "sina_kline": "sh000001",
+        "tencent_hk": "hk00700",
+        "alpha_vantage": "IBM",  # alpha_vantage 只支持美股
+    }
+    if symbol is None:
+        symbol = default_symbols.get(source_name, "sh000001")
+
     parsers = {
         "tencent": _parse_tencent_quote,
         "sina": _parse_sina_quote,
@@ -388,12 +418,35 @@ async def test_source_async(source_name: str, symbol: str = "sh000001") -> dict:
             timeout=10.0
         )
         if result:
+            _update_history(source_name, "ok", result.get("latency_ms"))
             return {"status": "ok", "latency": result.get("latency_ms")}
+        _update_history(source_name, "fail", None)
         return {"status": "fail", "latency": None}
     except asyncio.TimeoutError:
+        _update_history(source_name, "timeout", None)
         return {"status": "timeout", "latency": None}
     except Exception as e:
+        _update_history(source_name, "error", None)
         return {"status": "error", "latency": None}
+
+
+def _update_history(source_name: str, status: str, latency: float):
+    """更新探测历史记录"""
+    import time
+    if source_name not in _source_status:
+        return
+    entry = {
+        "status": status,
+        "latency": latency,
+        "timestamp": int(time.time())
+    }
+    _source_status[source_name]["history"].append(entry)
+    # 只保留最近 MAX_HISTORY 条
+    if len(_source_status[source_name]["history"]) > MAX_HISTORY:
+        _source_status[source_name]["history"].pop(0)
+    # 更新当前状态
+    _source_status[source_name]["status"] = status
+    _source_status[source_name]["latency"] = latency
 
 
 def get_source_status() -> dict:
@@ -408,5 +461,21 @@ def set_primary_source(source_name: str) -> bool:
     global _current_source
     if source_name in DATA_SOURCES:
         _current_source = source_name
+        return True
+    return False
+
+
+def open_circuit(source_name: str) -> bool:
+    """熔断指定数据源"""
+    if source_name in _source_status:
+        _source_status[source_name]["state"] = "open"
+        return True
+    return False
+
+
+def close_circuit(source_name: str) -> bool:
+    """恢复（关闭熔断）指定数据源"""
+    if source_name in _source_status:
+        _source_status[source_name]["state"] = "closed"
         return True
     return False

@@ -62,30 +62,59 @@
         <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
           <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
           <p class="text-xs text-theme-secondary leading-relaxed">
-            系统从多个数据源（腾讯、新浪、东方财富）获取股票行情。当某个数据源出现故障时，
-            <strong class="text-terminal-accent">熔断机制</strong>会自动切断该源，防止错误数据进入系统。
-            你可以手动控制熔断状态，或查看各数据源的响应速度。
+            <strong class="text-terminal-accent">股票/基金/期货行情数据源</strong>：当获取实时行情时，后端自动选择最快的数据源。
+            当前使用：<span class="text-[var(--color-warning)]">{{ probeData?.current_source || '-' }}</span>
+            <br/>⭐ 主源 = 默认优先级 | ✓ 当前使用 = 实际被使用的
+            <br/><strong class="text-[var(--color-warning)]">注意</strong>：此面板仅控制行情数据源，基金/宏观等模块使用独立数据源。
           </p>
         </div>
 
+        <!-- 统一代理设置 -->
+        <div class="p-4 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm">
+          <h3 class="text-sm font-bold text-[var(--color-warning)] mb-2">🌐 国外数据源代理设置</h3>
+          <p class="text-xs text-theme-muted mb-3">AlphaVantage 等国外数据源需要代理才能访问。设置代理后重启服务生效。</p>
+          <div class="flex gap-2">
+            <input v-model="proxyUrl" type="text" placeholder="如: 192.168.1.50:7897" class="flex-1 bg-terminal-bg border border-theme rounded-sm px-3 py-2 text-sm text-theme-primary" />
+            <button @click="saveProxy" class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm">保存并重启</button>
+          </div>
+        </div>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div v-for="(source, key) in sourceStatus.sources" :key="key" class="p-4 rounded-sm border" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)]'">
+          <div v-for="(source, key) in sourceStatus.sources" :key="key" class="p-4 rounded-sm border" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]' : source.health === 'unknown' ? 'bg-[var(--color-info-bg)] border-[var(--color-info-border)]' : 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)]'">
             <div class="flex items-center justify-between mb-3">
               <div class="flex items-center gap-2">
-                <span class="w-3 h-3 rounded-full" :class="source.state === 'closed' ? 'bg-[var(--color-success-light)]' : 'bg-[var(--color-danger-light)]'"></span>
+                <span class="w-3 h-3 rounded-full" :class="source.state === 'closed' ? 'bg-[var(--color-success-light)]' : source.state === 'unknown' ? 'bg-[var(--color-info)]' : 'bg-[var(--color-danger-light)]'"></span>
                 <span class="font-medium text-theme-primary">{{ key }}</span>
+                <span v-if="source.is_primary" class="text-[10px] px-1.5 py-0.5 rounded-sm bg-[var(--color-warning)] text-black font-bold">⭐ 主源</span>
+                <span v-if="probeData?.current_source === key" class="text-[10px] px-1.5 py-0.5 rounded-sm bg-[var(--color-success)] text-black font-bold">✓ 当前使用</span>
               </div>
-              <span class="text-[10px] px-2 py-0.5 rounded-sm" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
-                {{ source.health === 'healthy' ? '健康' : '异常' }}
+              <span class="text-[10px] px-2 py-0.5 rounded-sm" :class="source.health === 'healthy' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : source.health === 'unknown' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+                {{ source.health === 'healthy' ? '健康' : source.health === 'unknown' ? '未探测' : '异常' }}
               </span>
             </div>
             <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-theme-muted">响应延迟</span><span :class="source.latency_ms < 100 ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'">{{ source.latency_ms }}ms</span></div>
+              <div class="flex justify-between"><span class="text-theme-muted">响应延迟</span><span :class="source.latency_ms === null ? 'text-theme-muted' : source.latency_ms < 100 ? 'text-[var(--color-success)]' : 'text-[var(--color-warning)]'">{{ source.latency_ms === null ? '-' : source.latency_ms + 'ms' }}</span></div>
               <div class="flex justify-between"><span class="text-theme-muted">连续失败</span><span :class="source.fail_count === 0 ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'">{{ source.fail_count }} 次</span></div>
             </div>
             <div class="flex gap-2 mt-4 pt-3 border-t border-theme/50">
               <button v-if="source.state !== 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-danger-bg)] text-[var(--color-danger)] rounded-sm text-xs" @click="confirmAction(`熔断 ${key}`, `系统将停止从 ${key} 获取数据，转到其他数据源。确定？`, () => controlCircuit(key, 'open'))">⚠️ 熔断</button>
               <button v-if="source.state === 'open'" class="flex-1 px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-xs" @click="confirmAction(`恢复 ${key}`, `系统将重新从 ${key} 获取数据。确定？`, () => controlCircuit(key, 'close'))">✅ 恢复</button>
+            </div>
+            <!-- 探测历史 -->
+            <div class="mt-3 pt-3 border-t border-theme/50">
+              <button @click="expandedHistory[key] = !expandedHistory[key]" class="text-[10px] text-theme-muted hover:text-theme-primary flex items-center gap-1">
+                <span>{{ expandedHistory[key] ? '▼' : '▶' }}</span>
+                <span>探测历史</span>
+                <span v-if="source.history?.length">({{ source.history.length }})</span>
+              </button>
+              <div v-if="expandedHistory[key] && source.history?.length" class="mt-2 space-y-1">
+                <div v-for="(h, i) in source.history.slice().reverse()" :key="i" class="flex items-center justify-between text-[10px]">
+                  <span class="text-theme-muted">{{ formatHistoryTime(h.timestamp) }}</span>
+                  <span :class="getHistoryStatusClass(h.status)">{{ h.status === 'ok' ? '✅' : h.status === 'fail' ? '❌' : h.status === 'timeout' ? '⏱️' : '⚠️' }}</span>
+                  <span :class="getHistoryStatusClass(h.status)">{{ h.status === 'ok' ? h.latency + 'ms' : h.status }}</span>
+                </div>
+                <div v-if="!source.history?.length" class="text-[10px] text-theme-muted">暂无历史记录</div>
+              </div>
             </div>
           </div>
         </div>
@@ -608,11 +637,15 @@ import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
 const echarts = window.echarts
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
+import { toast } from '../composables/useToast.js'
 
 const version = __APP_VERSION__
 const activeTab = ref('sources')
 const mobileNavOpen = ref(false)
 const logContainer = ref(null)
+const proxyUrl = ref('')
+const expandedHistory = ref({})
+const probeData = ref(null)
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
@@ -673,9 +706,12 @@ function getDiskColor(p) { return !p ? 'text-theme-muted' : p < 70 ? 'text-[var(
 
 const sourceStatus = reactive({
   sources: {
-    tencent: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '腾讯财经 - 主数据源' },
-    sina: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '新浪财经 - 备用源' },
-    eastmoney: { state: 'closed', fail_count: 0, latency_ms: 0, health: 'healthy', description: '东方财富 - 备用源' }
+    tencent: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: '腾讯财经 - 主数据源' },
+    sina_kline: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: '新浪K线 - 备用源' },
+    sina: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: '新浪财经 - 备用源' },
+    eastmoney: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: '东方财富 - 备用源' },
+    tencent_hk: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: '腾讯港股 - 备用源' },
+    alpha_vantage: { state: 'unknown', fail_count: 0, latency_ms: null, health: 'unknown', description: 'AlphaVantage - 美股源' }
   }
 })
 
@@ -1139,23 +1175,55 @@ async function refreshLogs() {
 
 async function refreshSourceStatus() {
   try {
-    const data = await apiFetch('/api/v1/admin/sources/status')
+    // 探测所有数据源，获取延迟、熔断状态和失败计数
+    const data = await apiFetch('/api/v1/admin/sources/probe', { method: 'POST' })
+    probeData.value = data
+
     if (data?.sources) {
-      // 深度合并：保留内存默认值，只更新后端返回的字段
-      for (const [key, src] of Object.entries(data.sources)) {
+      for (const [key, result] of Object.entries(data.sources)) {
         if (!sourceStatus.sources[key]) sourceStatus.sources[key] = {}
-        Object.assign(sourceStatus.sources[key], src)
+        sourceStatus.sources[key].latency_ms = result.latency ?? null
+        sourceStatus.sources[key].health = result.status === 'ok' ? 'healthy' : 'unhealthy'
+        sourceStatus.sources[key].state = result.state || (result.status === 'ok' ? 'closed' : 'open')
+        sourceStatus.sources[key].fail_count = result.fail_count ?? 0
+        sourceStatus.sources[key].status = result.status
+        sourceStatus.sources[key].is_primary = result.is_primary ?? false
+        sourceStatus.sources[key].history = result.history ?? []
       }
     }
   } catch (e) { logger.error('刷新失败:', e) }
 }
 
+async function saveProxy() {
+  try {
+    const fullProxy = proxyUrl.value.startsWith('http') ? proxyUrl.value : `http://${proxyUrl.value}`
+    await apiFetch('/api/v1/source/proxy', {
+      method: 'POST',
+      body: JSON.stringify({ proxy: fullProxy })
+    })
+    toast.success('代理配置已保存，重启服务后生效')
+  } catch (e) { toast.error('代理配置失败: ' + e.message) }
+}
+
+function formatHistoryTime(timestamp) {
+  if (!timestamp) return '-'
+  const d = new Date(timestamp * 1000)
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`
+}
+
+function getHistoryStatusClass(status) {
+  if (status === 'ok') return 'text-[var(--color-success)]'
+  if (status === 'fail' || status === 'timeout') return 'text-[var(--color-danger)]'
+  return 'text-[var(--color-warning)]'
+}
+
 async function controlCircuit(source, action) {
   try {
-    await apiFetch('/api/v1/admin/sources/circuit_breaker', {
+    const data = await apiFetch('/api/v1/admin/sources/circuit_breaker', {
       method: 'POST',
       body: JSON.stringify({ source, action })
     })
+    toast.success(data?.message || (action === 'open' ? '熔断成功' : '恢复成功'))
     await refreshSourceStatus()
   } catch (e) { alert('操作失败: ' + e.message) }
 }
