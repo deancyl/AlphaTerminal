@@ -65,12 +65,13 @@ def _get_llm_config(provider: str) -> dict:
         "opencode": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://api.opencode.ai/v1"), "model": os.getenv("OPENCODE_MODEL","opencode-chat")},
         "opencode_go": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/go/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.7")},
         "opencode_zen": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.5-free")},
+        "minimax": {"api_key": os.getenv("MINIMAX_API_KEY",""), "base_url": "https://api.minimax.chat/v1", "model": "abab6.5s-chat"},
     }
     return defaults.get(provider, {})
 
 def _detect_provider() -> str:
     """按优先级检测可用的 LLM Provider（优先使用数据库配置）"""
-    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode_go", "opencode_zen"]:
+    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen", "minimax"]:
         if _get_llm_config(p).get("api_key"):
             return p
     return "mock"
@@ -429,15 +430,16 @@ async def _call_qianwen(messages: list[dict], model_override: str | None = None)
         yield _sse({"error": f"通义千问 API 调用失败: {e}"})
 
 
-async def _call_minimax(messages: list[dict]) -> AsyncGenerator[str, None]:
+async def _call_minimax(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
     import httpx
-    url = "https://api.minimax.chat/v1/text/chatcompletion_pro"
+    cfg = _get_llm_config("minimax")
+    url = f"{cfg['base_url']}/text/chatcompletion_pro"
     headers = {
-        "Authorization": f"Bearer {MINIMAX_API_KEY}",
+        "Authorization": f"Bearer {cfg['api_key']}",
         "Content-Type":  "application/json",
     }
     payload = {
-        "model":       "abab6.5s-chat",
+        "model":       model_override or cfg.get("model") or "abab6.5s-chat",
         "messages":    messages,
         "stream":      True,
         "temperature": 0.7,
