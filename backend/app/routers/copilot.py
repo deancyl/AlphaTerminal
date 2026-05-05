@@ -7,7 +7,9 @@ import asyncio
 import json
 import os
 import re
+import uuid
 import logging
+from datetime import datetime
 from typing import AsyncGenerator, Optional, List
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
@@ -904,6 +906,57 @@ def _fetch_historical_data(symbol: str, period: str = "daily", limit: int = 60) 
     except Exception as e:
         logger.warning(f"[Copilot] historical data lookup error: {e}")
     return {}
+# 对话历史持久化
+# ═══════════════════════════════════════════════════════════════
+
+def _init_conversations_table():
+    """确保 conversations 表存在"""
+    try:
+        from app.db.database import _get_conn
+        conn = _get_conn()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS copilot_conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"[Copilot] conversations table init error: {e}")
+
+def _save_message(session_id: str, role: str, content: str):
+    """保存单条消息到历史"""
+    try:
+        from app.db.database import _get_conn
+        conn = _get_conn()
+        conn.execute(
+            "INSERT INTO copilot_conversations (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+            (session_id, role, content, datetime.now().isoformat())
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"[Copilot] save message error: {e}")
+
+def _load_conversation(session_id: str, limit: int = 20) -> List[dict]:
+    """加载对话历史，返回消息列表"""
+    try:
+        from app.db.database import _get_conn
+        conn = _get_conn()
+        rows = conn.execute(
+            "SELECT role, content FROM copilot_conversations WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+            (session_id, limit)
+        ).fetchall()
+        conn.close()
+        return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+    except Exception as e:
+        logger.warning(f"[Copilot] load conversation error: {e}")
+        return []
+
 # SSE 流式对话端点
 # ═══════════════════════════════════════════════════════════════
 
@@ -927,6 +980,14 @@ async def copilot_chat(request: Request):
     symbol = (body.get("symbol") or "").strip() or None
 
     provider_override = (body.get("provider") or "").strip().lower() or None
+
+    # 会话ID：支持对话历史续接
+    session_id = (body.get("session_id") or "").strip()
+    if not session_id:
+        session_id = str(uuid.uuid4())
+
+    # 初始化 conversations 表（如果不存在）
+    _init_conversations_table()
     model_override = (body.get("model") or "").strip() or None
 
     if not prompt:
@@ -986,14 +1047,24 @@ async def copilot_chat(request: Request):
         context_block=context_block,
     )
 
+    # 加载对话历史（如果提供了 session_id）
+    history = _load_conversation(session_id) if session_id else []
+
     messages = [
         {"role": "system", "content": system_msg},
-        {"role": "user",   "content": prompt},
     ]
+    # 添加历史消息（保持上下文连贯）
+    for h in history:
+        messages.append(h)
+    messages.append({"role": "user", "content": prompt})
+
+    # 保存用户消息
+    if session_id:
+        _save_message(session_id, "user", prompt)
 
     logger.info(
         f"[Copilot] provider={provider} model={model_override or 'default'} symbol={symbol or '-'} "
-        f"prompt='{prompt[:40]}...' context_blocks={len(context_block)}"
+        f"prompt='{prompt[:40]}...' history={len(history)} context_blocks={len(context_block)}"
     )
 
     return StreamingResponse(
@@ -1003,6 +1074,7 @@ async def copilot_chat(request: Request):
             "Cache-Control":   "no-cache",
             "Connection":       "keep-alive",
             "X-Accel-Buffering": "no",
+            "X-Session-Id": session_id,
         },
     )
 
