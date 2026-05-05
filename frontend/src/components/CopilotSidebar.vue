@@ -54,13 +54,18 @@
       <span class="text-[10px] text-terminal-dim/50 ml-auto self-center">💡 勾选可将数据加入AI上下文</span>
     </div>
 
-    <!-- 模型选择器 -->
+    <!-- Provider 选择 -->
     <div class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
       <span class="text-[10px] text-terminal-dim shrink-0">🤖 模型</span>
+      <select v-model="selectedProvider"
+              class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
+                     text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
+        <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.label }}</option>
+      </select>
       <select v-model="selectedModel"
               class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
                      text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
-        <option v-for="m in modelOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
+        <option v-for="m in currentModels" :key="m.value" :value="m.value">{{ m.label }}</option>
       </select>
     </div>
 
@@ -303,17 +308,40 @@ onMounted(() => {
 })
 
 // ── 模型选择 ──────────────────────────────────────────────────
-const selectedModel = ref('deepseek-v3')
-const modelOptions = [
-  { label: 'DeepSeek-V3（推荐）',     value: 'deepseek-v3',  provider: 'deepseek', model: 'deepseek-chat' },
-  { label: 'DeepSeek-R1（思维链）',   value: 'deepseek-r1',  provider: 'deepseek', model: 'deepseek-reasoner' },
-  { label: 'Qwen Plus',               value: 'qwen',         provider: 'qianwen',  model: 'qwen-plus' },
-  { label: 'OpenAI GPT-3.5',          value: 'openai',       provider: 'openai',   model: 'gpt-3.5-turbo' },
-  { label: '硅基流动 DeepSeek-V3',     value: 'siliconflow-v3', provider: 'siliconflow', model: 'deepseek-ai/DeepSeek-V3' },
-  { label: '硅基流动 DeepSeek-R1',     value: 'siliconflow-r1', provider: 'siliconflow', model: 'deepseek-ai/DeepSeek-R1' },
-  { label: 'OpenCode',                value: 'opencode',     provider: 'opencode', model: 'opencode-chat' },
-  { label: 'Mock（本地模拟）',         value: 'mock',         provider: 'mock',     model: '' },
+const selectedProvider = ref('deepseek')
+const providers = [
+  { label: 'DeepSeek',     id: 'deepseek' },
+  { label: '硅基流动',    id: 'siliconflow' },
+  { label: '通义千问',    id: 'qianwen' },
+  { label: 'OpenAI',      id: 'openai' },
+  { label: 'OpenCode',    id: 'opencode' },
+  { label: 'Mock',        id: 'mock' },
 ]
+const allModels = {
+  deepseek: [
+    { label: 'DeepSeek-V3（推荐）', value: 'deepseek-chat' },
+    { label: 'DeepSeek-R1（思维链）', value: 'deepseek-reasoner' },
+  ],
+  siliconflow: [
+    { label: 'DeepSeek-V3', value: 'deepseek-ai/DeepSeek-V3' },
+    { label: 'DeepSeek-R1', value: 'deepseek-ai/DeepSeek-R1' },
+  ],
+  qianwen: [
+    { label: 'Qwen Plus', value: 'qwen-plus' },
+  ],
+  openai: [
+    { label: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
+  ],
+  opencode: [
+    { label: 'OpenCode Chat', value: 'opencode-chat' },
+  ],
+  mock: [
+    { label: '本地模拟', value: '' },
+  ],
+}
+const selectedModel = ref('deepseek-chat')
+const currentModels = computed(() => allModels[selectedProvider.value] || [])
+const selectedModelLabel = computed(() => currentModels.value.find(m => m.value === selectedModel.value)?.label || '')
 
 // 快捷命令
 const quickCommands = [
@@ -938,17 +966,15 @@ ${positionLines}
       }
       currentAbortController = new AbortController()
       
-      // 根据选中的模型提取 provider 和 model 名
-      const sel = modelOptions.find(m => m.value === selectedModel.value) || modelOptions[0]
-
+      // Provider + Model 两级选择
       const response = await fetch('/api/v1/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
         body: JSON.stringify({ 
           prompt: text,
           context: context || undefined,
-          provider: sel.provider,
-          model: sel.model || undefined,
+          provider: selectedProvider.value,
+          model: selectedModel.value || undefined,
           // Week 3-4 新增：投资组合和历史数据参数
           portfolio_id: ctxPortfolio.value ? selectedPortfolioId.value : undefined,
           include_historical: ctxHistorical.value,
