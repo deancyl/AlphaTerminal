@@ -287,7 +287,7 @@ async def get_balance_config():
     conn = _get_conn()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT config_value FROM system_config WHERE config_key = 'source_balance'")
+        cursor.execute("SELECT value FROM admin_config WHERE key = 'source_balance'")
         row = cursor.fetchone()
     finally:
         conn.close()
@@ -304,7 +304,7 @@ async def set_balance_config(config: SourceBalanceConfig):
     try:
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT OR REPLACE INTO system_config (config_key, config_value, updated_at) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
             ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
         )
         conn.commit()

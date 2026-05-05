@@ -1368,6 +1368,18 @@ async function dbMaintenance(action) {
 }
 
 
+async function refreshDbStatus() {
+  try {
+    const data = await apiFetch('/api/v1/admin/database/stats')
+    if (data) {
+      dbStatus.size = data.db_size_mb || 0
+      dbStatus.realtime = data.tables?.market_data_realtime || 0
+      dbStatus.daily = data.tables?.market_data_daily || 0
+      dbStatus.stocks = data.tables?.market_all_stocks || 0
+    }
+  } catch (e) { logger.error('Refresh db status failed:', e) }
+}
+
 async function refreshSystemMetrics() {
   try {
     const data = await apiFetch('/api/v1/admin/system/metrics')
@@ -1380,8 +1392,9 @@ onMounted(() => {
   refreshScheduler()
   refreshSystemMetrics()
   refreshLogs()
+  refreshDbStatus()
   logger.log('[AdminDashboard] Mounting, calling refreshWatchdog...')
   refreshWatchdog().catch(e => logger.error('[AdminDashboard] refreshWatchdog failed:', e))
-  
+
 })
 </script>

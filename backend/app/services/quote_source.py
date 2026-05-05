@@ -316,6 +316,9 @@ def get_quote_with_fallback(symbol: str) -> dict:
         sources_order = ["tencent"]
     
     for source_name in sources_order:
+        if _source_status.get(source_name, {}).get("state") == "open":
+            logger.debug(f"[Quote] 跳过熔断源: {source_name}")
+            continue
         logger.debug(f"[Quote] 尝试: {source_name}")
         
         if source_name == "tencent":
@@ -363,6 +366,9 @@ async def get_quote_with_fallback_async(symbol: str) -> dict:
         sources_order = [("tencent", _parse_tencent_quote)]
 
     for source_name, parser in sources_order:
+        if _source_status.get(source_name, {}).get("state") == "open":
+            logger.debug(f"[Quote/async] 跳过熔断源: {source_name}")
+            continue
         logger.debug(f"[Quote/async] 尝试: {source_name}")
         try:
             result = await asyncio.wait_for(
