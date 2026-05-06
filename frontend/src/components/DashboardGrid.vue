@@ -31,6 +31,7 @@
 
     <!-- 市场情绪 -->
     <div id="section-sentiment" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 180px;">
+      <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">🌡️ A股市场情绪</div>
       <SentimentGauge :market-data="{ indices: indices }" :macro-data="macroData" @symbol-click="handleWindClick" class="w-full" />
     </div>
 
@@ -114,6 +115,7 @@
     <div class="grid-stack-item"
          gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8">
       <div class="grid-stack-item-content terminal-panel p-3">
+        <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">🌡️ A股市场情绪</div>
         <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
       </div>
     </div>
