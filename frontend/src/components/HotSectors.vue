@@ -1,7 +1,11 @@
 <template>
   <div class="flex flex-col min-w-0 overflow-hidden" style="height: 100%;">
     <div class="flex items-center justify-between mb-2 shrink-0">
-      <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
+      <div class="flex items-center gap-1.5">
+        <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
+        <button v-if="isRefreshing" class="text-[9px] text-terminal-dim animate-spin">⟳</button>
+        <span v-else @click="refreshSectors" class="text-[9px] text-terminal-dim/50 hover:text-terminal-dim cursor-pointer transition-colors" title="点击刷新">↻</span>
+      </div>
       <div class="flex items-center gap-2">
         <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
         <button v-if="sectors.length > 12" @click="showAllSectors = !showAllSectors"
@@ -76,17 +80,19 @@ const emit = defineEmits(['sector-click'])
 const { setSymbol } = useMarketStore()
 const sectors = ref([])
 const isLoading = ref(false)
+const isRefreshing = ref(false)
 const tsDisplay = ref('')
 const showAllSectors = ref(false)
+const cacheAge = ref(0) // seconds
 let refreshTimer = null
 
 // 响应式列数（根据容器宽度估算）
 const { width: winWidth } = useWindowSize()
 const gridCols = computed(() => {
-  if (winWidth.value < 480) return 2   // 手机 < 480px → 2列
-  if (winWidth.value < 768) return 3  // 手机 ≥ 480px → 3列
-  if (winWidth.value < 1024) return 4 // 平板 → 4列
-  return 5  // 桌面 → 5列
+  if (winWidth.value < 480) return 3   // 手机 < 480px → 3列（默认12个板块）
+  if (winWidth.value < 768) return 4  // 手机 ≥ 480px → 4列
+  if (winWidth.value < 1024) return 5 // 平板 → 5列
+  return 6  // 桌面 → 6列
 })
 
 // 显示所有板块（受 showAllSectors 控制）
@@ -101,13 +107,12 @@ async function fetchSectors() {
     if (!d) return
     const sectorsList = d.sectors || []
     sectors.value = sectorsList
-    // 更新时间戳
-    if (d.timestamp) {
-      const ts = typeof d.timestamp === 'number' 
-        ? new Date(d.timestamp).toLocaleTimeString('zh-CN', { hour12: false })
-        : (typeof d.timestamp === 'string' && d.timestamp.includes('T') 
-          ? d.timestamp.slice(11, 19) : '')
-      tsDisplay.value = ts ? `更新 ${ts}` : ''
+    // 更新时间戳（缓存时间）
+    if (d.cache_age_seconds !== undefined) {
+      cacheAge.value = d.cache_age_seconds
+      tsDisplay.value = cacheAge.value < 60
+        ? `${cacheAge.value}秒前`
+        : `${Math.floor(cacheAge.value / 60)}分前`
     }
   } catch (e) {
     logger.warn('[HotSectors] fetch failed:', e.message)
@@ -118,6 +123,27 @@ async function fetchSectors() {
 
 function handleClick(sec) {
   emit('sector-click', sec)
+}
+
+async function refreshSectors() {
+  if (isRefreshing.value) return
+  isRefreshing.value = true
+  try {
+    const d = await apiFetch('/api/v1/market/sectors/refresh', { method: 'POST' })
+    if (d?.sectors) {
+      sectors.value = d.sectors
+      if (d.cache_age_seconds !== undefined) {
+        cacheAge.value = d.cache_age_seconds
+        tsDisplay.value = cacheAge.value < 60
+          ? `${cacheAge.value}秒前`
+          : `${Math.floor(cacheAge.value / 60)}分前`
+      }
+    }
+  } catch (e) {
+    logger.warn('[HotSectors] refresh failed:', e.message)
+  } finally {
+    isRefreshing.value = false
+  }
 }
 
 onMounted(() => {

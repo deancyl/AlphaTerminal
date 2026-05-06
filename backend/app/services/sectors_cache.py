@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 _SECTORS_CACHE: list[dict] = []
 _CACHE_READY: bool = False
+_SECTORS_CACHE_TS: float = 0.0  # Unix timestamp of last cache update
 _LOCK = threading.Lock()
 
 # 静态兜底数据（所有 API 全挂时使用）
@@ -47,7 +48,8 @@ SINA_HEADERS = {
 
 def update_sectors(sectors: list[dict]):
     """后台 Job 调用此函数更新板块缓存"""
-    global _SECTORS_CACHE, _CACHE_READY
+    global _SECTORS_CACHE, _CACHE_READY, _SECTORS_CACHE_TS
+    import time
     with _LOCK:
         # 检查是否所有数据都是0，如果是则使用兜底数据
         non_zero = [s for s in sectors if s.get('change_pct', 0) != 0]
@@ -57,6 +59,7 @@ def update_sectors(sectors: list[dict]):
         else:
             _SECTORS_CACHE = sectors
         _CACHE_READY = True
+        _SECTORS_CACHE_TS = time.time()
     logger.info(f"[SectorsCache] {len(_SECTORS_CACHE)} 个板块已缓存")
 
 
@@ -69,6 +72,17 @@ def get_sectors() -> list[dict]:
         if _SECTORS_CACHE:
             return list(_SECTORS_CACHE)
     return list(_FALLBACK_SECTORS)
+
+
+async def refresh_sectors_cache() -> list[dict]:
+    """
+    手动刷新缓存：立即触发重新抓取，返回最新数据
+    适用于 /market/sectors/refresh 接口
+    """
+    import asyncio
+    loop = asyncio.get_event_loop()
+    sectors = await loop.run_in_executor(None, fetch_and_cache_sectors)
+    return sectors
 
 
 def is_ready() -> bool:
