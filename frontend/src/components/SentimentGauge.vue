@@ -4,7 +4,7 @@
     <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
     <div class="bg-terminal-bg rounded-sm border border-theme p-2">
       <div class="flex items-center justify-between mb-1">
-        <span class="text-[10px] text-terminal-dim">📈 全市场多空对比（全天走势）</span>
+        <span class="text-[10px] text-terminal-dim">📈 全天走势</span>
         <span class="text-[10px] text-terminal-dim">{{ intradayUpdateTime }}</span>
       </div>
       <!-- ECharts 折线图：上涨家数全天走势 -->
@@ -13,9 +13,8 @@
 
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
     <div class="bg-terminal-bg rounded-sm border border-theme p-3">
-      <!-- 标题栏：情绪 + 资讯面 -->
+      <!-- 标题栏：情绪 + 资讯面（移动端由外层panel提供标题，这里不重复） -->
       <div class="flex items-center justify-between mb-2">
-        <span class="text-xs text-terminal-dim">📊 A股市场情绪</span>
         <div class="flex items-center gap-2">
           <!-- Phase 4: 资讯情绪徽标 -->
           <span
