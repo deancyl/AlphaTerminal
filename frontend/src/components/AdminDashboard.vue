@@ -119,6 +119,34 @@
           </div>
         </div>
 
+
+        <!-- 饼图 + 健康详情 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- ECharts 饼图 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
+            <div ref="sourceChartRef" style="width:100%;height:220px"></div>
+          </div>
+          <!-- 状态列表 -->
+          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
+            <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
+            <div class="space-y-2">
+              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded-sm bg-terminal-panel/50">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-[var(--color-success-light)]' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-[var(--color-danger-light)]'"></span>
+                  <span class="text-sm text-theme-primary">{{ key }}</span>
+                </div>
+                <div class="flex items-center gap-3 text-xs">
+                  <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
+                  <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="info.status === 'ok' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.status === 'slow' ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
+                  </span>
+                </div>
+              </div>
+              <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
+            </div>
+          </div>
+        </div>
         <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">
           <strong class="text-[var(--color-warning)]">操作后果说明：</strong>
           <ul class="mt-1 space-y-1 list-disc list-inside">
@@ -440,58 +468,6 @@
       </div>
     </div>
 
-      <!-- 数据源健康度仪表盘 -->
-      <div v-else-if="activeTab === 'source-health'" class="space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 class="text-lg font-bold text-theme-primary">📡 数据源健康度</h2>
-            <p class="text-xs text-theme-muted mt-1">实时监测各数据源连通性与响应速度</p>
-          </div>
-          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshSourceHealth">🔄 刷新状态</button>
-        </div>
-
-        <!-- 代理配置 -->
-        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
-          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">🌐 代理配置</h3>
-          <div v-if="proxyConfig" class="mt-2 flex items-center gap-4 text-xs">
-            <div class="flex items-center gap-2">
-              <span class="text-theme-muted">代理地址：</span>
-              <span class="text-terminal-accent font-mono">{{ proxyConfig.proxy_url || '未配置' }}</span>
-            </div>
-            <span class="px-2 py-0.5 rounded-sm text-[10px]" :class="proxyConfig.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'">
-              {{ proxyConfig.enabled ? '● 已启用' : '○ 已禁用' }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 饼图 + 卡片 -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <!-- ECharts 饼图 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
-            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
-            <div ref="sourceChartRef" style="width:100%;height:220px"></div>
-          </div>
-          <!-- 状态列表 -->
-          <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
-            <div class="text-sm font-bold text-theme-primary mb-3">🔍 各源详情</div>
-            <div class="space-y-2">
-              <div v-for="(info, key) in sourceHealthData" :key="key" class="flex items-center justify-between p-2 rounded-sm bg-terminal-panel/50">
-                <div class="flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full" :class="info.status === 'ok' ? 'bg-[var(--color-success-light)]' : info.status === 'slow' ? 'bg-yellow-400' : 'bg-[var(--color-danger-light)]'"></span>
-                  <span class="text-sm text-theme-primary">{{ key }}</span>
-                </div>
-                <div class="flex items-center gap-3 text-xs">
-                  <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
-                  <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="info.status === 'ok' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.status === 'slow' ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
-                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
-                  </span>
-                </div>
-              </div>
-              <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <!-- LLM 配置 -->
       <div v-else-if="activeTab === 'llm'" class="space-y-6">
@@ -649,7 +625,6 @@ const probeData = ref(null)
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'source-health', label: '源健康度', desc: '数据源连通性监测与ECharts可视化', icon: '📊', status: false, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'watchdog', label: '进程保活', desc: '监控后端进程状态，自动重启', icon: '🛡️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
@@ -1138,10 +1113,11 @@ function disconnectLogWs() {
   if (ws) { ws.close(); ws = null; wsConnected = false }
 }
 
-// 切换到 logs tab 时建立 WS；离开时断开
+// 切换到 logs tab 时建立 WS；切换到 sources tab 时刷新健康度
 watch(activeTab, (tab) => {
   if (tab === 'logs' && !wsConnected) connectLogWs()
   else if (tab !== 'logs') disconnectLogWs()
+  if (tab === 'sources') refreshSourceHealth()
 })
 
 // 组件销毁时清理
