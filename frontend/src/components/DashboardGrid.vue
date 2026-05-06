@@ -22,7 +22,7 @@
     </div>
 
     <!-- A股监测：自适应高度，内部滚动 -->
-    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-screener" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow-y: auto;">
       <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">📊 A股监测</div>
       <div class="w-full overflow-y-auto" style="height: calc(100% - 32px);">
         <StockScreener :data="globalItems" @symbol-click="handleScreenerClick" />
@@ -36,12 +36,12 @@
     </div>
 
     <!-- 板块热度：自适应高度，内部滚动 -->
-    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 280px; max-height: 45vh; overflow: hidden;">
+    <div id="section-sectors" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 280px; max-height: 45vh; overflow-y: auto;">
       <HotSectors :data="sectors" class="w-full" />
     </div>
 
     <!-- 新闻快讯：自适应高度，内部滚动 -->
-    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow: hidden;">
+    <div id="section-news" class="terminal-panel p-4 rounded-xl shadow-lg border border-theme/10 shrink-0" style="min-height: 300px; max-height: 50vh; overflow-y: auto;">
       <NewsFeed class="w-full" />
     </div>
   </div>

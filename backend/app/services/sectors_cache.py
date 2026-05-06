@@ -155,7 +155,7 @@ def _fetch_sina_boards(param: str) -> list[dict]:
 
 def fetch_and_cache_sectors():
     """
-    后台 Job — 抓取行业+概念板块，合并去重，关键词加权排序，缓存 Top 20。
+    后台 Job — 抓取行业+概念板块，合并去重，关键词加权排序，缓存所有板块。
     绝不在 API 路由线程中调用！
     """
     WEIGHT_KEYWORDS = ["算力", "人工智能", "AI", "中特估", "半导体设备",
@@ -198,10 +198,10 @@ def fetch_and_cache_sectors():
 
     if all_rows:
         all_rows.sort(key=sort_key, reverse=True)
-        top20 = all_rows[:20]
-        update_sectors(top20)
-        top_names = [r["name"] for r in top20]
-        logger.info(f"[SectorsCache] 综合排序完成，Top 20: {top_names}")
+        # Return ALL sectors so frontend can slice as needed for expand/collapse
+        update_sectors(all_rows)
+        top_names = [r["name"] for r in all_rows[:20]]
+        logger.info(f"[SectorsCache] 综合排序完成，共 {len(all_rows)} 个板块, Top 20: {top_names}")
         return
 
     # 全挂：使用静态兜底

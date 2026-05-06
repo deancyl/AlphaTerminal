@@ -4,7 +4,7 @@
       <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
       <div class="flex items-center gap-2">
         <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
-        <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
+        <button v-if="sectors.length > 12" @click="showAllSectors = !showAllSectors"
           class="text-[10px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors">
           {{ showAllSectors ? '收起' : '展开全部' }}
         </button>
@@ -91,7 +91,7 @@ const gridCols = computed(() => {
 
 // 显示所有板块（受 showAllSectors 控制）
 const displaySectors = computed(() =>
-  showAllSectors.value ? sectors.value : sectors.value.slice(0, 20)
+  showAllSectors.value ? sectors.value : sectors.value.slice(0, 12)
 )
 
 async function fetchSectors() {
