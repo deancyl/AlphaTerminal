@@ -84,9 +84,9 @@
             ● LIVE
           </span>
           <!-- 仅桌面端显示锁定按钮（手机端不需要拖拽） -->
-          <button
+<button
             v-if="!isMobile"
-            class="flex items-center gap-1 px-2.5 py-1 rounded border text-xs transition"
+            class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition"
             :class="isLocked
               ? 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
               : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'"
@@ -98,8 +98,8 @@
             {{ isLocked ? '已锁定' : '可拖拽' }}
           </button>
           <!-- Copilot 唤醒按钮 -->
-          <button
-            class="flex items-center gap-1 px-1.5 py-0 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs h-5 leading-none relative"
+<button
+            class="btn-xs flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs leading-none relative"
             @click="toggleCopilot"
           >
             <span v-if="isCopilotOpen">⏭ 收起</span>

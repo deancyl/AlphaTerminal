@@ -5,6 +5,15 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-05-06
+
+### Fixes
+
+- **按钮高度修复** — 修复顶部状态栏 AI 按钮、锁定按钮及全屏按钮垂直高度过高问题，添加 `btn-xs` CSS 类使小按钮不受触控热区最小高度规则约束（桌面端 44px / 移动端 48px）
+- **移动端触控例外** — `style.css` 中为移动端（`pointer: coarse`）媒体查询添加小按钮例外规则，与桌面端保持一致
+- **指标图表全屏按钮** — 重新设计 IndexLineChart 全屏按钮，统一桌面端和移动端样式，移除不必要的 `isMobile` 逻辑
+- **DashboardGrid 全屏按钮** — 精简样式，去掉 emoji 图标，统一为文字按钮
+
 ## [0.6.11] - 2026-05-06
 
 ### Features

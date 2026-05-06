@@ -140,7 +140,14 @@
       min-height: 48px;
       min-width: 48px;
     }
-    
+
+    /* 移动端小按钮例外 */
+    .btn-icon, .btn-xs, .icon-btn,
+    button.w-6, button.w-7, button.w-8 {
+      min-height: 28px;
+      min-width: 28px;
+    }
+
     /* 表格行高增加 */
     td, th {
       min-height: 48px;

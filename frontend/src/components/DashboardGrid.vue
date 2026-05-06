@@ -59,10 +59,10 @@
           <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
           <!-- 全屏按钮：独立一行，位于右上角 -->
           <button
-            class="px-2 py-0.5 text-[10px] rounded border border-theme-secondary text-theme-secondary hover:border-terminal-accent/50 hover:text-terminal-accent transition-colors"
+            class="px-1.5 py-0 text-[10px] rounded border border-theme/40 text-theme-muted hover:text-terminal-accent hover:border-terminal-accent/50 transition-colors"
             @click="handleFullscreenClick()"
             title="全屏"
-          >⛶ 全屏</button>
+          >全屏</button>
         </div>
         <!-- 指数切换行 -->
         <div class="flex items-center gap-1 mb-1 shrink-0">

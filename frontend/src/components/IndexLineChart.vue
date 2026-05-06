@@ -5,11 +5,11 @@
     <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
       <div class="px-1 flex items-center justify-between leading-none">
         <span class="text-[12px] font-bold text-theme-primary">{{ currentName }}</span>
-        <!-- 移动端全屏按钮 -->
+        <!-- 全屏按钮 -->
         <button
-          class="md:hidden px-2 h-4 w-12 text-[9px] rounded-sm border border-terminal-accent/40 text-terminal-accent hover:border-terminal-accent hover:text-terminal-accent transition-colors"
-          title="横屏全屏"
-          @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
+          class="btn-xs px-2 py-0.5 text-[10px] rounded border border-theme/40 text-theme-muted hover:text-terminal-accent hover:border-terminal-accent/50 transition-colors shrink-0 leading-none"
+          title="全屏"
+          @click="handleFullscreen"
         >全屏</button>
         <span v-if="isLoading" class="text-[9px] font-mono text-theme-tertiary animate-pulse">加载…</span>
       </div>
@@ -74,6 +74,14 @@ const isLoading    = ref(false)
 const isFetching   = ref(false)   // 后端正在抓取宏观品种数据
 const chartType    = ref('candlestick')
 const currentName  = ref('指标图表')
+
+// 全屏按钮处理：统一跳转到 FullscreenKline 面板
+function handleFullscreen() {
+  useUiStore().openKlineFullscreen({
+    symbol: props.symbol,
+    name: props.name,
+  })
+}
 
 let   chartInstance = null
 let   resizeObserver = null
