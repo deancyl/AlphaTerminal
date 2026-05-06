@@ -223,9 +223,9 @@ class SpotCache:
         buckets = []
         for label, lo, hi in cls.BUCKET_THRESHOLDS:
             if label == "平盘(0%)":
-                count = int((pcts == 0.0).sum())
+                count = int(sum(1 for p in pcts if p == 0.0))
             else:
-                count = int(((pcts > lo) & (pcts <= hi)).sum())
+                count = int(sum(1 for p in pcts if lo < p <= hi))
             color = "#14b143" if lo < 0 else "#ef232a" if lo >= 0 else "#6b7280"
             buckets.append({
                 "label": label, "count": count,
