@@ -1031,11 +1031,13 @@ function updateSourceChart(sources) {
   const fastCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms < 200).length
   const mediumCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms >= 200 && s.latency_ms <= 500).length
   const slowCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms > 500).length
+  const errorCount = Object.values(sources).filter(s => s.status === 'error').length
 
   const chartData = [
     { value: fastCount, name: '<200ms 快速', itemStyle: { color: '#22c55e' } },
     { value: mediumCount, name: '200-500ms 中等', itemStyle: { color: '#eab308' } },
     { value: slowCount, name: '>500ms 慢速', itemStyle: { color: '#ef4444' } },
+    { value: errorCount, name: '连接异常', itemStyle: { color: '#6b7280' } },
   ]
 
   // Filter out zero-value sectors
