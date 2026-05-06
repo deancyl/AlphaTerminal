@@ -18,7 +18,7 @@
       <div class="flex items-center justify-between mb-2 shrink-0">
         <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
       </div>
-      <IndexLineChart :symbol="selectedIndex" :period="selectedPeriod" class="w-full" style="height: 180px;" />
+      <IndexLineChart :key="selectedIndex" :symbol="selectedIndex" :name="currentIndexName" :period="selectedPeriod" class="w-full" style="height: 180px;" />
     </div>
 
     <!-- A股监测：自适应高度，内部滚动 -->
