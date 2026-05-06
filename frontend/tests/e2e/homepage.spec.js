@@ -29,13 +29,22 @@ test.describe('Homepage', () => {
 
   test('should display sidebar or menu', async ({ page }) => {
     await page.goto('/')
+    await page.waitForLoadState('networkidle')
     
-    // Look for sidebar patterns
+    // First, click the hamburger button to open the sidebar
+    // The sidebar is hidden by default (isSidebarOpen = false in App.vue)
+    const hamburgerBtn = page.locator('button:has-text("☰"), button:has-text("菜单"), [data-testid="menu-toggle"], .menu-toggle, .hamburger')
+    if (await hamburgerBtn.count() > 0) {
+      await hamburgerBtn.first().click()
+      await page.waitForTimeout(500) // Wait for CSS transition
+    }
+    
+    // Now check for sidebar patterns
     const sidebar = page.locator('aside, .sidebar, .sidenav, [data-testid="sidebar"]')
     const hasSidebar = await sidebar.count() > 0
     
     if (hasSidebar) {
-      await expect(sidebar.first()).toBeVisible()
+      await expect(sidebar.first()).toBeVisible({ timeout: 10000 })
     }
   })
 
