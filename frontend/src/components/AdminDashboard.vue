@@ -124,7 +124,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- ECharts 饼图 -->
           <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme">
-            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源可用性</div>
+            <div class="text-sm font-bold text-theme-primary mb-3">📊 数据源响应速度分布</div>
             <div ref="sourceChartRef" style="width:100%;height:220px"></div>
           </div>
           <!-- 状态列表 -->
@@ -138,9 +138,9 @@
                 </div>
                 <div class="flex items-center gap-3 text-xs">
                   <span class="text-theme-muted">{{ info.latency_ms || 0 }}ms</span>
-                  <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="info.status === 'ok' ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.status === 'slow' ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
-                    {{ info.status === 'ok' ? '正常' : info.status === 'slow' ? '缓慢' : '异常' }}
-                  </span>
+                  <span class="px-1.5 py-0.5 rounded-sm text-[10px]" :class="info.latency_ms === null ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : info.latency_ms < 200 ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : info.latency_ms <= 500 ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+                      {{ info.latency_ms === null ? '未知' : info.latency_ms < 200 ? '<200ms' : info.latency_ms <= 500 ? '200-500ms' : '>500ms' }}
+                    </span>
                 </div>
               </div>
               <div v-if="!Object.keys(sourceHealthData).length" class="text-center text-theme-muted text-xs py-4">暂无数据</div>
@@ -1026,14 +1026,21 @@ function updateSourceChart(sources) {
   if (!sourceChart) {
     sourceChart = echarts.init(sourceChartRef.value)
   }
-  const okCount = Object.values(sources).filter(s => s.status === 'ok').length
-  const slowCount = Object.values(sources).filter(s => s.status === 'slow').length
-  const errorCount = Object.values(sources).filter(s => s.status === 'error').length
+
+  // Group by latency buckets
+  const fastCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms < 200).length
+  const mediumCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms >= 200 && s.latency_ms <= 500).length
+  const slowCount = Object.values(sources).filter(s => s.latency_ms !== null && s.latency_ms > 500).length
+
   const chartData = [
-    { value: okCount, name: '正常', itemStyle: { color: '#22c55e' } },
-    { value: slowCount, name: '缓慢', itemStyle: { color: '#eab308' } },
-    { value: errorCount, name: '异常', itemStyle: { color: '#ef4444' } },
+    { value: fastCount, name: '<200ms 快速', itemStyle: { color: '#22c55e' } },
+    { value: mediumCount, name: '200-500ms 中等', itemStyle: { color: '#eab308' } },
+    { value: slowCount, name: '>500ms 慢速', itemStyle: { color: '#ef4444' } },
   ]
+
+  // Filter out zero-value sectors
+  const visibleData = chartData.filter(d => d.value > 0)
+
   sourceChart.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c} 个' },
     legend: { bottom: 0, textStyle: { color: '#9ca3af', fontSize: 11 } },
@@ -1041,7 +1048,7 @@ function updateSourceChart(sources) {
       type: 'pie',
       radius: ['40%', '70%'],
       label: { show: true, formatter: '{b} {c}', fontSize: 11, color: '#d1d5db' },
-      data: chartData,
+      data: visibleData,
     }],
   })
 }
