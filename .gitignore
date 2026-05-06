@@ -160,3 +160,4 @@ data/exports/*
 vendor/
 libs/
 externals/
+.sisyphus/
