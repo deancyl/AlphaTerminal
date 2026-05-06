@@ -1067,6 +1067,8 @@ async def market_history(
                     total    = get_daily_count(clean_sym)
             except Exception as e:
                 logger.error(f"[Market History] AkShare 穿透失败: {e}")
+            finally:
+                fetching = False
 
         history  = _inject_change_pct(_apply_adjustment(list(reversed(raw_rows)), adjustment))
         has_more = (offset + len(raw_rows)) < total
