@@ -4,7 +4,7 @@
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
     <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
       <div class="px-1 flex items-center justify-between leading-none">
-        <span class="text-[10px] font-bold text-theme-primary">{{ currentName }}</span>
+        <span class="text-[9px] font-bold text-theme-primary">{{ currentName }}</span>
         <!-- 移动端全屏按钮 -->
         <button
           class="md:hidden text-[9px] text-terminal-accent/60 hover:text-terminal-accent"
