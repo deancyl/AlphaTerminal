@@ -159,7 +159,7 @@
               <div class="flex gap-2">
                 <button v-if="job.state === 'running'" class="px-3 py-1.5 bg-[var(--color-warning-bg)] text-[var(--color-warning)] rounded-sm text-xs" @click="confirmAction(`暂停 ${job.name}`, `该任务将停止自动执行，相关数据不再更新。确定？`, () => controlJob(job.id, 'pause'))">⏸️ 暂停</button>
                 <button v-else class="px-3 py-1.5 bg-[var(--color-success-bg)] text-[var(--color-success)] rounded-sm text-xs" @click="controlJob(job.id, 'resume')">▶️ 恢复</button>
-                <button class="px-3 py-1.5 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-xs" @click="confirmAction(`立即执行 ${job.name}`, `立即执行一次该任务，不影响定时计划。确定？`, () => controlJob(job.id, 'trigger_now'))">⚡ 立即执行</button>
+                <button class="px-3 py-1.5 bg-[var(--color-info-bg)] text-[var(--color-info)] rounded-sm text-xs" @click="confirmAction(`立即执行 ${job.name}`, `立即执行一次该任务，不影响定时计划。确定？`, () => controlJob(job.id, 'run'))">⚡ 立即执行</button>
               </div>
             </div>
             <div class="grid grid-cols-2 gap-4 text-xs text-theme-muted">
@@ -1031,7 +1031,7 @@ async function refreshSourceHealth() {
     const converted = {}
     for (const [key, info] of Object.entries(sources)) {
       converted[key] = {
-        status: info.status === 'ok' ? 'ok' : info.status === 'slow' ? 'slow' : 'error',
+        status: info.status === 'ok' ? 'ok' : 'error',
         latency_ms: info.latency || 0,
         fail_count: info.fail_count || 0,
       }
@@ -1285,7 +1285,9 @@ async function refreshWatchdog() {
   watchdogLoading.value = true
   watchdogError.value = null
   try {
-    const data = await apiFetch('/api/v1/admin/watchdog/status')
+    const rawData = await apiFetch('/api/v1/admin/watchdog/status')
+    // 兼容：如果返回的是完整响应而不是 data 字段，直接使用
+    const data = rawData && rawData.code !== undefined ? rawData.data ?? rawData : rawData
     logger.log('[Watchdog] Raw response:', data)
     // apiFetch 已经通过 extractData 提取了 response.data
     if (data && typeof data.enabled === 'boolean') {

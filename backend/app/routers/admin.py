@@ -328,6 +328,7 @@ async def get_scheduler_jobs():
                 "name": job.name,
                 "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
                 "trigger": str(job.trigger),
+                "state": "running" if job.next_run_time is not None else "paused",
             }
             for job in jobs
         ]
