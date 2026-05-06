@@ -6,7 +6,7 @@
         <span class="text-terminal-dim text-[10px]">{{ tsDisplay }}</span>
         <button v-if="sectors.length > 5" @click="showAllSectors = !showAllSectors"
           class="text-[10px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors">
-          {{ showAllSectors ? '收起' : `更多(${sectors.length})` }}
+          {{ showAllSectors ? '收起' : '展开全部' }}
         </button>
       </div>
     </div>

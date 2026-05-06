@@ -128,8 +128,8 @@
     <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
     <div
       ref="listEl"
-      class="flex-1 overflow-y-auto mt-2"
-      style="height: 0; min-height: 200px;"
+      class="flex-1 overflow-y-auto mt-2 min-h-[120px] sm:min-h-[200px]"
+      style="height: 0;"
     >
       <div class="flex flex-col">
         <div

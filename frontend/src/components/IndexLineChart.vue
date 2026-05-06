@@ -733,7 +733,7 @@ async function fetchAndRender() {
     // Guard: if symbol prop is undefined/null, use a fallback URL
     const safeSymbol = (props.symbol && props.symbol !== 'undefined') ? props.symbol : 'sh000001'
     const fullUrl = `/api/v1/market/history/${safeSymbol}?period=${props.period || 'daily'}&_t=${Date.now()}`
-    const d = await apiFetch(fullUrl)
+    const d = await apiFetch(fullUrl, { timeoutMs: 15000 })
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
 
