@@ -19,13 +19,22 @@ test.describe('Portfolio Creation', () => {
 
   test('should open create portfolio dialog', async ({ page }) => {
     await page.goto('/')
-    await page.waitForTimeout(1000)
+    await page.waitForLoadState('networkidle')
+    
+    // First, click the hamburger button to open the sidebar
+    // The sidebar is hidden by default (isSidebarOpen = false in App.vue)
+    const hamburgerBtn = page.locator('button:has-text("☰"), button:has-text("菜单"), [data-testid="menu-toggle"], .menu-toggle, .hamburger')
+    if (await hamburgerBtn.count() > 0) {
+      await hamburgerBtn.first().click()
+      await page.waitForTimeout(500)
+    }
     
     // Navigate to portfolio view first (click portfolio sidebar item)
+    // Note: sidebar uses v-if when closed, so we need to open it first
     const portfolioNav = page.locator('button:has-text("💰"), button:has-text("组合"), button:has-text("portfolio"), [data-testid="nav-portfolio"]').first()
     if (await portfolioNav.count() > 0) {
       await portfolioNav.click()
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(1000) // Wait for view to change
     }
     
     // Look for create portfolio button
@@ -33,11 +42,11 @@ test.describe('Portfolio Creation', () => {
     
     if (await createButton.count() > 0) {
       await createButton.click()
-      await page.waitForTimeout(500)
+      await page.waitForTimeout(1000) // Wait for dialog animation
       
       // Check if dialog/modal appeared
       const dialog = page.locator('.dialog, .modal, [role="dialog"], [data-testid="portfolio-dialog"]')
-      expect(await dialog.count() > 0).toBe(true)
+      await expect(dialog.first()).toBeVisible({ timeout: 10000 })
     }
   })
 
