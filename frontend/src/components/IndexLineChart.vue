@@ -2,20 +2,18 @@
   <div class="w-full h-full min-h-[120px] relative flex flex-col">
 
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
-    <div class="shrink-0 flex items-center justify-between border-b border-theme bg-theme/60 px-2 py-0.5">
-      <!-- 左：名称 + 全屏按钮（仅移动端） -->
-      <div class="flex items-center gap-1.5">
+    <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
+      <div class="px-2 py-0.5 flex items-center justify-between">
         <span class="text-[10px] font-bold text-theme-primary">{{ currentName }}</span>
         <!-- 移动端全屏按钮 -->
         <button
-          class="md:hidden px-1.5 h-5 text-[9px] rounded-sm border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors flex items-center"
+          class="md:hidden p-0.5 h-5 text-[9px] rounded-sm border border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/10 transition-colors flex items-center"
           title="横屏全屏"
           @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
         >⛶</button>
         <span v-if="isLoading" class="text-[9px] font-mono text-theme-tertiary animate-pulse">加载…</span>
       </div>
-      <!-- 中：价格 + 涨跌幅 -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 px-2 py-0.5">
         <span class="text-[12px] font-mono font-medium"
               :class="hoverBar.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
@@ -23,13 +21,14 @@
         <span class="text-[10px] font-mono" :class="hoverBar.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ hoverBar.change_pct >= 0 ? '+' : '' }}{{ hoverBar.change_pct?.toFixed(2) ?? '--' }}%
         </span>
+        <span class="text-[9px] font-mono text-theme-secondary ml-auto">{{ hoverBar.time || '--' }}</span>
       </div>
-      <!-- 右：时间 + OHLCV（时间紧凑，hover时显示） -->
-      <div class="flex items-center gap-1.5">
-        <span class="text-[9px] font-mono text-theme-secondary">{{ hoverBar.time || '--' }}</span>
-        <template v-if="hoverBar.open != null">
-          <span class="text-[9px] font-mono text-theme-tertiary">{{ hoverBar.open?.toFixed(2) }}/{{ hoverBar.close?.toFixed(2) }}</span>
-        </template>
+      <div v-if="hoverBar.open != null" class="flex items-center gap-2 px-2 pb-0.5">
+        <span class="text-[9px] font-mono text-theme-tertiary">开<span class="text-theme-primary">{{ hoverBar.open?.toFixed(2) }}</span></span>
+        <span class="text-[9px] font-mono text-theme-tertiary">高<span class="text-bullish">{{ hoverBar.high?.toFixed(2) }}</span></span>
+        <span class="text-[9px] font-mono text-theme-tertiary">低<span class="text-bearish">{{ hoverBar.low?.toFixed(2) }}</span></span>
+        <span class="text-[9px] font-mono text-theme-tertiary">收<span class="text-theme-primary">{{ hoverBar.close?.toFixed(2) }}</span></span>
+        <span class="text-[9px] font-mono text-theme-tertiary ml-auto">{{ hoverBar.volume != null ? (hoverBar.volume >= 1e8 ? (hoverBar.volume/1e8).toFixed(2)+'亿股' : (hoverBar.volume/1e4).toFixed(2)+'万股') : '--' }}</span>
       </div>
     </div>
 
