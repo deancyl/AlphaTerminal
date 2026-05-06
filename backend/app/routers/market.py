@@ -1063,8 +1063,8 @@ async def market_history(
                     from app.services.data_fetcher import fetch_stock_history
                     rows = fetch_stock_history(clean_sym)
                 if rows:
-                    raw_rows = get_daily_history(clean_sym, limit=limit, offset=offset)
-                    total    = get_daily_count(clean_sym)
+                    raw_rows = rows
+                    total    = len(raw_rows)
             except Exception as e:
                 logger.error(f"[Market History] AkShare 穿透失败: {e}")
             finally:
