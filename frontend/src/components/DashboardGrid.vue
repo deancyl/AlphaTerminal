@@ -1,6 +1,6 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-2 px-1 py-2 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;">
+  <div v-if="isMobile" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;">
 
     <!-- 快捷导航胶囊 -->
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
