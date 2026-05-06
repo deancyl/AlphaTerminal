@@ -3,18 +3,18 @@
 
     <!-- ── Task 3: 顶部动态 Hover Bar ─────────────────────────────── -->
     <div class="shrink-0 flex flex-col border-b border-theme bg-theme/60">
-      <div class="px-2 py-0.5 flex items-center justify-between">
+      <div class="px-1 flex items-center justify-between leading-none">
         <span class="text-[10px] font-bold text-theme-primary">{{ currentName }}</span>
         <!-- 移动端全屏按钮 -->
         <button
-          class="md:hidden px-1 h-4 text-[9px] text-terminal-accent/60 hover:text-terminal-accent transition-colors"
+          class="md:hidden text-[9px] text-terminal-accent/60 hover:text-terminal-accent"
           title="横屏全屏"
           @click="useUiStore().openKlineFullscreen({ symbol: symbol || props.symbol, name: name || props.name })"
         >全屏</button>
         <span v-if="isLoading" class="text-[9px] font-mono text-theme-tertiary animate-pulse">加载…</span>
       </div>
-      <div class="flex items-center gap-2 px-2 py-0.5">
-        <span class="text-[12px] font-mono font-medium"
+      <div class="flex items-center gap-2 px-1 leading-none">
+        <span class="text-[11px] font-mono font-medium"
               :class="hoverBar.change_pct >= 0 ? 'text-bullish' : 'text-bearish'">
           {{ hoverBar.price != null ? hoverBar.price.toFixed(2) : '--' }}
         </span>
@@ -23,7 +23,7 @@
         </span>
         <span class="text-[9px] font-mono text-theme-secondary ml-auto">{{ hoverBar.time || '--' }}</span>
       </div>
-      <div v-if="hoverBar.open != null" class="flex items-center gap-2 px-2 pb-0.5">
+      <div v-if="hoverBar.open != null" class="flex items-center gap-2 px-1 leading-none">
         <span class="text-[9px] font-mono text-theme-tertiary">开<span class="text-theme-primary">{{ hoverBar.open?.toFixed(2) }}</span></span>
         <span class="text-[9px] font-mono text-theme-tertiary">高<span class="text-bullish">{{ hoverBar.high?.toFixed(2) }}</span></span>
         <span class="text-[9px] font-mono text-theme-tertiary">低<span class="text-bearish">{{ hoverBar.low?.toFixed(2) }}</span></span>
