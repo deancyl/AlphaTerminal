@@ -1,8 +1,8 @@
 <template>
-  <div class="flex flex-col min-h-0 h-full">
+  <div class="flex flex-col min-h-0 h-full overflow-hidden">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="flex items-center justify-between mb-2 shrink-0">
+    <div class="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-1">
       <div class="flex items-center gap-2">
         <span class="text-theme-primary font-semibold text-sm">快讯</span>
         <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10">

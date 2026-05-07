@@ -579,7 +579,8 @@ function toggleLock() {
 
 <style>
 .grid-stack { width: 100%; height: 100%; overflow: hidden; }
-.grid-stack-item-content { inset: 4px; overflow: hidden; border-radius: 8px; display: flex; flex-direction: column; }
+.grid-stack-item { overflow: hidden; }
+.grid-stack-item-content { inset: 4px; overflow: hidden; min-height: 0; border-radius: 8px; display: flex; flex-direction: column; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 </style>
