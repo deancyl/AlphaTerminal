@@ -16,6 +16,26 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
+# HK stock code -> name mapping (fallback when API fails)
+HK_STOCK_NAMES = {
+    "00700": "腾讯控股",
+    "09988": "阿里巴巴",
+    "09999": "网易",
+    "03690": "美团",
+    "01810": "小米集团",
+    "06160": "百济神州",
+    "02628": "中国人寿",
+    "02318": "中国平安",
+    "02382": "舜宇光学科技",
+    "00857": "中国石油股份",
+    "00941": "中国移动",
+    "01093": "中国联通",
+    "01299": "友邦保险",
+    "01398": "工商银行",
+    "01928": "金沙中国",
+    "00270": "金隅集团",
+}
+
 
 class EastmoneyFundFetcher:
     """东方财富基金数据抓取器"""
@@ -386,12 +406,13 @@ class EastmoneyFundFetcher:
                                 parts = sc.split('.')
                                 if len(parts) == 2:
                                     market, code = parts
-                                    # 补齐代码到6位
-                                    code = code.zfill(6)
-                                    clean_codes.append(code)
-                                    # 记录港股 (market=116)
+                                    # 港股 (market=116) 补齐到5位，A股补齐到6位
                                     if market == '116':
+                                        code = code.zfill(5)  # 港股代码5位
                                         hk_codes.append(code)
+                                    else:
+                                        code = code.zfill(6)  # A股代码6位
+                                    clean_codes.append(code)
                             else:
                                 # 旧格式: "6005191" -> 取前6位
                                 if len(sc) >= 6:
@@ -425,9 +446,9 @@ class EastmoneyFundFetcher:
                             
                             name = stock_names.get(lookup_key, "-")
                             
-                            # 如果腾讯 API 返回失败，使用港股标识
+                            # 如果腾讯 API 返回失败，优先使用 HK_STOCK_NAMES 映射
                             if name == "-" and clean_code in hk_codes:
-                                name = "港股"
+                                name = HK_STOCK_NAMES.get(clean_code, "港股")
                             
                             stocks.append({
                                 "code": clean_code,
