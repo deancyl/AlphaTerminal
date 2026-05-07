@@ -370,16 +370,22 @@ class EastmoneyFundFetcher:
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """
         获取基金持仓数据（重仓股 + 资产配置）
-        从 pingzhongdata.js 解析 stockCodes
+        从 pingzhongdata.js 解析 stockCodes，从 HTML 页面解析持仓比例
         """
         try:
-            url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+            # 同时获取 JS 数据和 HTML 页面
+            js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+            html_url = f"https://fund.eastmoney.com/{code}.html"
             
             async with self._get_client() as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
+                # 获取 JS 数据（股票代码）
+                js_resp = await client.get(js_url)
+                js_resp.raise_for_status()
+                js_text = js_resp.text
                 
-                js_text = resp.text
+                # 获取 HTML 页面（持仓比例）
+                html_resp = await client.get(html_url)
+                html_text = html_resp.text
                 
                 # 提取股票代码数组（支持新旧两种格式）
                 # 新格式: stockCodesNew =["1.600519","0.000858","116.00700"...]
@@ -448,8 +454,37 @@ class EastmoneyFundFetcher:
                             stocks.append({
                                 "code": clean_code,
                                 "name": name,
-                                "ratio": 0,  # 比例需要另外获取（TODO: 从其他 API 获取）
+                                "ratio": 0,  # 将在下面从 HTML 中解析
                             })
+                        
+                        # 从 HTML 中解析持仓比例
+                        # 查找股票持仓表格中的比例数据
+                        # 格式: <td class="alignRight bold">9.91%</td>
+                        ratio_pattern = r'<tr[^>]*>.*?<td[^>]*>.*?<a[^>]*title="([^"]*)">.*?</a>.*?</td>\s*<td[^>]*class="[^"]*alignRight[^"]*"[^>]*>([\d.]+)%</td>'
+                        ratios_found = re.findall(ratio_pattern, html_text, re.DOTALL)
+                        
+                        # 创建名称到比例的映射
+                        ratio_map = {}
+                        for stock_name, ratio_str in ratios_found:
+                            ratio_map[stock_name.strip()] = float(ratio_str)
+                        
+                        # 更新 stocks 中的比例
+                        for stock in stocks:
+                            if stock["name"] in ratio_map:
+                                stock["ratio"] = ratio_map[stock["name"]]
+                            elif stock["name"] == "港股" and stock["code"] in ["00700", "09987", "00883", "09988", "06618"]:
+                                # 港股常见代码映射
+                                hk_name_map = {
+                                    "00700": "腾讯控股",
+                                    "09987": "百胜中国",
+                                    "00883": "中国海洋石油",
+                                    "09988": "阿里巴巴-W",
+                                    "06618": "京东健康",
+                                }
+                                hk_name = hk_name_map.get(stock["code"])
+                                if hk_name and hk_name in ratio_map:
+                                    stock["ratio"] = ratio_map[hk_name]
+                                    stock["name"] = hk_name  # 更新名称
                         
                         # 估算资产配置
                         total_stock_ratio = min(len(stocks) * 8, 95)  # 粗略估算
