@@ -12,10 +12,13 @@ Agent Gateway Router - AI Agent API 端点
 from __future__ import annotations
 
 import time
+import logging
 from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 from ..services.agent.token_service import (
     AgentTokenService,
@@ -311,16 +314,49 @@ async def search_symbols(
         details={"market": market, "keyword": keyword, "limit": limit}
     )
     
-    # TODO: 实现实际的标的搜索
-    # 目前返回模拟数据
     if not token.can_access_market(market):
         raise HTTPException(status_code=403, detail=f"Market {market} not allowed")
     
-    return SymbolsResponse(symbols=[
-        {"symbol": "600519", "name": "贵州茅台", "market": "AStock"},
-        {"symbol": "000858", "name": "五粮液", "market": "AStock"},
-        {"symbol": "00700", "name": "腾讯控股", "market": "HKStock"},
-    ][:limit])
+    # 调用现有的股票搜索功能
+    try:
+        from app.routers.stocks import search_stocks as _search_stocks
+        results = await _search_stocks(q=keyword)
+        
+        # 过滤市场
+        market_prefix_map = {
+            "AStock": ("sh", "sz"),  # A股前缀
+            "HKStock": ("hk",),  # 港股前缀
+            "USStock": ("us",),  # 美股前缀
+        }
+        prefixes = market_prefix_map.get(market, ())
+        
+        filtered = []
+        for item in results.get("data", {}).get("stocks", [])[:50]:
+            code = item.get("code", "")
+            # 根据市场过滤
+            if prefixes:
+                if any(code.startswith(p) for p in prefixes):
+                    filtered.append({
+                        "symbol": code.lstrip("shszHK").lstrip("0").lstrip("hk").lstrip("us") or code,
+                        "name": item.get("name", ""),
+                        "market": market,
+                        "code": code,
+                    })
+            else:
+                filtered.append({
+                    "symbol": code,
+                    "name": item.get("name", ""),
+                    "market": market,
+                    "code": code,
+                })
+            if len(filtered) >= limit:
+                break
+        
+        return SymbolsResponse(symbols=filtered)
+    except Exception as e:
+        # 降级为返回空列表
+        logger.warning(f"[Agent] search_symbols failed: {e}")
+        return SymbolsResponse(symbols=[])
 
 
 @router.post("/klines", response_model=KlinesResponse)
@@ -349,23 +385,55 @@ async def get_klines(
         }
     )
     
-    # TODO: 实现实际的 K 线获取
-    # 目前返回模拟数据
-    return KlinesResponse(
-        market=request.market,
-        symbol=request.symbol,
-        timeframe=request.timeframe,
-        data=[
-            {
-                "timestamp": "2024-01-01T00:00:00",
-                "open": 100.0,
-                "high": 105.0,
-                "low": 98.0,
-                "close": 103.0,
-                "volume": 1000000,
-            }
-        ],
-    )
+    # 调用现有的 K 线接口
+    try:
+        from app.routers.market import market_history
+        from app.db import get_periodic_history
+        
+        # 转换市场代码
+        symbol = request.symbol
+        if request.market == "AStock":
+            symbol = symbol  # 保持原样
+        elif request.market == "HKStock":
+            symbol = f"hk{symbol}"
+        elif request.market == "USStock":
+            symbol = f"us{symbol}"
+        
+        # 获取历史数据
+        period_map = {"1m": "1min", "5m": "5min", "15m": "15min", "1H": "60min", "4H": "60min", "1D": "daily", "1W": "weekly"}
+        period = period_map.get(request.timeframe, "daily")
+        
+        # 限制数量
+        limit = min(request.limit, 1000)
+        
+        rows = get_periodic_history(symbol, period=period, limit=limit)
+        
+        data = []
+        for row in rows:
+            data.append({
+                "timestamp": row.get("trade_date", ""),
+                "open": float(row.get("open", 0)),
+                "high": float(row.get("high", 0)),
+                "low": float(row.get("low", 0)),
+                "close": float(row.get("close", 0)),
+                "volume": float(row.get("volume", 0)),
+            })
+        
+        return KlinesResponse(
+            market=request.market,
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            data=data,
+        )
+    except Exception as e:
+        logger.warning(f"[Agent] get_klines failed: {e}")
+        # 降级返回空数据
+        return KlinesResponse(
+            market=request.market,
+            symbol=request.symbol,
+            timeframe=request.timeframe,
+            data=[],
+        )
 
 
 @router.get("/price")
@@ -388,14 +456,45 @@ async def get_price(
         details={"market": market, "symbol": symbol}
     )
     
-    # TODO: 实现实际的价格获取
+    # 调用现有的实时行情接口
+    try:
+        from app.routers.market import market_quote
+        
+        # 转换市场代码
+        sym = symbol
+        if market == "AStock":
+            if not symbol.startswith(("sh", "sz")):
+                sym = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
+        elif market == "HKStock":
+            sym = f"hk{symbol}"
+        elif market == "USStock":
+            sym = f"us{symbol}"
+        
+        quote = await market_quote(sym)
+        
+        if "data" in quote:
+            data = quote["data"]
+            return {
+                "market": market,
+                "symbol": symbol,
+                "price": data.get("price", 0),
+                "change": data.get("price_change", 0),
+                "change_pct": data.get("pct_change", 0),
+                "volume": data.get("volume", 0),
+                "timestamp": int(time.time()),
+            }
+    except Exception as e:
+        logger.warning(f"[Agent] get_price failed: {e}")
+    
+    # 降级返回
     return {
         "market": market,
         "symbol": symbol,
-        "price": 100.0,
-        "change": 2.5,
-        "change_pct": 2.56,
+        "price": 0,
+        "change": 0,
+        "change_pct": 0,
         "timestamp": int(time.time()),
+        "error": "Failed to fetch price",
     }
 
 
