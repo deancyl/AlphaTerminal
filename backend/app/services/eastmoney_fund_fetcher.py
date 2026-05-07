@@ -365,34 +365,74 @@ class EastmoneyFundFetcher:
                 
                 js_text = resp.text
                 
-                # 提取股票代码数组
-                stock_codes_match = re.search(r'stockCodes\s*=\s*(\[[^\]]*\])', js_text)
+                # 提取股票代码数组（支持新旧两种格式）
+                # 新格式: stockCodesNew =["1.600519","0.000858","116.00700"...]
+                # 旧格式: stockCodes =["6005191","0008580"...]
+                stock_codes_match = re.search(r'stockCodesNew\s*=\s*(\[[^\]]*\])', js_text)
+                if not stock_codes_match:
+                    stock_codes_match = re.search(r'stockCodes\s*=\s*(\[[^\]]*\])', js_text)
+                
                 if stock_codes_match:
                     try:
                         stock_codes = json.loads(stock_codes_match.group(1))
                         
-                        # 清理股票代码（去除市场后缀）
+                        # 清理股票代码（处理 {market}.{code} 格式）
                         clean_codes = []
+                        hk_codes = []  # 记录哪些是港股
                         for sc in stock_codes[:10]:  # 只取前10只
-                            # 代码格式如 "6005191" 或 "0008580"
-                            if len(sc) >= 6:
-                                clean_code = sc[:6]
-                                clean_codes.append(clean_code)
+                            if '.' in sc:
+                                # 新格式: "1.600519" -> market=1, code=600519
+                                # "116.00700" -> market=116, code=00700 (港股)
+                                parts = sc.split('.')
+                                if len(parts) == 2:
+                                    market, code = parts
+                                    # 补齐代码到6位
+                                    code = code.zfill(6)
+                                    clean_codes.append(code)
+                                    # 记录港股 (market=116)
+                                    if market == '116':
+                                        hk_codes.append(code)
+                            else:
+                                # 旧格式: "6005191" -> 取前6位
+                                if len(sc) >= 6:
+                                    clean_codes.append(sc[:6])
                         
-                        # 批量获取股票名称
-                        stock_names = await self._get_stock_names(clean_codes)
+                        # 批量获取股票名称（港股加 hk 前缀）
+                        tencent_codes = []
+                        for code in clean_codes:
+                            if code in hk_codes:
+                                tencent_codes.append(f"hk{code}")
+                            elif code.startswith('6'):
+                                tencent_codes.append(f"sh{code}")
+                            elif code.startswith('0') or code.startswith('3'):
+                                tencent_codes.append(f"sz{code}")
+                            else:
+                                tencent_codes.append(code)
+                        
+                        stock_names = await self._get_stock_names(tencent_codes)
                         
                         stocks = []
-                        for clean_code in clean_codes:
-                            name = stock_names.get(clean_code, "-")
-                            # 如果腾讯 API 返回失败，尝试从已知数据推断
-                            if name == "-" and clean_code in ["007001", "099871"]:
-                                # 港股代码，尝试其他格式
-                                name = "港股"  # 简化处理
+                        for i, clean_code in enumerate(clean_codes):
+                            # 构建查询用的 key
+                            if clean_code in hk_codes:
+                                lookup_key = f"hk{clean_code}"
+                            elif clean_code.startswith('6'):
+                                lookup_key = f"sh{clean_code}"
+                            elif clean_code.startswith('0') or clean_code.startswith('3'):
+                                lookup_key = f"sz{clean_code}"
+                            else:
+                                lookup_key = clean_code
+                            
+                            name = stock_names.get(lookup_key, "-")
+                            
+                            # 如果腾讯 API 返回失败，使用港股标识
+                            if name == "-" and clean_code in hk_codes:
+                                name = "港股"
+                            
                             stocks.append({
                                 "code": clean_code,
                                 "name": name,
-                                "ratio": 0,  # 比例需要另外获取
+                                "ratio": 0,  # 比例需要另外获取（TODO: 从其他 API 获取）
                             })
                         
                         # 估算资产配置
