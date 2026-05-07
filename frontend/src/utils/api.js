@@ -134,16 +134,18 @@ function sleep(ms) {
  * @returns {Promise<any>}
  */
 export async function apiFetch(url, options = {}) {
-  const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body } = options
+  const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
+    // 优先使用外部 signal（组件卸载时由外部中止），否则用本地 controller.signal
+    const activeSignal = (externalSignal && !externalSignal.aborted) ? externalSignal : controller.signal
     
     try {
       const fetchOptions = { 
-        signal: controller.signal,
+        signal: activeSignal,
         method,
         headers: {
           ...headers,

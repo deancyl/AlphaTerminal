@@ -86,6 +86,7 @@ function handleFullscreen() {
 let   chartInstance = null
 let   resizeObserver = null
 let   _fetchRetryCount = 0  // 宏观品种抓取重试计数器
+let   _fetchController = null  // AbortController：组件卸载时取消 pending 请求
 const hoverBar      = ref({})   // Task 3: 动态 OHLCV 数据
 
 function _safeMin(arr) { let m = arr[0]; for (let i = 1; i < arr.length; i++) if (arr[i] < m) m = arr[i]; return m }
@@ -730,12 +731,15 @@ function _cancelLeaveTimer() {
 // 渲染循环
 // ─────────────────────────────────────────────────────────────────
 async function fetchAndRender() {
+  // 取消上一个 pending 请求
+  _fetchController?.abort()
+  _fetchController = new AbortController()
   chartError.value = ''; isLoading.value = true
   try {
     // Guard: if symbol prop is undefined/null, use a fallback URL
     const safeSymbol = (props.symbol && props.symbol !== 'undefined') ? props.symbol : 'sh000001'
     const fullUrl = `/api/v1/market/history/${safeSymbol}?period=${props.period || 'daily'}&_t=${Date.now()}`
-    const d = await apiFetch(fullUrl, { timeoutMs: 15000 })
+    const d = await apiFetch(fullUrl, { timeoutMs: 15000, signal: _fetchController.signal })
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
 
@@ -838,6 +842,8 @@ onMounted(async () => {
 onUnmounted(() => {
   clearTimeout(_leaveTimer)
   _leaveTimer = null
+  _fetchController?.abort()
+  _fetchController = null
   resizeObserver?.disconnect()
   if (chartInstance) {
     chartInstance.off('mousemove')

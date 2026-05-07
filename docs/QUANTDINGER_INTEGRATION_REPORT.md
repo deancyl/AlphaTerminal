@@ -1,8 +1,8 @@
 # QuantDinger & awesome-quant 深度整合报告
 
-> 分析日期: 2026-05-07  
-> 当前版本: v0.6.11  
-> 状态: ✅ 深度审计完成  
+> 分析日期: 2026-05-07
+> 当前版本: v0.6.11
+> 状态: ✅ 深度审计完成 (第二版)
 > 仓库: https://github.com/deancyl/AlphaTerminal
 
 ---
@@ -15,12 +15,6 @@
    - [1.3 AlphaTerminal 当前状态](#13-alphaterminal-当前状态)
 2. [功能对比矩阵](#2-功能对比矩阵)
 3. [技术整合路线图](#3-技术整合路线图)
-   - [3.1 AI Agent & MCP 整合](#31-ai-agent--mcp-整合)
-   - [3.2 数据源整合](#32-数据源整合)
-   - [3.3 回测引擎整合](#33-回测引擎整合)
-   - [3.4 策略框架整合](#34-策略框架整合)
-   - [3.5 UI/UX 整合](#35-ux-整合)
-   - [3.6 安全机制整合](#36-安全机制整合)
 4. [实施计划](#4-实施计划)
 5. [参考资源](#5-参考资源)
 
@@ -30,8 +24,8 @@
 
 ### 1.1 QuantDinger 深度审计
 
-**GitHub**: https://github.com/brokermr810/QuantDinger  
-**版本**: v3.0.3  
+**GitHub**: https://github.com/brokermr810/QuantDinger
+**版本**: v3.0.3
 **定位**: 自托管量化交易操作系统 (Private AI Quant OS)
 
 #### 1.1.1 技术栈
@@ -46,33 +40,60 @@ Deploy:    Docker Compose
 ML:       LLM (OpenAI/Anthropic)
 ```
 
-#### 1.1.2 后端架构 (backend_api_python/app/)
+#### 1.1.2 后端架构总览
 
-**Routes (19 个路由文件, 总计约 800KB)**:
+```
+backend_api_python/app/
+├── routes/          # 21 个路由文件 + agent_v1 子模块
+├── services/        # 64 个服务文件
+├── data_providers/ # 10 个数据提供者
+└── data_sources/   # 交易所数据源
+```
 
-| 路由文件 | 大小 | 功能 |
-|----------|------|------|
-| `auth.py` | 47KB | 认证授权、JWT、OAuth |
-| `user.py` | 74KB | 用户管理、订阅、计费 |
-| `strategy.py` | 84KB | 策略 CRUD、版本管理 |
-| `quick_trade.py` | 71KB | 快捷交易引擎 |
-| `trading_executor.py` | 182KB | 订单执行引擎 |
-| `indicator.py` | 55KB | 技术指标计算 |
-| `backtest.py` | 40KB | 回测引擎 |
-| `portfolio.py` | 42KB | 组合管理 |
-| `market.py` | 22KB | 市场数据 |
-| `kline.py` | 3KB | K线数据 |
-| `dashboard.py` | 29KB | 仪表板数据 |
-| `fast_analysis.py` | 24KB | 快速分析 (AI) |
-| `ai_chat.py` | 1KB | AI 对话 |
-| `ibkr.py` | 10KB | IBKR 券商接口 |
-| `mt5.py` | 12KB | MT5 外汇接口 |
-| `billing.py` | 3KB | 计费系统 |
-| `community.py` | 15KB | 社区功能 |
-| `experiment.py` | 6KB | 实验编排 (AI) |
-| `polymarket.py` | 11KB | Polymarket 预测市场 |
+##### 路由模块 (routes/)
 
-**Services (33 个服务文件, 总计约 1.5MB)**:
+| 路由文件 | 大小 | 功能 | API数量 |
+|----------|------|------|---------|
+| `auth.py` | 47KB | 认证授权、JWT、OAuth、登录码 | 15+ |
+| `user.py` | 74KB | 用户管理、订阅、计费、通知 | 20+ |
+| `strategy.py` | 84KB | 策略 CRUD、版本管理、回测 | 15+ |
+| `quick_trade.py` | 71KB | 快捷交易引擎 | 10+ |
+| `trading_executor.py` | 182KB | 订单执行引擎 | 15+ |
+| `indicator.py` | 55KB | 技术指标计算、AI 生成 | 10+ |
+| `backtest.py` | 40KB | 回测引擎 | 8+ |
+| `portfolio.py` | 42KB | 组合管理、监控、警报 | 12+ |
+| `market.py` | 22KB | 市场数据、搜索 | 10+ |
+| `kline.py` | 3KB | K线数据 | 2 |
+| `dashboard.py` | 29KB | 仪表板数据 | 3 |
+| `fast_analysis.py` | 24KB | 快速 AI 分析 | 8+ |
+| `ai_chat.py` | 1KB | AI 对话 (桩) | 3 |
+| `ibkr.py` | 10KB | IBKR 券商接口 | 10+ |
+| `mt5.py` | 12KB | MT5 外汇接口 | 10+ |
+| `billing.py` | 3KB | 计费系统 | 4 |
+| `community.py` | 15KB | 社区功能、市场 | 10+ |
+| `experiment.py` | 6KB | 实验编排 (AI) | 5+ |
+| `polymarket.py` | 11KB | Polymarket 预测市场 | 3 |
+| `settings.py` | 44KB | 系统配置管理 | 6 |
+| `credentials.py` | 12KB | 交易所凭证加密存储 | 5 |
+| `global_market.py` | 12KB | 全球市场仪表板 | 8 |
+
+**Agent v1 子模块** (`/api/agent/v1/*`):
+
+| 文件 | 功能 | 认证 |
+|------|------|------|
+| `admin.py` | Token 发行管理 | JWT admin |
+| `strategies.py` | 策略 CRUD | Agent Token (R/W) |
+| `markets.py` | 市场数据 | Agent Token (R) |
+| `portfolio.py` | 组合查询 | Agent Token (R) |
+| `backtests.py` | 回测提交 | Agent Token (B) |
+| `experiments.py` | 实验编排 | Agent Token (B) |
+| `jobs.py` | 任务轮询 | Agent Token (R) |
+| `quick_trade.py` | Paper 交易 | Agent Token (T) |
+| `health.py` | 健康检查 | 无 |
+
+##### 服务模块 (services/) — 64 个文件
+
+**核心服务:**
 
 | 服务文件 | 大小 | 功能 |
 |----------|------|------|
@@ -91,26 +112,78 @@ ML:       LLM (OpenAI/Anthropic)
 | `builtin_indicators.py` | 8KB | 内置指标 |
 | `exchange_execution.py` | 4KB | 交易所执行 |
 
-**Data Providers (12 个数据提供者)**:
-- `adanos_sentiment.py` - 情绪数据
-- `crypto.py` - 加密货币
-- `forex.py` - 外汇
-- `commodities.py` - 大宗商品
-- `indices.py` - 指数
-- `news.py` - 新闻
-- `heatmap.py` - 热力图
-- `opportunities.py` - 机会发现
+**实验模块** (`services/experiment/`):
 
-#### 1.1.3 AI Agent Gateway 架构 (核心亮点) ⭐
+| 文件 | 功能 |
+|------|------|
+| `regime.py` | 规则型市场状态识别 |
+| `scoring.py` | 多因子评分 |
+| `evolution.py` | 参数空间生成候选变体 (grid/random) |
+| `runner.py` | 串联状态识别、批量回测、评分 |
+
+**交易所执行** (`services/live_trading/`):
+
+| 交易所 | 文件 |
+|--------|------|
+| Binance | `binance.py`, `binance_spot.py` |
+| OKX | `okx.py` |
+| Bybit | `bybit.py` |
+| Gate | `gate.py` |
+| KuCoin | `kucoin.py` |
+| HTX | `htx.py` |
+| Deepcoin | `deepcoin.py` |
+| Coinbase | `coinbase_exchange.py` |
+| Kraken | `kraken.py`, `kraken_futures.py` |
+| Bitget | `bitget.py`, `bitget_spot.py` |
+| 工厂 | `factory.py` — DataSourceFactory |
+
+**券商接口** (`services/ibkr_trading/`, `services/mt5_trading/`):
+
+- IBKR: `ib_insync` 库，支持美股/期权
+- MT5: MetaTrader5 Python 库，支持外汇/差价合约
+
+##### 数据提供者 (data_providers/) — 10 个文件
+
+| 提供者 | 功能 | 数据源 |
+|--------|------|--------|
+| `crypto.py` | 加密货币价格 | CCXT → yfinance → CoinGecko |
+| `forex.py` | 外汇对 | Twelve Data → yfinance → Tiingo |
+| `commodities.py` | 大宗商品 | Twelve Data → yfinance → Tiingo |
+| `indices.py` | 股票指数 | yfinance |
+| `sentiment.py` | 市场情绪 | Alternative.me, yfinance, akshare |
+| `news.py` | 财经新闻 | SearchService (Tavily/SerpAPI/Google CSE/Bing/DuckDuckGo) |
+| `heatmap.py` | 热力图聚合 | 综合上述所有来源 |
+| `opportunities.py` | 交易机会发现 | yfinance, 本地股票 |
+| `adanos_sentiment.py` | 社交情绪 API | Adanos API (Reddit/X/News/Polymarket) |
+| `__init__.py` | 缓存工具层 | Redis + 内存缓存 |
+
+**缓存 TTL 配置:**
+
+| 键 | TTL |
+|----|-----|
+| `crypto_heatmap` | 300s |
+| `forex_pairs` | 120s |
+| `stock_indices` | 120s |
+| `market_overview` | 120s |
+| `market_heatmap` | 120s |
+| `commodities` | 120s |
+| `market_news` | 180s |
+| `economic_calendar` | 3600s |
+| `market_sentiment` | 21600s |
+| `trading_opportunities` | 3600s |
+
+#### 1.1.3 AI Agent Gateway 架构 ⭐
 
 **文档**: `docs/agent/AGENT_ENVIRONMENT_DESIGN.md`, `docs/agent/AGENT_QUICKSTART.md`
 
+**设计原则**: 三层架构 (文档约定 → 命令约定 → 机器接口)
+
 **安全设计**:
-- Agent Token 颁发和管理 (JWT)
+- Agent Token 颁发和管理 (JWT 哈希存储)
 - 细粒度权限控制 (R/W/B/N/C/T Scopes)
-- 审计日志
+- 审计日志 (`qd_agent_audit` 表)
 - 交易 Token 默认 `paper_only=true`
-- 限流 (rate_limit_per_min)
+- 限流 (`rate_limit_per_min`)
 
 **Scope 权限矩阵**:
 
@@ -123,55 +196,65 @@ ML:       LLM (OpenAI/Anthropic)
 | `C` | Credentials | no | admin 专用 |
 | `T` | Trading | no | 交易/资金, 默认 paper-only |
 
-**Agent API 端点**:
+**Agent API 端点** (`/api/agent/v1/*`):
 
 ```bash
-# 发行 Token
-POST /api/agent/v1/admin/tokens
+# Token 管理 (admin JWT)
+POST   /api/agent/v1/admin/tokens          # 发行 Token
+DELETE /api/agent/v1/admin/tokens/{id}     # 撤销 Token
+GET    /api/agent/v1/admin/tokens          # 列表
 
-# 健康检查
-GET /api/agent/v1/health
+# 健康与身份
+GET    /api/agent/v1/health                # 公共探活
+GET    /api/agent/v1/whoami                # Token 身份
 
-# 身份验证
-GET /api/agent/v1/whoami
+# 市场数据 (R scope)
+GET    /api/agent/v1/markets               # 可访问市场列表
+GET    /api/agent/v1/markets/{market}/symbols  # 搜索标的
+GET    /api/agent/v1/klines               # OHLCV 数据
+GET    /api/agent/v1/price                # 最新价格
 
-# 市场数据
-GET /api/agent/v1/markets
-GET /api/agent/v1/markets/{market}/symbols
-GET /api/agent/v1/klines
-GET /api/agent/v1/price
+# 策略管理 (R/W scope)
+GET    /api/agent/v1/strategies            # 列表
+GET    /api/agent/v1/strategies/{id}      # 详情
 
-# 策略管理
-GET /api/agent/v1/strategies
-GET /api/agent/v1/strategies/{id}
+# 回测 (B scope)
+POST   /api/agent/v1/backtests             # 提交回测
+GET    /api/agent/v1/jobs/{id}            # 查询任务
 
-# 回测
-POST /api/agent/v1/backtests
-GET /api/agent/v1/jobs/{id}
+# 实验 (B scope)
+POST   /api/agent/v1/experiments/regime/detect      # 市场状态识别
+POST   /api/agent/v1/experiments/structured-tune    # 参数调优
+
+# Paper 交易 (T scope)
+POST   /api/agent/v1/quick-trade/order    # 下单 (paper)
 ```
 
 #### 1.1.4 MCP Server 实现 ⭐
 
-**路径**: `mcp_server/`  
+**路径**: `mcp_server/src/quantdinger_mcp/server.py`
 **PyPI**: `quantdinger-mcp`
+**传输**: stdio (默认), SSE, streamable-http
+
+**架构原则**: 薄封装，REST 是唯一事实来源，只暴露 R 类和 B 类工具。
 
 **暴露的 MCP 工具**:
 
-| 工具 | 类 | 功能 |
-|------|-----|------|
-| `whoami` | R | 检查调用 token |
-| `list_markets` | R | 可访问市场 |
-| `search_symbols` | R | 搜索标的 |
-| `get_klines` | R | OHLCV 数据 |
-| `get_price` | R | 最新价格 |
-| `list_strategies` | R | 列出策略 |
-| `get_strategy` | R | 获取策略详情 |
-| `submit_backtest` | B | 提交回测 |
-| `get_job` | R | 查询任务状态 |
-| `regime_detect` | B | 市场状态检测 |
-| `submit_structured_tune` | B | 提交参数调优 |
+| 工具 | 类 | 功能 | 对应 REST |
+|------|-----|------|----------|
+| `whoami` | R | 检查调用 token 身份 | GET /api/agent/v1/whoami |
+| `list_markets` | R | 可访问市场列表 | GET /api/agent/v1/markets |
+| `search_symbols` | R | 搜索标的 | GET /api/agent/v1/markets/{market}/symbols |
+| `get_klines` | R | OHLCV 数据 | GET /api/agent/v1/klines |
+| `get_price` | R | 最新价格 | GET /api/agent/v1/price |
+| `list_strategies` | R | 策略列表 | GET /api/agent/v1/strategies |
+| `get_strategy` | R | 策略详情 | GET /api/agent/v1/strategies/{id} |
+| `submit_backtest` | B | 提交回测 | POST /api/agent/v1/backtests |
+| `get_job` | R | 查询任务状态 | GET /api/agent/v1/jobs/{id} |
+| `regime_detect` | B | 市场状态检测 | POST /api/agent/v1/experiments/regime/detect |
+| `submit_structured_tune` | B | 提交参数调优 | POST /api/agent/v1/experiments/structured-tune |
 
-**MCP 配置示例**:
+**MCP 配置示例** (Cursor/Cline/Claude Code):
 
 ```json
 {
@@ -187,42 +270,78 @@ GET /api/agent/v1/jobs/{id}
 }
 ```
 
+**环境变量**:
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `QUANTDINGER_BASE_URL` | (必需) | API 基础 URL |
+| `QUANTDINGER_AGENT_TOKEN` | (必需) | Agent Token |
+| `QUANTDINGER_TIMEOUT_S` | 60 | 请求超时 |
+| `QUANTDINGER_MCP_TRANSPORT` | stdio | 传输方式 |
+| `QUANTDINGER_MCP_HOST` | 0.0.0.0 | HTTP 绑定地址 |
+| `QUANTDINGER_MCP_PORT` | 7800 | HTTP 端口 |
+
 #### 1.1.5 AI 交易系统架构 ⭐
 
 **文档**: `docs/AI_TRADING_SYSTEM_PLAN_CN.md`
 
 **目标架构**:
 ```
-Market Regime Engine -> Strategy Generator -> Backtest Engine 
+Market Regime Engine -> Strategy Generator -> Backtest Engine
 -> Strategy Scoring -> Strategy Evolution -> Best Strategy Output
 ```
 
-**Phase 1 (当前)**:
-- AI 识别市场状态
+**Phase 1 (当前实现)**:
+- AI 识别市场状态 (规则型 regime.py)
 - 批量生成/接收策略候选
-- 自动回测并评分
-- 参数进化
-- 输出最优策略供人工确认
+- 自动回测并评分 (多因子 scoring.py)
+- 参数进化 (grid/random, evolution.py)
+- 输出最优候选供人工确认
+
+**Experiment 服务管线** (`services/experiment/runner.py`):
+1. 调用 `regime.py` 识别市场状态
+2. 生成/接收策略候选变体
+3. 并行批量回测
+4. 多因子评分 (收益、夏普、回撤、稳定性、胜率、盈亏比)
+5. 排名并输出最佳策略
 
 **新增 API**:
 
 ```bash
 # 市场状态识别
 POST /api/experiment/regime/detect
+{
+  "market": "Crypto",
+  "symbol": "BTC/USDT",
+  "timeframe": "1D",
+  "startDate": "2024-01-01",
+  "endDate": "2024-12-31"
+}
 
 # 完整实验管线
 POST /api/experiment/pipeline/run
+{
+  "base": {
+    "indicatorCode": "output = {'signal': df['close'] > df['close'].rolling(20).mean()}",
+    "market": "Crypto", "symbol": "BTC/USDT",
+    "timeframe": "1D", "startDate": "2024-01-01",
+    "endDate": "2024-12-31", "initialCapital": 10000,
+    "commission": 0.02, "slippage": 0.02,
+    "leverage": 1, "tradeDirection": "long",
+    "strategyConfig": {"risk": {"stopLossPct": 2, "takeProfitPct": 6}}
+  },
+  "variants": [{"name": "tight_risk", "overrides": {"strategyConfig.risk.stopLossPct": 1.5}}],
+  "evolution": {"method": "grid", "maxVariants": 8},
+  "parameterSpace": {
+    "strategyConfig.risk.stopLossPct": [1.0, 1.5, 2.0],
+    "strategyConfig.risk.takeProfitPct": [4, 6, 8]
+  }
+}
 ```
-
-**Experiment 服务**:
-- `regime.py` - 规则型市场状态识别
-- `scoring.py` - 多因子评分
-- `evolution.py` - 参数空间生成候选变体
-- `runner.py` - 串联状态识别、批量回测、评分
 
 #### 1.1.6 策略框架 ⭐
 
-**文档**: `docs/STRATEGY_DEV_GUIDE_CN.md`
+**文档**: `docs/STRATEGY_DEV_GUIDE_CN.md` (1269 行)
 
 **两种策略模式**:
 
@@ -231,7 +350,7 @@ POST /api/experiment/pipeline/run
 | **IndicatorStrategy** | 指标/信号脚本 | df 计算, 布尔信号, 图表展示 |
 | **ScriptStrategy** | 事件驱动脚本 | on_bar, ctx.position, ctx.buy/sell |
 
-**IndicatorStrategy 示例**:
+**IndicatorStrategy 核心约定**:
 
 ```python
 # @name 均量金叉策略
@@ -253,6 +372,46 @@ output = {
     'signals': {'buy': df['buy'], 'sell': df['sell']}
 }
 ```
+
+**ScriptStrategy 核心约定**:
+
+```python
+def on_init(ctx):
+    ctx.log("strategy initialized")
+
+def on_bar(ctx, bar):
+    stop_loss_pct = ctx.param("stop_loss_pct", 0.03)
+    take_profit_pct = ctx.param("take_profit_pct", 0.06)
+
+    if not ctx.position and ma_fast > ma_slow:
+        ctx.buy(price=bar.close, amount=risk_pct)
+        return
+
+    if ctx.position["side"] == "long":
+        if bar.close <= entry_price * (1 - stop_loss_pct):
+            ctx.close_position()
+```
+
+**`# @strategy` 支持的 key**:
+
+| Key | 含义 | 示例 |
+|-----|------|------|
+| `stopLossPct` | 默认止损比例 | `0.02` = 2% |
+| `takeProfitPct` | 默认止盈比例 | `0.05` = 5% |
+| `entryPct` | 默认开仓资金占比 | `0.25` = 25% |
+| `trailingEnabled` | 跟踪止损 | `true`/`false` |
+| `trailingStopPct` | 跟踪止损比例 | `0.015` |
+| `trailingActivationPct` | 启动阈值 | `0.03` |
+| `tradeDirection` | 方向限制 | `long`/`short`/`both` |
+
+**ctx.position 字段**:
+
+| 字段 | 含义 |
+|------|------|
+| `side` | `long`, `short`, 或空字符串 |
+| `size` | 当前持仓大小 |
+| `entry_price` | 平均开仓价 |
+| `direction` | `1`, `-1`, `0` |
 
 #### 1.1.7 技术指标定义 ⭐
 
@@ -294,12 +453,25 @@ services:
   frontend:  image: nginx (预构建 dist)
 ```
 
-#### 1.1.10 核心文档列表
+#### 1.1.10 API 认证缺陷 ⚠️
+
+**重要发现**: 以下路由**完全没有认证保护**:
+
+| 路由 | 风险等级 | 说明 |
+|------|----------|------|
+| `ibkr.py` | 🔴 高 | 券商账户操作，无 `@login_required` |
+| `mt5.py` | 🔴 高 | 外汇账户操作，无 `@login_required` |
+| `ai_chat.py` | 🟡 中 | 桩文件，但无认证 |
+| `health.py` | 🟢 低 | 仅为健康检查 |
+
+**建议**: 必须为 `ibkr.py` 和 `mt5.py` 添加认证中间件。
+
+#### 1.1.11 核心文档列表
 
 | 文档 | 内容 |
 |------|------|
 | `AI_TRADING_SYSTEM_PLAN_CN.md` | AI 完整交易系统改造方案 |
-| `STRATEGY_DEV_GUIDE_CN.md` | Python 策略开发指南 |
+| `STRATEGY_DEV_GUIDE_CN.md` | Python 策略开发指南 (1269 行) |
 | `INDICATOR_DEFINITIONS_CN.md` | 技术指标计算口径 |
 | `AGENT_ENVIRONMENT_DESIGN.md` | 多 Agent 运行环境设计 |
 | `AGENT_QUICKSTART.md` | Agent 快速入门 |
@@ -315,16 +487,16 @@ services:
 
 #### 1.2.1 数据源
 
-| 资源 | 类型 | 价值评分 | AlphaTerminal 状态 |
-|------|------|----------|-------------------|
-| **AkShare** | 免费开源 | ⭐⭐⭐ | ✅ 已在用 |
-| TuShare | 免费 | ⭐⭐ | ⚪ 备选 |
-| pytdx | 通达信 | ⭐⭐ | ⚪ 未用 |
-| JoinQuant SDK | 在线 | ⭐⭐ | ⚪ 备选 |
-| zvt | 量化框架 | ⭐⭐ | ⚪ 未用 |
-| fooltrader | 大数据 | ⭐⭐ | ⚪ 未用 |
-| FXMacroData | 外汇宏观 | ⭐⭐ | ⚪ 未用 |
-| **Adanos Sentiment** | 情绪 API | ⭐⭐⭐ | ⚪ 未用 |
+| 资源 | 类型 | AlphaTerminal 状态 |
+|------|------|-------------------|
+| **AkShare** | 免费开源 | ✅ 已在用 |
+| TuShare | 免费 | ⚪ 备选 |
+| pytdx | 通达信 | ⚪ 未用 |
+| JoinQuant SDK | 在线 | ⚪ 备选 |
+| zvt | 量化框架 | ⚪ 未用 |
+| fooltrader | 大数据 | ⚪ 未用 |
+| FXMacroData | 外汇宏观 | ⚪ 未用 (支持 MCP) |
+| **Adanos Sentiment** | 情绪 API | ⚪ 未用 |
 
 #### 1.2.2 回测框架
 
@@ -365,22 +537,33 @@ services:
 | InfluxDB | 时序 | 监控场景 |
 | kdb+ | 时序 | 超大规模 (收费) |
 
+#### 1.2.6 学术论文分类 (papers.md)
+
+| 类别 | 论文数 | 代表作 |
+|------|--------|--------|
+| Machine Learning (低频预测) | 6+ | CNN/RBM/SVM/Boosting |
+| Reinforcement Learning | 4+ | DQN/ANFIS/自动 FX 交易 |
+| NLP | 4+ | Twitter mood/Bollen Mao/事件驱动 |
+| High Frequency Trading | 7+ | LOB/暗池/最优执行 |
+| Portfolio Management | 2+ | 在线组合选择/深度组合理论 |
+
 ---
 
 ### 1.3 AlphaTerminal 当前状态
 
-**GitHub**: https://github.com/deancyl/AlphaTerminal  
+**GitHub**: https://github.com/deancyl/AlphaTerminal
 **当前版本**: v0.6.11
 
 #### 1.3.1 技术栈
 
 ```
-Frontend:  Vue 3 + ECharts + Vite
+Frontend:  Vue 3 + ECharts + Vite + Tailwind CSS
 Backend:   FastAPI (Python 3.11+)
 Database:  SQLite (WAL 模式)
 Cache:     内存缓存 (SpotCache)
 Data:      AkShare / 腾讯财经 / 新浪财经 / Eastmoney
 LLM:       多 Provider (MiniMax, DeepSeek, OpenAI, Kimi 等)
+Proxy:     Vite Preview 内置代理
 ```
 
 #### 1.3.2 Backend Routers (17 个)
@@ -412,20 +595,24 @@ LLM:       多 Provider (MiniMax, DeepSeek, OpenAI, Kimi 等)
 | `proxy_config.py` | 智能代理分流 |
 | `data_validator.py` | 数据验证 |
 | `scheduler.py` | 定时任务 |
+| `fetchers/` | 多源数据获取 (sina, tencent, eastmoney, alphavantage) |
+| `circuit_breaker.py` | 熔断器 |
+| `ws_manager.py` | WebSocket 管理 |
 
 #### 1.3.4 Frontend Components
 
-**主要组件**:
-- `AdminDashboard.vue` - 管理面板
-- `AdvancedKlinePanel.vue` - K线面板
-- `BacktestDashboard.vue` - 回测仪表板
-- `BacktestChart.vue` - 回测图表
-- `PortfolioDashboard.vue` - 组合仪表板
-- `SentimentGauge.vue` - 情绪仪表
-- `NewsFeed.vue` - 快讯
-- `FundHoldings.vue` - 基金持仓
-- `CommandCenter.vue` - 命令中心
-- `CommandPalette.vue` - 命令面板
+| 组件 | 状态 |
+|------|------|
+| `AdminDashboard.vue` | ✅ |
+| `AdvancedKlinePanel.vue` | ✅ |
+| `BacktestDashboard.vue` | ✅ |
+| `BacktestChart.vue` | ✅ |
+| `PortfolioDashboard.vue` | ✅ |
+| `SentimentGauge.vue` | ✅ |
+| `NewsFeed.vue` | ✅ |
+| `FundHoldings.vue` | ✅ |
+| `CommandCenter.vue` | ✅ |
+| `CommandPalette.vue` | ✅ |
 
 #### 1.3.5 已有功能
 
@@ -488,17 +675,15 @@ LLM:       多 Provider (MiniMax, DeepSeek, OpenAI, Kimi 等)
 
 ## 3. 技术整合路线图
 
-### 3.1 AI Agent & MCP 整合
+### 3.1 AI Agent & MCP 整合 ⭐⭐⭐
 
 #### 3.1.1 为什么重要
 
-QuantDinger 的 Agent Gateway 允许 AI Agent (Claude Code, Cursor) 直接调用量化系统，这是未来趋势。AlphaTerminal 目前只有简单的 Copilot，无法被 AI Agent 驱动。
+QuantDinger 的 Agent Gateway 允许 AI Agent (Claude Code, Cursor) 直接调用量化系统。AlphaTerminal 目前只有简单的 Copilot，无法被 AI Agent 驱动。
 
 #### 3.1.2 实现方案
 
-**1. 创建 Agent Token 系统**
-
-参考 `backend_api_python/app/routes/auth.py` 和 `backend_api_python/app/services/security_service.py`:
+**1. 创建 Agent Token 系统** (参考 `backend_api_python/app/routes/auth.py`)
 
 ```python
 # backend/app/services/agent_token.py
@@ -532,9 +717,6 @@ class AgentToken:
     created_at: datetime
 
 class AgentTokenService:
-    def __init__(self, db):
-        self.db = db
-    
     def create_token(
         self,
         name: str,
@@ -543,11 +725,11 @@ class AgentTokenService:
         instruments: list[str] = None,
         expires_in_days: int = 30,
         rate_limit: int = 120
-    ) -> AgentToken:
+    ) -> tuple[str, AgentToken]:
         """创建新的 Agent Token"""
         raw_token = f"at_{secrets.token_hex(32)}"
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
-        
+
         token = AgentToken(
             id=self._next_id(),
             name=name,
@@ -556,23 +738,19 @@ class AgentTokenService:
             scopes=scopes,
             markets=markets or ["*"],
             instruments=instruments or ["*"],
-            paper_only=True,  # 默认 paper-only
+            paper_only=True,
             rate_limit=rate_limit,
             expires_at=datetime.now() + timedelta(days=expires_in_days),
             created_at=datetime.now()
         )
-        
         self._save(token)
-        # 返回原始 token (只显示一次)
         return raw_token, token
-    
+
     def verify_token(self, raw_token: str) -> AgentToken | None:
-        """验证 Token"""
         token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
         return self.db.get(token_hash=token_hash)
-    
+
     def check_scope(self, token: AgentToken, required_scope: TokenScope) -> bool:
-        """检查 Token 是否有权限"""
         return required_scope.value in token.scopes
 ```
 
@@ -587,18 +765,13 @@ from typing import Optional
 
 router = APIRouter(prefix="/api/agent/v1", tags=["agent"])
 
-class AgentTokenService:
-    def __init__(self):
-        self.tokens = {}
-    
-    async def verify(self, authorization: str = Header(...)) -> dict:
-        if not authorization.startswith("Bearer "):
-            raise HTTPException(401, "Invalid authorization header")
-        token = authorization[7:]
-        # verify logic...
-        return {"scopes": ["R", "B"], "markets": ["Crypto"]}
-
 agent_service = AgentTokenService()
+
+async def verify(authorization: str = Header(...)) -> dict:
+    if not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Invalid authorization header")
+    token = authorization[7:]
+    return agent_service.verify(token)
 
 # Market Data Endpoints
 @router.get("/health")
@@ -606,7 +779,7 @@ async def health():
     return {"status": "ok"}
 
 @router.get("/whoami")
-async def whoami(token: dict = Depends(agent_service.verify)):
+async def whoami(token: dict = Depends(verify)):
     return {
         "scopes": token["scopes"],
         "markets": token["markets"],
@@ -614,30 +787,18 @@ async def whoami(token: dict = Depends(agent_service.verify)):
     }
 
 @router.get("/markets")
-async def list_markets(token: dict = Depends(agent_service.verify)):
+async def list_markets(token: dict = Depends(verify)):
     if "R" not in token["scopes"]:
         raise HTTPException(403, "Insufficient scope")
-    # 返回支持的市场列表
     return ["Crypto", "USStock", "Forex", "AStock"]
 
 @router.get("/markets/{market}/symbols")
-async def search_symbols(
-    market: str,
-    keyword: str = "",
-    limit: int = 20,
-    token: dict = Depends(agent_service.verify)
-):
+async def search_symbols(market: str, keyword: str = "", limit: int = 20, token: dict = Depends(verify)):
     # 搜索市场内的标的
     ...
 
 @router.get("/klines")
-async def get_klines(
-    market: str,
-    symbol: str,
-    timeframe: str = "1D",
-    limit: int = 100,
-    token: dict = Depends(agent_service.verify)
-):
+async def get_klines(market: str, symbol: str, timeframe: str = "1D", limit: int = 300, token: dict = Depends(verify)):
     # 获取 K 线数据
     ...
 
@@ -650,7 +811,7 @@ async def submit_backtest(
     timeframe: str,
     start_date: str,
     end_date: str,
-    token: dict = Depends(agent_service.verify)
+    token: dict = Depends(verify)
 ):
     if "B" not in token["scopes"]:
         raise HTTPException(403, "Insufficient scope")
@@ -663,11 +824,11 @@ async def submit_backtest(
 ```python
 # backend/mcp_server/src/server.py
 
-from mcp.server import Server
-from mcp.types import Tool, Resource
+from mcp.server.fastmcp import FastMCP
 import httpx
+import os
 
-server = Server("alphaterminal")
+server = FastMCP("alphaterminal")
 
 @server.list_tools()
 async def list_tools() -> list[Tool]:
@@ -706,7 +867,7 @@ async def list_tools() -> list[Tool]:
 async def call_tool(name: str, arguments: dict) -> list[dict]:
     base_url = os.environ["ALPHATERMINAL_BASE_URL"]
     token = os.environ["ALPHATERMINAL_AGENT_TOKEN"]
-    
+
     async with httpx.AsyncClient() as client:
         if name == "get_market_data":
             resp = await client.get(
@@ -715,7 +876,6 @@ async def call_tool(name: str, arguments: dict) -> list[dict]:
                 headers={"Authorization": f"Bearer {token}"}
             )
             return [{"content": resp.json()}]
-        # ...
 ```
 
 #### 3.1.3 实施步骤
@@ -760,46 +920,15 @@ import tushare as ts
 class TushareFetcher:
     def __init__(self, token: str = None):
         self.pro = ts.pro_api(token)
-    
+
     def get_stock_basic(self) -> pd.DataFrame:
-        """获取股票基本信息"""
         return self.pro.stock_basic(exchange='', list_status='L')
-    
+
     def get_daily(self, ts_code: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """获取日线数据"""
         return self.pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
-    
-    def get_financial_data(self, ts_code: str, period: str) -> pd.DataFrame:
-        """获取财务数据"""
-        return self.pro.fina_indicator(ts_code=ts_code, period=period)
 ```
 
-**2. pytdx** (通达信数据)
-
-```python
-# backend/app/services/pytdx_fetcher.py
-
-from pytdx.hq import TdxHq_API
-
-class PytdxFetcher:
-    def __init__(self):
-        self.api = TdxHq_API(heartbeat=True)
-    
-    def connect(self, ip: str = "101.227.73.33", port: int = 7709):
-        self.api.connect(ip, port)
-    
-    def get_quote(self, code: str) -> dict:
-        """获取实时行情"""
-        data = self.api.get_security_quote([(code,)])[0]
-        return {
-            "code": data["code"],
-            "name": data["name"],
-            "price": data["price"],
-            "volume": data["vol"]
-        }
-```
-
-**3. Adanos Market Sentiment API**
+**2. Adanos Market Sentiment API**
 
 ```python
 # backend/app/services/adanos_fetcher.py
@@ -810,9 +939,8 @@ class AdanosSentimentFetcher:
     def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://api.adanos.org"
-    
+
     async def get_trending(self, category: str = "stocks") -> dict:
-        """获取 trending tickers"""
         async with httpx.AsyncClient() as client:
             resp = await client.get(
                 f"{self.base_url}/v1/trending",
@@ -827,11 +955,10 @@ class AdanosSentimentFetcher:
 | 阶段 | 任务 | 工作量 | 依赖 |
 |------|------|--------|------|
 | 1 | TuShare 集成 (基础行情) | 2d | 无 |
-| 2 | pytdx 集成 (Level2) | 3d | 1 |
-| 3 | Adanos 情绪 API | 2d | 无 |
-| 4 | 统一数据接口 | 2d | 1,2,3 |
+| 2 | Adanos 情绪 API | 2d | 无 |
+| 3 | 统一数据接口 | 2d | 1, 2 |
 
-**总工期**: 约 9 个工作日
+**总工期**: 约 6 个工作日
 
 #### 3.2.4 实施难度
 
@@ -863,9 +990,8 @@ class PerformanceAnalyzer:
     def __init__(self, returns: pd.Series, positions: pd.DataFrame = None):
         self.returns = returns
         self.positions = positions
-    
+
     def get_metrics(self) -> dict:
-        """计算绩效指标"""
         return {
             "total_return": ep.cum_returns_final(self.returns),
             "annual_return": ep.annual_return(self.returns, period='daily'),
@@ -875,9 +1001,8 @@ class PerformanceAnalyzer:
             "calmar_ratio": ep.calmar_ratio(self.returns),
             "win_rate": (self.returns > 0).sum() / len(self.returns),
         }
-    
+
     def generate_pyfolio_report(self, benchmark_returns: pd.Series = None):
-        """生成 pyfolio 报告"""
         return pf.create_full_tear_sheet(
             self.returns,
             positions=self.positions,
@@ -895,8 +1020,8 @@ from enum import Enum
 import itertools
 
 class OptimizationMethod(Enum):
-    GRID = "grid"        # 网格搜索
-    RANDOM = "random"    # 随机搜索
+    GRID = "grid"
+    RANDOM = "random"
 
 @dataclass
 class ParameterSpace:
@@ -907,11 +1032,9 @@ class BacktestOptimizer:
     def __init__(self, strategy_code: str, parameter_space: list[ParameterSpace]):
         self.strategy_code = strategy_code
         self.parameter_space = parameter_space
-    
+
     def generate_variants(self, method: OptimizationMethod, max_variants: int = 100):
-        """生成参数变体"""
         if method == OptimizationMethod.GRID:
-            # 网格搜索
             keys = [p.name for p in self.parameter_space]
             values = [p.values for p in self.parameter_space]
             for combo in itertools.product(*values):
@@ -921,22 +1044,13 @@ class BacktestOptimizer:
             keys = [p.name for p in self.parameter_space]
             for _ in range(max_variants):
                 yield {k: random.choice(p.values) for k, p in zip(keys, self.parameter_space)}
-    
-    def run_optimization(
-        self,
-        method: OptimizationMethod,
-        metric: str = "sharpe_ratio",
-        max_variants: int = 100
-    ) -> list[dict]:
-        """运行优化"""
+
+    def run_optimization(self, method: OptimizationMethod, metric: str = "sharpe_ratio", max_variants: int = 100) -> list[dict]:
         results = []
         for params in self.generate_variants(method, max_variants):
-            # 运行回测
             result = self.run_backtest(params)
             result["params"] = params
             results.append(result)
-        
-        # 按指标排序
         results.sort(key=lambda x: x.get(metric, 0), reverse=True)
         return results
 ```
@@ -948,7 +1062,7 @@ class BacktestOptimizer:
 | 1 | pyfolio 集成 | 2d | 无 |
 | 2 | 绩效指标计算 | 1d | 1 |
 | 3 | 参数调优框架 | 3d | 无 |
-| 4 | 多策略对比 UI | 2d | 1,2,3 |
+| 4 | 多策略对比 UI | 2d | 1, 2, 3 |
 
 **总工期**: 约 8 个工作日
 
@@ -958,7 +1072,7 @@ class BacktestOptimizer:
 
 ---
 
-### 3.4 策略框架整合
+### 3.4 策略框架整合 ⭐⭐⭐⭐
 
 #### 3.4.1 为什么重要
 
@@ -977,7 +1091,6 @@ import pandas as pd
 
 @dataclass
 class StrategySpec:
-    """策略规格定义"""
     name: str
     description: str
     parameters: Dict[str, any]
@@ -988,55 +1101,24 @@ class IndicatorStrategy:
     def __init__(self, code: str, spec: StrategySpec):
         self.code = code
         self.spec = spec
-    
+
     def compile(self) -> Callable:
-        """编译策略代码为可执行函数"""
-        local_vars = {"pd": pd}
+        local_vars = {"pd": pd, "params": self.spec.parameters}
         exec(self.code, local_vars)
         return local_vars["output"]
-    
+
     def evaluate(self, df: pd.DataFrame) -> Dict[str, pd.Series]:
-        """评估策略生成信号"""
         output_func = self.compile()
         return output_func(df)
-    
+
     def to_signal_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        """转换为信号 DataFrame"""
         result = self.evaluate(df)
         signals = result.get("signals", {})
-        
         return pd.DataFrame({
             "buy": signals.get("buy", pd.Series(False, index=df.index)),
             "sell": signals.get("sell", pd.Series(False, index=df.index)),
             "indicators": result.get("indicators", {})
         })
-
-# 策略执行器
-class StrategyRunner:
-    def __init__(self, strategy: IndicatorStrategy):
-        self.strategy = strategy
-    
-    def backtest(self, df: pd.DataFrame, initial_capital: float = 10000) -> BacktestResult:
-        """回测策略"""
-        signals = self.strategy.to_signal_df(df)
-        # ... 回测逻辑
-        return BacktestResult(...)
-    
-    def walk_forward(self, df: pd.DataFrame, train_window: int, test_window: int):
-        """Walk-forward 分析"""
-        results = []
-        for i in range(train_window, len(df), test_window):
-            train_df = df[i-train_window:i]
-            test_df = df[i:i+test_window]
-            
-            # 在训练集上优化参数
-            best_params = self.optimize(train_df)
-            
-            # 在测试集上验证
-            result = self.backtest_with_params(test_df, best_params)
-            results.append(result)
-        
-        return results
 ```
 
 **ScriptStrategy 模式**:
@@ -1048,7 +1130,6 @@ from dataclasses import dataclass
 
 @dataclass
 class StrategyContext:
-    """策略执行上下文"""
     df: pd.DataFrame
     position: float = 0.0
     cash: float = 0.0
@@ -1059,9 +1140,8 @@ class ScriptStrategy:
     def __init__(self, code: str):
         self.code = code
         self._compile()
-    
+
     def _compile(self):
-        """编译策略代码"""
         self._namespace = {
             "pd": pd,
             "ctx": StrategyContext(df=pd.DataFrame()),
@@ -1070,25 +1150,23 @@ class ScriptStrategy:
             "close_position": self._close_position,
         }
         exec(self.code, self._namespace)
-    
+
     def on_init(self, ctx: StrategyContext):
-        """初始化回调"""
         if "on_init" in self._namespace:
             self._namespace["on_init"](ctx)
-    
+
     def on_bar(self, ctx: StrategyContext, bar: pd.Series):
-        """每根 K 线回调"""
         if "on_bar" in self._namespace:
             self._namespace["on_bar"](ctx, bar)
-    
+
     def _buy(self, ctx: StrategyContext, quantity: float, price: float = None):
         ctx.position += quantity
         ctx.cash -= quantity * (price or ctx.df["close"].iloc[-1])
-    
+
     def _sell(self, ctx: StrategyContext, quantity: float, price: float = None):
         ctx.position -= quantity
         ctx.cash += quantity * (price or ctx.df["close"].iloc[-1])
-    
+
     def _close_position(self, ctx: StrategyContext):
         ctx.position = 0
 ```
@@ -1100,8 +1178,8 @@ class ScriptStrategy:
 | 1 | 策略 DSL 设计 | 2d | 无 |
 | 2 | IndicatorStrategy 解析器 | 3d | 1 |
 | 3 | ScriptStrategy 运行时 | 3d | 1 |
-| 4 | 策略 IDE UI | 5d | 2,3 |
-| 5 | 策略版本管理 | 2d | 2,3 |
+| 4 | 策略 IDE UI | 5d | 2, 3 |
+| 5 | 策略版本管理 | 2d | 2, 3 |
 
 **总工期**: 约 15 个工作日
 
@@ -1111,56 +1189,9 @@ class ScriptStrategy:
 
 ---
 
-### 3.5 UI/UX 整合
+### 3.5 安全机制整合
 
-#### 3.5.1 QuantDinger UI 设计模式
-
-QuantDinger 有私有前端仓库 (`frontend/` 仅含构建产物)。但从文档 `docs/FRONTEND_FAST_ANALYSIS.md` 可以看出:
-
-**UI 设计原则**:
-1. **Fast Analysis 组件化** - 快速分析结果应该是一个独立组件
-2. **Trading Plan 明确** - 止损/止盈应该从 `trading_plan` 字段读取，而非 `trading_levels`
-3. **Market Regime 展示** - 市场状态应该可视化展示
-
-**参考组件结构**:
-```
-FastAnalysisReport.vue
-├── TrendOutlook.vue      # 趋势预判
-├── TradingPlan.vue      # 交易计划
-│   ├── EntryPrice.vue
-│   ├── StopLoss.vue
-│   └── TakeProfit.vue
-└── IndicatorsPro.vue   # 技术指标详情
-```
-
-#### 3.5.2 AlphaTerminal UI 当前状态
-
-| 组件 | 状态 | 说明 |
-|------|------|------|
-| DashboardGrid | ✅ | 响应式网格布局 |
-| SentimentGauge | ✅ | 情绪仪表 |
-| NewsFeed | ✅ | 快讯列表 |
-| FundHoldings | ✅ | 基金持仓 |
-| Copilot | ⚠️ | 基础对话 |
-
-#### 3.5.3 UI 整合建议
-
-| 功能 | 优先级 | 实现方案 |
-|------|--------|---------|
-| 策略 IDE | ⭐⭐⭐ | 参考 QuantDinger Indicator IDE |
-| Fast Analysis | ⭐⭐ | 新增 AI 分析结果组件 |
-| Market Regime 展示 | ⭐⭐ | 新增市场状态组件 |
-| 多窗口布局 | ⭐ | 参考 GridStack 实现 |
-
-#### 3.5.4 实施难度
-
-⭐⭐⭐ (3/5)
-
----
-
-### 3.6 安全机制整合
-
-#### 3.6.1 为什么重要
+#### 3.5.1 为什么重要
 
 QuantDinger 的安全机制确保:
 - Agent Token 不会被滥用
@@ -1169,7 +1200,7 @@ QuantDinger 的安全机制确保:
 
 AlphaTerminal 目前没有这些机制。
 
-#### 3.6.2 实现方案
+#### 3.5.2 实现方案
 
 **1. 审计日志**:
 
@@ -1178,7 +1209,6 @@ AlphaTerminal 目前没有这些机制。
 
 from dataclasses import dataclass
 from datetime import datetime
-import json
 
 @dataclass
 class AuditLog:
@@ -1192,18 +1222,7 @@ class AuditLog:
     user_agent: str
 
 class AuditService:
-    def __init__(self, db):
-        self.db = db
-    
-    def log(
-        self,
-        agent_id: str,
-        action: str,
-        resource: str,
-        details: dict = None,
-        request: Request = None
-    ):
-        """记录审计日志"""
+    def log(self, agent_id: str, action: str, resource: str, details: dict = None, request: Request = None):
         log = AuditLog(
             id=self._next_id(),
             timestamp=datetime.now(),
@@ -1215,24 +1234,6 @@ class AuditService:
             user_agent=request.headers.get("user-agent") if request else None
         )
         self._save(log)
-    
-    def query(
-        self,
-        agent_id: str = None,
-        action: str = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        limit: int = 100
-    ) -> list[AuditLog]:
-        """查询审计日志"""
-        query = "SELECT * FROM audit_logs WHERE 1=1"
-        params = []
-        
-        if agent_id:
-            query += " AND agent_id = ?"
-            params.append(agent_id)
-        
-        return self.db.execute(query, params).fetchall()
 ```
 
 **2. Paper Trading 模式**:
@@ -1251,39 +1252,30 @@ class TradingMode(Enum):
 class Order:
     id: str
     symbol: str
-    side: str  # BUY / SELL
+    side: str
     quantity: float
     price: float
     mode: TradingMode
-    status: str  # PENDING / FILLED / CANCELLED
+    status: str
 
 class PaperTradingService:
     def __init__(self, portfolio_service):
         self.portfolio = portfolio_service
         self.orders = []
-    
+
     def submit_order(self, order: Order) -> Order:
-        """提交订单 (paper 模式)"""
         if order.mode != TradingMode.PAPER:
             raise ValueError("PaperTradingService only accepts PAPER orders")
-        
         order.status = "FILLED"
         self.orders.append(order)
-        
-        # 更新 paper portfolio
         if order.side == "BUY":
             self.portfolio.buy(order.symbol, order.quantity, order.price)
         else:
             self.portfolio.sell(order.symbol, order.quantity, order.price)
-        
         return order
-    
-    def get_paper_positions(self) -> dict:
-        """获取 paper 持仓"""
-        return self.portfolio.get_positions()
 ```
 
-#### 3.6.3 实施难度
+#### 3.5.3 实施难度
 
 ⭐⭐ (2/5)
 
@@ -1297,7 +1289,7 @@ class PaperTradingService:
 |--------|------|--------|------|
 | **P0** | MCP Server 集成 | 7d | ⭐⭐⭐⭐⭐ |
 | **P0** | Agent Token 系统 | 5d | ⭐⭐⭐⭐⭐ |
-| **P1** | 数据源扩展 (TuShare) | 4d | ⭐⭐⭐⭐ |
+| **P1** | 数据源扩展 (TuShare/Adanos) | 4d | ⭐⭐⭐⭐ |
 | **P1** | 策略框架基础 | 10d | ⭐⭐⭐⭐ |
 | **P2** | pyfolio 集成 | 4d | ⭐⭐⭐ |
 | **P2** | 参数调优 | 5d | ⭐⭐⭐ |
@@ -1341,7 +1333,7 @@ Q4 2026
 | 周 | 任务 | 交付物 |
 |----|------|--------|
 | 1 | TuShare 集成 | 基础行情 API |
-| 2 | pytdx 集成 | Level2 行情 |
+| 2 | Adanos 情绪 API | 社交情绪数据 |
 
 #### Phase 3: 策略框架 (6 周)
 
@@ -1373,17 +1365,18 @@ Q4 2026
 |------|-----------|
 | GitHub | https://github.com/brokermr810/QuantDinger |
 | AI 交易系统方案 | `docs/AI_TRADING_SYSTEM_PLAN_CN.md` |
-| 策略开发指南 | `docs/STRATEGY_DEV_GUIDE_CN.md` |
+| 策略开发指南 | `docs/STRATEGY_DEV_GUIDE_CN.md` (1269行) |
 | Agent 设计 | `docs/agent/AGENT_ENVIRONMENT_DESIGN.md` |
 | Agent 快速入门 | `docs/agent/AGENT_QUICKSTART.md` |
 | 技术指标定义 | `docs/INDICATOR_DEFINITIONS_CN.md` |
-| MCP Server | `mcp_server/` |
+| MCP Server | `mcp_server/src/quantdinger_mcp/server.py` |
 
 ### 5.2 awesome-quant
 
 | 资源 | 链接 |
 |------|------|
 | GitHub | https://github.com/thuquant/awesome-quant |
+| 论文集 | `papers.md` |
 
 ### 5.3 推荐集成
 
@@ -1394,6 +1387,8 @@ Q4 2026
 | Zipline | 回测框架 | https://github.com/quantopian/zipline |
 | RQAlpha | 回测框架 | https://github.com/ricequant/rqalpha |
 | pandas-ta | 技术指标 | https://github.com/tedchuai/pandas-ta |
+| Adanos API | 市场情绪 | https://adanos.org |
+| FXMacroData | 外汇宏观 | https://fxmacrodata.com |
 
 ---
 
@@ -1411,7 +1406,15 @@ Q4 2026
 | `portfolio.py` | 组合管理 | 12+ |
 | `market.py` | 市场数据 | 10+ |
 | `experiment.py` | 实验编排 | 5+ |
-| `polymarket.py` | 预测市场 | 5+ |
+| `polymarket.py` | 预测市场 | 3 |
+| `settings.py` | 系统配置 | 6 |
+| `credentials.py` | 凭证管理 | 5 |
+| `global_market.py` | 全球市场 | 8 |
+| `fast_analysis.py` | AI 分析 | 8+ |
+| `community.py` | 社区功能 | 10+ |
+| `billing.py` | 计费系统 | 4 |
+| `ibkr.py` | IBKR 接口 | 10+ (⚠️无认证) |
+| `mt5.py` | MT5 接口 | 10+ (⚠️无认证) |
 
 ## 附录 B: awesome-quant 完整资源列表
 
@@ -1430,8 +1433,11 @@ Q4 2026
 ### 交易 API (10+)
 - IB API, Futu Open API, vnpy, tqsdk
 
+### 学术论文分类
+- ML 低频预测 (6+), RL (4+), NLP (4+), HFT (7+), Portfolio (2+)
+
 ---
 
-*报告生成时间: 2026-05-07*  
-*分析工具: OpenCode ULW Agent*  
+*报告生成时间: 2026-05-07*
+*分析工具: OpenCode ULW Agent*
 *数据来源: QuantDinger v3.0.3, awesome-quant, AlphaTerminal v0.6.11*
