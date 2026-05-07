@@ -302,37 +302,24 @@ class EastmoneyFundFetcher:
         批量获取股票名称（腾讯财经 API）
         
         Args:
-            stock_codes: 股票代码列表（支持带前缀如 ['sh600519', 'hk00700', '600519']）
+            stock_codes: 股票代码列表（如 ['600519', '000858']）
         
         Returns:
-            Dict[code, name]（返回 key 与输入格式一致）
+            Dict[code, name]
         """
         if not stock_codes:
             return {}
         
         try:
-            # 构建腾讯 API 参数（确保有市场前缀）
+            # 构建腾讯 API 参数（添加市场前缀）
             codes_with_prefix = []
-            code_mapping = {}  # 记录原始格式 -> API格式的映射
-            
             for code in stock_codes:
-                if code.startswith('sh') or code.startswith('sz') or code.startswith('hk'):
-                    # 已经有前缀
-                    codes_with_prefix.append(code)
-                    code_mapping[code] = code
-                elif code.startswith('6'):
+                if code.startswith('6'):
                     codes_with_prefix.append(f"sh{code}")
-                    code_mapping[f"sh{code}"] = code
                 elif code.startswith('0') or code.startswith('3'):
                     codes_with_prefix.append(f"sz{code}")
-                    code_mapping[f"sz{code}"] = code
-                elif code.startswith('8') or code.startswith('9'):
-                    # 港股代码通常以 0/8/9 开头
-                    codes_with_prefix.append(f"hk{code}")
-                    code_mapping[f"hk{code}"] = code
                 else:
                     codes_with_prefix.append(code)
-                    code_mapping[code] = code
             
             url = f"https://qt.gtimg.cn/q={','.join(codes_with_prefix)}"
             
@@ -345,20 +332,17 @@ class EastmoneyFundFetcher:
                 
                 # 解析返回数据
                 # 格式: v_sh600519="1~贵州茅台~600519..."
-                # 格式: v_hk00700="1~腾讯控股~00700..."
                 for line in text.strip().split(';'):
                     if not line.strip():
                         continue
                     
-                    match = re.search(r'v_([^=]+)="([^"]+)"', line)
+                    match = re.search(r'v_[^=]+="([^"]+)"', line)
                     if match:
-                        api_key = match.group(1)  # 如 'sh600519', 'hk00700'
-                        parts = match.group(2).split('~')
+                        parts = match.group(1).split('~')
                         if len(parts) >= 3:
                             name = parts[1]  # 股票名称
-                            # 使用原始 key 返回（保持与输入一致）
-                            original_key = code_mapping.get(api_key, api_key)
-                            result[original_key] = name
+                            code = parts[2]  # 股票代码
+                            result[code] = name
                 
                 logger.info(f"[Eastmoney] 批量获取 {len(result)} 只股票名称")
                 return result
@@ -370,26 +354,16 @@ class EastmoneyFundFetcher:
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """
         获取基金持仓数据（重仓股 + 资产配置）
-        从 pingzhongdata.js 解析 stockCodes，从 HTML 页面解析持仓比例
+        从 pingzhongdata.js 解析 stockCodes
         """
         try:
-            # 同时获取 JS 数据和 HTML 页面
-            js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
-            html_url = f"https://fund.eastmoney.com/{code}.html"
+            url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
             
             async with self._get_client() as client:
-                # 获取 JS 数据（股票代码）
-                js_resp = await client.get(js_url, timeout=30.0)
-                js_resp.raise_for_status()
-                js_text = js_resp.text
+                resp = await client.get(url)
+                resp.raise_for_status()
                 
-                # 获取 HTML 页面（持仓比例）- 带超时和错误处理
-                html_text = ""
-                try:
-                    html_resp = await client.get(html_url, timeout=30.0)
-                    html_text = html_resp.text
-                except Exception as e:
-                    logger.warning(f"[Eastmoney] 获取 HTML 页面失败: {e}")
+                js_text = resp.text
                 
                 # 提取股票代码数组（支持新旧两种格式）
                 # 新格式: stockCodesNew =["1.600519","0.000858","116.00700"...]
@@ -458,37 +432,8 @@ class EastmoneyFundFetcher:
                             stocks.append({
                                 "code": clean_code,
                                 "name": name,
-                                "ratio": 0,  # 将在下面从 HTML 中解析
+                                "ratio": 0,  # 比例需要另外获取（TODO: 从其他 API 获取）
                             })
-                        
-                        # 从 HTML 中解析持仓比例
-                        # 查找股票持仓表格中的比例数据
-                        # 格式: <td class="alignRight bold">9.91%</td>
-                        ratio_pattern = r'<tr[^>]*>.*?<td[^>]*>.*?<a[^>]*title="([^"]*)">.*?</a>.*?</td>\s*<td[^>]*class="[^"]*alignRight[^"]*"[^>]*>([\d.]+)%</td>'
-                        ratios_found = re.findall(ratio_pattern, html_text, re.DOTALL)
-                        
-                        # 创建名称到比例的映射
-                        ratio_map = {}
-                        for stock_name, ratio_str in ratios_found:
-                            ratio_map[stock_name.strip()] = float(ratio_str)
-                        
-                        # 更新 stocks 中的比例
-                        for stock in stocks:
-                            if stock["name"] in ratio_map:
-                                stock["ratio"] = ratio_map[stock["name"]]
-                            elif stock["name"] == "港股" and stock["code"] in ["00700", "09987", "00883", "09988", "06618"]:
-                                # 港股常见代码映射
-                                hk_name_map = {
-                                    "00700": "腾讯控股",
-                                    "09987": "百胜中国",
-                                    "00883": "中国海洋石油",
-                                    "09988": "阿里巴巴-W",
-                                    "06618": "京东健康",
-                                }
-                                hk_name = hk_name_map.get(stock["code"])
-                                if hk_name and hk_name in ratio_map:
-                                    stock["ratio"] = ratio_map[hk_name]
-                                    stock["name"] = hk_name  # 更新名称
                         
                         # 估算资产配置
                         total_stock_ratio = min(len(stocks) * 8, 95)  # 粗略估算
