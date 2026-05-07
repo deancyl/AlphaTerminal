@@ -5,7 +5,17 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-05-06
+## [0.6.11] - 2026-05-07
+
+### Fixes
+
+- **基金港股名称显示** — 修复港股代码位数问题（zfill(5) for HK, zfill(6) for A-share），添加 HK_STOCK_NAMES 映射表
+- **A股名称查询修复** — 修复 _get_stock_names 重复加前缀和 key 不匹配问题
+- **移动端主题切换** — 手机版添加主题切换按钮，隐藏无效的侧边栏按钮
+- **快讯移动端优化** — 手机版快讯每页显示10条，移除 max-height 限制
+- **涨跌百分比精度** — 修复浮点误差，统一下跌百分比显示为小数点后2位
+
+## [0.6.10] - 2026-05-06
 
 ### Fixes
 
@@ -13,8 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **移动端触控例外** — `style.css` 中为移动端（`pointer: coarse`）媒体查询添加小按钮例外规则，与桌面端保持一致
 - **指标图表全屏按钮** — 重新设计 IndexLineChart 全屏按钮，统一桌面端和移动端样式，移除不必要的 `isMobile` 逻辑
 - **DashboardGrid 全屏按钮** — 精简样式，去掉 emoji 图标，统一为文字按钮
-
-## [0.6.11] - 2026-05-06
 
 ### Features
 
