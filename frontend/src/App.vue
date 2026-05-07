@@ -67,13 +67,23 @@
       <!-- 顶部状态栏 -->
       <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
         <div class="flex items-center gap-3">
-          <!-- ☰ 侧边栏展开按钮 -->
+          <!-- ☰ 侧边栏展开按钮（仅桌面端显示） -->
           <button
+            v-if="!isMobile"
             class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
             @click="isSidebarOpen = !isSidebarOpen"
             title="切换侧边栏"
           >
             ☰
+          </button>
+          <!-- 手机端主题切换按钮 -->
+          <button
+            v-if="isMobile"
+            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
+            @click="cycleTheme"
+            :title="`当前主题: ${currentTheme}, 点击切换`"
+          >
+            {{ THEME_ICONS[currentTheme] || '🌙' }}
           </button>
           <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
         </div>
@@ -271,7 +281,7 @@ const { currentSymbol } = useMarketStore()
 const { success: toastSuccess, info: toastInfo } = useToast()
 
 // 初始化主题系统（必须在组件挂载前调用）
-const { theme: currentTheme, isDark } = useTheme()
+const { theme: currentTheme, isDark, cycleTheme, THEME_ICONS } = useTheme()
 
 // 全局错误处理
 const hasError = ref(false)
