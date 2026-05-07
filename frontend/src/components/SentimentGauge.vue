@@ -52,7 +52,7 @@
       <div class="flex justify-between mt-1 text-[10px] text-terminal-dim">
         <span>涨 {{ data.advance || 0 }} ({{ upPct }}%)</span>
         <span>平 {{ data.unchanged || 0 }}</span>
-        <span>跌 {{ data.decline || 0 }} ({{ 100 - upPct }}%)</span>
+        <span>跌 {{ data.decline || 0 }} ({{ downPct }}%)</span>
       </div>
 
       <!-- 底部统计 -->
@@ -159,6 +159,11 @@ const allItems = computed(() => {
 const upPct = computed(() => {
   const t = data.value.total || 1
   return ((data.value.advance / t) * 100).toFixed(2)
+})
+
+const downPct = computed(() => {
+  const t = data.value.total || 1
+  return ((data.value.decline / t) * 100).toFixed(2)
 })
 
 function formatPrice(v) {
