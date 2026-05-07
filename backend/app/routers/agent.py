@@ -541,7 +541,7 @@ async def get_strategy(
     # 审计日志
     service = get_token_service()
     service.log_audit(
-        token, "get_strategy", f"/strategies/{strategy_id}"
+        token.id, "get_strategy", f"/strategies/{strategy_id}"
     )
     
     # TODO: 实现实际的策略获取
@@ -574,7 +574,7 @@ async def submit_backtest(
     # 审计日志
     service = get_token_service()
     service.log_audit(
-        token, "submit_backtest", "/backtests",
+        token.id, "submit_backtest", "/backtests",
         details={
             "market": request.market,
             "symbol": request.symbol,
@@ -649,3 +649,72 @@ async def get_audit_logs(
     )
     
     return {"logs": logs}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MCP Server Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MCPTool(BaseModel):
+    name: str
+    description: str
+    input_schema: dict
+    required_scope: str
+
+
+class MCPToolsResponse(BaseModel):
+    tools: list[MCPTool]
+    count: int
+
+
+class MCPCallRequest(BaseModel):
+    tool_name: str
+    arguments: dict = Field(default_factory=dict)
+
+
+class MCPCallResponse(BaseModel):
+    success: bool
+    data: Optional[Any] = None
+    error: Optional[str] = None
+
+
+@router.get("/mcp/tools", response_model=MCPToolsResponse)
+async def list_mcp_tools(
+    token: Any = Depends(require_scope(TokenScope.READ)),
+):
+    """列出所有可用 MCP 工具"""
+    from app.mcp.server import get_mcp_server
+
+    server = get_mcp_server()
+    tools = server.list_tools()
+
+    return MCPToolsResponse(
+        tools=[MCPTool(**t) for t in tools],
+        count=len(tools),
+    )
+
+
+@router.post("/mcp/call", response_model=MCPCallResponse)
+async def call_mcp_tool(
+    request: MCPCallRequest,
+    token: Any = Depends(verify_token),
+):
+    """调用 MCP 工具"""
+    from app.mcp.server import get_mcp_server
+    from app.services.agent.token_service import TokenScope
+
+    server = get_mcp_server()
+    tool = server.get_tool(request.tool_name)
+
+    if tool is None:
+        raise HTTPException(status_code=404, detail=f"Unknown tool: {request.tool_name}")
+
+    # Scope 权限检查
+    scope_map = {"R": TokenScope.READ, "W": TokenScope.WRITE, "B": TokenScope.BACKTEST, "N": TokenScope.NOTIFY, "T": TokenScope.TRADE}
+    required = scope_map.get(tool.required_scope, TokenScope.READ)
+    if not token.has_scope(required):
+        raise HTTPException(status_code=403, detail=f"Insufficient scope for tool {request.tool_name}")
+
+    # 调用工具
+    result = server.call_tool(request.tool_name, request.arguments)
+    return MCPCallResponse(**result)
