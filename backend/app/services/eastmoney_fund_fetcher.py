@@ -302,24 +302,37 @@ class EastmoneyFundFetcher:
         批量获取股票名称（腾讯财经 API）
         
         Args:
-            stock_codes: 股票代码列表（如 ['600519', '000858']）
+            stock_codes: 股票代码列表（支持带前缀如 ['sh600519', 'hk00700', '600519']）
         
         Returns:
-            Dict[code, name]
+            Dict[code, name]（返回 key 与输入格式一致）
         """
         if not stock_codes:
             return {}
         
         try:
-            # 构建腾讯 API 参数（添加市场前缀）
+            # 构建腾讯 API 参数（确保有市场前缀）
             codes_with_prefix = []
+            code_mapping = {}  # 记录原始格式 -> API格式的映射
+            
             for code in stock_codes:
-                if code.startswith('6'):
+                if code.startswith('sh') or code.startswith('sz') or code.startswith('hk'):
+                    # 已经有前缀
+                    codes_with_prefix.append(code)
+                    code_mapping[code] = code
+                elif code.startswith('6'):
                     codes_with_prefix.append(f"sh{code}")
+                    code_mapping[f"sh{code}"] = code
                 elif code.startswith('0') or code.startswith('3'):
                     codes_with_prefix.append(f"sz{code}")
+                    code_mapping[f"sz{code}"] = code
+                elif code.startswith('8') or code.startswith('9'):
+                    # 港股代码通常以 0/8/9 开头
+                    codes_with_prefix.append(f"hk{code}")
+                    code_mapping[f"hk{code}"] = code
                 else:
                     codes_with_prefix.append(code)
+                    code_mapping[code] = code
             
             url = f"https://qt.gtimg.cn/q={','.join(codes_with_prefix)}"
             
@@ -332,17 +345,20 @@ class EastmoneyFundFetcher:
                 
                 # 解析返回数据
                 # 格式: v_sh600519="1~贵州茅台~600519..."
+                # 格式: v_hk00700="1~腾讯控股~00700..."
                 for line in text.strip().split(';'):
                     if not line.strip():
                         continue
                     
-                    match = re.search(r'v_[^=]+="([^"]+)"', line)
+                    match = re.search(r'v_([^=]+)="([^"]+)"', line)
                     if match:
-                        parts = match.group(1).split('~')
+                        api_key = match.group(1)  # 如 'sh600519', 'hk00700'
+                        parts = match.group(2).split('~')
                         if len(parts) >= 3:
                             name = parts[1]  # 股票名称
-                            code = parts[2]  # 股票代码
-                            result[code] = name
+                            # 使用原始 key 返回（保持与输入一致）
+                            original_key = code_mapping.get(api_key, api_key)
+                            result[original_key] = name
                 
                 logger.info(f"[Eastmoney] 批量获取 {len(result)} 只股票名称")
                 return result
