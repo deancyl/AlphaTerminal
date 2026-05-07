@@ -379,13 +379,17 @@ class EastmoneyFundFetcher:
             
             async with self._get_client() as client:
                 # 获取 JS 数据（股票代码）
-                js_resp = await client.get(js_url)
+                js_resp = await client.get(js_url, timeout=30.0)
                 js_resp.raise_for_status()
                 js_text = js_resp.text
                 
-                # 获取 HTML 页面（持仓比例）
-                html_resp = await client.get(html_url)
-                html_text = html_resp.text
+                # 获取 HTML 页面（持仓比例）- 带超时和错误处理
+                html_text = ""
+                try:
+                    html_resp = await client.get(html_url, timeout=30.0)
+                    html_text = html_resp.text
+                except Exception as e:
+                    logger.warning(f"[Eastmoney] 获取 HTML 页面失败: {e}")
                 
                 # 提取股票代码数组（支持新旧两种格式）
                 # 新格式: stockCodesNew =["1.600519","0.000858","116.00700"...]
