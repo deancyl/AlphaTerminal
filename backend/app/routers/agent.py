@@ -296,7 +296,7 @@ async def whoami(token: Any = Depends(verify_token)):
 @router.get("/markets", response_model=MarketsResponse)
 async def list_markets(token: Any = Depends(require_scope(TokenScope.READ))):
     """获取支持的市场列表"""
-    # 审计日志
+    logger.debug(f"[Agent] list_markets | token_id={token.id}")
     service = get_token_service()
     service.log_audit(token.id, "list_markets", "/markets")
     
@@ -319,15 +319,17 @@ async def search_symbols(
         keyword: 搜索关键词
         limit: 返回数量限制
     """
-    # 审计日志
-    service = get_token_service()
-    service.log_audit(
-        token, "search_symbols", f"/markets/{market}/symbols",
-        details={"market": market, "keyword": keyword, "limit": limit}
-    )
-    
+    logger.debug(f"[Agent] search_symbols | market={market} keyword={keyword} limit={limit} token_id={token.id}")
+
     if not token.can_access_market(market):
         raise HTTPException(status_code=403, detail=f"Market {market} not allowed")
+
+    # 审计日志（权限检查之后）
+    service = get_token_service()
+    service.log_audit(
+        token.id, "search_symbols", f"/markets/{market}/symbols",
+        details={"market": market, "keyword": keyword, "limit": limit}
+    )
     
     # 调用现有的股票搜索功能
     try:
@@ -382,13 +384,15 @@ async def get_klines(
     Args:
         request: K线请求参数
     """
+    logger.debug(f"[Agent] get_klines | market={request.market} symbol={request.symbol} timeframe={request.timeframe} limit={request.limit} token_id={token.id}")
+
     if not token.can_access_market(request.market):
         raise HTTPException(status_code=403, detail=f"Market {request.market} not allowed")
     
     # 审计日志
     service = get_token_service()
     service.log_audit(
-        token, "get_klines", f"/klines",
+        token.id, "get_klines", f"/klines",
         details={
             "market": request.market,
             "symbol": request.symbol,
@@ -455,6 +459,8 @@ async def get_price(
     token: Any = Depends(require_scope(TokenScope.READ)),
 ):
     """获取最新价格"""
+    logger.debug(f"[Agent] get_price | market={market} symbol={symbol} token_id={token.id}")
+
     if not token.can_access_market(market):
         raise HTTPException(status_code=403, detail=f"Market {market} not allowed")
     
@@ -464,7 +470,7 @@ async def get_price(
     # 审计日志
     service = get_token_service()
     service.log_audit(
-        token, "get_price", f"/price",
+        token.id, "get_price", f"/price",
         details={"market": market, "symbol": symbol}
     )
     
