@@ -283,8 +283,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
+
+// 响应式断点检测
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = breakpoints.smaller('md')  // < 768px 为手机端
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
@@ -502,14 +507,15 @@ const hotNews = computed(() => {
 })
 
 // ── 分页状态 ─────────────────────────────────────────────────────────
-const PAGE_SIZE  = 50
+// 手机端每页10条，桌面端每页50条
+const PAGE_SIZE = computed(() => isMobile.value ? 10 : 50)
 const currentPage = ref(1)
 
-const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / PAGE_SIZE)))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.length / PAGE_SIZE.value)))
 
 const pagedItems = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredItems.value.slice(start, start + PAGE_SIZE)
+  const start = (currentPage.value - 1) * PAGE_SIZE.value
+  return filteredItems.value.slice(start, start + PAGE_SIZE.value)
 })
 
 const visiblePages = computed(() => {
