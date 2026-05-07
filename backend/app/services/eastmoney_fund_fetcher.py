@@ -331,15 +331,9 @@ class EastmoneyFundFetcher:
             return {}
         
         try:
-            # 构建腾讯 API 参数（添加市场前缀）
-            codes_with_prefix = []
-            for code in stock_codes:
-                if code.startswith('6'):
-                    codes_with_prefix.append(f"sh{code}")
-                elif code.startswith('0') or code.startswith('3'):
-                    codes_with_prefix.append(f"sz{code}")
-                else:
-                    codes_with_prefix.append(code)
+            # stock_codes 已包含前缀 (sh600519, hk00700, sz000858)
+            # 直接使用即可
+            codes_with_prefix = stock_codes
             
             url = f"https://qt.gtimg.cn/q={','.join(codes_with_prefix)}"
             
@@ -362,7 +356,10 @@ class EastmoneyFundFetcher:
                         if len(parts) >= 3:
                             name = parts[1]  # 股票名称
                             code = parts[2]  # 股票代码
-                            result[code] = name
+                            # 从 API key 提取带前缀的代码用于 lookup
+                            key_match = re.search(r'v_(sh\d+|sz\d+|hk\d+)', line)
+                            if key_match:
+                                result[key_match.group(1)] = name
                 
                 logger.info(f"[Eastmoney] 批量获取 {len(result)} 只股票名称")
                 return result
