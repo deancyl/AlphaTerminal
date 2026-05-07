@@ -85,7 +85,7 @@
         <button
           v-for="(item, idx) in hotNews.slice(0, 5)"
           :key="item.id || item.title"
-          class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[140px] truncate"
+          class="shrink-0 text-[10px] px-2 py-1 rounded-sm border transition text-left max-w-[200px] truncate"
           :class="modalItem?.id === item.id
             ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
