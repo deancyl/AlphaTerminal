@@ -68,12 +68,13 @@ def _get_llm_config(provider: str) -> dict:
         "opencode_go": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/go/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.7")},
         "opencode_zen": {"api_key": os.getenv("OPENCODE_API_KEY",""), "base_url": os.getenv("OPENCODE_API_BASE","https://opencode.ai/zen/v1"), "model": os.getenv("OPENCODE_MODEL","minimax-m2.5-free")},
         "minimax": {"api_key": os.getenv("MINIMAX_API_KEY",""), "base_url": "https://api.minimax.chat/v1", "model": "abab6.5s-chat"},
+        "kimi": {"api_key": os.getenv("KIMI_API_KEY",""), "base_url": os.getenv("KIMI_API_BASE","https://api.moonshot.cn/v1"), "model": os.getenv("KIMI_MODEL","moonshot-v1-8k")},
     }
     return defaults.get(provider, {})
 
 def _detect_provider() -> str:
     """按优先级检测可用的 LLM Provider（优先使用数据库配置）"""
-    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen", "minimax"]:
+    for p in ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen", "minimax", "kimi"]:
         if _get_llm_config(p).get("api_key"):
             return p
     return "mock"
@@ -303,6 +304,9 @@ async def _llm_stream(
             yield chunk
     elif provider == "opencode_zen":
         async for chunk in _call_opencode_zen(messages, model_override):
+            yield chunk
+    elif provider == "kimi":
+        async for chunk in _call_kimi(messages, model_override):
             yield chunk
     else:
         async for chunk in _mock_stream(messages):
@@ -623,6 +627,46 @@ async def _call_opencode_zen(messages: list[dict], model_override: str | None = 
     except Exception as e:
         logger.error(f"[OpenCode Zen] {e}")
         yield _sse({"error": f"OpenCode Zen API 调用失败: {e}"})
+
+
+async def _call_kimi(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
+    """Kimi (Moonshot) API 调用 - OpenAI 兼容格式"""
+    import httpx
+    cfg = _get_llm_config("kimi")
+    url = f"{(cfg['base_url'] or 'https://api.moonshot.cn/v1').rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {cfg['api_key']}",
+        "Content-Type":  "application/json",
+    }
+    payload = {
+        "model":       model_override or cfg.get("model") or "moonshot-v1-8k",
+        "messages":    messages,
+        "stream":      True,
+        "temperature": 0.7,
+        "max_tokens":  4096,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream("POST", url, headers=headers, json=payload) as resp:
+                async for line in resp.aiter_lines():
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    if line.startswith("data: "):
+                        try:
+                            d = json.loads(line[6:])
+                            content = (
+                                d.get("choices", [{}])[0]
+                                .get("delta", {})
+                                .get("content", "")
+                            )
+                            if content:
+                                yield _sse({"content": content})
+                        except json.JSONDecodeError:
+                            continue
+    except Exception as e:
+        logger.error(f"[Kimi] {e}")
+        yield _sse({"error": f"Kimi API 调用失败: {e}"})
 
 
 async def _mock_stream(messages: list[dict]) -> AsyncGenerator[str, None]:

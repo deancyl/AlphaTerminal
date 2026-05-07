@@ -106,7 +106,7 @@ def _mask_key(key: str) -> str:
 def get_llm_settings():
     """获取 LLM 配置（API Key 已掩码）。优先级：数据库 > .env > 默认值"""
     from app.db.database import get_admin_config
-    providers = ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen"]
+    providers = ["deepseek", "qianwen", "openai", "siliconflow", "opencode", "opencode_go", "opencode_zen", "kimi"]
     defaults = {
         "deepseek": {"base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
         "qianwen":  {"base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
@@ -115,6 +115,7 @@ def get_llm_settings():
         "opencode": {"base_url": "https://api.opencode.ai/v1", "model": "opencode-chat"},
         "opencode_go": {"base_url": "https://opencode.ai/zen/go/v1", "model": "minimax-m2.7"},
         "opencode_zen": {"base_url": "https://opencode.ai/zen/v1", "model": "minimax-m2.5-free"},
+        "kimi":     {"base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k"},
     }
     result = {}
     for p in providers:
@@ -140,7 +141,8 @@ def save_llm_settings(body: dict = Body(...)):
         "siliconflow": "llm_siliconflow", 
         "opencode": "llm_opencode",
         "opencode_go": "llm_opencode_go",
-        "opencode_zen": "llm_opencode_zen"
+        "opencode_zen": "llm_opencode_zen",
+        "kimi": "llm_kimi",
     }
     if provider not in key_map:
         return {"code": 1, "error": f"Unknown provider: {provider}"}
@@ -168,7 +170,8 @@ def test_llm_connection(body: dict = Body(...)):
         "siliconflow": "deepseek-ai/DeepSeek-V3", 
         "opencode": "opencode-chat",
         "opencode_go": "minimax-m2.7",
-        "opencode_zen": "minimax-m2.5-free"
+        "opencode_zen": "minimax-m2.5-free",
+        "kimi": "moonshot-v1-8k",
     }
     test_url  = f"{base_url.rstrip('/')}/chat/completions"
     headers   = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
