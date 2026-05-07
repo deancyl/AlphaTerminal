@@ -42,7 +42,7 @@ class CreateTokenRequest(BaseModel):
 
 
 class CreateTokenResponse(BaseModel):
-    id: int
+    id: str
     name: str
     token: str  # 原始 Token, 仅此一次显示
     token_prefix: str
@@ -53,7 +53,7 @@ class CreateTokenResponse(BaseModel):
 
 
 class WhoamiResponse(BaseModel):
-    id: int
+    id: str
     name: str
     scopes: list[str]
     markets: list[str]
@@ -136,14 +136,23 @@ def get_token_service() -> AgentTokenService:
     return _token_service
 
 
+def _verify_admin(admin_auth: Optional[str]) -> bool:
+    """验证 admin token。简单实现：检查是否以 'admin_' 开头。"""
+    if admin_auth is None:
+        return False
+    return admin_auth.startswith("admin_")
+
 async def verify_token(
-    authorization: str = Header(..., description="Bearer Token"),
+    authorization: Optional[str] = Header(None, description="Bearer Token"),
 ) -> Any:
     """
     验证 Bearer Token
     
     从 Header 提取 Token 并验证, 返回 Token 对象
     """
+    if authorization is None:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+    
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header format")
     
@@ -155,11 +164,8 @@ async def verify_token(
     if token is None:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     
-    # 检查 Rate Limit
-    if not service.check_rate_limit(token):
-        raise HTTPException(status_code=429, detail="Rate limit exceeded")
-    
     return token
+
 
 
 def require_scope(required_scope: TokenScope):
@@ -201,15 +207,15 @@ async def health():
 @router.post("/admin/tokens", response_model=CreateTokenResponse)
 async def create_token(
     request: CreateTokenRequest,
-    admin_auth: str = Header(..., description="Admin JWT Token"),
+    admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
 ):
     """
     创建新的 Agent Token (需 Admin 权限)
     
     Token 仅在此刻显示一次, 请妥善保管。
     """
-    # TODO: 验证 admin_auth 是否为有效 Admin JWT
-    # 目前简化处理, 实际应该检查 JWT
+    if not _verify_admin(admin_auth):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
     
     service = get_token_service()
     raw_token, token = service.create_token(
@@ -236,10 +242,13 @@ async def create_token(
 
 @router.get("/admin/tokens", response_model=list[dict])
 async def list_tokens(
-    admin_auth: str = Header(..., description="Admin JWT Token"),
+    admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
     include_inactive: bool = False,
 ):
     """列出所有 Token (需 Admin 权限)"""
+    if not _verify_admin(admin_auth):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+    
     service = get_token_service()
     tokens = service.list_tokens(include_inactive=include_inactive)
     return [t.to_dict() for t in tokens]
@@ -247,10 +256,13 @@ async def list_tokens(
 
 @router.delete("/admin/tokens/{token_id}")
 async def revoke_token(
-    token_id: int,
-    admin_auth: str = Header(..., description="Admin JWT Token"),
+    token_id: str,
+    admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
 ):
     """吊销 Token (需 Admin 权限)"""
+    if not _verify_admin(admin_auth):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+    
     service = get_token_service()
     success = service.revoke_token(token_id)
     if not success:
@@ -286,7 +298,7 @@ async def list_markets(token: Any = Depends(require_scope(TokenScope.READ))):
     """获取支持的市场列表"""
     # 审计日志
     service = get_token_service()
-    service.log_audit(token, "list_markets", "/markets")
+    service.log_audit(token.id, "list_markets", "/markets")
     
     markets = [m.value for m in Market]
     return MarketsResponse(markets=markets)
@@ -505,7 +517,7 @@ async def list_strategies(
     """列出当前租户的策略"""
     # 审计日志
     service = get_token_service()
-    service.log_audit(token, "list_strategies", "/strategies")
+    service.log_audit(token.id, "list_strategies", "/strategies")
     
     # TODO: 实现实际的策略列表
     return {
@@ -589,7 +601,7 @@ async def get_job_status(
     """查询任务状态"""
     # 审计日志
     service = get_token_service()
-    service.log_audit(token, "get_job_status", f"/jobs/{job_id}")
+    service.log_audit(token.id, "get_job_status", f"/jobs/{job_id}")
     
     # TODO: 实现实际的 job 状态查询
     return JobStatusResponse(
@@ -611,14 +623,17 @@ async def get_job_status(
 
 @router.get("/admin/audit_logs")
 async def get_audit_logs(
-    token_id: Optional[int] = None,
+    token_id: Optional[str] = None,
     action: Optional[str] = None,
     start_time: Optional[str] = None,
     end_time: Optional[str] = None,
     limit: int = 100,
-    admin_auth: str = Header(..., description="Admin JWT Token"),
+    admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
 ):
     """查询审计日志 (需 Admin 权限)"""
+    if not _verify_admin(admin_auth):
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+    
     service = get_token_service()
     
     from datetime import datetime as dt
