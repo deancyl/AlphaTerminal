@@ -40,8 +40,8 @@
       <HotSectors :data="sectors" class="w-full" />
     </div>
 
-    <!-- 新闻快讯：自适应高度，内部滚动 -->
-    <div id="section-news" class="terminal-panel p-2 rounded-lg shadow border border-theme/10 shrink-0" style="min-height: 260px; max-height: 50vh; overflow-y: auto;">
+    <!-- 新闻快讯：手机版自然高度不限制，桌面版 GridStack 控制 -->
+    <div id="section-news" class="terminal-panel p-2 rounded-lg shadow border border-theme/10 shrink-0">
       <NewsFeed class="w-full" />
     </div>
   </div>
