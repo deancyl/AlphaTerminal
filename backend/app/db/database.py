@@ -237,6 +237,8 @@ def init_tables():
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────
         init_all_stocks_table()
+        # ── Strategy/Token/Audit 持久化表 ──────────────────────────────
+        init_persistence_tables()
     logger.info(f"DB Ready: {_db_path}")
 
 def buffer_insert(data_list):
@@ -369,6 +371,16 @@ def init_all_stocks_table():
         """)
         conn.commit()
         conn.close()
+
+def init_persistence_tables():
+    """初始化策略/Token/审计日志持久化表"""
+    from app.db.strategy_db import init_strategy_table
+    from app.db.token_db import init_token_table
+    from app.db.audit_db import init_audit_table
+    
+    init_strategy_table()
+    init_token_table()
+    init_audit_table()
 
 def upsert_all_stocks(rows):
     """批量写入全市场个股数据（生产者：立即入队，不持有锁）"""

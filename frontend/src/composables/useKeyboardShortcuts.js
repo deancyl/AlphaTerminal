@@ -24,6 +24,21 @@ export const SHORTCUTS = [
   { key: '8',         ctrl: false, alt: false, shift: false, action: 'view',        param: 'portfolio', description: '组合管理', category: '视图切换' },
   { key: '9',         ctrl: false, alt: false, shift: false, action: 'view',        param: 'backtest',  description: '回测实验室', category: '视图切换' },
   
+  // 视图切换（Ctrl+字母）
+  { key: 'o',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'options',   description: '期权分析', category: '视图切换' },
+  { key: 'g',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'global-index', description: '全球指数', category: '视图切换' },
+  { key: 'b',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'bond',      description: '债券综合', category: '视图切换' },
+  { key: 'm',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'macro',     description: '宏观经济', category: '视图切换' },
+  { key: 'p',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'portfolio', description: '投资组合', category: '视图切换' },
+  { key: 'f',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'fund',      description: '基金分析', category: '视图切换' },
+  { key: 'r',         ctrl: true,  alt: false, shift: false, action: 'view',        param: 'backtest',  description: '回测实验室', category: '视图切换' },
+  
+  // 视图切换（Ctrl+Shift+字母 - 管理功能）
+  { key: 'a',         ctrl: true,  alt: false, shift: true,  action: 'view',        param: 'admin',     description: '系统管理', category: '管理功能' },
+  { key: 't',         ctrl: true,  alt: false, shift: true,  action: 'view',        param: 'agent_tokens', description: 'API Token管理', category: '管理功能' },
+  { key: 'm',         ctrl: true,  alt: false, shift: true,  action: 'view',        param: 'mcp',       description: 'AI工具配置', category: '管理功能' },
+  { key: 's',         ctrl: true,  alt: false, shift: true,  action: 'view',        param: 'strategy-center', description: '策略中心', category: '管理功能' },
+  
   // 功能键
   { key: 'f1',        ctrl: false, alt: false, shift: false, action: 'help',        param: null,        description: '帮助文档', category: '功能' },
   { key: 'f5',        ctrl: false, alt: false, shift: false, action: 'refresh',     param: null,        description: '刷新数据', category: '功能' },

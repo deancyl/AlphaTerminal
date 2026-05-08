@@ -557,3 +557,125 @@ async def get_backtest_results(limit: int = 10):
         return {"code": 0, "data": {"results": results}}
     finally:
         conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Walk-Forward Analysis
+# ═══════════════════════════════════════════════════════════════
+
+class WalkForwardRequest(BaseModel):
+    symbol: str
+    start_date: str
+    end_date: str
+    strategy_type: str = "ma_crossover"
+    initial_capital: float = 100000
+    train_window_days: int = 252
+    test_window_days: int = 63
+    step_days: int = 63
+    mode: str = "rolling"
+    param_grid: Optional[Dict[str, List[Any]]] = None
+
+
+@router.post("/walkforward/analyze")
+async def walkforward_analyze(req: WalkForwardRequest):
+    """Walk-Forward Analysis for out-of-sample validation"""
+    from app.services.backtest.walk_forward import WalkForwardAnalyzer
+    
+    db_symbol = req.symbol.replace("sh", "").replace("sz", "")
+    
+    dates_valid, dates_error, _ = _validate_dates(req.start_date, req.end_date)
+    if not dates_valid:
+        return {"code": 1, "message": dates_error}
+    
+    capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
+    if not capital_valid:
+        return {"code": 1, "message": capital_error}
+    
+    conn = _get_conn()
+    try:
+        rows = conn.execute("""
+            SELECT date, open, high, low, close, volume
+            FROM market_data_daily
+            WHERE symbol = ? AND date >= ? AND date <= ?
+            ORDER BY date ASC
+        """, (db_symbol, req.start_date, req.end_date)).fetchall()
+        
+        if len(rows) < 126:
+            return {"code": 1, "message": f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据"}
+        
+        data = [{"date": r[0], "close": float(r[4])} for r in rows]
+        
+        default_param_grid = {
+            "ma_crossover": {
+                "fast_ma": [5, 10, 15],
+                "slow_ma": [20, 30, 60]
+            },
+            "rsi_oversold": {
+                "rsi_period": [7, 14, 21],
+                "rsi_buy": [25, 30, 35],
+                "rsi_sell": [65, 70, 75]
+            },
+            "bollinger_bands": {
+                "bb_period": [15, 20, 25],
+                "bb_std": [1.5, 2.0, 2.5]
+            }
+        }
+        
+        param_grid = req.param_grid or default_param_grid.get(req.strategy_type, {})
+        
+        analyzer = WalkForwardAnalyzer(
+            train_window_days=req.train_window_days,
+            test_window_days=req.test_window_days,
+            step_days=req.step_days,
+            mode=req.mode
+        )
+        
+        result = analyzer.analyze(
+            data=data,
+            strategy_type=req.strategy_type,
+            param_grid=param_grid,
+            initial_capital=initial_capital,
+            symbol=req.symbol
+        )
+        
+        windows_data = []
+        for w in result.windows:
+            windows_data.append({
+                "window_index": w.window_index,
+                "train_start": w.train_start,
+                "train_end": w.train_end,
+                "test_start": w.test_start,
+                "test_end": w.test_end,
+                "train_return_pct": w.train_return_pct,
+                "train_sharpe": w.train_sharpe,
+                "test_return_pct": w.test_return_pct,
+                "test_sharpe": w.test_sharpe,
+                "return_gap": w.return_gap,
+                "is_overfitted": w.is_overfitted,
+                "best_params": w.best_params
+            })
+        
+        return {
+            "code": 0,
+            "data": {
+                "symbol": result.symbol,
+                "strategy_type": result.strategy_type,
+                "window_mode": result.window_mode,
+                "total_windows": result.total_windows,
+                "avg_test_return_pct": result.avg_test_return_pct,
+                "avg_test_sharpe": result.avg_test_sharpe,
+                "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
+                "avg_test_win_rate": result.avg_test_win_rate,
+                "avg_train_return_pct": result.avg_train_return_pct,
+                "avg_return_gap": result.avg_return_gap,
+                "overfitting_windows": result.overfitting_windows,
+                "overfitting_ratio": result.overfitting_ratio,
+                "overfitting_severity": result.overfitting_severity,
+                "consistency_score": result.consistency_score,
+                "recommendation": result.recommendation,
+                "confidence": result.confidence,
+                "windows": windows_data
+            }
+        }
+    finally:
+        conn.close()

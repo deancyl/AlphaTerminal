@@ -1,30 +1,32 @@
 <template>
   <div class="flex flex-col w-full h-full overflow-hidden">
     <!-- 顶部控制栏 -->
-    <div class="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-theme bg-terminal-panel/80">
-      <span class="text-[10px] text-theme-muted">置信水平</span>
-      <select
-        v-model="confidence"
-        class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary"
-      >
-        <option :value="0.90">90%</option>
-        <option :value="0.95">95%</option>
-        <option :value="0.99">99%</option>
-      </select>
-      <span class="text-[10px] text-theme-muted ml-2">持有期</span>
-      <select
-        v-model="horizon"
-        class="bg-theme-tertiary/30 border border-theme rounded-sm px-1.5 py-0.5 text-[10px] text-theme-primary"
-      >
-        <option :value="1">1天</option>
-        <option :value="5">5天</option>
-        <option :value="10">10天</option>
-        <option :value="20">20天</option>
-      </select>
+    <div class="shrink-0 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-2 px-3 py-2 border-b border-theme bg-terminal-panel/80">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="text-[10px] text-theme-muted">置信水平</span>
+        <select
+          v-model="confidence"
+          class="min-h-[44px] bg-theme-tertiary/30 border border-theme rounded-sm px-2 py-2 text-[10px] text-theme-primary"
+        >
+          <option :value="0.90">90%</option>
+          <option :value="0.95">95%</option>
+          <option :value="0.99">99%</option>
+        </select>
+        <span class="text-[10px] text-theme-muted">持有期</span>
+        <select
+          v-model="horizon"
+          class="min-h-[44px] bg-theme-tertiary/30 border border-theme rounded-sm px-2 py-2 text-[10px] text-theme-primary"
+        >
+          <option :value="1">1天</option>
+          <option :value="5">5天</option>
+          <option :value="10">10天</option>
+          <option :value="20">20天</option>
+        </select>
+      </div>
       <button
         @click="loadRisk"
         :disabled="loading"
-        class="ml-auto px-3 py-0.5 rounded-sm text-[10px] font-medium transition-colors"
+        class="sm:ml-auto min-h-[44px] px-4 py-2 rounded-sm text-[10px] font-medium transition-colors"
         :class="loading
           ? 'bg-gray-600/40 text-theme-muted cursor-not-allowed'
           : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] border border-[var(--color-info-border)]'"
@@ -37,20 +39,20 @@
       <!-- VaR 指标 -->
       <div class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">⚠️ 风险价值 (VaR)</div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">历史模拟法 VaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.var_historical_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.var_historical_amount) }}</div>
           </div>
           
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">参数法 VaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.var_parametric_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.var_parametric_amount) }}</div>
           </div>
           
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">{{ risk.horizon_days }}日 VaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.var_horizon_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.var_horizon_amount) }}</div>
@@ -64,20 +66,20 @@
       <!-- CVaR 指标 -->
       <div class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">🔥 条件风险价值 (CVaR / Expected Shortfall)</div>
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">历史模拟法 CVaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.cvar_historical_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.cvar_historical_amount) }}</div>
           </div>
           
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">参数法 CVaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.cvar_parametric_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.cvar_parametric_amount) }}</div>
           </div>
           
-          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+          <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
             <div class="text-[10px] text-theme-muted">{{ risk.horizon_days }}日 CVaR</div>
             <div class="text-[14px] font-mono font-bold text-bearish">-{{ risk.cvar_horizon_pct }}%</div>
             <div class="text-[10px] text-theme-muted">≈ ¥{{ fmtYuan(risk.cvar_horizon_amount) }}</div>
@@ -89,23 +91,23 @@
       </div>
 
       <!-- 统计指标 -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+      <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-2">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
           <div class="text-[10px] text-theme-muted">日均波动率</div>
           <div class="text-[14px] font-mono font-bold">{{ risk.daily_volatility_pct }}%</div>
         </div>
         
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
           <div class="text-[10px] text-theme-muted">年化波动率</div>
           <div class="text-[14px] font-mono font-bold">{{ risk.annual_volatility_pct }}%</div>
         </div>
         
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
           <div class="text-[10px] text-theme-muted">最差单日</div>
           <div class="text-[14px] font-mono font-bold text-bearish">{{ risk.worst_day_pct }}%</div>
         </div>
         
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-2">
+        <div class="rounded-sm border border-theme bg-terminal-panel/60 px-3 py-3">
           <div class="text-[10px] text-theme-muted">最佳单日</div>
           <div class="text-[14px] font-mono font-bold text-bullish">+{{ risk.best_day_pct }}%</div>
         </div>

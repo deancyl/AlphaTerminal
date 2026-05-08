@@ -61,8 +61,8 @@
       </div>
     </div>
 
-    <!-- 加载中 -->
-    <div v-if="loading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <!-- 加载中（包括自动加载） -->
+    <div v-if="loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
       <!-- 顶部指标骨架 -->
       <div class="grid grid-cols-3 gap-3">
         <div class="skeleton h-16 rounded-sm" v-for="n in 3" :key="n"></div>
@@ -75,19 +75,57 @@
       </div>
     </div>
 
-    <!-- 无数据（仅 ETF/公募基金显示） -->
-    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading" class="flex-1 flex items-center justify-center">
+    <!-- 自动加载失败 -->
+    <div v-else-if="autoLoadFailed && !fundInfo" class="flex-1 flex items-center justify-center">
       <div class="text-center">
-        <div class="text-4xl mb-3">📭</div>
-        <div class="text-theme-muted text-sm">请输入代码或从快捷列表选择</div>
-        <div class="text-xs text-theme-tertiary mt-1">
-          {{ activeTab === 'etf' ? '支持沪深 ETF、LOF' : '支持股票型、混合型、债券型基金' }}
+        <div class="text-4xl mb-3">⚠️</div>
+        <div class="text-theme-muted text-sm mb-3">自动加载失败</div>
+        <div class="text-xs text-theme-tertiary mb-4">
+          请检查网络连接后重试
+        </div>
+        <button 
+          @click="retryAutoLoad"
+          class="px-4 py-2 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition"
+        >
+          🔄 重试
+        </button>
+      </div>
+    </div>
+
+    <!-- 无数据（仅 ETF/公募基金显示） -->
+    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading && !autoLoading" class="flex-1 flex items-center justify-center">
+      <div class="text-center py-12">
+        <div class="text-6xl mb-4">📊</div>
+        <div class="text-lg text-terminal-accent font-bold mb-2">
+          {{ activeTab === 'etf' ? 'ETF 基金查询' : '公募基金查询' }}
+        </div>
+        <div class="text-sm text-terminal-dim mb-4">
+          输入基金代码或从下方快捷列表选择
+        </div>
+
+        <!-- 快捷基金按钮 -->
+        <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
+          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：</div>
+          <div class="flex flex-wrap gap-2 justify-center">
+            <button
+              v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
+              :key="f.code"
+              @click="selectFund(f.code)"
+              class="px-3 py-2 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent"
+            >
+              {{ f.name }}
+            </button>
+          </div>
+        </div>
+
+        <div class="text-xs text-theme-tertiary">
+          {{ activeTab === 'etf' ? '支持沪深 ETF、LOF 场内基金' : '支持股票型、混合型、债券型公募基金' }}
         </div>
       </div>
     </div>
 
     <!-- 主内容区（ETF/公募基金/对比） -->
-    <div v-if="activeTab === 'compare' || fundInfo || loading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
       
       <!-- ETF 面板 -->
       <div v-if="activeTab === 'etf'" class="space-y-4">
@@ -476,6 +514,8 @@ const getEcharts = () => window.echarts
 
 // ── 状态 ────────────────────────────────────────────────────────
 const loading = ref(false)
+const autoLoading = ref(false)
+const autoLoadFailed = ref(false)
 const searchQuery = ref('')
 const selectedFundCode = ref('')
 const activeTab = ref('open') // 'etf' | 'open' | 'compare'
@@ -572,10 +612,17 @@ async function searchFund() {
   await selectFund(query)
 }
 
-async function selectFund(code) {
+async function selectFund(code, retryCount = 0, maxRetries = 2) {
   if (!code) return
   selectedFundCode.value = code
-  loading.value = true
+  
+  // Set loading state based on whether this is an auto-load
+  if (retryCount === 0) {
+    loading.value = true
+    autoLoading.value = true
+    autoLoadFailed.value = false
+  }
+  
   dataSource.value = ''
   
   try {
@@ -593,10 +640,23 @@ async function selectFund(code) {
     }
     
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    autoLoadFailed.value = false
   } catch (e) {
     logger.error('[FundDashboard] 加载失败:', e)
+    
+    // Retry logic with exponential backoff
+    if (retryCount < maxRetries) {
+      const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s...
+      logger.warn(`[FundDashboard] 重试 ${retryCount + 1}/${maxRetries}，等待 ${delay}ms`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+      return selectFund(code, retryCount + 1, maxRetries)
+    } else {
+      autoLoadFailed.value = true
+      logger.error('[FundDashboard] 自动加载失败，已达最大重试次数')
+    }
   } finally {
     loading.value = false
+    autoLoading.value = false
     // 等待 DOM 更新完成后再渲染图表
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -1040,6 +1100,15 @@ function formatAmount(amt) {
 }
 
 // ── 生命周期 ───────────────────────────────────────────────────
+
+function retryAutoLoad() {
+  autoLoadFailed.value = false
+  // Retry with the last selected fund code or default
+  const code = selectedFundCode.value || (activeTab.value === 'etf' ? quickETFs[0]?.code : quickFunds[0]?.code)
+  if (code) {
+    selectFund(code)
+  }
+}
 
 function handleResize() {
   klineChart.value?.resize()

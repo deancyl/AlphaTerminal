@@ -25,7 +25,7 @@
       <!-- GDP卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">GDP</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="国内生产总值：一个国家或地区在一定时期内所生产的全部最终产品和服务的市场价值总和，是衡量经济规模和增长的核心指标">GDP</span>
           <span class="text-xs text-terminal-dim">{{ overview.gdp?.period }}</span>
         </div>
         <div class="text-2xl font-bold text-terminal-primary">
@@ -37,7 +37,7 @@
       <!-- CPI卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">CPI</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="消费者物价指数：反映居民家庭购买的消费品和服务价格变动情况的宏观经济指标，用于衡量通货膨胀水平">CPI</span>
           <span class="text-xs text-terminal-dim">{{ overview.cpi?.period }}</span>
         </div>
         <div class="text-2xl font-bold" :class="getColorClass(overview.cpi?.yoy)">
@@ -49,7 +49,7 @@
       <!-- PPI卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">PPI</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="生产者物价指数：衡量工业企业产品出厂价格变动趋势和程度的指数，反映生产环节的价格变化，是预测CPI的重要先行指标">PPI</span>
           <span class="text-xs text-terminal-dim">{{ overview.ppi?.period }}</span>
         </div>
         <div class="text-2xl font-bold" :class="getColorClass(overview.ppi?.yoy)">
@@ -61,7 +61,7 @@
       <!-- PMI卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">PMI</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="采购经理指数：通过对采购经理的月度调查汇总出来的指数，反映经济变化趋势。50%为荣枯线，高于50%表示经济扩张，低于50%表示经济收缩">PMI</span>
           <span class="text-xs text-terminal-dim">{{ overview.pmi?.period }}</span>
         </div>
         <div class="text-2xl font-bold" :class="getPMIColor(overview.pmi?.manufacturing)">
@@ -73,7 +73,7 @@
       <!-- M2卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">M2</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="广义货币供应量：现金+活期存款+定期存款+储蓄存款+其他存款，反映社会总购买力，是衡量货币政策松紧的重要指标">M2</span>
           <span class="text-xs text-terminal-dim">{{ overview.m2?.period }}</span>
         </div>
         <div class="text-2xl font-bold text-terminal-primary">
@@ -85,7 +85,7 @@
       <!-- 社融卡片 -->
       <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">社融</span>
+          <span class="text-xs text-terminal-dim cursor-help" title="社会融资规模：一定时期内实体经济从金融体系获得的资金总额，包括人民币贷款、外币贷款、委托贷款、信托贷款、未贴现银行承兑汇票、企业债券、政府债券、股票融资等">社融</span>
           <span class="text-xs text-terminal-dim">{{ overview.social_financing?.period }}</span>
         </div>
         <div class="text-2xl font-bold" :class="getColorClass(overview.social_financing?.yoy)">

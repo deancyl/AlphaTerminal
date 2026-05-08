@@ -79,7 +79,7 @@ const moreTabs = [
   { id: 'macro', label: '宏观', icon: '🌍' },
   { id: 'options', label: '期权', icon: '⚡' },
   { id: 'global-index', label: '全球', icon: '🌐' },
-  { id: 'backtest', label: '回测', icon: '🔬' },
+  { id: 'strategy-center', label: '策略', icon: '🎯' },
   { id: 'admin', label: '设置', icon: '⚙️' },
 ]
 

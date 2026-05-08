@@ -575,6 +575,66 @@
         </div>
       </div>
 
+      <!-- API密钥管理 -->
+      <div v-else-if="activeTab === 'agent_tokens'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">🔑 API密钥管理</h2>
+            <p class="text-xs text-theme-muted mt-1">管理Agent和第三方服务的API密钥</p>
+          </div>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshAgentTokens">🔄 刷新</button>
+        </div>
+
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
+          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
+          <p class="text-xs text-theme-secondary leading-relaxed">
+            管理用于<strong class="text-terminal-accent">AI Agent</strong>和<strong class="text-terminal-accent">第三方服务</strong>的API密钥。
+            密钥将被安全存储，用于自动化交易、数据获取等功能。
+          </p>
+        </div>
+
+        <div class="bg-terminal-panel border border-theme rounded-sm p-5">
+          <div class="text-center py-12 text-theme-muted">
+            <div class="text-4xl mb-3">🔑</div>
+            <div class="text-sm">API密钥管理功能</div>
+            <div class="text-xs mt-2 text-theme-tertiary">请切换到主界面的API密钥管理模块进行操作</div>
+            <button @click="$emit('navigate', 'agent_tokens')" class="mt-4 px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/25 transition-colors">
+              前往API密钥管理 →
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI工具配置 (MCP) -->
+      <div v-else-if="activeTab === 'mcp'" class="space-y-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-bold text-theme-primary">🔌 AI工具配置</h2>
+            <p class="text-xs text-theme-muted mt-1">配置MCP工具和外部AI服务集成</p>
+          </div>
+          <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshMcpConfig">🔄 刷新</button>
+        </div>
+
+        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">
+          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>
+          <p class="text-xs text-theme-secondary leading-relaxed">
+            配置<strong class="text-terminal-accent">MCP (Model Context Protocol)</strong>工具和外部AI服务。
+            通过MCP协议，可以让AI助手访问更多数据源和工具，如实时行情、数据库查询等。
+          </p>
+        </div>
+
+        <div class="bg-terminal-panel border border-theme rounded-sm p-5">
+          <div class="text-center py-12 text-theme-muted">
+            <div class="text-4xl mb-3">🔌</div>
+            <div class="text-sm">AI工具配置功能</div>
+            <div class="text-xs mt-2 text-theme-tertiary">请切换到主界面的AI工具配置模块进行操作</div>
+            <button @click="$emit('navigate', 'mcp')" class="mt-4 px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/25 transition-colors">
+              前往AI工具配置 →
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div v-else-if="activeTab === 'logs'" class="space-y-6">
         <div class="flex items-center justify-between">          <div>            <h2 class="text-lg font-bold text-theme-primary">📝 日志查看</h2>            <p class="text-xs text-theme-muted">查看系统运行日志和错误信息</p>          </div>          <div class="flex gap-2">            <select v-model="logLevel" class="px-3 py-2 bg-terminal-panel border border-theme rounded-sm text-sm">              <option value="ALL">全部级别</option>              <option value="ERROR">ERROR</option>              <option value="WARNING">WARNING</option>              <option value="INFO">INFO</option>              <option value="DEBUG">DEBUG</option>            </select>            <button class="px-4 py-2 bg-terminal-accent/15 text-terminal-accent rounded-sm text-sm" @click="refreshLogs">🔄 刷新</button>          </div>        </div>        <div class="p-4 bg-[var(--info-bg)] border border-[var(--color-info-border)] rounded-sm">          <h3 class="text-sm font-bold text-[var(--color-info)] mb-2">💡 这个功能是做什么的？</h3>          <p class="text-xs text-theme-secondary leading-relaxed">            显示系统的<strong class="text-terminal-accent">运行日志</strong>，包括数据更新记录、错误信息等。当系统异常时，可通过日志排查问题。          </p>        </div>        <div class="p-4 bg-theme-secondary/20 rounded-sm border border-theme h-96 overflow-auto font-mono text-xs" ref="logContainer">          <div v-if="logs.length === 0" class="text-theme-muted text-center py-8">            <div class="text-2xl mb-2">📭</div>            <div>暂无日志数据</div>            <div class="mt-2 text-[10px]">点击刷新按钮加载日志</div>          </div>          <div v-else class="space-y-1">            <div v-for="(log, i) in filteredLogs" :key="i" class="break-all">              <span class="text-theme-muted">{{ formatTime(log.timestamp) }}</span>              <span class="px-1.5 py-0.5 rounded-sm text-[10px] ml-2" :class="getLogLevelClass(log.level)">{{ log.level }}</span>              <span class="text-theme-secondary ml-2">{{ log.message }}</span>            </div>          </div>        </div>        <div class="p-3 bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] rounded-sm text-xs text-theme-muted">          <strong class="text-[var(--color-warning)]">日志级别说明：</strong>          <ul class="mt-1 space-y-1 list-disc list-inside">            <li><strong>DEBUG</strong>：详细的调试信息，开发时使用</li>            <li><strong>INFO</strong>：常规运行信息，如数据更新成功</li>            <li><strong>WARNING</strong>：警告信息，如数据源响应慢</li>            <li><strong>ERROR</strong>：错误信息，需要关注</li>          </ul>        </div>      </div>
 
@@ -615,6 +675,8 @@ import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
 
+const emit = defineEmits(['navigate'])
+
 const version = __APP_VERSION__
 const activeTab = ref('sources')
 const mobileNavOpen = ref(false)
@@ -622,6 +684,15 @@ const logContainer = ref(null)
 const proxyUrl = ref('')
 const expandedHistory = ref({})
 const probeData = ref(null)
+
+// Placeholder functions for agent_tokens and mcp
+function refreshAgentTokens() {
+  toast.info('提示', '请切换到主界面的API密钥管理模块')
+}
+
+function refreshMcpConfig() {
+  toast.info('提示', '请切换到主界面的AI工具配置模块')
+}
 
 const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
@@ -631,6 +702,8 @@ const navItems = [
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'llm', label: '模型配置', desc: 'LLM API Key 和连接配置', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'agent_tokens', label: 'API密钥', desc: '管理Agent和第三方API密钥', icon: '🔑', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'mcp', label: 'AI工具配置', desc: '配置MCP工具和外部服务', icon: '🔌', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'logs', label: '日志查看', desc: '查看系统运行日志和错误信息', icon: '📝', status: false, statusClass: 'bg-gray-400' },
 ]
 

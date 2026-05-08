@@ -253,6 +253,12 @@ const VIEWS = [
   { id: 'futures', name: '期货行情', icon: '🛢️', shortcut: '6' },
   { id: 'macro', name: '宏观经济', icon: '🌍', shortcut: 'Ctrl+M' },
   { id: 'backtest', name: '回测实验室', icon: '🔬', shortcut: 'Ctrl+R' },
+  { id: 'options', name: '期权分析', icon: '⚡', shortcut: 'Ctrl+O' },
+  { id: 'global-index', name: '全球指数', icon: '🌐', shortcut: 'Ctrl+G' },
+  { id: 'strategy-center', name: '策略中心', icon: '🧪', shortcut: 'Ctrl+S' },
+  { id: 'admin', name: '系统管理', icon: '⚙️', shortcut: 'Ctrl+Shift+A' },
+  { id: 'agent_tokens', name: 'API Token管理', icon: '🔑', shortcut: 'Ctrl+Shift+T' },
+  { id: 'mcp', name: 'AI工具配置', icon: '🤖', shortcut: 'Ctrl+Shift+M' },
 ]
 
 // ── 计算属性 ──

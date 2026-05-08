@@ -121,7 +121,7 @@
     </div>
 
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
@@ -169,7 +169,7 @@
     </div>
 
     <!-- ━━━ Widget 5：资金流向（独立，右侧4列，6起）━━━━━━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
         <FundFlowPanel />
@@ -177,7 +177,7 @@
     </div>
 
     <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
         <HotSectors @sector-click="handleSectorClick" />
@@ -185,7 +185,7 @@
     </div>
 
     <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
@@ -222,7 +222,7 @@
     </div>
 
     <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener @symbol-click="handleScreenerClick" />
@@ -230,7 +230,7 @@
     </div>
 
     <!-- ━━━ Widget 8：价格预警管理（右侧3列，15起）━━━━━━━━━━━ -->
-    <div class="grid-stack-item"
+    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
          gs-x="9" gs-y="15" gs-w="3" gs-h="6" gs-min-w="2" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <AlertManager />
@@ -265,6 +265,7 @@ const props = defineProps({
   sectorsData:    { type: Array,  default: () => [] },
   derivativesData:{ type: Array,  default: () => [] },
   isLocked:       { type: Boolean, default: true },
+  layoutMode:     { type: String,  default: 'advanced' }, // 'simple' | 'advanced'
 })
 
 const emit = defineEmits(['toggle-lock', 'open-fullscreen'])

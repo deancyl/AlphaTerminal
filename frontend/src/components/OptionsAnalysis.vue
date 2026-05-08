@@ -4,19 +4,19 @@
     <div class="flex items-center justify-between px-4 py-2 border-b border-theme-secondary shrink-0">
       <div class="flex items-center gap-3">
         <span class="text-lg font-bold text-terminal-accent">⚡ 期权分析</span>
-        <span class="text-xs text-terminal-dim">Black-Scholes 希腊值计算</span>
+        <span class="text-xs text-terminal-dim cursor-help" title="Black-Scholes模型：1973年由Fischer Black和Myron Scholes提出的期权定价模型，是现代金融理论的基石之一。该模型假设股票价格服从对数正态分布，通过五个参数（标的资产价格、行权价、到期时间、波动率、无风险利率）计算欧式期权的理论价格">Black-Scholes 希腊值计算</span>
       </div>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4 space-y-4">
       <!-- 输入参数 -->
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="space-y-1">
           <label class="text-xs text-terminal-dim">标的资产价格 S</label>
           <input
             v-model.number="params.S"
             type="number"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="100.00"
           />
         </div>
@@ -26,7 +26,7 @@
           <input
             v-model.number="params.K"
             type="number"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="100.00"
           />
         </div>
@@ -37,7 +37,7 @@
             v-model.number="params.T"
             type="number"
             step="0.01"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="0.25"
           />
         </div>
@@ -48,7 +48,7 @@
             v-model.number="params.sigma"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="20.0"
           />
         </div>
@@ -59,7 +59,7 @@
             v-model.number="params.r"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="3.0"
           />
         </div>
@@ -70,14 +70,14 @@
             v-model.number="params.q"
             type="number"
             step="0.1"
-            class="w-full bg-terminal-panel border border-theme-secondary rounded-sm px-2 py-1 text-sm text-terminal-primary"
+            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
             placeholder="0.0"
           />
         </div>
       </div>
 
       <!-- 计算结果 -->
-      <div v-if="results" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div v-if="results" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <!-- 期权价格 -->
         <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
           <div class="text-[10px] text-theme-muted mb-1">看涨期权价格</div>
@@ -88,7 +88,7 @@
 
         <!-- Delta -->
         <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1">Delta (Δ)</div>
+          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Delta (Δ)：期权价格对标的资产价格的敏感度。看涨期权Delta范围0-1，看跌期权Delta范围-1到0。Delta=0.5表示标的资产每变动1元，期权价格变动0.5元">Delta (Δ)</div>
           <div class="text-lg font-mono font-bold">{{ results.callDelta.toFixed(4) }}</div>
           <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putDelta.toFixed(4) }}</div>
           <div class="text-[10px] text-terminal-dim mt-1">价格对标的敏感度</div>
@@ -96,14 +96,14 @@
 
         <!-- Gamma -->
         <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1">Gamma (Γ)</div>
+          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Gamma (Γ)：Delta对标的资产价格的二阶导数，衡量Delta的变化速度。Gamma越大，Delta变化越快，期权价格对标的资产价格变动越敏感。平值期权Gamma最大">Gamma (Γ)</div>
           <div class="text-lg font-mono font-bold text-terminal-accent">{{ results.gamma.toFixed(4) }}</div>
           <div class="text-[10px] text-terminal-dim mt-1">Delta对标的二阶敏感度</div>
         </div>
 
         <!-- Theta -->
         <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1">Theta (Θ)</div>
+          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Theta (Θ)：期权价格对时间流逝的敏感度，表示每过一天期权价值的损耗。通常为负值，因为随着到期日临近，期权时间价值逐渐减少。平值期权Theta绝对值最大">Theta (Θ)</div>
           <div class="text-lg font-mono font-bold">{{ results.callTheta.toFixed(4) }}</div>
           <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putTheta.toFixed(4) }}</div>
           <div class="text-[10px] text-terminal-dim mt-1">时间衰减（每日）</div>
@@ -111,7 +111,7 @@
 
         <!-- Vega -->
         <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1">Vega (V)</div>
+          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Vega (V)：期权价格对波动率的敏感度，表示波动率每变动1%，期权价格的变动量。Vega始终为正，因为波动率上升会增加期权价值。平值期权Vega最大">Vega (V)</div>
           <div class="text-lg font-mono font-bold text-[var(--color-warning)]">{{ results.vega.toFixed(4) }}</div>
           <div class="text-[10px] text-terminal-dim mt-1">对波动率的敏感度</div>
         </div>
@@ -120,11 +120,11 @@
       <!-- 策略盈亏图 -->
       <div v-if="results" class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
         <div class="text-[10px] text-theme-muted font-bold mb-2">📈 策略盈亏分析</div>
-        <div class="flex gap-2 mb-3">
+        <div class="flex flex-wrap gap-2 mb-3">
           <button
             v-for="s in strategies"
             :key="s.id"
-            class="text-[10px] px-2 py-1 rounded-sm border transition"
+            class="text-[10px] px-3 py-2 min-h-[44px] rounded-sm border transition"
             :class="activeStrategy === s.id
               ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
               : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
@@ -133,7 +133,7 @@
             {{ s.name }}
           </button>
         </div>
-        <div ref="strategyChart" class="w-full h-[250px]"></div>
+        <div ref="strategyChart" class="w-full h-[250px] sm:h-[300px]"></div>
       </div>
 
       <!-- 希腊值说明 -->

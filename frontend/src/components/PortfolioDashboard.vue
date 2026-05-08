@@ -58,11 +58,93 @@
       </div>
     </div>
 
+    <!-- 无账户时显示引导 -->
+    <div v-if="portfolioList.length === 0 && !loading" class="flex-1 flex items-center justify-center py-12">
+      <div class="text-center">
+        <div class="text-6xl mb-4">🏦</div>
+        <div class="text-lg text-terminal-accent font-bold mb-2">欢迎使用投资组合管理</div>
+        <div class="text-sm text-terminal-dim mb-4">创建您的第一个账户，开始管理投资组合</div>
+        
+        <!-- 功能预览卡片 -->
+        <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
+          <div class="text-xs text-terminal-dim mb-3">💡 您将获得以下功能：</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+            <div class="flex flex-col items-center gap-1 p-2 bg-terminal-bg/50 rounded-sm">
+              <span class="text-2xl">📊</span>
+              <span class="text-theme-secondary">持仓管理</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 p-2 bg-terminal-bg/50 rounded-sm">
+              <span class="text-2xl">📈</span>
+              <span class="text-theme-secondary">业绩追踪</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 p-2 bg-terminal-bg/50 rounded-sm">
+              <span class="text-2xl">📋</span>
+              <span class="text-theme-secondary">模拟调仓</span>
+            </div>
+            <div class="flex flex-col items-center gap-1 p-2 bg-terminal-bg/50 rounded-sm">
+              <span class="text-2xl">⚠️</span>
+              <span class="text-theme-secondary">风险分析</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 快速上手指南 -->
+        <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-md mx-auto">
+          <div class="text-xs text-terminal-dim mb-3">🚀 快速上手指南：</div>
+          <div class="space-y-2 text-xs text-theme-secondary">
+            <div class="flex items-start gap-2">
+              <span class="text-terminal-accent font-bold">1.</span>
+              <span>点击下方按钮创建账户</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-terminal-accent font-bold">2.</span>
+              <span>选择「主账户」类型（可包含子账户）</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-terminal-accent font-bold">3.</span>
+              <span>输入账户名称和初始本金</span>
+            </div>
+            <div class="flex items-start gap-2">
+              <span class="text-terminal-accent font-bold">4.</span>
+              <span>添加持仓，开始追踪业绩</span>
+            </div>
+          </div>
+        </div>
+        
+        <button @click="showCreateModal = true" class="btn-primary px-6 py-3 text-sm font-bold shadow-lg hover:shadow-xl transition-shadow">
+          ➕ 创建第一个账户
+        </button>
+      </div>
+    </div>
+
     <!-- 无持仓时显示 -->
-    <div v-if="positions.length === 0 && !loading" class="text-center text-terminal-dim py-8">
-      <div class="text-2xl mb-2">📭</div>
-      <div>暂无持仓</div>
-      <div class="text-xs text-theme-tertiary mt-1">买入标的后将显示在这里</div>
+    <div v-if="portfolioList.length > 0 && positions.length === 0 && !loading && selectedPortfolioId !== null" class="flex-1 flex items-center justify-center py-8">
+      <div class="text-center">
+        <div class="text-5xl mb-3">📭</div>
+        <div class="text-base text-terminal-accent font-bold mb-2">暂无持仓</div>
+        
+        <!-- 显示当前账户信息 -->
+        <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3 mb-4 max-w-sm mx-auto">
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div class="text-left">
+              <div class="text-theme-tertiary mb-1">当前账户</div>
+              <div class="text-theme-primary font-medium">{{ currentPortfolioName || '-' }}</div>
+            </div>
+            <div class="text-right">
+              <div class="text-theme-tertiary mb-1">现金余额</div>
+              <div class="text-terminal-accent font-bold">¥{{ (cashBalance||0).toLocaleString() }}</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="text-xs text-theme-tertiary mb-4">
+          点击「模拟调仓」添加您的第一笔持仓
+        </div>
+        
+        <button @click="showTradeModal = true" class="bg-[var(--color-success-bg)] hover:bg-[var(--color-success-bg)] text-[var(--color-success)] border border-[var(--color-success-border)] px-6 py-2.5 text-sm font-bold rounded-sm transition-colors">
+          📋 开始模拟调仓
+        </button>
+      </div>
     </div>
 
     <!-- Phase 4: PnL 三分卡片 -->

@@ -11,7 +11,7 @@
           <button
             v-for="preset in strategyPresets" :key="preset.name"
             @click="applyPreset(preset)"
-            class="px-2 py-1 text-[10px] rounded-sm border transition-colors"
+            class="min-h-[44px] px-3 py-2 text-[10px] rounded-sm border transition-colors"
             :class="isPresetActive(preset)
               ? 'bg-[var(--color-info-bg)] border-[var(--color-info-border)] text-[var(--color-info)]'
               : 'border-theme-secondary text-theme-secondary hover:border-[var(--color-info-border)] hover:text-[var(--color-info-light)]'"
@@ -146,16 +146,16 @@
             <button
               @click="targetMode = 'stock'"
               :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-theme-secondary' : 'text-theme-secondary'"
-              class="px-2 py-0.5">股票</button>
+              class="min-h-[44px] px-3 py-2">股票</button>
             <button
               @click="targetMode = 'portfolio'"
               :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-theme-secondary'"
-              class="px-2 py-0.5">组合</button>
+              class="min-h-[44px] px-3 py-2">组合</button>
           </div>
         </div>
         <div class="flex items-center gap-1.5">
           <input v-model="symbol"
-            class="flex-1 bg-terminal-bg/60 border border-theme-secondary rounded-sm px-2 py-1 text-[10px] text-[var(--color-info)] focus:outline-none focus:border-terminal-accent/60 placeholder:text-theme-tertiary"
+            class="flex-1 min-h-[44px] bg-terminal-bg/60 border border-theme-secondary rounded-sm px-3 py-2 text-[10px] text-[var(--color-info)] focus:outline-none focus:border-terminal-accent/60 placeholder:text-theme-tertiary"
             placeholder="输入代码 (例: sh600519)"
             @keyup.enter="runBacktest" />
           <!-- 格式校验 -->
@@ -184,18 +184,18 @@
             <button
               @click="targetMode = 'stock'"
               :class="targetMode === 'stock' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)] border-r border-theme-secondary' : 'text-theme-secondary'"
-              class="px-2 py-0.5">股票</button>
+              class="min-h-[44px] px-3 py-2">股票</button>
             <button
               @click="targetMode = 'portfolio'"
               :class="targetMode === 'portfolio' ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 'text-theme-secondary'"
-              class="px-2 py-0.5">组合</button>
+              class="min-h-[44px] px-3 py-2">组合</button>
           </div>
         </div>
 
         <!-- 组合下拉 -->
         <select v-model="selectedPortfolioId"
           @change="onPortfolioChange"
-          class="w-full bg-terminal-bg/60 border border-theme-secondary rounded-sm px-2 py-1 text-[10px] text-[var(--color-info)] mb-2 focus:outline-none">
+          class="w-full min-h-[44px] bg-terminal-bg/60 border border-theme-secondary rounded-sm px-3 py-2 text-[10px] text-[var(--color-info)] mb-2 focus:outline-none">
           <option value="">— 选择组合账户 —</option>
           <option v-for="p in portfolioOptions" :key="p.id" :value="p.id">
             {{ p.parent_id ? '  └ ' : '' }}{{ p.name }}
@@ -209,7 +209,7 @@
             :key="pos.symbol"
             @click="runBacktestWithSymbol(pos.symbol)"
             :disabled="running"
-            class="px-1.5 py-0.5 text-[10px] rounded-sm border transition-colors"
+            class="min-h-[44px] px-3 py-2 text-[10px] rounded-sm border transition-colors"
             :class="running
               ? 'border-theme-tertiary text-theme-muted cursor-not-allowed opacity-50'
               : 'border-[var(--color-info-border)] text-[var(--color-info)] hover:bg-[var(--color-info-bg)] cursor-pointer'"
@@ -229,7 +229,7 @@
         <button
           @click="runBacktest"
           :disabled="running"
-          class="w-full py-1.5 rounded-sm text-[11px] font-medium transition-colors"
+          class="w-full min-h-[44px] py-3 rounded-sm text-[11px] font-medium transition-colors"
           :class="running
             ? 'bg-[var(--color-neutral-bg)] text-theme-muted cursor-not-allowed'
             : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-hover)]/30 border border-[var(--color-info-border)]'"
@@ -263,13 +263,13 @@
             </span>
           </div>
           <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
-            <span class="text-[10px] text-theme-muted mb-0.5">最大回撤</span>
+            <span class="text-[10px] text-theme-muted mb-0.5 cursor-help" title="最大回撤：策略在回测期间从峰值到谷值的最大跌幅，衡量策略可能面临的最大亏损风险">最大回撤</span>
             <span class="text-sm font-mono text-bearish">
               {{ (backtestResult.max_drawdown_pct||0).toFixed(2) }}%
             </span>
           </div>
           <div class="flex flex-col items-center bg-terminal-bg rounded-sm p-2 border border-theme">
-            <span class="text-[10px] text-theme-muted mb-0.5">夏普比率</span>
+            <span class="text-[10px] text-theme-muted mb-0.5 cursor-help" title="夏普比率：(年化收益率-无风险利率) / 年化波动率，衡量每承担一单位风险所获得的超额收益。>1为良好，>2为优秀，>3为卓越">夏普比率</span>
             <span class="text-sm font-mono" :class="(backtestResult.sharpe_ratio||0) >= 1 ? 'text-bullish' : 'text-theme-muted'">
               {{ (backtestResult.sharpe_ratio||0).toFixed(2) || '—' }}
             </span>
@@ -319,11 +319,11 @@
             </span>
           </div>
           <div class="shrink-0 flex items-center gap-1">
-            <span class="text-theme-muted">最大回撤</span>
+            <span class="text-theme-muted cursor-help" title="最大回撤：策略在回测期间从峰值到谷值的最大跌幅，衡量策略可能面临的最大亏损风险。数值越小越好，通常应控制在20%以内">最大回撤</span>
             <span class="font-mono text-bearish">{{ (backtestResult.max_drawdown_pct||0).toFixed(2) }}%</span>
           </div>
           <div class="shrink-0 flex items-center gap-1">
-            <span class="text-theme-muted">胜率</span>
+            <span class="text-theme-muted cursor-help" title="胜率：盈利交易次数占总交易次数的比例。胜率×平均盈利 > (1-胜率)×平均亏损 时策略才能盈利">胜率</span>
             <span class="font-mono text-theme-primary">{{ (backtestResult.win_rate||0).toFixed(1) }}%</span>
           </div>
           <div class="shrink-0 flex items-center gap-1">
@@ -331,23 +331,23 @@
             <span class="font-mono text-theme-primary">{{ backtestResult.trades_count||0 }}</span>
           </div>
           <div class="shrink-0 flex items-center gap-1">
-            <span class="text-theme-muted">夏普</span>
+            <span class="text-theme-muted cursor-help" title="夏普比率：(年化收益率-无风险利率) / 年化波动率，衡量每承担一单位风险所获得的超额收益。>1为良好，>2为优秀，>3为卓越">夏普</span>
             <span class="font-mono" :class="(backtestResult.sharpe_ratio||0) >= 1 ? 'text-bullish' : 'text-theme-muted'">
               {{ (backtestResult.sharpe_ratio||0).toFixed(2) || '—' }}
             </span>
           </div>
           <div class="shrink-0 flex items-center gap-1">
-            <span class="text-theme-muted">盈亏比</span>
+            <span class="text-theme-muted cursor-help" title="盈亏比：平均盈利金额 / 平均亏损金额。盈亏比>1表示盈利时赚的比亏损时亏的多，是策略长期盈利的关键指标">盈亏比</span>
             <span class="font-mono text-theme-primary">{{ profitFactor }}</span>
           </div>
           <button
-            class="shrink-0 text-[10px] text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors border border-[var(--color-info-border)] rounded-sm px-2 py-0.5"
+            class="shrink-0 min-h-[44px] text-[10px] px-3 py-2 text-[var(--color-info)] hover:text-[var(--color-info-light)] transition-colors border border-[var(--color-info-border)] rounded-sm"
             @click="exportBacktest"
             :disabled="!backtestResult">
             📥 导出
           </button>
           <button
-            class="ml-auto shrink-0 text-[10px] text-theme-muted hover:text-[var(--color-info)] transition-colors"
+            class="ml-auto shrink-0 min-h-[44px] text-[10px] px-3 py-2 text-theme-muted hover:text-[var(--color-info)] transition-colors"
             @click="showTrades = !showTrades">
             {{ showTrades ? '▲ 收起' : '▼ 交易' }} ({{ backtestResult.trades?.length||0 }})
           </button>

@@ -136,11 +136,12 @@ def get_token_service() -> AgentTokenService:
     return _token_service
 
 
-def _verify_admin(admin_auth: Optional[str]) -> bool:
-    """验证 admin token。简单实现：检查是否以 'admin_' 开头。"""
-    if admin_auth is None:
+def _verify_admin(admin_auth: Optional[str], x_admin_auth: Optional[str] = None) -> bool:
+    """验证 admin token。支持 Header 或 X-Admin-Auth 方式。"""
+    auth_value = x_admin_auth or admin_auth
+    if auth_value is None:
         return False
-    return admin_auth.startswith("admin_")
+    return auth_value.startswith("admin_") or auth_value == "admin_ui"
 
 async def verify_token(
     authorization: Optional[str] = Header(None, description="Bearer Token"),
@@ -204,17 +205,18 @@ async def health():
 # Token Management (Admin)
 # ─────────────────────────────────────────────────────────────────────────────
 
-@router.post("/admin/tokens", response_model=CreateTokenResponse)
+@router.post("/admin/tokens")
 async def create_token(
     request: CreateTokenRequest,
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
+    x_admin_auth: Optional[str] = Header(None, alias="X-Admin-Auth", description="Admin UI Auth"),
 ):
     """
     创建新的 Agent Token (需 Admin 权限)
     
     Token 仅在此刻显示一次, 请妥善保管。
     """
-    if not _verify_admin(admin_auth):
+    if not _verify_admin(admin_auth, x_admin_auth):
         raise HTTPException(status_code=403, detail="Invalid admin token")
     
     service = get_token_service()
@@ -228,46 +230,60 @@ async def create_token(
         expires_in_days=request.expires_in_days,
     )
     
-    return CreateTokenResponse(
-        id=token.id,
-        name=token.name,
-        token=raw_token,  # 仅此一次显示
-        token_prefix=token.token_prefix,
-        scopes=token.scopes,
-        markets=token.markets,
-        paper_only=token.paper_only,
-        expires_at=token.expires_at.isoformat() if token.expires_at else None,
-    )
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "id": token.id,
+            "name": token.name,
+            "token": raw_token,
+            "token_prefix": token.token_prefix,
+            "scopes": token.scopes,
+            "markets": token.markets,
+            "paper_only": token.paper_only,
+            "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+        }
+    }
 
 
-@router.get("/admin/tokens", response_model=list[dict])
+@router.get("/admin/tokens")
 async def list_tokens(
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
+    x_admin_auth: Optional[str] = Header(None, alias="X-Admin-Auth", description="Admin UI Auth"),
     include_inactive: bool = False,
 ):
     """列出所有 Token (需 Admin 权限)"""
-    if not _verify_admin(admin_auth):
+    if not _verify_admin(admin_auth, x_admin_auth):
         raise HTTPException(status_code=403, detail="Invalid admin token")
     
     service = get_token_service()
     tokens = service.list_tokens(include_inactive=include_inactive)
-    return [t.to_dict() for t in tokens]
+    return {
+        "code": 0,
+        "message": "success",
+        "data": [t.to_dict() for t in tokens]
+    }
 
 
 @router.delete("/admin/tokens/{token_id}")
 async def revoke_token(
     token_id: str,
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
+    x_admin_auth: Optional[str] = Header(None, alias="X-Admin-Auth", description="Admin UI Auth"),
 ):
     """吊销 Token (需 Admin 权限)"""
-    if not _verify_admin(admin_auth):
+    if not _verify_admin(admin_auth, x_admin_auth):
         raise HTTPException(status_code=403, detail="Invalid admin token")
     
     service = get_token_service()
     success = service.revoke_token(token_id)
     if not success:
         raise HTTPException(status_code=404, detail="Token not found")
-    return {"status": "ok", "message": f"Token {token_id} revoked"}
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {"status": "ok", "message": f"Token {token_id} revoked"}
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────

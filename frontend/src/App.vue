@@ -107,6 +107,20 @@
             <span v-else>🔓</span>
             {{ isLocked ? '已锁定' : '可拖拽' }}
           </button>
+          <!-- 布局模式切换（仅桌面端） -->
+          <button
+            v-if="!isMobile"
+            class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition cursor-help"
+            :class="layoutMode === 'simple'
+              ? 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
+              : 'border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'"
+            @click="toggleLayoutMode"
+            :title="layoutMode === 'simple' ? '简洁模式：4个核心组件\n点击切换到专业模式（8个组件）' : '专业模式：8个组件\n点击切换到简洁模式（4个核心组件）'"
+          >
+            <span v-if="layoutMode === 'simple'">🎯</span>
+            <span v-else>📊</span>
+            {{ layoutMode === 'simple' ? '简洁' : '专业' }}
+          </button>
           <!-- Copilot 唤醒按钮 -->
 <button
             class="btn-xs flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs leading-none relative"
@@ -163,6 +177,7 @@
           :sectors-data="sectorsData"
           :derivatives-data="derivativesData"
           :is-locked="isLocked"
+          :layout-mode="layoutMode"
           @toggle-lock="toggleLock"
           @open-fullscreen="openFullscreenKline"
         />
@@ -174,14 +189,20 @@
         <FundDashboard v-else-if="currentView === 'fund'" />
         <!-- 期货行情 -->
         <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
-        <!-- 回测实验室 -->
-        <BacktestDashboard v-else-if="currentView === 'backtest'" />
+        <!-- 策略中心 -->
+        <StrategyCenter v-else-if="currentView === 'strategy-center'" />
         <!-- 系统管理 -->
         <AdminDashboard v-else-if="currentView === 'admin'" />
         <!-- 宏观经济 -->
         <MacroDashboard v-else-if="currentView === 'macro'" />
         <!-- 期权分析 -->
         <OptionsAnalysis v-else-if="currentView === 'options'" />
+        <!-- 全球指数 -->
+        <GlobalIndex v-else-if="currentView === 'global-index'" />
+        <!-- API Token 管理 -->
+        <AgentTokenManager v-else-if="currentView === 'agent_tokens'" />
+        <!-- MCP Configuration -->
+        <MCPConfigDashboard v-else-if="currentView === 'mcp'" />
         <!-- F9 深度资料 -->
         <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
       </div>
@@ -259,14 +280,17 @@ const BondDashboard   = defineAsyncComponent(() => import('./components/BondDash
 const FuturesDashboard = defineAsyncComponent(() => import('./components/FuturesDashboard.vue'))
 const PortfolioDashboard = defineAsyncComponent(() => import('./components/PortfolioDashboard.vue'))
 const FundDashboard   = defineAsyncComponent(() => import('./components/FundDashboard.vue'))
-const BacktestDashboard = defineAsyncComponent(() => import('./components/BacktestDashboard.vue'))
+const StrategyCenter   = defineAsyncComponent(() => import('./components/StrategyCenter.vue'))
 const FuturesPanel    = defineAsyncComponent(() => import('./components/FuturesPanel.vue'))
 const CopilotSidebar  = defineAsyncComponent(() => import('./components/CopilotSidebar.vue'))
 const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
 const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
 const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
+const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
+const AgentTokenManager = defineAsyncComponent(() => import('./components/AgentTokenManager.vue'))
+const MCPConfigDashboard = defineAsyncComponent(() => import('./components/MCPConfigDashboard.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -325,7 +349,8 @@ function getViewName(viewId) {
   const names = {
     stock: '股票行情', bond: '债券行情', futures: '期货行情',
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
-    backtest: '回测实验室', admin: '系统管理', f9: '深度资料'
+    'strategy-center': '策略中心', admin: '系统管理',
+    f9: '深度资料', mcp: 'AI工具配置', 'global-index': '全球指数'
   }
   return names[viewId] || viewId
 }
@@ -404,6 +429,15 @@ const copilotUnreadCount = ref(0) // Copilot 未读消息数
 const isLocked = ref(true)     // 网格默认锁定
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
+
+// ── 布局模式：simple（简洁）或 advanced（专业）────────────────────
+const layoutMode = ref(localStorage.getItem('alphaterminal_layout_mode') || 'advanced')
+
+function toggleLayoutMode() {
+  layoutMode.value = layoutMode.value === 'simple' ? 'advanced' : 'simple'
+  localStorage.setItem('alphaterminal_layout_mode', layoutMode.value)
+  toastInfo('布局模式', `已切换到${layoutMode.value === 'simple' ? '简洁模式（4个核心组件）' : '专业模式（8个组件）'}`)
+}
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
 function openFullscreenKline({ symbol, name }) {

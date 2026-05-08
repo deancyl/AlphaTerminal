@@ -96,7 +96,7 @@ const mainNavItems = [
   { id: 'macro',     label: '宏观经济',   icon: '🌍' },
   { id: 'options',   label: '期权分析',   icon: '⚡' },
   { id: 'global-index', label: '全球指数',  icon: '🌐' },
-  { id: 'backtest',  label: '回测实验室', icon: '🔬' },
+  { id: 'strategy-center', label: '策略中心', icon: '🎯' },
 ]
 
 const adminNavItems = [
