@@ -2,11 +2,13 @@
 AlphaTerminal 实时新闻引擎 - Phase 5
 全局缓存 + 后台异步刷新（API 只读缓存，<50ms 响应）
 """
+import asyncio
 import hashlib
 import logging
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
 # ── 代理由 proxy_config.py 统一管理，从环境变量读取 ──────────────
@@ -23,6 +25,9 @@ def _get_ak():
         import akshare as ak
         _akshare_module = ak
     return _akshare_module
+
+# ── 线程池执行器（用于异步并行获取新闻）────────────────────────────────────
+_news_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="news_fetch_")
 
 # ── 全局新闻缓存（进程内存，uvicorn 常驻）──────────────────────────────
 # 结构: list[dict]，由后台刷新线程维护，API 只读不写
@@ -131,6 +136,52 @@ def _fetch_7x24_news() -> list[dict]:
         return []
 
 
+async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
+    """并行获取多个股票的新闻（最多4个并发）"""
+    loop = asyncio.get_event_loop()
+
+    async def fetch_one(sym):
+        try:
+            df = await loop.run_in_executor(
+                _news_executor,
+                lambda s=sym: _get_ak().stock_news_em(symbol=s)
+            )
+            if df is None or df.empty:
+                return []
+            rows = []
+            for _, row in df.iterrows():
+                try:
+                    raw_url = str(row.get("新闻链接", "")) or ""
+                    title   = str(row.get("新闻标题", "")) or ""
+                    if not title or not raw_url or raw_url == "nan":
+                        continue
+                    rows.append({
+                        "title":  title.strip(),
+                        "time":   str(row.get("发布时间", ""))[:16],
+                        "source": str(row.get("文章来源", "")) or "未知",
+                        "url":    raw_url,
+                    })
+                except Exception:
+                    continue
+            return rows
+        except Exception as e:
+            logger.warning(f"[NewsEngine] parallel fetch failed for {sym}: {type(e).__name__}: {e}")
+            return []
+
+    results = await asyncio.gather(*[fetch_one(s) for s in symbols])
+
+    all_news = []
+    seen = set()
+    for items in results:
+        for item in items:
+            h = _url_md5(item["url"])
+            if h not in seen:
+                seen.add(h)
+                all_news.append(item)
+
+    return all_news
+
+
 def refresh_news_cache(background: bool = True):
     """
     刷新全局新闻缓存池（后台线程调用）
@@ -155,46 +206,18 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            # ① 宏观快讯：_get_ak().stock_news_em（东方财富，真实发布时间）
-            for sym in _MACRO_SYMBOLS:
-                try:
-                    df = _get_ak().stock_news_em(symbol=sym)
-                    if df is not None and not df.empty:
-                        for _, row in df.iterrows():
-                            try:
-                                title  = str(row.get("新闻标题", "") or "")
-                                time_  = str(row.get("发布时间", "") or "")[:16]
-                                source = str(row.get("文章来源", "东财") or "东财")
-                                url    = str(row.get("新闻链接", "") or "")
-                                if title and len(title) > 5:
-                                    all_news.append({
-                                        "title":  title.strip(),
-                                        "time":   time_,
-                                        "source": source,
-                                        "url":    url,
-                                    })
-                            except Exception:
-                                continue
-                        sources_used.append(f"em:{sym}")
-                except Exception as e:
-                    logger.warning(f"[SCHEDULER] stock_news_em({sym}) failed: {type(e).__name__}: {e}")
-                time.sleep(0.05)
+            macro_news = asyncio.run(fetch_news_parallel(_MACRO_SYMBOLS))
+            all_news.extend(macro_news)
+            sources_used.append(f"parallel:{len(_MACRO_SYMBOLS)}")
+            logger.info(f"[SCHEDULER] 宏观快讯并行获取: {len(macro_news)} 条")
 
-            logger.info(f"[SCHEDULER] stock_news_em 宏观: fetched {len(all_news)} raw items.")
-
-            # ② 个股新闻（东方财富，20只标的）
-            for sym in NEWS_SYMBOLS:
-                try:
-                    items = _fetch_news_for_symbol(sym)
-                    if items:
-                        all_news.extend(items)
-                except Exception as e:
-                    logger.warning(f"[SCHEDULER] {sym} failed: {type(e).__name__}: {e}")
-                time.sleep(0.05)  # 快速轮询
+            stock_news = asyncio.run(fetch_news_parallel(NEWS_SYMBOLS))
+            all_news.extend(stock_news)
+            sources_used.append(f"parallel:{len(NEWS_SYMBOLS)}")
+            logger.info(f"[SCHEDULER] 个股新闻并行获取: {len(stock_news)} 条")
 
         except Exception as e:
             logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
-            # 即使失败也打印心跳，不让日志沉默
             logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
             return
 

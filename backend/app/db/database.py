@@ -152,6 +152,8 @@ def init_tables():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_p ON market_data_periodic(symbol, period)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pos_port ON positions(portfolio_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_snap_port ON portfolio_snapshots(portfolio_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_sym_date ON market_data_daily(symbol, date DESC)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_periodic_sym_period_date ON market_data_periodic(symbol, period, date DESC)")
         # ── Admin 系统配置持久化 ────────────────────────────────────
         conn.execute("""
             CREATE TABLE IF NOT EXISTS admin_config (

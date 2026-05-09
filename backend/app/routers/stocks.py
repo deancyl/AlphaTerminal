@@ -17,8 +17,10 @@ import httpx
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 线程池执行器用于运行阻塞代码
-_executor = ThreadPoolExecutor(max_workers=2)
+# 线程池执行器用于运行阻塞代码（根据CPU核心数动态配置）
+import os
+CPU_COUNT = os.cpu_count() or 4
+_executor = ThreadPoolExecutor(max_workers=min(8, CPU_COUNT * 2), thread_name_prefix="stocks_api_")
 
 # 缓存配置（带大小限制和过期清理）
 _CACHE = {}
