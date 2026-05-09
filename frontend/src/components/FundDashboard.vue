@@ -508,6 +508,7 @@
 import { ref, shallowRef, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { formatVol, formatAmount } from '../utils/formatters.js'
 
 // ECharts 通过 CDN 加载，使用全局变量
 const getEcharts = () => window.echarts
@@ -1085,19 +1086,9 @@ function getChangeColor(pct) {
   return 'text-theme-primary'
 }
 
-function formatVolume(vol) {
-  if (!vol) return '-'
-  if (vol > 100000000) return (vol / 100000000).toFixed(1) + '亿'
-  if (vol > 10000) return (vol / 10000).toFixed(0) + '万'
-  return vol.toFixed(0)
-}
-
-function formatAmount(amt) {
-  if (!amt) return '-'
-  if (amt > 100000000) return (amt / 100000000).toFixed(1) + '亿'
-  if (amt > 10000) return (amt / 10000).toFixed(0) + '万'
-  return amt.toFixed(0)
-}
+// 使用从 formatters.js 导入的 formatVol 和 formatAmount
+// 重命名以避免与本地变量冲突
+const formatVolume = formatVol
 
 // ── 生命周期 ───────────────────────────────────────────────────
 

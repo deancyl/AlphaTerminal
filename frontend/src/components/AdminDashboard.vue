@@ -1129,12 +1129,18 @@ function updateSourceChart(sources) {
 }
 
 // 监听窗口变化
+let _sourceChartResizeHandler = null
+
 onMounted(() => {
   refreshSourceHealth()
-  window.addEventListener('resize', () => sourceChart?.resize())
+  _sourceChartResizeHandler = () => sourceChart?.resize()
+  window.addEventListener('resize', _sourceChartResizeHandler)
 })
 onUnmounted(() => {
-  window.removeEventListener('resize', () => sourceChart?.resize())
+  if (_sourceChartResizeHandler) {
+    window.removeEventListener('resize', _sourceChartResizeHandler)
+    _sourceChartResizeHandler = null
+  }
   if (sourceChart) {
     sourceChart.dispose()
     sourceChart = null

@@ -65,6 +65,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
+import { formatPrice, formatVol } from '../utils/formatters.js'
 
 const props = defineProps({
   chartInstance: { type: Object, default: null },
@@ -300,23 +301,11 @@ function onClick(e) {
   })
 }
 
-// 格式化
-function formatPrice(price) {
-  if (price == null) return '--'
-  return price.toFixed(2)
-}
-
+// 格式化时间
 function formatTime(timestamp) {
   if (!timestamp) return '--'
   const date = new Date(timestamp)
   return `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function formatVolume(vol) {
-  if (vol == null) return '--'
-  if (vol >= 1e8) return (vol / 1e8).toFixed(2) + '亿股'
-  if (vol >= 1e4) return (vol / 1e4).toFixed(2) + '万股'
-  return vol.toFixed(0) + '股'
 }
 
 function getPriceColor(price, ref) {

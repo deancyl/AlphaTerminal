@@ -66,6 +66,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { usePriceFlash } from '../composables/usePriceFlash.js'
+import { formatPrice, formatVol } from '../utils/formatters.js'
 
 const props = defineProps({
   symbol: { type: String, required: true }
@@ -97,22 +98,10 @@ const statusText = computed(() => {
   return '交易中'
 })
 
-function formatPrice(p) {
-  if (!p || p === 0) return '--'
-  return p.toFixed(2)
-}
-
 function formatChange(pct) {
   if (!pct && pct !== 0) return '--'
   const sign = pct > 0 ? '+' : ''
   return `${sign}${pct.toFixed(2)}%`
-}
-
-function formatVol(v) {
-  if (!v) return '--'
-  if (v >= 100000000) return (v / 100000000).toFixed(2) + '亿'
-  if (v >= 10000) return (v / 10000).toFixed(2) + '万'
-  return v.toString()
 }
 
 function changeSymbol() {

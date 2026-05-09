@@ -682,26 +682,19 @@ def _load_all_stock_names() -> list[dict]:
             import akshare as ak
             logger.info("[SymbolRegistry] 开始加载全市场A股名称...")
             df = ak.stock_info_a_code_name()
-            rows = []
-            for _, row in df.iterrows():
-                code = str(row.get('code', '')).strip()
-                name = str(row.get('name', '')).strip()
-                if not code or not name or len(code) != 6:
-                    continue
-                # 交易所判断：6/9 开头=上海，0-3 开头=深圳，8 开头=北交所
-                prefix = 'sh' if code[0] in ('6', '9') else ('bj' if code[0] == '8' else 'sz')
-                symbol = f'{prefix}{code}'
-                rows.append({
-                    'symbol': symbol,
-                    'code':   code,
-                    'name':   name,
-                    'pinyin': _pinyin_fallback(name),
-                    'market': 'AShare',
-                    'type':   'stock',
-                })
-            _ALL_STOCK_NAMES = rows
+            # 向量化处理
+            df_work = df.copy()
+            df_work['code'] = df_work['code'].astype(str).str.strip()
+            df_work['name'] = df_work['name'].astype(str).str.strip()
+            df_work = df_work[(df_work['code'].str.len() == 6) & (df_work['code'] != '') & (df_work['name'] != '')]
+            df_work['prefix'] = df_work['code'].apply(lambda x: 'sh' if x[0] in ('6', '9') else ('bj' if x[0] == '8' else 'sz'))
+            df_work['symbol'] = df_work['prefix'] + df_work['code']
+            df_work['pinyin'] = df_work['name'].apply(_pinyin_fallback)
+            df_work['market'] = 'AShare'
+            df_work['type'] = 'stock'
+            _ALL_STOCK_NAMES = df_work[['symbol', 'code', 'name', 'pinyin', 'market', 'type']].to_dict('records')
             _STOCK_NAMES_LOADED = True
-            logger.info(f"[SymbolRegistry] 全市场A股加载完成: {len(rows)} 只")
+            logger.info(f"[SymbolRegistry] 全市场A股加载完成: {len(_ALL_STOCK_NAMES)} 只")
         except Exception as e:
             logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}")
             _ALL_STOCK_NAMES = []
@@ -895,23 +888,24 @@ async def get_fund_flow():
         )
         df = df.tail(30)
 
-        result = []
-        for _, row in df.iterrows():
-            result.append({
-                "date": str(row.get("日期", "")),
-                "sh_close": float(row.get("上证-收盘价", 0) or 0),
-                "sh_chg": float(row.get("上证-涨跌幅", 0) or 0),
-                "sz_close": float(row.get("深证-收盘价", 0) or 0),
-                "sz_chg": float(row.get("深证-涨跌幅", 0) or 0),
-                "main_net": int(float(row.get("主力净流入-净额", 0) or 0)),
-                "main_pct": float(row.get("主力净流入-净占比", 0) or 0),
-                "large_net": int(float(row.get("大单净流入-净额", 0) or 0)),
-                "large_pct": float(row.get("大单净流入-净占比", 0) or 0),
-                "medium_net": int(float(row.get("中单净流入-净额", 0) or 0)),
-                "medium_pct": float(row.get("中单净流入-净占比", 0) or 0),
-                "small_net": int(float(row.get("小单净流入-净额", 0) or 0)),
-                "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
-            })
+        # 向量化处理
+        df_work = df.copy()
+        df_work['date'] = df_work['日期'].astype(str)
+        df_work['sh_close'] = df_work['上证-收盘价'].apply(lambda x: float(x) if x else 0)
+        df_work['sh_chg'] = df_work['上证-涨跌幅'].apply(lambda x: float(x) if x else 0)
+        df_work['sz_close'] = df_work['深证-收盘价'].apply(lambda x: float(x) if x else 0)
+        df_work['sz_chg'] = df_work['深证-涨跌幅'].apply(lambda x: float(x) if x else 0)
+        df_work['main_net'] = df_work['主力净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
+        df_work['main_pct'] = df_work['主力净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work['large_net'] = df_work['大单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
+        df_work['large_pct'] = df_work['大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work['medium_net'] = df_work['中单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
+        df_work['medium_pct'] = df_work['中单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        df_work['small_net'] = df_work['小单净流入-净额'].apply(lambda x: int(float(x)) if x else 0)
+        df_work['small_pct'] = df_work['小单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        result = df_work[['date', 'sh_close', 'sh_chg', 'sz_close', 'sz_chg',
+                         'main_net', 'main_pct', 'large_net', 'large_pct',
+                         'medium_net', 'medium_pct', 'small_net', 'small_pct']].to_dict('records')
 
         if not result:
             raise ValueError("Empty data from akshare")
@@ -1122,6 +1116,16 @@ async def market_history(
 _FUTURES_FREQ_MAP = {"1min": 1, "5min": 5, "15min": 15, "30min": 30, "60min": 60}
 
 
+def _parse_timestamp(dt_str: str) -> int:
+    """将日期时间字符串转为 Unix timestamp（毫秒）"""
+    try:
+        from datetime import datetime
+        dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+        return int(dt_obj.timestamp() * 1000)
+    except Exception:
+        return 0
+
+
 @router.get("/market/futures/{symbol}")
 async def futures_history(
     symbol: str,
@@ -1152,17 +1156,16 @@ async def futures_history(
             if df is None or df.empty:
                 return {"symbol": clean_sym, "period": period, "history": []}
             df = df.tail(limit)
-            rows = []
-            for _, r in df.iterrows():
-                rows.append({
-                    "date":      str(r["date"]),
-                    "open":      round(float(r["open"]), 2),
-                    "high":      round(float(r["high"]), 2),
-                    "low":       round(float(r["low"]), 2),
-                    "close":     round(float(r["close"]), 2),
-                    "volume":    int(r["volume"]) if r["volume"] == r["volume"] else 0,
-                    "hold":      int(r["hold"]) if r["hold"] == r["hold"] else 0,   # 持仓量（Open Interest）
-                })
+            # 向量化处理
+            df_work = df.copy()
+            df_work['date'] = df_work['date'].astype(str)
+            df_work['open'] = df_work['open'].apply(lambda x: round(float(x), 2))
+            df_work['high'] = df_work['high'].apply(lambda x: round(float(x), 2))
+            df_work['low'] = df_work['low'].apply(lambda x: round(float(x), 2))
+            df_work['close'] = df_work['close'].apply(lambda x: round(float(x), 2))
+            df_work['volume'] = df_work['volume'].apply(lambda x: int(x) if x == x else 0)
+            df_work['hold'] = df_work['hold'].apply(lambda x: int(x) if x == x else 0)
+            rows = df_work[['date', 'open', 'high', 'low', 'close', 'volume', 'hold']].to_dict('records')
             return {"symbol": clean_sym, "period": period, "history": list(reversed(rows))}
         except Exception as e:
             logger.error(f"[Futures] daily failed {clean_sym}: {e}")
@@ -1176,27 +1179,17 @@ async def futures_history(
             if df is None or df.empty:
                 return {"symbol": clean_sym, "period": period, "history": []}
             df = df.tail(limit)
-            rows = []
-            for _, r in df.iterrows():
-                # datetime: "2026-04-07 14:40:00"
-                dt_str = str(r["datetime"])
-                # 转为 Unix timestamp（秒）
-                try:
-                    from datetime import datetime
-                    dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
-                    ts = int(dt_obj.timestamp() * 1000)
-                except Exception:
-                    ts = 0
-                rows.append({
-                    "date":    dt_str,
-                    "open":    round(float(r["open"]), 2),
-                    "high":    round(float(r["high"]), 2),
-                    "low":     round(float(r["low"]), 2),
-                    "close":   round(float(r["close"]), 2),
-                    "volume":  int(r["volume"]) if r["volume"] == r["volume"] else 0,
-                    "hold":    int(r["hold"]) if r["hold"] == r["hold"] else 0,
-                    "timestamp": ts,
-                })
+            # 向量化处理（含时间戳转换）
+            df_work = df.copy()
+            df_work['date'] = df_work['datetime'].astype(str)
+            df_work['open'] = df_work['open'].apply(lambda x: round(float(x), 2))
+            df_work['high'] = df_work['high'].apply(lambda x: round(float(x), 2))
+            df_work['low'] = df_work['low'].apply(lambda x: round(float(x), 2))
+            df_work['close'] = df_work['close'].apply(lambda x: round(float(x), 2))
+            df_work['volume'] = df_work['volume'].apply(lambda x: int(x) if x == x else 0)
+            df_work['hold'] = df_work['hold'].apply(lambda x: int(x) if x == x else 0)
+            df_work['timestamp'] = df_work['date'].apply(_parse_timestamp)
+            rows = df_work[['date', 'open', 'high', 'low', 'close', 'volume', 'hold', 'timestamp']].to_dict('records')
             return {"symbol": clean_sym, "period": period, "history": rows}
         except Exception as e:
             logger.error(f"[Futures] minute failed {clean_sym}: {e}")

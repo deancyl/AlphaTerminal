@@ -90,28 +90,25 @@ async def get_limit_up():
             df = ak.stock_zt_pool_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            result = []
-            for _, row in df.iterrows():
-                code = str(row.get('代码', ''))
-                # 判断交易所: 0/2/3开头为深圳，6开头为上海
-                symbol = 'sh' + code if code.startswith('6') else 'sz' + code
-                result.append({
-                    'symbol': symbol,
-                    'code': code,
-                    'name': str(row.get('名称', '')),
-                    'price': float(row.get('最新价', 0)),
-                    'change_pct': float(row.get('涨跌幅', 0)),
-                    'turnover': float(row.get('成交额', 0)),
-                    'float_market_cap': float(row.get('流通市值', 0)),
-                    'total_market_cap': float(row.get('总市值', 0)),
-                    'turnover_rate': float(row.get('换手率', 0)),
-                    'seal_fund': float(row.get('封板资金', 0)) if '封板资金' in row else 0,
-                    'first_seal_time': str(row.get('首次封板时间', '')),
-                    'last_seal_time': str(row.get('最后封板时间', '')) if '最后封板时间' in row else '',
-                    'board_count': int(row.get('连板数', 0)),
-                    'industry': str(row.get('所属行业', '')),
-                })
-            return result
+            # 向量化处理
+            df_work = df.copy()
+            df_work['code'] = df_work['代码'].astype(str)
+            df_work['symbol'] = df_work['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
+            df_work['name'] = df_work['名称'].astype(str)
+            df_work['price'] = df_work['最新价'].apply(lambda x: float(x) if x else 0)
+            df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
+            df_work['turnover'] = df_work['成交额'].apply(lambda x: float(x) if x else 0)
+            df_work['float_market_cap'] = df_work['流通市值'].apply(lambda x: float(x) if x else 0)
+            df_work['total_market_cap'] = df_work['总市值'].apply(lambda x: float(x) if x else 0)
+            df_work['turnover_rate'] = df_work['换手率'].apply(lambda x: float(x) if x else 0)
+            df_work['seal_fund'] = df_work.get('封板资金', 0).apply(lambda x: float(x) if x else 0) if '封板资金' in df_work else 0
+            df_work['first_seal_time'] = df_work['首次封板时间'].astype(str)
+            df_work['last_seal_time'] = df_work.get('最后封板时间', '').astype(str) if '最后封板时间' in df_work else ''
+            df_work['board_count'] = df_work['连板数'].apply(lambda x: int(x) if x else 0)
+            df_work['industry'] = df_work['所属行业'].astype(str)
+            return df_work[['symbol', 'code', 'name', 'price', 'change_pct', 'turnover',
+                           'float_market_cap', 'total_market_cap', 'turnover_rate', 'seal_fund',
+                           'first_seal_time', 'last_seal_time', 'board_count', 'industry']].to_dict('records')
         except Exception as e:
             logger.warning(f"[Stocks] limit_up fetch error: {e}")
             return []
@@ -135,25 +132,23 @@ async def get_limit_down():
             df = ak.stock_zt_pool_dtgc_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            result = []
-            for _, row in df.iterrows():
-                code = str(row.get('代码', ''))
-                symbol = 'sh' + code if code.startswith('6') else 'sz' + code
-                result.append({
-                    'symbol': symbol,
-                    'code': code,
-                    'name': str(row.get('名称', '')),
-                    'price': float(row.get('最新价', 0)),
-                    'change_pct': float(row.get('涨跌幅', 0)),
-                    'turnover': float(row.get('成交额', 0)),
-                    'float_market_cap': float(row.get('流通市值', 0)),
-                    'total_market_cap': float(row.get('总市值', 0)),
-                    'turnover_rate': float(row.get('换手率', 0)),
-                    'continue_stop': int(row.get('连续跌停', 0)),
-                    'open_count': int(row.get('开板次数', 0)) if '开板次数' in row else 0,
-                    'industry': str(row.get('所属行业', '')),
-                })
-            return result
+            # 向量化处理
+            df_work = df.copy()
+            df_work['code'] = df_work['代码'].astype(str)
+            df_work['symbol'] = df_work['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
+            df_work['name'] = df_work['名称'].astype(str)
+            df_work['price'] = df_work['最新价'].apply(lambda x: float(x) if x else 0)
+            df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
+            df_work['turnover'] = df_work['成交额'].apply(lambda x: float(x) if x else 0)
+            df_work['float_market_cap'] = df_work['流通市值'].apply(lambda x: float(x) if x else 0)
+            df_work['total_market_cap'] = df_work['总市值'].apply(lambda x: float(x) if x else 0)
+            df_work['turnover_rate'] = df_work['换手率'].apply(lambda x: float(x) if x else 0)
+            df_work['continue_stop'] = df_work['连续跌停'].apply(lambda x: int(x) if x else 0)
+            df_work['open_count'] = df_work.get('开板次数', 0).apply(lambda x: int(x) if x else 0) if '开板次数' in df_work else 0
+            df_work['industry'] = df_work['所属行业'].astype(str)
+            return df_work[['symbol', 'code', 'name', 'price', 'change_pct', 'turnover',
+                           'float_market_cap', 'total_market_cap', 'turnover_rate',
+                           'continue_stop', 'open_count', 'industry']].to_dict('records')
         except Exception as e:
             logger.warning(f"[Stocks] limit_down fetch error: {e}")
             return []
@@ -177,29 +172,24 @@ async def get_unusual():
             df = ak.stock_zt_pool_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            result = []
-            for _, row in df.iterrows():
-                turnover_rate = float(row.get('换手率', 0))
-                change_pct = float(row.get('涨跌幅', 0))
-                # 异动: 换手率>5% 或 涨幅>9.5%
-                if turnover_rate > 5 or change_pct >= 9.5:
-                    code = str(row.get('代码', ''))
-                    symbol = 'sh' + code if code.startswith('6') else 'sz' + code
-                    result.append({
-                        'symbol': symbol,
-                        'code': code,
-                        'name': str(row.get('名称', '')),
-                        'price': float(row.get('最新价', 0)),
-                        'change_pct': change_pct,
-                        'turnover_rate': turnover_rate,
-                        'turnover': float(row.get('成交额', 0)),
-                        'volume_ratio': round(turnover_rate / 3, 1),  # 估算量比
-                        'industry': str(row.get('所属行业', '')),
-                        'board_count': int(row.get('连板数', 0)),
-                    })
-            # 按换手率排序
-            result.sort(key=lambda x: x['turnover_rate'], reverse=True)
-            return result[:30]
+            # 向量化处理
+            df_work = df.copy()
+            df_work['turnover_rate'] = df_work['换手率'].apply(lambda x: float(x) if x else 0)
+            df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
+            # 筛选异动股票
+            df_filtered = df_work[(df_work['turnover_rate'] > 5) | (df_work['change_pct'] >= 9.5)]
+            df_filtered['code'] = df_filtered['代码'].astype(str)
+            df_filtered['symbol'] = df_filtered['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
+            df_filtered['name'] = df_filtered['名称'].astype(str)
+            df_filtered['price'] = df_filtered['最新价'].apply(lambda x: float(x) if x else 0)
+            df_filtered['turnover'] = df_filtered['成交额'].apply(lambda x: float(x) if x else 0)
+            df_filtered['volume_ratio'] = df_filtered['turnover_rate'] / 3
+            df_filtered['industry'] = df_filtered['所属行业'].astype(str)
+            df_filtered['board_count'] = df_filtered['连板数'].apply(lambda x: int(x) if x else 0)
+            result_df = df_filtered[['symbol', 'code', 'name', 'price', 'change_pct', 'turnover_rate',
+                                     'turnover', 'volume_ratio', 'industry', 'board_count']]
+            result_df = result_df.sort_values('turnover_rate', ascending=False).head(30)
+            return result_df.to_dict('records')
         except Exception as e:
             logger.warning(f"[Stocks] unusual fetch error: {e}")
             return []
@@ -226,22 +216,26 @@ def _load_stock_cache():
         try:
             df_sh = ak.stock_info_sh_name_code()
             if df_sh is not None and len(df_sh) > 0:
-                for _, row in df_sh.head(1000).iterrows():
-                    code = str(row.get('证券代码', '')).strip()
-                    name = str(row.get('证券简称', '')).strip()
-                    if code and name:
-                        _STOCK_CACHE.append({'code': code, 'name': name, 'market': 'SH'})
+                df_work = df_sh.head(1000)[['证券代码', '证券简称']].copy()
+                df_work = df_work.dropna(subset=['证券代码', '证券简称'])
+                df_work['code'] = df_work['证券代码'].astype(str).str.strip()
+                df_work['name'] = df_work['证券简称'].astype(str).str.strip()
+                for r in df_work[['code', 'name']].to_dict('records'):
+                    if r['code'] and r['name']:
+                        _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SH'})
         except Exception as e:
             logger.warning(f"[Stocks] SH load error: {e}")
         
         try:
             df_sz = ak.stock_info_sz_name_code()
             if df_sz is not None and len(df_sz) > 0:
-                for _, row in df_sz.head(1000).iterrows():
-                    code = str(row.get('A股代码', '')).strip()
-                    name = str(row.get('A股简称', '')).strip()
-                    if code and name:
-                        _STOCK_CACHE.append({'code': code, 'name': name, 'market': 'SZ'})
+                df_work = df_sz.head(1000)[['A股代码', 'A股简称']].copy()
+                df_work = df_work.dropna(subset=['A股代码', 'A股简称'])
+                df_work['code'] = df_work['A股代码'].astype(str).str.strip()
+                df_work['name'] = df_work['A股简称'].astype(str).str.strip()
+                for r in df_work[['code', 'name']].to_dict('records'):
+                    if r['code'] and r['name']:
+                        _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SZ'})
         except Exception as e:
             logger.warning(f"[Stocks] SZ load error: {e}")
         
@@ -399,12 +393,11 @@ async def get_limit_summary():
             zt_count = len(zt_df) if zt_df is not None else 0
             dt_count = len(dt_df) if dt_df is not None else 0
             
-            # 涨停行业分布
+            # 涨停行业分布（向量化）
             industry_dist = {}
             if zt_df is not None and len(zt_df) > 0:
-                for _, row in zt_df.iterrows():
-                    ind = str(row.get('所属行业', '其他'))
-                    industry_dist[ind] = industry_dist.get(ind, 0) + 1
+                industry_counts = zt_df['所属行业'].astype(str).value_counts()
+                industry_dist = industry_counts.to_dict()
             
             # 强势股（换手率最高的）- 兼容列名变化
             def _safe_sort_by_turnover(df):

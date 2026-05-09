@@ -298,114 +298,55 @@ let socialFinancingChartInstance = null
 let industrialProductionChartInstance = null
 let unemploymentChartInstance = null
 
-async function fetchOverview() {
-  try {
-    const data = await apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 })
-    if (data?.overview) {
-      overview.value = data.overview
-      lastUpdate.value = data.last_update
-    }
-  } catch (e) {
-    console.error('[Macro] Overview fetch error:', e)
-  }
-}
+async function fetchAllData() {
+  loading.value = true
+  error.value = null
 
-async function fetchCalendar() {
   try {
-    const data = await apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 })
-    if (data?.calendar) {
-      calendar.value = data.calendar
-    }
-  } catch (e) {
-    console.error('[Macro] Calendar fetch error:', e)
-  }
-}
+    const [
+      overviewRes,
+      calendarRes,
+      gdpRes,
+      cpiRes,
+      pmiRes,
+      ppiRes,
+      m2Res,
+      socialRes,
+      industrialRes,
+      unemploymentRes
+    ] = await Promise.all([
+      apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Overview error:', e); return null }),
+      apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Calendar error:', e); return null }),
+      apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] GDP error:', e); return null }),
+      apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] CPI error:', e); return null }),
+      apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] PMI error:', e); return null }),
+      apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] PPI error:', e); return null }),
+      apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] M2 error:', e); return null }),
+      apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Social error:', e); return null }),
+      apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Industrial error:', e); return null }),
+      apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Unemployment error:', e); return null })
+    ])
 
-async function fetchGDP() {
-  try {
-    const data = await apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawGDPChart(data.data)
+    // Process results
+    if (overviewRes?.overview) {
+      overview.value = overviewRes.overview
+      lastUpdate.value = overviewRes.last_update
     }
-  } catch (e) {
-    console.error('[Macro] GDP fetch error:', e)
-  }
-}
+    if (calendarRes?.calendar) calendar.value = calendarRes.calendar
+    if (gdpRes?.data) drawGDPChart(gdpRes.data)
+    if (cpiRes?.data) drawCPIChart(cpiRes.data)
+    if (pmiRes?.data) drawPMIChart(pmiRes.data)
+    if (ppiRes?.data) drawPPIChart(ppiRes.data)
+    if (m2Res?.data) drawM2Chart(m2Res.data)
+    if (socialRes?.data) drawSocialFinancingChart(socialRes.data)
+    if (industrialRes?.data) drawIndustrialProductionChart(industrialRes.data)
+    if (unemploymentRes?.data) drawUnemploymentChart(unemploymentRes.data)
 
-async function fetchCPI() {
-  try {
-    const data = await apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawCPIChart(data.data)
-    }
   } catch (e) {
-    console.error('[Macro] CPI fetch error:', e)
-  }
-}
-
-async function fetchPMI() {
-  try {
-    const data = await apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawPMIChart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] PMI fetch error:', e)
-  }
-}
-
-async function fetchPPI() {
-  try {
-    const data = await apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawPPIChart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] PPI fetch error:', e)
-  }
-}
-
-async function fetchM2() {
-  try {
-    const data = await apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawM2Chart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] M2 fetch error:', e)
-  }
-}
-
-async function fetchSocialFinancing() {
-  try {
-    const data = await apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawSocialFinancingChart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] Social financing fetch error:', e)
-  }
-}
-
-async function fetchIndustrialProduction() {
-  try {
-    const data = await apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawIndustrialProductionChart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] Industrial production fetch error:', e)
-  }
-}
-
-async function fetchUnemployment() {
-  try {
-    const data = await apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 })
-    if (data?.data) {
-      drawUnemploymentChart(data.data)
-    }
-  } catch (e) {
-    console.error('[Macro] Unemployment fetch error:', e)
+    console.error('[Macro] Fetch all error:', e)
+    error.value = '数据加载失败'
+  } finally {
+    loading.value = false
   }
 }
 
@@ -846,20 +787,7 @@ function drawUnemploymentChart(data) {
 }
 
 async function refreshAll() {
-  loading.value = true
-  await Promise.all([
-    fetchOverview(),
-    fetchCalendar(),
-    fetchGDP(),
-    fetchCPI(),
-    fetchPMI(),
-    fetchPPI(),
-    fetchM2(),
-    fetchSocialFinancing(),
-    fetchIndustrialProduction(),
-    fetchUnemployment()
-  ])
-  loading.value = false
+  await fetchAllData()
 }
 
 function formatNumber(val) {

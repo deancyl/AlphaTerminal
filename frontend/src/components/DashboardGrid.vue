@@ -245,6 +245,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
+import { formatPrice } from '../utils/formatters.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
@@ -537,11 +538,6 @@ onUnmounted(() => {
   grid?.destroy(false)
   pauseLow()
 })
-
-function formatPrice(v) {
-  if (v == null || isNaN(v)) return '--'
-  return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
-}
 
 // Phase 5: 格式化宏观价格（带单位）
 function formatMacroPrice(item) {

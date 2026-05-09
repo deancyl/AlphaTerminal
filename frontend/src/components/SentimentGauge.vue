@@ -106,6 +106,7 @@ import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
 import { apiFetch } from '../utils/api.js'
+import { formatPrice } from '../utils/formatters.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -165,11 +166,6 @@ const downPct = computed(() => {
   const t = data.value.total || 1
   return ((data.value.decline / t) * 100).toFixed(2)
 })
-
-function formatPrice(v) {
-  if (v == null || isNaN(v)) return '--'
-  return Number(v).toLocaleString('en-US', { maximumFractionDigits: 2 })
-}
 
 // ── ECharts 折线图：上涨家数全天走势 ─────────────────────────────
 function buildIntradayOption(series) {

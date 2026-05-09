@@ -130,16 +130,21 @@ async def get_gdp_data(limit: int = 20):
         # 取最近N条（数据按时间降序排列，最新在最前）
         df = df.head(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "quarter": row["季度"],
-                "gdp_absolute": _safe_float(row["国内生产总值-绝对值"]),
-                "gdp_yoy": _safe_float(row["国内生产总值-同比增长"]),
-                "primary_yoy": _safe_float(row["第一产业-同比增长"]),
-                "secondary_yoy": _safe_float(row["第二产业-同比增长"]),
-                "tertiary_yoy": _safe_float(row["第三产业-同比增长"]),
-            })
+        # 向量化处理：直接使用 df.to_dict('records')
+        data = (
+            df[['季度', '国内生产总值-绝对值', '国内生产总值-同比增长',
+                '第一产业-同比增长', '第二产业-同比增长', '第三产业-同比增长']]
+            .assign(
+                gdp_absolute=lambda x: x['国内生产总值-绝对值'].apply(_safe_float),
+                gdp_yoy=lambda x: x['国内生产总值-同比增长'].apply(_safe_float),
+                primary_yoy=lambda x: x['第一产业-同比增长'].apply(_safe_float),
+                secondary_yoy=lambda x: x['第二产业-同比增长'].apply(_safe_float),
+                tertiary_yoy=lambda x: x['第三产业-同比增长'].apply(_safe_float),
+            )
+            .rename(columns={'季度': 'quarter'})
+            [['quarter', 'gdp_absolute', 'gdp_yoy', 'primary_yoy', 'secondary_yoy', 'tertiary_yoy']]
+            .to_dict('records')
+        )
         
         return success_response({
             "indicator": "GDP",
@@ -165,16 +170,20 @@ async def get_cpi_data(limit: int = 24):
         df = _get_ak().macro_china_cpi()
         df = df.head(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["月份"],
-                "nation_current": _safe_float(row["全国-当月"]),
-                "nation_yoy": _safe_float(row["全国-同比增长"]),
-                "nation_mom": _safe_float(row["全国-环比增长"]),
-                "city_yoy": _safe_float(row["城市-同比增长"]),
-                "rural_yoy": _safe_float(row["农村-同比增长"]),
-            })
+        # 向量化处理
+        data = (
+            df[['月份', '全国-当月', '全国-同比增长', '全国-环比增长', '城市-同比增长', '农村-同比增长']]
+            .assign(
+                nation_current=lambda x: x['全国-当月'].apply(_safe_float),
+                nation_yoy=lambda x: x['全国-同比增长'].apply(_safe_float),
+                nation_mom=lambda x: x['全国-环比增长'].apply(_safe_float),
+                city_yoy=lambda x: x['城市-同比增长'].apply(_safe_float),
+                rural_yoy=lambda x: x['农村-同比增长'].apply(_safe_float),
+            )
+            .rename(columns={'月份': 'month'})
+            [['month', 'nation_current', 'nation_yoy', 'nation_mom', 'city_yoy', 'rural_yoy']]
+            .to_dict('records')
+        )
         
         return success_response({
             "indicator": "CPI",
@@ -200,14 +209,18 @@ async def get_ppi_data(limit: int = 24):
         df = _get_ak().macro_china_ppi()
         df = df.head(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["月份"],
-                "current": _safe_float(row["当月"]),
-                "yoy": _safe_float(row["当月同比增长"]),
-                "cumulative": _safe_float(row["累计"]),
-            })
+        # 向量化处理
+        data = (
+            df[['月份', '当月', '当月同比增长', '累计']]
+            .assign(
+                current=lambda x: x['当月'].apply(_safe_float),
+                yoy=lambda x: x['当月同比增长'].apply(_safe_float),
+                cumulative=lambda x: x['累计'].apply(_safe_float),
+            )
+            .rename(columns={'月份': 'month'})
+            [['month', 'current', 'yoy', 'cumulative']]
+            .to_dict('records')
+        )
         
         return success_response({
             "indicator": "PPI",
@@ -233,15 +246,19 @@ async def get_pmi_data(limit: int = 24):
         df = _get_ak().macro_china_pmi()
         df = df.head(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["月份"],
-                "manufacturing_index": _safe_float(row["制造业-指数"]),
-                "manufacturing_yoy": _safe_float(row["制造业-同比增长"]),
-                "non_manufacturing_index": _safe_float(row["非制造业-指数"]),
-                "non_manufacturing_yoy": _safe_float(row["非制造业-同比增长"]),
-            })
+        # 向量化处理
+        data = (
+            df[['月份', '制造业-指数', '制造业-同比增长', '非制造业-指数', '非制造业-同比增长']]
+            .assign(
+                manufacturing_index=lambda x: x['制造业-指数'].apply(_safe_float),
+                manufacturing_yoy=lambda x: x['制造业-同比增长'].apply(_safe_float),
+                non_manufacturing_index=lambda x: x['非制造业-指数'].apply(_safe_float),
+                non_manufacturing_yoy=lambda x: x['非制造业-同比增长'].apply(_safe_float),
+            )
+            .rename(columns={'月份': 'month'})
+            [['month', 'manufacturing_index', 'manufacturing_yoy', 'non_manufacturing_index', 'non_manufacturing_yoy']]
+            .to_dict('records')
+        )
         
         return success_response({
             "indicator": "PMI",
@@ -451,13 +468,17 @@ async def get_m2_data(limit: int = 24):
         df = _get_ak().macro_china_supply_of_money()
         df = df.head(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["统计时间"],
-                "m2_yoy": _safe_float(row["货币和准货币（广义货币M2）同比增长"]),
-                "m2_amount": _safe_float(row["货币和准货币（广义货币M2）"]),
-            })
+        # 向量化处理
+        data = (
+            df[['统计时间', '货币和准货币（广义货币M2）同比增长', '货币和准货币（广义货币M2）']]
+            .assign(
+                m2_yoy=lambda x: x['货币和准货币（广义货币M2）同比增长'].apply(_safe_float),
+                m2_amount=lambda x: x['货币和准货币（广义货币M2）'].apply(_safe_float),
+            )
+            .rename(columns={'统计时间': 'month'})
+            [['month', 'm2_yoy', 'm2_amount']]
+            .to_dict('records')
+        )
         
         result = success_response({
             "indicator": "M2",
@@ -492,13 +513,17 @@ async def get_social_financing_data(limit: int = 24):
         # 数据升序排列，取最后N条
         df = df.tail(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["月份"],
-                "total": _safe_float(row["社会融资规模增量"]),
-                "rmb_loan": _safe_float(row["其中-人民币贷款"]),
-            })
+        # 向量化处理
+        data = (
+            df[['月份', '社会融资规模增量', '其中-人民币贷款']]
+            .assign(
+                total=lambda x: x['社会融资规模增量'].apply(_safe_float),
+                rmb_loan=lambda x: x['其中-人民币贷款'].apply(_safe_float),
+            )
+            .rename(columns={'月份': 'month'})
+            [['month', 'total', 'rmb_loan']]
+            .to_dict('records')
+        )
         
         result = success_response({
             "indicator": "SocialFinancing",
@@ -535,13 +560,12 @@ async def get_industrial_production_data(limit: int = 24):
         # 数据升序排列，取最后N条
         df = df.tail(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": _safe_strftime(row["日期"], '%Y-%m'),
-                "yoy": _safe_float(row["今值"]),
-                "previous": _safe_float(row["前值"]),
-            })
+        # 向量化处理（需处理日期格式化）
+        df_work = df[['日期', '今值', '前值']].copy()
+        df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
+        df_work['yoy'] = df_work['今值'].apply(_safe_float)
+        df_work['previous'] = df_work['前值'].apply(_safe_float)
+        data = df_work[['month', 'yoy', 'previous']].to_dict('records')
         
         result = success_response({
             "indicator": "IndustrialProduction",
@@ -578,12 +602,16 @@ async def get_unemployment_data(limit: int = 24):
         # 数据升序排列，取最后N条
         df = df.tail(limit) if len(df) > limit else df
         
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "month": row["date"],
-                "rate": _safe_float(row["value"]),
-            })
+        # 向量化处理
+        data = (
+            df[['date', 'value']]
+            .assign(
+                month=lambda x: x['date'],
+                rate=lambda x: x['value'].apply(_safe_float),
+            )
+            [['month', 'rate']]
+            .to_dict('records')
+        )
         
         result = success_response({
             "indicator": "Unemployment",
@@ -618,64 +646,88 @@ async def get_macro_batch(
         
         if "gdp" in indicator_list:
             df = _get_ak().macro_china_gdp().tail(limit)
+            df_work = df[['季度', '国内生产总值-同比增长']].copy()
+            df_work['quarter'] = df_work['季度']
+            df_work['yoy'] = df_work['国内生产总值-同比增长'].apply(_safe_float)
             result["gdp"] = {
-                "data": [{"quarter": r["季度"], "yoy": _safe_float(r["国内生产总值-同比增长"])} for _, r in df.iterrows()],
+                "data": df_work[['quarter', 'yoy']].to_dict('records'),
                 "unit": "%",
                 "frequency": "季度"
             }
         
         if "cpi" in indicator_list:
             df = _get_ak().macro_china_cpi().tail(limit)
+            df_work = df[['月份', '全国-同比增长']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['全国-同比增长'].apply(_safe_float)
             result["cpi"] = {
-                "data": [{"month": r["月份"], "yoy": _safe_float(r["全国-同比增长"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'yoy']].to_dict('records'),
                 "unit": "%",
                 "frequency": "月度"
             }
         
         if "ppi" in indicator_list:
             df = _get_ak().macro_china_ppi().tail(limit)
+            df_work = df[['月份', '当月同比增长']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['当月同比增长'].apply(_safe_float)
             result["ppi"] = {
-                "data": [{"month": r["月份"], "yoy": _safe_float(r["当月同比增长"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'yoy']].to_dict('records'),
                 "unit": "%",
                 "frequency": "月度"
             }
         
         if "pmi" in indicator_list:
             df = _get_ak().macro_china_pmi().tail(limit)
+            df_work = df[['月份', '制造业-指数']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['index'] = df_work['制造业-指数'].apply(_safe_float)
             result["pmi"] = {
-                "data": [{"month": r["月份"], "index": _safe_float(r["制造业-指数"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'index']].to_dict('records'),
                 "unit": "",
                 "frequency": "月度"
             }
         
         if "m2" in indicator_list:
             df = _get_ak().macro_china_m2_yearly().tail(limit)
+            df_work = df[['月份', 'M2-同比增长']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['M2-同比增长'].apply(_safe_float)
             result["m2"] = {
-                "data": [{"month": r["月份"], "yoy": _safe_float(r["M2-同比增长"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'yoy']].to_dict('records'),
                 "unit": "%",
                 "frequency": "月度"
             }
         
         if "social_financing" in indicator_list:
             df = _get_ak().macro_china_bank_financing().tail(limit)
+            df_work = df[['月份', '社会融资规模增量']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['total'] = df_work['社会融资规模增量'].apply(_safe_float)
             result["social_financing"] = {
-                "data": [{"month": r["月份"], "total": _safe_float(r["社会融资规模增量"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'total']].to_dict('records'),
                 "unit": "亿元",
                 "frequency": "月度"
             }
         
         if "industrial_production" in indicator_list:
             df = _get_ak().macro_china_gyzjz().tail(limit)
+            df_work = df[['月份', '同比增长']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['同比增长'].apply(_safe_float)
             result["industrial_production"] = {
-                "data": [{"month": r["月份"], "yoy": _safe_float(r["同比增长"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'yoy']].to_dict('records'),
                 "unit": "%",
                 "frequency": "月度"
             }
         
         if "unemployment" in indicator_list:
             df = _get_ak().macro_china_urban_unemployment().tail(limit)
+            df_work = df[['月份', '失业率']].copy()
+            df_work['month'] = df_work['月份']
+            df_work['rate'] = df_work['失业率'].apply(_safe_float)
             result["unemployment"] = {
-                "data": [{"month": r["月份"], "rate": _safe_float(r["失业率"])} for _, r in df.iterrows()],
+                "data": df_work[['month', 'rate']].to_dict('records'),
                 "unit": "%",
                 "frequency": "月度"
             }

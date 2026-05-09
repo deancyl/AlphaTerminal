@@ -147,7 +147,7 @@
 
 
 <script setup>
-import { ref, nextTick, computed, onMounted, watch } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
@@ -305,6 +305,14 @@ async function loadPortfolioList() {
 // 组件挂载时加载投资组合列表
 onMounted(() => {
   loadPortfolioList()
+})
+
+// 组件卸载时清理资源
+onUnmounted(() => {
+  if (currentAbortController) {
+    currentAbortController.abort()
+    currentAbortController = null
+  }
 })
 
 // ── 模型选择 ──────────────────────────────────────────────────

@@ -158,7 +158,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
-import { fmtPrice, fmtPct, fmtChg, fmtTurnover } from '../utils/formatters.js'
+import { fmtPrice, fmtPct, fmtChg, fmtTurnover, formatAmount } from '../utils/formatters.js'
 import { apiFetch } from '../utils/api.js'
 import ContextMenu from './ContextMenu.vue'
 import { useToast } from '../composables/useToast.js'
@@ -293,13 +293,6 @@ const debouncedFetch = useDebounceFn(fetchStocks, 300)
 function getColor(val) {
   if (!val && val !== 0) return ''
   return val >= 0 ? 'text-bullish' : 'text-bearish'
-}
-
-function formatAmount(v) {
-  if (!v) return '--'
-  if (v >= 1e8) return (v / 1e8).toFixed(2) + '亿'
-  if (v >= 1e4) return (v / 1e4).toFixed(2) + '万'
-  return Number(v).toFixed(2)
 }
 
 function sortClass(col) {

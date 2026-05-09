@@ -139,6 +139,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { formatPrice, formatVol } from '../utils/formatters.js'
 
 const props = defineProps({
   symbol: { type: String, default: 'sh600519' },
@@ -190,20 +191,6 @@ const weibi = computed(() => {
 
 // 委差 = 买入总量 - 卖出总量
 const weicha = computed(() => totalBidVol.value - totalAskVol.value)
-
-// ── 工具函数 ───────────────────────────────────────────────────
-function formatPrice(p) {
-  if (!p) return '--'
-  return p.toFixed(2)
-}
-
-function formatVol(v) {
-  if (!v) return '0'
-  if (v >= 1e8) return (v / 1e8).toFixed(1) + '亿'
-  if (v >= 1e4) return (v / 1e4).toFixed(1) + 'w'
-  if (v >= 1e3) return (v / 1e3).toFixed(1) + 'k'
-  return v.toFixed(0)
-}
 
 // 深度条宽度：相对于最大挂单量，max=100%
 function getDepthWidth(vol, max) {
