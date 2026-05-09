@@ -203,6 +203,10 @@
         <AgentTokenManager v-else-if="currentView === 'agent_tokens'" />
         <!-- MCP Configuration -->
         <MCPConfigDashboard v-else-if="currentView === 'mcp'" />
+        <!-- Walk-Forward Analysis -->
+        <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
+        <!-- Performance Analyzer -->
+        <PerformanceAnalyzer v-else-if="currentView === 'performance'" />
         <!-- F9 深度资料 -->
         <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
       </div>
@@ -291,6 +295,8 @@ const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIn
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 const AgentTokenManager = defineAsyncComponent(() => import('./components/AgentTokenManager.vue'))
 const MCPConfigDashboard = defineAsyncComponent(() => import('./components/MCPConfigDashboard.vue'))
+const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
+const PerformanceAnalyzer = defineAsyncComponent(() => import('./components/PerformanceAnalyzer.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -340,7 +346,26 @@ const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
 const f9Symbol = ref('') // F9深度资料当前股票代码
 
+// Watch for currentView changes with comprehensive debug logging
+watch(currentView, (newView, oldView) => {
+  console.log('[DEBUG-CYCLE-APP] App.vue currentView changed:', {
+    timestamp: new Date().toISOString(),
+    previousView: oldView,
+    newView: newView,
+    isStrategyCenter: newView === 'strategy-center',
+    viewChanged: true
+  })
+}, { immediate: false })
+
 function handleSidebarNavigate(viewId) {
+  // Debug Cycle 5: View change in App.vue
+  console.log('[DEBUG-CYCLE-5] App.vue view change triggered:', {
+    timestamp: new Date().toISOString(),
+    previousView: currentView.value,
+    newView: viewId,
+    source: 'sidebar'
+  })
+  
   currentView.value = viewId
   toastInfo('视图切换', `已切换到 ${getViewName(viewId)}`)
 }
@@ -350,7 +375,9 @@ function getViewName(viewId) {
     stock: '股票行情', bond: '债券行情', futures: '期货行情',
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
     'strategy-center': '策略中心', admin: '系统管理',
-    f9: '深度资料', mcp: 'AI工具配置', 'global-index': '全球指数'
+    f9: '深度资料', mcp: 'AI工具配置', 'global-index': '全球指数',
+    'agent_tokens': 'Agent Token管理', 'walk-forward': '滚动前向分析',
+    'performance': '绩效分析'
   }
   return names[viewId] || viewId
 }
@@ -576,8 +603,18 @@ onMounted(() => {
   clockTimer = setInterval(updateClock, 1000)
 
   // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）
-  fetchHighFreq().then(_checkInitDone)
-  fetchMedFreq().then(_checkInitDone)
+  fetchHighFreq()
+    .then(_checkInitDone)
+    .catch(e => {
+      console.error('[App] fetchHighFreq failed:', e.message)
+      _checkInitDone() // Continue even on error
+    })
+  fetchMedFreq()
+    .then(_checkInitDone)
+    .catch(e => {
+      console.error('[App] fetchMedFreq failed:', e.message)
+      _checkInitDone() // Continue even on error
+    })
 
   // 启动错峰轮询（仅在页面可见时）
   if (visibility.value === 'visible') {

@@ -1,17 +1,17 @@
 <template>
-  <div class="h-full flex flex-col bg-terminal-bg">
+  <div class="h-full flex flex-col bg-terminal-bg overflow-hidden">
     <!-- 顶部标题栏 -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-theme-secondary">
+    <div class="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-theme-secondary">
       <div class="flex items-center gap-3">
         <span class="text-lg font-bold text-terminal-accent">📊 宏观经济</span>
-        <span class="text-xs text-terminal-dim">中国宏观指标监控</span>
+        <span class="text-xs text-terminal-dim hidden sm:inline">中国宏观指标监控</span>
       </div>
       <div class="flex items-center gap-2">
-        <span v-if="lastUpdate" class="text-xs text-terminal-dim">
+        <span v-if="lastUpdate" class="text-xs text-terminal-dim hidden md:inline">
           更新于 {{ formatTime(lastUpdate) }}
         </span>
         <button 
-          class="px-3 py-1.5 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+          class="px-3 py-1.5 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition disabled:opacity-50"
           @click="refreshAll"
           :disabled="loading"
         >
@@ -20,174 +20,248 @@
       </div>
     </div>
 
-    <!-- 核心指标卡片 -->
-    <div v-if="overview" class="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4">
-      <!-- GDP卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="国内生产总值：一个国家或地区在一定时期内所生产的全部最终产品和服务的市场价值总和，是衡量经济规模和增长的核心指标">GDP</span>
-          <span class="text-xs text-terminal-dim">{{ overview.gdp?.period }}</span>
+    <!-- 主内容区域 - 可滚动 -->
+    <div class="flex-1 overflow-y-auto">
+      <!-- 核心指标卡片 - 响应式网格 -->
+      <div v-if="overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
+        <!-- GDP卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="国内生产总值">GDP</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.gdp?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold text-terminal-primary">
+            {{ formatNumber(overview.gdp?.yoy) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">同比增长</div>
+          <div class="mt-2 h-1 bg-terminal-bg/50 rounded-full overflow-hidden">
+            <div class="h-full bg-terminal-accent/60 rounded-full" :style="{ width: Math.min(Math.abs(overview.gdp?.yoy || 0) * 10, 100) + '%' }"></div>
+          </div>
         </div>
-        <div class="text-2xl font-bold text-terminal-primary">
-          {{ formatNumber(overview.gdp?.yoy) }}<span class="text-sm">%</span>
+
+        <!-- CPI卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="消费者物价指数">CPI</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.cpi?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold" :class="getColorClass(overview.cpi?.yoy)">
+            {{ formatNumber(overview.cpi?.yoy) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">同比</div>
+          <div class="mt-2 flex items-center gap-1">
+            <span class="text-[10px]" :class="getColorClass(overview.cpi?.mom)">
+              {{ overview.cpi?.mom >= 0 ? '↑' : '↓' }}{{ Math.abs(overview.cpi?.mom || 0).toFixed(1) }}%
+            </span>
+            <span class="text-[10px] text-terminal-dim">环比</span>
+          </div>
         </div>
-        <div class="text-xs text-terminal-dim mt-1">同比增长</div>
-      </div>
 
-      <!-- CPI卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="消费者物价指数：反映居民家庭购买的消费品和服务价格变动情况的宏观经济指标，用于衡量通货膨胀水平">CPI</span>
-          <span class="text-xs text-terminal-dim">{{ overview.cpi?.period }}</span>
+        <!-- PPI卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="生产者物价指数">PPI</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.ppi?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold" :class="getColorClass(overview.ppi?.yoy)">
+            {{ formatNumber(overview.ppi?.yoy) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">同比</div>
+          <div class="mt-2 h-1 bg-terminal-bg/50 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all" 
+                 :class="overview.ppi?.yoy >= 0 ? 'bg-bullish/60' : 'bg-bearish/60'"
+                 :style="{ width: Math.min(Math.abs(overview.ppi?.yoy || 0) * 10, 100) + '%' }"></div>
+          </div>
         </div>
-        <div class="text-2xl font-bold" :class="getColorClass(overview.cpi?.yoy)">
-          {{ formatNumber(overview.cpi?.yoy) }}<span class="text-sm">%</span>
+
+        <!-- PMI卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="采购经理指数">PMI</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.pmi?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold" :class="getPMIColor(overview.pmi?.manufacturing)">
+            {{ formatNumber(overview.pmi?.manufacturing) }}
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">制造业</div>
+          <div class="mt-2 flex items-center gap-1">
+            <span class="text-[10px]" :class="getPMIColor(overview.pmi?.manufacturing)">
+              {{ overview.pmi?.manufacturing >= 50 ? '扩张' : '收缩' }}
+            </span>
+            <span class="text-[10px] text-terminal-dim/50">|</span>
+            <span class="text-[10px] text-terminal-dim">非制造 {{ formatNumber(overview.pmi?.non_manufacturing) }}</span>
+          </div>
         </div>
-        <div class="text-xs text-terminal-dim mt-1">同比</div>
-      </div>
 
-      <!-- PPI卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="生产者物价指数：衡量工业企业产品出厂价格变动趋势和程度的指数，反映生产环节的价格变化，是预测CPI的重要先行指标">PPI</span>
-          <span class="text-xs text-terminal-dim">{{ overview.ppi?.period }}</span>
+        <!-- M2卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="广义货币供应量">M2</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.m2?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold text-terminal-primary">
+            {{ formatNumber(overview.m2?.yoy) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">同比</div>
+          <div class="mt-2 text-[10px] text-terminal-dim">
+            {{ formatLargeNumber(overview.m2?.value) }}亿元
+          </div>
         </div>
-        <div class="text-2xl font-bold" :class="getColorClass(overview.ppi?.yoy)">
-          {{ formatNumber(overview.ppi?.yoy) }}<span class="text-sm">%</span>
+
+        <!-- 社融卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="社会融资规模">社融</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.social_financing?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold text-terminal-primary">
+            {{ formatLargeNumber(overview.social_financing?.total) }}
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">亿元</div>
+          <div class="mt-2 h-1 bg-terminal-bg/50 rounded-full overflow-hidden">
+            <div class="h-full bg-terminal-accent/60 rounded-full" :style="{ width: Math.min((overview.social_financing?.total || 0) / 500, 100) + '%' }"></div>
+          </div>
         </div>
-        <div class="text-xs text-terminal-dim mt-1">同比</div>
-      </div>
 
-      <!-- PMI卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="采购经理指数：通过对采购经理的月度调查汇总出来的指数，反映经济变化趋势。50%为荣枯线，高于50%表示经济扩张，低于50%表示经济收缩">PMI</span>
-          <span class="text-xs text-terminal-dim">{{ overview.pmi?.period }}</span>
+        <!-- 工业增加值卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="工业增加值">工业</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.industrial_production?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold" :class="getColorClass(overview.industrial_production?.yoy)">
+            {{ formatNumber(overview.industrial_production?.yoy) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">同比</div>
+          <div class="mt-2 h-1 bg-terminal-bg/50 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all"
+                 :class="overview.industrial_production?.yoy >= 0 ? 'bg-bullish/60' : 'bg-bearish/60'"
+                 :style="{ width: Math.min(Math.abs(overview.industrial_production?.yoy || 0) * 10, 100) + '%' }"></div>
+          </div>
         </div>
-        <div class="text-2xl font-bold" :class="getPMIColor(overview.pmi?.manufacturing)">
-          {{ formatNumber(overview.pmi?.manufacturing) }}
-        </div>
-        <div class="text-xs text-terminal-dim mt-1">制造业</div>
-      </div>
 
-      <!-- M2卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="广义货币供应量：现金+活期存款+定期存款+储蓄存款+其他存款，反映社会总购买力，是衡量货币政策松紧的重要指标">M2</span>
-          <span class="text-xs text-terminal-dim">{{ overview.m2?.period }}</span>
-        </div>
-        <div class="text-2xl font-bold text-terminal-primary">
-          {{ formatNumber(overview.m2?.yoy) }}<span class="text-sm">%</span>
-        </div>
-        <div class="text-xs text-terminal-dim mt-1">同比</div>
-      </div>
-
-      <!-- 社融卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim cursor-help" title="社会融资规模：一定时期内实体经济从金融体系获得的资金总额，包括人民币贷款、外币贷款、委托贷款、信托贷款、未贴现银行承兑汇票、企业债券、政府债券、股票融资等">社融</span>
-          <span class="text-xs text-terminal-dim">{{ overview.social_financing?.period }}</span>
-        </div>
-        <div class="text-2xl font-bold" :class="getColorClass(overview.social_financing?.yoy)">
-          {{ formatNumber(overview.social_financing?.total) }}
-        </div>
-        <div class="text-xs text-terminal-dim mt-1">亿元</div>
-      </div>
-
-      <!-- 工业增加值卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">工业增加值</span>
-          <span class="text-xs text-terminal-dim">{{ overview.industrial_production?.period }}</span>
-        </div>
-        <div class="text-2xl font-bold" :class="getColorClass(overview.industrial_production?.yoy)">
-          {{ formatNumber(overview.industrial_production?.yoy) }}<span class="text-sm">%</span>
-        </div>
-        <div class="text-xs text-terminal-dim mt-1">同比</div>
-      </div>
-
-      <!-- 失业率卡片 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-terminal-dim">失业率</span>
-          <span class="text-xs text-terminal-dim">{{ overview.unemployment?.period }}</span>
-        </div>
-        <div class="text-2xl font-bold" :class="getUnemploymentColor(overview.unemployment?.rate)">
-          {{ formatNumber(overview.unemployment?.rate) }}<span class="text-sm">%</span>
-        </div>
-        <div class="text-xs text-terminal-dim mt-1">城镇调查</div>
-      </div>
-    </div>
-
-    <!-- 图表区域 -->
-    <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4 min-h-0 overflow-y-auto">
-      <!-- GDP趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">GDP同比增长率</h3>
-        <div ref="gdpChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- CPI趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">CPI同比/环比</h3>
-        <div ref="cpiChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- PMI趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">PMI制造业/非制造业</h3>
-        <div ref="pmiChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- PPI趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">PPI同比</h3>
-        <div ref="ppiChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- M2趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">M2货币供应量同比</h3>
-        <div ref="m2Chart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- 社融趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">社会融资规模</h3>
-        <div ref="socialFinancingChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- 工业增加值趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">工业增加值同比</h3>
-        <div ref="industrialProductionChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-
-      <!-- 失业率趋势图 -->
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 flex flex-col">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">城镇调查失业率</h3>
-        <div ref="unemploymentChart" class="flex-1 min-h-[200px]"></div>
-      </div>
-    </div>
-
-    <!-- 经济日历 -->
-    <div class="px-4 pb-4">
-      <div class="bg-terminal-panel rounded-sm border border-theme-secondary p-4">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">📅 近期数据发布</h3>
-        <div class="space-y-2">
-          <div v-for="(item, index) in calendar" :key="index" class="flex items-center justify-between py-2 border-b border-theme/10 last:border-0">
-            <div class="flex items-center gap-3">
-              <span class="text-xs px-2 py-0.5 rounded-sm" :class="getStatusClass(item.status)">
-                {{ item.status === 'released' ? '已发布' : '待发布' }}
-              </span>
-              <span class="text-sm text-terminal-primary">{{ item.name }}</span>
+        <!-- 失业率卡片 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-terminal-dim cursor-help font-medium" title="城镇调查失业率">失业率</span>
+            <span class="text-[10px] text-terminal-dim/70">{{ overview.unemployment?.period }}</span>
+          </div>
+          <div class="text-xl md:text-2xl font-bold" :class="getUnemploymentColor(overview.unemployment?.rate)">
+            {{ formatNumber(overview.unemployment?.rate) }}<span class="text-sm ml-0.5">%</span>
+          </div>
+          <div class="text-[10px] md:text-xs text-terminal-dim mt-1">城镇调查</div>
+          <div class="mt-2 flex items-center gap-1">
+            <div class="flex-1 h-1 bg-terminal-bg/50 rounded-full overflow-hidden">
+              <div class="h-full bg-warning/60 rounded-full" :style="{ width: Math.min((overview.unemployment?.rate || 0) * 10, 100) + '%' }"></div>
             </div>
-            <div class="flex items-center gap-4">
-              <span class="text-xs text-terminal-dim">{{ item.date }}</span>
-              <span v-if="item.value !== null" class="text-sm font-mono" :class="getColorClass(item.value)">
-                {{ formatNumber(item.value) }}{{ item.unit }}
-              </span>
+            <span class="text-[10px] text-terminal-dim">{{ overview.unemployment?.rate >= 5.5 ? '⚠️' : '✓' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 图表区域 - PC端3列，平板2列，移动端1列 -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 px-3 md:px-4 pb-3">
+        <!-- GDP趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">📈 GDP同比增长率</h3>
+            <span class="text-[10px] text-terminal-dim/70">近20季度</span>
+          </div>
+          <div ref="gdpChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- CPI趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">📊 CPI同比/环比</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="cpiChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- PMI趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">📉 PMI制造业/非制造业</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="pmiChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- PPI趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">📈 PPI同比</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="ppiChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- M2趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">💰 M2货币供应量同比</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="m2Chart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- 社融趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">🏦 社会融资规模</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="socialFinancingChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- 工业增加值趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">🏭 工业增加值同比</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="industrialProductionChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+
+        <!-- 失业率趋势图 -->
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">👥 城镇调查失业率</h3>
+            <span class="text-[10px] text-terminal-dim/70">近24月</span>
+          </div>
+          <div ref="unemploymentChart" class="flex-1 w-full h-[250px]"></div>
+        </div>
+      </div>
+
+      <!-- 经济日历 -->
+      <div class="px-3 md:px-4 pb-4">
+        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-terminal-accent">📅 近期数据发布</h3>
+            <span class="text-[10px] text-terminal-dim/70">{{ calendar.length }}项</span>
+          </div>
+          <div v-if="calendar.length > 0" class="space-y-2">
+            <div v-for="(item, index) in calendar" :key="index" 
+                 class="flex items-center justify-between py-2 px-3 rounded-md hover:bg-terminal-bg/30 transition-colors"
+                 :class="index < calendar.length - 1 ? 'border-b border-theme/10' : ''">
+              <div class="flex items-center gap-3">
+                <span class="text-[10px] px-2 py-0.5 rounded-full font-medium" 
+                      :class="getStatusClass(item.status)">
+                  {{ item.status === 'released' ? '已发布' : '待发布' }}
+                </span>
+                <span class="text-sm text-terminal-primary font-medium">{{ item.name }}</span>
+              </div>
+              <div class="flex items-center gap-3 md:gap-4">
+                <span class="text-[10px] md:text-xs text-terminal-dim">{{ item.date }}</span>
+                <span v-if="item.value !== null" class="text-sm font-mono font-bold" :class="getColorClass(item.value)">
+                  {{ formatNumber(item.value) }}{{ item.unit }}
+                </span>
+              </div>
             </div>
+          </div>
+          <div v-else class="text-center py-8 text-terminal-dim text-sm">
+            暂无数据发布计划
           </div>
         </div>
       </div>
@@ -199,7 +273,6 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 
-// 使用 CDN 加载的 echarts（index.html 中已注入）
 const echarts = window.echarts
 
 const loading = ref(false)
@@ -225,7 +298,6 @@ let socialFinancingChartInstance = null
 let industrialProductionChartInstance = null
 let unemploymentChartInstance = null
 
-// 获取概览数据
 async function fetchOverview() {
   try {
     const data = await apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 })
@@ -238,7 +310,6 @@ async function fetchOverview() {
   }
 }
 
-// 获取经济日历
 async function fetchCalendar() {
   try {
     const data = await apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 })
@@ -250,138 +321,148 @@ async function fetchCalendar() {
   }
 }
 
-// 获取GDP数据并绘制图表
 async function fetchGDP() {
   try {
     const data = await apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawGDPChart(data.data.data)
+    if (data?.data) {
+      drawGDPChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] GDP fetch error:', e)
   }
 }
 
-// 获取CPI数据并绘制图表
 async function fetchCPI() {
   try {
     const data = await apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawCPIChart(data.data.data)
+    if (data?.data) {
+      drawCPIChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] CPI fetch error:', e)
   }
 }
 
-// 获取PMI数据并绘制图表
 async function fetchPMI() {
   try {
     const data = await apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawPMIChart(data.data.data)
+    if (data?.data) {
+      drawPMIChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] PMI fetch error:', e)
   }
 }
 
-// 获取PPI数据并绘制图表
 async function fetchPPI() {
   try {
     const data = await apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawPPIChart(data.data.data)
+    if (data?.data) {
+      drawPPIChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] PPI fetch error:', e)
   }
 }
 
-// 获取M2数据并绘制图表
 async function fetchM2() {
   try {
     const data = await apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawM2Chart(data.data.data)
+    if (data?.data) {
+      drawM2Chart(data.data)
     }
   } catch (e) {
     console.error('[Macro] M2 fetch error:', e)
   }
 }
 
-// 获取社融数据并绘制图表
 async function fetchSocialFinancing() {
   try {
     const data = await apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawSocialFinancingChart(data.data.data)
+    if (data?.data) {
+      drawSocialFinancingChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] Social financing fetch error:', e)
   }
 }
 
-// 获取工业增加值数据并绘制图表
 async function fetchIndustrialProduction() {
   try {
     const data = await apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawIndustrialProductionChart(data.data.data)
+    if (data?.data) {
+      drawIndustrialProductionChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] Industrial production fetch error:', e)
   }
 }
 
-// 获取失业率数据并绘制图表
 async function fetchUnemployment() {
   try {
     const data = await apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 })
-    if (data?.data?.data) {
-      drawUnemploymentChart(data.data.data)
+    if (data?.data) {
+      drawUnemploymentChart(data.data)
     }
   } catch (e) {
     console.error('[Macro] Unemployment fetch error:', e)
   }
 }
 
-// 绘制GDP图表
+function getChartColors() {
+  return {
+    primary: getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA',
+    text: getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E',
+    up: getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B',
+    down: getComputedStyle(document.documentElement).getPropertyValue('--color-down').trim() || '#51CF66',
+    warning: getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#FF7D00',
+    success: getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#51CF66',
+  }
+}
+
 function drawGDPChart(data) {
   if (!gdpChartInstance || !gdpChart.value) return
   
+  const colors = getChartColors()
   const quarters = data.map(d => d.quarter)
   const yoyData = data.map(d => d.gdp_yoy)
   
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  
   gdpChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: quarters,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: 'GDP同比',
       type: 'line',
       data: yoyData,
       smooth: true,
-      lineStyle: { color: primaryColor, width: 2 },
-      itemStyle: { color: primaryColor },
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: { color: colors.primary, width: 3 },
+      itemStyle: { color: colors.primary, borderWidth: 2 },
       areaStyle: { 
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: primaryColor + '4D' },  // 30% opacity
-            { offset: 1, color: primaryColor + '0D' }   // 5% opacity
+            { offset: 0, color: colors.primary + '60' },
+            { offset: 1, color: colors.primary + '10' }
           ]
         }
       }
@@ -389,30 +470,39 @@ function drawGDPChart(data) {
   })
 }
 
-// 绘制CPI图表
 function drawCPIChart(data) {
   if (!cpiChartInstance || !cpiChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.nation_yoy)
   const momData = data.map(d => d.nation_mom)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const upColor = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B'
-  const downColor = getComputedStyle(document.documentElement).getPropertyValue('--color-down').trim() || '#51CF66'
-  
   cpiChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['同比', '环比'], textStyle: { color: chartTextColor, fontSize: 10 } },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
+    legend: { 
+      data: ['同比', '环比'], 
+      textStyle: { color: colors.text, fontSize: 11 },
+      top: 0,
+      right: 0
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [
       {
@@ -420,48 +510,60 @@ function drawCPIChart(data) {
         type: 'line',
         data: yoyData,
         smooth: true,
-        lineStyle: { color: upColor, width: 2 },
-        itemStyle: { color: upColor }
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: colors.up, width: 2 },
+        itemStyle: { color: colors.up }
       },
       {
         name: '环比',
         type: 'line',
         data: momData,
         smooth: true,
-        lineStyle: { color: downColor, width: 2 },
-        itemStyle: { color: downColor }
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: colors.down, width: 2, type: 'dashed' },
+        itemStyle: { color: colors.down }
       }
     ]
   })
 }
 
-// 绘制PMI图表
 function drawPMIChart(data) {
   if (!pmiChartInstance || !pmiChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const manufacturingData = data.map(d => d.manufacturing_index)
   const nonManufacturingData = data.map(d => d.non_manufacturing_index)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
-  const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#FF7D00'
-  const successColor = getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#51CF66'
-  
   pmiChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['制造业', '非制造业'], textStyle: { color: chartTextColor, fontSize: 10 } },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
+    legend: { 
+      data: ['制造业', '非制造业'], 
+      textStyle: { color: colors.text, fontSize: 11 },
+      top: 0,
+      right: 0
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
       min: 45,
       max: 60,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10 },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [
       {
@@ -469,11 +571,13 @@ function drawPMIChart(data) {
         type: 'line',
         data: manufacturingData,
         smooth: true,
-        lineStyle: { color: primaryColor, width: 2 },
-        itemStyle: { color: primaryColor },
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: colors.primary, width: 2 },
+        itemStyle: { color: colors.primary },
         markLine: {
-          data: [{ yAxis: 50, lineStyle: { color: warningColor, type: 'dashed' } }],
-          label: { formatter: '荣枯线', color: warningColor, fontSize: 10 }
+          data: [{ yAxis: 50, lineStyle: { color: colors.warning, type: 'dashed', width: 2 } }],
+          label: { formatter: '荣枯线', color: colors.warning, fontSize: 10 }
         }
       },
       {
@@ -481,49 +585,58 @@ function drawPMIChart(data) {
         type: 'line',
         data: nonManufacturingData,
         smooth: true,
-        lineStyle: { color: successColor, width: 2 },
-        itemStyle: { color: successColor }
+        symbol: 'circle',
+        symbolSize: 5,
+        lineStyle: { color: colors.success, width: 2 },
+        itemStyle: { color: colors.success }
       }
     ]
   })
 }
 
-// 绘制PPI图表
 function drawPPIChart(data) {
   if (!ppiChartInstance || !ppiChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const upColor = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B'
-  
   ppiChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: 'PPI同比',
       type: 'line',
       data: yoyData,
       smooth: true,
-      lineStyle: { color: upColor, width: 2 },
-      itemStyle: { color: upColor },
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { color: colors.up, width: 2 },
+      itemStyle: { color: colors.up },
       areaStyle: { 
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: upColor + '4D' },  // 30% opacity
-            { offset: 1, color: upColor + '0D' }   // 5% opacity
+            { offset: 0, color: colors.up + '40' },
+            { offset: 1, color: colors.up + '10' }
           ]
         }
       }
@@ -531,42 +644,49 @@ function drawPPIChart(data) {
   })
 }
 
-// 绘制M2图表
 function drawM2Chart(data) {
   if (!m2ChartInstance || !m2Chart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.m2_yoy)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const primaryColor = getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim() || '#0F52BA'
-  
   m2ChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: 'M2同比',
       type: 'line',
       data: yoyData,
       smooth: true,
-      lineStyle: { color: primaryColor, width: 2 },
-      itemStyle: { color: primaryColor },
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { color: colors.primary, width: 2 },
+      itemStyle: { color: colors.primary },
       areaStyle: { 
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: primaryColor + '4D' },
-            { offset: 1, color: primaryColor + '0D' }
+            { offset: 0, color: colors.primary + '40' },
+            { offset: 1, color: colors.primary + '10' }
           ]
         }
       }
@@ -574,73 +694,96 @@ function drawM2Chart(data) {
   })
 }
 
-// 绘制社融图表
 function drawSocialFinancingChart(data) {
   if (!socialFinancingChartInstance || !socialFinancingChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const totalData = data.map(d => d.total)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const upColor = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B'
-  
   socialFinancingChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10 },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: '社融增量',
       type: 'bar',
       data: totalData,
-      itemStyle: { color: upColor }
+      itemStyle: { 
+        color: {
+          type: 'linear',
+          x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: colors.up },
+            { offset: 1, color: colors.up + '60' }
+          ]
+        },
+        borderRadius: [4, 4, 0, 0]
+      },
+      barMaxWidth: 30
     }]
   })
 }
 
-// 绘制工业增加值图表
 function drawIndustrialProductionChart(data) {
   if (!industrialProductionChartInstance || !industrialProductionChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const yoyData = data.map(d => d.yoy)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const successColor = getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#51CF66'
-  
   industrialProductionChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: '工业增加值同比',
       type: 'line',
       data: yoyData,
       smooth: true,
-      lineStyle: { color: successColor, width: 2 },
-      itemStyle: { color: successColor },
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { color: colors.success, width: 2 },
+      itemStyle: { color: colors.success },
       areaStyle: { 
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: successColor + '4D' },
-            { offset: 1, color: successColor + '0D' }
+            { offset: 0, color: colors.success + '40' },
+            { offset: 1, color: colors.success + '10' }
           ]
         }
       }
@@ -648,52 +791,60 @@ function drawIndustrialProductionChart(data) {
   })
 }
 
-// 绘制失业率图表
 function drawUnemploymentChart(data) {
   if (!unemploymentChartInstance || !unemploymentChart.value) return
   
+  const colors = getChartColors()
   const months = data.map(d => d.month)
   const rateData = data.map(d => d.rate)
   
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const warningColor = getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#FF7D00'
-  
   unemploymentChartInstance.setOption({
-    tooltip: { trigger: 'axis' },
+    tooltip: { 
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: colors.primary,
+      textStyle: { color: '#E5E7EB', fontSize: 12 }
+    },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
     xAxis: { 
       type: 'category', 
       data: months,
-      axisLabel: { color: chartTextColor, fontSize: 10 }
+      axisLabel: { color: colors.text, fontSize: 10, rotate: 45 },
+      axisLine: { lineStyle: { color: colors.text + '40' } }
     },
     yAxis: { 
       type: 'value',
-      min: 3,
-      max: 7,
-      axisLabel: { color: chartTextColor, fontSize: 10, formatter: '{value}%' }
+      axisLabel: { color: colors.text, fontSize: 10, formatter: '{value}%' },
+      axisLine: { lineStyle: { color: colors.text + '40' } },
+      splitLine: { lineStyle: { color: colors.text + '20' } }
     },
     series: [{
       name: '失业率',
       type: 'line',
       data: rateData,
       smooth: true,
-      lineStyle: { color: warningColor, width: 2 },
-      itemStyle: { color: warningColor },
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { color: colors.warning, width: 2 },
+      itemStyle: { color: colors.warning },
       areaStyle: { 
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: warningColor + '4D' },
-            { offset: 1, color: warningColor + '0D' }
+            { offset: 0, color: colors.warning + '40' },
+            { offset: 1, color: colors.warning + '10' }
           ]
         }
+      },
+      markLine: {
+        data: [{ yAxis: 5.5, lineStyle: { color: colors.up, type: 'dashed', width: 2 } }],
+        label: { formatter: '警戒线', color: colors.up, fontSize: 10 }
       }
     }]
   })
 }
 
-// 刷新所有数据
 async function refreshAll() {
   loading.value = true
   await Promise.all([
@@ -711,9 +862,16 @@ async function refreshAll() {
   loading.value = false
 }
 
-// 工具函数
 function formatNumber(val) {
   if (val === null || val === undefined) return '--'
+  return Number(val).toFixed(2)
+}
+
+function formatLargeNumber(val) {
+  if (val === null || val === undefined) return '--'
+  if (val >= 10000) {
+    return (val / 10000).toFixed(2) + '万'
+  }
   return Number(val).toFixed(2)
 }
 
@@ -740,65 +898,131 @@ function getUnemploymentColor(val) {
 
 function getStatusClass(status) {
   return status === 'released' 
-    ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' 
-    : 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'
+    ? 'bg-success/20 text-success' 
+    : 'bg-warning/20 text-warning'
 }
 
-// 初始化图表
+let resizeTimer = null
+function handleResize() {
+  clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    gdpChartInstance?.resize()
+    cpiChartInstance?.resize()
+    pmiChartInstance?.resize()
+    ppiChartInstance?.resize()
+    m2ChartInstance?.resize()
+    socialFinancingChartInstance?.resize()
+    industrialProductionChartInstance?.resize()
+    unemploymentChartInstance?.resize()
+  }, 150)
+}
+
 onMounted(async () => {
   await nextTick()
   
-  if (gdpChart.value) {
-    gdpChartInstance = echarts.init(gdpChart.value)
-  }
-  if (cpiChart.value) {
-    cpiChartInstance = echarts.init(cpiChart.value)
-  }
-  if (pmiChart.value) {
-    pmiChartInstance = echarts.init(pmiChart.value)
-  }
-  if (ppiChart.value) {
-    ppiChartInstance = echarts.init(ppiChart.value)
-  }
-  if (m2Chart.value) {
-    m2ChartInstance = echarts.init(m2Chart.value)
-  }
-  if (socialFinancingChart.value) {
-    socialFinancingChartInstance = echarts.init(socialFinancingChart.value)
-  }
-  if (industrialProductionChart.value) {
-    industrialProductionChartInstance = echarts.init(industrialProductionChart.value)
-  }
-  if (unemploymentChart.value) {
-    unemploymentChartInstance = echarts.init(unemploymentChart.value)
-  }
+  const chartRefs = [
+    { ref: gdpChart.value, name: 'GDP', instance: 'gdpChartInstance' },
+    { ref: cpiChart.value, name: 'CPI', instance: 'cpiChartInstance' },
+    { ref: pmiChart.value, name: 'PMI', instance: 'pmiChartInstance' },
+    { ref: ppiChart.value, name: 'PPI', instance: 'ppiChartInstance' },
+    { ref: m2Chart.value, name: 'M2', instance: 'm2ChartInstance' },
+    { ref: socialFinancingChart.value, name: 'SocialFinancing', instance: 'socialFinancingChartInstance' },
+    { ref: industrialProductionChart.value, name: 'IndustrialProduction', instance: 'industrialProductionChartInstance' },
+    { ref: unemploymentChart.value, name: 'Unemployment', instance: 'unemploymentChartInstance' },
+  ]
+  
+  chartRefs.forEach(({ ref, name }) => {
+    if (ref) {
+      try {
+        if (name === 'GDP') gdpChartInstance = echarts.init(ref)
+        else if (name === 'CPI') cpiChartInstance = echarts.init(ref)
+        else if (name === 'PMI') pmiChartInstance = echarts.init(ref)
+        else if (name === 'PPI') ppiChartInstance = echarts.init(ref)
+        else if (name === 'M2') m2ChartInstance = echarts.init(ref)
+        else if (name === 'SocialFinancing') socialFinancingChartInstance = echarts.init(ref)
+        else if (name === 'IndustrialProduction') industrialProductionChartInstance = echarts.init(ref)
+        else if (name === 'Unemployment') unemploymentChartInstance = echarts.init(ref)
+      } catch (e) {
+        console.warn(`[MacroDashboard] Failed to init ${name} chart:`, e.message)
+      }
+    }
+  })
   
   await refreshAll()
   
-  // 窗口大小改变时重绘图表
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
+  clearTimeout(resizeTimer)
   window.removeEventListener('resize', handleResize)
-  gdpChartInstance?.dispose()
-  cpiChartInstance?.dispose()
-  pmiChartInstance?.dispose()
-  ppiChartInstance?.dispose()
-  m2ChartInstance?.dispose()
-  socialFinancingChartInstance?.dispose()
-  industrialProductionChartInstance?.dispose()
-  unemploymentChartInstance?.dispose()
+  try { gdpChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] GDP dispose error:', e.message) }
+  try { cpiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] CPI dispose error:', e.message) }
+  try { pmiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] PMI dispose error:', e.message) }
+  try { ppiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] PPI dispose error:', e.message) }
+  try { m2ChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] M2 dispose error:', e.message) }
+  try { socialFinancingChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] SocialFinancing dispose error:', e.message) }
+  try { industrialProductionChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] IndustrialProduction dispose error:', e.message) }
+  try { unemploymentChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] Unemployment dispose error:', e.message) }
+  gdpChartInstance = null
+  cpiChartInstance = null
+  pmiChartInstance = null
+  ppiChartInstance = null
+  m2ChartInstance = null
+  socialFinancingChartInstance = null
+  industrialProductionChartInstance = null
+  unemploymentChartInstance = null
 })
-
-function handleResize() {
-  gdpChartInstance?.resize()
-  cpiChartInstance?.resize()
-  pmiChartInstance?.resize()
-  ppiChartInstance?.resize()
-  m2ChartInstance?.resize()
-  socialFinancingChartInstance?.resize()
-  industrialProductionChartInstance?.resize()
-  unemploymentChartInstance?.resize()
-}
 </script>
+
+<style scoped>
+.bg-terminal-panel {
+  background: var(--bg-secondary, #1a1f2e);
+}
+
+.text-terminal-accent {
+  color: var(--color-primary, #0F52BA);
+}
+
+.text-terminal-primary {
+  color: var(--text-primary, #E5E7EB);
+}
+
+.text-terminal-dim {
+  color: var(--text-secondary, #8B949E);
+}
+
+.text-bullish {
+  color: var(--color-up, #FF6B6B);
+}
+
+.text-bearish {
+  color: var(--color-down, #51CF66);
+}
+
+.text-success {
+  color: var(--color-success, #51CF66);
+}
+
+.text-warning {
+  color: var(--color-warning, #FF7D00);
+}
+
+.border-theme-secondary {
+  border-color: var(--border-color, #2d3748);
+}
+
+.bg-terminal-bg {
+  background: var(--bg-primary, #0f1419);
+}
+
+@media (max-width: 768px) {
+  .text-xl {
+    font-size: 1.25rem;
+  }
+  
+  .text-2xl {
+    font-size: 1.5rem;
+  }
+}
+</style>

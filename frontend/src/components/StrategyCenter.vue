@@ -5,7 +5,7 @@
       <button
         v-for="tab in tabs"
         :key="tab.id"
-        @click="activeTab = tab.id"
+        @click="handleTabChange(tab.id)"
         class="px-4 py-2 text-sm font-medium rounded-sm transition-all"
         :class="activeTab === tab.id
           ? 'bg-terminal-accent/20 text-terminal-accent border-b-2 border-terminal-accent'
@@ -32,7 +32,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import BacktestDashboard from './BacktestDashboard.vue'
 import StrategyLab from './StrategyLab.vue'
 
@@ -42,4 +42,47 @@ const tabs = [
 ]
 
 const activeTab = ref('quick')
+
+// Debug Cycle 1: Component mount
+onMounted(() => {
+  console.log('[DEBUG-CYCLE-1] StrategyCenter component mounted:', {
+    componentName: 'StrategyCenter',
+    initialTab: activeTab.value,
+    timestamp: new Date().toISOString(),
+    availableTabs: tabs.map(t => t.id)
+  })
+})
+
+// Debug Cycle 2: Component unmount
+onUnmounted(() => {
+  console.log('[DEBUG-CYCLE-2] StrategyCenter component unmounted:', {
+    componentName: 'StrategyCenter',
+    finalTab: activeTab.value,
+    timestamp: new Date().toISOString()
+  })
+})
+
+// Debug Cycle 3: Tab change watcher
+const handleTabChange = (tabId) => {
+  console.log('[DEBUG-CYCLE-3] StrategyCenter tab changed:', {
+    previousTab: activeTab.value,
+    newTab: tabId,
+    timestamp: new Date().toISOString()
+  })
+  activeTab.value = tabId
+}
+
+// Debug Cycle 4: Component render check
+console.log('[DEBUG-CYCLE-4] StrategyCenter component rendered:', {
+  activeTab: activeTab.value,
+  tabsCount: tabs.length,
+  timestamp: new Date().toISOString()
+})
+
+// Debug Cycle 5: Component initialization complete
+console.log('[DEBUG-CYCLE-5] StrategyCenter initialization complete:', {
+  componentReady: true,
+  defaultTab: 'quick',
+  timestamp: new Date().toISOString()
+})
 </script>

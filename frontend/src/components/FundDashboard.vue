@@ -1134,6 +1134,11 @@ onUnmounted(() => {
   if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
   if (assetChart.value) { try { assetChart.value.dispose() } catch (e) {} }
   if (compareChart.value) { try { compareChart.value.dispose() } catch (e) {} }
+  // Clear references
+  klineChart.value = null
+  navChart.value = null
+  assetChart.value = null
+  compareChart.value = null
 })
 
 // 监听选项卡切换

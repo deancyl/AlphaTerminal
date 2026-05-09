@@ -658,14 +658,21 @@ def _save_snapshot_impl(portfolio_id: int):
     """
     保存当日净值快照（同步函数，供 scheduler 直接调用）
     计算: total_asset = Σ(shares * latest_close)，total_cost = Σ(shares * avg_cost)
+    Phase 4 Fix: 优先从 position_summary 读取（lot-based 系统），fallback 到 positions
     """
     today = date.today().isoformat()
     with _lock:
         conn = _get_conn()
         rows = conn.execute(
-            "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+            "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
             (portfolio_id,)
         ).fetchall()
+        
+        if not rows:
+            rows = conn.execute(
+                "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+                (portfolio_id,)
+            ).fetchall()
         conn.close()
 
     if not rows:

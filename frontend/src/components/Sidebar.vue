@@ -34,6 +34,24 @@
         <span class="text-base">{{ item.icon }}</span>
         <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
+
+      <!-- AI & Agent Tools Section -->
+      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider mt-4">🤖 AI & Agent 工具</div>
+
+      <button
+        v-for="item in aiNavItems"
+        :key="item.id"
+        class="w-full flex items-center gap-2.5 px-3 py-2.5 transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
+        :class="[
+          activeId === item.id
+            ? 'bg-theme-hover text-theme-primary border-r-2 border-theme-secondary'
+            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
+        ]"
+        @click="handleClick(item)"
+      >
+        <span class="text-base">{{ item.icon }}</span>
+        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
+      </button>
     </nav>
 
     <!-- 主题切换区域 -->
@@ -96,7 +114,14 @@ const mainNavItems = [
   { id: 'macro',     label: '宏观经济',   icon: '🌍' },
   { id: 'options',   label: '期权分析',   icon: '⚡' },
   { id: 'global-index', label: '全球指数',  icon: '🌐' },
+]
+
+const aiNavItems = [
   { id: 'strategy-center', label: '策略中心', icon: '🎯' },
+  { id: 'walk-forward', label: '滚动前向分析', icon: '📊' },
+  { id: 'performance', label: '绩效分析', icon: '📈' },
+  { id: 'agent_tokens', label: 'Agent Token管理', icon: '🔑' },
+  { id: 'mcp', label: 'MCP配置', icon: '⚙️' },
 ]
 
 const adminNavItems = [
@@ -111,7 +136,63 @@ const themeList = [
 ]
 
 function handleClick(item) {
+  // Debug Cycle 1: Log navigation item click
+  console.log('[DEBUG-CYCLE-1] Sidebar navigation item clicked:', {
+    itemId: item.id,
+    itemLabel: item.label,
+    itemIcon: item.icon,
+    timestamp: new Date().toISOString(),
+    currentActiveId: props.activeId,
+    navigationType: item.id === 'strategy-center' || item.id === 'agent_tokens' || item.id === 'mcp' || item.id === 'walk-forward' || item.id === 'performance' ? 'AI_TOOL' : 'MARKET',
+    isMCPConfig: item.id === 'mcp',
+    isWalkForward: item.id === 'walk-forward',
+    isPerformance: item.id === 'performance'
+  })
+  
+  // Debug Cycle 2: Pre-emit state check
+  console.log('[DEBUG-CYCLE-2] Sidebar pre-emit state:', {
+    isEmitting: true,
+    eventPayload: item.id,
+    sidebarOpen: props.isOpen,
+    timestamp: new Date().toISOString(),
+    isMCPNavigation: item.id === 'mcp',
+    isWalkForwardNavigation: item.id === 'walk-forward',
+    isPerformanceNavigation: item.id === 'performance'
+  })
+  
   emit('navigate', item.id)
+  
+  // Debug Cycle 3: Post-navigate emit
+  console.log('[DEBUG-CYCLE-3] Sidebar navigate emit completed:', {
+    emittedEvent: 'navigate',
+    emittedId: item.id,
+    timestamp: new Date().toISOString(),
+    isMCPNavigation: item.id === 'mcp',
+    isWalkForwardNavigation: item.id === 'walk-forward',
+    isPerformanceNavigation: item.id === 'performance'
+  })
+  
   emit('close')
+  
+  // Debug Cycle 4: Post-close emit
+  console.log('[DEBUG-CYCLE-4] Sidebar close emit completed:', {
+    emittedEvent: 'close',
+    sidebarWillClose: true,
+    timestamp: new Date().toISOString()
+  })
+  
+  // Debug Cycle 5: Final state summary
+  console.log('[DEBUG-CYCLE-5] Sidebar navigation flow complete:', {
+    targetView: item.id,
+    targetLabel: item.label,
+    flowComplete: true,
+    timestamp: new Date().toISOString(),
+    isMCPNavigation: item.id === 'mcp',
+    isWalkForwardNavigation: item.id === 'walk-forward',
+    isPerformanceNavigation: item.id === 'performance',
+    mcpDebugNote: item.id === 'mcp' ? 'MCP Config Dashboard should now be visible' : null,
+    walkForwardDebugNote: item.id === 'walk-forward' ? 'Walk-Forward Analysis Panel should now be visible' : null,
+    performanceDebugNote: item.id === 'performance' ? 'Performance Analyzer Panel should now be visible' : null
+  })
 }
 </script>

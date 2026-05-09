@@ -20,6 +20,7 @@ from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
+from app.middleware.agent_auth import audit_middleware
 
 
 @asynccontextmanager
@@ -45,6 +46,10 @@ app = FastAPI(
 
 # 初始化日志队列（WebSocket 实时日志流）
 init_logging_queue()
+
+# ── Agent Authentication Middleware ───────────────────────────────────────────
+# Add audit middleware for agent API requests
+audit_middleware(app)
 
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
 # 允许的来源：本地开发 + 环境变量配置（生产环境应通过 ALLOWED_ORIGINS 配置）

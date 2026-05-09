@@ -951,6 +951,12 @@ ${positionLines}
     
     const context = contextParts.join('\n\n')
     
+    // Validate array index before access
+    if (aiMsgIndex < 0 || aiMsgIndex >= messages.value.length) {
+      console.error('[Copilot] Invalid message index:', aiMsgIndex, 'total messages:', messages.value.length)
+      return
+    }
+    
     if (cachedResponse) {
       // 使用缓存（立即显示，无流式）
       messages.value[aiMsgIndex].displayedContent = cachedResponse

@@ -1135,7 +1135,10 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.removeEventListener('resize', () => sourceChart?.resize())
-  sourceChart?.dispose()
+  if (sourceChart) {
+    sourceChart.dispose()
+    sourceChart = null
+  }
 })
 
 // ── 日志数据 + WebSocket 实时流（替代 HTTP 轮询）────────────────────────────
@@ -1164,6 +1167,8 @@ function scrollToBottom() {
 }
 
 function connectLogWs() {
+  // NOTE: This is a dedicated WebSocket for log streaming, separate from useMarketStream singleton
+  // which handles market data. This is intentional and not a duplicate connection.
   if (ws) {
     ws.close()
     ws = null

@@ -92,7 +92,9 @@ async function createPortfolio(name, type = 'main') {
     try {
       const body = await res.json()
       msg = body?.message || body?.detail || msg
-    } catch (_) {}
+    } catch (parseError) {
+      logger.warn('[PortfolioStore] Failed to parse error response:', parseError.message)
+    }
     // P1-12 Fix: 清理技术性错误信息（UNIQUE 可能来自任意字段，非账户名）
     if (msg.includes('UNIQUE')) msg = '数据已存在（UNIQUE 约束冲突），请检查是否重复添加'
     throw new Error(msg)
@@ -112,7 +114,9 @@ async function upsertPosition(portfolio_id, symbol, shares, avg_cost) {
     try {
       const body = await res.json()
       msg = body?.message || body?.detail || msg
-    } catch (_) {}
+    } catch (parseError) {
+      logger.warn('[PortfolioStore] Failed to parse error response:', parseError.message)
+    }
     // P1-12 Fix: UNIQUE 可能来自 (portfolio_id, symbol) 复合约束，非账户名
     if (msg.includes('UNIQUE')) msg = '数据已存在（UNIQUE 约束冲突），请检查是否重复添加'
     throw new Error(msg)
@@ -128,7 +132,9 @@ async function deletePosition(portfolio_id, symbol) {
     try {
       const body = await res.json()
       msg = body?.message || body?.detail || msg
-    } catch (_) {}
+    } catch (parseError) {
+      logger.warn('[PortfolioStore] Failed to parse error response:', parseError.message)
+    }
     throw new Error(msg)
   }
   await fetchPnL(portfolio_id)

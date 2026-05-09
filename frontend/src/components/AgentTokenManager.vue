@@ -186,7 +186,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { listTokens, createToken, revokeToken, SCOPE_LABELS, SCOPE_COLORS } from '../services/agentTokenService.js'
 import { useToast } from '../composables/useToast.js'
 
@@ -346,5 +346,22 @@ function getStatusText(token) {
   return '正常'
 }
 
-onMounted(loadTokens)
+onMounted(() => {
+  // Debug Cycle 3: Component mount
+  console.log('[DEBUG-CYCLE-3] AgentTokenManager component mounted:', {
+    timestamp: new Date().toISOString(),
+    component: 'AgentTokenManager',
+    lifecycle: 'mounted'
+  })
+  loadTokens()
+})
+
+onUnmounted(() => {
+  // Debug Cycle 4: Component unmount
+  console.log('[DEBUG-CYCLE-4] AgentTokenManager component unmounted:', {
+    timestamp: new Date().toISOString(),
+    component: 'AgentTokenManager',
+    lifecycle: 'unmounted'
+  })
+})
 </script>

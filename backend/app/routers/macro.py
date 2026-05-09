@@ -4,12 +4,17 @@
 覆盖: GDP、CPI、PPI、PMI、经济日历
 """
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from fastapi import APIRouter
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/macro", tags=["macro"])
+
+# ── 线程池执行器（用于并行化 akshare 同步调用）────────────────────
+_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="macro_")
 
 # ── 延迟导入工具 ─────────────────────────────────────────────────────
 _akshare_module = None
@@ -255,46 +260,60 @@ async def get_pmi_data(limit: int = 24):
 async def get_macro_overview():
     """
     获取宏观经济综合概览（最新一期各指标）
+    优化：使用线程池并行获取8个指标，将串行耗时降至并行耗时
     """
-    # 检查缓存
     cached = get_cached("macro_overview")
     if cached:
         return cached
     
     try:
-        # GDP（最新季度）- akshare数据按时间降序排列，最新在第一行
-        gdp_df = _get_ak().macro_china_gdp()
+        loop = asyncio.get_event_loop()
+        
+        async def fetch_gdp():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp())
+        
+        async def fetch_cpi():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi())
+        
+        async def fetch_ppi():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi())
+        
+        async def fetch_pmi():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi())
+        
+        async def fetch_m2():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money())
+        
+        async def fetch_sf():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm())
+        
+        async def fetch_ind():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy())
+        
+        async def fetch_unemp():
+            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment())
+        
+        gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = await asyncio.gather(
+            fetch_gdp(),
+            fetch_cpi(),
+            fetch_ppi(),
+            fetch_pmi(),
+            fetch_m2(),
+            fetch_sf(),
+            fetch_ind(),
+            fetch_unemp()
+        )
+        
         gdp_latest = gdp_df.iloc[0] if len(gdp_df) > 0 else None
-        
-        # CPI（最新月份）
-        cpi_df = _get_ak().macro_china_cpi()
         cpi_latest = cpi_df.iloc[0] if len(cpi_df) > 0 else None
-        
-        # PPI（最新月份）
-        ppi_df = _get_ak().macro_china_ppi()
         ppi_latest = ppi_df.iloc[0] if len(ppi_df) > 0 else None
-        
-        # PMI（最新月份）
-        pmi_df = _get_ak().macro_china_pmi()
         pmi_latest = pmi_df.iloc[0] if len(pmi_df) > 0 else None
-        
-        # M2货币供应量（最新月份）- 降序排列，最新在前
-        m2_df = _get_ak().macro_china_supply_of_money()
         m2_latest = m2_df.iloc[0] if len(m2_df) > 0 else None
-        
-        # 社会融资规模（最新月份）- 升序排列，最新在后
-        sf_df = _get_ak().macro_china_shrzgm()
         sf_latest = sf_df.iloc[-1] if len(sf_df) > 0 else None
         
-        # 工业增加值（最新月份）- 升序排列，最新在后
-        ind_df = _get_ak().macro_china_industrial_production_yoy()
-        # 过滤掉今值为NaN的数据
         ind_df_valid = ind_df[_get_pd().notna(ind_df['今值'])] if len(ind_df) > 0 else None
         ind_latest = ind_df_valid.iloc[-1] if ind_df_valid is not None and len(ind_df_valid) > 0 else None
         
-        # 失业率（最新月份）- 升序排列，最新在后
-        unemp_df = _get_ak().macro_china_urban_unemployment()
-        # 筛选全国城镇调查失业率（注意：item字段有尾随空格）
         unemp_df_filtered = unemp_df[unemp_df['item'].str.strip() == '全国城镇调查失业率'] if len(unemp_df) > 0 else None
         unemp_latest = unemp_df_filtered.iloc[-1] if unemp_df_filtered is not None and len(unemp_df_filtered) > 0 else None
         

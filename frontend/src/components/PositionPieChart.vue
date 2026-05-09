@@ -166,6 +166,7 @@ export default {
     onUnmounted(() => {
       window.removeEventListener('resize', handleResize);
       chartInstance?.dispose();
+      chartInstance = null;
     });
 
     return { chartEl, loading, positions, totalMv, totalPnl, load, getPnlClass };

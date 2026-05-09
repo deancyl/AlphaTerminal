@@ -99,7 +99,13 @@ onMounted(() => {
   init()
   if (chartRef.value) { ro = new ResizeObserver(() => chartInstance && chartInstance.resize()); ro.observe(chartRef.value) }
 })
-onUnmounted(() => { ro && ro.disconnect(); chartInstance && chartInstance.dispose() })
+onUnmounted(() => {
+  ro && ro.disconnect()
+  if (chartInstance) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
 watch(() => props.futuresData, () => { debouncedInit() }, { deep: true })
 </script>
 

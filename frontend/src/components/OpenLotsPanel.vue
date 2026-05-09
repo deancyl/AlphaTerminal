@@ -121,7 +121,10 @@ export default {
               market_value: s.market_value || 0,
             };
           });
-        } catch (_) {}
+        } catch (parseError) {
+          console.warn('[OpenLotsPanel] Failed to parse summary data:', parseError.message);
+          // Continue with empty summary map
+        }
       } catch (e) {
         error.value = e.message;
         console.warn('[OpenLotsPanel] load error:', e.message);

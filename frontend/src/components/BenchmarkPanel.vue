@@ -258,7 +258,10 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
-  if (chart) { chart.dispose(); chart = null }
+  if (chart) {
+    chart.dispose()
+    chart = null
+  }
 })
 
 function handleResize() {

@@ -44,6 +44,16 @@ from .experiment import (
     detect_regime,
     run_experiment,
 )
+from .execution_engine import (
+    StrategyExecutionEngine,
+    ExecutionConfig,
+    ExecutionResult,
+    ExecutionMetrics,
+    ExecutionStatus,
+    ExecutionType,
+    create_execution_engine,
+    execute_strategy_simple,
+)
 
 __all__ = [
     "StrategySpec",
@@ -82,4 +92,12 @@ __all__ = [
     "ExperimentPipeline",
     "detect_regime",
     "run_experiment",
+    "StrategyExecutionEngine",
+    "ExecutionConfig",
+    "ExecutionResult",
+    "ExecutionMetrics",
+    "ExecutionStatus",
+    "ExecutionType",
+    "create_execution_engine",
+    "execute_strategy_simple",
 ]

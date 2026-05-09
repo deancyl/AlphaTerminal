@@ -201,8 +201,35 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
+
+// Debug Cycle 1: Component mount/unmount lifecycle
+onMounted(() => {
+  console.log('[DEBUG-CYCLE-1] WalkForwardPanel mounted:', {
+    timestamp: new Date().toISOString(),
+    componentState: {
+      symbol: symbol.value,
+      strategyType: strategyType.value,
+      mode: mode.value,
+      trainWindowDays: trainWindowDays.value,
+      testWindowDays: testWindowDays.value
+    },
+    message: 'Walk-Forward Analysis Panel is now active and ready'
+  })
+})
+
+onUnmounted(() => {
+  console.log('[DEBUG-CYCLE-1] WalkForwardPanel unmounted:', {
+    timestamp: new Date().toISOString(),
+    finalState: {
+      hadResult: !!result.value,
+      hadError: !!error.value,
+      wasRunning: running.value
+    },
+    message: 'Walk-Forward Analysis Panel has been destroyed'
+  })
+})
 
 const symbol = ref('sh600519')
 const strategyType = ref('ma_crossover')
@@ -216,6 +243,23 @@ const initialCapital = 100000
 const running = ref(false)
 const error = ref('')
 const result = ref(null)
+
+// Debug Cycle 2: Watch parameter changes
+watch([symbol, strategyType, mode, trainWindowDays, testWindowDays, windowPreset], 
+  ([newSymbol, newStrategy, newMode, newTrain, newTest, newPreset]) => {
+    console.log('[DEBUG-CYCLE-2] WalkForwardPanel parameter changed:', {
+      timestamp: new Date().toISOString(),
+      parameters: {
+        symbol: newSymbol,
+        strategyType: newStrategy,
+        mode: newMode,
+        trainWindowDays: newTrain,
+        testWindowDays: newTest,
+        windowPreset: newPreset
+      }
+    })
+  }
+)
 
 const overfittingText = computed(() => {
   if (!result.value) return '—'
@@ -272,6 +316,20 @@ function formatParams(params) {
 async function runAnalysis() {
   if (running.value) return
   
+  // Debug Cycle 3: Analysis start
+  console.log('[DEBUG-CYCLE-3] WalkForwardPanel analysis starting:', {
+    timestamp: new Date().toISOString(),
+    analysisConfig: {
+      symbol: symbol.value,
+      strategyType: strategyType.value,
+      mode: mode.value,
+      trainWindowDays: trainWindowDays.value,
+      testWindowDays: testWindowDays.value,
+      windowPreset: windowPreset.value
+    },
+    message: 'Starting Walk-Forward Analysis'
+  })
+  
   running.value = true
   error.value = ''
   result.value = null
@@ -296,12 +354,39 @@ async function runAnalysis() {
     
     if (resp?.code !== 0 && resp?.code !== undefined) {
       error.value = resp?.message || '分析失败'
+      // Debug Cycle 4: Analysis error
+      console.log('[DEBUG-CYCLE-4] WalkForwardPanel analysis error:', {
+        timestamp: new Date().toISOString(),
+        error: error.value,
+        responseCode: resp?.code,
+        message: 'Walk-Forward Analysis failed'
+      })
       return
     }
     
     result.value = resp?.data || resp
+    
+    // Debug Cycle 5: Analysis complete
+    console.log('[DEBUG-CYCLE-5] WalkForwardPanel analysis complete:', {
+      timestamp: new Date().toISOString(),
+      resultSummary: {
+        avgTestReturn: result.value?.avg_test_return_pct,
+        avgTestSharpe: result.value?.avg_test_sharpe,
+        overfittingSeverity: result.value?.overfitting_severity,
+        consistencyScore: result.value?.consistency_score,
+        totalWindows: result.value?.total_windows
+      },
+      message: 'Walk-Forward Analysis completed successfully'
+    })
   } catch (e) {
     error.value = e.message || '分析失败'
+    // Debug Cycle 4: Analysis error (exception)
+    console.log('[DEBUG-CYCLE-4] WalkForwardPanel analysis exception:', {
+      timestamp: new Date().toISOString(),
+      error: error.value,
+      exception: e.toString(),
+      message: 'Walk-Forward Analysis threw an exception'
+    })
   } finally {
     running.value = false
   }
