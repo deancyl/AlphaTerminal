@@ -2,7 +2,7 @@
 
 > 分析日期: 2026-05-07
 > 更新日期: 2026-05-09
-> 当前版本: v0.6.12
+> 当前版本: v0.6.13
 > 状态: ✅ Phase 1-3 完成 (15/20 Tasks)
 > 仓库: https://github.com/deancyl/AlphaTerminal
 
