@@ -42,12 +42,12 @@
         />
       </div>
 
-      <!-- BaseKLineChart 哑组件（内部全权负责 ECharts 渲染） -->
+      <!-- BaseKLineChart 哑组件（内部全权负责主图 ECharts 渲染） -->
+      <!-- sub-charts 已移除：副图由下方 SubChart 组件独立渲染，避免双重渲染 -->
       <BaseKLineChart
         ref="baseChartRef"
         class="w-full h-full"
         :chart-data="processedChartData"
-        :sub-charts="activeSubCharts"
         :tick="liveTick"
         :symbol="currentSymbol"
         @datazoom="onDataZoom"
@@ -236,11 +236,7 @@ const drawingLocked   = ref(false)
 const ctxMenu         = ref({ visible: false, x: 0, y: 0, date: '', idx: -1 })
 
 // ── 派生数据 ────────────────────────────────────────────────────
-// activeSubCharts：subChartTab → BaseKLineChart subCharts 数组格式
-const activeSubCharts = computed(() => {
-  const map = { VOL: ['VOL'], MACD: ['VOL', 'MACD'], KDJ: ['VOL', 'KDJ'], RSI: ['VOL', 'RSI'], BOLL: ['VOL'] }
-  return map[subChartTab.value] ?? ['VOL']
-})
+// activeSubCharts 已移除: 副图由 SubChart 组件独立渲染, 不再传递给 BaseKLineChart
 
 // MA 最新值（左上角浮显）
 const maDisplays = computed(() => {
