@@ -1,0 +1,101 @@
+/* ── Copilot Markdown 渲染样式 ──────────────────────────── */
+.copilot-markdown {
+  line-height: 1.65;
+}
+.copilot-markdown h1,
+.copilot-markdown h2,
+.copilot-markdown h3,
+.copilot-markdown h4 {
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+  font-weight: 700;
+  color: var(--terminal-accent, #60a5fa);
+}
+.copilot-markdown h2 { font-size: 1.05em; border-bottom: 1px solid rgba(96,165,250,0.15); padding-bottom: 0.25em; }
+.copilot-markdown h3 { font-size: 0.95em; }
+.copilot-markdown h4 { font-size: 0.9em; }
+
+.copilot-markdown p { margin: 0.4em 0; }
+.copilot-markdown ul,
+.copilot-markdown ol { padding-left: 1.2em; margin: 0.4em 0; }
+.copilot-markdown li { margin: 0.2em 0; }
+
+.copilot-markdown strong { color: #f0f0f0; font-weight: 700; }
+.copilot-markdown em { color: #d4a574; font-style: italic; }
+.copilot-markdown code {
+  background: rgba(255,255,255,0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  font-size: 0.85em;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.copilot-markdown pre {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 0.7em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.copilot-markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.82em;
+}
+
+.copilot-markdown blockquote {
+  border-left: 3px solid rgba(96,165,250,0.4);
+  padding-left: 0.7em;
+  margin: 0.5em 0;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.copilot-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+  font-size: 0.85em;
+}
+.copilot-markdown th,
+.copilot-markdown td {
+  border: 1px solid rgba(255,255,255,0.1);
+  padding: 0.35em 0.5em;
+  text-align: left;
+}
+.copilot-markdown th {
+  background: rgba(96,165,250,0.08);
+  color: #60a5fa;
+  font-weight: 600;
+}
+.copilot-markdown tr:nth-child(even) {
+  background: rgba(255,255,255,0.015);
+}
+.copilot-markdown a { color: #60a5fa; text-decoration: underline; }
+.copilot-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.8em 0; }
+
+/* ── 深度推理折叠区块 ──────────────────────────────────── */
+.copilot-thinking {
+  margin: 0.4em 0;
+  border: 1px solid rgba(168,85,247,0.2);
+  border-radius: 6px;
+  background: rgba(168,85,247,0.04);
+  overflow: hidden;
+}
+.copilot-thinking summary {
+  cursor: pointer;
+  padding: 0.4em 0.7em;
+  font-size: 0.8em;
+  color: #a855f7;
+  user-select: none;
+}
+.copilot-thinking summary:hover { background: rgba(168,85,247,0.08); }
+.copilot-thinking[open] summary { border-bottom: 1px solid rgba(168,85,247,0.15); }
+.copilot-thinking-content {
+  padding: 0.5em 0.7em;
+  font-size: 0.8em;
+  color: #a78bfa;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
