@@ -2,14 +2,14 @@
   <div class="drawing-toolbar">
     <!-- 绘制工具组 -->
     <div class="toolbar-section">
-      <div v-for="tool in drawTools" :key="tool.key" class="tool-item">
+      <div v-for="tool in sanitizedDrawTools" :key="tool.key" class="tool-item">
         <button
           class="tool-btn"
           :class="{ active: activeTool === tool.key }"
           :title="tool.label + ' (' + tool.shortcut + ')'"
           @click="emit('tool-change', activeTool === tool.key ? '' : tool.key)"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" v-html="tool.svg"></svg>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" v-html="tool.sanitizedSvg"></svg>
         </button>
         <div class="tooltip">
           <div class="tooltip-inner">
@@ -132,7 +132,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import DOMPurify from 'dompurify'
 
 const props = defineProps({
   activeTool:  { type: String,  default: '' },
@@ -228,6 +229,18 @@ const drawTools = [
     svg: '<path d="M3 11V4l4-2.5 4 2.5v7M7 6v4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>'
   },
 ]
+
+// P0-007 Fix: Sanitize SVG to prevent XSS attacks
+const sanitizedDrawTools = computed(() => 
+  drawTools.map(tool => ({
+    ...tool,
+    sanitizedSvg: DOMPurify.sanitize(tool.svg, { 
+      USE_PROFILES: { svg: true, svgFilters: true },
+      ADD_TAGS: ['path', 'line', 'circle', 'rect', 'ellipse'],
+      ADD_ATTR: ['d', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'rx', 'ry', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'fill', 'opacity']
+    })
+  }))
+)
 
 function selectColor(color) {
   emit('color-change', color)

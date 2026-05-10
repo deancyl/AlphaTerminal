@@ -149,6 +149,7 @@
 <script setup>
 import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
+import DOMPurify from 'dompurify'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { apiFetch } from '../utils/api.js'
@@ -196,7 +197,7 @@ const mdParser = new MarkdownIt({
 function renderMarkdown(raw) {
   if (!raw) return ''
   // 提取 thinking 块（DeepSeek R1 推理过程）
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+  const thinkRegex = /<tool_call>([\s\S]*?)<\/think>/g
   const parts = []
   let lastIdx = 0
   let match
@@ -215,7 +216,7 @@ function renderMarkdown(raw) {
     parts.push({ type: 'content', text: raw.slice(lastIdx) })
   }
 
-  if (parts.length === 0) return mdParser.render(raw)
+  if (parts.length === 0) return DOMPurify.sanitize(mdParser.render(raw))
 
   return parts.map(p => {
     if (p.type === 'thinking') {
@@ -224,7 +225,7 @@ function renderMarkdown(raw) {
       const safeHtml = p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
       return `<details class="copilot-thinking"><summary>🧠 深度推理（${p.text.length}字）</summary><div class="copilot-thinking-content">${safeHtml}</div></details>`
     }
-    return mdParser.render(p.text)
+    return DOMPurify.sanitize(mdParser.render(p.text))
   }).join('')
 }
 
