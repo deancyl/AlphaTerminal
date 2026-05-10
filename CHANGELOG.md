@@ -5,6 +5,79 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.22] - 2026-05-10
+
+### Error Handling (P1-014)
+
+- **useApiError Composable** — Unified error handling across all components
+  - Created `useApiError.js` with `handleError`, `wrapApiCall`, `errorState`
+  - Auto-classifies errors by type (network, timeout, server, client, validation)
+  - Optional toast notifications and retry support
+  - Centralized error reporting
+
+- **Enhanced errorHandler.js** — Added utility functions
+  - `isRetryable(error)` — Determines if error should be retried
+  - `formatErrorForUser(error, context)` — Context-aware user messages
+
+- **Component Refactoring** — Adopted useApiError in:
+  - StockDetail.vue (7 error handlers)
+  - MacroDashboard.vue (10 error handlers)
+
+### Retry Mechanism (P1-015)
+
+- **Jitter in Exponential Backoff** — Prevents thundering herd
+  - ±25% random jitter on retry delays
+  - Base delay: 500ms, max delay: 8000ms
+
+- **Per-Endpoint Retry Config** — `retryConfig.js`
+  - Macro endpoints: 2-3 retries, 30s timeout
+  - Market endpoints: 1-2 retries, 10s timeout
+  - F9 endpoints: 2 retries, 15s timeout
+  - Backtest: 0 retries, 60s timeout
+
+### WebSocket Reconnection (P1-016)
+
+- **Manual Reconnect** — User-triggered reconnection
+  - `manualReconnect()` function in useMarketStream
+  - Resets retry count and delay
+  - Clean disconnect before reconnect
+
+- **Connection Stats** — Enhanced monitoring
+  - `lastConnectedAt` timestamp
+  - `connectionAttempts` counter
+  - Exposed via `getStats()`
+
+- **StatusBar Enhancements** — Visual feedback
+  - Reconnect button when disconnected
+  - Connection duration display
+  - Retry count tooltip
+
+### Data Validation (P1-017)
+
+- **Zod Integration** — Schema validation library
+  - Installed zod package
+  - Type-safe API response validation
+
+- **Schema Definitions** — Created schemas for:
+  - Stock quotes, market overview, sectors
+  - Portfolio holdings and summary
+  - Macro indicators and time series
+
+- **apiFetchValidated()** — Validated API calls
+  - Automatic schema validation
+  - Detailed error messages on validation failure
+  - Type inference from schemas
+
+### Metrics
+
+- **Error handling**: 1 composable, 2 utility functions, 2 components refactored
+- **Retry improvements**: Jitter + per-endpoint config
+- **WebSocket enhancements**: Manual reconnect + connection stats
+- **Validation**: 4 schema files, 1 validated fetch function
+- **Lines added**: 630
+
+---
+
 ## [0.6.21] - 2026-05-10
 
 ### Mobile/Desktop Optimizations
