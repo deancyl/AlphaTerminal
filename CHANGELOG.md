@@ -5,6 +5,33 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.24] - 2026-05-10
+
+### Code Refactoring (P1-018)
+
+- **Market Module Split** — Split market.py (1869 lines) into 8 domain modules
+  - `overview.py`: Market overview, macro data (5 endpoints, 552 lines)
+  - `quotes.py`: Quote, quote_detail, order_book (4 endpoints, 432 lines)
+  - `history.py`: Price history, futures (2 endpoints, 256 lines)
+  - `symbols.py`: Symbol registry, search (5 endpoints, 289 lines)
+  - `sectors.py`: Sector data (2 endpoints, 47 lines)
+  - `source.py`: Data source management (10 endpoints, 159 lines)
+  - `system.py`: System info (2 endpoints, 81 lines)
+  - `dependencies.py`: Shared utilities, caches, constants (650+ lines)
+
+- **Router Aggregation** — `__init__.py` combines all sub-routers
+  - All 33 endpoints preserved
+  - No breaking changes to API routes
+
+### Metrics
+
+- **Original file**: 1869 lines
+- **New modules**: ~2500 lines (better organized)
+- **Endpoints preserved**: 33
+- **Files created**: 9
+
+---
+
 ## [0.6.23] - 2026-05-10
 
 ### Code Refactoring (P1-018)
