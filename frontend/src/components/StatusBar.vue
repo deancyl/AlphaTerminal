@@ -10,9 +10,25 @@
           :class="connectionStatus === 'connected' ? 'bg-bullish' : connectionStatus === 'degraded' ? 'bg-[var(--color-warning)]' : 'bg-bearish'"
         />
         <span>{{ connectionText }}</span>
+        <!-- Reconnect button when disconnected -->
+        <button
+          v-if="connectionStatus === 'disconnected' && showReconnect"
+          class="ml-1 px-1.5 py-0.5 rounded text-terminal-accent hover:bg-terminal-accent/20 transition"
+          @click="handleReconnect"
+        >
+          重连
+        </button>
       </div>
       <span class="text-theme-secondary">|</span>
       <span>数据更新: {{ lastUpdateTime }}</span>
+      <!-- Connection stats tooltip -->
+      <span
+        v-if="connectionStats"
+        class="text-terminal-dim/60 hidden lg:inline"
+        :title="connectionStatsTitle"
+      >
+        ({{ connectionStats }})
+      </span>
     </div>
 
     <!-- 右侧：市场状态 + 快捷键提示 -->
@@ -35,7 +51,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 const props = defineProps({
   connectionStatus: {
     type: String,
-    default: 'connected', // 'connected' | 'degraded' | 'disconnected'
+    default: 'connected',
   },
   lastUpdate: {
     type: String,
@@ -43,9 +59,23 @@ const props = defineProps({
   },
   marketStatus: {
     type: String,
-    default: 'closed', // 'open' | 'closed' | 'pre' | 'post'
+    default: 'closed',
+  },
+  showReconnect: {
+    type: Boolean,
+    default: false,
+  },
+  lastConnectedAt: {
+    type: Number,
+    default: null,
+  },
+  connectionAttempts: {
+    type: Number,
+    default: 0,
   },
 })
+
+const emit = defineEmits(['reconnect'])
 
 const now = ref(new Date())
 let timer = null
@@ -85,6 +115,33 @@ const marketStatusClass = computed(() => {
       return 'border-theme-secondary/30 bg-terminal-panel text-terminal-dim'
   }
 })
+
+const connectionStats = computed(() => {
+  if (props.connectionStatus === 'connected' && props.lastConnectedAt) {
+    const seconds = Math.floor((Date.now() - props.lastConnectedAt) / 1000)
+    if (seconds < 60) return `${seconds}秒`
+    const minutes = Math.floor(seconds / 60)
+    if (minutes < 60) return `${minutes}分钟`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}小时`
+  }
+  if (props.connectionAttempts > 0 && props.connectionStatus === 'disconnected') {
+    return `重试${props.connectionAttempts}次`
+  }
+  return null
+})
+
+const connectionStatsTitle = computed(() => {
+  if (props.lastConnectedAt) {
+    const d = new Date(props.lastConnectedAt)
+    return `上次连接: ${d.toLocaleTimeString()}`
+  }
+  return ''
+})
+
+function handleReconnect() {
+  emit('reconnect')
+}
 
 onMounted(() => {
   timer = setInterval(() => { now.value = new Date() }, 1000)

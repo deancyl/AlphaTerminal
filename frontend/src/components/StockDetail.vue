@@ -134,6 +134,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useStockDetail, useStockQuote } from '../composables/useStockDetail.js'
+import { useApiError } from '../composables/useApiError.js'
 
 // Import sub-components
 import CompanyOverview from './stock-detail/CompanyOverview.vue'
@@ -151,6 +152,7 @@ const props = defineProps({
 
 const { getBareSymbol } = useStockDetail()
 const { stockInfo, loading, fetchQuote, priceClass, changeClass } = useStockQuote()
+const { handleError } = useApiError({ showToast: false }) // Don't auto-show toast, we handle UI ourselves
 
 const inputSymbol = ref(props.symbol)
 const activeTab = ref('overview')
@@ -246,8 +248,8 @@ async function fetchShareholderData() {
       shareholderError.value = '获取股东数据失败'
     }
   } catch (e) {
-    console.error('[StockDetail] Shareholder fetch error:', e)
-    shareholderError.value = e.message || '网络请求失败'
+    const { userMessage } = handleError(e, { context: '获取股东数据', silent: true })
+    shareholderError.value = userMessage
   } finally {
     shareholderLoading.value = false
   }
@@ -266,8 +268,8 @@ async function fetchMarginData(symbol) {
       marginError.value = '暂无融资融券数据'
     }
   } catch (e) {
-    console.error('[StockDetail] Margin data fetch error:', e)
-    marginError.value = e.message || '获取融资融券数据失败'
+    const { userMessage } = handleError(e, { context: '获取融资融券数据', silent: true })
+    marginError.value = userMessage
   } finally {
     marginLoading.value = false
   }
@@ -286,8 +288,8 @@ async function fetchFinancialData() {
       financialError.value = '暂无财务数据'
     }
   } catch (e) {
-    console.error('[StockDetail] Financial data fetch error:', e)
-    financialError.value = '加载财务数据失败，请稍后重试'
+    const { userMessage } = handleError(e, { context: '加载财务数据', silent: true })
+    financialError.value = userMessage
   } finally {
     financialLoading.value = false
   }
@@ -306,8 +308,8 @@ async function fetchForecastData(symbol) {
       forecastError.value = '暂无盈利预测数据'
     }
   } catch (e) {
-    console.error('[StockDetail] Forecast error:', e)
-    forecastError.value = e.message || '网络请求失败'
+    const { userMessage } = handleError(e, { context: '获取盈利预测数据', silent: true })
+    forecastError.value = userMessage
   } finally {
     forecastLoading.value = false
   }
@@ -326,8 +328,8 @@ async function fetchPeersData(symbol) {
       peersError.value = '暂无同业比较数据'
     }
   } catch (e) {
-    console.error('[StockDetail] Peers error:', e)
-    peersError.value = e.message || '网络请求失败'
+    const { userMessage } = handleError(e, { context: '获取同业比较数据', silent: true })
+    peersError.value = userMessage
   } finally {
     peersLoading.value = false
   }
@@ -347,8 +349,8 @@ async function fetchAnnouncementsData(page = 1) {
       announcementsError.value = '获取公告数据失败'
     }
   } catch (e) {
-    console.error('[StockDetail] Announcements fetch error:', e)
-    announcementsError.value = e.message || '网络请求失败'
+    const { userMessage } = handleError(e, { context: '获取公告数据', silent: true })
+    announcementsError.value = userMessage
   } finally {
     announcementsLoading.value = false
   }
@@ -369,8 +371,8 @@ async function fetchInstitutionData() {
       institutionError.value = '暂无机构持股数据'
     }
   } catch (e) {
-    console.error('[StockDetail] Institution fetch error:', e)
-    institutionError.value = `获取数据失败: ${e.message || '未知错误'}`
+    const { userMessage } = handleError(e, { context: '获取机构持股数据', silent: true })
+    institutionError.value = userMessage
   } finally {
     institutionLoading.value = false
   }

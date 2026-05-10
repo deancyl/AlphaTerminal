@@ -133,6 +133,17 @@ function sleep(ms) {
  * @param {any} options.body - 请求体
  * @returns {Promise<any>}
  */
+const RETRY_JITTER = 0.25
+const RETRY_BASE_DELAY = 500
+const RETRY_MAX_DELAY = 8000
+
+function calculateRetryDelay(attempt) {
+  const baseDelay = RETRY_BASE_DELAY * Math.pow(2, attempt)
+  const cappedDelay = Math.min(baseDelay, RETRY_MAX_DELAY)
+  const jitter = 1 - RETRY_JITTER + Math.random() * RETRY_JITTER * 2
+  return Math.floor(cappedDelay * jitter)
+}
+
 export async function apiFetch(url, options = {}) {
   const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
@@ -167,9 +178,8 @@ export async function apiFetch(url, options = {}) {
       // 仅对5xx服务器错误和超时应试重试，4xx客户端错误立即失败
       if (!res.ok) {
         if (res.status >= 500 || res.status === 429) {
-          // 服务器错误，可以重试（指数退避：delay = 500 * 2^attempt）
           if (attempt < retries) {
-            const backoffMs = Math.min(500 * Math.pow(2, attempt), 8000)
+            const backoffMs = calculateRetryDelay(attempt)
             logger.warn(`[apiFetch] ${url} returned ${res.status}, retrying (${attempt + 1}/${retries}) in ${backoffMs}ms...`)
             await sleep(backoffMs)
             continue
@@ -200,8 +210,9 @@ export async function apiFetch(url, options = {}) {
       // 修复: 增加网络错误 (TypeError) 和 Fetch 失败的重试
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
       if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
-        logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying...`)
-        await sleep(500 * (attempt + 1))
+        const backoffMs = calculateRetryDelay(attempt)
+        logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying in ${backoffMs}ms...`)
+        await sleep(backoffMs)
         continue
       }
       // 记录失败（用于熔断计数）
@@ -251,11 +262,24 @@ export async function fetchApiBatch(requests, silent = false) {
   if (errors.length > 0) {
     data._errors = errors
     data._stale = true
-    // required=true 且 silent=false 时抛出错误
     const requiredErrors = errors.filter(e => settled.find(s => s.key === e.key)?.required)
     if (requiredErrors.length > 0 && !silent) {
       throw new Error(`必需接口失败: ${requiredErrors.map(e => `[${e.key}] ${e.error}`).join(', ')}`)
     }
   }
   return data
+}
+
+export async function apiFetchValidated(url, schema, options = {}) {
+  const data = await apiFetch(url, options)
+  const result = schema.safeParse(data)
+  
+  if (!result.success) {
+    const errorMessages = result.error.errors
+      .map(e => `${e.path.join('.')}: ${e.message}`)
+      .join(', ')
+    throw new Error(`数据验证失败: ${errorMessages}`)
+  }
+  
+  return result.data
 }

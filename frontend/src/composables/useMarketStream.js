@@ -57,6 +57,8 @@ let _tickDirty = false
 // WS 连接状态：'idle' | 'connecting' | 'connected' | 'disconnected' | 'failed'
 const globalWsStatus = ref('idle')
 const globalError = ref(null)
+const globalLastConnectedAt = ref(null)
+const globalConnectionAttempts = ref(0)
 
 // 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
 const subscribedSymRefCount = new Map()
@@ -83,6 +85,7 @@ function _newConnection() {
 
   globalWsStatus.value = 'connecting'
   globalError.value = null
+  globalConnectionAttempts.value++
   const url = `${WS_BASE}/ws/market`
 
   try {
@@ -98,6 +101,8 @@ function _newConnection() {
   _ws.onopen = () => {
     globalWsStatus.value = 'connected'
     globalError.value = null
+    globalLastConnectedAt.value = Date.now()
+    globalConnectionAttempts.value = 0
     _retryDelay = 2000
     _retryCount = 0
     // 重连时重新订阅所有仍有引用的 symbol
@@ -356,6 +361,21 @@ export function useMarketStream(initialSymbol = '') {
     }
   }
 
+  function manualReconnect() {
+    if (_ws) {
+      _stopHeartbeat()
+      clearTimeout(_retryTimer)
+      _ws.onclose = null
+      _ws.onerror = null
+      _ws.close(1000, 'manual_reconnect')
+      _ws = null
+    }
+    _retryCount = 0
+    _retryDelay = 2000
+    globalWsStatus.value = 'idle'
+    _newConnection()
+  }
+
   // 启动心跳
   _startHeartbeat()
 
@@ -377,14 +397,9 @@ export function useMarketStream(initialSymbol = '') {
   })
 
   return {
-    // 当前 symbol 的 tick（shallowRef，仅引用变化时触发）
     tick: computed(() => localSymbol.value ? globalTicks.value[localSymbol.value] : null),
-    // 完整 tick 字典（高级用法）
     ticks: globalTicks,
-    // WS 连接状态：'idle' | 'connecting' | 'connected' | 'disconnected' | 'failed'
-    // ⚡ 组件应 watch 此状态实现 HTTP 轮询降级
     wsStatus: globalWsStatus,
-    // 已废弃，保留兼容：优先用 wsStatus
     connected: computed(() => globalWsStatus.value === 'connected'),
     reconnecting: computed(() => globalWsStatus.value === 'connecting'),
     error: globalError,
@@ -392,12 +407,17 @@ export function useMarketStream(initialSymbol = '') {
     connect,
     disconnect,
     unsubscribe,
+    manualReconnect,
+    lastConnectedAt: globalLastConnectedAt,
+    connectionAttempts: globalConnectionAttempts,
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
       retryCount: _retryCount,
       connectionCount: _connectedCount.value,
       wsStatus: globalWsStatus.value,
+      lastConnectedAt: globalLastConnectedAt.value,
+      connectionAttempts: globalConnectionAttempts.value,
     }),
   }
 }

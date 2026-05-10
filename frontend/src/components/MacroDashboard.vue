@@ -272,8 +272,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useApiError } from '../composables/useApiError.js'
 
 const echarts = window.echarts
+const { handleError } = useApiError({ showToast: false })
 
 const loading = ref(false)
 const error = ref(null)
@@ -316,16 +318,16 @@ async function fetchAllData() {
       industrialRes,
       unemploymentRes
     ] = await Promise.all([
-      apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Overview error:', e); return null }),
-      apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Calendar error:', e); return null }),
-      apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] GDP error:', e); return null }),
-      apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] CPI error:', e); return null }),
-      apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] PMI error:', e); return null }),
-      apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] PPI error:', e); return null }),
-      apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] M2 error:', e); return null }),
-      apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Social error:', e); return null }),
-      apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Industrial error:', e); return null }),
-      apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }).catch(e => { console.error('[Macro] Unemployment error:', e); return null })
+      apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '宏观概览', silent: true }); return null }),
+      apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '经济日历', silent: true }); return null }),
+      apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'GDP数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'CPI数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'PMI数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'PPI数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'M2数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '社融数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '工业增加值数据', silent: true }); return null }),
+      apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '失业率数据', silent: true }); return null })
     ])
 
     // Process results
@@ -344,8 +346,8 @@ async function fetchAllData() {
     if (unemploymentRes?.data) drawUnemploymentChart(unemploymentRes.data)
 
   } catch (e) {
-    console.error('[Macro] Fetch all error:', e)
-    error.value = '数据加载失败'
+    const { userMessage } = handleError(e, { context: '宏观数据' })
+    error.value = userMessage
   } finally {
     loading.value = false
   }

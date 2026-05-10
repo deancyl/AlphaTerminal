@@ -331,7 +331,6 @@ export function showErrorNotification(error, options = {}) {
   const { showDetails = false, duration = 5000 } = options
   const userMessage = getUserMessage(error)
   
-  // 使用浏览器通知 API
   if ('Notification' in window && Notification.permission === 'granted') {
     new Notification('错误', {
       body: userMessage,
@@ -339,7 +338,6 @@ export function showErrorNotification(error, options = {}) {
     })
   }
   
-  // 或者使用自定义 UI (如 toast)
   if (window.showToast) {
     window.showToast({
       type: 'error',
@@ -348,6 +346,35 @@ export function showErrorNotification(error, options = {}) {
     })
   }
   
-  // 控制台输出
   logger.error('[Error Notification]', error)
+}
+
+export function isRetryable(error) {
+  if (!error) return false
+  
+  const type = classifyError(error)
+  
+  if (type === ErrorType.CLIENT || type === ErrorType.VALIDATION) {
+    return false
+  }
+  
+  const message = error.message || ''
+  if (message.includes('HTTP 401') || message.includes('HTTP 403')) {
+    return false
+  }
+  
+  return type === ErrorType.NETWORK || 
+         type === ErrorType.TIMEOUT || 
+         type === ErrorType.SERVER
+}
+
+export function formatErrorForUser(error, context = {}) {
+  const baseMessage = getUserMessage(error)
+  const { context: contextName, operation } = context
+  
+  if (contextName || operation) {
+    return `${contextName || operation}失败: ${baseMessage}`
+  }
+  
+  return baseMessage
 }
