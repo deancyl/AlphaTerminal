@@ -463,7 +463,7 @@ function renderDonut() {
   })
 }
 
-watch(() => fundDonutData.value, () => { nextTick(renderDonut) }, { deep: true, immediate: true })
+watch(fundDonutData, () => { nextTick(renderDonut) }, { immediate: true })
 
 let _donutRO = null
 onMounted(() => {

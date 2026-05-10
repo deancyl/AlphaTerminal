@@ -182,3 +182,86 @@ lsof -i :60100
 - 本地访问: `http://localhost:60100`
 - 局域网访问: `http://192.168.1.50:60100`
 - 其他IP: 任何能访问该机器的网络地址
+
+---
+
+## F9 深度资料功能
+
+### 功能概述
+
+F9 深度资料是一个专业的股票深度分析面板，提供 8 个维度的股票信息：
+
+| Tab | 功能 | 数据源 |
+|-----|------|--------|
+| 公司概况 | 基本信息、主营业务 | `/api/v1/stocks/quote` |
+| 财务摘要 | 25+ 财务指标、8 季度趋势 | `stock_financial_analysis_indicator` |
+| 机构持股 | 机构持仓、8 季度趋势 | `stock_institute_hold_detail` |
+| 盈利预测 | EPS 预测、机构评级 | `stock_profit_forecast_ths` |
+| 股东研究 | Top10 股东、股本变动 | `stock_circulate_stock_holder` |
+| 公司公告 | 公司公告列表（分页） | `stock_notice_report` |
+| 同业比较 | 行业对比、雷达图 | `stock_individual_info_em` |
+| 融资融券 | 融资融券余额、30 日趋势 | `stock_margin_detail_sse/szse` |
+
+### 使用方式
+
+1. **键盘快捷键**: 按 `F9` 键打开深度资料
+2. **命令面板**: 按 `Ctrl+K`，输入 `:F9`
+3. **右键菜单**: 在股票列表中右键选择 "F9 深度资料"
+
+### API 端点
+
+```bash
+# 健康检查
+GET /api/v1/f9/health
+
+# 财务摘要
+GET /api/v1/f9/{symbol}/financial
+
+# 机构持股
+GET /api/v1/f9/{symbol}/institution
+
+# 盈利预测
+GET /api/v1/f9/{symbol}/forecast
+
+# 股东研究
+GET /api/v1/f9/{symbol}/shareholder
+
+# 公司公告（支持分页）
+GET /api/v1/f9/{symbol}/announcements?page=1&page_size=20
+
+# 同业比较
+GET /api/v1/f9/{symbol}/peers
+
+# 融资融券
+GET /api/v1/f9/{symbol}/margin
+```
+
+### 缓存策略
+
+- **缓存时间**: 5 分钟（300 秒）
+- **缓存位置**: 后端内存缓存
+- **缓存键**: `{endpoint}_{symbol}`
+
+### 测试命令
+
+```bash
+# 测试所有 F9 端点
+curl http://localhost:60100/api/v1/f9/600519/financial
+curl http://localhost:60100/api/v1/f9/600519/institution
+curl http://localhost:60100/api/v1/f9/600519/margin
+curl http://localhost:60100/api/v1/f9/600519/forecast
+curl http://localhost:60100/api/v1/f9/600519/shareholder
+curl http://localhost:60100/api/v1/f9/600519/announcements
+curl http://localhost:60100/api/v1/f9/600519/peers
+```
+
+### 文件位置
+
+- **后端路由**: `/backend/app/routers/f9_deep.py`
+- **前端组件**: `/frontend/src/components/StockDetail.vue`
+- **共享组件**: `/frontend/src/components/f9/`
+  - `DataTable.vue` - 可排序、分页的数据表格
+  - `InfoCard.vue` - 关键指标卡片
+  - `LoadingSpinner.vue` - 加载指示器
+  - `ErrorDisplay.vue` - 错误显示组件
+  - `TrendChart.vue` - ECharts 趋势图封装

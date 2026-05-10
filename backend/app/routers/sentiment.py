@@ -80,6 +80,7 @@ async def market_sentiment():
             "limit_down": h.get("limit_down", 0),
             "total":      h.get("total", 0),
             "up_ratio":   h.get("up_ratio", 0.0),
+            "advance_rate": h.get("up_ratio", 0.0),
             "timestamp":  h.get("timestamp", ""),
         })
     except Exception as e:

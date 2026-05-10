@@ -225,6 +225,13 @@ rm rollup-linux-x64-gnu.tgz
 - **执行历史**：保留最近 50 次执行记录，支持报告导出
 - **命令行支持**：`./scripts/debug/debug.sh full` 一键完整诊断
 
+### F9 深度资料（v0.6.15+）
+- **8 维度分析**：公司概况、财务摘要、机构持股、盈利预测、股东研究、公司公告、同业比较、融资融券
+- **实时数据**：25+ 财务指标、8 季度趋势、机构持仓变化、30 日融资融券数据
+- **可视化图表**：趋势图、饼图、雷达图、对比表格
+- **快捷操作**：F9 键盘快捷键、Ctrl+K 命令面板、右键菜单
+- **智能缓存**：5 分钟缓存，首次加载后快速响应
+
 ---
 
 ## 🏗 技术架构
@@ -245,6 +252,10 @@ rm rollup-linux-x64-gnu.tgz
 │   /api/v1/news/force_refresh  /api/v1/market/sectors      │
 │   /api/v1/portfolio/          /api/v1/backtest/run         │
 │   /api/v1/copilot/status      /api/v1/market/stocks/search │
+│   /api/v1/f9/{symbol}/financial  /api/v1/f9/{symbol}/institution │
+│   /api/v1/f9/{symbol}/margin     /api/v1/f9/{symbol}/forecast    │
+│   /api/v1/f9/{symbol}/shareholder /api/v1/f9/{symbol}/announcements│
+│   /api/v1/f9/{symbol}/peers      /api/v1/f9/health               │
 │                                                             │
 │   APScheduler 调度任务（后台线程）                          │
 │   ├── NewsRefresh (每 5 分钟) ←─ 东方财富实时新闻        │
@@ -276,7 +287,8 @@ AlphaTerminal/
 │   │   │   ├── sentiment.py    # 市场情绪
 │   │   │   ├── portfolio.py    # 投资组合 CRUD / PnL / 快照
 │   │   │   ├── backtest.py     # 回测引擎
-│   │   │   └── copilot.py     # AI Copilot
+│   │   │   ├── copilot.py     # AI Copilot
+│   │   │   └── f9_deep.py     # F9 深度资料 API
 │   │   └── services/
 │   │       ├── data_fetcher.py  # AkShare / httpx 数据获取
 │   │       ├── news_engine.py    # 新闻缓存引擎
@@ -308,7 +320,14 @@ AlphaTerminal/
 │           ├── PortfolioDashboard.vue # 投资组合面板
 │           ├── StockScreener.vue     # 条件选股
 │           ├── SentimentGauge.vue    # 市场情绪仪表
-│           └── FundFlowPanel.vue     # 资金流向面板
+│           ├── FundFlowPanel.vue     # 资金流向面板
+│           ├── StockDetail.vue       # F9 深度资料面板
+│           └── f9/                   # F9 共享组件
+│               ├── DataTable.vue     # 数据表格
+│               ├── InfoCard.vue      # 信息卡片
+│               ├── LoadingSpinner.vue # 加载指示器
+│               ├── ErrorDisplay.vue  # 错误显示
+│               └── TrendChart.vue    # 趋势图表
 ├── scripts/
 │   ├── init_env.sh              # ✅ 环境初始化脚本（克隆后运行）
 │   ├── init_database.py         # 数据库初始化

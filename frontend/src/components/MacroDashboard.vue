@@ -276,6 +276,7 @@ import { apiFetch } from '../utils/api.js'
 const echarts = window.echarts
 
 const loading = ref(false)
+const error = ref(null)
 const overview = ref(null)
 const calendar = ref([])
 const lastUpdate = ref(null)

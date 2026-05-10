@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance
+from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
@@ -152,6 +152,7 @@ app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
 app.include_router(fund.router, prefix="/api/v1", tags=["fund"])
 app.include_router(export.router, prefix="/api/v1", tags=["export"])
 app.include_router(macro.router, prefix="/api/v1", tags=["macro"])
+app.include_router(f9_deep.router, prefix="/api/v1", tags=["f9_deep_data"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["mcp"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["performance"])
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}

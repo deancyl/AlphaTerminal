@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
+import pandas as pd
 
 # 代理由 proxy_config.py 统一管理，从环境变量读取
 # 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
@@ -342,36 +343,204 @@ async def search_stocks(q: str = ""):
 async def get_quote(symbol: str):
     """
     获取单个股票实时行情
-    来源: 腾讯 qt.gtimg.cn
+    来源: 腾讯 qt.gtimg.cn + akshare 补充信息
     """
     def fetch():
         try:
-            # symbol 格式: sh600519 或 sz000001
+            # symbol 格式: sh600519 或 sz000001，如果没有前缀则自动添加
+            sym = symbol
+            bare_symbol = symbol.replace('sh', '').replace('sz', '')
+            if not sym.startswith('sh') and not sym.startswith('sz'):
+                if sym.startswith('6'):
+                    sym = 'sh' + sym
+                else:
+                    sym = 'sz' + sym
+                bare_symbol = symbol
+            
+            # 1. 从腾讯API获取实时行情
             with httpx.Client(timeout=5.0) as client:
-                resp = client.get(f"https://qt.gtimg.cn/q={symbol}")
+                resp = client.get(f"https://qt.gtimg.cn/q={sym}")
                 resp.raise_for_status()
                 raw = resp.text
+            
+            result = {
+                'symbol': symbol,
+                'name': '',
+                'price': 0,
+                'change_pct': 0,
+                'open': 0,
+                'high': 0,
+                'low': 0,
+                'volume': 0,
+                'amount': 0,
+                'bid1': 0,
+                'ask1': 0,
+                'update_time': '',
+                'industry': '--',
+                'totalShares': None,
+                'floatShares': None,
+                'totalMarketCap': None,
+                'floatMarketCap': None,
+                'listDate': None,
+                'business': '暂无主营业务数据',
+            }
+            
             for line in raw.splitlines():
                 line = line.strip()
                 if "=" not in line or "none_match" in line:
                     continue
-                parts = line.split("=")[1].strip('";\n').split(",")
-                if len(parts) > 32:
-                    return {
-                        'symbol': symbol,
-                        'name': parts[1] if len(parts) > 1 else '',
-                        'price': float(parts[1]) if parts[1] else 0,
-                        'change_pct': float(parts[32]) if parts[32] else 0,
-                        'open': float(parts[5]) if parts[5] else 0,
-                        'high': float(parts[33]) if parts[33] else 0,
-                        'low': float(parts[34]) if parts[34] else 0,
-                        'volume': float(parts[7]) if parts[7] else 0,
-                        'amount': float(parts[9]) if parts[9] else 0,
-                        'bid1': float(parts[20]) if parts[20] else 0,
-                        'ask1': float(parts[21]) if parts[21] else 0,
-                        'update_time': parts[30] if len(parts) > 30 else '',
-                    }
-            return {}
+                # 解析格式: v_sh600519="1~贵州茅台~600519~1372.99~..."
+                try:
+                    value_part = line.split("=", 1)[1].strip('";\n')
+                    parts = value_part.split("~")
+                    if len(parts) > 35:
+                        result.update({
+                            'name': parts[1] if len(parts) > 1 else '',
+                            'price': float(parts[3]) if parts[3] else 0,
+                            'change_pct': float(parts[32]) if parts[32] else 0,
+                            'open': float(parts[5]) if parts[5] else 0,
+                            'high': float(parts[33]) if parts[33] else 0,
+                            'low': float(parts[34]) if parts[34] else 0,
+                            'volume': float(parts[6]) if parts[6] else 0,
+                            'amount': float(parts[37]) if parts[37] else 0,
+                            'bid1': float(parts[9]) if parts[9] else 0,
+                            'ask1': float(parts[19]) if parts[19] else 0,
+                            'update_time': parts[30] if len(parts) > 30 else '',
+                        })
+                        break
+                except (ValueError, IndexError) as e:
+                    logger.debug(f"[Stocks] parse line error: {e}")
+                    continue
+            
+            # 2. 从akshare获取补充信息（上市日期、行业、股本）
+            try:
+                import akshare as ak
+                
+                # Try stock_info_sh_name_code for list date (more reliable)
+                if bare_symbol.startswith('6'):
+                    try:
+                        info_df = ak.stock_info_sh_name_code()
+                        if info_df is not None and len(info_df) > 0:
+                            row = info_df[info_df['证券代码'] == bare_symbol]
+                            if len(row) > 0:
+                                list_date = row.iloc[0].get('上市日期')
+                                if list_date:
+                                    result['listDate'] = str(list_date)
+                    except Exception as e:
+                        logger.debug(f"[Stocks] stock_info_sh_name_code error: {e}")
+                
+                # Try stock_profile_cninfo for industry and business (巨潮资讯 - more reliable)
+                try:
+                    profile_df = ak.stock_profile_cninfo(symbol=bare_symbol)
+                    if profile_df is not None and len(profile_df) > 0:
+                        profile = profile_df.iloc[0]
+                        if not result.get('industry') or result['industry'] == '--':
+                            result['industry'] = profile.get('所属行业', '--') or '--'
+                        if not result.get('business') or result['business'] == '暂无主营业务数据':
+                            result['business'] = profile.get('主营业务', '暂无主营业务数据') or '暂无主营业务数据'
+                        if not result.get('listDate'):
+                            result['listDate'] = str(profile.get('上市日期', '')) if profile.get('上市日期') else None
+                except Exception as e:
+                    logger.debug(f"[Stocks] stock_profile_cninfo error for {bare_symbol}: {e}")
+                
+                # Try stock_individual_spot_xq for market cap and shares (雪球)
+                try:
+                    exchange = "SH" if bare_symbol.startswith('6') else "SZ"
+                    spot_df = ak.stock_individual_spot_xq(symbol=f"{exchange}{bare_symbol}")
+                    if spot_df is not None and len(spot_df) > 0:
+                        spot_data = dict(zip(spot_df['item'], spot_df['value']))
+                        
+                        # Get float shares and market cap
+                        float_shares = spot_data.get('流通股')
+                        float_market_cap = spot_data.get('流通值')
+                        
+                        if float_shares:
+                            try:
+                                result['floatShares'] = float(float_shares)
+                            except:
+                                pass
+                        if float_market_cap:
+                            try:
+                                result['floatMarketCap'] = float(float_market_cap)
+                            except:
+                                pass
+                except Exception as e:
+                    logger.debug(f"[Stocks] stock_individual_spot_xq error for {bare_symbol}: {e}")
+                
+                # Try stock_share_change_cninfo for total shares (巨潮资讯 - most reliable)
+                if not result.get('totalShares'):
+                    try:
+                        from datetime import datetime
+                        today = datetime.now().strftime('%Y%m%d')
+                        one_year_ago = (datetime.now() - __import__('datetime').timedelta(days=365)).strftime('%Y%m%d')
+                        share_df = ak.stock_share_change_cninfo(symbol=bare_symbol, start_date=one_year_ago, end_date=today)
+                        if share_df is not None and len(share_df) > 0 and '总股本' in share_df.columns:
+                            latest = share_df.sort_values('变动日期', ascending=False).iloc[0]
+                            total_wan = latest.get('总股本')
+                            if total_wan is not None and pd.notna(total_wan):
+                                result['totalShares'] = float(total_wan) * 10000
+                    except Exception as e:
+                        logger.debug(f"[Stocks] stock_share_change_cninfo error for {bare_symbol}: {e}")
+                
+                # Try stock_main_stock_holder as fallback for total shares (derived from top holder)
+                if not result.get('totalShares'):
+                    try:
+                        holder_df = ak.stock_main_stock_holder(stock=bare_symbol)
+                        if holder_df is not None and len(holder_df) > 0:
+                            first = holder_df.iloc[0]
+                            shares = first.get('持股数量')
+                            ratio = first.get('持股比例')
+                            if pd.notna(shares) and pd.notna(ratio) and ratio > 0:
+                                # Derive total shares from holding ratio
+                                result['totalShares'] = float(shares) / (float(ratio) / 100)
+                                logger.debug(f"[Stocks] Derived totalShares from stock_main_stock_holder: {result['totalShares']}")
+                    except Exception as e:
+                        logger.debug(f"[Stocks] stock_main_stock_holder error for {bare_symbol}: {e}")
+                
+                # Try stock_individual_info_em as last resort (may fail due to network)
+                if not result.get('industry') or result['industry'] == '--':
+                    try:
+                        info_df = ak.stock_individual_info_em(symbol=bare_symbol)
+                        if info_df is not None and len(info_df) > 0:
+                            info_dict = dict(zip(info_df['item'], info_df['value']))
+                            if not result.get('industry') or result['industry'] == '--':
+                                result['industry'] = info_dict.get('行业', '--') or '--'
+                            if not result.get('business') or result['business'] == '暂无主营业务数据':
+                                result['business'] = info_dict.get('主营业务', '暂无主营业务数据') or '暂无主营业务数据'
+                            
+                            # Parse total shares and float shares
+                            def parse_capital(value):
+                                if not value:
+                                    return None
+                                try:
+                                    value = str(value).strip()
+                                    if '亿' in value:
+                                        return float(value.replace('亿', '').strip()) * 100000000
+                                    elif '万' in value:
+                                        return float(value.replace('万', '').strip()) * 10000
+                                    else:
+                                        return float(value)
+                                except Exception:
+                                    return None
+                            
+                            if not result.get('totalShares'):
+                                result['totalShares'] = parse_capital(info_dict.get('总股本', None))
+                            if not result.get('floatShares'):
+                                result['floatShares'] = parse_capital(info_dict.get('流通股', None))
+                            
+                            # Calculate market cap
+                            if result['price'] > 0:
+                                if result.get('totalShares') and not result.get('totalMarketCap'):
+                                    result['totalMarketCap'] = result['price'] * result['totalShares']
+                                if result.get('floatShares') and not result.get('floatMarketCap'):
+                                    result['floatMarketCap'] = result['price'] * result['floatShares']
+                    except Exception as e:
+                        logger.debug(f"[Stocks] stock_individual_info_em error for {bare_symbol}: {e}")
+                    
+            except Exception as e:
+                logger.debug(f"[Stocks] akshare info error for {bare_symbol}: {e}")
+            
+            return result
         except Exception as e:
             logger.warning(f"[Stocks] quote error for {symbol}: {e}")
             return {}
