@@ -422,7 +422,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return response
             
         except HTTPException as e:
-            # Log HTTP exceptions
+            # Log HTTP exceptions (authentication/authorization errors)
             duration = time.time() - request_start_time
             logger.warning(f"[AUDIT_ERROR] HTTP exception: status={e.status_code}, detail={e.detail}, duration={duration:.3f}s")
             
@@ -449,8 +449,70 @@ class AuditMiddleware(BaseHTTPMiddleware):
             
             raise
             
+        except AttributeError as e:
+            # Log attribute errors (e.g., missing request state attributes)
+            duration = time.time() - request_start_time
+            logger.error(f"[AUDIT_ATTR_ERROR] Attribute error: {e}\n{traceback.format_exc()}")
+            
+            # Get token if available
+            token = get_current_token(request)
+            token_id = token.id if token else "unknown"
+            
+            # Log error
+            service = get_token_service()
+            service.log_audit(
+                token_id=token_id,
+                action="request_attr_error",
+                resource=request.url.path,
+                details={
+                    "method": request.method,
+                    "error_type": "AttributeError",
+                    "error_message": str(e),
+                    "duration_seconds": round(duration, 3),
+                    "ip_address": ip_address,
+                    "user_agent": user_agent[:200],
+                    "request_id": request_id,
+                }
+            )
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Internal server error: attribute access failed",
+            )
+            
+        except (KeyError, ValueError, TypeError) as e:
+            # Log data processing errors
+            duration = time.time() - request_start_time
+            logger.error(f"[AUDIT_DATA_ERROR] Data processing error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+            
+            # Get token if available
+            token = get_current_token(request)
+            token_id = token.id if token else "unknown"
+            
+            # Log error
+            service = get_token_service()
+            service.log_audit(
+                token_id=token_id,
+                action="request_data_error",
+                resource=request.url.path,
+                details={
+                    "method": request.method,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "duration_seconds": round(duration, 3),
+                    "ip_address": ip_address,
+                    "user_agent": user_agent[:200],
+                    "request_id": request_id,
+                }
+            )
+            
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Internal server error: {type(e).__name__}",
+            )
+            
         except Exception as e:
-            # Log unexpected exceptions
+            # Log unexpected exceptions (fallback)
             duration = time.time() - request_start_time
             logger.error(f"[AUDIT_EXCEPTION] Unexpected exception: {e}\n{traceback.format_exc()}")
             

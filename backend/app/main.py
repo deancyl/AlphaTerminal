@@ -96,7 +96,9 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
     body = {}
     try:
         body = await request.body()
-    except Exception:
+    except (RuntimeError, ValueError):
+        # RuntimeError: Request body stream already consumed or closed
+        # ValueError: Invalid request body encoding
         pass
     errors = exc.errors()
     first = errors[0] if errors else {}
@@ -162,15 +164,19 @@ app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 try:
     from app.routers import backtest
     app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
-except Exception as e:
+except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest module not loaded: {e}")
+except Exception as e:
+    logger.error(f"Unexpected error loading backtest module: {e}")
 
 # 策略模块
 try:
     from app.routers import strategy
     app.include_router(strategy.router)
-except Exception as e:
+except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Strategy module not loaded: {e}")
+except Exception as e:
+    logger.error(f"Unexpected error loading strategy module: {e}")
 
 
 @app.get("/health")

@@ -97,8 +97,16 @@ def is_market_open(market_type: str = "A_SHARE") -> tuple[bool, str]:
             if et_time < time(4, 0):
                 return False, "盘后"
             return False, "已休市"
+        except KeyError:
+            # 时区名称无效（ZoneInfoNotFoundError 是 KeyError 子类）
+            if weekday >= 5:
+                return False, "已休市"
+            t = now.time()
+            if time(9, 30) <= t <= time(16, 0):
+                return True, "交易中"
+            return False, "已休市"
         except Exception:
-            # 时区转换失败时用简化逻辑（本地时间，仅作保底）
+            # 其他未知错误，保底逻辑
             if weekday >= 5:
                 return False, "已休市"
             t = now.time()
@@ -121,7 +129,11 @@ def is_market_open(market_type: str = "A_SHARE") -> tuple[bool, str]:
             if et_time > time(15, 0):
                 return False, "已休市"
             return False, "已休市"
+        except KeyError:
+            # 时区名称无效
+            return False, "已休市"
         except Exception:
+            # 其他未知错误
             return False, "已休市"
 
     return False, "已休市"
