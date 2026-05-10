@@ -70,7 +70,7 @@ from .sectors import router as sectors_router
 from .source import router as source_router
 from .system import router as system_router
 
-router = APIRouter(prefix="/market", tags=["market"])
+router = APIRouter(tags=["market"])
 
 router.include_router(overview_router)
 router.include_router(quotes_router)

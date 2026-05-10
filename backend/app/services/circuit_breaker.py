@@ -183,6 +183,24 @@ class CircuitBreaker:
             self._opened_at = None
             self._half_open_calls = 0
             self._stats = CircuitBreakerStats()
+    
+    def __enter__(self):
+        """上下文管理器入口 - 支持 with 语句"""
+        if not self.is_available():
+            stats = self.get_stats()
+            raise CircuitBreakerOpen(
+                self.name,
+                stats.get("timeout", 30)
+            )
+        return self
+    
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """上下文管理器出口"""
+        if exc_type is not None and issubclass(exc_type, Exception):
+            self.record_failure()
+        else:
+            self.record_success()
+        return False  # 不吞没异常
 
 
 class CircuitBreakerOpen(Exception):
