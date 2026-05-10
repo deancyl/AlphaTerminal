@@ -13,6 +13,7 @@ Tests cover:
 import os
 import tempfile
 import uuid
+import sqlite3
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -614,6 +615,8 @@ class TestConcurrency:
             try:
                 for _ in range(10):
                     agent_db.list_tokens(active_only=False)
+            except sqlite3.Error as e:
+                errors.append(e)
             except Exception as e:
                 errors.append(e)
 
@@ -628,6 +631,8 @@ class TestConcurrency:
                         scopes=["W"],
                     )
                     agent_db.save_token(new_token)
+            except sqlite3.Error as e:
+                errors.append(e)
             except Exception as e:
                 errors.append(e)
 

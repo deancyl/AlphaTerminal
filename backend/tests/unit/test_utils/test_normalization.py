@@ -79,14 +79,23 @@ def test_normalization():
     try:
         import json
         import urllib.request
-        
+        import urllib.error
+
         response = urllib.request.urlopen("http://localhost:8002/api/v1/market/history/000001?period=daily&limit=5")
         data = json.loads(response.read().decode())
         sh_data = data.get('history', [])
-        
+
         print("上证指数数据:")
         for i, day in enumerate(sh_data[:3]):
             print(f"  {i+1}. {day['date']}: O={day['open']:.2f} H={day['high']:.2f} L={day['low']:.2f} C={day['close']:.2f}")
+    except urllib.error.URLError as e:
+        print(f"获取上证指数数据失败 (URL错误): {e}")
+    except urllib.error.HTTPError as e:
+        print(f"获取上证指数数据失败 (HTTP错误): {e}")
+    except json.JSONDecodeError as e:
+        print(f"获取上证指数数据失败 (JSON解析错误): {e}")
+    except KeyError as e:
+        print(f"获取上证指数数据失败 (数据格式错误): {e}")
     except Exception as e:
         print(f"获取上证指数数据失败: {e}")
 

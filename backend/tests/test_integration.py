@@ -710,7 +710,7 @@ class TestDebugCycles:
     def test_cycle_1_initialization(self, agent_db, risk_manager, notification_service, performance_calculator):
         """Cycle 1: Test initialization"""
         cycle_tracker.start_cycle(1, "Test Initialization")
-        
+
         try:
             # Verify all components initialized
             assert agent_db is not None, "AgentDB not initialized"
@@ -728,6 +728,9 @@ class TestDebugCycles:
             
             cycle_tracker.end_cycle(1, "Test Initialization", True, details)
             
+        except AssertionError as e:
+            cycle_tracker.end_cycle(1, "Test Initialization", False, {"error": str(e)})
+            raise
         except Exception as e:
             cycle_tracker.end_cycle(1, "Test Initialization", False, {"error": str(e)})
             raise
@@ -735,11 +738,11 @@ class TestDebugCycles:
     def test_cycle_2_integration(self, agent_db, risk_manager, notification_service):
         """Cycle 2: Component integration check"""
         cycle_tracker.start_cycle(2, "Component Integration Check")
-        
+
         try:
             # Test integration between components
             integration_tests = []
-            
+
             # Test 1: Agent DB + Risk Manager
             from app.services.risk_manager import Position
             position = risk_manager.register_position(
@@ -748,7 +751,7 @@ class TestDebugCycles:
                 shares=10
             )
             integration_tests.append(("risk_manager_position", position is not None))
-            
+
             # Test 2: Notification Service
             from app.services.notification_service import NotificationChannel
             success = notification_service.send_notification(
@@ -758,14 +761,20 @@ class TestDebugCycles:
                 subject="Test"
             )
             integration_tests.append(("notification_service", success))
-            
+
             # Verify all integration tests passed
             all_passed = all(result for _, result in integration_tests)
-            
+
             details = {name: "passed" if result else "failed" for name, result in integration_tests}
-            
+
             cycle_tracker.end_cycle(2, "Component Integration Check", all_passed, details)
-            
+
+        except AssertionError as e:
+            cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
+            raise
+        except ValueError as e:
+            cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
+            raise
         except Exception as e:
             cycle_tracker.end_cycle(2, "Component Integration Check", False, {"error": str(e)})
             raise
@@ -803,6 +812,15 @@ class TestDebugCycles:
 
             cycle_tracker.end_cycle(3, "Data Flow Validation", all_passed, details)
 
+        except AssertionError as e:
+            cycle_tracker.end_cycle(3, "Data Flow Validation", False, {"error": str(e)})
+            raise
+        except KeyError as e:
+            cycle_tracker.end_cycle(3, "Data Flow Validation", False, {"error": str(e)})
+            raise
+        except ValueError as e:
+            cycle_tracker.end_cycle(3, "Data Flow Validation", False, {"error": str(e)})
+            raise
         except Exception as e:
             cycle_tracker.end_cycle(3, "Data Flow Validation", False, {"error": str(e)})
             raise
@@ -842,6 +860,12 @@ class TestDebugCycles:
 
             cycle_tracker.end_cycle(4, "Performance Benchmarking", all_passed, benchmarks)
 
+        except KeyError as e:
+            cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
+            raise
+        except ValueError as e:
+            cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
+            raise
         except Exception as e:
             cycle_tracker.end_cycle(4, "Performance Benchmarking", False, {"error": str(e)})
             raise
@@ -849,11 +873,11 @@ class TestDebugCycles:
     def test_cycle_5_cleanup(self):
         """Cycle 5: Cleanup and summary"""
         cycle_tracker.start_cycle(5, "Cleanup and Summary")
-        
+
         try:
             # Get summary
             summary = cycle_tracker.get_summary()
-            
+
             # Log summary
             logger.info("=" * 80)
             logger.info("[INTEGRATION TEST SUMMARY]")
@@ -863,24 +887,30 @@ class TestDebugCycles:
             logger.info(f"Failed: {summary['failed_cycles']}")
             logger.info(f"Total Duration: {summary['total_duration_seconds']:.3f}s")
             logger.info("=" * 80)
-            
+
             for cycle_id, cycle_info in summary['cycles'].items():
                 status = "✅" if cycle_info['success'] else "❌"
                 logger.info(f"{status} {cycle_info['name']}: {cycle_info['duration_seconds']:.3f}s")
-            
+
             logger.info("=" * 80)
-            
+
             # Verify all cycles passed
             all_passed = summary['successful_cycles'] == summary['total_cycles']
-            
+
             details = {
                 "total_cycles": summary['total_cycles'],
                 "successful_cycles": summary['successful_cycles'],
                 "total_duration": f"{summary['total_duration_seconds']:.3f}s"
             }
-            
+
             cycle_tracker.end_cycle(5, "Cleanup and Summary", all_passed, details)
-            
+
+        except KeyError as e:
+            cycle_tracker.end_cycle(5, "Cleanup and Summary", False, {"error": str(e)})
+            raise
+        except AssertionError as e:
+            cycle_tracker.end_cycle(5, "Cleanup and Summary", False, {"error": str(e)})
+            raise
         except Exception as e:
             cycle_tracker.end_cycle(5, "Cleanup and Summary", False, {"error": str(e)})
             raise

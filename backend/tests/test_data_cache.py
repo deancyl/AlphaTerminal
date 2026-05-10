@@ -308,13 +308,17 @@ class TestDataCacheThreadSafety:
             try:
                 for i in range(start, start + count):
                     cache.set(f"key_{i}", f"value_{i}")
+            except RuntimeError as e:
+                errors.append(e)
             except Exception as e:
                 errors.append(e)
-        
+
         def reader(start, count):
             try:
                 for i in range(start, start + count):
                     cache.get(f"key_{i}")
+            except RuntimeError as e:
+                errors.append(e)
             except Exception as e:
                 errors.append(e)
         

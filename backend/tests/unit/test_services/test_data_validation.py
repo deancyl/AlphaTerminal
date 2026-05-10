@@ -16,6 +16,7 @@ import sys
 import os
 import httpx
 from unittest.mock import AsyncMock, patch, MagicMock
+from pydantic import ValidationError
 
 # 确保 backend 路径在 sys.path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -73,11 +74,13 @@ def test_price_must_be_positive():
             timestamp=0, source="test",
         )
         fail_("price <= 0 必须报错", "未抛出异常")
-    except Exception as e:
+    except ValidationError as e:
         if "price" in str(e).lower() or "positive" in str(e).lower():
             pass_("price <= 0 正确触发 ValidationError")
         else:
             fail_("price <= 0 报错类型", f"异常信息不含 'price': {e}")
+    except Exception as e:
+        fail_("price <= 0 报错类型", f"非预期异常: {type(e).__name__}: {e}")
 
 
 def test_change_pct_out_of_range():
@@ -93,11 +96,13 @@ def test_change_pct_out_of_range():
             timestamp=0, source="test",
         )
         fail_("change_pct > 25% 必须报错", "未抛出异常")
-    except Exception as e:
+    except ValidationError as e:
         if "25" in str(e) or "range" in str(e).lower():
             pass_("change_pct 超出 ±25% 正确触发 ValidationError")
         else:
             fail_("change_pct > 25% 报错类型", f"{e}")
+    except Exception as e:
+        fail_("change_pct > 25% 报错类型", f"非预期异常: {type(e).__name__}: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -126,6 +131,12 @@ def test_ohlc_price_outside_high_low():
             pass_(f"price=3.94 不在合理范围 [2000,6000]，validate_critical_symbol 拒绝")
         else:
             fail_("price=3.94 应被 validate_critical_symbol 拒绝", "未拒绝")
+    except ValidationError as e:
+        # Pydantic 校验阶段抛出异常
+        pass_(f"price=3.94 在 Pydantic 校验阶段被拒绝: {e}")
+    except ValueError as e:
+        # 数值校验阶段抛出异常
+        pass_(f"price=3.94 在数值校验阶段被拒绝: {e}")
     except Exception as e:
         # 任何校验阶段抛出异常都算通过（price 本身已被拦截）
         pass_(f"price=3.94 在某校验层被拒绝: {e}")
@@ -143,11 +154,18 @@ def test_ohlc_consistency_close_outside():
             volume=1e9, timestamp=0, source="test",
         )
         fail_("K线 close 不在 [low, high] 必须报错", "未抛出异常")
-    except Exception as e:
+    except ValidationError as e:
         if "close" in str(e).lower() or "OHLC" in str(e):
             pass_(f"K线 close 超出范围正确触发: {e}")
         else:
             fail_(f"K线 close 报错类型: {e}", "")
+    except ValueError as e:
+        if "close" in str(e).lower() or "OHLC" in str(e):
+            pass_(f"K线 close 超出范围正确触发: {e}")
+        else:
+            fail_(f"K线 close 报错类型: {e}", "")
+    except Exception as e:
+        fail_(f"K线 close 报错类型: {e}", "")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,11 +190,18 @@ def test_change_pct_mismatch():
         # 期望 change_pct ≈ -0.64，但传入 0.24
         # 误差 0.88%，超过 0.02% 阈值
         fail_("change_pct=0.24 但计算应为 -0.64，误差过大应报错", "未抛出异常")
-    except Exception as e:
+    except ValidationError as e:
         if "change_pct" in str(e).lower() or "计算" in str(e) or "不符" in str(e):
             pass_(f"change_pct 与价格计算不符正确触发: {e}")
         else:
             fail_(f"change_pct 不符报错类型: {e}", "")
+    except ValueError as e:
+        if "change_pct" in str(e).lower() or "计算" in str(e) or "不符" in str(e):
+            pass_(f"change_pct 与价格计算不符正确触发: {e}")
+        else:
+            fail_(f"change_pct 不符报错类型: {e}", "")
+    except Exception as e:
+        fail_(f"change_pct 不符报错类型: {e}", "")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -199,9 +224,12 @@ def test_critical_index_out_of_range():
             pass_(f"sh000001 price=3.94 不在合理范围 [2000,6000]，拒绝写入")
         else:
             fail_("sh000001 price=3.94 应被 validate_critical_symbol 拒绝", "未拒绝")
+    except ValidationError as e:
+        pass_(f"price=3.94 在 Pydantic 校验阶段触发异常: {e}")
+    except ValueError as e:
+        pass_(f"price=3.94 在数值校验阶段触发异常: {e}")
     except Exception as e:
-        # OHLC 一致性校验在价格合理性之前触发
-        pass_(f"price=3.94 在 OHLC 阶段即触发异常: {e}")
+        pass_(f"price=3.94 在某校验层触发异常: {e}")
 
 
 def test_critical_index_valid():
@@ -220,6 +248,10 @@ def test_critical_index_valid():
             pass_("sh000001 price=3948.55 在 [2000,6000]，通过")
         else:
             fail_("sh000001 price=3948.55 应通过", "被拒绝")
+    except ValidationError as e:
+        fail_(f"正常价格应通过，但触发 ValidationError: {e}", "")
+    except ValueError as e:
+        fail_(f"正常价格应通过，但触发 ValueError: {e}", "")
     except Exception as e:
         fail_(f"正常价格应通过: {e}", "")
 
@@ -242,12 +274,20 @@ def test_kline_ohlc():
     try:
         normal = KlineData(**klines[0])
         pass_("正常 K线 通过")
+    except ValidationError as e:
+        fail_(f"正常 K线 应通过，但触发 ValidationError: {e}", "")
+    except ValueError as e:
+        fail_(f"正常 K线 应通过，但触发 ValueError: {e}", "")
     except Exception as e:
         fail_(f"正常 K线 应通过: {e}", "")
 
     try:
         bad = KlineData(**klines[1])
         fail_("close > high 的 K线 应报错", "未抛出异常")
+    except ValidationError as e:
+        pass_(f"close > high 正确触发 ValidationError: {e}")
+    except ValueError as e:
+        pass_(f"close > high 正确触发 ValueError: {e}")
     except Exception as e:
         pass_(f"close > high 正确触发: {e}")
 
@@ -465,6 +505,12 @@ if __name__ == "__main__":
     for t in tests:
         try:
             t()
+        except AssertionError as e:
+            fail_(f"{t.__name__} 断言失败", f"{type(e).__name__}: {e}")
+        except ValidationError as e:
+            fail_(f"{t.__name__} ValidationError", f"{type(e).__name__}: {e}")
+        except ValueError as e:
+            fail_(f"{t.__name__} ValueError", f"{type(e).__name__}: {e}")
         except Exception as e:
             fail_(f"{t.__name__} 异常", f"{type(e).__name__}: {e}")
 
