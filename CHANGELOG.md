@@ -5,6 +5,52 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.19] - 2026-05-10
+
+### Code Quality Improvements
+
+- **Exception Handling in Test Files** — Added specific exception types in 22 blocks across 5 test files
+  - `test_data_validation.py`: ValidationError, ValueError handlers
+  - `test_integration.py`: AssertionError, KeyError, ValueError handlers
+  - `test_data_cache.py`: RuntimeError handlers
+  - `test_agent_db.py`: sqlite3.Error handlers
+  - `test_normalization.py`: URLError, HTTPError, JSONDecodeError handlers
+
+### Accessibility (ARIA)
+
+- **ARIA Attributes Added** — Added accessibility attributes to 14 Vue components
+  - Interactive controls: MobileBottomNav, ContextMenu, SimulatedTradeModal, BondHistoryModal
+  - Data display: DataTable with sortable headers
+  - Status components: ToastContainer, LoadingSpinner, ErrorDisplay, ErrorBoundary
+  - Navigation: DashboardGrid, BacktestDashboard, StockScreener, AlertManager
+
+### Component Refactoring
+
+- **StockDetail.vue Split** — Refactored from 1688 lines to modular structure
+  - Created 8 tab components in `stock-detail/` directory
+  - Extracted shared logic to `useStockDetail.js` composable
+  - Main component reduced to 377 lines (orchestrator only)
+
+- **AdminDashboard.vue Split** — Refactored into 10 panel components
+  - Created panel components in `admin/` directory
+  - Added AgentTokensPanel and McpPanel for inline sections
+  - Fixed missing `</ul>` tag in MonitorPanel
+
+- **DrawingCanvas.vue Split** — Refactored from 1367 lines to composables
+  - Created 4 composables: useDrawingState, useDrawingRenderer, useDrawingEvents, useDrawingStorage
+  - Main component reduced to ~420 lines
+  - All 11 drawing tools and magnet mode preserved
+
+### Metrics
+
+- **Files changed**: 45
+- **New files created**: 22
+- **Exception blocks improved**: 68 (46 production + 22 test)
+- **Components refactored**: 3 large components split
+- **ARIA components**: 14
+
+---
+
 ## [0.6.18] - 2026-05-10
 
 ### Code Quality Improvements
