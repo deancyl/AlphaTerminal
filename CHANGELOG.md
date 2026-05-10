@@ -5,6 +5,40 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.25] - 2026-05-10
+
+### Code Refactoring (P1-018)
+
+- **CopilotSidebar Split** — Split CopilotSidebar.vue (1228 lines) into composables and subcomponents
+  - **Composables** (6 files, 631 lines):
+    - `useCopilotMarkdown.js` (53 lines): Markdown rendering with XSS prevention
+    - `useCopilotCache.js` (36 lines): Response cache with 5-min TTL
+    - `useCopilotData.js` (88 lines): Market data fetching wrappers
+    - `useCopilotCommands.js` (124 lines): Command parsing logic
+    - `useCopilotStock.js` (60 lines): Stock operations
+    - `useCopilotChat.js` (170 lines): LLM chat with SSE streaming
+  - **Subcomponents** (5 files, 204 lines):
+    - `CopilotHeader.vue` (17 lines): Title section
+    - `CopilotQuickCommands.vue` (23 lines): Quick command buttons
+    - `CopilotContextSelector.vue` (80 lines): Context checkboxes + model selectors
+    - `CopilotMessageList.vue` (44 lines): Message history display
+    - `CopilotInput.vue` (40 lines): Input textarea + send button
+  - **Styles**: Extracted markdown CSS to `copilot-markdown.css` (100 lines)
+
+- **Main Component Reduction** — CopilotSidebar.vue reduced from 1228 to 296 lines (76% reduction)
+  - All functionality preserved
+  - No breaking changes to props/emits
+  - Build verified successful
+
+### Metrics
+
+- **Original file**: 1228 lines
+- **New modules**: 935 lines (composables + subcomponents + CSS)
+- **Main component**: 296 lines
+- **Files created**: 12
+
+---
+
 ## [0.6.24] - 2026-05-10
 
 ### Code Refactoring (P1-018)
