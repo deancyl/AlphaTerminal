@@ -91,6 +91,9 @@ async def get_shareholder_data(symbol: str):
                         'date': str(latest_date),
                         'holders': latest_df[['股东名称', '持股数量', '占流通股比例', '股本性质']].to_dict('records')
                     }
+                except (KeyError, ValueError, TypeError) as e:
+                    logger.warning(f"[shareholder] Data processing error in circulate holders: {e}")
+                    return None
                 except Exception as e:
                     logger.warning(f"[shareholder] Failed to fetch circulate holders: {e}")
                     return None
@@ -116,6 +119,9 @@ async def get_shareholder_data(symbol: str):
                         changes.append(change)
                     
                     return changes
+                except (KeyError, ValueError, TypeError, AttributeError) as e:
+                    logger.warning(f"[shareholder] Data processing error in share changes: {e}")
+                    return []
                 except Exception as e:
                     logger.warning(f"[shareholder] Failed to fetch share changes: {e}")
                     return []
@@ -139,6 +145,9 @@ async def get_shareholder_data(symbol: str):
                         }
                         changes.append(change)
                     return changes[:20]  # 最近20条
+                except (KeyError, ValueError, TypeError, AttributeError) as e:
+                    logger.warning(f"[shareholder] Data processing error in holder changes: {e}")
+                    return []
                 except Exception as e:
                     logger.warning(f"[shareholder] Failed to fetch holder changes: {e}")
                     return []
@@ -162,6 +171,9 @@ async def get_shareholder_data(symbol: str):
         logger.info(f"[shareholder] Successfully fetched data for {symbol}")
         return success_response(result)
         
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[shareholder] Data processing error for {symbol}: {e}")
+        return error_response(f"数据处理失败: {str(e)}")
     except Exception as e:
         logger.error(f"[shareholder] Error fetching data for {symbol}: {e}")
         return error_response(f"获取股东数据失败: {str(e)}")
@@ -236,6 +248,9 @@ async def get_margin_data(symbol: str):
 
                             if len(all_data) >= 30:
                                 break
+            except (KeyError, ValueError, TypeError) as e:
+                logger.debug(f"[Margin] Data processing error for {symbol} on {date}: {e}")
+                continue
             except Exception as e:
                 logger.debug(f"[Margin] No data for {symbol} on {date}: {e}")
                 continue
@@ -266,6 +281,9 @@ async def get_margin_data(symbol: str):
         logger.info(f"[Margin] Successfully fetched {len(trend_data)} days data for {symbol}")
         return success_response(result)
 
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[Margin] Data processing error for {symbol}: {e}")
+        return error_response(f"数据处理失败: {str(e)}", code=500)
     except Exception as e:
         logger.error(f"[Margin] Error fetching margin data for {symbol}: {e}")
         return error_response(f"获取融资融券数据失败: {str(e)}", code=500)
@@ -351,9 +369,17 @@ async def get_financial_data(symbol: str):
         logger.info(f"[F9] Fetched financial data for {symbol}, quarters: {len(result['indicators'])}")
         return success_response(result)
 
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[F9] Data processing error for financial data {symbol}: {e}", exc_info=True)
+        # Return empty data instead of exception
+        return success_response({
+            "indicators": [],
+            "latest": {},
+            "trend": []
+        })
     except Exception as e:
         logger.error(f"[F9] Error fetching financial data for {symbol}: {e}", exc_info=True)
-        # 返回空数据而不是异常
+        # Return empty data instead of exception
         return success_response({
             "indicators": [],
             "latest": {},
@@ -418,6 +444,9 @@ async def get_profit_forecast(symbol: str):
         
         return success_response(result)
         
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[F9] Data processing error for forecast {symbol}: {e}")
+        return error_response(f"数据处理失败: {str(e)}")
     except Exception as e:
         logger.error(f"[F9] Error fetching forecast for {symbol}: {e}")
         return error_response(f"获取盈利预测数据失败: {str(e)}")
@@ -471,6 +500,9 @@ async def get_institution_holdings(symbol: str):
                     if df is not None and not df.empty:
                         logger.info(f"[Institution] Found data for quarter {quarter_str}")
                         return df.to_dict('records'), quarter_str
+                except (KeyError, ValueError, TypeError) as e:
+                    logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
+                    continue
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
                     continue
@@ -492,9 +524,7 @@ async def get_institution_holdings(symbol: str):
                 try:
                     df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
                     if df is not None and not df.empty:
-                        # 计算机构数量和总持股比例
                         count = len(df)
-                        # 尝试获取持股比例列
                         pct_col = None
                         for col in df.columns:
                             if '持股比例' in col or '占比' in col:
@@ -512,6 +542,9 @@ async def get_institution_holdings(symbol: str):
                             "count": count,
                             "total_pct": round(total_pct, 2)
                         })
+                except (KeyError, ValueError, TypeError) as e:
+                    logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
+                    continue
                 except Exception as e:
                     logger.debug(f"[Institution] No data for {quarter_str}: {e}")
                     continue
@@ -538,6 +571,9 @@ async def get_institution_holdings(symbol: str):
         logger.info(f"[Institution] Successfully fetched data for {symbol}")
         return success_response(result)
         
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[Institution] Data processing error for {symbol}: {e}")
+        return error_response(f"数据处理失败: {str(e)}")
     except Exception as e:
         logger.error(f"[Institution] Error fetching data for {symbol}: {e}")
         return error_response(f"获取机构持股数据失败: {str(e)}")
@@ -592,6 +628,8 @@ async def get_peer_comparison(symbol: str):
                     row = df.iloc[0]
                     info_dict['行业'] = row.get('所属行业', '')
                     info_dict['主营业务'] = row.get('主营业务', '')
+            except (KeyError, ValueError, TypeError) as e:
+                logger.debug(f"[Peers] Data processing error in stock_profile_cninfo: {e}")
             except Exception as e:
                 logger.debug(f"[Peers] stock_profile_cninfo failed: {e}")
             
@@ -602,6 +640,8 @@ async def get_peer_comparison(symbol: str):
                         for _, row in df.iterrows():
                             if row['item'] not in info_dict or not info_dict[row['item']]:
                                 info_dict[row['item']] = row['value']
+                except (KeyError, ValueError, TypeError) as e:
+                    logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}")
                 except Exception as e:
                     logger.warning(f"[Peers] stock_individual_info_em failed: {e}")
             
@@ -651,6 +691,9 @@ async def get_peer_comparison(symbol: str):
                 logger.info(f"[Peers] Found {len(result)} stocks in industry {industry}")
                 return result
                 
+            except (KeyError, ValueError, TypeError, AttributeError) as e:
+                logger.warning(f"[Peers] Data processing error in BaoStock: {e}")
+                return []
             except Exception as e:
                 logger.warning(f"[Peers] BaoStock failed: {e}")
                 return []
@@ -666,6 +709,9 @@ async def get_peer_comparison(symbol: str):
                         'pb': latest.get('市净率'),
                         'revenue_growth': latest.get('主营业务收入增长率(%)')
                     }
+                return None
+            except (KeyError, ValueError, TypeError) as e:
+                logger.debug(f"[Peers] Data processing error for financial {stock_symbol}: {e}")
                 return None
             except Exception as e:
                 logger.debug(f"[Peers] Failed to fetch financial for {stock_symbol}: {e}")
@@ -775,6 +821,9 @@ async def get_peer_comparison(symbol: str):
         logger.info(f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}")
         return success_response(result)
         
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True)
+        return error_response(f"数据处理失败: {str(e)}")
     except Exception as e:
         logger.error(f"[Peers] Error fetching peer data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取同业比较数据失败: {str(e)}")
@@ -817,6 +866,9 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
                     all_announcements.append(announcement)
                 
                 return all_announcements
+            except (KeyError, ValueError, TypeError) as e:
+                logger.warning(f"[Announcements] Data processing error for {symbol}: {e}")
+                return []
             except Exception as e:
                 logger.warning(f"[Announcements] Failed to fetch for {symbol}: {e}")
                 return []
@@ -841,6 +893,9 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         logger.info(f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}")
         return success_response(result)
         
+    except (KeyError, ValueError, TypeError) as e:
+        logger.error(f"[Announcements] Data processing error for {symbol}: {e}")
+        return error_response(f"数据处理失败: {str(e)}")
     except Exception as e:
         logger.error(f"[Announcements] Error fetching data for {symbol}: {e}")
         return error_response(f"获取公司公告数据失败: {str(e)}")

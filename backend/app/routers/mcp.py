@@ -330,9 +330,23 @@ async def test_mcp_connection():
                 }
             }
     
+    except asyncio.CancelledError:
+        latency_ms = int((time.time() - start_time) * 1000)
+        logger.warning(f"[MCP] Connection test cancelled")
+        
+        return {
+            "code": 1,
+            "message": "Connection test cancelled",
+            "data": {
+                "connected": False,
+                "latency_ms": latency_ms,
+                "error": "Request was cancelled"
+            }
+        }
+    
     except Exception as e:
         latency_ms = int((time.time() - start_time) * 1000)
-        logger.error(f"[MCP] Connection test failed: {e}")
+        logger.error(f"[MCP] Connection test failed: {e}", exc_info=True)
         
         return {
             "code": 1,
