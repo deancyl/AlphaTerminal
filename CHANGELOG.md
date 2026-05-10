@@ -5,6 +5,62 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.20] - 2026-05-10
+
+### Security
+
+- **XSS Prevention** — Added DOMPurify sanitization for all v-html content
+  - CopilotSidebar: LLM markdown output sanitized
+  - DrawingToolbar: SVG icons sanitized
+  - Installed dompurify npm package
+
+### Data Source Reliability
+
+- **AkShare Circuit Breaker** — Added circuit breaker protection for all AkShare calls
+  - 3 consecutive failures → circuit OPEN
+  - 60 second recovery timeout
+  - Graceful degradation with HTTP 503 when unavailable
+
+- **CircuitBreaker Consolidation** — Removed duplicate implementation
+  - Single source of truth in `services/circuit_breaker.py`
+  - Deleted `fetchers/circuit_breaker.py` (161 lines eliminated)
+  - Updated all imports to use consolidated implementation
+
+### Frontend-Backend Coordination
+
+- **F9 Symbol Format Fix** — F9 endpoints now accept both formats
+  - `sh600519` and `600519` return same data
+  - Added `normalize_f9_symbol()` helper to strip prefixes
+  - Applied to all 7 F9 endpoints
+
+### Accessibility (WCAG 2.1)
+
+- **Focus Trap in Modals** — Implemented WAI-ARIA focus management
+  - Tab cycles within modal only
+  - Escape closes modal
+  - Focus returns to trigger element
+  - Added to NewsFeed, SimulatedTradeModal, BondHistoryModal
+
+- **ARIA Navigation** — Enhanced StockDetail tab navigation
+  - Added `role="tablist"` and `role="tab"` attributes
+  - Implemented arrow key navigation
+  - Added `aria-selected` state binding
+
+- **Touch Target Sizes** — Increased to 44px minimum
+  - Fixed period/indicator buttons in FullscreenKline
+  - Fixed more menu buttons in MobileBottomNav
+  - All interactive elements now meet WCAG 2.1 guidelines
+
+### Metrics
+
+- **Security fixes**: 1 (XSS prevention)
+- **Data source improvements**: 2 (circuit breaker + consolidation)
+- **Accessibility fixes**: 3 (focus trap, ARIA, touch targets)
+- **Coordination fixes**: 1 (symbol format)
+- **Lines eliminated**: ~161 (duplicate code)
+
+---
+
 ## [0.6.19] - 2026-05-10
 
 ### Code Quality Improvements
