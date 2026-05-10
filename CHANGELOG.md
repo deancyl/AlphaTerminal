@@ -5,6 +5,33 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.18] - 2026-05-10
+
+### Code Quality Improvements
+
+- **API Response Format Standardization** — Converted `portfolio.py` and `backtest.py` to use standard `success_response/error_response` format from `utils/response.py`
+  - 42 endpoints in portfolio.py now use consistent response format
+  - 15 endpoints in backtest.py now use consistent response format
+  - Eliminated manual `{"code": 0, ...}` construction
+
+- **Exception Handling Improvements** — Added specific exception types before generic `Exception` fallback in 46 blocks across 7 production files:
+  - `portfolio.py`: 20 blocks (sqlite3.IntegrityError, OperationalError, ValueError, TypeError, KeyError, ZeroDivisionError)
+  - `f9_deep.py`: 18 blocks (KeyError, ValueError, TypeError, AttributeError)
+  - `main.py`: 2 blocks (ImportError, AttributeError, SyntaxError)
+  - `mcp.py`: 1 block (asyncio.CancelledError)
+  - `agent_auth.py`: 1 block (AttributeError, KeyError, ValueError, TypeError)
+  - `notification_service.py`: 2 blocks (ValueError, KeyError)
+  - `market_status.py`: 2 blocks (KeyError for timezone operations)
+
+### Metrics
+
+- **Files changed**: 8
+- **Lines changed**: +399 / -120
+- **Exception blocks improved**: 46
+- **API endpoints standardized**: 57
+
+---
+
 ## [0.6.17] - 2026-05-10
 
 ### Audit & Code Quality
