@@ -13,7 +13,7 @@ import logging
 import os
 import time
 import httpx
-from app.services.fetchers.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
 
 logger = logging.getLogger(__name__)
 
@@ -99,18 +99,18 @@ _source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0, "hi
 # ========== Circuit Breaker 实例 ==========
 # 每个数据源一个熔断器，防止级联故障
 _circuit_breakers = {
-    "tencent": CircuitBreaker("tencent", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
-    "sina": CircuitBreaker("sina", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
-    "sina_kline": CircuitBreaker("sina_kline", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
-    "eastmoney": CircuitBreaker("eastmoney", CircuitBreakerConfig(failure_threshold=3, recovery_timeout=60.0)),
-    "tencent_hk": CircuitBreaker("tencent_hk", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
-    "alpha_vantage": CircuitBreaker("alpha_vantage", CircuitBreakerConfig(failure_threshold=3, recovery_timeout=120.0)),
+    "tencent": CircuitBreaker("tencent", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
+    "sina": CircuitBreaker("sina", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
+    "sina_kline": CircuitBreaker("sina_kline", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
+    "eastmoney": CircuitBreaker("eastmoney", CircuitBreakerConfig(failure_threshold=3, timeout=60.0)),
+    "tencent_hk": CircuitBreaker("tencent_hk", CircuitBreakerConfig(failure_threshold=5, timeout=30.0)),
+    "alpha_vantage": CircuitBreaker("alpha_vantage", CircuitBreakerConfig(failure_threshold=3, timeout=120.0)),
 }
 
 
 def get_circuit_breaker_status() -> dict:
     """获取所有熔断器状态（用于监控）"""
-    return {name: breaker.get_status() for name, breaker in _circuit_breakers.items()}
+    return {name: breaker.get_stats() for name, breaker in _circuit_breakers.items()}
 
 
 def _get_proxy(source_name: str) -> dict | None:
@@ -127,7 +127,7 @@ def _get_proxy(source_name: str) -> dict | None:
 def _parse_tencent_quote(symbol: str) -> dict | None:
     """腾讯A股（同步，抓取用完即弃连接池）"""
     breaker = _circuit_breakers["tencent"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[Tencent] Circuit breaker OPEN, skipping {symbol}")
         return None
     
@@ -166,7 +166,7 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
 def _parse_sina_quote(symbol: str) -> dict | None:
     """新浪A股（同步）"""
     breaker = _circuit_breakers["sina"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[Sina] Circuit breaker OPEN, skipping {symbol}")
         return None
     
@@ -204,7 +204,7 @@ def _parse_sina_quote(symbol: str) -> dict | None:
 def _parse_sina_kline_60min(symbol: str) -> dict | None:
     """新浪60分钟K线数据（同步）"""
     breaker = _circuit_breakers["sina_kline"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[SinaKline] Circuit breaker OPEN, skipping {symbol}")
         return None
     
@@ -240,7 +240,7 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
 def _parse_eastmoney_quote(symbol: str) -> dict | None:
     """东方财富（同步）"""
     breaker = _circuit_breakers["eastmoney"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[Eastmoney] Circuit breaker OPEN, skipping {symbol}")
         return None
     
@@ -281,7 +281,7 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
 def _parse_tencent_hk_quote(symbol: str) -> dict | None:
     """腾讯港股（同步）"""
     breaker = _circuit_breakers["tencent_hk"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[Tencent HK] Circuit breaker OPEN, skipping {symbol}")
         return None
     
@@ -319,7 +319,7 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
 def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
     """Alpha Vantage - 美股数据（同步，带重试和代理支持）"""
     breaker = _circuit_breakers["alpha_vantage"]
-    if not breaker.can_execute():
+    if not breaker.is_available():
         logger.warning(f"[AlphaVantage] Circuit breaker OPEN, skipping {symbol}")
         return None
     

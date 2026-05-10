@@ -10,7 +10,7 @@ import logging
 from typing import Optional, Dict, Any, Callable, Awaitable
 
 from .base import BaseMarketFetcher
-from .circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen, CircuitContext
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class FetcherFactory:
     @classmethod
     def circuit_status(cls) -> Dict[str, dict]:
         """Get status of all circuit breakers"""
-        return {name: cb.get_status() for name, cb in _circuit_breakers.items()}
+        return {name: cb.get_stats() for name, cb in _circuit_breakers.items()}
 
     @classmethod
     def reset_circuit(cls, name: str):
@@ -120,7 +120,7 @@ async def fetch_with_fallback(
 
     for i, src in enumerate(sources):
         cb = get_circuit_breaker(src)
-        if not cb.can_execute():
+        if not cb.is_available():
             logger.debug(f"[fetch_with_fallback] {src}: circuit open, skipping")
             continue
 
