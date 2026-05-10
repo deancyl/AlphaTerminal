@@ -53,7 +53,8 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['gridstack', 'echarts'],
+    include: ['gridstack'],
+    exclude: ['echarts'],
   },
   build: {
     rollupOptions: {
@@ -62,15 +63,21 @@ export default defineConfig({
           if (id.includes('node_modules')) {
             if (id.includes('@mlc-ai/web-llm')) return 'vendor-webllm'
             if (id.includes('vue'))             return 'vendor-vue'
-            if (id.includes('gridstack'))       return 'vendor-gridstack'
-            if (id.includes('echarts'))         return 'vendor-echarts'
+            if (id.includes('gridstack'))        return 'vendor-gridstack'
+            if (id.includes('echarts'))          return 'vendor-echarts'
             if (id.includes('lightweight-charts')) return 'vendor-lwcharts'
-            if (id.includes('html2canvas'))     return 'vendor-html2canvas'
+            if (id.includes('html2canvas'))      return 'vendor-html2canvas'
+            if (id.includes('@vueuse'))           return 'vendor-vueuse'
+            if (id.includes('pinia'))             return 'vendor-pinia'
+            if (id.includes('axios'))            return 'vendor-axios'
+            if (id.includes('dayjs'))             return 'vendor-dayjs'
+            if (id.includes('lodash'))            return 'vendor-lodash'
             return 'vendor'
           }
         },
       },
     },
     chunkSizeWarningLimit: 1000,
+    target: 'esnext',
   },
 })

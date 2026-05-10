@@ -9,6 +9,7 @@ import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
+import { initChart, getECharts } from '../utils/lazyEcharts.js'
 
 
 
@@ -316,16 +317,14 @@ function applyTickFast(cData, tick) {
 }
 
 // ── 生命周期 ────────────────────────────────────────────────────
-onMounted(() => {
-  // 彻底抛弃 nextTick 等待，完全交给 ResizeObserver 充当守门员
-  _ro = new ResizeObserver((entries) => {
+onMounted(async () => {
+  _ro = new ResizeObserver(async (entries) => {
     if (!chartEl.value) return
     const { width, height } = entries[0].contentRect
     if (width <= 0 || height <= 0) return
     if (!chart) {
-      // 第一次拿到实际尺寸，初始化图表
       logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-      chart = window.echarts.init(chartEl.value, 'dark')
+      chart = await initChart(chartEl.value, 'dark')
       _lastChartData = props.chartData
       chart.setOption(buildOption(props.chartData))
       chart.on('datazoom', () => {

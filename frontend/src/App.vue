@@ -107,6 +107,16 @@
             <span v-else>🔓</span>
             {{ isLocked ? '已锁定' : '可拖拽' }}
           </button>
+          <!-- 重置布局按钮（仅桌面端，解锁时显示） -->
+          <button
+            v-if="!isMobile && !isLocked"
+            class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
+            @click="resetGridLayout"
+            title="重置为默认布局"
+          >
+            <span>↺</span>
+            重置布局
+          </button>
           <!-- 布局模式切换（仅桌面端） -->
           <button
             v-if="!isMobile"
@@ -172,6 +182,7 @@
         <!-- 股票行情（默认） -->
         <DashboardGrid
           v-if="currentView === 'stock'"
+          ref="dashboardGridRef"
           :market-data="marketOverview"
           :china-all-data="chinaAllData"
           :sectors-data="sectorsData"
@@ -192,7 +203,7 @@
         <!-- 策略中心 -->
         <StrategyCenter v-else-if="currentView === 'strategy-center'" />
         <!-- 系统管理 -->
-        <AdminDashboard v-else-if="currentView === 'admin'" />
+        <AdminDashboard v-else-if="currentView === 'admin'" @clear-layout="resetGridLayout" />
         <!-- 宏观经济 -->
         <MacroDashboard v-else-if="currentView === 'macro'" />
         <!-- 期权分析 -->
@@ -209,6 +220,33 @@
         <PerformanceAnalyzer v-else-if="currentView === 'performance'" />
         <!-- F9 深度资料 -->
         <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
+        
+        <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+        <div 
+          v-if="isSwiping && isMobile"
+          class="absolute inset-0 z-20 pointer-events-none"
+        >
+          <!-- 左侧边缘指示器（向右滑动显示上一个视图） -->
+          <div 
+            v-if="swipeProgress > 0"
+            class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-theme-accent/30 to-transparent"
+            :style="{ width: `${Math.min(swipeProgress * 100, 50)}%` }"
+          >
+            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-theme-accent text-xs font-medium">
+              ← {{ getViewName(getNextView('right')) }}
+            </div>
+          </div>
+          <!-- 右侧边缘指示器（向左滑动显示下一个视图） -->
+          <div 
+            v-if="swipeProgress < 0"
+            class="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-theme-accent/30 to-transparent"
+            :style="{ width: `${Math.min(Math.abs(swipeProgress) * 100, 50)}%` }"
+          >
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-theme-accent text-xs font-medium">
+              {{ getViewName(getNextView('left')) }} →
+            </div>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -303,8 +341,10 @@ import { useMarketStore } from './stores/market.js'
 import { useTheme } from './composables/useTheme.js'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
 import { useToast } from './composables/useToast.js'
+import { useSwipe } from './composables/useSwipe.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
+import { preloadECharts } from './utils/lazyEcharts.js'
 
 const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
@@ -346,6 +386,10 @@ const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
 const f9Symbol = ref('') // F9深度资料当前股票代码
 
+// ── 历史导航状态（Android 硬件返回键支持）──────────────────────────────
+const viewHistory = ref(['stock']) // 视图历史栈
+const isHistoryNavigation = ref(false) // 防止循环 push
+
 // Watch for currentView changes with comprehensive debug logging
 watch(currentView, (newView, oldView) => {
   console.log('[DEBUG-CYCLE-APP] App.vue currentView changed:', {
@@ -355,6 +399,21 @@ watch(currentView, (newView, oldView) => {
     isStrategyCenter: newView === 'strategy-center',
     viewChanged: true
   })
+  
+  // 添加到历史栈（非历史导航时）
+  if (!isHistoryNavigation.value && newView !== oldView) {
+    viewHistory.value.push(newView)
+    // 限制历史栈大小（最多 20 条）
+    if (viewHistory.value.length > 20) {
+      viewHistory.value.shift()
+    }
+    // 更新浏览器历史
+    if (window.history && window.history.pushState) {
+      window.history.pushState({ view: newView }, '', `#view=${newView}`)
+    }
+  }
+  // 重置标记
+  isHistoryNavigation.value = false
 }, { immediate: false })
 
 function handleSidebarNavigate(viewId) {
@@ -450,10 +509,43 @@ const { helpVisible, searchVisible } = useKeyboardShortcuts({
   }
 })
 
+// ── 移动端滑动导航 ─────────────────────────────────────────────────────
+// View order for swipe navigation (matches mobile bottom nav)
+const VIEW_ORDER = ['stock', 'bond', 'futures', 'macro', 'portfolio', 'fund']
+
+function getNextView(direction) {
+  const currentIndex = VIEW_ORDER.indexOf(currentView.value)
+  if (currentIndex === -1) return currentView.value // Not in nav order
+  
+  if (direction === 'left') {
+    const nextIndex = (currentIndex + 1) % VIEW_ORDER.length
+    return VIEW_ORDER[nextIndex]
+  } else {
+    const prevIndex = (currentIndex - 1 + VIEW_ORDER.length) % VIEW_ORDER.length
+    return VIEW_ORDER[prevIndex]
+  }
+}
+
+const { isSwiping, swipeProgress } = useSwipe({
+  onSwipeLeft: () => {
+    const nextView = getNextView('left')
+    currentView.value = nextView
+    toastInfo('视图切换', `已切换到 ${getViewName(nextView)}`)
+  },
+  onSwipeRight: () => {
+    const prevView = getNextView('right')
+    currentView.value = prevView
+    toastInfo('视图切换', `已切换到 ${getViewName(prevView)}`)
+  },
+  threshold: 50,
+  maxDuration: 300
+})
+
 const commandPaletteOpen = ref(false) // 全局命令面板
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const copilotUnreadCount = ref(0) // Copilot 未读消息数
 const isLocked = ref(true)     // 网格默认锁定
+const dashboardGridRef = ref(null) // DashboardGrid ref for layout reset
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
@@ -473,6 +565,13 @@ function openFullscreenKline({ symbol, name }) {
 
 function toggleLock() {
   isLocked.value = !isLocked.value
+}
+
+function resetGridLayout() {
+  if (dashboardGridRef.value?.resetLayout) {
+    dashboardGridRef.value.resetLayout()
+    toastSuccess('布局重置', '已恢复默认布局')
+  }
 }
 
 function toggleCopilot() {
@@ -602,6 +701,9 @@ onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
 
+  // 预加载 ECharts（降低首屏体积约 800KB，异步加载不阻塞渲染）
+  preloadECharts()
+
   // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）
   fetchHighFreq()
     .then(_checkInitDone)
@@ -620,13 +722,81 @@ onMounted(() => {
   if (visibility.value === 'visible') {
     resumeHigh(); resumeMed()
   }
+  
+  // ── Android 硬件返回键支持（popstate 事件监听）──────────────────────
+  if (window.history && window.addEventListener) {
+    // 初始化历史状态
+    window.history.replaceState({ view: currentView.value }, '', `#view=${currentView.value}`)
+    
+    // 监听浏览器历史变化（Android 返回键触发）
+    window.addEventListener('popstate', handlePopState)
+    
+    // 监听页面卸载（退出确认）
+    window.addEventListener('beforeunload', handleBeforeUnload)
+  }
 })
 
 onUnmounted(() => {
   clearTimeout(_骨架屏超时)
   clearInterval(clockTimer)
   pauseHigh(); pauseMed()
+  
+  // 清理历史导航监听器
+  if (window.removeEventListener) {
+    window.removeEventListener('popstate', handlePopState)
+    window.removeEventListener('beforeunload', handleBeforeUnload)
+  }
 })
+
+// ── 历史导航处理函数 ─────────────────────────────────────────────────────
+function handlePopState(event) {
+  // 检查是否有历史记录
+  if (viewHistory.value.length > 1) {
+    // 移除当前视图
+    viewHistory.value.pop()
+    // 获取上一个视图
+    const previousView = viewHistory.value[viewHistory.value.length - 1]
+    
+    // 标记为历史导航（防止再次 push）
+    isHistoryNavigation.value = true
+    currentView.value = previousView
+    
+    toastInfo('返回', `已返回到 ${getViewName(previousView)}`)
+  } else {
+    // 历史栈为空，显示退出确认
+    showExitConfirmation()
+  }
+}
+
+function handleBeforeUnload(event) {
+  // 仅在移动端显示退出确认
+  if (isMobile.value && viewHistory.value.length > 1) {
+    const message = '确定要退出 AlphaTerminal 吗？'
+    event.preventDefault()
+    event.returnValue = message
+    return message
+  }
+}
+
+function showExitConfirmation() {
+  // 使用浏览器原生确认对话框
+  if (confirm('确定要退出 AlphaTerminal 吗？')) {
+    // 用户确认退出，关闭应用
+    // 在 Android WebView 中，这会关闭 Activity
+    if (window.close) {
+      window.close()
+    }
+    // 如果无法关闭，尝试返回到初始视图
+    isHistoryNavigation.value = true
+    currentView.value = 'stock'
+    viewHistory.value = ['stock']
+  } else {
+    // 用户取消，恢复历史状态
+    if (window.history && window.history.pushState) {
+      window.history.pushState({ view: currentView.value }, '', `#view=${currentView.value}`)
+    }
+  }
+}
 </script>
 
 <style>

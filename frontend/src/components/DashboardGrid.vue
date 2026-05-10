@@ -1,6 +1,18 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;" role="main" aria-label="市场行情仪表盘">
+  <div v-if="isMobile" ref="mobileContainerRef" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;" role="main" aria-label="市场行情仪表盘">
+    
+    <!-- 下拉刷新指示器 -->
+    <div class="pull-refresh-indicator" :style="pullIndicatorStyle">
+      <div class="flex items-center justify-center gap-2 py-2 text-terminal-accent">
+        <svg v-if="isRefreshing" class="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span v-if="isRefreshing" class="text-sm">刷新中...</span>
+        <span v-else-if="pullDistance > 0" class="text-sm">↓ 下拉刷新</span>
+      </div>
+    </div>
 
     <!-- 快捷导航胶囊 -->
     <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0" role="navigation" aria-label="快捷导航">
@@ -55,6 +67,7 @@
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
     <div class="grid-stack-item"
+         data-widget-id="chart"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <!-- 标题行 -->
@@ -129,6 +142,7 @@
     <!-- ━━━ Widget 2：市场情绪直方图（K线正下方，左侧8列）━━━━━━━━━━━━━ -->
     <!-- 情绪面板扩展至 10 单位高度（800px），彻底消除滚动条 -->
     <div class="grid-stack-item"
+         data-widget-id="sentiment"
          gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8">
       <div class="grid-stack-item-content terminal-panel p-3">
         <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">🌡️ A股市场情绪</div>
@@ -138,6 +152,7 @@
 
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="news"
          gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <NewsFeed />
@@ -146,6 +161,7 @@
 
     <!-- ━━━ Widget 4：风向标（右上，右侧4列）━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
+         data-widget-id="wind"
          gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-2">
         <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
@@ -186,6 +202,7 @@
 
     <!-- ━━━ Widget 5：资金流向（独立，右侧4列，6起）━━━━━━━━━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="fundflow"
          gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
         <FundFlowPanel />
@@ -194,6 +211,7 @@
 
     <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="sectors"
          gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
         <HotSectors @sector-click="handleSectorClick" />
@@ -202,6 +220,7 @@
 
     <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="china"
          gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
@@ -239,6 +258,7 @@
 
     <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="screener"
          gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
         <StockScreener @symbol-click="handleScreenerClick" />
@@ -247,6 +267,7 @@
 
     <!-- ━━━ Widget 8：价格预警管理（右侧3列，15起）━━━━━━━━━━━ -->
     <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+         data-widget-id="alerts"
          gs-x="9" gs-y="15" gs-w="3" gs-h="6" gs-min-w="2" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
         <AlertManager />
@@ -262,6 +283,7 @@ import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibili
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
 import { formatPrice } from '../utils/formatters.js'
+import { usePullToRefresh } from '../composables/usePullToRefresh.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
@@ -270,11 +292,39 @@ import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
 import AlertManager      from './AlertManager.vue'
 
+// ── Layout Persistence Constants ─────────────────────────────────────
+const LAYOUT_STORAGE_KEY = 'alphaterminal_grid_layout'
+const LAYOUT_VERSION = 1  // Increment when default layout changes
+
+// Default widget positions (must match template gs-* attributes)
+const DEFAULT_LAYOUT = [
+  { id: 'chart',      x: 0,  y: 0,  w: 8,  h: 6,  minW: 4, minH: 4 },
+  { id: 'sentiment',  x: 0,  y: 6,  w: 8,  h: 10, minW: 4, minH: 8 },
+  { id: 'news',       x: 0,  y: 16, w: 8,  h: 6,  minW: 4, minH: 4 },
+  { id: 'wind',       x: 8,  y: 0,  w: 4,  h: 6,  minW: 3, minH: 3 },
+  { id: 'fundflow',   x: 8,  y: 6,  w: 4,  h: 5,  minW: 3, minH: 4 },
+  { id: 'sectors',    x: 8,  y: 11, w: 4,  h: 5,  minW: 3, minH: 4 },
+  { id: 'china',      x: 8,  y: 16, w: 4,  h: 5,  minW: 3, minH: 3 },
+  { id: 'screener',   x: 0,  y: 21, w: 12, h: 8,  minW: 6, minH: 5 },
+  { id: 'alerts',     x: 9,  y: 15, w: 3,  h: 6,  minW: 2, minH: 4 },
+]
+
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
 
 const { currentSymbol, currentSymbolName, currentColor, setSymbol, normalizeSymbol, indices } = useMarketStore()
 const currentIndexName = ref('上证指数')
+
+async function handlePullRefresh() {
+  await fetchLowFreq()
+}
+
+const {
+  pullDistance,
+  isRefreshing,
+  pullIndicatorStyle,
+  containerRef: mobileContainerRef,
+} = usePullToRefresh(handlePullRefresh)
 
 const props = defineProps({
   marketData:     { type: Object, default: null },
@@ -285,12 +335,124 @@ const props = defineProps({
   layoutMode:     { type: String,  default: 'advanced' }, // 'simple' | 'advanced'
 })
 
-const emit = defineEmits(['toggle-lock', 'open-fullscreen'])
+const emit = defineEmits(['toggle-lock', 'open-fullscreen', 'reset-layout'])
 
 const gridRef          = ref(null)
 const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
+
+// ── Layout Persistence Functions ─────────────────────────────────────
+function saveLayout() {
+  if (!grid || typeof window === 'undefined') return
+  
+  const nodes = grid.getGridItems().map(el => {
+    const node = el.gridstackNode
+    return {
+      id: el.dataset.widgetId || node.id,
+      x: node.x,
+      y: node.y,
+      w: node.w,
+      h: node.h,
+    }
+  })
+  
+  const layoutData = {
+    version: LAYOUT_VERSION,
+    timestamp: Date.now(),
+    layoutMode: props.layoutMode,
+    nodes,
+  }
+  
+  try {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(layoutData))
+  } catch (e) {
+    console.warn('[DashboardGrid] Failed to save layout:', e)
+  }
+}
+
+// Debounced save to avoid excessive writes during drag
+const debouncedSaveLayout = useDebounceFn(saveLayout, 500)
+
+function loadLayout() {
+  if (typeof window === 'undefined') return null
+  
+  try {
+    const stored = localStorage.getItem(LAYOUT_STORAGE_KEY)
+    if (!stored) return null
+    
+    const data = JSON.parse(stored)
+    
+    // Version check - reset if incompatible
+    if (data.version !== LAYOUT_VERSION) {
+      console.log('[DashboardGrid] Layout version mismatch, resetting to default')
+      clearLayout()
+      return null
+    }
+    
+    // Layout mode check - reset if mode changed
+    if (data.layoutMode !== props.layoutMode) {
+      console.log('[DashboardGrid] Layout mode changed, using default')
+      return null
+    }
+    
+    return data.nodes
+  } catch (e) {
+    console.warn('[DashboardGrid] Failed to load layout:', e)
+    return null
+  }
+}
+
+function clearLayout() {
+  if (typeof window === 'undefined') return
+  try {
+    localStorage.removeItem(LAYOUT_STORAGE_KEY)
+  } catch (e) {
+    console.warn('[DashboardGrid] Failed to clear layout:', e)
+  }
+}
+
+function applyLayout(nodes) {
+  if (!grid || !nodes || !nodes.length) return false
+  
+  let applied = false
+  nodes.forEach(node => {
+    const el = gridRef.value?.querySelector(`[data-widget-id="${node.id}"]`)
+    if (el && el.gridstackNode) {
+      grid.update(el, {
+        x: node.x,
+        y: node.y,
+        w: node.w,
+        h: node.h,
+      })
+      applied = true
+    }
+  })
+  
+  return applied
+}
+
+// Expose reset function for parent component
+defineExpose({
+  resetLayout: () => {
+    clearLayout()
+    if (grid) {
+      // Re-apply default positions from template
+      grid.getGridItems().forEach(el => {
+        const widgetId = el.dataset.widgetId
+        const defaultPos = DEFAULT_LAYOUT.find(d => d.id === widgetId)
+        if (defaultPos) {
+          grid.update(el, {
+            x: defaultPos.x,
+            y: defaultPos.y,
+            w: defaultPos.w,
+            h: defaultPos.h,
+          })
+        }
+      })
+    }
+  }
+})
 
 // ── 列表点击联动 ─────────────────────────────────────────────────
 // 宏观品种名称 → symbol 映射（windItems 的宏观行没有 symbol 字段）
@@ -547,6 +709,23 @@ onMounted(async () => {
       disableResize: isMobile.value, // 手机端禁止缩放
     })
     grid.setStatic(props.isLocked)
+    
+    // ── Load saved layout from localStorage ───────────────────────────
+    const savedLayout = loadLayout()
+    if (savedLayout) {
+      applyLayout(savedLayout)
+    }
+    
+    // ── Setup layout change listeners for persistence ──────────────────
+    grid.on('change', (event, items) => {
+      debouncedSaveLayout()
+    })
+    grid.on('resizestop', (event, el) => {
+      saveLayout()
+    })
+    grid.on('dragstop', (event, el) => {
+      saveLayout()
+    })
   }
 })
 
@@ -596,4 +775,23 @@ function toggleLock() {
 .grid-stack-item-content { inset: 4px; overflow: hidden; min-height: 0; border-radius: 8px; display: flex; flex-direction: column; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+.pull-refresh-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
 </style>

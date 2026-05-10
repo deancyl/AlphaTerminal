@@ -83,7 +83,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
-import * as echarts from 'echarts'
+import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
 
 const props = defineProps({
@@ -121,14 +121,14 @@ const trendText = computed(() => {
   return diff >= 0 ? `+${diff.toFixed(2)}%` : `${diff.toFixed(2)}%`
 })
 
-function renderPieChart() {
+async function renderPieChart() {
   if (!pieChartRef.value || !props.data?.current) return
   
   if (pieChartInstance) {
     pieChartInstance.dispose()
   }
   
-  pieChartInstance = echarts.init(pieChartRef.value)
+  pieChartInstance = await initChart(pieChartRef.value)
   
   const holders = props.data.current.slice(0, 10)
   const pieData = holders.map(h => ({
@@ -184,14 +184,14 @@ function renderPieChart() {
   pieChartInstance.setOption(option)
 }
 
-function renderTrendChart() {
+async function renderTrendChart() {
   if (!trendChartRef.value || !props.data?.trend) return
   
   if (trendChartInstance) {
     trendChartInstance.dispose()
   }
   
-  trendChartInstance = echarts.init(trendChartRef.value)
+  trendChartInstance = await initChart(trendChartRef.value)
   
   const trend = props.data.trend
   const quarters = trend.map(t => `${t.year}Q${t.quarter_num}`)

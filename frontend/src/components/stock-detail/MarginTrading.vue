@@ -91,7 +91,7 @@
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import * as echarts from 'echarts'
+import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
 
 const props = defineProps({
@@ -105,14 +105,14 @@ const { formatMoney, formatVolume } = useStockDetail()
 const chartRef = ref(null)
 let chartInstance = null
 
-function renderChart() {
+async function renderChart() {
   if (!chartRef.value || !props.data) return
 
   if (chartInstance) {
     chartInstance.dispose()
   }
 
-  chartInstance = echarts.init(chartRef.value)
+  chartInstance = await initChart(chartRef.value)
 
   const trend = props.data.trend || []
   const dates = trend.map(d => d.date)

@@ -107,6 +107,12 @@
         @refresh="refreshSystemMetrics"
       />
 
+      <!-- 布局设置 -->
+      <LayoutPanel
+        v-else-if="activeTab === 'layout'"
+        @clear-layout="$emit('clear-layout')"
+      />
+
       <!-- LLM 配置 -->
       <LLMConfigPanel
         v-else-if="activeTab === 'llm'"
@@ -185,8 +191,9 @@ import LLMConfigPanel from './admin/LLMConfigPanel.vue'
 import LogsPanel from './admin/LogsPanel.vue'
 import AgentTokensPanel from './admin/AgentTokensPanel.vue'
 import McpPanel from './admin/McpPanel.vue'
+import LayoutPanel from './admin/LayoutPanel.vue'
 
-const emit = defineEmits(['navigate'])
+const emit = defineEmits(['navigate', 'clear-layout'])
 
 const version = __APP_VERSION__
 const activeTab = ref('sources')
@@ -211,6 +218,7 @@ const navItems = [
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'layout', label: '布局设置', desc: '管理仪表盘布局和组件位置', icon: '📐', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'llm', label: '模型配置', desc: 'LLM API Key 和连接配置', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'agent_tokens', label: 'API密钥', desc: '管理Agent和第三方API密钥', icon: '🔑', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'mcp', label: 'AI工具配置', desc: '配置MCP工具和外部服务', icon: '🔌', status: true, statusClass: 'bg-[var(--color-success-light)]' },

@@ -77,7 +77,7 @@
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import * as echarts from 'echarts'
+import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
 
 const props = defineProps({
@@ -92,14 +92,14 @@ const { formatMetric, getMetricClass } = useStockDetail()
 const radarChartRef = ref(null)
 let radarChartInstance = null
 
-function renderRadarChart() {
+async function renderRadarChart() {
   if (!radarChartRef.value || !props.data?.peers) return
   
   if (radarChartInstance) {
     radarChartInstance.dispose()
   }
   
-  radarChartInstance = echarts.init(radarChartRef.value)
+  radarChartInstance = await initChart(radarChartRef.value)
   
   const peers = props.data.peers
   const currentStock = peers.find(p => p.symbol === props.currentSymbol)

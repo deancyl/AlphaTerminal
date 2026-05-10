@@ -10,7 +10,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { getChartColors, onThemeChange } from '../../composables/useTheme.js'
-import * as echarts from 'echarts'
+import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 
 const props = defineProps({
   data: {
@@ -147,7 +147,7 @@ function buildOption() {
   }
 }
 
-function renderChart() {
+async function renderChart() {
   if (!chartRef.value) return
 
   const option = buildOption()
@@ -159,7 +159,7 @@ function renderChart() {
   }
 
   if (!chartInstance) {
-    chartInstance = echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    chartInstance = await initChart(chartRef.value)
   }
 
   chartInstance.clear()
@@ -172,9 +172,9 @@ watch(() => [props.data, props.type, props.color], () => {
 
 let unsubscribeTheme = null
 
-onMounted(() => {
+onMounted(async () => {
   if (chartRef.value) {
-    chartInstance = echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    chartInstance = await initChart(chartRef.value)
     resizeObserver = new ResizeObserver(() => chartInstance?.resize())
     resizeObserver.observe(chartRef.value)
     renderChart()
