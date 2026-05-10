@@ -10,8 +10,19 @@ import time
 import logging
 import traceback
 import httpx
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
 
 logger = logging.getLogger(__name__)
+
+# ── AkShare 熔断器（全局单例）─────────────────────────────────────────────
+# 配置：3次连续失败触发熔断，60秒恢复超时
+_akshare_breaker_config = CircuitBreakerConfig(
+    failure_threshold=3,
+    success_threshold=2,
+    timeout=60.0,
+    half_open_max_calls=3
+)
+akshare_breaker = CircuitBreaker("akshare", config=_akshare_breaker_config)
 
 # ── 国内金融域名不走代理 ─────────────────────────────────────────────────
 NO_PROXY_DOMESTIC = (
@@ -165,9 +176,15 @@ def fetch_shibor() -> list[dict]:
     返回最新可用日期的数据
     """
     rows = []
+    
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_shibor")
+        return rows
+    
     try:
         import akshare as ak
-        df = ak.macro_china_shibor_all()
+        with akshare_breaker:
+            df = ak.macro_china_shibor_all()
         df.columns = [c.strip() for c in df.columns]
 
         # 取最新一行
@@ -195,7 +212,8 @@ def fetch_shibor() -> list[dict]:
                 logger.info(f"[AkShare] {name}: {val}%")
         # LPR
         try:
-            df_lpr = ak.macro_china_lpr()
+            with akshare_breaker:
+                df_lpr = ak.macro_china_lpr()
             df_lpr.columns = [c.strip() for c in df_lpr.columns]
             lpr_latest = df_lpr.iloc[-1]
             lpr1y = None
@@ -219,6 +237,8 @@ def fetch_shibor() -> list[dict]:
             logger.error(f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}")
             traceback.print_exc()
 
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[AkShare] Circuit breaker OPEN for shibor: {e}")
     except Exception as e:
         logger.error(f"[AkShare] fetch_shibor 失败: {type(e).__name__}: {e}")
         traceback.print_exc()
@@ -388,48 +408,61 @@ def fetch_derivatives() -> list[dict]:
     rows = []
 
     # ① 上海金基准价（SGE）
-    try:
-        import akshare as ak
-        df_gold = ak.spot_golden_benchmark_sge()
-        if not df_gold.empty:
-            latest = df_gold.iloc[-1]
-            price  = float(latest["晚盘价"]) if "晚盘价" in latest and latest["晚盘价"] else None
-            if price:
-                rows.append({
-                    "symbol":    "GC",
-                    "name":     "SGE黄金",
-                    "market":   "COMEX",
-                    "price":    price,
-                    "change_pct": None,
-                    "volume":   None,
-                    "timestamp": int(time.time()),
-                    "data_type": "derivative",
-                })
-                logger.info(f"[SGE] 黄金基准价: {price}")
-    except Exception as e:
-        logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}")
+    if akshare_breaker.is_available():
+        try:
+            import akshare as ak
+            with akshare_breaker:
+                df_gold = ak.spot_golden_benchmark_sge()
+            if not df_gold.empty:
+                latest = df_gold.iloc[-1]
+                price  = float(latest["晚盘价"]) if "晚盘价" in latest and latest["晚盘价"] else None
+                if price:
+                    rows.append({
+                        "symbol":    "GC",
+                        "name":     "SGE黄金",
+                        "market":   "COMEX",
+                        "price":    price,
+                        "change_pct": None,
+                        "volume":   None,
+                        "timestamp": int(time.time()),
+                        "data_type": "derivative",
+                    })
+                    logger.info(f"[SGE] 黄金基准价: {price}")
+        except CircuitBreakerOpen as e:
+            logger.warning(f"[AkShare] Circuit breaker OPEN for gold: {e}")
+        except Exception as e:
+            logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}")
+    else:
+        logger.warning("[AkShare] Circuit breaker OPEN, skipping gold fetch")
 
     # ② 国内能源指数（综合）
-    try:
-        df_energy = ak.macro_china_energy_index()
-        if not df_energy.empty:
-            latest = df_energy.iloc[-1]
-            val = latest.get("最新值")
-            chg = latest.get("涨跌幅", 0)
-            if val:
-                rows.append({
-                    "symbol":    "EC",
-                    "name":     "能源指数",
-                    "market":   "CHINA",
-                    "price":    float(val),
-                    "change_pct": float(chg) if chg else None,
-                    "volume":   None,
-                    "timestamp": int(time.time()),
-                    "data_type": "derivative",
-                })
-                logger.info(f"[能源指数] 最新值: {val} 涨跌幅: {chg}")
-    except Exception as e:
-        logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}")
+    if akshare_breaker.is_available():
+        try:
+            import akshare as ak
+            with akshare_breaker:
+                df_energy = ak.macro_china_energy_index()
+            if not df_energy.empty:
+                latest = df_energy.iloc[-1]
+                val = latest.get("最新值")
+                chg = latest.get("涨跌幅", 0)
+                if val:
+                    rows.append({
+                        "symbol":    "EC",
+                        "name":     "能源指数",
+                        "market":   "CHINA",
+                        "price":    float(val),
+                        "change_pct": float(chg) if chg else None,
+                        "volume":   None,
+                        "timestamp": int(time.time()),
+                        "data_type": "derivative",
+                    })
+                    logger.info(f"[能源指数] 最新值: {val} 涨跌幅: {chg}")
+        except CircuitBreakerOpen as e:
+            logger.warning(f"[AkShare] Circuit breaker OPEN for energy: {e}")
+        except Exception as e:
+            logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}")
+    else:
+        logger.warning("[AkShare] Circuit breaker OPEN, skipping energy fetch")
 
     # ③ Sina 期货（IF期指 / 黄金 / 原油）退补
     try:
@@ -528,6 +561,10 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
     AkShare stock_zh_index_daily 返回: ['date','open','high','low','close','volume']
     注意: AkShare DataFrame 列名直接用英文字符串访问
     """
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_china_index_history for {symbol}")
+        return []
+    
     try:
         import akshare as ak, pandas as pd
 
@@ -543,7 +580,8 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
             logger.warning(f"[AkShare] 无映射: {symbol}")
             return []
 
-        df = ak.stock_zh_index_daily(symbol=ak_sym)
+        with akshare_breaker:
+            df = ak.stock_zh_index_daily(symbol=ak_sym)
         if df is None or df.empty:
             return []
 
@@ -656,6 +694,9 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                     logger.info(f"[AkShare] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
 
         return rows[-100:]
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}")
+        return []
     except Exception as e:
         logger.error(f"[AkShare] fetch_china_index_history({symbol}) 失败: {type(e).__name__}: {e}")
         traceback.print_exc()
@@ -801,6 +842,10 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
     支持前复权/后复权/不复权。
     akshare stock_zh_a_daily: symbol 如 "sh600519"（沪深）或 "sz000001"（深圳）
     """
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_stock_history for {symbol}")
+        return []
+    
     try:
         import akshare as ak, pandas as pd
         from datetime import datetime
@@ -818,7 +863,8 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
             ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Stock] 开始拉取 {ak_sym} ({start_date}~{end_date})")
-        df = ak.stock_zh_a_daily(symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq")
+        with akshare_breaker:
+            df = ak.stock_zh_a_daily(symbol=ak_sym, start_date=start_date, end_date=end_date, adjust="qfq")
         if df is None or df.empty:
             logger.warning(f"[AkShare Stock] {ak_sym} 无数据返回")
             return []
@@ -913,6 +959,9 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                 logger.info(f"[AkShare Stock] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
 
         return rows
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}")
+        return []
     except Exception as e:
         logger.error(f"[AkShare Stock] fetch_stock_history({symbol}) 失败: {type(e).__name__}: {e}")
         traceback.print_exc()
@@ -925,6 +974,10 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
     支持指数: sh000001(上证), sz399001(深证), sz399006(创业板), sh000300(沪深300)等
     akshare stock_zh_index_daily: symbol 如 "sh000001", "sz399001"
     """
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fetch_index_daily_history for {symbol}")
+        return []
+    
     try:
         import akshare as ak, pandas as pd
         from datetime import datetime
@@ -939,7 +992,8 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
             ak_sym = f"{prefix}{numeric}"
 
         logger.info(f"[AkShare Index] 开始拉取指数 {ak_sym}")
-        df = ak.stock_zh_index_daily(symbol=ak_sym)
+        with akshare_breaker:
+            df = ak.stock_zh_index_daily(symbol=ak_sym)
         if df is None or df.empty:
             logger.warning(f"[AkShare Index] {ak_sym} 无数据返回")
             return []
@@ -1022,6 +1076,9 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
                 logger.info(f"[AkShare Index] {symbol} 周线+月线写入 {len(periodic_rows)//2} 组")
 
         return rows
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}")
+        return []
     except Exception as e:
         logger.error(f"[AkShare Index] fetch_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}")
         traceback.print_exc()
