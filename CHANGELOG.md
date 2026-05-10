@@ -5,6 +5,33 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.23] - 2026-05-10
+
+### Code Refactoring (P1-018)
+
+- **Portfolio Module Split** — Split portfolio.py (2206 lines) into 6 domain modules
+  - `accounts.py`: Portfolio CRUD (3 endpoints, 103 lines)
+  - `positions.py`: Position management + PnL (7 endpoints, 594 lines)
+  - `analytics.py`: Attribution, performance, risk (4 endpoints, 791 lines)
+  - `cash.py`: Cash operations, transfers (6 endpoints, 173 lines)
+  - `lots.py`: Lot trading, conservation (9 endpoints, 499 lines)
+  - `schemas.py`: Pydantic models (9 classes, 114 lines)
+  - `dependencies.py`: Helper functions (8 functions, 275 lines)
+
+- **Router Aggregation** — `__init__.py` combines all sub-routers
+  - All 29 endpoints preserved
+  - No breaking changes to API routes
+  - Better code organization and maintainability
+
+### Metrics
+
+- **Original file**: 2206 lines
+- **New modules**: 2573 lines (better organized)
+- **Endpoints preserved**: 29
+- **Files created**: 8
+
+---
+
 ## [0.6.22] - 2026-05-10
 
 ### Error Handling (P1-014)
