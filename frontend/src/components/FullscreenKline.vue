@@ -171,9 +171,10 @@ import { useBreakpoints, breakpointsTailwind, useThrottleFn } from '@vueuse/core
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
-// echarts 从 CDN 加载 via window.echarts
+import { initChart, getECharts } from '../utils/lazyEcharts.js'
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
+import { calcMA, calcMACD, calcKDJ, calcRSI, calcBOLL, calcOBV, calcDMI, calcCCI } from '../utils/indicators.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
@@ -458,7 +459,13 @@ async function renderChart() {
   if (!chartEl.value) return
 
   if (!chart) {
-    chart = window.echarts.init(chartEl.value)
+    try {
+      chart = await initChart(chartEl.value)
+    } catch (e) {
+      chartError.value = `图表初始化失败: ${e.message}`
+      logger.error('[FullscreenKline] ECharts init error:', e)
+      return
+    }
     // 初始化 ResizeObserver（替换全局 window.resize）
     if (chartEl.value) {
       const ro = new ResizeObserver((entries) => {
@@ -479,11 +486,12 @@ async function renderChart() {
   const data = histData.value
   const dates = data.map(d => d.date)
   const klineData = data.map(d => [d.open, d.close, d.low, d.high])
+  const closes = data.map(d => d.close)
 
-  const ma5 = calcMA(data, 5)
-  const ma10 = calcMA(data, 10)
-  const ma20 = calcMA(data, 20)
-  const ma60 = calcMA(data, 60)
+  const ma5 = calcMA(closes, 5)
+  const ma10 = calcMA(closes, 10)
+  const ma20 = calcMA(closes, 20)
+  const ma60 = calcMA(closes, 60)
 
   const subChartData = calcSubChartData(data, activeSubChart.value, tc)
 
@@ -541,6 +549,8 @@ async function renderChart() {
 // 计算副图指标数据
 function calcSubChartData(data, indicator, tc) {
   const closes = data.map(d => d.close)
+  const highs = data.map(d => d.high)
+  const lows = data.map(d => d.low)
   const volumes = data.map(d => d.volume)
 
   switch (indicator) {
@@ -564,7 +574,7 @@ function calcSubChartData(data, indicator, tc) {
         ]
       }
     case 'KDJ':
-      const kdj = calcKDJ(data)
+      const kdj = calcKDJ(closes, highs, lows)
       return {
         legend: ['K', 'D', 'J'], scale: true,
         series: [
@@ -588,21 +598,21 @@ function calcSubChartData(data, indicator, tc) {
         legend: ['MID', 'UP', 'LOW'], scale: true,
         series: [
           { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
-          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.up, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
-          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.low, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.upper, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.lower, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
         ]
       }
     case 'OBV':
-      const obv = calcOBV(data)
+      const obv = calcOBV(closes, volumes)
       return {
         legend: ['OBV', 'MA30'], scale: true,
         series: [
-          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => ({ close: v })), 30), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv.map(v => v / 1e6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => v / 1e6), 30), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'DMI':
-      const dmi = calcDMI(data)
+      const dmi = calcDMI(highs, lows, closes)
       return {
         legend: ['PDI', 'MDI', 'ADX'], scale: true,
         series: [
@@ -614,140 +624,11 @@ function calcSubChartData(data, indicator, tc) {
     case 'CCI':
       return {
         legend: ['CCI'], scale: true,
-        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(data), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
+        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(closes, highs, lows), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
       }
     default:
       return { legend: [], scale: false, series: [] }
   }
-}
-
-function calcMA(data, period) {
-  const result = []
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) { result.push('-'); continue }
-    let sum = 0
-    for (let j = 0; j < period; j++) sum += data[i - j].close ?? data[i - j]
-    result.push((sum / period).toFixed(2))
-  }
-  return result
-}
-
-function calcEMA(data, period) {
-  const k = 2 / (period + 1)
-  const result = []
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) result.push('-')
-    else if (i === period - 1) { let sum = 0; for (let j = 0; j < period; j++) sum += data[i - j]; result.push((sum / period).toFixed(2)) }
-    else { const ema = data[i] * k + parseFloat(result[i - 1]) * (1 - k); result.push(ema.toFixed(2)) }
-  }
-  return result
-}
-
-function calcMACD(closes, fast = 12, slow = 26, signal = 9) {
-  const emaFast = calcEMA(closes, fast)
-  const emaSlow = calcEMA(closes, slow)
-  const dif = emaFast.map((v, i) => v === '-' || emaSlow[i] === '-' ? '-' : (parseFloat(v) - parseFloat(emaSlow[i])).toFixed(2))
-  const dea = calcEMA(dif.filter(v => v !== '-').map(v => parseFloat(v)), signal)
-  const fullDea = new Array(dif.filter(v => v === '-').length).fill('-').concat(dea)
-  const macd = dif.map((v, i) => v === '-' || fullDea[i] === '-' ? '-' : ((parseFloat(v) - parseFloat(fullDea[i])) * 2).toFixed(2))
-  return { dif, dea: fullDea, macd }
-}
-
-function calcKDJ(data, n = 9) {
-  const k = [], d = [], j = []
-  for (let i = 0; i < data.length; i++) {
-    if (i < n - 1) { k.push('-'); d.push('-'); j.push('-'); continue }
-    let low = data[i].low, high = data[i].high
-    for (let x = 1; x < n; x++) { low = Math.min(low, data[i - x].low); high = Math.max(high, data[i - x].high) }
-    const rsv = high === low ? 0 : (data[i].close - low) / (high - low) * 100
-    if (i === n - 1) { k.push(rsv.toFixed(2)); d.push(rsv.toFixed(2)) }
-    else {
-      const kVal = (2 / 3 * parseFloat(k[i - 1]) + 1 / 3 * rsv).toFixed(2)
-      const dVal = (2 / 3 * parseFloat(d[i - 1]) + 1 / 3 * parseFloat(kVal)).toFixed(2)
-      k.push(kVal); d.push(dVal)
-    }
-    j.push((3 * parseFloat(k[i]) - 2 * parseFloat(d[i])).toFixed(2))
-  }
-  return { k, d, j }
-}
-
-function calcRSI(closes, period = 14) {
-  const result = []
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period) { result.push('-'); continue }
-    let gain = 0, loss = 0
-    for (let j = 1; j <= period; j++) { 
-      const change = closes[i - j + 1] - closes[i - j]
-      if (change > 0) gain += change
-      else loss -= change
-    }
-    const rs = loss === 0 ? 100 : gain / loss
-    result.push((100 - 100 / (1 + rs)).toFixed(2))
-  }
-  return result
-}
-
-function calcBOLL(closes, period = 20, multiplier = 2) {
-  const mid = calcMA(closes.map(c => ({ close: c })), period)
-  const up = [], low = []
-  for (let i = 0; i < closes.length; i++) {
-    if (i < period - 1) { up.push('-'); low.push('-'); continue }
-    let sum = 0
-    for (let j = 0; j < period; j++) sum += Math.pow(closes[i - j] - parseFloat(mid[i]), 2)
-    const std = Math.sqrt(sum / period)
-    up.push((parseFloat(mid[i]) + multiplier * std).toFixed(2))
-    low.push((parseFloat(mid[i]) - multiplier * std).toFixed(2))
-  }
-  return { mid, up, low }
-}
-
-function calcOBV(data) {
-  const result = [0]
-  for (let i = 1; i < data.length; i++) {
-    const change = data[i].close - data[i - 1].close
-    const vol = change > 0 ? data[i].volume : change < 0 ? -data[i].volume : 0
-    result.push(result[i - 1] + vol)
-  }
-  return result.map(v => v / 1e6)
-}
-
-function calcDMI(data, period = 14) {
-  const pdi = [], mdi = [], adx = []
-  const tr = [], plusDM = [], minusDM = []
-  for (let i = 1; i < data.length; i++) {
-    const highDiff = data[i].high - data[i - 1].high
-    const lowDiff = data[i - 1].low - data[i].low
-    plusDM.push(highDiff > lowDiff && highDiff > 0 ? highDiff : 0)
-    minusDM.push(lowDiff > highDiff && lowDiff > 0 ? lowDiff : 0)
-    tr.push(Math.max(data[i].high - data[i].low, Math.abs(data[i].high - data[i - 1].close), Math.abs(data[i].low - data[i - 1].close)))
-  }
-  for (let i = 0; i < data.length; i++) {
-    if (i < period) { pdi.push('-'); mdi.push('-'); adx.push('-'); continue }
-    let trSum = 0, plusDMSum = 0, minusDMSum = 0
-    for (let j = 0; j < period; j++) { trSum += tr[i - j - 1]; plusDMSum += plusDM[i - j - 1]; minusDMSum += minusDM[i - j - 1] }
-    pdi.push((plusDMSum / trSum * 100).toFixed(2))
-    mdi.push((minusDMSum / trSum * 100).toFixed(2))
-    const dx = (Math.abs(parseFloat(pdi[i]) - parseFloat(mdi[i])) / (parseFloat(pdi[i]) + parseFloat(mdi[i])) * 100).toFixed(2)
-    if (i === period) adx.push(dx)
-    else adx.push(((parseFloat(adx[i - 1]) * (period - 1) + parseFloat(dx)) / period).toFixed(2))
-  }
-  return { pdi, mdi, adx }
-}
-
-function calcCCI(data, period = 14) {
-  const result = []
-  for (let i = 0; i < data.length; i++) {
-    if (i < period - 1) { result.push('-'); continue }
-    let tpSum = 0
-    for (let j = 0; j < period; j++) tpSum += (data[i - j].high + data[i - j].low + data[i - j].close) / 3
-    const sma = tpSum / period
-    let mdSum = 0
-    for (let j = 0; j < period; j++) mdSum += Math.abs((data[i - j].high + data[i - j].low + data[i - j].close) / 3 - sma)
-    const md = mdSum / period
-    const tp = (data[i].high + data[i].low + data[i].close) / 3
-    result.push(md === 0 ? '0' : ((tp - sma) / (0.015 * md)).toFixed(2))
-  }
-  return result
 }
 
 function handleResize() {

@@ -3,7 +3,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
@@ -32,6 +32,7 @@ const chartEl = ref(null)
 let chart = null
 let _ro = null
 let _lastChartData = null   // 保留引用用于 tick patch
+let _isInitialized = false  // 初始化完成标记
 
 // ── 动态构建 ECharts Option ──────────────────────────────────────
 function buildOption(cData) {
@@ -318,29 +319,53 @@ function applyTickFast(cData, tick) {
 
 // ── 生命周期 ────────────────────────────────────────────────────
 onMounted(async () => {
-  _ro = new ResizeObserver(async (entries) => {
-    if (!chartEl.value) return
-    const { width, height } = entries[0].contentRect
-    if (width <= 0 || height <= 0) return
-    if (!chart) {
-      logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-      chart = await initChart(chartEl.value, 'dark')
-      _lastChartData = props.chartData
-      chart.setOption(buildOption(props.chartData))
-      chart.on('datazoom', () => {
-        const zr = chart.getOption()?.dataZoom?.[0]
-        if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
-      })
-    } else {
-      logger.debug(`[ECharts] 📐 resize ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-      chart.resize()
+  if (!chartEl.value) return
+
+  await nextTick()
+
+  // Wait for container dimensions with timeout
+  const startTime = performance.now()
+  while (chartEl.value && (chartEl.value.clientWidth === 0 || chartEl.value.clientHeight === 0)) {
+    if (performance.now() - startTime > 1000) {
+      console.error('[BaseKLineChart] Container has zero dimensions after 1s')
+      return
     }
-  })
-  if (chartEl.value) _ro.observe(chartEl.value)
+    await new Promise(r => requestAnimationFrame(r))
+  }
+
+  try {
+    const width = chartEl.value.clientWidth
+    const height = chartEl.value.clientHeight
+    logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+
+    chart = markRaw(await initChart(chartEl.value, 'dark'))
+    _isInitialized = true
+    _lastChartData = props.chartData
+
+    if (props.chartData && !props.chartData.isEmpty) {
+      chart.setOption(buildOption(props.chartData))
+    }
+
+    chart.on('datazoom', () => {
+      const zr = chart.getOption()?.dataZoom?.[0]
+      if (zr) emit('datazoom', { start: zr.start ?? 0, end: zr.end ?? 100 })
+    })
+
+    // ResizeObserver for resize only (not init)
+    _ro = new ResizeObserver(() => {
+      if (!_isInitialized || !chart) return
+      chart.resize()
+    })
+    _ro.observe(chartEl.value)
+
+  } catch (e) {
+    console.error('[BaseKLineChart] Initialization failed:', e)
+  }
 })
 
 onBeforeUnmount(() => {
   _ro?.disconnect()
+  _isInitialized = false
   if (chart) {
     logger.debug(`[ECharts] 🗑️  disposed instance for: ${props.symbol}`)
     chart.dispose()
