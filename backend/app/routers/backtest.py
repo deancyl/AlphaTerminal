@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -350,7 +351,7 @@ async def get_strategies():
         ).fetchone()
         
         if not table_exists:
-            return {"code": 0, "data": {"strategies": []}}
+            return success_response({"strategies": []})
         
         rows = conn.execute("""
             SELECT id, name, description, type, params, created_at, updated_at
@@ -369,10 +370,10 @@ async def get_strategies():
                 "updated_at": r[6]
             })
         
-        return {"code": 0, "data": {"strategies": strategies}}
+        return success_response({"strategies": strategies})
     except Exception as e:
         logger.error(f"[Backtest] 获取策略列表失败: {e}")
-        return {"code": 0, "data": {"strategies": []}}
+        return success_response({"strategies": []})
     finally:
         conn.close()
 
@@ -395,7 +396,7 @@ async def create_strategy(req: StrategyCreateRequest):
         
         strategy_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         
-        return {"code": 0, "data": {"id": strategy_id, "message": "Strategy created"}}
+        return success_response({"id": strategy_id, "message": "Strategy created"})
     finally:
         conn.close()
 
@@ -416,12 +417,12 @@ async def run_backtest(req: BacktestRequest):
     # 日期校验
     dates_valid, dates_error, _ = _validate_dates(req.start_date, req.end_date)
     if not dates_valid:
-        return {"code": 1, "message": dates_error}
+        return error_response(ErrorCode.BAD_REQUEST, dates_error)
     
     # 资金校验
     capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
     if not capital_valid:
-        return {"code": 1, "message": capital_error}
+        return error_response(ErrorCode.BAD_REQUEST, capital_error)
     
     # ── 第二步：获取历史数据 ──────────────────────────────────────
     conn = _get_conn()
@@ -434,9 +435,9 @@ async def run_backtest(req: BacktestRequest):
         """, (db_symbol, req.start_date, req.end_date)).fetchall()
         
         if len(rows) == 0:
-            return {"code": 1, "message": f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。"}
+            return error_response(ErrorCode.NOT_FOUND, f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。")
         if len(rows) < slow_ma:
-            return {"code": 1, "message": f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。"}
+            return error_response(ErrorCode.BAD_REQUEST, f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。")
         
         # ── 基准收益率 ────────────────────────────────────────────
         first_close = float(rows[0][4])
@@ -497,30 +498,27 @@ async def run_backtest(req: BacktestRequest):
             logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
         
         # ── 返回结果 ──────────────────────────────────────────────
-        return {
-            "code": 0,
-            "data": {
-                "symbol": req.symbol,
-                "start_date": req.start_date,
-                "end_date": req.end_date,
-                "initial_capital": initial_capital,
-                "final_capital": round(final_capital, 2),
-                "total_return": metrics["total_return"],
-                "total_return_pct": metrics["total_return_pct"],
-                "max_drawdown": metrics["max_drawdown"],
-                "max_drawdown_pct": metrics["max_drawdown_pct"],
-                "wins": wins,
-                "losses": losses,
-                "win_rate": metrics["win_rate"],
-                "trades_count": metrics["total_trades"],
-                "sharpe_ratio": metrics["sharpe_ratio"],
-                "annualized_return_pct": metrics["annualized_return_pct"],
-                "benchmark_return_pct": benchmark_return_pct,
-                "strategy_type": strategy_type,
-                "trades": trades,
-                "equity_curve": metrics["equity_curve"],
-            }
-        }
+        return success_response({
+            "symbol": req.symbol,
+            "start_date": req.start_date,
+            "end_date": req.end_date,
+            "initial_capital": initial_capital,
+            "final_capital": round(final_capital, 2),
+            "total_return": metrics["total_return"],
+            "total_return_pct": metrics["total_return_pct"],
+            "max_drawdown": metrics["max_drawdown"],
+            "max_drawdown_pct": metrics["max_drawdown_pct"],
+            "wins": wins,
+            "losses": losses,
+            "win_rate": metrics["win_rate"],
+            "trades_count": metrics["total_trades"],
+            "sharpe_ratio": metrics["sharpe_ratio"],
+            "annualized_return_pct": metrics["annualized_return_pct"],
+            "benchmark_return_pct": benchmark_return_pct,
+            "strategy_type": strategy_type,
+            "trades": trades,
+            "equity_curve": metrics["equity_curve"],
+        })
     finally:
         conn.close()
 
@@ -554,7 +552,7 @@ async def get_backtest_results(limit: int = 10):
                 "created_at": r[11]
             })
         
-        return {"code": 0, "data": {"results": results}}
+        return success_response({"results": results})
     finally:
         conn.close()
 
@@ -585,11 +583,11 @@ async def walkforward_analyze(req: WalkForwardRequest):
     
     dates_valid, dates_error, _ = _validate_dates(req.start_date, req.end_date)
     if not dates_valid:
-        return {"code": 1, "message": dates_error}
+        return error_response(ErrorCode.BAD_REQUEST, dates_error)
     
     capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
     if not capital_valid:
-        return {"code": 1, "message": capital_error}
+        return error_response(ErrorCode.BAD_REQUEST, capital_error)
     
     conn = _get_conn()
     try:
@@ -601,7 +599,7 @@ async def walkforward_analyze(req: WalkForwardRequest):
         """, (db_symbol, req.start_date, req.end_date)).fetchall()
         
         if len(rows) < 126:
-            return {"code": 1, "message": f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据"}
+            return error_response(ErrorCode.BAD_REQUEST, f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据")
         
         data = [{"date": r[0], "close": float(r[4])} for r in rows]
         
@@ -655,27 +653,24 @@ async def walkforward_analyze(req: WalkForwardRequest):
                 "best_params": w.best_params
             })
         
-        return {
-            "code": 0,
-            "data": {
-                "symbol": result.symbol,
-                "strategy_type": result.strategy_type,
-                "window_mode": result.window_mode,
-                "total_windows": result.total_windows,
-                "avg_test_return_pct": result.avg_test_return_pct,
-                "avg_test_sharpe": result.avg_test_sharpe,
-                "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
-                "avg_test_win_rate": result.avg_test_win_rate,
-                "avg_train_return_pct": result.avg_train_return_pct,
-                "avg_return_gap": result.avg_return_gap,
-                "overfitting_windows": result.overfitting_windows,
-                "overfitting_ratio": result.overfitting_ratio,
-                "overfitting_severity": result.overfitting_severity,
-                "consistency_score": result.consistency_score,
-                "recommendation": result.recommendation,
-                "confidence": result.confidence,
-                "windows": windows_data
-            }
-        }
+        return success_response({
+            "symbol": result.symbol,
+            "strategy_type": result.strategy_type,
+            "window_mode": result.window_mode,
+            "total_windows": result.total_windows,
+            "avg_test_return_pct": result.avg_test_return_pct,
+            "avg_test_sharpe": result.avg_test_sharpe,
+            "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
+            "avg_test_win_rate": result.avg_test_win_rate,
+            "avg_train_return_pct": result.avg_train_return_pct,
+            "avg_return_gap": result.avg_return_gap,
+            "overfitting_windows": result.overfitting_windows,
+            "overfitting_ratio": result.overfitting_ratio,
+            "overfitting_severity": result.overfitting_severity,
+            "consistency_score": result.consistency_score,
+            "recommendation": result.recommendation,
+            "confidence": result.confidence,
+            "windows": windows_data
+        })
     finally:
         conn.close()

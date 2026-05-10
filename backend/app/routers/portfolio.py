@@ -5,11 +5,14 @@ CRUD: 账户 / 持仓 / 净值历史
 import os
 import time
 import logging
+import sqlite3
 from datetime import datetime, date
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends, Header
 from pydantic import BaseModel
+
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +159,6 @@ def _transfer_between_accounts(
     return {"from": from_pid, "to": to_pid, "amount": amount,
             "balance_from": new_bal_from, "balance_to": new_bal_to}
 
-# ── 响应格式标准化（可选使用）─────────────────────────────
-def _ok(data, msg="success"):
-    return {"code": 0, "message": msg, "data": data, "timestamp": int(time.time() * 1000)}
-
 # ── 数据库工具 ────────────────────────────────────────────────
 
 from app.db.database import _get_conn, _lock
@@ -181,9 +180,9 @@ async def list_portfolios():
         ).fetchall()
     finally:
         conn.close()
-    return {"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
+    return success_response({"portfolios": _row2dict(rows, ["id", "name", "type", "parent_id", "created_at", "total_cost",
                                             "cash_balance", "currency", "asset_class", "strategy", "benchmark",
-                                            "status", "initial_capital", "description"])}
+                                            "status", "initial_capital", "description"])})
 
 @router.post("/")
 async def create_portfolio(body: PortfolioIn):
@@ -218,15 +217,22 @@ async def create_portfolio(body: PortfolioIn):
             pid = cur.lastrowid
         except HTTPException:
             raise
+        except sqlite3.IntegrityError as e:
+            raise HTTPException(400, f"数据完整性错误: {e}")
+        except sqlite3.OperationalError as e:
+            raise HTTPException(500, f"数据库操作错误: {e}")
+        except ValueError as e:
+            raise HTTPException(400, f"参数错误: {e}")
         except Exception as e:
-            raise HTTPException(400, f"创建账户失败: {e}")
+            logger.exception("Unexpected error in create_portfolio")
+            raise HTTPException(500, f"创建账户失败: {e}")
         finally:
             conn.close()
-    return {"id": pid, "name": body.name, "type": body.type, "parent_id": body.parent_id,
+    return success_response({"id": pid, "name": body.name, "type": body.type, "parent_id": body.parent_id,
             "created_at": now, "total_cost": 0.0, "currency": body.currency,
             "asset_class": body.asset_class, "strategy": body.strategy,
             "benchmark": body.benchmark, "status": body.status,
-            "initial_capital": body.initial_capital, "description": body.description}
+            "initial_capital": body.initial_capital, "description": body.description})
 
 @router.delete("/{portfolio_id}")
 async def delete_portfolio(portfolio_id: int, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
@@ -239,7 +245,7 @@ async def delete_portfolio(portfolio_id: int, api_key: str = None, auth: bool = 
         conn.close()
     if not deleted:
         raise HTTPException(404, "账户不存在")
-    return {"ok": True}
+    return success_response({"ok": True})
 
 # ── 持仓 CRUD ─────────────────────────────────────────────────
 
@@ -281,11 +287,11 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
                     WHERE ps.portfolio_id IN ({placeholders}) AND ps.total_shares > 0""",
                 tuple(all_ids)
             ).fetchall()
-            return {"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
+            return success_response({"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
                                     "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
                                     "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_name": r[7], "portfolio_id": r[0]} for r in rows],
                     "includes_children": True,
-                    "portfolio_ids": all_ids}
+                    "portfolio_ids": all_ids})
         else:
             rows = conn.execute(
                 """SELECT portfolio_id, symbol, total_shares, avg_cost, 
@@ -294,9 +300,9 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
                    WHERE portfolio_id=? AND total_shares > 0""",
                 (portfolio_id,)
             ).fetchall()
-            return {"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
+            return success_response({"positions": [{"id": f"{r[0]}_{r[1]}", "symbol": r[1], "shares": r[2],
                                     "avg_cost": r[3], "marketValue": r[4] or (r[2] * r[3] if r[2] and r[3] else 0), "unrealized_pnl": r[5] or 0,
-                                    "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_id": r[0]} for r in rows]}
+                                    "cost": r[2] * r[3] if r[2] and r[3] else 0, "updated_at": r[6], "portfolio_id": r[0]} for r in rows]})
     finally:
         conn.close()
 
@@ -322,7 +328,7 @@ async def upsert_position(body: PositionIn):
             )
             conn.commit()
             conn.close()
-            return {"ok": True, "action": "cleared"}
+            return success_response({"ok": True, "action": "cleared"})
         conn.execute(
             "INSERT OR REPLACE INTO positions (portfolio_id, symbol, shares, avg_cost, updated_at) "
             "VALUES (?,?,?,?,?)",
@@ -336,7 +342,7 @@ async def upsert_position(body: PositionIn):
         )
         conn.commit()
         conn.close()
-    return {"ok": True, "action": "upserted"}
+    return success_response({"ok": True, "action": "upserted"})
 
 @router.delete("/{portfolio_id}/positions/{symbol}")
 async def delete_position(portfolio_id: int, symbol: str, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
@@ -349,7 +355,7 @@ async def delete_position(portfolio_id: int, symbol: str, api_key: str = None, a
         )
         conn.commit()
         conn.close()
-    return {"ok": True}
+    return success_response({"ok": True})
 
 # ── 实时浮动盈亏（依赖 SpotCache） ─────────────────────────────
 
@@ -394,6 +400,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             for r in meta_rows:
                 stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
                 stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取股票元数据: {e}")
         except Exception as e:
             logger.warning(f"[Portfolio PnL] Failed to fetch stock metadata: {e}")
 
@@ -405,13 +413,15 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 (portfolio_id,),
             ).fetchone()
             cash_balance = cb[0] or 0.0 if cb else 0.0
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取 cash_balance (portfolio_id={portfolio_id}): {e}")
         except Exception as e:
             logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}")
     finally:
         conn.close()
 
     if not rows:
-        return _ok({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
+        return success_response({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
                      "includes_children": include_children,
                      "realized_pnl": 0.0, "unrealized_pnl": 0.0, "daily_pnl": 0.0,
                      "cash_balance": cash_balance})
@@ -452,6 +462,10 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     price_map[sym.upper()] = price_map[sym]
             db_price_loaded = True
             logger.info(f"[Portfolio PnL] 从数据库加载 {len(db_rows)} 只股票价格")
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[Portfolio PnL] 数据库操作错误，兜底获取价格失败: {e}")
+        except ValueError as e:
+            logger.warning(f"[Portfolio PnL] 价格数据格式错误: {e}")
         except Exception as e:
             logger.warning(f"[Portfolio PnL] 数据库兜底失败: {e}")
     
@@ -563,6 +577,16 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             (portfolio_id, today),
         ).fetchone()
         daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
+    except sqlite3.OperationalError as e:
+        logger.warning(f"[Portfolio PnL] 数据库操作错误，无法读取盈亏数据 (portfolio_id={portfolio_id}): {e}")
+        realized_pnl = 0.0
+        unrealized_pnl = 0.0
+        daily_pnl = 0.0
+    except ValueError as e:
+        logger.warning(f"[Portfolio PnL] 盈亏数据格式错误 (portfolio_id={portfolio_id}): {e}")
+        realized_pnl = 0.0
+        unrealized_pnl = 0.0
+        daily_pnl = 0.0
     except Exception as e:
         logger.warning(f"[Portfolio PnL] 读取盈亏数据失败 (portfolio_id={portfolio_id}): {e}")
         realized_pnl = 0.0
@@ -599,7 +623,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         response["price_data_source"] = "SpotCache"
     response["price_data_count"] = len(spot) if spot else 0
 
-    return _ok(response)
+    return success_response(response)
 
 
 
@@ -640,13 +664,13 @@ async def get_snapshots(
             ).fetchall()
     finally:
         conn.close()
-    return {
+    return success_response({
         "snapshots": [
             {"date": r[0], "total_asset": r[1], "total_cost": r[2],
              "pnl_pct": round((r[1]-r[2])/r[2]*100, 2) if r[2] else 0.0}
             for r in rows
         ]
-    }
+    })
 
 @router.post("/{portfolio_id}/snapshots")
 async def save_snapshot(portfolio_id: int):
@@ -676,7 +700,7 @@ def _save_snapshot_impl(portfolio_id: int):
         conn.close()
 
     if not rows:
-        return {"ok": False, "message": "无持仓，无须保存"}
+        return success_response({"ok": False, "message": "无持仓，无须保存"})
 
     # 从 market_data_realtime（SpotCache 刷新的实时表）取最新价格
     from app.db.database import get_latest_prices
@@ -700,12 +724,12 @@ def _save_snapshot_impl(portfolio_id: int):
         conn.commit()
         conn.close()
 
-    return {
+    return success_response({
         "ok": True, "date": today,
         "total_asset": round(total_asset, 2),
         "total_cost": round(total_cost, 2),
         "pnl_pct": round((total_asset-total_cost)/total_cost*100, 2) if total_cost else 0.0
-    }
+    })
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -798,7 +822,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
         conn.close()
 
     if not rows:
-        return _ok({"attribution": [], "risk_metrics": None, "total_exposure": []})
+        return success_response({"attribution": [], "risk_metrics": None, "total_exposure": []})
 
     # ── 2. 获取最新价格 ────────────────────────────────────────
 
@@ -882,7 +906,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
 
         # 极端边界：所有持仓市值和盈亏均为 0（价格全失效），返回空数据避免后续除零
         if total_mv <= 0 and total_pnl == 0:
-            return _ok({"attribution": [], "risk_metrics": None, "total_exposure": [],
+            return success_response({"attribution": [], "risk_metrics": None, "total_exposure": [],
                         "summary": {"total_market_value": 0, "total_cost": 0, "total_pnl": 0, "total_pnl_pct": 0}})
 
         attribution = []
@@ -960,10 +984,16 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
                         "annual_return_pct": round(ann_ret * 100, 2),
                         "days":              len(assets),
                     }
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}")
+        except ValueError as e:
+            logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}")
+        except ZeroDivisionError as e:
+            logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}")
         except Exception as e:
             logger.warning(f"[Attribution] risk_metrics error: {e}")
 
-        return _ok({
+        return success_response({
             "attribution":    attribution,
             "total_exposure":  total_exposure,
             "risk_metrics":    risk_metrics,
@@ -975,6 +1005,15 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
             },
         })
 
+    except sqlite3.OperationalError as e:
+        logger.error(f"[Attribution] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="数据库操作失败，请稍后重试")
+    except ValueError as e:
+        logger.error(f"[Attribution] 数据格式错误: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
+    except ZeroDivisionError as e:
+        logger.error(f"[Attribution] 计算错误（除零）: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="归因计算时发生除零错误，请检查数据")
     except Exception as e:
         logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
         from fastapi import HTTPException
@@ -1008,7 +1047,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
             ).fetchall()
             
             if not rows or len(rows) < 30:
-                return _ok({
+                return success_response({
                     "metrics": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
@@ -1045,7 +1084,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
             
             n = len(portfolio_returns)
             if n < 5:
-                return _ok({"metrics": None, "message": "收益率数据不足", "days": n})
+                return success_response({"metrics": None, "message": "收益率数据不足", "days": n})
             
             avg_return = mean(portfolio_returns)
             std_return = stdev(portfolio_returns) if n > 1 else 0
@@ -1136,7 +1175,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
                     "benchmark_return": None,
                 })
             
-            return _ok({
+            return success_response({
                 "metrics": metrics,
                 "portfolio_id": portfolio_id,
                 "benchmark": benchmark,
@@ -1146,6 +1185,15 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
         finally:
             conn.close()
             
+    except sqlite3.OperationalError as e:
+        logger.error(f"[Performance] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
+    except ValueError as e:
+        logger.error(f"[Performance] 数据格式错误: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
+    except ZeroDivisionError as e:
+        logger.error(f"[Performance] 计算错误（除零）: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="业绩评价计算失败：除零错误")
     except Exception as e:
         logger.error(f"[Performance] 计算异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"业绩评价计算失败: {str(e)}")
@@ -1179,7 +1227,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
             ).fetchall()
             
             if not rows or len(rows) < 30:
-                return _ok({
+                return success_response({
                     "risk": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
@@ -1194,7 +1242,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
                     returns.append((assets[i] - assets[i-1]) / assets[i-1])
             
             if len(returns) < 5:
-                return _ok({"risk": None, "message": "收益率数据不足", "days": len(returns)})
+                return success_response({"risk": None, "message": "收益率数据不足", "days": len(returns)})
             
             import math
             from statistics import mean, stdev
@@ -1273,7 +1321,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
                 "best_day_pct": round(max(returns) * 100, 2),
             }
             
-            return _ok({
+            return success_response({
                 "risk": risk,
                 "portfolio_id": portfolio_id,
                 "period": f"{rows[0][0]} ~ {rows[-1][0]}",
@@ -1282,6 +1330,15 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
         finally:
             conn.close()
             
+    except sqlite3.OperationalError as e:
+        logger.error(f"[Risk] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
+    except ValueError as e:
+        logger.error(f"[Risk] 数据格式错误: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
+    except ZeroDivisionError as e:
+        logger.error(f"[Risk] 计算错误（除零）: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="风险价值计算失败：除零错误")
     except Exception as e:
         logger.error(f"[Risk] 计算异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"风险价值计算失败: {str(e)}")
@@ -1315,7 +1372,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
             ).fetchall()
             
             if not rows or len(rows) < 30:
-                return _ok({
+                return success_response({
                     "comparison": None,
                     "message": "历史数据不足（需要至少30个交易日）",
                     "days": len(rows) if rows else 0
@@ -1333,7 +1390,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
             ).fetchall()
             
             if not bench_rows or len(bench_rows) < 30:
-                return _ok({
+                return success_response({
                     "comparison": None,
                     "message": "基准数据不足",
                     "days": 0
@@ -1352,7 +1409,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                     })
             
             if len(aligned_data) < 30:
-                return _ok({
+                return success_response({
                     "comparison": None,
                     "message": "对齐后数据不足",
                     "days": len(aligned_data)
@@ -1416,7 +1473,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
                     month_start_portfolio = item["portfolio_asset"]
                     month_start_benchmark = item["benchmark_price"]
             
-            return _ok({
+            return success_response({
                 "comparison": {
                     "portfolio_return_pct": round(final_portfolio_return * 100, 2),
                     "benchmark_return_pct": round(final_benchmark_return * 100, 2),
@@ -1440,6 +1497,15 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
         finally:
             conn.close()
             
+    except sqlite3.OperationalError as e:
+        logger.error(f"[Benchmark] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
+    except ValueError as e:
+        logger.error(f"[Benchmark] 数据格式错误: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
+    except ZeroDivisionError as e:
+        logger.error(f"[Benchmark] 计算错误（除零）: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="基准对比计算失败：除零错误")
     except Exception as e:
         logger.error(f"[Benchmark] 计算异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"基准对比计算失败: {str(e)}")
@@ -1478,10 +1544,15 @@ async def transfer_direct(body: TransferIn):
             body.amount,
             body.note,
         )
-        return _ok(result)
+        return success_response(result)
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(400, f"数据完整性错误: {e}")
+    except sqlite3.OperationalError as e:
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
+        logger.exception("Unexpected error in transfer_direct")
         raise HTTPException(500, f"划转失败: {e}")
 
 
@@ -1498,7 +1569,7 @@ async def get_cash(portfolio_id: int):
         conn.close()
     if not row:
         raise HTTPException(404, "账户不存在")
-    return _ok({"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]})
+    return success_response({"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]})
 
 
 class CashOpIn(BaseModel):
@@ -1532,7 +1603,7 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn):
                                 body.amount, new_balance, operator=body.operator,
                                 note=body.note or "充值")
             conn.commit()
-            return _ok({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+            return success_response({"portfolio_id": portfolio_id, "cash_balance": new_balance})
         finally:
             conn.close()
 
@@ -1564,7 +1635,7 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn):
                                 body.amount, new_balance, operator=body.operator,
                                 note=body.note or "提现")
             conn.commit()
-            return _ok({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+            return success_response({"portfolio_id": portfolio_id, "cash_balance": new_balance})
         finally:
             conn.close()
 
@@ -1591,7 +1662,7 @@ async def list_transactions(
                 "counterparty_id", "related_symbol", "note", "created_at", "operator"]
     finally:
         conn.close()
-    return _ok({"transactions": _row2dict(rows, cols), "total": len(rows)})
+    return success_response({"transactions": _row2dict(rows, cols), "total": len(rows)})
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -1638,7 +1709,7 @@ async def buy_lot(portfolio_id: int, body: BuyIn):
             buy_date     = body.buy_date,
             order_id     = body.order_id,
         )
-        return _ok({
+        return success_response({
             "lot_id":    lot.id,
             "symbol":    lot.symbol,
             "shares":    lot.shares,
@@ -1648,6 +1719,10 @@ async def buy_lot(portfolio_id: int, body: BuyIn):
         })
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(400, f"数据完整性错误: {e}")
+    except sqlite3.OperationalError as e:
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Buy] error: {e}", exc_info=True)
         raise HTTPException(500, f"买入失败: {e}")
@@ -1705,7 +1780,7 @@ async def sell_lot(portfolio_id: int, body: SellIn):
                 conn.rollback()
                 raise
 
-        return _ok({
+        return success_response({
             "symbol":              body.symbol,
             "shares_sold":         body.shares - result.shares_remaining,
             "total_realized_pnl":  result.total_realized_pnl,
@@ -1724,6 +1799,10 @@ async def sell_lot(portfolio_id: int, body: SellIn):
         })
     except ValueError as e:
         raise HTTPException(400, str(e))
+    except sqlite3.IntegrityError as e:
+        raise HTTPException(400, f"数据完整性错误: {e}")
+    except sqlite3.OperationalError as e:
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Sell] error: {e}", exc_info=True)
         raise HTTPException(500, f"卖出失败: {e}")
@@ -1752,7 +1831,7 @@ async def list_lots(
                 conn.close()
         else:
             all_ids = [portfolio_id]
-        return _ok({
+        return success_response({
             "lots": [
                 {
                     "id":            l.id,
@@ -1771,6 +1850,9 @@ async def list_lots(
             "includes_children": include_children,
             "portfolio_ids": all_ids if include_children else [portfolio_id],
         })
+    except sqlite3.OperationalError as e:
+        logger.error(f"[Lots] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Lots] error: {e}", exc_info=True)
         raise HTTPException(500, f"批次查询失败: {e}")
@@ -1790,7 +1872,13 @@ async def unrealized_pnl(
     """
     try:
         result = calc_unrealized_pnl(portfolio_id, symbol, current_price)
-        return _ok(result)
+        return success_response(result)
+    except ValueError as e:
+        logger.error(f"[UnrealizedPnl] 参数错误: {e}", exc_info=True)
+        raise HTTPException(400, f"参数错误: {e}")
+    except sqlite3.OperationalError as e:
+        logger.error(f"[UnrealizedPnl] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[UnrealizedPnl] error: {e}", exc_info=True)
         raise HTTPException(500, f"盈亏计算失败: {e}")
@@ -1876,11 +1964,17 @@ async def check_conservation(portfolio_id: int):
         try:
             if abs(parent_total - (parent_cash + parent_pos_value)) > 0.001:
                 conservation_ok = False
+        except TypeError as e:
+            logger.warning(f"[Portfolio Conservation] 类型错误 (portfolio_id={portfolio_id}): {e}")
+            conservation_ok = False
+        except ValueError as e:
+            logger.warning(f"[Portfolio Conservation] 数值错误 (portfolio_id={portfolio_id}): {e}")
+            conservation_ok = False
         except Exception as e:
             logger.warning(f"[Portfolio Conservation] 校验异常 (portfolio_id={portfolio_id}): {e}")
             conservation_ok = False
 
-        return _ok({
+        return success_response({
             "parent_id":          portfolio_id,
             "parent_name":        parent[1],
             "parent": {
@@ -1962,7 +2056,7 @@ async def get_portfolio_tree(portfolio_id: int):
             }
 
         tree = build_node(portfolio_id)
-        return _ok({"tree": tree})
+        return success_response({"tree": tree})
     finally:
         conn.close()
 
@@ -1985,7 +2079,13 @@ async def lots_summary(
     """
     try:
         rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
-        return _ok({"summary": rows, "count": len(rows), "includes_children": include_children})
+        return success_response({"summary": rows, "count": len(rows), "includes_children": include_children})
+    except sqlite3.OperationalError as e:
+        logger.error(f"[lots_summary] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(500, f"数据库操作错误: {e}")
+    except ValueError as e:
+        logger.error(f"[lots_summary] 参数错误: {e}", exc_info=True)
+        raise HTTPException(400, f"参数错误: {e}")
     except Exception as e:
         logger.error(f"[lots_summary] error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
@@ -2003,8 +2103,15 @@ async def refresh_market_value(
     """
     try:
         result = update_market_value(portfolio_id, symbol, current_price)
-        return _ok(result)
+        return success_response(result)
+    except ValueError as e:
+        logger.error(f"[refresh_market_value] 参数错误: {e}", exc_info=True)
+        raise HTTPException(400, f"参数错误: {e}")
+    except sqlite3.OperationalError as e:
+        logger.error(f"[refresh_market_value] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
+        logger.error(f"[refresh_market_value] error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 
@@ -2033,11 +2140,21 @@ async def lots_echarts_data(
                 "unrealized_pnl": r.get('unrealized_pnl', 0),
                 "weight_pct":   pct,
             })
-        return _ok({
+        return success_response({
             "total_market_value": round(total_mv, 2),
             "positions": chart_data,
         })
+    except sqlite3.OperationalError as e:
+        logger.error(f"[lots_echarts_data] 数据库操作错误: {e}", exc_info=True)
+        raise HTTPException(500, f"数据库操作错误: {e}")
+    except KeyError as e:
+        logger.error(f"[lots_echarts_data] 数据字段缺失: {e}", exc_info=True)
+        raise HTTPException(500, f"数据格式错误: {e}")
+    except ZeroDivisionError as e:
+        logger.error(f"[lots_echarts_data] 计算错误（除零）: {e}", exc_info=True)
+        raise HTTPException(500, "计算错误：除零")
     except Exception as e:
+        logger.error(f"[lots_echarts_data] error: {e}", exc_info=True)
         raise HTTPException(500, str(e))
 
 
@@ -2073,10 +2190,12 @@ async def daily_pnl_only(portfolio_id: int):
                 (portfolio_id,),
             ).fetchone()
             unrealized = ur[0] or 0.0 if ur else 0.0
+        except sqlite3.OperationalError as e:
+            logger.warning(f"[Portfolio daily_pnl] 数据库操作错误，无法读取 unrealized (portfolio_id={portfolio_id}): {e}")
         except Exception as e:
             logger.warning(f"[Portfolio daily_pnl] 读取 unrealized 失败 (portfolio_id={portfolio_id}): {e}")
 
-        return _ok({
+        return success_response({
             "date":           today,
             "realized_today": round(realized_today, 2),
             "cash_flow":      round(cash_flow, 2),
