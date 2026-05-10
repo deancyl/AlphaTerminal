@@ -1,14 +1,17 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;">
+  <div v-if="isMobile" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;" role="main" aria-label="市场行情仪表盘">
 
     <!-- 快捷导航胶囊 -->
-    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0">
+    <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-hide shrink-0" role="navigation" aria-label="快捷导航">
       <button v-for="anchor in mobileAnchors" :key="anchor.id"
         :href="`#${anchor.id}`"
         class="shrink-0 px-2 py-0 rounded-full text-xs border transition-colors h-4 flex items-center"
         :class="'bg-terminal-accent/10 border-terminal-accent/30 text-terminal-accent hover:bg-terminal-accent/20'"
-        @click.prevent="scrollToMobileSection(anchor.id)">
+        @click.prevent="scrollToMobileSection(anchor.id)"
+        :aria-label="`跳转到${anchor.label}区域`"
+        type="button"
+      >
         {{ anchor.label }}
       </button>
     </div>
@@ -47,7 +50,7 @@
   </div>
 
   <!-- ━━━ 桌面端：GridStack 网格布局 (≥ 768px) ━━━━━━━━━━━━ -->
-  <div v-else class="grid-stack" ref="gridRef">
+  <div v-else class="grid-stack" ref="gridRef" role="main" aria-label="市场行情仪表盘">
 
     <!-- ━━━ Widget 1：A股K线（分时/日/周/月 + MACD/BOLL预留）━━━━━━━━━━ -->
     <!-- K线主图：左侧 8列，高度6单位 -->
@@ -61,38 +64,51 @@
           <button
             class="px-1.5 py-0 text-[10px] rounded border border-theme/40 text-theme-muted hover:text-terminal-accent hover:border-terminal-accent/50 transition-colors"
             @click="handleFullscreenClick()"
-            title="全屏"
+            aria-label="全屏显示图表"
+            type="button"
           >全屏</button>
         </div>
         <!-- 指数切换行 -->
-        <div class="flex items-center gap-1 mb-1 shrink-0">
+        <div class="flex items-center gap-1 mb-1 shrink-0" role="group" aria-label="指数选择">
           <button v-for="idx in indexOptions" :key="idx.symbol"
                   class="px-2 py-0.5 text-[10px] rounded border transition"
                   :class="selectedIndex === idx.symbol
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                     : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="switchIndex(idx)">
+                  @click="switchIndex(idx)"
+                  :aria-pressed="selectedIndex === idx.symbol"
+                  :aria-label="`切换到${idx.name}`"
+                  type="button"
+          >
             {{ idx.name }}
           </button>
         </div>
         <!-- Period selector -->
-        <div class="flex items-center gap-1 mb-2 shrink-0">
+        <div class="flex items-center gap-1 mb-2 shrink-0" role="group" aria-label="周期选择">
           <button v-for="p in periods" :key="p.key"
                   class="px-2 py-0.5 text-[10px] rounded border transition"
                   :class="selectedPeriod === p.key
                     ? 'bg-[var(--color-info-bg)] border-blue-500/50 text-[var(--color-info)]'
                     : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="switchPeriod(p.key)">
+                  @click="switchPeriod(p.key)"
+                  :aria-pressed="selectedPeriod === p.key"
+                  :aria-label="`切换到${p.label}`"
+                  type="button"
+          >
             {{ p.label }}
           </button>
           <!-- Indicator toggles -->
-          <span class="ml-2 text-theme-tertiary text-[9px]">指标:</span>
+          <span class="ml-2 text-theme-tertiary text-[9px]" aria-hidden="true">指标:</span>
           <button v-for="ind in indicators" :key="ind.key"
                   class="px-1.5 py-0.5 text-[9px] rounded border transition"
                   :class="activeIndicators.includes(ind.key)
                     ? 'bg-[var(--color-primary-bg)] border-purple-500/50 text-[var(--color-primary)]'
                     : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="toggleIndicator(ind.key)">
+                  @click="toggleIndicator(ind.key)"
+                  :aria-pressed="activeIndicators.includes(ind.key)"
+                  :aria-label="`${activeIndicators.includes(ind.key) ? '隐藏' : '显示'}${ind.label}指标`"
+                  type="button"
+          >
             {{ ind.label }}
           </button>
         </div>

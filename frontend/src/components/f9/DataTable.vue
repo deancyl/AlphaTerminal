@@ -1,8 +1,8 @@
 <template>
-  <div class="data-table-container">
+  <div class="data-table-container" role="region" aria-label="数据表格">
     <!-- Table -->
     <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+      <table class="w-full text-sm" role="table">
         <thead>
           <tr class="border-b border-theme-secondary bg-terminal-panel">
             <th
@@ -10,10 +10,14 @@
               :key="col.key"
               class="px-3 py-2 text-left text-xs font-bold text-terminal-primary cursor-pointer hover:bg-theme-hover transition"
               @click="handleSort(col.key)"
+              :aria-sort="sortKey === col.key ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined"
+              scope="col"
+              tabindex="0"
+              role="columnheader"
             >
               <div class="flex items-center gap-1">
                 <span>{{ col.label }}</span>
-                <span v-if="sortKey === col.key" class="text-terminal-accent">
+                <span v-if="sortKey === col.key" class="text-terminal-accent" aria-hidden="true">
                   {{ sortOrder === 'asc' ? '↑' : '↓' }}
                 </span>
               </div>
@@ -44,8 +48,8 @@
     </div>
 
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-between px-3 py-2 border-t border-theme-secondary">
-      <div class="text-xs text-terminal-dim">
+    <div v-if="totalPages > 1" class="flex items-center justify-between px-3 py-2 border-t border-theme-secondary" role="navigation" aria-label="表格分页">
+      <div class="text-xs text-terminal-dim" aria-live="polite">
         共 {{ data.length }} 条，第 {{ currentPage }}/{{ totalPages }} 页
       </div>
       <div class="flex items-center gap-1">
@@ -53,6 +57,8 @@
           class="px-2 py-1 text-xs rounded border border-theme-secondary text-terminal-secondary hover:border-terminal-accent hover:text-terminal-accent transition disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="currentPage === 1"
           @click="currentPage--"
+          :aria-label="`第${currentPage - 1}页`"
+          type="button"
         >
           上一页
         </button>
@@ -60,6 +66,8 @@
           class="px-2 py-1 text-xs rounded border border-theme-secondary text-terminal-secondary hover:border-terminal-accent hover:text-terminal-accent transition disabled:opacity-50 disabled:cursor-not-allowed"
           :disabled="currentPage === totalPages"
           @click="currentPage++"
+          :aria-label="`第${currentPage + 1}页`"
+          type="button"
         >
           下一页
         </button>

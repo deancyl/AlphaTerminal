@@ -1,6 +1,6 @@
 <template>
-  <div class="loading-spinner flex flex-col items-center justify-center py-12">
-    <div class="relative w-12 h-12 mb-4">
+  <div class="loading-spinner flex flex-col items-center justify-center py-12" role="status" aria-live="polite" aria-label="加载中">
+    <div class="relative w-12 h-12 mb-4" aria-hidden="true">
       <div class="absolute inset-0 border-4 border-theme-secondary rounded-full"></div>
       <div class="absolute inset-0 border-4 border-terminal-accent border-t-transparent rounded-full animate-spin"></div>
     </div>

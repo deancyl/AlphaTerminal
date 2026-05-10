@@ -1,7 +1,7 @@
 <template>
-  <div v-if="error" class="error-fallback">
+  <div v-if="error" class="error-fallback" role="alert" aria-live="assertive">
     <div class="error-container">
-      <div class="error-icon">
+      <div class="error-icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
           <line x1="12" y1="8" x2="12" y2="12"/>
@@ -18,13 +18,13 @@
       </div>
       
       <div class="error-actions">
-        <button @click="reload" class="btn-primary">
+        <button @click="reload" class="btn-primary" aria-label="重新加载页面" type="button">
           重新加载
         </button>
-        <button @click="goHome" class="btn-secondary">
+        <button @click="goHome" class="btn-secondary" aria-label="返回首页" type="button">
           返回首页
         </button>
-        <button v-if="errorDetails" @click="toggleDetails" class="btn-text">
+        <button v-if="errorDetails" @click="toggleDetails" class="btn-text" :aria-expanded="showDetails" type="button">
           {{ showDetails ? '隐藏详情' : '查看详情' }}
         </button>
       </div>

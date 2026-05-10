@@ -1,6 +1,6 @@
 <template>
-  <div class="error-display flex flex-col items-center justify-center py-12">
-    <div class="text-4xl mb-4">⚠️</div>
+  <div class="error-display flex flex-col items-center justify-center py-12" role="alert" aria-live="assertive">
+    <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
     <div class="text-sm text-terminal-dim mb-4 text-center max-w-md">
       {{ error || '加载失败，请稍后重试' }}
     </div>
@@ -8,6 +8,8 @@
       v-if="retry"
       class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
       @click="handleRetry"
+      aria-label="重试加载"
+      type="button"
     >
       重试
     </button>

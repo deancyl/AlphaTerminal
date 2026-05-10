@@ -1,13 +1,13 @@
 <template>
-  <div class="flex flex-col md:flex-row w-full h-full overflow-hidden">
+  <div class="flex flex-col md:flex-row w-full h-full overflow-hidden" role="main" aria-label="回测实验室">
 
     <!-- ═══════════════ 左侧边栏 ═══════════════ -->
-    <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3">
+    <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3" role="form" aria-label="回测参数配置">
 
       <!-- 策略模板预设（新增） -->
       <div class="px-3 py-2 border-b border-theme">
         <div class="text-[10px] text-theme-accent font-bold mb-2">🎯 快速预设</div>
-        <div class="flex flex-wrap gap-1.5">
+        <div class="flex flex-wrap gap-1.5" role="group" aria-label="策略预设选择">
           <button
             v-for="preset in strategyPresets" :key="preset.name"
             @click="applyPreset(preset)"
@@ -15,6 +15,9 @@
             :class="isPresetActive(preset)
               ? 'bg-[var(--color-info-bg)] border-[var(--color-info-border)] text-[var(--color-info)]'
               : 'border-theme-secondary text-theme-secondary hover:border-[var(--color-info-border)] hover:text-[var(--color-info-light)]'"
+            :aria-pressed="isPresetActive(preset)"
+            :aria-label="`${preset.name}: ${preset.desc}`"
+            type="button"
           >
             {{ preset.icon }} {{ preset.name }}
           </button>
@@ -233,12 +236,17 @@
           :class="running
             ? 'bg-[var(--color-neutral-bg)] text-theme-muted cursor-not-allowed'
             : 'bg-[var(--color-info-bg)] text-[var(--color-info)] hover:bg-[var(--color-info-hover)]/30 border border-[var(--color-info-border)]'"
+          :aria-busy="running"
+          type="button"
         >
           {{ running ? '⏳ 回测中...' : '▶ 执行回测' }}
         </button>
         <!-- 状态行 -->
         <div v-if="statusMsg" class="mt-1.5 text-[10px] text-center"
-          :class="statusMsg.startsWith('❌') ? 'text-[var(--color-danger)]' : statusMsg.startsWith('⚠️') ? 'text-[var(--color-warning)]' : 'text-theme-muted'">
+          :class="statusMsg.startsWith('❌') ? 'text-[var(--color-danger)]' : statusMsg.startsWith('⚠️') ? 'text-[var(--color-warning)]' : 'text-theme-muted'"
+          role="status"
+          aria-live="polite"
+        >
           {{ statusMsg }}
         </div>
       </div>

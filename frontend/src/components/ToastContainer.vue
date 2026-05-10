@@ -3,6 +3,9 @@
     <div
       class="fixed z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none"
       :class="isMobile ? 'top-2 left-2 right-2 items-center' : 'top-4 right-4 items-end'"
+      role="region"
+      aria-label="通知消息"
+      aria-live="polite"
     >
       <TransitionGroup
         enter-active-class="transition-all duration-300 ease-out"
@@ -19,9 +22,11 @@
           :class="getToastClass(toast.type)"
           @mouseenter="pauseToast(toast.id)"
           @mouseleave="resumeToast(toast.id)"
+          role="alert"
+          :aria-label="`${toast.title}${toast.message ? ': ' + toast.message : ''}`"
         >
           <div class="flex items-start gap-2 p-3">
-            <span class="text-base shrink-0 mt-0.5">{{ toast.icon }}</span>
+            <span class="text-base shrink-0 mt-0.5" aria-hidden="true">{{ toast.icon }}</span>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium leading-tight">{{ toast.title }}</div>
               <div v-if="toast.message" class="text-xs mt-0.5 opacity-80 leading-relaxed">{{ toast.message }}</div>
@@ -29,12 +34,14 @@
             <button
               class="shrink-0 w-5 h-5 flex items-center justify-center rounded-sm opacity-50 hover:opacity-100 transition-opacity text-xs"
               @click="remove(toast.id)"
+              :aria-label="`关闭${toast.title}通知`"
+              type="button"
             >
               ✕
             </button>
           </div>
           <!-- 进度条 -->
-          <div class="h-0.5 bg-current opacity-20">
+          <div class="h-0.5 bg-current opacity-20" aria-hidden="true">
             <div
               class="h-full bg-current opacity-60 transition-all linear"
               :style="{ width: getProgress(toast) + '%', transitionDuration: toast.duration + 'ms' }"

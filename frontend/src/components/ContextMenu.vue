@@ -13,16 +13,21 @@
         class="fixed z-[var(--z-popover)] bg-terminal-panel border border-theme-secondary rounded-sm shadow-sm py-1 min-w-[160px]"
         :style="{ left: x + 'px', top: y + 'px' }"
         @click.stop
+        role="menu"
+        aria-label="上下文菜单"
       >
         <div
           v-for="item in items"
           :key="item.id"
           class="px-3 py-2 text-[12px] text-theme-primary hover:bg-theme-hover cursor-pointer flex items-center gap-2 transition-colors"
           @click="handleClick(item)"
+          role="menuitem"
+          :aria-label="item.label"
+          tabindex="0"
         >
-          <span class="text-base">{{ item.icon }}</span>
+          <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
           <span>{{ item.label }}</span>
-          <span v-if="item.shortcut" class="ml-auto text-[10px] text-theme-muted">{{ item.shortcut }}</span>
+          <span v-if="item.shortcut" class="ml-auto text-[10px] text-theme-muted" aria-hidden="true">{{ item.shortcut }}</span>
         </div>
       </div>
     </Transition>

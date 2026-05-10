@@ -1,6 +1,6 @@
 <template>
-  <div class="loading-fallback">
-    <div class="loading-spinner" />
+  <div class="loading-fallback" role="status" aria-live="polite" aria-label="加载中">
+    <div class="loading-spinner" aria-hidden="true" />
     <p class="loading-text">{{ text }}</p>
   </div>
 </template>

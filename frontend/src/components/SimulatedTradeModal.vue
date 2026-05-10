@@ -1,10 +1,22 @@
 <template>
-  <div v-if="visible" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="close">
+  <div
+    v-if="visible"
+    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+    @click.self="close"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="trade-modal-title"
+  >
     <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-96 shadow-sm">
       <!-- Header -->
       <div class="flex items-center justify-between mb-5">
-        <h3 class="text-theme-primary font-bold text-base">📋 模拟调仓</h3>
-        <button @click="close" class="text-[var(--text-secondary)] hover:text-theme-primary text-lg">×</button>
+        <h3 id="trade-modal-title" class="text-theme-primary font-bold text-base">📋 模拟调仓</h3>
+        <button
+          @click="close"
+          class="text-[var(--text-secondary)] hover:text-theme-primary text-lg"
+          aria-label="关闭对话框"
+          type="button"
+        >×</button>
       </div>
 
       <!-- 账户标识 -->
@@ -15,7 +27,7 @@
       </div>
 
       <!-- 方向切换 -->
-      <div class="flex gap-2 mb-4">
+      <div class="flex gap-2 mb-4" role="group" aria-label="交易方向">
         <button
           @click="form.direction = 'buy'"
           :class="[
@@ -24,6 +36,9 @@
               ? 'bg-green-600 text-theme-primary'
               : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
           ]"
+          :aria-pressed="form.direction === 'buy'"
+          aria-label="买入"
+          type="button"
         >📈 买入</button>
         <button
           @click="form.direction = 'sell'"
@@ -33,6 +48,9 @@
               ? 'bg-red-600 text-theme-primary'
               : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
           ]"
+          :aria-pressed="form.direction === 'sell'"
+          aria-label="卖出"
+          type="button"
         >📉 卖出</button>
       </div>
 
@@ -40,32 +58,38 @@
       <div class="space-y-3">
         <!-- 标的代码 -->
         <div>
-          <label class="text-[var(--text-secondary)] text-xs mb-1 block">标的代码</label>
+          <label for="trade-symbol" class="text-[var(--text-secondary)] text-xs mb-1 block">标的代码</label>
           <input
+            id="trade-symbol"
             v-model="form.symbol"
             @input="form.symbol = form.symbol.toLowerCase()"
             class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm tracking-wider"
             placeholder="sh000001 / sz000001"
+            aria-describedby="trade-symbol-hint"
           />
+          <span id="trade-symbol-hint" class="sr-only">输入股票代码，如 sh000001 或 sz000001</span>
         </div>
 
         <!-- 价格 -->
         <div>
-          <label class="text-[var(--text-secondary)] text-xs mb-1 block">交易价格 (元)</label>
+          <label for="trade-price" class="text-[var(--text-secondary)] text-xs mb-1 block">交易价格 (元)</label>
           <input
+            id="trade-price"
             v-model.number="form.price"
             type="number"
             step="0.001"
             min="0"
             class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm"
             placeholder="10.00"
+            aria-describedby="price-hint"
           />
         </div>
 
         <!-- 数量 -->
         <div>
-          <label class="text-[var(--text-secondary)] text-xs mb-1 block">交易数量 (股)</label>
+          <label for="trade-shares" class="text-[var(--text-secondary)] text-xs mb-1 block">交易数量 (股)</label>
           <input
+            id="trade-shares"
             v-model.number="form.shares"
             type="number"
             step="1"
@@ -77,8 +101,9 @@
 
         <!-- 日期 -->
         <div>
-          <label class="text-[var(--text-secondary)] text-xs mb-1 block">交易日期</label>
+          <label for="trade-date" class="text-[var(--text-secondary)] text-xs mb-1 block">交易日期</label>
           <input
+            id="trade-date"
             v-model="form.date"
             type="date"
             class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary text-sm"
@@ -86,12 +111,22 @@
         </div>
 
         <!-- 错误提示 -->
-        <div v-if="error" class="text-[var(--color-danger)] text-xs bg-[var(--color-danger-light)]/10 border border-[var(--color-danger-border)]/20 rounded-sm px-3 py-2">
+        <div
+          v-if="error"
+          class="text-[var(--color-danger)] text-xs bg-[var(--color-danger-light)]/10 border border-[var(--color-danger-border)]/20 rounded-sm px-3 py-2"
+          role="alert"
+          aria-live="polite"
+        >
           {{ error }}
         </div>
 
         <!-- 成功提示 -->
-        <div v-if="success" class="text-[var(--color-success)] text-xs bg-[var(--color-success-light)]/10 border border-[var(--color-success-border)]/20 rounded-sm px-3 py-2">
+        <div
+          v-if="success"
+          class="text-[var(--color-success)] text-xs bg-[var(--color-success-light)]/10 border border-[var(--color-success-border)]/20 rounded-sm px-3 py-2"
+          role="status"
+          aria-live="polite"
+        >
           ✅ {{ success }}
         </div>
       </div>
@@ -101,6 +136,7 @@
         <button
           @click="close"
           class="flex-1 py-2 text-[var(--text-secondary)] hover:text-theme-primary rounded-sm border border-[var(--border-primary)] text-sm"
+          type="button"
         >取消</button>
         <button
           @click="submitTrade"
@@ -113,6 +149,8 @@
                 ? 'bg-[var(--color-success)] hover:bg-[var(--color-success-hover)] text-theme-primary'
                 : 'bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-theme-primary'
           ]"
+          :aria-busy="loading"
+          type="button"
         >
           <span v-if="loading">提交中...</span>
           <span v-else>{{ form.direction === 'buy' ? '📈 确认买入' : '📉 确认卖出' }}</span>
@@ -120,7 +158,7 @@
       </div>
 
       <!-- 市价参考（买入时显示今日收盘价参考） -->
-      <div v-if="priceHint" class="mt-3 text-xs text-[var(--text-muted)] text-center">
+      <div v-if="priceHint" class="mt-3 text-xs text-[var(--text-muted)] text-center" id="price-hint">
         💡 {{ priceHint }}
       </div>
     </div>

@@ -7,6 +7,9 @@
     class="fixed inset-0 z-[9999] flex items-center justify-center"
     style="background: rgba(0,0,0,0.65); backdrop-filter: blur(3px);"
     @click.self="close"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="bond-history-title"
   >
     <!-- 弹窗主体 -->
     <div class="terminal-panel border border-theme rounded-sm p-4 w-full max-w-[540px] flex flex-col gap-3 shadow-sm"
@@ -15,17 +18,19 @@
       <!-- 头部 -->
       <div class="flex items-center justify-between">
         <div class="flex flex-col">
-          <span class="text-[13px] font-semibold text-theme-primary">{{ tenorLabel }} 国债历史走势</span>
+          <span id="bond-history-title" class="text-[13px] font-semibold text-theme-primary">{{ tenorLabel }} 国债历史走势</span>
           <span class="text-[10px] text-terminal-dim mt-0.5">周期：{{ periodLabel }} &nbsp;|&nbsp; 数据来源：AkShare</span>
         </div>
         <button
           class="text-theme-tertiary hover:text-theme-primary transition-colors text-lg leading-none"
           @click="close"
+          aria-label="关闭对话框"
+          type="button"
         >✕</button>
       </div>
 
       <!-- 加载 / 错误 -->
-      <div v-if="isLoading" class="py-6 space-y-3 px-2">
+      <div v-if="isLoading" class="py-6 space-y-3 px-2" aria-live="polite" aria-busy="true">
         <div class="skeleton h-4 w-3/4 rounded-sm"></div>
         <div class="skeleton h-4 w-1/2 rounded-sm"></div>
         <div class="skeleton h-4 w-2/3 rounded-sm"></div>
@@ -35,7 +40,7 @@
           <div class="skeleton h-3 w-12 rounded-sm"></div>
         </div>
       </div>
-      <div v-else-if="error" class="flex items-center justify-center py-6">
+      <div v-else-if="error" class="flex items-center justify-center py-6" role="alert" aria-live="assertive">
         <span class="text-bullish text-xs">{{ error }}</span>
       </div>
 

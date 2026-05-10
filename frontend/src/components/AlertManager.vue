@@ -1,5 +1,5 @@
 <template>
-  <div class="alert-manager">
+  <div class="alert-manager" role="region" aria-label="价格预警管理">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-3">
       <span class="text-terminal-accent font-bold text-sm">🔔 价格预警</span>
@@ -8,12 +8,16 @@
           v-if="notificationPermission !== 'granted'"
           @click="requestPermission"
           class="bg-[var(--color-warning-bg)] hover:bg-[var(--color-warning-bg)] text-[var(--color-warning)] border border-[var(--color-warning-border)] text-xs px-2 py-1 rounded-sm transition-colors"
+          aria-label="启用浏览器通知"
+          type="button"
         >
           启用通知
         </button>
         <button
           @click="showAddModal = true"
           class="bg-terminal-accent/20 hover:bg-terminal-accent/30 text-terminal-accent border border-terminal-accent/30 text-xs px-2 py-1 rounded-sm transition-colors"
+          aria-label="添加价格预警"
+          type="button"
         >
           + 添加
         </button>
@@ -21,12 +25,12 @@
     </div>
 
     <!-- 权限状态 -->
-    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-sm text-xs text-[var(--color-danger-light)]">
+    <div v-if="notificationPermission === 'denied'" class="mb-3 p-2 bg-[var(--color-danger-bg)] border border-[var(--color-danger-border)] rounded-sm text-xs text-[var(--color-danger-light)]" role="alert" aria-live="assertive">
       ⚠️ 浏览器通知权限被拒绝，请手动启用通知权限以接收预警
     </div>
 
     <!-- 预警规则列表 -->
-    <div class="space-y-2 max-h-60 overflow-y-auto">
+    <div class="space-y-2 max-h-60 overflow-y-auto" role="list" aria-label="预警规则列表">
       <div v-if="alertRules.length === 0" class="text-center text-[var(--text-muted)] text-xs py-4">
         暂无预警规则，点击"添加"创建
       </div>
@@ -36,6 +40,7 @@
         :key="rule.id"
         class="p-2 bg-terminal-panel border border-theme rounded-sm text-xs"
         :class="{ 'opacity-50': !rule.enabled }"
+        role="listitem"
       >
         <div class="flex items-center justify-between">
           <div class="flex-1">
@@ -53,12 +58,17 @@
               @click="toggleRule(rule.id)"
               class="w-6 h-6 rounded-sm flex items-center justify-center transition-colors"
               :class="rule.enabled ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 'bg-[var(--color-neutral-bg)] text-[var(--text-secondary)]'"
+              :aria-label="rule.enabled ? '禁用预警' : '启用预警'"
+              :aria-pressed="rule.enabled"
+              type="button"
             >
               {{ rule.enabled ? '✓' : '○' }}
             </button>
             <button
               @click="deleteRule(rule.id)"
               class="w-6 h-6 rounded-sm flex items-center justify-center bg-[var(--color-danger-bg)] text-[var(--color-danger)] hover:bg-[var(--color-danger-bg)] transition-colors"
+              :aria-label="`删除${rule.symbol}预警`"
+              type="button"
             >
               ×
             </button>
@@ -68,14 +78,15 @@
     </div>
 
     <!-- 添加预警弹窗 -->
-    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddModal = false">
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddModal = false" role="dialog" aria-modal="true" aria-labelledby="alert-modal-title">
       <div class="bg-terminal-panel border border-theme rounded-sm p-4 w-80 max-w-[90vw]">
-        <h3 class="text-sm font-bold text-terminal-accent mb-3">添加价格预警</h3>
+        <h3 id="alert-modal-title" class="text-sm font-bold text-terminal-accent mb-3">添加价格预警</h3>
         
         <div class="space-y-3">
           <div>
-            <label class="block text-xs text-[var(--text-secondary)] mb-1">股票代码</label>
+            <label for="alert-symbol" class="block text-xs text-[var(--text-secondary)] mb-1">股票代码</label>
             <input
+              id="alert-symbol"
               v-model="newRule.symbol"
               type="text"
               placeholder="如: sh600519"
@@ -84,8 +95,9 @@
           </div>
           
           <div>
-            <label class="block text-xs text-[var(--text-secondary)] mb-1">预警条件</label>
+            <label for="alert-condition" class="block text-xs text-[var(--text-secondary)] mb-1">预警条件</label>
             <select
+              id="alert-condition"
               v-model="newRule.condition"
               class="w-full bg-terminal-bg/60 border border-[var(--border-primary)] rounded-sm px-2 py-1 text-xs text-theme-primary focus:border-terminal-accent/60 focus:outline-none"
             >
@@ -96,8 +108,9 @@
           </div>
           
           <div>
-            <label class="block text-xs text-[var(--text-secondary)] mb-1">目标价格</label>
+            <label for="alert-price" class="block text-xs text-[var(--text-secondary)] mb-1">目标价格</label>
             <input
+              id="alert-price"
               v-model.number="newRule.targetPrice"
               type="number"
               step="0.01"
@@ -107,8 +120,9 @@
           </div>
           
           <div>
-            <label class="block text-xs text-[var(--text-secondary)] mb-1">备注（可选）</label>
+            <label for="alert-note" class="block text-xs text-[var(--text-secondary)] mb-1">备注（可选）</label>
             <input
+              id="alert-note"
               v-model="newRule.note"
               type="text"
               placeholder="添加备注说明"
@@ -121,6 +135,7 @@
           <button
             @click="showAddModal = false"
             class="px-3 py-1 text-xs text-[var(--text-secondary)] hover:text-theme-primary transition-colors"
+            type="button"
           >
             取消
           </button>
@@ -128,6 +143,7 @@
             @click="addRule"
             :disabled="!canAdd"
             class="px-3 py-1 text-xs bg-[var(--color-info)] text-theme-primary rounded-sm hover:bg-[var(--color-info-hover)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            type="button"
           >
             添加
           </button>

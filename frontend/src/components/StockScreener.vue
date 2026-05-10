@@ -1,49 +1,58 @@
 <template>
-  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono">
+  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono" role="region" aria-label="股票筛选器">
     <div class="flex flex-wrap items-center justify-between p-2 gap-2 border-b border-theme-secondary shrink-0">
       <div class="flex items-center gap-4 text-xs">
         <span class="text-terminal-accent font-bold">全市场个股</span>
         <div class="flex items-center gap-1">
-          <input type="text" v-model="searchQuery" placeholder="输入拼音/代码/名称"
+          <label for="stock-search" class="sr-only">搜索股票</label>
+          <input id="stock-search" type="text" v-model="searchQuery" placeholder="输入拼音/代码/名称"
              class="bg-terminal-bg border border-theme-secondary rounded-sm px-2 py-1 focus:border-terminal-accent outline-none w-32" />
         </div>
       </div>
       <!-- 电脑端：显示所有筛选条件 -->
-      <div class="hidden md:flex items-center gap-3 flex-wrap">
+      <div class="hidden md:flex items-center gap-3 flex-wrap" role="group" aria-label="筛选条件">
         <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">涨跌幅 ></span>
-          <input type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">%</span>
+          <label for="filter-change" class="text-terminal-dim">涨跌幅 ></label>
+          <input id="filter-change" type="number" v-model="flt.change_pct.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" aria-describedby="filter-change-unit" />
+          <span id="filter-change-unit" class="text-terminal-dim">%</span>
         </div>
         <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">换手率 ></span>
-          <input type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
-          <span class="text-terminal-dim">%</span>
+          <label for="filter-turnover" class="text-terminal-dim">换手率 ></label>
+          <input id="filter-turnover" type="number" v-model="flt.turnover.min" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" aria-describedby="filter-turnover-unit" />
+          <span id="filter-turnover-unit" class="text-terminal-dim">%</span>
         </div>
         <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">PE <</span>
-          <input type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-pe" class="text-terminal-dim">PE <</label>
+          <input id="filter-pe" type="number" v-model="flt.pe.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
-          <span class="text-terminal-dim">PB <</span>
-          <input type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-pb" class="text-terminal-dim">PB <</label>
+          <input id="filter-pb" type="number" v-model="flt.pb.max" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">价格区间</span>
-          <input type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-price-min" class="sr-only">最低价格</label>
+          <input id="filter-price-min" type="number" v-model="flt.price.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-price-max" class="sr-only">最高价格</label>
+          <input id="filter-price-max" type="number" v-model="flt.price.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
         <div class="flex items-center gap-1 text-xs">
           <span class="text-terminal-dim">市值(亿)</span>
-          <input type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-mktcap-min" class="sr-only">最小市值</label>
+          <input id="filter-mktcap-min" type="number" v-model="flt.mktcap.min" placeholder="低" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
           <span class="text-terminal-dim">~</span>
-          <input type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
+          <label for="filter-mktcap-max" class="sr-only">最大市值</label>
+          <input id="filter-mktcap-max" type="number" v-model="flt.mktcap.max" placeholder="高" class="w-12 bg-terminal-bg border border-theme-secondary rounded-sm px-1 outline-none focus:border-theme-accent" />
         </div>
       </div>
       <!-- 移动端：简化筛选 -->
       <div class="flex md:hidden items-center gap-2">
-        <button @click="showMobileFilter = !showMobileFilter" class="px-2 py-0.5 text-[10px] border border-theme-secondary rounded-sm text-terminal-dim hover:border-theme-accent">
+        <button @click="showMobileFilter = !showMobileFilter" class="px-2 py-0.5 text-[10px] border border-theme-secondary rounded-sm text-terminal-dim hover:border-theme-accent"
+          :aria-expanded="showMobileFilter"
+          aria-label="筛选条件"
+          type="button"
+        >
           筛选
         </button>
       </div>
