@@ -11,6 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter
 from typing import Any, Dict, Optional
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.circuit_breaker import CircuitBreakerOpen
+from app.services.data_fetcher import akshare_breaker
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
@@ -22,6 +24,34 @@ _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="f9_")
 _cache: Dict[str, Any] = {}
 _cache_ttl: Dict[str, float] = {}
 CACHE_DURATION = 300  # 5分钟缓存
+
+
+def normalize_f9_symbol(symbol: str) -> str:
+    """
+    标准化股票代码，去除前缀
+    
+    Args:
+        symbol: 股票代码，可能带前缀（如 sh600519, sz000001, hk00700, usAAPL）
+    
+    Returns:
+        纯股票代码（如 600519, 000001, 00700, AAPL）
+    """
+    if not symbol:
+        return symbol
+    
+    # 转小写用于匹配
+    symbol_lower = symbol.lower()
+    
+    # 常见前缀列表
+    prefixes = ['sh', 'sz', 'hk', 'us']
+    
+    for prefix in prefixes:
+        if symbol_lower.startswith(prefix):
+            # 返回去除前缀后的原始大小写（保留数字部分）
+            return symbol[len(prefix):]
+    
+    # 无前缀，直接返回
+    return symbol
 
 
 def get_cached(key: str) -> Optional[Any]:
@@ -47,6 +77,14 @@ def set_cached(key: str, value: Any) -> None:
     _cache_ttl[key] = time.time()
 
 
+def check_akshare_circuit() -> bool:
+    """检查 AkShare 熔断器状态，返回 True 表示可用"""
+    if not akshare_breaker.is_available():
+        logger.warning("[F9] AkShare circuit breaker OPEN, skipping request")
+        return False
+    return True
+
+
 # ── API 端点 ─────────────────────────────────────────────────────
 
 # ── 健康检查端点 ─────────────────────────────────────────────────
@@ -67,11 +105,15 @@ async def get_shareholder_data(symbol: str):
     - 股本变动记录
     - 流通股东变化
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"shareholder_{symbol}"
     cached = get_cached(cache_key)
     if cached:
         logger.info(f"[shareholder] Cache hit for {symbol}")
         return success_response(cached)
+    
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     
     try:
         import akshare as ak
@@ -83,7 +125,8 @@ async def get_shareholder_data(symbol: str):
         async def fetch_circulate_holders():
             def _fetch():
                 try:
-                    df = ak.stock_circulate_stock_holder(symbol=symbol)
+                    with akshare_breaker:
+                        df = ak.stock_circulate_stock_holder(symbol=symbol)
                     # 获取最新一期数据
                     latest_date = df['截止日期'].max()
                     latest_df = df[df['截止日期'] == latest_date].head(10)
@@ -91,6 +134,9 @@ async def get_shareholder_data(symbol: str):
                         'date': str(latest_date),
                         'holders': latest_df[['股东名称', '持股数量', '占流通股比例', '股本性质']].to_dict('records')
                     }
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    return None
                 except (KeyError, ValueError, TypeError) as e:
                     logger.warning(f"[shareholder] Data processing error in circulate holders: {e}")
                     return None
@@ -105,7 +151,8 @@ async def get_shareholder_data(symbol: str):
                 try:
                     end_date = datetime.now().strftime('%Y%m%d')
                     start_date = (datetime.now() - timedelta(days=365)).strftime('%Y%m%d')
-                    df = ak.stock_share_change_cninfo(symbol=symbol, start_date=start_date, end_date=end_date)
+                    with akshare_breaker:
+                        df = ak.stock_share_change_cninfo(symbol=symbol, start_date=start_date, end_date=end_date)
                     
                     changes = []
                     for _, row in df.iterrows():
@@ -119,6 +166,9 @@ async def get_shareholder_data(symbol: str):
                         changes.append(change)
                     
                     return changes
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
                     logger.warning(f"[shareholder] Data processing error in share changes: {e}")
                     return []
@@ -131,7 +181,8 @@ async def get_shareholder_data(symbol: str):
         async def fetch_holder_changes():
             def _fetch():
                 try:
-                    df = ak.stock_shareholder_change_ths(symbol=symbol)
+                    with akshare_breaker:
+                        df = ak.stock_shareholder_change_ths(symbol=symbol)
                     changes = []
                     for _, row in df.iterrows():
                         change = {
@@ -145,6 +196,9 @@ async def get_shareholder_data(symbol: str):
                         }
                         changes.append(change)
                     return changes[:20]  # 最近20条
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
                     logger.warning(f"[shareholder] Data processing error in holder changes: {e}")
                     return []
@@ -186,11 +240,15 @@ async def get_margin_data(symbol: str):
     获取个股融资融券数据（最近30天）
     数据来源: akshare stock_margin_detail_sse / stock_margin_detail_szse
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"margin_{symbol}"
     cached = get_cached(cache_key)
     if cached:
         logger.info(f"[Margin] Cache hit for {symbol}")
         return success_response(cached)
+
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
 
     def fetch_margin_data():
         """在线程池中执行 akshare 调用"""
@@ -214,10 +272,11 @@ async def get_margin_data(symbol: str):
         # 尝试获取数据（从最近的日期开始）
         for date in dates[:15]:  # 尝试最近15个工作日
             try:
-                if exchange == "sse":
-                    df = ak.stock_margin_detail_sse(date=date)
-                else:
-                    df = ak.stock_margin_detail_szse(date=date)
+                with akshare_breaker:
+                    if exchange == "sse":
+                        df = ak.stock_margin_detail_sse(date=date)
+                    else:
+                        df = ak.stock_margin_detail_szse(date=date)
 
                 if df is not None and len(df) > 0:
                     # 查找对应股票的数据
@@ -248,6 +307,9 @@ async def get_margin_data(symbol: str):
 
                             if len(all_data) >= 30:
                                 break
+            except CircuitBreakerOpen as e:
+                logger.warning(f"[Margin] Circuit breaker OPEN: {e}")
+                break
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Margin] Data processing error for {symbol} on {date}: {e}")
                 continue
@@ -296,6 +358,7 @@ async def get_financial_data(symbol: str):
     获取股票财务指标数据
     数据来源: akshare.stock_financial_analysis_indicator
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"financial_{symbol}"
 
     # 检查缓存
@@ -303,6 +366,9 @@ async def get_financial_data(symbol: str):
     if cached:
         logger.info(f"[F9] Cache hit for financial: {symbol}")
         return success_response(cached)
+
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
 
     try:
         # 在线程池中执行同步的 akshare 调用
@@ -313,7 +379,8 @@ async def get_financial_data(symbol: str):
             import pandas as pd
 
             # 获取财务指标数据
-            df = ak.stock_financial_analysis_indicator(symbol=symbol, start_year="2020")
+            with akshare_breaker:
+                df = ak.stock_financial_analysis_indicator(symbol=symbol, start_year="2020")
 
             if df.empty:
                 return None
@@ -369,6 +436,9 @@ async def get_financial_data(symbol: str):
         logger.info(f"[F9] Fetched financial data for {symbol}, quarters: {len(result['indicators'])}")
         return success_response(result)
 
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[F9] Circuit breaker OPEN for financial {symbol}: {e}")
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[F9] Data processing error for financial data {symbol}: {e}", exc_info=True)
         # Return empty data instead of exception
@@ -394,6 +464,7 @@ async def get_profit_forecast(symbol: str):
     盈利预测数据
     数据来源: akshare stock_profit_forecast_ths
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"forecast_{symbol}"
     
     # 检查缓存
@@ -402,25 +473,26 @@ async def get_profit_forecast(symbol: str):
         logger.info(f"[F9] Cache hit for forecast: {symbol}")
         return success_response(cached)
     
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
+    
     try:
         import akshare as ak
         
         # 在线程池中执行同步调用
         loop = asyncio.get_event_loop()
         
-        # 获取EPS预测数据
-        eps_task = loop.run_in_executor(
-            _executor,
-            lambda: ak.stock_profit_forecast_ths(symbol=symbol, indicator="预测年报每股收益")
-        )
+        def fetch_eps():
+            with akshare_breaker:
+                return ak.stock_profit_forecast_ths(symbol=symbol, indicator="预测年报每股收益")
         
-        # 获取机构预测详表
-        institution_task = loop.run_in_executor(
-            _executor,
-            lambda: ak.stock_profit_forecast_ths(symbol=symbol, indicator="业绩预测详表-机构")
-        )
+        def fetch_institutions():
+            with akshare_breaker:
+                return ak.stock_profit_forecast_ths(symbol=symbol, indicator="业绩预测详表-机构")
         
         # 并行执行
+        eps_task = loop.run_in_executor(_executor, fetch_eps)
+        institution_task = loop.run_in_executor(_executor, fetch_institutions)
         eps_df, institution_df = await asyncio.gather(eps_task, institution_task)
         
         # 处理EPS预测数据
@@ -444,6 +516,9 @@ async def get_profit_forecast(symbol: str):
         
         return success_response(result)
         
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}")
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[F9] Data processing error for forecast {symbol}: {e}")
         return error_response(f"数据处理失败: {str(e)}")
@@ -470,11 +545,15 @@ async def get_institution_holdings(symbol: str):
             }
         }
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"institution_{symbol}"
     cached = get_cached(cache_key)
     if cached:
         logger.info(f"[Institution] Cache hit for {symbol}")
         return success_response(cached)
+    
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     
     try:
         import akshare as ak
@@ -496,10 +575,14 @@ async def get_institution_holdings(symbol: str):
                 quarter_str = f"{y}{q}"
                 
                 try:
-                    df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
+                    with akshare_breaker:
+                        df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
                     if df is not None and not df.empty:
                         logger.info(f"[Institution] Found data for quarter {quarter_str}")
                         return df.to_dict('records'), quarter_str
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}")
+                    return [], current_quarter_str
                 except (KeyError, ValueError, TypeError) as e:
                     logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
                     continue
@@ -522,7 +605,8 @@ async def get_institution_holdings(symbol: str):
                 quarter_str = f"{y}{q}"
                 
                 try:
-                    df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
+                    with akshare_breaker:
+                        df = ak.stock_institute_hold_detail(stock=symbol, quarter=quarter_str)
                     if df is not None and not df.empty:
                         count = len(df)
                         pct_col = None
@@ -542,6 +626,9 @@ async def get_institution_holdings(symbol: str):
                             "count": count,
                             "total_pct": round(total_pct, 2)
                         })
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}")
+                    break
                 except (KeyError, ValueError, TypeError) as e:
                     logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
                     continue
@@ -571,6 +658,9 @@ async def get_institution_holdings(symbol: str):
         logger.info(f"[Institution] Successfully fetched data for {symbol}")
         return success_response(result)
         
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[Institution] Circuit breaker OPEN for {symbol}: {e}")
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Institution] Data processing error for {symbol}: {e}")
         return error_response(f"数据处理失败: {str(e)}")
@@ -607,11 +697,15 @@ async def get_peer_comparison(symbol: str):
             }
         }
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"peers_{symbol}"
     cached = get_cached(cache_key)
     if cached:
         logger.info(f"[Peers] Cache hit for {symbol}")
         return success_response(cached)
+    
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     
     try:
         import akshare as ak
@@ -623,11 +717,14 @@ async def get_peer_comparison(symbol: str):
             info_dict = {}
             
             try:
-                df = ak.stock_profile_cninfo(symbol=symbol)
+                with akshare_breaker:
+                    df = ak.stock_profile_cninfo(symbol=symbol)
                 if df is not None and not df.empty:
                     row = df.iloc[0]
                     info_dict['行业'] = row.get('所属行业', '')
                     info_dict['主营业务'] = row.get('主营业务', '')
+            except CircuitBreakerOpen as e:
+                logger.warning(f"[Peers] Circuit breaker OPEN: {e}")
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Peers] Data processing error in stock_profile_cninfo: {e}")
             except Exception as e:
@@ -635,11 +732,14 @@ async def get_peer_comparison(symbol: str):
             
             if not info_dict.get('行业'):
                 try:
-                    df = ak.stock_individual_info_em(symbol=symbol)
+                    with akshare_breaker:
+                        df = ak.stock_individual_info_em(symbol=symbol)
                     if df is not None and not df.empty:
                         for _, row in df.iterrows():
                             if row['item'] not in info_dict or not info_dict[row['item']]:
                                 info_dict[row['item']] = row['value']
+                except CircuitBreakerOpen as e:
+                    logger.warning(f"[Peers] Circuit breaker OPEN: {e}")
                 except (KeyError, ValueError, TypeError) as e:
                     logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}")
                 except Exception as e:
@@ -700,7 +800,8 @@ async def get_peer_comparison(symbol: str):
         
         def fetch_financial_indicator(stock_symbol):
             try:
-                df = ak.stock_financial_analysis_indicator(symbol=stock_symbol, start_year="2023")
+                with akshare_breaker:
+                    df = ak.stock_financial_analysis_indicator(symbol=stock_symbol, start_year="2023")
                 if df is not None and not df.empty:
                     latest = df.iloc[0]
                     return {
@@ -709,6 +810,9 @@ async def get_peer_comparison(symbol: str):
                         'pb': latest.get('市净率'),
                         'revenue_growth': latest.get('主营业务收入增长率(%)')
                     }
+                return None
+            except CircuitBreakerOpen as e:
+                logger.warning(f"[Peers] Circuit breaker OPEN for {stock_symbol}: {e}")
                 return None
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Peers] Data processing error for financial {stock_symbol}: {e}")
@@ -821,6 +925,9 @@ async def get_peer_comparison(symbol: str):
         logger.info(f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}")
         return success_response(result)
         
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[Peers] Circuit breaker OPEN for {symbol}: {e}")
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
@@ -836,11 +943,15 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     获取公司公告数据
     数据来源: akshare stock_individual_notice_report
     """
+    symbol = normalize_f9_symbol(symbol)
     cache_key = f"announcements_{symbol}_{page}"
     cached = get_cached(cache_key)
     if cached:
         logger.info(f"[Announcements] Cache hit for {symbol} page {page}")
         return success_response(cached)
+    
+    if not check_akshare_circuit():
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     
     try:
         import akshare as ak
@@ -848,7 +959,8 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         
         def fetch_announcements():
             try:
-                df = ak.stock_individual_notice_report(security=symbol)
+                with akshare_breaker:
+                    df = ak.stock_individual_notice_report(security=symbol)
                 
                 if df is None or df.empty:
                     return []
@@ -866,6 +978,9 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
                     all_announcements.append(announcement)
                 
                 return all_announcements
+            except CircuitBreakerOpen as e:
+                logger.warning(f"[Announcements] Circuit breaker OPEN: {e}")
+                return []
             except (KeyError, ValueError, TypeError) as e:
                 logger.warning(f"[Announcements] Data processing error for {symbol}: {e}")
                 return []
@@ -893,6 +1008,9 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         logger.info(f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}")
         return success_response(result)
         
+    except CircuitBreakerOpen as e:
+        logger.warning(f"[Announcements] Circuit breaker OPEN for {symbol}: {e}")
+        return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Announcements] Data processing error for {symbol}: {e}")
         return error_response(f"数据处理失败: {str(e)}")
