@@ -12,34 +12,10 @@ import time
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# ── API 响应标准化工具 ─────────────────────────────────────────────────
-def success_response(data, message="success"):
-    """创建成功响应"""
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-def error_response(code, message, data=None):
-    """创建错误响应"""
-    return {
-        "code": code,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-class ErrorCode:
-    SUCCESS = 0
-    BAD_REQUEST = 100
-    NOT_FOUND = 104
-    INTERNAL_ERROR = 200
 
 # ── 缓存 ────────────────────────────────────────────────────────
 _BOND_CACHE      = {}

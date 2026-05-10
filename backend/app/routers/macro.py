@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from fastapi import APIRouter
 from typing import Optional, List
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/macro", tags=["macro"])
@@ -99,23 +100,6 @@ def set_cached(key, value):
     _cache[key] = value
     _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
     logger.info(f"[Cache SET] {key}, expires at {_cache_ttl[key]}")
-
-# ── 响应标准化工具 ─────────────────────────────────────────────────
-def success_response(data, message="success"):
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(datetime.now().timestamp() * 1000)
-    }
-
-def error_response(message, code=500):
-    return {
-        "code": code,
-        "message": message,
-        "data": None,
-        "timestamp": int(datetime.now().timestamp() * 1000)
-    }
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")

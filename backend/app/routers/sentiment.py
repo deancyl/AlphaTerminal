@@ -16,36 +16,11 @@ from app.services.sentiment_engine import (
     get_last_news_time, trigger_spot_fetch, trigger_news_fetch,
     get_news_sentiment,
 )
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ── API 响应标准化工具 ─────────────────────────────────────────────────
-def success_response(data, message="success"):
-    """创建成功响应"""
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-def error_response(code, message, data=None):
-    """创建错误响应"""
-    return {
-        "code": code,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-class ErrorCode:
-    SUCCESS = 0
-    BAD_REQUEST = 100
-    NOT_FOUND = 104
-    INTERNAL_ERROR = 200
-    THIRD_PARTY_ERROR = 302
 
 # ── 日内多空历史（每15秒追加一点，最多480个点=2小时轮询）────────
 _INTRADAY_MAX_POINTS = 480

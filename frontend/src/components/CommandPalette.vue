@@ -12,35 +12,44 @@
         v-if="visible"
         class="fixed inset-0 z-[900] flex items-start justify-center pt-[15vh]"
         @click="handleBackdropClick"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="command-palette-title"
       >
         <!-- 半透明遮罩 -->
-        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" aria-hidden="true"></div>
 
         <!-- 命令面板 -->
         <div
           class="relative w-full max-w-[560px] mx-4 rounded-sm shadow-sm overflow-hidden flex flex-col max-h-[60vh]"
           style="background: var(--bg-glass); backdrop-filter: blur(12px);"
           @click.stop
+          role="search"
         >
           <!-- 搜索输入框 -->
           <div class="flex items-center gap-3 px-4 py-3 border-b border-[var(--border-primary)]">
-            <span class="text-[var(--text-tertiary)] text-lg">🔍</span>
+            <span class="text-[var(--text-tertiary)] text-lg" aria-hidden="true">🔍</span>
+            <label id="command-palette-title" class="sr-only">命令搜索</label>
             <input
               ref="inputRef"
               v-model="query"
-              type="text"
+              type="search"
               placeholder="输入代码/名称/拼音首字母，或输入命令（如 :F9）"
               class="flex-1 bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-[var(--text-placeholder)]"
               @keydown="handleInputKeydown"
+              aria-label="搜索股票或命令"
+              aria-autocomplete="list"
+              aria-controls="command-results"
+              :aria-activedescendant="selectedItem"
             />
-            <span class="text-[10px] text-[var(--text-muted)] px-2 py-1 rounded-sm border border-[var(--border-secondary)]">ESC</span>
+            <kbd class="text-[10px] text-[var(--text-muted)] px-2 py-1 rounded-sm border border-[var(--border-secondary)]" aria-hidden="true">ESC</kbd>
           </div>
 
           <!-- 搜索结果 -->
-          <div class="flex-1 overflow-y-auto">
+          <div class="flex-1 overflow-y-auto" id="command-results" role="listbox">
             <!-- 最近搜索 -->
             <div v-if="!query && recentSearches.length > 0" class="py-2">
-              <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">最近搜索</div>
+              <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider" aria-hidden="true">最近搜索</div>
               <div
                 v-for="(item, index) in recentSearches"
                 :key="item.id"
@@ -48,8 +57,11 @@
                 :class="selectedIndex === index ? 'bg-[var(--color-primary-bg)]' : 'hover:bg-[var(--bg-hover)]'"
                 @click="executeItem(item)"
                 @mouseenter="selectedIndex = index"
+                role="option"
+                :aria-selected="selectedIndex === index"
+                :id="`recent-${index}`"
               >
-                <span class="text-base">{{ item.icon }}</span>
+                <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
                 <div class="flex-1 min-w-0">
                   <div class="text-sm text-[var(--text-primary)]">{{ item.name }}</div>
                   <div class="text-[10px] text-[var(--text-muted)]">{{ item.desc }}</div>
@@ -57,6 +69,8 @@
                 <button
                   class="text-[var(--text-muted)] hover:text-[var(--text-primary)] px-1"
                   @click.stop="removeRecent(item)"
+                  aria-label="从最近搜索中移除"
+                  type="button"
                 >
                   ✕
                 </button>
@@ -67,7 +81,7 @@
             <template v-if="query">
               <!-- 股票结果 -->
               <div v-if="stockResults.length > 0" class="py-2">
-                <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">股票</div>
+                <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider" aria-hidden="true">股票</div>
                 <div
                   v-for="(item, index) in stockResults"
                   :key="item.symbol"
@@ -75,8 +89,11 @@
                   :class="selectedIndex === getGlobalIndex('stock', index) ? 'bg-[var(--color-primary-bg)]' : 'hover:bg-[var(--bg-hover)]'"
                   @click="executeItem(item)"
                   @mouseenter="selectedIndex = getGlobalIndex('stock', index)"
+                  role="option"
+                  :aria-selected="selectedIndex === getGlobalIndex('stock', index)"
+                  :id="`stock-${index}`"
                 >
-                  <span class="text-base">📈</span>
+                  <span class="text-base" aria-hidden="true">📈</span>
                   <div class="flex-1 min-w-0">
                     <div class="text-sm text-[var(--text-primary)]">
                       <span class="font-mono">{{ item.symbol }}</span>
@@ -89,7 +106,7 @@
 
               <!-- 功能命令 -->
               <div v-if="commandResults.length > 0" class="py-2">
-                <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">命令</div>
+                <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider" aria-hidden="true">命令</div>
                 <div
                   v-for="(item, index) in commandResults"
                   :key="item.cmd"
@@ -97,6 +114,9 @@
                   :class="selectedIndex === getGlobalIndex('command', index) ? 'bg-[var(--color-primary-bg)]' : 'hover:bg-[var(--bg-hover)]'"
                   @click="executeItem(item)"
                   @mouseenter="selectedIndex = getGlobalIndex('command', index)"
+                  role="option"
+                  :aria-selected="selectedIndex === getGlobalIndex('command', index)"
+                  :id="`cmd-${index}`"
                 >
                   <span class="text-base">{{ item.icon }}</span>
                   <div class="flex-1 min-w-0">

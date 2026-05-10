@@ -6,12 +6,14 @@
 - 底层 _parse_* 函数保持同步（httpx.Client + timeout context manager）
 - 上层 async 路由通过 asyncio.to_thread() 调用同步函数，避免阻塞事件循环
 - 不混用 httpx.AsyncClient（避免连接池泄漏和调试困难）
+- ✅ Circuit Breaker 保护每个数据源，防止级联故障
 """
 import asyncio
 import logging
 import os
 import time
 import httpx
+from app.services.fetchers.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +96,22 @@ _current_source = "tencent"
 MAX_HISTORY = 5
 _source_status = {k: {"status": "unknown", "latency": None, "fail_count": 0, "history": [], "state": "closed"} for k in DATA_SOURCES}
 
+# ========== Circuit Breaker 实例 ==========
+# 每个数据源一个熔断器，防止级联故障
+_circuit_breakers = {
+    "tencent": CircuitBreaker("tencent", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
+    "sina": CircuitBreaker("sina", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
+    "sina_kline": CircuitBreaker("sina_kline", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
+    "eastmoney": CircuitBreaker("eastmoney", CircuitBreakerConfig(failure_threshold=3, recovery_timeout=60.0)),
+    "tencent_hk": CircuitBreaker("tencent_hk", CircuitBreakerConfig(failure_threshold=5, recovery_timeout=30.0)),
+    "alpha_vantage": CircuitBreaker("alpha_vantage", CircuitBreakerConfig(failure_threshold=3, recovery_timeout=120.0)),
+}
+
+
+def get_circuit_breaker_status() -> dict:
+    """获取所有熔断器状态（用于监控）"""
+    return {name: breaker.get_status() for name, breaker in _circuit_breakers.items()}
+
 
 def _get_proxy(source_name: str) -> dict | None:
     from app.services.proxy_config import get_proxy_url, build_httpx_proxies
@@ -108,6 +126,11 @@ def _get_proxy(source_name: str) -> dict | None:
 
 def _parse_tencent_quote(symbol: str) -> dict | None:
     """腾讯A股（同步，抓取用完即弃连接池）"""
+    breaker = _circuit_breakers["tencent"]
+    if not breaker.can_execute():
+        logger.warning(f"[Tencent] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     url = f"https://qt.gtimg.cn/q={symbol}"
     try:
         start = time.time()
@@ -115,10 +138,13 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
             r = client.get(url)
         latency = (time.time() - start) * 1000
         if r.status_code != 200 or '"' not in r.text:
+            breaker.record_failure()
             return None
         parts = r.text.split('"')[1].split('~')
         if len(parts) < 40:
+            breaker.record_failure()
             return None
+        breaker.record_success()
         return {
             "source": "tencent",
             "latency_ms": round(latency, 1),
@@ -132,12 +158,18 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
             "low": float(parts[7]) if parts[7] else None,
         }
     except Exception as e:
+        breaker.record_failure()
         logger.warning(f"[Tencent] {symbol} fail: {e}")
         return None
 
 
 def _parse_sina_quote(symbol: str) -> dict | None:
     """新浪A股（同步）"""
+    breaker = _circuit_breakers["sina"]
+    if not breaker.can_execute():
+        logger.warning(f"[Sina] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     url = f"https://hq.sinajs.cn/list={symbol}"
     headers = {'User-Agent': 'Mozilla/5.0', 'Referer': 'https://finance.sina.com.cn'}
     try:
@@ -146,10 +178,13 @@ def _parse_sina_quote(symbol: str) -> dict | None:
             r = client.get(url)
         latency = (time.time() - start) * 1000
         if '=' not in r.text:
+            breaker.record_failure()
             return None
         parts = r.text.split('=')[1].split(',')
         if len(parts) < 10:
+            breaker.record_failure()
             return None
+        breaker.record_success()
         return {
             "source": "sina",
             "latency_ms": round(latency, 1),
@@ -161,12 +196,18 @@ def _parse_sina_quote(symbol: str) -> dict | None:
             "pe_static": None, "pe_ttm": None, "pb": None,
         }
     except Exception as e:
+        breaker.record_failure()
         logger.warning(f"[Sina] {symbol} fail: {e}")
         return None
 
 
 def _parse_sina_kline_60min(symbol: str) -> dict | None:
     """新浪60分钟K线数据（同步）"""
+    breaker = _circuit_breakers["sina_kline"]
+    if not breaker.can_execute():
+        logger.warning(f"[SinaKline] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     url = f"http://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={symbol}&scale=60&ma=no&datalen=100"
     try:
         start = time.time()
@@ -174,11 +215,14 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
             r = client.get(url)
         latency = (time.time() - start) * 1000
         if r.status_code != 200:
+            breaker.record_failure()
             return None
         import json
         data = json.loads(r.text)
         if not isinstance(data, list) or len(data) == 0:
+            breaker.record_failure()
             return None
+        breaker.record_success()
         klines = data[-60:] if len(data) > 60 else data
         return {
             "source": "sina_kline",
@@ -188,12 +232,18 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
             "count": len(klines),
         }
     except Exception as e:
+        breaker.record_failure()
         logger.warning(f"[SinaKline] {symbol} fail: {e}")
         return None
 
 
 def _parse_eastmoney_quote(symbol: str) -> dict | None:
     """东方财富（同步）"""
+    breaker = _circuit_breakers["eastmoney"]
+    if not breaker.can_execute():
+        logger.warning(f"[Eastmoney] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     if symbol.startswith('sh'):
         secid = '1.' + symbol[2:]
     elif symbol.startswith('sz'):
@@ -209,6 +259,10 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
             r = client.get(url, params=params)
         latency = (time.time() - start) * 1000
         d = r.json().get('data', {})
+        if not d:
+            breaker.record_failure()
+            return None
+        breaker.record_success()
         return {
             "source": "eastmoney",
             "latency_ms": round(latency, 1),
@@ -219,12 +273,18 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
             "pb": d.get('f58') or d.get('f117'),
         }
     except Exception as e:
+        breaker.record_failure()
         logger.warning(f"[Eastmoney] {symbol} fail: {e}")
         return None
 
 
 def _parse_tencent_hk_quote(symbol: str) -> dict | None:
     """腾讯港股（同步）"""
+    breaker = _circuit_breakers["tencent_hk"]
+    if not breaker.can_execute():
+        logger.warning(f"[Tencent HK] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     url = f"https://qt.gtimg.cn/q={symbol}"
     try:
         start = time.time()
@@ -232,10 +292,13 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
             r = client.get(url)
         latency = (time.time() - start) * 1000
         if r.status_code != 200 or '"' not in r.text:
+            breaker.record_failure()
             return None
         parts = r.text.split('"')[1].split('~')
         if len(parts) < 40:
+            breaker.record_failure()
             return None
+        breaker.record_success()
         return {
             "source": "tencent_hk",
             "latency_ms": round(latency, 1),
@@ -248,12 +311,18 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
             "pb": float(parts[39]) if parts[39] not in ('0', '-', '') else None,
         }
     except Exception as e:
+        breaker.record_failure()
         logger.warning(f"[Tencent HK] {symbol} fail: {e}")
         return None
 
 
 def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
     """Alpha Vantage - 美股数据（同步，带重试和代理支持）"""
+    breaker = _circuit_breakers["alpha_vantage"]
+    if not breaker.can_execute():
+        logger.warning(f"[AlphaVantage] Circuit breaker OPEN, skipping {symbol}")
+        return None
+    
     api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "demo")
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
 
@@ -277,11 +346,13 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
             break
         except Exception as e:
             if attempt == 1:
+                breaker.record_failure()
                 logger.warning(f"[AlphaVantage] {symbol} failed after 2 attempts: {e}")
                 return None
             time.sleep(0.5)
 
     if not r or r.status_code != 200:
+        breaker.record_failure()
         return None
 
     import json
@@ -289,8 +360,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
     quote = data.get("Global Quote", {})
 
     if not quote:
+        breaker.record_failure()
         return None
 
+    breaker.record_success()
     return {
         "source": "alpha_vantage",
         "latency_ms": round(latency, 1),

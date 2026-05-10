@@ -10,36 +10,11 @@ import asyncio
 import logging
 import time
 from fastapi import APIRouter, HTTPException, Query
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-# ── API 响应标准化工具 ─────────────────────────────────────────────────
-def success_response(data, message="success"):
-    """创建成功响应"""
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-def error_response(code, message, data=None):
-    """创建错误响应"""
-    return {
-        "code": code,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-class ErrorCode:
-    SUCCESS = 0
-    BAD_REQUEST = 100
-    NOT_FOUND = 104
-    INTERNAL_ERROR = 200
-    THIRD_PARTY_ERROR = 302
 
 
 @router.get("/news/flash")

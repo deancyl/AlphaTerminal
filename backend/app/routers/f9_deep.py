@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 from typing import Any, Dict, Optional
+from app.utils.response import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
@@ -46,25 +47,7 @@ def set_cached(key: str, value: Any) -> None:
     _cache_ttl[key] = time.time()
 
 
-def success_response(data: Any, message: str = "success") -> Dict[str, Any]:
-    """成功响应格式化"""
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(datetime.now().timestamp() * 1000)
-    }
-
-
-def error_response(message: str, code: int = 1) -> Dict[str, Any]:
-    """错误响应格式化"""
-    return {
-        "code": code,
-        "message": message,
-        "data": None,
-        "timestamp": int(datetime.now().timestamp() * 1000)
-    }
-
+# ── API 端点 ─────────────────────────────────────────────────────
 
 # ── 健康检查端点 ─────────────────────────────────────────────────
 @router.get("/health")

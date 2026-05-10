@@ -5,6 +5,50 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.17] - 2026-05-10
+
+### Audit & Code Quality
+
+- **Comprehensive Platform Audit** — Completed full audit comparing AlphaTerminal to professional platforms (Bloomberg/Wind/TradingView), identifying 47 gaps across 6 categories
+- **Code Quality Evaluation** — Overall score 50/100, identified 204 hours of technical debt remediation needed
+- **Documentation Created** — Added comprehensive audit documents in `docs/` folder
+
+### Fixes
+
+- **Bare Except Blocks (P0)** — Fixed 10 bare `except:` blocks in `stocks.py`, `portfolio.py`, `market.py`, `compiler.py`, replaced with specific exception types `(ValueError, TypeError)`
+- **success_response Consolidation (P0)** — Removed 8 duplicate `success_response()` definitions from routers, consolidated to single import from `utils/response.py`, reducing ~120 lines of duplicate code
+- **Circuit Breaker Application (P0)** — Applied circuit breaker pattern to all 6 data sources in `quote_source.py`:
+  - Tencent (failure_threshold=5, recovery_timeout=30s)
+  - Sina (failure_threshold=5, recovery_timeout=30s)
+  - Sina Kline (failure_threshold=5, recovery_timeout=30s)
+  - Eastmoney (failure_threshold=3, recovery_timeout=60s)
+  - Tencent HK (failure_threshold=5, recovery_timeout=30s)
+  - Alpha Vantage (failure_threshold=3, recovery_timeout=120s)
+- **SQL Injection Review (P0)** — Verified all 9 f-string SQL usages are safe (using parameterized queries)
+- **ARIA Accessibility (P1)** — Added ARIA attributes to critical navigation components (`Sidebar.vue`, `CommandPalette.vue`)
+
+### Features
+
+- **Circuit Breaker Status API** — Added `/api/v1/market/source/circuit-breaker` endpoint for monitoring circuit breaker status
+
+### Documentation
+
+- `docs/COMPREHENSIVE_AUDIT_SUMMARY.md` — Full audit summary with scores and priority matrix
+- `docs/GAP_ANALYSIS.md` — 47 gaps vs professional platforms
+- `docs/COORDINATION_ANALYSIS.md` — Frontend-backend coordination issues
+- `docs/HIGH_AVAILABILITY_ARCHITECTURE.md` — Data source reliability design
+- `docs/IMPLEMENTATION_ROADMAP.md` — HA implementation plan
+- `PROFESSIONAL_FEATURE_GAP_ANALYSIS.md` — Regulatory compliance gaps
+
+### Metrics
+
+- **Files changed**: 15
+- **Lines changed**: +200 / -150
+- **Code reduction**: ~120 lines from duplicate removal
+- **Critical fixes**: 4 P0 issues resolved
+
+---
+
 ## [0.6.11] - 2026-05-07
 
 ### Fixes

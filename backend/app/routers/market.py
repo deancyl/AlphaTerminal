@@ -22,37 +22,11 @@ from app.utils.market_status import is_market_open
 from app.services.fetchers import FetcherFactory, fetch_with_fallback, get_market_fetcher
 from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback_async, get_source_status
+from app.utils.response import success_response, error_response, ErrorCode
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-
-# ── API 响应标准化工具 ─────────────────────────────────────────────────
-def success_response(data, message="success"):
-    """创建成功响应"""
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-def error_response(code, message, data=None):
-    """创建错误响应"""
-    return {
-        "code": code,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
-    }
-
-# 错误码定义
-class ErrorCode:
-    SUCCESS = 0
-    BAD_REQUEST = 100
-    NOT_FOUND = 104
-    INTERNAL_ERROR = 200
-    THIRD_PARTY_ERROR = 302
 
 # ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
 # 代理由 proxy_config.py 统一管理，从环境变量读取
@@ -1554,6 +1528,13 @@ async def source_status():
     return success_response(get_source_status())
 
 
+@router.get("/source/circuit-breaker")
+async def circuit_breaker_status():
+    """获取所有数据源的熔断器状态"""
+    from app.services.quote_source import get_circuit_breaker_status
+    return success_response(get_circuit_breaker_status())
+
+
 @router.post("/source/switch")
 async def switch_source(source: str):
     """手动切换主源"""
@@ -1768,8 +1749,8 @@ async def get_order_book(symbol: str):
         if code_num < 100000:  # 0-99999 可能是指数
             # 常见指数: 000001, 000300, 399001, 399006, 000688
             is_index = True
-    except:
-        pass
+    except (ValueError, TypeError):
+        pass  # Non-numeric code, treat as stock
 
     if is_index:
         # 指数没有Level 2数据，返回说明

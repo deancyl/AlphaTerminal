@@ -2,6 +2,8 @@
   <aside
     v-if="isOpen"
     class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme-secondary overflow-hidden h-full w-[220px]"
+    role="navigation"
+    aria-label="主导航菜单"
   >
     <!-- 顶部：Logo + 关闭按钮 -->
     <div class="flex items-center justify-between h-12 border-b border-theme-secondary shrink-0 px-4"
@@ -10,15 +12,16 @@
       <button
         class="w-10 h-10 flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
         @click="$emit('close')"
-        title="关闭侧边栏"
+        aria-label="关闭侧边栏"
+        type="button"
       >
-        <span class="text-sm">◀</span>
+        <span class="text-sm" aria-hidden="true">◀</span>
       </button>
     </div>
 
     <!-- 导航列表 -->
-    <nav class="flex-1 overflow-y-auto py-2 w-full">
-      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider">📂 市场行情</div>
+    <nav class="flex-1 overflow-y-auto py-2 w-full" aria-label="市场行情">
+      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider" aria-hidden="true">📂 市场行情</div>
 
       <button
         v-for="item in mainNavItems"
@@ -30,13 +33,16 @@
             : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
         ]"
         @click="handleClick(item)"
+        :aria-current="activeId === item.id ? 'page' : undefined"
+        :aria-label="item.label"
+        type="button"
       >
-        <span class="text-base">{{ item.icon }}</span>
+        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
         <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
 
       <!-- AI & Agent Tools Section -->
-      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider mt-4">🤖 AI & Agent 工具</div>
+      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider mt-4" aria-hidden="true">🤖 AI & Agent 工具</div>
 
       <button
         v-for="item in aiNavItems"
@@ -48,15 +54,18 @@
             : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
         ]"
         @click="handleClick(item)"
+        :aria-current="activeId === item.id ? 'page' : undefined"
+        :aria-label="item.label"
+        type="button"
       >
-        <span class="text-base">{{ item.icon }}</span>
+        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
         <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
     </nav>
 
     <!-- 主题切换区域 -->
-    <div class="px-3 py-3 border-t border-theme shrink-0 w-full">
-      <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2">🎨 主题切换</div>
+    <div class="px-3 py-3 border-t border-theme shrink-0 w-full" role="group" aria-label="主题切换">
+      <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2" aria-hidden="true">🎨 主题切换</div>
       <div class="grid grid-cols-4 gap-1">
         <button
           v-for="t in themeList"
@@ -66,16 +75,18 @@
             ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/50'
             : 'bg-theme-secondary/50 text-theme-secondary border border-transparent hover:bg-theme-hover hover:text-theme-primary'"
           @click="setTheme(t.key)"
-          :title="t.name"
+          :aria-label="t.name"
+          :aria-pressed="currentTheme === t.key"
+          type="button"
         >
-          <span class="text-base mb-0.5">{{ t.icon }}</span>
+          <span class="text-base mb-0.5" aria-hidden="true">{{ t.icon }}</span>
           <span class="scale-90">{{ t.shortName }}</span>
         </button>
       </div>
     </div>
 
     <!-- 系统管理 -->
-    <div class="border-t border-theme shrink-0 px-3 py-2 w-full">
+    <div class="border-t border-theme shrink-0 px-3 py-2 w-full" role="group" aria-label="系统管理">
       <button
         v-for="item in adminNavItems"
         :key="item.id"
@@ -86,8 +97,11 @@
             : 'text-theme-secondary hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] border-r-transparent'
         ]"
         @click="handleClick(item)"
+        :aria-current="activeId === item.id ? 'page' : undefined"
+        :aria-label="item.label"
+        type="button"
       >
-        <span class="text-base">{{ item.icon }}</span>
+        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
         <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
       </button>
     </div>

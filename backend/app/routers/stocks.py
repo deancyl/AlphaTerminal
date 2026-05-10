@@ -11,6 +11,7 @@ from datetime import datetime
 from fastapi import APIRouter
 import httpx
 import pandas as pd
+from app.utils.response import success_response, error_response, ErrorCode
 
 # 代理由 proxy_config.py 统一管理，从环境变量读取
 # 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
@@ -69,15 +70,6 @@ def _cache_or_fetch(key, fetch_fn, ttl=_CACHE_TTL):
         if key in _CACHE:
             return _CACHE[key]['data']
         return []
-
-
-def success_response(data, message="success"):
-    return {
-        "code": 0,
-        "message": message,
-        "data": data,
-        "timestamp": int(datetime.now().timestamp() * 1000)
-    }
 
 
 @router.get("/limit_up")
@@ -457,13 +449,13 @@ async def get_quote(symbol: str):
                         if float_shares:
                             try:
                                 result['floatShares'] = float(float_shares)
-                            except:
-                                pass
+                            except (ValueError, TypeError) as e:
+                                logger.debug(f"[Stocks] Failed to parse floatShares for {bare_symbol}: {e}")
                         if float_market_cap:
                             try:
                                 result['floatMarketCap'] = float(float_market_cap)
-                            except:
-                                pass
+                            except (ValueError, TypeError) as e:
+                                logger.debug(f"[Stocks] Failed to parse floatMarketCap for {bare_symbol}: {e}")
                 except Exception as e:
                     logger.debug(f"[Stocks] stock_individual_spot_xq error for {bare_symbol}: {e}")
                 

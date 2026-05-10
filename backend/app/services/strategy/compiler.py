@@ -797,7 +797,7 @@ class StrategyCompiler:
                     sample_params[param_name] = bool(default_val)
                 else:
                     sample_params[param_name] = default_val
-            except:
+            except (ValueError, TypeError):
                 sample_params[param_name] = default_val
         
         logger.debug(f"    Sample data: {len(sample_df)} rows")
@@ -973,30 +973,30 @@ class StrategyCompiler:
                 if key == 'stopLossPct':
                     try:
                         stop_loss_pct = float(value)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Invalid value, keep default
                 elif key == 'takeProfitPct':
                     try:
                         take_profit_pct = float(value)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Invalid value, keep default
                 elif key == 'entryPct':
                     try:
                         entry_pct = float(value)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Invalid value, keep default
                 elif key == 'trailingEnabled':
                     trailing_enabled = value.lower() == 'true'
                 elif key == 'trailingStopPct':
                     try:
                         trailing_stop_pct = float(value)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Invalid value, keep default
                 elif key == 'trailingActivationPct':
                     try:
                         trailing_activation_pct = float(value)
-                    except:
-                        pass
+                    except (ValueError, TypeError):
+                        pass  # Invalid value, keep default
                 elif key == 'tradeDirection':
                     trade_direction = value.lower()
                 continue

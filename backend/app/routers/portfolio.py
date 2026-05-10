@@ -394,8 +394,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             for r in meta_rows:
                 stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
                 stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"[Portfolio PnL] Failed to fetch stock metadata: {e}")
 
         # ── 获取现金余额 ──────────────────────────────────────────────
         cash_balance = 0.0
