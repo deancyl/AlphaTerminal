@@ -37,13 +37,18 @@
     <div class="flex-1 flex min-h-0">
       <!-- 左侧导航树 -->
       <div class="w-44 border-r border-theme-secondary bg-terminal-panel overflow-y-auto">
-        <div class="py-2">
+        <div class="py-2" role="tablist" aria-label="F9深度资料导航">
           <div
-            v-for="item in menuItems"
+            v-for="(item, index) in menuItems"
             :key="item.id"
+            :ref="el => tabRefs[index] = el"
+            role="tab"
+            :aria-selected="activeTab === item.id"
+            :tabindex="activeTab === item.id ? 0 : -1"
             class="px-3 py-2 text-sm cursor-pointer transition flex items-center gap-2"
             :class="activeTab === item.id ? 'bg-terminal-accent/20 text-terminal-accent border-l-2 border-terminal-accent' : 'text-terminal-secondary hover:bg-theme-hover'"
             @click="activeTab = item.id"
+            @keydown="handleTabKeydown($event, index)"
           >
             <span>{{ item.icon }}</span>
             <span>{{ item.name }}</span>
@@ -126,7 +131,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useStockDetail, useStockQuote } from '../composables/useStockDetail.js'
 
@@ -149,6 +154,9 @@ const { stockInfo, loading, fetchQuote, priceClass, changeClass } = useStockQuot
 
 const inputSymbol = ref(props.symbol)
 const activeTab = ref('overview')
+
+// Tab refs for keyboard navigation
+const tabRefs = ref([])
 
 // Data states for each tab
 const shareholderData = ref(null)
@@ -191,6 +199,34 @@ const menuItems = [
   { id: 'peer', name: '同业比较', icon: '📋' },
   { id: 'margin', name: '融资融券', icon: '💹' },
 ]
+
+// Handle keyboard navigation for tabs
+function handleTabKeydown(event, currentIndex) {
+  const totalTabs = menuItems.length
+  let newIndex = currentIndex
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    newIndex = (currentIndex + 1) % totalTabs
+  } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+    event.preventDefault()
+    newIndex = (currentIndex - 1 + totalTabs) % totalTabs
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    newIndex = 0
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    newIndex = totalTabs - 1
+  } else {
+    return
+  }
+
+  // Update active tab
+  activeTab.value = menuItems[newIndex].id
+
+  // Focus the new tab
+  tabRefs.value[newIndex]?.focus()
+}
 
 async function handleSearch() {
   if (!inputSymbol.value) return
