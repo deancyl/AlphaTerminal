@@ -180,46 +180,48 @@
         </div>
 
         <!-- 股票行情（默认） -->
-        <DashboardGrid
-          v-if="currentView === 'stock'"
-          ref="dashboardGridRef"
-          :market-data="marketOverview"
-          :china-all-data="chinaAllData"
-          :sectors-data="sectorsData"
-          :derivatives-data="derivativesData"
-          :is-locked="isLocked"
-          :layout-mode="layoutMode"
-          @toggle-lock="toggleLock"
-          @open-fullscreen="openFullscreenKline"
-        />
-        <!-- 债券行情 -->
-        <BondDashboard v-else-if="currentView === 'bond'" />
-        <!-- 投资组合 -->
-        <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
-        <!-- 基金分析 -->
-        <FundDashboard v-else-if="currentView === 'fund'" />
-        <!-- 期货行情 -->
-        <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
-        <!-- 策略中心 -->
-        <StrategyCenter v-else-if="currentView === 'strategy-center'" />
-        <!-- 系统管理 -->
-        <AdminDashboard v-else-if="currentView === 'admin'" @clear-layout="resetGridLayout" />
-        <!-- 宏观经济 -->
-        <MacroDashboard v-else-if="currentView === 'macro'" />
-        <!-- 期权分析 -->
-        <OptionsAnalysis v-else-if="currentView === 'options'" />
-        <!-- 全球指数 -->
-        <GlobalIndex v-else-if="currentView === 'global-index'" />
-        <!-- API Token 管理 -->
-        <AgentTokenManager v-else-if="currentView === 'agent_tokens'" />
-        <!-- MCP Configuration -->
-        <MCPConfigDashboard v-else-if="currentView === 'mcp'" />
-        <!-- Walk-Forward Analysis -->
-        <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
-        <!-- Performance Analyzer -->
-        <PerformanceAnalyzer v-else-if="currentView === 'performance'" />
-        <!-- F9 深度资料 -->
-        <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
+        <KeepAlive :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard']">
+          <DashboardGrid
+            v-if="currentView === 'stock'"
+            ref="dashboardGridRef"
+            :market-data="marketOverview"
+            :china-all-data="chinaAllData"
+            :sectors-data="sectorsData"
+            :derivatives-data="derivativesData"
+            :is-locked="isLocked"
+            :layout-mode="layoutMode"
+            @toggle-lock="toggleLock"
+            @open-fullscreen="openFullscreenKline"
+          />
+          <!-- 债券行情 -->
+          <BondDashboard v-else-if="currentView === 'bond'" />
+          <!-- 投资组合 -->
+          <PortfolioDashboard v-else-if="currentView === 'portfolio'" />
+          <!-- 基金分析 -->
+          <FundDashboard v-else-if="currentView === 'fund'" />
+          <!-- 期货行情 -->
+          <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
+          <!-- 策略中心 -->
+          <StrategyCenter v-else-if="currentView === 'strategy-center'" />
+          <!-- 系统管理 -->
+          <AdminDashboard v-else-if="currentView === 'admin'" @clear-layout="resetGridLayout" />
+          <!-- 宏观经济 -->
+          <MacroDashboard v-else-if="currentView === 'macro'" />
+          <!-- 期权分析 -->
+          <OptionsAnalysis v-else-if="currentView === 'options'" />
+          <!-- 全球指数 -->
+          <GlobalIndex v-else-if="currentView === 'global-index'" />
+          <!-- API Token 管理 -->
+          <AgentTokenManager v-else-if="currentView === 'agent_tokens'" />
+          <!-- MCP Configuration -->
+          <MCPConfigDashboard v-else-if="currentView === 'mcp'" />
+          <!-- Walk-Forward Analysis -->
+          <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
+          <!-- Performance Analyzer -->
+          <PerformanceAnalyzer v-else-if="currentView === 'performance'" />
+          <!-- F9 深度资料 -->
+          <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
+        </KeepAlive>
         
         <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
         <div 
@@ -610,6 +612,7 @@ const sectorsData     = ref([])
 const derivativesData = ref([])
 const currentTime     = ref('')
 const watchList       = ref([])   // 自选股列表
+const preFetchedKlineData = ref(null) // 预取的K线数据
 
 let clockTimer = null
 
@@ -643,6 +646,26 @@ async function fetchMedFreq() {
 }
 
 // low-freq data (macro/rates/global/news) 已下放到各组件内部自持
+
+// ── 预取默认K线数据（等待后端就绪）──────────────────────────────────────
+async function waitForBackendAndPrefetchKline() {
+  // 轮询健康检查端点，直到后端就绪
+  const maxPolls = 30 // 最多等待30秒
+  for (let i = 0; i < maxPolls; i++) {
+    try {
+      const health = await apiFetch('/api/v1/health/ready')
+      if (health?.data?.ready) {
+        // 后端就绪，预取K线数据
+        const kline = await apiFetch('/api/v1/market/history/000001?period=daily&limit=300')
+        preFetchedKlineData.value = kline?.data?.history || kline?.history || null
+        return
+      }
+    } catch (e) {
+      // 忽略轮询期间的错误
+    }
+    await new Promise(r => setTimeout(r, 1000)) // 每次轮询间隔1秒
+  }
+}
 
 // ── 计数：两个梯队均完成首次加载后关闭骨架屏 ──────────────────────────
 let _loadedCount = 0
@@ -701,6 +724,9 @@ onMounted(() => {
       console.error('[App] fetchMedFreq failed:', e.message)
       _checkInitDone() // Continue even on error
     })
+
+  // 预取K线数据（等待后端就绪后执行）
+  waitForBackendAndPrefetchKline()
 
   // 启动错峰轮询（仅在页面可见时）
   if (visibility.value === 'visible') {

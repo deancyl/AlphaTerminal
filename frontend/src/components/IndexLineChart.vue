@@ -11,7 +11,9 @@
           title="全屏"
           @click="handleFullscreen"
         >全屏</button>
-        <span v-if="isLoading" class="text-[9px] font-mono text-theme-tertiary animate-pulse">加载…</span>
+        <span v-if="isLoading || retrying" class="text-[9px] font-mono text-theme-tertiary animate-pulse">
+          {{ retrying ? `重试中(${retryCount}/${maxRetries})…` : '加载…' }}
+        </span>
       </div>
       <div class="flex items-center gap-2 px-1 leading-none">
         <span class="text-[11px] font-mono font-medium"
@@ -74,6 +76,9 @@ const isLoading    = ref(false)
 const isFetching   = ref(false)   // 后端正在抓取宏观品种数据
 const chartType    = ref('candlestick')
 const currentName  = ref('指标图表')
+const retryCount   = ref(0)       // 空数据重试计数器
+const maxRetries   = 3            // 最大重试次数
+const retrying     = ref(false)   // 正在重试中
 
 // 全屏按钮处理：统一跳转到 FullscreenKline 面板
 function handleFullscreen() {
@@ -776,10 +781,26 @@ async function fetchAndRender() {
 
     // 空数据：设置错误提示，不渲染空图表
     if (!opt) {
+      // 空数据自动重试机制（指数退避：2s, 4s, 8s）
+      if (retryCount.value < maxRetries) {
+        retryCount.value++
+        retrying.value = true
+        chartError.value = `暂无历史数据，正在重试 (${retryCount.value}/${maxRetries})...`
+        const delayMs = Math.pow(2, retryCount.value) * 1000 // 2s, 4s, 8s
+        setTimeout(() => fetchAndRender(), delayMs)
+        return
+      }
+      // 达到最大重试次数，显示错误
+      retryCount.value = 0
+      retrying.value = false
       chartError.value = '暂无历史数据'
       if (chartInstance) chartInstance.clear()
       return
     }
+
+    // 成功获取数据，重置重试状态
+    retryCount.value = 0
+    retrying.value = false
 
     // 注：GOLD/WTI/VIX 等宏观品种后端已有K线数据，
     // 不再显示"暂无K线数据"（后端 `/api/v1/market/history/{symbol}` 已支持）

@@ -137,6 +137,9 @@ def start_scheduler():
         except Exception as e:
             logger.error(f"[Scheduler] Sina HQ 触发失败: {e}", exc_info=True)
         
+        # Mark backend as ready
+        from app.routers.health import set_backend_ready
+        set_backend_ready(True)
         logger.info("[Scheduler] 启动初始化完成")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
