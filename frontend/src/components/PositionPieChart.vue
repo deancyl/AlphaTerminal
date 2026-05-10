@@ -133,12 +133,12 @@ export default {
       try {
         chartInstance.setOption({
           backgroundColor: 'transparent',
-          tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)', backgroundColor: '#1e2535', borderColor: '#2a3444', textStyle: { color: '#c8d4e8', fontSize: 12 } },
+          tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)', backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-primary)', textStyle: { color: 'var(--text-primary)', fontSize: 12 } },
           series: [{
             type: 'pie', radius: ['35%', '65%'], center: ['50%', '50%'], data: chartData,
             label: { show: true, formatter: '{b}\n{d}%', color: '#7a8ba8', fontSize: 11 },
-            labelLine: { show: true, lineStyle: { color: '#2a3444' } },
-            emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' }, label: { show: true, fontSize: 13, fontWeight: 'bold', color: '#fff' } },
+            labelLine: { show: true, lineStyle: { color: 'var(--border-primary)' } },
+            emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' }, label: { show: true, fontSize: 13, fontWeight: 'bold', color: 'var(--text-primary)' } },
             itemStyle: { borderRadius: 4, borderColor: '#0f1419', borderWidth: 2 },
           }],
         });
@@ -175,18 +175,18 @@ export default {
 </script>
 
 <style scoped>
-.position-pie-chart { background: #0f1419; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
-.panel-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #1a2030; border-bottom: 1px solid #2a3444; }
-.panel-title { color: #c8d4e8; font-size: 13px; font-weight: 600; }
-.btn-refresh { background: none; border: 1px solid #2a3444; color: #7a8ba8; width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; }
-.btn-refresh:hover { border-color: #4a6fa5; color: #c8d4e8; }
-.chart-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; color: #4a5a6a; }
+.position-pie-chart { background: var(--bg-primary); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+.panel-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: var(--bg-secondary); border-bottom: 1px solid var(--border-primary); }
+.panel-title { color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.btn-refresh { background: none; border: 1px solid var(--border-primary); color: var(--text-secondary); width: 24px; height: 24px; border-radius: 4px; cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; }
+.btn-refresh:hover { border-color: var(--accent-primary); color: var(--text-primary); }
+.chart-placeholder { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; color: var(--text-tertiary); }
 .loading .spinner { font-size: 24px; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-text { font-size: 12px; margin-top: 8px; }
 .empty-icon { font-size: 32px; margin-bottom: 8px; }
 .empty-text { font-size: 14px; font-weight: 600; }
-.empty-hint { font-size: 12px; margin-top: 4px; color: #3a4a5a; }
+.empty-hint { font-size: 12px; margin-top: 4px; color: var(--text-muted); }
 .echart-container {
   height: 220px;
   width: 100%;
@@ -197,16 +197,16 @@ export default {
   z-index: 1;
 }
 .pie-legend { padding: 8px 12px; }
-.legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: #7a8ba8; border-bottom: 1px solid #1a2030; }
+.legend-item { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--bg-secondary); }
 .legend-item:last-child { border-bottom: none; }
 .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-.legend-symbol { color: #7dd3fc; font-weight: 600; min-width: 60px; }
-.legend-pct { margin-left: auto; color: #c8d4e8; min-width: 40px; text-align: right; }
-.legend-mv { color: #7a8ba8; min-width: 50px; text-align: right; font-size: 11px; }
+.legend-symbol { color: var(--accent-secondary); font-weight: 600; min-width: 60px; }
+.legend-pct { margin-left: auto; color: var(--text-primary); min-width: 40px; text-align: right; }
+.legend-mv { color: var(--text-secondary); min-width: 50px; text-align: right; font-size: 11px; }
 .legend-pnl { min-width: 50px; text-align: right; font-size: 11px; font-weight: 600; }
-.pnl-pos { color: #34d399; }
-.pnl-neg { color: #f87171; }
-.pnl-zero { color: #4a5a6a; }
-.pie-footer { padding: 8px 16px; font-size: 12px; color: #4a5a6a; border-top: 1px solid #1e2535; text-align: right; }
-.pie-footer b { color: #c8d4e8; }
+.pnl-pos { color: var(--bearish); }
+.pnl-neg { color: var(--bullish); }
+.pnl-zero { color: var(--text-tertiary); }
+.pie-footer { padding: 8px 16px; font-size: 12px; color: var(--text-tertiary); border-top: 1px solid var(--bg-secondary); text-align: right; }
+.pie-footer b { color: var(--text-primary); }
 </style>

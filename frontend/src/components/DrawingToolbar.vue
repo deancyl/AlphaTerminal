@@ -287,27 +287,27 @@ function confirmClear() {
   justify-content: center;
   background: transparent;
   border: none;
-  color: #6b7280;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .tool-btn:hover {
-  color: #e5e7eb;
+  color: var(--text-primary);
   background: rgba(75, 85, 99, 0.3);
 }
 
 .tool-btn.active {
-  color: #fbbf24;
+  color: var(--status-warning);
   background: rgba(251, 191, 36, 0.15);
 }
 
 .tool-btn.inactive {
-  color: #374151;
+  color: var(--bg-tertiary);
 }
 
 .tool-btn.delete-btn:hover {
-  color: #f87171;
+  color: var(--bullish);
   background: rgba(248, 113, 113, 0.15);
 }
 
@@ -348,21 +348,21 @@ function confirmClear() {
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 11px;
-  color: #e5e7eb;
+  color: var(--text-primary);
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .tooltip-inner .shortcut {
   font-size: 10px;
-  color: #6b7280;
+  color: var(--text-secondary);
   background: rgba(31, 41, 55, 0.8);
   padding: 1px 5px;
   border-radius: 3px;
 }
 
 .tooltip-inner.delete-text {
-  color: #f87171;
+  color: var(--bullish);
 }
 
 .color-picker {
@@ -400,7 +400,7 @@ function confirmClear() {
 }
 
 .color-option.active {
-  border-color: #fff;
+  border-color: var(--text-primary);
 }
 
 .custom-color {
@@ -422,6 +422,6 @@ function confirmClear() {
 
 .custom-color span {
   font-size: 11px;
-  color: #9ca3af;
+  color: var(--text-secondary);
 }
 </style>

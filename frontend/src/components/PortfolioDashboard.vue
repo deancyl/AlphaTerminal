@@ -567,17 +567,17 @@ async function exportPortfolio() {
   }
 }
 .pnl-card {
-  background: #131a28;
-  border: 1px solid #1e2535;
+  background: var(--bg-primary);
+  border: 1px solid var(--bg-secondary);
   border-radius: 8px;
   padding: 10px 14px;
 }
-.pnl-card.total { border-color: #2a3444; background: #1a2030; }
-.pnl-card-label { font-size: 11px; color: #4a5a6a; margin-bottom: 4px; white-space: nowrap; }
-.pnl-card-value { font-size: 14px; font-weight: 700; color: #c8d4e8; }
-.pnl-pos .pnl-card-value { color: #34d399; }
-.pnl-neg .pnl-card-value { color: #f87171; }
-.pnl-zero .pnl-card-value { color: #4a5a6a; }
+.pnl-card.total { border-color: var(--border-primary); background: var(--bg-secondary); }
+.pnl-card-label { font-size: 11px; color: var(--text-tertiary); margin-bottom: 4px; white-space: nowrap; }
+.pnl-card-value { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.pnl-pos .pnl-card-value { color: var(--bearish); }
+.pnl-neg .pnl-card-value { color: var(--bullish); }
+.pnl-zero .pnl-card-value { color: var(--text-tertiary); }
 .pie-chart-wrapper { padding: 0 0 12px; }
 .pie-chart-wrapper :deep(.position-pie-chart) { min-height: 300px; display: flex; flex-direction: column; }
 .pie-chart-wrapper :deep(.echart-container) { min-height: 260px; height: 260px; }
