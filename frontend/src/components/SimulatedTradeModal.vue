@@ -1,11 +1,12 @@
 <template>
   <div
     v-if="visible"
+    ref="modalContainerRef"
     class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
-    @click.self="close"
     role="dialog"
     aria-modal="true"
     aria-labelledby="trade-modal-title"
+    @click.self="close"
   >
     <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-96 shadow-sm">
       <!-- Header -->
@@ -166,8 +167,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue';
+import { ref, reactive, watch, computed } from 'vue';
 import { apiFetch } from '../utils/api.js';
+import { useFocusTrap } from '../composables/useFocusTrap.js';
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -182,6 +184,17 @@ const loading = ref(false);
 const error = ref('');
 const success = ref('');
 const priceHint = ref('');
+const modalContainerRef = ref(null);
+const triggerRef = ref(null);
+
+const isModalActive = computed(() => props.visible);
+
+useFocusTrap({
+  isActive: isModalActive,
+  containerRef: modalContainerRef,
+  onClose: close,
+  triggerRef: triggerRef
+});
 
 const today = new Date().toISOString().slice(0, 10);
 

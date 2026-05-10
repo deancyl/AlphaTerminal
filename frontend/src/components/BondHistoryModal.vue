@@ -4,12 +4,13 @@
   <!-- 遮罩 -->
   <div
     v-if="visible"
+    ref="modalContainerRef"
     class="fixed inset-0 z-[9999] flex items-center justify-center"
     style="background: rgba(0,0,0,0.65); backdrop-filter: blur(3px);"
-    @click.self="close"
     role="dialog"
     aria-modal="true"
     aria-labelledby="bond-history-title"
+    @click.self="close"
   >
     <!-- 弹窗主体 -->
     <div class="terminal-panel border border-theme rounded-sm p-4 w-full max-w-[540px] flex flex-col gap-3 shadow-sm"
@@ -108,11 +109,12 @@
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useFocusTrap } from '../composables/useFocusTrap.js'
 
 const props = defineProps({
   visible:   { type: Boolean, default: false },
-  tenor:     { type: String, default: '10年' },  // 如 "10年"
-  period:    { type: String, default: '1Y' },   // 如 "1Y"
+  tenor:     { type: String, default: '10年' },
+  period:    { type: String, default: '1Y' },
 })
 
 const emit = defineEmits(['close'])
@@ -124,6 +126,17 @@ const error        = ref('')
 const historyData  = ref([])
 const currentYield = ref(null)
 const percentile   = ref(null)
+const modalContainerRef = ref(null)
+const triggerRef = ref(null)
+
+const isModalActive = computed(() => props.visible)
+
+useFocusTrap({
+  isActive: isModalActive,
+  containerRef: modalContainerRef,
+  onClose: close,
+  triggerRef: triggerRef
+})
 
 const periodLabel = computed(() => ({ '1M': '近1月', '3M': '近3月', '6M': '近6月', '1Y': '近1年', '3Y': '近3年' }[props.period] || props.period))
 const tenorLabel  = computed(() => props.tenor)

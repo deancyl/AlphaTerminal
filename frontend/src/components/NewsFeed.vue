@@ -89,7 +89,7 @@
           :class="modalItem?.id === item.id
             ? 'bg-theme-hover border-theme-secondary text-theme-primary'
             : 'bg-terminal-bg border-theme-secondary text-theme-primary hover:border-theme-secondary'"
-          @click="openModal(item)"
+          @click="openModal(item, $event)"
           :title="item.title"
         >
           <span class="text-theme-primary/60 mr-0.5">{{ idx + 1 }}.</span>{{ item.title }}
@@ -135,7 +135,7 @@
           v-for="item in pagedItems"
           :key="item.id || item.title"
           class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
-          @click="openModal(item)"
+          @click="openModal(item, $event)"
         >
           <!-- 第一行：时间 + 标签 + 情绪 + 来源 -->
           <div class="flex items-center gap-1.5">
@@ -208,7 +208,11 @@
     <!-- ── 详情 Modal ─────────────────────────────────────────── -->
     <Teleport to="body">
       <div v-if="modalItem"
+           ref="modalContainerRef"
            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="news-modal-title"
            @click.self="closeModal">
         <div class="absolute inset-0 bg-black/70"></div>
         <div class="relative z-10 w-full max-w-2xl max-h-[85vh] flex flex-col
@@ -228,11 +232,12 @@
                   {{ getItemSentiment(modalItem) }}
                 </span>
               </div>
-              <h2 class="text-sm font-semibold text-theme-primary leading-snug">{{ modalItem.title }}</h2>
+              <h2 id="news-modal-title" class="text-sm font-semibold text-theme-primary leading-snug">{{ modalItem.title }}</h2>
             </div>
             <button
               class="shrink-0 w-7 h-7 flex items-center justify-center rounded-sm
                      bg-theme-tertiary/30 hover:bg-theme-tertiary/50 text-theme-tertiary hover:text-theme-primary transition"
+              aria-label="关闭对话框"
               @click="closeModal">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
                 <path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clip-rule="evenodd" />
@@ -286,6 +291,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
+import { useFocusTrap } from '../composables/useFocusTrap.js'
 
 // 响应式断点检测
 const breakpoints = useBreakpoints(breakpointsTailwind)
@@ -545,6 +551,17 @@ function nextPage() { goToPage(currentPage.value + 1) }
 const modalItem    = ref(null)
 const modalContent = ref('')
 const modalLoading = ref(false)
+const modalContainerRef = ref(null)
+const modalTriggerRef = ref(null)
+
+const isModalActive = computed(() => modalItem.value !== null)
+
+useFocusTrap({
+  isActive: isModalActive,
+  containerRef: modalContainerRef,
+  onClose: closeModal,
+  triggerRef: modalTriggerRef
+})
 
 
 // ── 标签颜色映射 ──────────────────────────────────────────────────────
@@ -590,7 +607,10 @@ function sentimentBadgeClass(s) {
 
 // ── Modal 异步加载正文 ────────────────────────────────────────────────
 
-async function openModal(item) {
+async function openModal(item, event) {
+  if (event?.target) {
+    modalTriggerRef.value = event.target
+  }
   modalItem.value    = item
   modalContent.value = ''
   modalLoading.value = true
