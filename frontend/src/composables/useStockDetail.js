@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { formatNumber, formatMoney, formatVolume, formatHolderShares, formatHolderPct } from '../utils/formatters.js'
 
 /**
  * Composable for shared stock detail logic
@@ -10,49 +11,6 @@ export function useStockDetail() {
   function getBareSymbol(symbol) {
     if (!symbol) return ''
     return symbol.replace(/^(sh|sz)/i, '')
-  }
-
-  // Format number to Chinese units (亿/万)
-  function formatNumber(num) {
-    if (!num) return '--'
-    if (num >= 1e8) return (num / 1e8).toFixed(2) + '亿'
-    if (num >= 1e4) return (num / 1e4).toFixed(2) + '万'
-    return num.toString()
-  }
-
-  // Format money with larger units
-  function formatMoney(num) {
-    if (!num) return '--'
-    if (num >= 1e12) return (num / 1e12).toFixed(2) + '万亿'
-    if (num >= 1e8) return (num / 1e8).toFixed(2) + '亿'
-    if (num >= 1e4) return (num / 1e4).toFixed(2) + '万'
-    return num.toString()
-  }
-
-  // Format volume (shares)
-  function formatVolume(num) {
-    if (!num) return '--'
-    if (num >= 1e8) return (num / 1e8).toFixed(2) + '亿股'
-    if (num >= 1e4) return (num / 1e4).toFixed(2) + '万股'
-    return num.toString() + '股'
-  }
-
-  // Format holder shares
-  function formatHolderShares(num) {
-    if (!num) return '--'
-    const n = parseFloat(num)
-    if (isNaN(n)) return num
-    if (n >= 1e8) return (n / 1e8).toFixed(2) + '亿'
-    if (n >= 1e4) return (n / 1e4).toFixed(2) + '万'
-    return n.toFixed(0)
-  }
-
-  // Format holder percentage
-  function formatHolderPct(pct) {
-    if (!pct) return '--'
-    const n = parseFloat(pct)
-    if (isNaN(n)) return pct
-    return n.toFixed(2) + '%'
   }
 
   // Get change class (bullish/bearish)

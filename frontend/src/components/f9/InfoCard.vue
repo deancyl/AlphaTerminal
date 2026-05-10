@@ -25,6 +25,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { formatNumber, formatMoney } from '../../utils/formatters.js'
 
 const props = defineProps({
   title: {
@@ -65,19 +66,6 @@ const displayValue = computed(() => {
       return props.value
   }
 })
-
-function formatNumber(num) {
-  if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿'
-  if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万'
-  return num.toFixed(2)
-}
-
-function formatMoney(num) {
-  if (Math.abs(num) >= 1e12) return (num / 1e12).toFixed(2) + '万亿'
-  if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿'
-  if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万'
-  return num.toFixed(2)
-}
 </script>
 
 <style scoped>

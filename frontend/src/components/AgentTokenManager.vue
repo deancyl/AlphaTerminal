@@ -347,21 +347,9 @@ function getStatusText(token) {
 }
 
 onMounted(() => {
-  // Debug Cycle 3: Component mount
-  console.log('[DEBUG-CYCLE-3] AgentTokenManager component mounted:', {
-    timestamp: new Date().toISOString(),
-    component: 'AgentTokenManager',
-    lifecycle: 'mounted'
-  })
   loadTokens()
 })
 
 onUnmounted(() => {
-  // Debug Cycle 4: Component unmount
-  console.log('[DEBUG-CYCLE-4] AgentTokenManager component unmounted:', {
-    timestamp: new Date().toISOString(),
-    component: 'AgentTokenManager',
-    lifecycle: 'unmounted'
-  })
 })
 </script>

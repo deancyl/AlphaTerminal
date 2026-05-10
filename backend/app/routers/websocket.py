@@ -24,9 +24,24 @@ async def ws_market(ws: WebSocket):
       {"action": "ping"}       → 服务端回复 {"type": "pong"}
 
     服务端推送格式（由 scheduler 广播）：
-      {"symbol": "600519", "price": 1680.5, "chg": 20.5,
-       "chg_pct": 1.23, "volume": 123456, "amount": 98765432,
-       "timestamp": 1712467200}
+      Tick 消息（实时行情）：
+      {"type": "tick", "symbol": "600519", "name": "贵州茅台",
+       "price": 1680.5, "chg": 20.5, "chg_pct": 1.23,
+       "volume": 123456, "amount": 98765432, "turnover": 0.5,
+       "market": "sh", "data_type": "realtime", "timestamp": 1712467200}
+      
+      订阅确认：
+      {"type": "subscribed", "symbols": ["600519", "000858"]}
+      
+      取消订阅确认：
+      {"type": "unsubscribed", "symbols": ["600519"]}
+      
+      心跳响应：
+      {"type": "pong"}
+
+    协议规范：
+      - 所有服务端消息必须包含 "type" 字段
+      - symbol 订阅匹配不区分大小写（后端统一转小写处理）
     """
     # 接受WebSocket连接
     await ws.accept()

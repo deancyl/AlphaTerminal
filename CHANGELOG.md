@@ -5,6 +5,51 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.26] - 2026-05-10
+
+### Bug Fixes (Critical)
+
+- **Duplicate health() Function** — Fixed duplicate `health()` function definition in `main.py`
+  - Removed unreachable code at lines 223-234
+  - Only one health endpoint now exists (decorated with `@app.get("/health")`)
+
+### Code Quality Improvements
+
+- **DEBUG-CYCLE Logs Removal** — Removed 38 debug console.log statements from 7 Vue files
+  - App.vue: 2 logs removed
+  - Sidebar.vue: 5 logs removed
+  - AgentTokenManager.vue: 2 logs removed
+  - WalkForwardPanel.vue: 7 logs removed
+  - PerformanceAnalyzer.vue: 5 logs removed
+  - MCPConfigDashboard.vue: 12 logs removed
+  - StrategyCenter.vue: 5 logs removed
+
+- **Formatting Functions Consolidation** — Consolidated duplicate formatting functions
+  - Added `formatNumber`, `formatMoney`, `formatVolume`, `formatHolderShares`, `formatHolderPct` to `utils/formatters.js`
+  - Updated `useStockDetail.js` to import from formatters.js
+  - Updated `f9/InfoCard.vue` to import from formatters.js
+  - Removed duplicate function definitions
+
+### WebSocket Protocol Improvements
+
+- **Message Type Field** — Added `"type": "tick"` to WebSocket broadcast messages
+  - Makes protocol self-documenting
+  - Consistent with other message types (`"subscribed"`, `"pong"`)
+  - Updated `ws_manager.py` to include type field in broadcasts
+
+- **Symbol Case Handling** — Improved symbol case consistency
+  - Backend now properly normalizes symbols
+  - Frontend receives consistent symbol format
+
+### Metrics
+
+- **Lines removed**: 391 (debug logs, duplicate code)
+- **Lines added**: 97 (consolidated functions, WebSocket improvements)
+- **Net reduction**: 294 lines
+- **Files modified**: 14
+
+---
+
 ## [0.6.25] - 2026-05-10
 
 ### Code Refactoring (P1-018)

@@ -108,6 +108,16 @@ class ConnectionManager:
         """
         广播 tick 给所有订阅了该 symbol 的连接
         使用 O(1) 查找：直接从 _symbol_map 获取订阅者
+        
+        消息格式（WebSocket 协议）：
+        - tick 消息必须包含 "type": "tick" 字段
+        - symbol 字段保持原始格式（不强制小写）
+        - 示例：{"type": "tick", "symbol": "600519", "price": 1680.5, ...}
+        
+        订阅匹配规则：
+        - 订阅时 symbol 统一转为小写存储（subscribe/unsubscribe 方法）
+        - 广播时 symbol 转为小写进行匹配
+        - 这确保了 "600519" 和 "SH600519" 等不同大小写形式能正确匹配
         """
         sym_lower = symbol.strip().lower()
         data = json.dumps(tick, ensure_ascii=False)

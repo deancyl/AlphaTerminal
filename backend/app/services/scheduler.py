@@ -51,6 +51,7 @@ def _broadcast_realtime_ticks():
                     prev       = price / (1 + change_pct / 100) if change_pct != -100 else price
                     chg        = round(price - prev, 3)
                     tick = {
+                        "type":      "tick",  # 消息类型标识（协议一致性）
                         "symbol":    sym,
                         "name":      r.get("name", ""),
                         "price":     price,

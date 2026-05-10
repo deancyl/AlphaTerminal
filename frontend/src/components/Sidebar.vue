@@ -150,63 +150,7 @@ const themeList = [
 ]
 
 function handleClick(item) {
-  // Debug Cycle 1: Log navigation item click
-  console.log('[DEBUG-CYCLE-1] Sidebar navigation item clicked:', {
-    itemId: item.id,
-    itemLabel: item.label,
-    itemIcon: item.icon,
-    timestamp: new Date().toISOString(),
-    currentActiveId: props.activeId,
-    navigationType: item.id === 'strategy-center' || item.id === 'agent_tokens' || item.id === 'mcp' || item.id === 'walk-forward' || item.id === 'performance' ? 'AI_TOOL' : 'MARKET',
-    isMCPConfig: item.id === 'mcp',
-    isWalkForward: item.id === 'walk-forward',
-    isPerformance: item.id === 'performance'
-  })
-  
-  // Debug Cycle 2: Pre-emit state check
-  console.log('[DEBUG-CYCLE-2] Sidebar pre-emit state:', {
-    isEmitting: true,
-    eventPayload: item.id,
-    sidebarOpen: props.isOpen,
-    timestamp: new Date().toISOString(),
-    isMCPNavigation: item.id === 'mcp',
-    isWalkForwardNavigation: item.id === 'walk-forward',
-    isPerformanceNavigation: item.id === 'performance'
-  })
-  
   emit('navigate', item.id)
-  
-  // Debug Cycle 3: Post-navigate emit
-  console.log('[DEBUG-CYCLE-3] Sidebar navigate emit completed:', {
-    emittedEvent: 'navigate',
-    emittedId: item.id,
-    timestamp: new Date().toISOString(),
-    isMCPNavigation: item.id === 'mcp',
-    isWalkForwardNavigation: item.id === 'walk-forward',
-    isPerformanceNavigation: item.id === 'performance'
-  })
-  
   emit('close')
-  
-  // Debug Cycle 4: Post-close emit
-  console.log('[DEBUG-CYCLE-4] Sidebar close emit completed:', {
-    emittedEvent: 'close',
-    sidebarWillClose: true,
-    timestamp: new Date().toISOString()
-  })
-  
-  // Debug Cycle 5: Final state summary
-  console.log('[DEBUG-CYCLE-5] Sidebar navigation flow complete:', {
-    targetView: item.id,
-    targetLabel: item.label,
-    flowComplete: true,
-    timestamp: new Date().toISOString(),
-    isMCPNavigation: item.id === 'mcp',
-    isWalkForwardNavigation: item.id === 'walk-forward',
-    isPerformanceNavigation: item.id === 'performance',
-    mcpDebugNote: item.id === 'mcp' ? 'MCP Config Dashboard should now be visible' : null,
-    walkForwardDebugNote: item.id === 'walk-forward' ? 'Walk-Forward Analysis Panel should now be visible' : null,
-    performanceDebugNote: item.id === 'performance' ? 'Performance Analyzer Panel should now be visible' : null
-  })
 }
 </script>

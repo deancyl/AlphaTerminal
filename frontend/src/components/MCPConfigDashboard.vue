@@ -302,13 +302,6 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
 
-// ━━━ Debug Cycle 1: Component Mount Lifecycle ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-console.log('[DEBUG-CYCLE-1] MCPConfigDashboard.vue script setup initialized:', {
-  timestamp: new Date().toISOString(),
-  component: 'MCPConfigDashboard',
-  phase: 'script_setup'
-})
-
 const activeTab = ref('status')
 const mobileNavOpen = ref(false)
 
@@ -393,27 +386,12 @@ async function refreshStatus() {
 async function testConnection() {
   testingConnection.value = true
   
-  // ━━━ Debug Cycle 5: Connection Test ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log('[DEBUG-CYCLE-5] MCPConfigDashboard.vue testing connection:', {
-    timestamp: new Date().toISOString(),
-    component: 'MCPConfigDashboard',
-    action: 'testConnection',
-    baseUrl: configForm.base_url
-  })
-  
   try {
     const data = await apiFetch('/api/v1/mcp/test')
     if (data) {
       connectionTest.connected = data.connected || false
       connectionTest.latency_ms = data.latency_ms || null
       connectionTest.error = data.error || null
-      
-      console.log('[DEBUG-CYCLE-5] MCPConfigDashboard.vue connection test result:', {
-        timestamp: new Date().toISOString(),
-        connected: data.connected,
-        latency_ms: data.latency_ms,
-        error: data.error
-      })
       
       if (data.connected) {
         toast('Success', `Connection successful (${data.latency_ms}ms)`, 'success')
@@ -425,11 +403,6 @@ async function testConnection() {
     connectionTest.connected = false
     connectionTest.error = err.message
     toast('Error', 'Connection test failed', 'error')
-    
-    console.error('[DEBUG-CYCLE-5] MCPConfigDashboard.vue connection test error:', {
-      timestamp: new Date().toISOString(),
-      error: err.message
-    })
   } finally {
     testingConnection.value = false
   }
@@ -485,14 +458,6 @@ async function saveConfig() {
   savingConfig.value = true
   configMessage.value = ''
   
-  // ━━━ Debug Cycle 4: Configuration Save ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log('[DEBUG-CYCLE-4] MCPConfigDashboard.vue saving configuration:', {
-    timestamp: new Date().toISOString(),
-    component: 'MCPConfigDashboard',
-    action: 'saveConfig',
-    config: { ...configForm }
-  })
-  
   try {
     const data = await apiFetch('/api/v1/mcp/config', {
       method: 'POST',
@@ -502,29 +467,14 @@ async function saveConfig() {
       configMessage.value = 'Configuration saved successfully'
       configMessageOk.value = true
       toast('Success', 'Configuration saved', 'success')
-      
-      console.log('[DEBUG-CYCLE-4] MCPConfigDashboard.vue configuration saved successfully:', {
-        timestamp: new Date().toISOString(),
-        response: data
-      })
     } else {
       configMessage.value = data.message || 'Failed to save configuration'
       configMessageOk.value = false
-      
-      console.warn('[DEBUG-CYCLE-4] MCPConfigDashboard.vue configuration save failed:', {
-        timestamp: new Date().toISOString(),
-        error: data.message
-      })
     }
   } catch (err) {
     configMessage.value = err.message || 'Failed to save configuration'
     configMessageOk.value = false
     toast('Error', 'Failed to save configuration', 'error')
-    
-    console.error('[DEBUG-CYCLE-4] MCPConfigDashboard.vue configuration save error:', {
-      timestamp: new Date().toISOString(),
-      error: err.message
-    })
   } finally {
     savingConfig.value = false
   }
@@ -563,15 +513,6 @@ async function loadEnv() {
 }
 
 onMounted(() => {
-  // ━━━ Debug Cycle 2: Component Mount ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log('[DEBUG-CYCLE-2] MCPConfigDashboard.vue component mounted:', {
-    timestamp: new Date().toISOString(),
-    component: 'MCPConfigDashboard',
-    phase: 'onMounted',
-    initialTab: activeTab.value,
-    mobileNavOpen: mobileNavOpen.value
-  })
-  
   refreshStatus()
   loadConfig()
   loadTools()
@@ -579,12 +520,5 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  // ━━━ Debug Cycle 3: Component Unmount ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  console.log('[DEBUG-CYCLE-3] MCPConfigDashboard.vue component unmounted:', {
-    timestamp: new Date().toISOString(),
-    component: 'MCPConfigDashboard',
-    phase: 'onUnmounted',
-    finalTab: activeTab.value
-  })
 })
 </script>

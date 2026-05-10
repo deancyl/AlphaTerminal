@@ -42,48 +42,4 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-
-// Debug Cycle 1: Component mount
-onMounted(() => {
-  console.log('[DEBUG-CYCLE-1] PerformanceAnalyzer component mounted:', {
-    componentName: 'PerformanceAnalyzer',
-    timestamp: new Date().toISOString(),
-    componentState: 'ready',
-    version: 'v0.6.12'
-  })
-})
-
-// Debug Cycle 2: Component unmount
-onUnmounted(() => {
-  console.log('[DEBUG-CYCLE-2] PerformanceAnalyzer component unmounted:', {
-    componentName: 'PerformanceAnalyzer',
-    timestamp: new Date().toISOString(),
-    cleanupComplete: true
-  })
-})
-
-// Debug Cycle 3: Analysis operation simulation
-const simulateAnalysis = () => {
-  console.log('[DEBUG-CYCLE-3] PerformanceAnalyzer analysis operation:', {
-    operation: 'simulateAnalysis',
-    timestamp: new Date().toISOString(),
-    status: 'placeholder'
-  })
-}
-
-// Debug Cycle 4: Metric calculation simulation
-const calculateMetrics = () => {
-  console.log('[DEBUG-CYCLE-4] PerformanceAnalyzer metric calculation:', {
-    operation: 'calculateMetrics',
-    timestamp: new Date().toISOString(),
-    metrics: ['sharpe', 'maxDrawdown', 'calmar', 'var', 'cvar']
-  })
-}
-
-// Debug Cycle 5: Component initialization complete
-console.log('[DEBUG-CYCLE-5] PerformanceAnalyzer initialization complete:', {
-  componentReady: true,
-  timestamp: new Date().toISOString(),
-  features: ['performance-evaluation', 'risk-analysis', 'attribution']
-})
 </script>

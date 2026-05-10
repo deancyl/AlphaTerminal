@@ -75,3 +75,67 @@ export { formatPrice as fmtPrice }
 export { formatChangePct as fmtPct }
 export { formatChangePct as fmtChg }
 export { formatAmount as fmtTurnover }
+
+// ── 通用数字格式化（亿/万）────────────────────────────────────────
+/**
+ * 格式化数字（带亿/万单位）
+ * @param {number} num - 数字
+ * @returns {string} 格式化后的字符串
+ */
+export function formatNumber(num) {
+  if (num == null) return '--'
+  if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿'
+  if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万'
+  return num.toFixed(2)
+}
+
+/**
+ * 格式化金额（带万亿/亿/万单位）
+ * @param {number} num - 金额
+ * @returns {string} 格式化后的字符串
+ */
+export function formatMoney(num) {
+  if (num == null) return '--'
+  if (Math.abs(num) >= 1e12) return (num / 1e12).toFixed(2) + '万亿'
+  if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿'
+  if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万'
+  return num.toFixed(2)
+}
+
+/**
+ * 格式化成交量（带股单位）
+ * @param {number} num - 成交量（股数）
+ * @returns {string} 格式化后的字符串
+ */
+export function formatVolume(num) {
+  if (num == null) return '--'
+  if (num >= 1e8) return (num / 1e8).toFixed(2) + '亿股'
+  if (num >= 1e4) return (num / 1e4).toFixed(2) + '万股'
+  return num.toFixed(0) + '股'
+}
+
+/**
+ * 格式化股东持股数
+ * @param {number|string} num - 持股数
+ * @returns {string} 格式化后的字符串
+ */
+export function formatHolderShares(num) {
+  if (num == null) return '--'
+  const n = parseFloat(num)
+  if (Number.isNaN(n)) return String(num)
+  if (n >= 1e8) return (n / 1e8).toFixed(2) + '亿'
+  if (n >= 1e4) return (n / 1e4).toFixed(2) + '万'
+  return n.toFixed(0)
+}
+
+/**
+ * 格式化股东持股比例
+ * @param {number|string} pct - 持股比例
+ * @returns {string} 格式化后的字符串
+ */
+export function formatHolderPct(pct) {
+  if (pct == null) return '--'
+  const n = parseFloat(pct)
+  if (Number.isNaN(n)) return String(pct)
+  return n.toFixed(2) + '%'
+}

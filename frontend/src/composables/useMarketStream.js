@@ -113,8 +113,10 @@ function _newConnection() {
   _ws.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
-      if (data.type === 'pong' || data.type === 'subscribed') return
+      // 忽略控制消息（pong心跳、订阅确认）
+      if (data.type === 'pong' || data.type === 'subscribed' || data.type === 'unsubscribed') return
 
+      // tick 消息处理（data.type === 'tick' 或兼容旧格式无 type 字段）
       const sym = data.symbol
       if (!sym) return
 

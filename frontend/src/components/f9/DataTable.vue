@@ -78,6 +78,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { formatNumber, formatDate } from '../../utils/formatters.js'
 
 const props = defineProps({
   columns: {
@@ -143,19 +144,6 @@ function formatValue(value, format) {
     default:
       return value
   }
-}
-
-function formatNumber(num) {
-  if (num == null) return '--'
-  if (Math.abs(num) >= 1e8) return (num / 1e8).toFixed(2) + '亿'
-  if (Math.abs(num) >= 1e4) return (num / 1e4).toFixed(2) + '万'
-  return num.toFixed(2)
-}
-
-function formatDate(date) {
-  if (!date) return '--'
-  if (typeof date === 'string') return date.slice(0, 10)
-  return new Date(date).toISOString().slice(0, 10)
 }
 </script>
 

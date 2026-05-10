@@ -392,14 +392,6 @@ const isHistoryNavigation = ref(false) // 防止循环 push
 
 // Watch for currentView changes with comprehensive debug logging
 watch(currentView, (newView, oldView) => {
-  console.log('[DEBUG-CYCLE-APP] App.vue currentView changed:', {
-    timestamp: new Date().toISOString(),
-    previousView: oldView,
-    newView: newView,
-    isStrategyCenter: newView === 'strategy-center',
-    viewChanged: true
-  })
-  
   // 添加到历史栈（非历史导航时）
   if (!isHistoryNavigation.value && newView !== oldView) {
     viewHistory.value.push(newView)
@@ -417,14 +409,6 @@ watch(currentView, (newView, oldView) => {
 }, { immediate: false })
 
 function handleSidebarNavigate(viewId) {
-  // Debug Cycle 5: View change in App.vue
-  console.log('[DEBUG-CYCLE-5] App.vue view change triggered:', {
-    timestamp: new Date().toISOString(),
-    previousView: currentView.value,
-    newView: viewId,
-    source: 'sidebar'
-  })
-  
   currentView.value = viewId
   toastInfo('视图切换', `已切换到 ${getViewName(viewId)}`)
 }
