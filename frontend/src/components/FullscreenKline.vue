@@ -7,10 +7,10 @@
         <span class="symbol-code">{{ props.symbol ?? '--' }}</span>
       </div>
 
-      <!-- 工具栏：横向滚动，不换行 -->
-      <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0 max-w-full">
-        <!-- 横屏按钮：仅移动端显示，最左侧 -->
-        <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-2 py-1 rounded-sm mr-2" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
+        <!-- 工具栏：横向滚动，不换行 -->
+        <div class="header-center flex-nowrap overflow-x-auto scrollbar-hide shrink-0 max-w-full">
+          <!-- 横屏按钮：仅移动端显示，最左侧 -->
+          <button class="md:hidden shrink-0 text-[10px] bg-theme-secondary/20 px-3 py-2 rounded-sm mr-2 min-h-[44px] min-w-[44px]" @click="toggleMobileLandscape" title="横屏（仅安卓）">🔄 横屏</button>
         <!-- 周期选择 -->
         <div class="period-selector flex-nowrap shrink-0">
           <button
@@ -39,14 +39,14 @@
       <div class="header-right shrink-0 flex items-center gap-2">
         <span class="latest-price" :class="priceColor">{{ latestPriceText }}</span>
         <span class="latest-change" :class="priceColor">{{ latestChangeText }}</span>
-        <button 
-          class="text-xs px-2 py-1 rounded-sm bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+        <button
+          class="text-xs px-3 py-2 rounded-sm bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition min-h-[44px] min-w-[44px]"
           @click="showDetail = true"
           title="F9 深度资料"
         >
           📋 F9
         </button>
-        <button class="close-btn" @click="emit('close')">✕ 关闭</button>
+        <button class="close-btn min-h-[44px] min-w-[44px]" @click="emit('close')">✕ 关闭</button>
       </div>
     </header>
 
@@ -858,7 +858,18 @@ onUnmounted(() => {
 .symbol-code { font-size: 11px; color: var(--text-tertiary); font-family: monospace; }
 .header-center { display: flex; align-items: center; gap: 16px; flex: 1; justify-content: center; }
 .period-selector, .indicator-selector { display: flex; gap: 4px; }
-.period-btn, .indicator-btn { padding: 4px 10px; font-size: 12px; border: 1px solid var(--border-primary); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.period-btn, .indicator-btn {
+  padding: 8px 12px;
+  font-size: 12px;
+  border: 1px solid var(--border-primary);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+  min-width: 44px;
+}
 .period-btn:hover, .indicator-btn:hover { border-color: var(--border-hover); color: var(--text-primary); }
 .period-btn.active, .indicator-btn.active { background: var(--accent-primary); border-color: var(--accent-primary); color: var(--bg-primary); }
 .header-right { display: flex; align-items: center; gap: 12px; min-width: 200px; justify-content: flex-end; }
@@ -867,7 +878,18 @@ onUnmounted(() => {
 .price-up { color: var(--bullish); }
 .price-down { color: var(--bearish); }
 .price-flat { color: var(--text-tertiary); }
-.close-btn { padding: 6px 14px; font-size: 12px; border: 1px solid var(--border-hover); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+.close-btn {
+  padding: 8px 16px;
+  font-size: 12px;
+  border: 1px solid var(--border-hover);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 44px;
+  min-width: 44px;
+}
 .close-btn:hover { border-color: var(--status-error); color: var(--status-error); }
 
 .kline-body { flex: 1; display: flex; overflow: hidden; }
@@ -876,7 +898,18 @@ onUnmounted(() => {
 
 .loading-overlay, .error-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; opacity: 0.95; }
 .loading-text, .error-text { font-size: 14px; color: var(--text-secondary); }
-.error-close { margin-top: 12px; padding: 6px 16px; font-size: 12px; border: 1px solid var(--border-hover); background: transparent; color: var(--text-secondary); border-radius: 4px; cursor: pointer; }
+.error-close {
+  margin-top: 12px;
+  padding: 8px 16px;
+  font-size: 12px;
+  border: 1px solid var(--border-hover);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+}
 .error-close:hover { border-color: var(--border-hover); color: var(--text-primary); }
 
 .drawing-canvas { position: absolute; top: 48px; left: 0; right: 0; bottom: 0; z-index: 5; }
