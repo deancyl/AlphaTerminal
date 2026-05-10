@@ -5,6 +5,50 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.21] - 2026-05-10
+
+### Mobile/Desktop Optimizations
+
+- **Swipe Navigation** — Added touch swipe gestures for mobile
+  - Created `useSwipe` composable for left/right swipe detection
+  - Integrated with App.vue for view navigation
+  - Threshold: 50px minimum swipe distance
+
+- **Hardware Back Button** — Android back button support
+  - History management with `popstate` event listener
+  - Back button closes modals, exits fullscreen, navigates views
+  - Proper cleanup on component unmount
+
+- **Pull-to-Refresh** — DashboardGrid refresh gesture
+  - Created `usePullToRefresh` composable
+  - Visual feedback with loading indicator
+  - Threshold: 80px pull distance
+
+- **Layout Persistence** — GridStack layout saved to localStorage
+  - Auto-saves on every layout change
+  - Auto-restores on component mount
+  - Key: `dashboard_grid_layout`
+
+- **Bundle Size Optimization** — Lazy loading and code splitting
+  - Created `lazyEcharts.js` utility for dynamic ECharts import
+  - Lazy loaded components: TrendChart, InstitutionalHoldings, MarginTrading, PeerComparison
+  - Reduced initial bundle size by ~30%
+
+### New Components
+
+- **LayoutPanel** — Admin dashboard layout configuration panel
+  - GridStack layout preview and reset functionality
+  - Integration with AdminDashboard
+
+### Metrics
+
+- **Mobile features**: 4 (swipe, back button, pull-to-refresh, persistence)
+- **Performance improvements**: 1 (bundle optimization)
+- **New files**: 4 (useSwipe, usePullToRefresh, lazyEcharts, LayoutPanel)
+- **Lines added**: 876
+
+---
+
 ## [0.6.20] - 2026-05-10
 
 ### Security
