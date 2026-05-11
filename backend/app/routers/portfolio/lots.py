@@ -257,9 +257,9 @@ async def check_conservation(portfolio_id: int):
             (portfolio_id,)
         ).fetchall()
 
-        # 获取主账户自身持仓市值
+        # 获取主账户自身持仓市值（使用 position_summary 聚合表）
         parent_positions = conn.execute(
-            "SELECT portfolio_id, symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
+            "SELECT portfolio_id, symbol, total_shares as shares, avg_cost, market_value FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
             (portfolio_id,)
         ).fetchall()
 
@@ -268,7 +268,7 @@ async def check_conservation(portfolio_id: int):
         if all_desc_ids:
             placeholders = ','.join(['?' for _ in all_desc_ids])
             child_positions = conn.execute(
-                f"SELECT portfolio_id, symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({placeholders})",
+                f"SELECT portfolio_id, symbol, total_shares as shares, avg_cost, market_value FROM position_summary WHERE portfolio_id IN ({placeholders}) AND total_shares > 0",
                 tuple(all_desc_ids)
             ).fetchall()
         else:
@@ -289,9 +289,14 @@ async def check_conservation(portfolio_id: int):
 
         def positions_value(rows):
             total = 0.0
-            for (pid, sym, shares, avg_cost) in rows:
-                price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
-                total += shares * price
+            for row in rows:
+                pid, sym, shares, avg_cost = row[0], row[1], row[2], row[3]
+                market_value = row[4] if len(row) > 4 else None
+                if market_value is not None and market_value > 0:
+                    total += market_value
+                else:
+                    price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
+                    total += shares * price
             return total
 
         parent_pos_value = positions_value(parent_positions)

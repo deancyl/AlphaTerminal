@@ -1,6 +1,6 @@
 <template>
   <!-- ━━━ 移动端：单列垂直流式布局 (< 768px) ━━━━━━━━━━━━━━━ -->
-  <div v-if="isMobile" ref="mobileContainerRef" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px;" role="main" aria-label="市场行情仪表盘">
+  <div v-if="isMobile" ref="mobileContainerRef" class="flex flex-col gap-2 px-1 overflow-y-auto min-w-0" style="height: 100dvh; padding-bottom: 80px; overscroll-behavior: contain;" role="main" aria-label="市场行情仪表盘">
     
     <!-- 下拉刷新指示器 -->
     <div class="pull-refresh-indicator" :style="pullIndicatorStyle">
@@ -151,7 +151,7 @@
     </div>
 
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+    <div class="grid-stack-item"
          data-widget-id="news"
          gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-3">
@@ -201,7 +201,7 @@
     </div>
 
     <!-- ━━━ Widget 5：资金流向（独立，右侧4列，6起）━━━━━━━━━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+    <div class="grid-stack-item"
          data-widget-id="fundflow"
          gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
@@ -210,7 +210,7 @@
     </div>
 
     <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+    <div class="grid-stack-item"
          data-widget-id="sectors"
          gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
       <div class="grid-stack-item-content terminal-panel p-2">
@@ -219,7 +219,7 @@
     </div>
 
     <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+    <div class="grid-stack-item"
          data-widget-id="china"
          gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
@@ -257,7 +257,7 @@
     </div>
 
     <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
+    <div class="grid-stack-item"
          data-widget-id="screener"
          gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
       <div class="grid-stack-item-content terminal-panel p-3">
@@ -265,16 +265,7 @@
       </div>
     </div>
 
-    <!-- ━━━ Widget 8：价格预警管理（右侧3列，15起）━━━━━━━━━━━ -->
-    <div v-if="props.layoutMode === 'advanced'" class="grid-stack-item"
-         data-widget-id="alerts"
-         gs-x="9" gs-y="15" gs-w="3" gs-h="6" gs-min-w="2" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <AlertManager />
-      </div>
     </div>
-
-  </div>
 </template>
 
 <script setup>
@@ -290,7 +281,6 @@ import SentimentGauge    from './SentimentGauge.vue'
 import HotSectors        from './HotSectors.vue'
 import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
-import AlertManager      from './AlertManager.vue'
 
 // ── Layout Persistence Constants ─────────────────────────────────────
 const LAYOUT_STORAGE_KEY = 'alphaterminal_grid_layout'
@@ -306,7 +296,6 @@ const DEFAULT_LAYOUT = [
   { id: 'sectors',    x: 8,  y: 11, w: 4,  h: 5,  minW: 3, minH: 4 },
   { id: 'china',      x: 8,  y: 16, w: 4,  h: 5,  minW: 3, minH: 3 },
   { id: 'screener',   x: 0,  y: 21, w: 12, h: 8,  minW: 6, minH: 5 },
-  { id: 'alerts',     x: 9,  y: 15, w: 3,  h: 6,  minW: 2, minH: 4 },
 ]
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
@@ -332,7 +321,6 @@ const props = defineProps({
   sectorsData:    { type: Array,  default: () => [] },
   derivativesData:{ type: Array,  default: () => [] },
   isLocked:       { type: Boolean, default: true },
-  layoutMode:     { type: String,  default: 'advanced' }, // 'simple' | 'advanced'
 })
 
 const emit = defineEmits(['toggle-lock', 'open-fullscreen', 'reset-layout'])
@@ -360,7 +348,6 @@ function saveLayout() {
   const layoutData = {
     version: LAYOUT_VERSION,
     timestamp: Date.now(),
-    layoutMode: props.layoutMode,
     nodes,
   }
   
@@ -387,12 +374,6 @@ function loadLayout() {
     if (data.version !== LAYOUT_VERSION) {
       console.log('[DashboardGrid] Layout version mismatch, resetting to default')
       clearLayout()
-      return null
-    }
-    
-    // Layout mode check - reset if mode changed
-    if (data.layoutMode !== props.layoutMode) {
-      console.log('[DashboardGrid] Layout mode changed, using default')
       return null
     }
     

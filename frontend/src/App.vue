@@ -117,20 +117,6 @@
             <span>↺</span>
             重置布局
           </button>
-          <!-- 布局模式切换（仅桌面端） -->
-          <button
-            v-if="!isMobile"
-            class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition cursor-help"
-            :class="layoutMode === 'simple'
-              ? 'border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20'
-              : 'border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20'"
-            @click="toggleLayoutMode"
-            :title="layoutMode === 'simple' ? '简洁模式：4个核心组件\n点击切换到专业模式（8个组件）' : '专业模式：8个组件\n点击切换到简洁模式（4个核心组件）'"
-          >
-            <span v-if="layoutMode === 'simple'">🎯</span>
-            <span v-else>📊</span>
-            {{ layoutMode === 'simple' ? '简洁' : '专业' }}
-          </button>
           <!-- Copilot 唤醒按钮 -->
 <button
             class="btn-xs flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs leading-none relative"
@@ -189,7 +175,6 @@
             :sectors-data="sectorsData"
             :derivatives-data="derivativesData"
             :is-locked="isLocked"
-            :layout-mode="layoutMode"
             @toggle-lock="toggleLock"
             @open-fullscreen="openFullscreenKline"
           />
@@ -497,7 +482,7 @@ const { helpVisible, searchVisible } = useKeyboardShortcuts({
 
 // ── 移动端滑动导航 ─────────────────────────────────────────────────────
 // View order for swipe navigation (matches mobile bottom nav)
-const VIEW_ORDER = ['stock', 'bond', 'futures', 'macro', 'portfolio', 'fund']
+const VIEW_ORDER = ['stock', 'fund', 'bond', 'futures', 'portfolio', 'macro']
 
 function getNextView(direction) {
   const currentIndex = VIEW_ORDER.indexOf(currentView.value)
@@ -534,15 +519,6 @@ const isLocked = ref(true)     // 网格默认锁定
 const dashboardGridRef = ref(null) // DashboardGrid ref for layout reset
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
-
-// ── 布局模式：simple（简洁）或 advanced（专业）────────────────────
-const layoutMode = ref(localStorage.getItem('alphaterminal_layout_mode') || 'advanced')
-
-function toggleLayoutMode() {
-  layoutMode.value = layoutMode.value === 'simple' ? 'advanced' : 'simple'
-  localStorage.setItem('alphaterminal_layout_mode', layoutMode.value)
-  toastInfo('布局模式', `已切换到${layoutMode.value === 'simple' ? '简洁模式（4个核心组件）' : '专业模式（8个组件）'}`)
-}
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
 function openFullscreenKline({ symbol, name }) {
