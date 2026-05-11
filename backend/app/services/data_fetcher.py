@@ -874,19 +874,28 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                         if 'pct' in c.lower() or 'change' in c.lower() or c == '涨跌幅'), None)
         rows = []
         prev_close = None
+        
+        # Safely get column names (AkShare may return different column names for ETFs)
+        def get_col_val(row, possible_names, default=0.0):
+            for name in possible_names:
+                if name in df.columns:
+                    try:
+                        return float(row[name])
+                    except (ValueError, TypeError):
+                        pass
+            return default
+        
         for i in range(len(df)):
             try:
                 dt    = int(pd.Timestamp(df.iloc[i][date_col]).timestamp())
-                open_ = float(df.iloc[i]["open"])
-                high  = float(df.iloc[i]["high"])
-                low   = float(df.iloc[i]["low"])
-                close = float(df.iloc[i]["close"])
-                vol   = float(df.iloc[i]["volume"]) if "volume" in df.columns else 0.0
+                open_ = get_col_val(df.iloc[i], ["open", "开盘", "Open"])
+                high  = get_col_val(df.iloc[i], ["high", "最高", "High"])
+                low   = get_col_val(df.iloc[i], ["low", "最低", "Low"])
+                close = get_col_val(df.iloc[i], ["close", "收盘", "Close"])
+                vol   = get_col_val(df.iloc[i], ["volume", "成交量", "Volume"])
                 pct   = float(df.iloc[i][_pct_col]) if _pct_col and _pct_col in df.columns else 0.0
-                # amount: 成交额（元），指数无此字段
-                amount = float(df.iloc[i]["amount"]) if "amount" in df.columns else 0.0
-                # turnover_rate: 换手率(%)，AkShare返回小数形式(如0.0023)，转%
-                raw_turnover = float(df.iloc[i]["turnover"]) if "turnover" in df.columns else None
+                amount = get_col_val(df.iloc[i], ["amount", "成交额", "Amount"])
+                raw_turnover = get_col_val(df.iloc[i], ["turnover", "换手率", "Turnover"], default=None)
                 turnover_rate = round(raw_turnover * 100, 4) if raw_turnover is not None else 0.0
                 # amplitude: 振幅(%) = (high - low) / prev_close * 100
                 if prev_close and prev_close != 0:

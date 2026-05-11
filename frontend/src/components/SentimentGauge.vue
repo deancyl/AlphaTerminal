@@ -107,6 +107,7 @@ import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
 import { apiFetch } from '../utils/api.js'
 import { formatPrice } from '../utils/formatters.js'
+import { getECharts } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -373,8 +374,10 @@ const debouncedUpdate = useDebounceFn(() => {
 watch(data, () => { debouncedUpdate() })
 
 onMounted(async () => {
+  // Wait for ECharts to be lazy-loaded (fixes race condition on page refresh)
+  await getECharts()
+  
   await fetchHistogram()
-  await new Promise(r => setTimeout(r, 0))
   initChart()
   initIntradayChart()
 

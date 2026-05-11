@@ -58,6 +58,7 @@ import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import { useUiStore } from '../composables/useUiStore.js'
+import { getECharts } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   symbol:     { type: String, default: '000001' },
@@ -847,7 +848,9 @@ watch(() => props.indicators, () => { fetchAndRender() }, { deep: true })
 let unsubscribeTheme = null
 
 onMounted(async () => {
-  await new Promise(r => setTimeout(r, 0))
+  // Wait for ECharts to be lazy-loaded (fixes race condition on page refresh)
+  await getECharts()
+  
   if (chartRef.value && window.echarts) {
     chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
     resizeObserver = new ResizeObserver(() => chartInstance?.resize())
