@@ -5,6 +5,49 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.27] - 2026-05-11
+
+### Bug Fixes
+
+- **ETF Data Compatibility** — Fixed ETF data fetching with improved column name handling
+  - Added `get_col_val()` helper function for flexible column name lookup
+  - Support for Chinese/English column names (open/开盘, high/最高, low/最低, close/收盘, volume/成交量, amount/成交额)
+  - Resolves issues with AkShare returning different column names for ETFs vs stocks
+
+- **Production Domain Configuration** — Added `allowedHosts` for production domain in `vite.config.js`
+  - Supports `finance.deancylnextcloud.eu.org` domain
+
+### Code Quality
+
+- **Comprehensive Quality Audit Completed**
+  - Backend code quality assessment (100+ Python files)
+  - Frontend code quality assessment (96 Vue components)
+  - API design patterns review (21 routers)
+  - Test coverage analysis (19% router coverage, 16% service coverage)
+  - Configuration and infrastructure audit
+
+### Security Findings (Require Attention)
+
+- ⚠️ Hardcoded API keys detected in `scripts/fetch_historical_data.py` and test files
+- ⚠️ SQL injection risk in `admin.py` dynamic table queries
+- ⚠️ No TypeScript configuration (frontend uses plain JavaScript)
+
+### Test Coverage Summary
+
+| Category | Files | Coverage |
+|----------|-------|----------|
+| Backend Routers | 21 | 19% (4 tested) |
+| Backend Services | 49 | 16% (8 tested) |
+| Frontend Components | 30+ | 17% (5 tested) |
+
+### Technical Details
+
+- Added safe column value extraction with fallback support
+- Improved error handling for missing columns
+- Minor UI fixes in IndexLineChart and SentimentGauge components
+
+---
+
 ## [0.6.26] - 2026-05-10
 
 ### Bug Fixes (Critical)
