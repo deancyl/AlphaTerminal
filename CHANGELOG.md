@@ -5,6 +5,39 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.28] - 2026-05-11
+
+### Bug Fixes
+
+- **AlertManager Widget Removed** — Removed price alert module from DashboardGrid
+  - User requested removal due to awkward UI placement
+  - Widget completely removed from mobile and desktop layouts
+
+- **Layout Mode Toggle Removed** — Removed "专业/简洁" buttons from status bar
+  - User requested removal as feature was not necessary
+  - All widgets now always display (no simple/advanced mode distinction)
+
+- **Conservation API Fixed** — Fixed portfolio audit "获取失败" error
+  - Changed from querying `positions` table to `position_summary` table
+  - Uses pre-calculated `market_value` when available
+  - Properly handles lot-based portfolio system
+
+- **Mobile Swipe Navigation Fixed** — Fixed swipe navigation order for fund module
+  - Updated VIEW_ORDER to match MobileBottomNav visual order
+  - Fund module now accessible via swipe: stock → fund → bond → futures
+
+- **Chrome Pull-to-Refresh Conflict Fixed** — Added `overscroll-behavior: contain`
+  - Prevents Chrome's native pull-to-refresh from interfering
+  - Custom pull-to-refresh now works correctly on mobile
+
+### Technical Details
+
+- Conservation API now uses `position_summary` aggregation table
+- Swipe navigation order: `['stock', 'fund', 'bond', 'futures', 'portfolio', 'macro']`
+- Mobile container CSS updated with overscroll behavior
+
+---
+
 ## [0.6.27] - 2026-05-11
 
 ### Bug Fixes
