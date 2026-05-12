@@ -791,3 +791,238 @@ async def get_macro_batch(
     except Exception as e:
         logger.error(f"[Macro] Batch fetch error: {e}")
         return error_response(f"批量获取失败: {str(e)}")
+
+
+# ── 国际宏观数据 ────────────────────────────────────────────────────────
+
+@router.get("/usa/cpi")
+async def get_usa_cpi(limit: int = 24):
+    """
+    获取美国CPI数据
+    
+    - **limit**: 返回最近N个月（默认24）
+    """
+    cache_key = f"macro_usa_cpi_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
+    try:
+        df = _get_ak().macro_usa_cpi()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "date": str(row.get("日期", "")),
+                "cpi_yoy": _safe_float(row.get("同比", None)),
+                "cpi_mom": _safe_float(row.get("环比", None)),
+            })
+        
+        result = success_response({
+            "indicator": "CPI",
+            "country": "美国",
+            "name": "消费者物价指数",
+            "unit": "%",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+        set_cached(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"[Macro] USA CPI fetch error: {e}")
+        return error_response(f"获取美国CPI失败: {str(e)}")
+
+
+@router.get("/usa/gdp")
+async def get_usa_gdp(limit: int = 20):
+    """
+    获取美国GDP数据
+    
+    - **limit**: 返回最近N个季度（默认20）
+    """
+    cache_key = f"macro_usa_gdp_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
+    try:
+        df = _get_ak().macro_usa_gdp()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "quarter": str(row.get("季度", "")),
+                "gdp_yoy": _safe_float(row.get("同比", None)),
+            })
+        
+        result = success_response({
+            "indicator": "GDP",
+            "country": "美国",
+            "name": "国内生产总值",
+            "unit": "%",
+            "frequency": "季度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+        set_cached(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"[Macro] USA GDP fetch error: {e}")
+        return error_response(f"获取美国GDP失败: {str(e)}")
+
+
+@router.get("/usa/unemployment")
+async def get_usa_unemployment(limit: int = 24):
+    """
+    获取美国失业率数据
+    
+    - **limit**: 返回最近N个月（默认24）
+    """
+    cache_key = f"macro_usa_unemployment_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
+    try:
+        df = _get_ak().macro_usa_unemployment()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "date": str(row.get("日期", "")),
+                "rate": _safe_float(row.get("失业率", None)),
+            })
+        
+        result = success_response({
+            "indicator": "Unemployment",
+            "country": "美国",
+            "name": "失业率",
+            "unit": "%",
+            "frequency": "月度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+        set_cached(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"[Macro] USA Unemployment fetch error: {e}")
+        return error_response(f"获取美国失业率失败: {str(e)}")
+
+
+@router.get("/euro/gdp")
+async def get_euro_gdp(limit: int = 20):
+    """
+    获取欧元区GDP数据
+    
+    - **limit**: 返回最近N个季度（默认20）
+    """
+    cache_key = f"macro_euro_gdp_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
+    try:
+        df = _get_ak().macro_euro_gdp()
+        df = df.tail(limit) if len(df) > limit else df
+        
+        data = []
+        for _, row in df.iterrows():
+            data.append({
+                "quarter": str(row.get("季度", "")),
+                "gdp_yoy": _safe_float(row.get("同比", None)),
+            })
+        
+        result = success_response({
+            "indicator": "GDP",
+            "country": "欧元区",
+            "name": "国内生产总值",
+            "unit": "%",
+            "frequency": "季度",
+            "data": data,
+            "last_update": datetime.now().isoformat()
+        })
+        set_cached(cache_key, result)
+        return result
+    except Exception as e:
+        logger.error(f"[Macro] Euro GDP fetch error: {e}")
+        return error_response(f"获取欧元区GDP失败: {str(e)}")
+
+
+@router.get("/international")
+async def get_international_macro():
+    """
+    获取国际宏观经济数据概览
+    
+    返回美国、欧元区主要指标
+    """
+    cache_key = "macro_international_overview"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
+    result = {
+        "usa": {},
+        "euro": {},
+        "last_update": datetime.now().isoformat()
+    }
+    
+    try:
+        # 美国CPI
+        try:
+            df = _get_ak().macro_usa_cpi()
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]
+                result["usa"]["cpi"] = {
+                    "date": str(latest.get("日期", "")),
+                    "yoy": _safe_float(latest.get("同比", None)),
+                }
+        except Exception as e:
+            logger.warning(f"[Macro] USA CPI fetch warning: {e}")
+        
+        # 美国GDP
+        try:
+            df = _get_ak().macro_usa_gdp()
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]
+                result["usa"]["gdp"] = {
+                    "quarter": str(latest.get("季度", "")),
+                    "yoy": _safe_float(latest.get("同比", None)),
+                }
+        except Exception as e:
+            logger.warning(f"[Macro] USA GDP fetch warning: {e}")
+        
+        # 美国失业率
+        try:
+            df = _get_ak().macro_usa_unemployment()
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]
+                result["usa"]["unemployment"] = {
+                    "date": str(latest.get("日期", "")),
+                    "rate": _safe_float(latest.get("失业率", None)),
+                }
+        except Exception as e:
+            logger.warning(f"[Macro] USA Unemployment fetch warning: {e}")
+        
+        # 欧元区GDP
+        try:
+            df = _get_ak().macro_euro_gdp()
+            if df is not None and not df.empty:
+                latest = df.iloc[-1]
+                result["euro"]["gdp"] = {
+                    "quarter": str(latest.get("季度", "")),
+                    "yoy": _safe_float(latest.get("同比", None)),
+                }
+        except Exception as e:
+            logger.warning(f"[Macro] Euro GDP fetch warning: {e}")
+        
+        response = success_response(result)
+        set_cached(cache_key, response)
+        return response
+        
+    except Exception as e:
+        logger.error(f"[Macro] International overview fetch error: {e}")
+        return error_response(f"获取国际宏观数据失败: {str(e)}")

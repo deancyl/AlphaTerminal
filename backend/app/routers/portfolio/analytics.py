@@ -789,3 +789,134 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
     except Exception as e:
         logger.error(f"[Benchmark] 计算异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"基准对比计算失败: {str(e)}")
+
+
+# ══════════════════════════════════════════════════════════════
+#  Brinson Attribution Analysis
+# ══════════════════════════════════════════════════════════════
+
+@router.get("/{portfolio_id}/brinson")
+async def get_brinson_attribution(
+    portfolio_id: int,
+    benchmark: str = Query(default="000300", description="基准指数代码（默认沪深300）"),
+    period_start: Optional[str] = Query(default=None, description="开始日期 YYYY-MM-DD"),
+    period_end: Optional[str] = Query(default=None, description="结束日期 YYYY-MM-DD")
+):
+    """
+    Brinson归因分析
+    
+    将组合超额收益分解为:
+    - 配置效应 (Allocation Effect): 行业配置带来的超额收益
+    - 选择效应 (Selection Effect): 行业内选股带来的超额收益
+    - 交互效应 (Interaction Effect): 配置与选择的交互影响
+    """
+    from app.services.attribution import calculate_brinson_attribution, aggregate_to_sectors
+    
+    try:
+        conn = _get_conn()
+        cursor = conn.cursor()
+        
+        # 获取组合持仓
+        cursor.execute("""
+            SELECT symbol, name, quantity, cost_price
+            FROM positions
+            WHERE portfolio_id = ? AND quantity > 0
+        """, (portfolio_id,))
+        positions = cursor.fetchall()
+        
+        if not positions:
+            raise HTTPException(status_code=404, detail="组合无持仓")
+        
+        # 计算组合权重（按市值）
+        total_value = 0.0
+        position_list = []
+        for pos in positions:
+            symbol, name, quantity, cost_price = pos
+            # 简化：使用成本价计算市值（实际应使用当前价格）
+            market_value = quantity * cost_price
+            total_value += market_value
+            position_list.append({
+                "symbol": symbol,
+                "name": name,
+                "quantity": quantity,
+                "cost_price": cost_price,
+                "market_value": market_value
+            })
+        
+        # 计算权重
+        for pos in position_list:
+            pos["weight"] = pos["market_value"] / total_value if total_value > 0 else 0
+        
+        # 模拟收益率（实际应从历史数据计算）
+        # 这里使用简化示例
+        portfolio_returns = {pos["symbol"]: 0.05 + (hash(pos["symbol"]) % 100) / 1000 for pos in position_list}
+        
+        # 聚合到行业层面
+        portfolio_sector_weights, portfolio_sector_returns = aggregate_to_sectors(
+            position_list, portfolio_returns
+        )
+        
+        # 基准数据（简化：使用固定权重）
+        # 实际应从指数成分数据获取
+        benchmark_weights = {
+            "银行": 0.15,
+            "白酒": 0.10,
+            "保险": 0.08,
+            "家电": 0.05,
+            "新能源": 0.12,
+            "汽车": 0.05,
+            "其他": 0.45
+        }
+        
+        # 基准收益率（简化）
+        benchmark_returns = {
+            "银行": 0.03,
+            "白酒": 0.08,
+            "保险": 0.04,
+            "家电": 0.05,
+            "新能源": 0.10,
+            "汽车": 0.06,
+            "其他": 0.04
+        }
+        
+        # 计算Brinson归因
+        result = calculate_brinson_attribution(
+            portfolio_weights=portfolio_sector_weights,
+            portfolio_returns=portfolio_sector_returns,
+            benchmark_weights=benchmark_weights,
+            benchmark_returns=benchmark_returns,
+            period_start=period_start or "2025-01-01",
+            period_end=period_end or "2025-12-31"
+        )
+        
+        conn.close()
+        
+        return success_response({
+            "allocation_effect": round(result.allocation_effect * 100, 4),
+            "selection_effect": round(result.selection_effect * 100, 4),
+            "interaction_effect": round(result.interaction_effect * 100, 4),
+            "total_excess_return": round(result.total_excess_return * 100, 4),
+            "sector_contributions": [
+                {
+                    "sector": c.sector,
+                    "portfolio_weight": round(c.portfolio_weight * 100, 2),
+                    "benchmark_weight": round(c.benchmark_weight * 100, 2),
+                    "portfolio_return": round(c.portfolio_return * 100, 2),
+                    "benchmark_return": round(c.benchmark_return * 100, 2),
+                    "allocation_effect": round(c.allocation_effect * 100, 4),
+                    "selection_effect": round(c.selection_effect * 100, 4),
+                    "interaction_effect": round(c.interaction_effect * 100, 4),
+                    "total_effect": round(c.total_effect * 100, 4)
+                }
+                for c in result.sector_contributions
+            ],
+            "period": f"{result.period_start} ~ {result.period_end}",
+            "benchmark": benchmark,
+            "note": "注：当前使用简化数据，实际应从历史行情计算收益率"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Brinson] 归因分析失败: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"归因分析失败: {str(e)}")
