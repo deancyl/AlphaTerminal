@@ -196,14 +196,8 @@
           <OptionsAnalysis v-else-if="currentView === 'options'" />
           <!-- 全球指数 -->
           <GlobalIndex v-else-if="currentView === 'global-index'" />
-          <!-- API Token 管理 -->
-          <AgentTokenManager v-else-if="currentView === 'agent_tokens'" />
-          <!-- MCP Configuration -->
-          <MCPConfigDashboard v-else-if="currentView === 'mcp'" />
           <!-- Walk-Forward Analysis -->
           <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
-          <!-- Performance Analyzer -->
-          <PerformanceAnalyzer v-else-if="currentView === 'performance'" />
           <!-- F9 深度资料 -->
           <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
         </KeepAlive>
@@ -318,10 +312,7 @@ const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDas
 const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
 const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
-const AgentTokenManager = defineAsyncComponent(() => import('./components/AgentTokenManager.vue'))
-const MCPConfigDashboard = defineAsyncComponent(() => import('./components/MCPConfigDashboard.vue'))
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
-const PerformanceAnalyzer = defineAsyncComponent(() => import('./components/PerformanceAnalyzer.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -405,9 +396,8 @@ function getViewName(viewId) {
     stock: '股票行情', bond: '债券行情', futures: '期货行情',
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
     'strategy-center': '策略中心', admin: '系统管理',
-    f9: '深度资料', mcp: 'AI工具配置', 'global-index': '全球指数',
-    'agent_tokens': 'Agent Token管理', 'walk-forward': '滚动前向分析',
-    'performance': '绩效分析'
+    f9: '深度资料', 'global-index': '全球指数',
+    'walk-forward': '滚动前向分析'
   }
   return names[viewId] || viewId
 }

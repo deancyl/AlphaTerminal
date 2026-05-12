@@ -133,9 +133,6 @@ const mainNavItems = [
 const aiNavItems = [
   { id: 'strategy-center', label: '策略中心', icon: '🎯' },
   { id: 'walk-forward', label: '滚动前向分析', icon: '📊' },
-  { id: 'performance', label: '绩效分析', icon: '📈' },
-  { id: 'agent_tokens', label: 'Agent Token管理', icon: '🔑' },
-  { id: 'mcp', label: 'MCP配置', icon: '⚙️' },
 ]
 
 const adminNavItems = [

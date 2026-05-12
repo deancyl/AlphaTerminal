@@ -9,7 +9,9 @@ Phase B: 统一 API 响应格式
 """
 import logging
 import time
-from datetime import datetime
+import asyncio
+from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 from fastapi import APIRouter, Query
 from app.services.sentiment_engine import (
     get_histogram, query_stocks, is_spot_ready,
@@ -21,6 +23,40 @@ from app.utils.response import success_response, error_response, ErrorCode
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="sentiment_")
+
+_akshare_module = None
+def _get_ak():
+    global _akshare_module
+    if _akshare_module is None:
+        import akshare as ak
+        _akshare_module = ak
+    return _akshare_module
+
+_cache = {}
+_cache_ttl = {}
+CACHE_DURATION = 300
+MAX_CACHE_SIZE = 20
+
+def _get_cached(key):
+    now = datetime.now()
+    expired = [k for k, v in _cache_ttl.items() if now >= v]
+    for k in expired:
+        _cache.pop(k, None)
+        _cache_ttl.pop(k, None)
+    if key in _cache and key in _cache_ttl:
+        if datetime.now() < _cache_ttl[key]:
+            return _cache[key]
+    return None
+
+def _set_cached(key, value):
+    if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
+        oldest_key = min(_cache_ttl, key=_cache_ttl.get)
+        _cache.pop(oldest_key, None)
+        _cache_ttl.pop(oldest_key, None)
+    _cache[key] = value
+    _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
 
 # ── 日内多空历史（每15秒追加一点，最多480个点=2小时轮询）────────
 _INTRADAY_MAX_POINTS = 480
@@ -163,11 +199,29 @@ async def debug_trigger():
 @router.get("/market/fund_flow")
 async def market_fund_flow():
     """市场资金流向 - 超大单/大单/中单/小单"""
-    import akshare as ak
+    cached = _get_cached("market_fund_flow")
+    if cached:
+        return cached
+    
+    FETCH_TIMEOUT = 30
     
     try:
-        df = ak.stock_market_fund_flow()
-        # 获取最近30天数据
+        loop = asyncio.get_event_loop()
+        
+        async def fetch_with_timeout():
+            try:
+                return await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().stock_market_fund_flow()),
+                    timeout=FETCH_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"[FundFlow] fetch timeout after {FETCH_TIMEOUT}s")
+                return None
+        
+        df = await fetch_with_timeout()
+        if df is None:
+            return error_response(500, "资金流数据获取超时")
+        
         df = df.tail(30)
         
         result = []
@@ -188,11 +242,13 @@ async def market_fund_flow():
                 "small_pct": float(row.get("小单净流入-净占比", 0) or 0),
             })
         
-        return success_response({
+        res = success_response({
             "items": result,
             "total": len(result),
             "source": "akshare - stock_market_fund_flow"
         })
+        _set_cached("market_fund_flow", res)
+        return res
     except Exception as e:
         logger.error(f"market_fund_flow error: {e}")
         return error_response(500, f"获取资金流数据失败: {str(e)}")
@@ -200,14 +256,31 @@ async def market_fund_flow():
 @router.get("/market/fund_flow/industry")
 async def industry_fund_flow():
     """行业资金流向"""
-    import akshare as ak
+    cached = _get_cached("market_fund_flow_industry")
+    if cached:
+        return cached
+    
+    FETCH_TIMEOUT = 30
     
     try:
-        df = ak.stock_sector_fund_flow_summary(indicator="今日")
+        loop = asyncio.get_event_loop()
+        
+        async def fetch_with_timeout():
+            try:
+                return await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().stock_sector_fund_flow_summary(indicator="今日")),
+                    timeout=FETCH_TIMEOUT
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"[IndustryFundFlow] fetch timeout after {FETCH_TIMEOUT}s")
+                return None
+        
+        df = await fetch_with_timeout()
+        if df is None:
+            return error_response(500, "行业资金流数据获取超时")
         
         result = []
         for _, row in df.iterrows():
-            # 尝试获取主力净流入字段
             try:
                 main_net = int(row.get("今日主力净流入-净额", 0) or 0)
             except (ValueError, TypeError):
@@ -218,11 +291,13 @@ async def industry_fund_flow():
                 "main_net": main_net,
             })
         
-        return success_response({
-            "items": result[:20],  # 前20个行业
+        res = success_response({
+            "items": result[:20],
             "total": len(result),
             "source": "akshare - stock_sector_fund_flow_summary"
         })
+        _set_cached("market_fund_flow_industry", res)
+        return res
     except Exception as e:
         logger.error(f"industry_fund_flow error: {e}")
         return error_response(500, f"获取行业资金流失败: {str(e)}")

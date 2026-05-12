@@ -46,6 +46,15 @@ class WindowResult:
 
 
 @dataclass
+class AnomalyWarning:
+    """Anomaly warning for pre-flight detection"""
+    level: str  # "info", "warning", "error"
+    category: str  # "data_quality", "strategy_compat", "volatility"
+    message: str
+    suggestion: str
+
+
+@dataclass
 class WalkForwardResult:
     """Aggregated walk-forward analysis result"""
     symbol: str
@@ -121,6 +130,93 @@ class WalkForwardAnalyzer:
         self.RETURN_GAP_SEVERE = 20.0     # 20% gap = severe
         self.SHARPE_GAP_WARNING = 0.5
         self.SHARPE_GAP_SEVERE = 1.0
+    
+    def detect_anomalies(
+        self,
+        data: List[Dict[str, Any]],
+        symbol: str,
+        strategy_type: str
+    ) -> List[AnomalyWarning]:
+        """
+        Pre-flight anomaly detection before WFA.
+        """
+        warnings = []
+        
+        if not data or len(data) < 20:
+            return warnings
+        
+        closes = [d.get('close', 0) for d in data if d.get('close')]
+        dates = [d.get('date', '') for d in data if d.get('date')]
+        
+        if len(closes) < 20:
+            return warnings
+        
+        # 1. Data Quality - Check for gaps
+        if len(dates) >= 2:
+            try:
+                date_span = (datetime.strptime(dates[-1], '%Y-%m-%d') - 
+                            datetime.strptime(dates[0], '%Y-%m-%d')).days
+                expected_trading_days = date_span * 252 / 365
+                if expected_trading_days > 0:
+                    gap_ratio = 1 - (len(dates) / expected_trading_days)
+                    if gap_ratio > 0.1:
+                        warnings.append(AnomalyWarning(
+                            level="warning",
+                            category="data_quality",
+                            message=f"数据存在缺口，覆盖率{100-gap_ratio*100:.1f}%",
+                            suggestion="建议检查数据源或使用更长时间范围"
+                        ))
+            except Exception:
+                pass
+        
+        # 2. Volatility Regime Check
+        returns = []
+        for i in range(1, len(closes)):
+            if closes[i-1] > 0:
+                returns.append((closes[i] - closes[i-1]) / closes[i-1])
+        
+        if len(returns) >= 20:
+            try:
+                recent_vol = statistics.stdev(returns[-20:]) * (252 ** 0.5) * 100
+                historical_vol = statistics.stdev(returns) * (252 ** 0.5) * 100
+                
+                if historical_vol > 0 and recent_vol < historical_vol * 0.5:
+                    warnings.append(AnomalyWarning(
+                        level="info",
+                        category="volatility",
+                        message=f"近期波动率({recent_vol:.1f}%)显著低于历史({historical_vol:.1f}%)",
+                        suggestion="低波动环境下趋势策略可能表现不佳"
+                    ))
+                elif historical_vol > 0 and recent_vol > historical_vol * 1.5:
+                    warnings.append(AnomalyWarning(
+                        level="warning",
+                        category="volatility",
+                        message=f"近期波动率({recent_vol:.1f}%)显著高于历史({historical_vol:.1f}%)",
+                        suggestion="高波动环境下需注意风险控制"
+                    ))
+            except Exception:
+                pass
+        
+        # 3. Strategy-Symbol Compatibility
+        if strategy_type == "ma_crossover" and len(closes) >= 14:
+            try:
+                up_moves = [max(closes[i] - closes[i-1], 0) for i in range(1, len(closes))]
+                down_moves = [max(closes[i-1] - closes[i], 0) for i in range(1, len(closes))]
+                
+                avg_up = sum(up_moves[-14:]) / 14
+                avg_down = sum(down_moves[-14:]) / 14
+                
+                if avg_down > avg_up * 1.5 and avg_up > 0:
+                    warnings.append(AnomalyWarning(
+                        level="info",
+                        category="strategy_compat",
+                        message="当前处于下跌趋势，双均线策略可能频繁止损",
+                        suggestion="考虑等待趋势明朗或使用做空策略"
+                    ))
+            except Exception:
+                pass
+        
+        return warnings
         
     def analyze(
         self,

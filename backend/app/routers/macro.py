@@ -109,6 +109,11 @@ async def get_gdp_data(limit: int = 20):
     
     - **limit**: 返回最近N个季度（默认20，即5年）
     """
+    cache_key = f"macro_gdp_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
     try:
         df = _get_ak().macro_china_gdp()
         # 取最近N条（数据按时间降序排列，最新在最前）
@@ -130,7 +135,7 @@ async def get_gdp_data(limit: int = 20):
             .to_dict('records')
         )
         
-        return success_response({
+        result = success_response({
             "indicator": "GDP",
             "name": "国内生产总值",
             "unit": "亿元",
@@ -138,6 +143,8 @@ async def get_gdp_data(limit: int = 20):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
+        set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"[Macro] GDP fetch error: {e}")
         return error_response(f"GDP数据获取失败: {str(e)}")
@@ -150,6 +157,11 @@ async def get_cpi_data(limit: int = 24):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
+    cache_key = f"macro_cpi_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
     try:
         df = _get_ak().macro_china_cpi()
         df = df.head(limit) if len(df) > limit else df
@@ -169,7 +181,7 @@ async def get_cpi_data(limit: int = 24):
             .to_dict('records')
         )
         
-        return success_response({
+        result = success_response({
             "indicator": "CPI",
             "name": "居民消费价格指数",
             "unit": "",
@@ -177,6 +189,8 @@ async def get_cpi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
+        set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"[Macro] CPI fetch error: {e}")
         return error_response(f"CPI数据获取失败: {str(e)}")
@@ -189,6 +203,11 @@ async def get_ppi_data(limit: int = 24):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
+    cache_key = f"macro_ppi_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
     try:
         df = _get_ak().macro_china_ppi()
         df = df.head(limit) if len(df) > limit else df
@@ -206,7 +225,7 @@ async def get_ppi_data(limit: int = 24):
             .to_dict('records')
         )
         
-        return success_response({
+        result = success_response({
             "indicator": "PPI",
             "name": "工业生产者出厂价格指数",
             "unit": "",
@@ -214,6 +233,8 @@ async def get_ppi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
+        set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"[Macro] PPI fetch error: {e}")
         return error_response(f"PPI数据获取失败: {str(e)}")
@@ -226,6 +247,11 @@ async def get_pmi_data(limit: int = 24):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
+    cache_key = f"macro_pmi_{limit}"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
     try:
         df = _get_ak().macro_china_pmi()
         df = df.head(limit) if len(df) > limit else df
@@ -244,7 +270,7 @@ async def get_pmi_data(limit: int = 24):
             .to_dict('records')
         )
         
-        return success_response({
+        result = success_response({
             "indicator": "PMI",
             "name": "采购经理指数",
             "unit": "",
@@ -252,6 +278,8 @@ async def get_pmi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
+        set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"[Macro] PMI fetch error: {e}")
         return error_response(f"PMI数据获取失败: {str(e)}")
@@ -267,32 +295,65 @@ async def get_macro_overview():
     if cached:
         return cached
     
+    FETCH_TIMEOUT = 30  # 30秒超时
+    
     try:
         loop = asyncio.get_event_loop()
         
+        async def fetch_with_timeout(coro, name):
+            try:
+                return await asyncio.wait_for(coro, timeout=FETCH_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro] {name} fetch timeout after {FETCH_TIMEOUT}s")
+                return None
+        
         async def fetch_gdp():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                "GDP"
+            )
         
         async def fetch_cpi():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                "CPI"
+            )
         
         async def fetch_ppi():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+                "PPI"
+            )
         
         async def fetch_pmi():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                "PMI"
+            )
         
         async def fetch_m2():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money()),
+                "M2"
+            )
         
         async def fetch_sf():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+                "SocialFinancing"
+            )
         
         async def fetch_ind():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
+                "IndustrialProduction"
+            )
         
         async def fetch_unemp():
-            return await loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment())
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
+                "Unemployment"
+            )
         
         gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = await asyncio.gather(
             fetch_gdp(),
@@ -383,6 +444,11 @@ async def get_economic_calendar():
     """
     获取中国宏观经济数据发布日历（近期重要数据预告）
     """
+    cache_key = "macro_calendar"
+    cached = get_cached(cache_key)
+    if cached:
+        return cached
+    
     try:
         # 使用akshare的宏观数据获取近期发布日程
         # 注：akshare没有专门的经济日历接口，我们用各指标的最新发布时间推算
@@ -427,10 +493,12 @@ async def get_economic_calendar():
                 "unit": ""
             })
         
-        return success_response({
+        result = success_response({
             "calendar": calendar_items,
             "last_update": datetime.now().isoformat()
         })
+        set_cached(cache_key, result)
+        return result
     except Exception as e:
         logger.error(f"[Macro] Calendar fetch error: {e}")
         return error_response(f"经济日历获取失败: {str(e)}")

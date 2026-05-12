@@ -1123,6 +1123,70 @@ async def copilot_chat(request: Request):
     )
 
 
+@router.post("/analyze-walkforward")
+async def analyze_walkforward(request: Request):
+    """
+    AI-powered Walk-Forward Analysis interpretation.
+    Uses Copilot LLM to generate plain language explanation and recommendations.
+    """
+    body = await request.json()
+    wfa_result = body.get("result", {})
+    
+    if not wfa_result:
+        return StreamingResponse(
+            iter([_sse({"error": "Missing result data"})]),
+            media_type="text/event-stream",
+        )
+    
+    context = f"""
+【Walk-Forward 分析结果】
+股票: {wfa_result.get('symbol', 'N/A')}
+策略: {wfa_result.get('strategy_type', 'N/A')}
+模式: {wfa_result.get('window_mode', 'N/A')}
+总窗口数: {wfa_result.get('total_windows', 0)}
+
+【核心指标】
+样本外平均收益: {wfa_result.get('avg_test_return_pct', 0):.2f}%
+样本外夏普比率: {wfa_result.get('avg_test_sharpe', 0):.2f}
+训练-测试收益差: {wfa_result.get('avg_return_gap', 0):.2f}%
+过拟合程度: {wfa_result.get('overfitting_severity', 'unknown')}
+过拟合窗口比例: {wfa_result.get('overfitting_ratio', 0) * 100:.1f}%
+一致性得分: {wfa_result.get('consistency_score', 0):.1f}
+置信度: {wfa_result.get('confidence', 'low')}
+
+【系统建议】
+{wfa_result.get('recommendation', 'N/A')}
+"""
+    
+    prompt = f"""请分析以上Walk-Forward分析结果，提供：
+
+1. **策略表现解读**（2-3句话，用通俗语言解释）
+2. **过拟合风险评估**（分析训练-测试差距的含义）
+3. **操作建议**（具体、可执行的建议）
+4. **风险提示**（列出2-3条关键风险）
+
+请用专业但易懂的语言，避免使用"作为一个AI"等套话。直接开始分析。
+
+{context}
+"""
+    
+    provider = _detect_provider()
+    messages = [
+        {"role": "system", "content": "你是一位专业的量化投资分析师，擅长用通俗语言解释复杂的策略分析结果。"},
+        {"role": "user", "content": prompt}
+    ]
+    
+    return StreamingResponse(
+        _llm_stream(provider, messages),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )
+
+
 @router.get("/status")
 async def copilot_status():
     """Copilot LLM 配置状态"""

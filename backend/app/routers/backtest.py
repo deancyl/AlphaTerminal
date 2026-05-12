@@ -628,6 +628,17 @@ async def walkforward_analyze(req: WalkForwardRequest):
             mode=req.mode
         )
         
+        anomalies = analyzer.detect_anomalies(data, req.symbol, req.strategy_type)
+        anomaly_warnings = [
+            {
+                "level": w.level,
+                "category": w.category,
+                "message": w.message,
+                "suggestion": w.suggestion
+            }
+            for w in anomalies
+        ]
+        
         result = analyzer.analyze(
             data=data,
             strategy_type=req.strategy_type,
@@ -670,7 +681,120 @@ async def walkforward_analyze(req: WalkForwardRequest):
             "consistency_score": result.consistency_score,
             "recommendation": result.recommendation,
             "confidence": result.confidence,
-            "windows": windows_data
+            "windows": windows_data,
+            "anomaly_warnings": anomaly_warnings
         })
     finally:
         conn.close()
+
+
+class SmartParamsRequest(BaseModel):
+    symbol: str
+    strategy_type: str = "ma_crossover"
+
+
+class SmartParamsResponse(BaseModel):
+    train_window_days: int
+    test_window_days: int
+    time_range: str
+    available_days: int
+    recommended_windows: int
+    reasoning: str
+    warnings: List[str] = []
+
+
+@router.post("/walkforward/smart-params")
+async def get_smart_params(req: SmartParamsRequest):
+    """
+    Smart parameter recommendation based on available data and strategy type.
+    """
+    import sqlite3
+    
+    # 1. Get available data days from database
+    db_symbol = req.symbol.replace("sh", "").replace("sz", "")
+    
+    try:
+        conn = sqlite3.connect("backend/cache/alpha_terminal.db")
+        cursor = conn.execute(
+            "SELECT COUNT(*) FROM market_data_daily WHERE symbol = ?",
+            (db_symbol,)
+        )
+        row = cursor.fetchone()
+        available_days = row[0] if row else 0
+        conn.close()
+    except Exception:
+        available_days = 0
+    
+    # 2. Strategy-specific configurations
+    strategy_config = {
+        "ma_crossover": {
+            "train_test_ratio": 4,
+            "min_train_days": 252,
+            "min_test_days": 63,
+            "description": "趋势策略需要更长窗口捕捉完整周期"
+        },
+        "rsi_oversold": {
+            "train_test_ratio": 3,
+            "min_train_days": 126,
+            "min_test_days": 42,
+            "description": "均值回归信号频繁，可使用较短窗口"
+        },
+        "bollinger_bands": {
+            "train_test_ratio": 3,
+            "min_train_days": 126,
+            "min_test_days": 42,
+            "description": "布林带策略需要足够数据计算波动率"
+        }
+    }
+    
+    config = strategy_config.get(req.strategy_type, strategy_config["ma_crossover"])
+    
+    # 3. Error handling for insufficient data
+    if available_days < 126:
+        return error_response(ErrorCode.BAD_REQUEST,
+            f"数据不足({available_days}天)，Walk-Forward需要至少126天(6个月)")
+    
+    # 4. Determine optimal parameters based on available data
+    if available_days >= 1260:  # 5 years
+        time_range = "5y"
+        train_days = 504
+        test_days = 126
+    elif available_days >= 756:  # 3 years
+        time_range = "3y"
+        train_days = 378
+        test_days = 126
+    elif available_days >= 504:  # 2 years
+        time_range = "2y"
+        train_days = 252
+        test_days = 63
+    else:  # 1 year minimum
+        time_range = "1y"
+        train_days = 126
+        test_days = 42
+    
+    # 5. Calculate expected windows
+    step = test_days
+    expected_windows = max(1, (available_days - train_days) // step)
+    
+    # 6. Generate reasoning
+    reasoning = f"基于{available_days}天可用数据，推荐{time_range}范围。"
+    reasoning += f"预计生成{expected_windows}个窗口，"
+    reasoning += f"训练/测试比例{train_days//test_days}:1。"
+    reasoning += config["description"]
+    
+    # 7. Generate warnings
+    warnings = []
+    if expected_windows < 3:
+        warnings.append("⚠️ 窗口数量较少(<3)，建议增加历史数据以提高统计显著性")
+    if available_days < 252:
+        warnings.append("⚠️ 数据量有限，结果置信度可能较低")
+    
+    return success_response({
+        "train_window_days": train_days,
+        "test_window_days": test_days,
+        "time_range": time_range,
+        "available_days": available_days,
+        "recommended_windows": expected_windows,
+        "reasoning": reasoning,
+        "warnings": warnings
+    })

@@ -22,8 +22,20 @@
 
     <!-- 主内容区域 - 可滚动 -->
     <div class="flex-1 overflow-y-auto">
+      <!-- 骨架加载器 -->
+      <div v-if="loading && !overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
+        <div v-for="i in 8" :key="i" class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 animate-pulse">
+          <div class="flex items-center justify-between mb-2">
+            <div class="h-3 w-10 bg-terminal-bg/50 rounded"></div>
+            <div class="h-2 w-16 bg-terminal-bg/50 rounded"></div>
+          </div>
+          <div class="h-6 w-20 bg-terminal-bg/50 rounded mt-2"></div>
+          <div class="h-2 w-12 bg-terminal-bg/50 rounded mt-2"></div>
+        </div>
+      </div>
+      
       <!-- 核心指标卡片 - 响应式网格 -->
-      <div v-if="overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
+      <div v-else-if="overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
         <!-- GDP卡片 -->
         <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors">
           <div class="flex items-center justify-between mb-2">
