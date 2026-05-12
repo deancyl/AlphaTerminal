@@ -10,7 +10,7 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.6.29-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.30-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 

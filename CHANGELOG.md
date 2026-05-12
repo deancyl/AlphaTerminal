@@ -5,6 +5,62 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.30] - 2026-05-12
+
+### 新功能
+
+- **研报平台 (RPP)** — 券商研报查询与分析
+  - 新增研报列表查询：按股票代码、关键词、机构筛选
+  - 新增研报统计：机构分布、评级分布
+  - 新增PDF链接：直接跳转研报原文
+  - 数据源：AkShare `stock_research_report_em`
+  - API端点：
+    - `GET /api/v1/research/reports?symbol=xxx`
+    - `GET /api/v1/research/statistics?symbol=xxx`
+    - `GET /api/v1/research/health`
+
+- **ESG评价体系** — 环境社会治理评级
+  - 新增ESG评级查询：华证ESG、MSCI ESG、新浪ESG
+  - 新增碳排放数据：北京碳交易、国内碳交易
+  - 新增ESG排名：ESG评级较高的股票列表
+  - 数据源：AkShare `stock_esg_*` 系列
+  - API端点：
+    - `GET /api/v1/esg/rating/{symbol}`
+    - `GET /api/v1/esg/carbon`
+    - `GET /api/v1/esg/rank`
+    - `GET /api/v1/esg/health`
+
+- **键盘快捷键扩展** — 从26个扩展到51个
+  - 新增功能键：F1-F12完整支持
+  - 新增快速操作：Alt+1/2/3/4（买入/卖出/预警/笔记）
+  - 新增数据操作：Ctrl+E/I/S/N（导出/导入/保存/新建）
+  - 新增编辑操作：Ctrl+Z/Y（撤销/重做）
+
+### 文档更新
+
+- **PRD覆盖率矩阵修正**
+  - F9深度资料：85% → 100%
+  - AI Copilot：75% → 95%
+  - EDB宏观经济：60% → 70%（仅中国数据）
+  - PMS组合管理：50% → 85%（无Brinson归因）
+  - 新闻资讯：35% → 75%（无研报平台）
+
+- **文档结构重组**
+  - `docs/architecture/` — 架构设计文档
+  - `docs/planning/` — 规划与PRD文档
+  - `docs/archive/` — 归档历史文档
+  - `docs/releases/` — 发布记录
+
+### 技术细节
+
+- 新增 `backend/app/routers/research.py` — 研报平台API
+- 新增 `backend/app/routers/esg.py` — ESG评价API
+- 更新 `frontend/src/composables/useKeyboardShortcuts.js` — 51个快捷键
+- 更新 `backend/app/main.py` — 注册新路由
+- PRD覆盖率从48%提升至52%
+
+---
+
 ## [0.6.29] - 2026-05-12
 
 ### 新功能
