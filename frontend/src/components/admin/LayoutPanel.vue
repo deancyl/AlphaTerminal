@@ -1,5 +1,48 @@
 <template>
   <div class="space-y-6">
+    <!-- 字体大小设置 -->
+    <div class="terminal-panel p-4">
+      <h3 class="text-lg font-bold text-terminal-accent mb-4">🔤 字体大小设置</h3>
+      
+      <div class="space-y-4">
+        <div class="bg-[var(--color-info-bg)]/30 border border-[var(--color-info-border)] rounded p-3">
+          <div class="text-sm text-[var(--color-info)] mb-1">💡 字体大小调节</div>
+          <div class="text-xs text-theme-muted">
+            调整全局字体大小，让界面更易阅读。设置会自动保存到浏览器。
+          </div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-2">
+          <button
+            v-for="option in fontSizeOptions"
+            :key="option.value"
+            class="flex flex-col items-center justify-center p-3 rounded border transition-all"
+            :class="currentFontSize === option.value
+              ? 'bg-[var(--color-accent-bg)] border-[var(--color-accent-border)] text-[var(--color-accent)]'
+              : 'bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-[var(--color-accent-border)] hover:text-[var(--color-accent-light)]'"
+            @click="setFontSize(option.value)"
+          >
+            <span class="text-lg font-bold">{{ option.label }}</span>
+            <span class="text-[10px] text-theme-muted mt-1">{{ option.size }}</span>
+          </button>
+        </div>
+
+        <div class="bg-terminal-bg rounded p-3 border border-theme">
+          <div class="text-sm text-theme-secondary mb-2">当前设置</div>
+          <div class="flex items-center gap-2">
+            <span class="text-base font-medium text-theme-primary">{{ fontSizeInfo.label }}</span>
+            <span class="text-xs text-theme-muted">({{ fontSizeInfo.size }})</span>
+            <span class="text-xs text-theme-tertiary">- {{ fontSizeInfo.desc }}</span>
+          </div>
+        </div>
+
+        <div class="text-xs text-theme-muted">
+          提示：字体大小会影响所有界面元素的显示比例。
+        </div>
+      </div>
+    </div>
+
+    <!-- 布局设置 -->
     <div class="terminal-panel p-4">
       <h3 class="text-lg font-bold text-terminal-accent mb-4">📐 仪表盘布局设置</h3>
 
@@ -50,10 +93,15 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { toast } from '../../composables/useToast.js'
+import { useFontSize } from '../../composables/useFontSize.js'
 
 const emit = defineEmits(['clear-layout'])
+
+const { currentFontSize, fontSizeOptions, setFontSize: setFontSizeValue, getFontSizeInfo } = useFontSize()
+
+const fontSizeInfo = computed(() => getFontSizeInfo())
 
 const hasSavedLayout = ref(false)
 const layoutVersion = ref(0)
@@ -63,6 +111,12 @@ const LAYOUT_STORAGE_KEY = 'alphaterminal_grid_layout'
 onMounted(() => {
   checkSavedLayout()
 })
+
+function setFontSize(value) {
+  setFontSizeValue(value)
+  const info = getFontSizeInfo()
+  toast.success('字体大小已更改', `已设置为 ${info.label} (${info.size})`)
+}
 
 function checkSavedLayout() {
   try {

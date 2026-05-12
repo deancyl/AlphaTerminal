@@ -320,6 +320,7 @@ import { useTheme } from './composables/useTheme.js'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
 import { useToast } from './composables/useToast.js'
 import { useSwipe } from './composables/useSwipe.js'
+import { useFontSize } from './composables/useFontSize.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 import { preloadECharts } from './utils/lazyEcharts.js'
@@ -330,6 +331,10 @@ const { success: toastSuccess, info: toastInfo } = useToast()
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark, cycleTheme, THEME_ICONS } = useTheme()
+
+// 初始化字体大小（必须在组件挂载前调用）
+const { initFontSize } = useFontSize()
+initFontSize()
 
 // 全局错误处理
 const hasError = ref(false)

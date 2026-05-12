@@ -41,10 +41,17 @@ export const SHORTCUTS = [
   
   // 功能键
   { key: 'f1',        ctrl: false, alt: false, shift: false, action: 'help',        param: null,        description: '帮助文档', category: '功能' },
+  { key: 'f2',        ctrl: false, alt: false, shift: false, action: 'rename',      param: null,        description: '重命名', category: '功能' },
+  { key: 'f3',        ctrl: false, alt: false, shift: false, action: 'view',        param: 'stock',     description: '上证指数', category: '功能' },
+  { key: 'f4',        ctrl: false, alt: false, shift: false, action: 'view',        param: 'stock',     description: '深证成指', category: '功能' },
   { key: 'f5',        ctrl: false, alt: false, shift: false, action: 'refresh',     param: null,        description: '刷新数据', category: '功能' },
   { key: 'f6',        ctrl: false, alt: false, shift: false, action: 'watchlist',   param: null,        description: '自选股', category: '功能' },
-  { key: 'f9',        ctrl: false, alt: false, shift: false, action: 'deep-info',   param: null,        description: '深度资料（预留）', category: '功能' },
+  { key: 'f7',        ctrl: false, alt: false, shift: false, action: 'screener',    param: null,        description: '条件选股', category: '功能' },
+  { key: 'f8',        ctrl: false, alt: false, shift: false, action: 'view',        param: 'backtest',  description: '回测实验室', category: '功能' },
+  { key: 'f9',        ctrl: false, alt: false, shift: false, action: 'deep-info',   param: null,        description: '深度资料', category: '功能' },
+  { key: 'f10',       ctrl: false, alt: false, shift: false, action: 'view',        param: 'admin',     description: '系统管理', category: '功能' },
   { key: 'f11',       ctrl: false, alt: false, shift: false, action: 'fullscreen',  param: null,        description: '全屏切换', category: '功能' },
+  { key: 'f12',       ctrl: false, alt: false, shift: false, action: 'dev-tools',   param: null,        description: '开发者工具', category: '功能' },
   
   // 导航与搜索
   { key: '/',         ctrl: false, alt: false, shift: false, action: 'search',      param: null,        description: '全局搜索/键盘精灵', category: '导航' },
@@ -55,6 +62,24 @@ export const SHORTCUTS = [
   // 系统功能
   { key: ',',         ctrl: true,  alt: false, shift: false, action: 'settings',    param: null,        description: '系统设置', category: '系统' },
   { key: 'd',         ctrl: true,  alt: false, shift: true,  action: 'toggle-theme',param: null,        description: '切换深色/浅色模式', category: '系统' },
+  
+  // 快速操作（Alt+数字）
+  { key: '1',         ctrl: false, alt: true,  shift: false, action: 'quick-action',param: 'buy',        description: '快速买入', category: '快速操作' },
+  { key: '2',         ctrl: false, alt: true,  shift: false, action: 'quick-action',param: 'sell',       description: '快速卖出', category: '快速操作' },
+  { key: '3',         ctrl: false, alt: true,  shift: false, action: 'quick-action',param: 'alert',      description: '设置预警', category: '快速操作' },
+  { key: '4',         ctrl: false, alt: true,  shift: false, action: 'quick-action',param: 'note',       description: '添加笔记', category: '快速操作' },
+  
+  // 数据操作
+  { key: 'e',         ctrl: true,  alt: false, shift: false, action: 'export',      param: null,        description: '导出数据', category: '数据' },
+  { key: 'i',         ctrl: true,  alt: false, shift: false, action: 'import',      param: null,        description: '导入数据', category: '数据' },
+  { key: 's',         ctrl: true,  alt: false, shift: false, action: 'save',        param: null,        description: '保存', category: '数据' },
+  { key: 'n',         ctrl: true,  alt: false, shift: false, action: 'new',         param: null,        description: '新建', category: '数据' },
+  
+  // 编辑操作
+  { key: 'z',         ctrl: true,  alt: false, shift: false, action: 'undo',        param: null,        description: '撤销', category: '编辑' },
+  { key: 'z',         ctrl: true,  alt: false, shift: true,  action: 'redo',        param: null,        description: '重做', category: '编辑' },
+  { key: 'y',         ctrl: true,  alt: false, shift: false, action: 'redo',        param: null,        description: '重做', category: '编辑' },
+  { key: 'Delete',    ctrl: false, alt: false, shift: false, action: 'delete',      param: null,        description: '删除', category: '编辑' },
 ]
 
 // ── 当前激活的快捷键帮助面板状态 ──────────────────────────────────

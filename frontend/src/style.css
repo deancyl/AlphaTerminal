@@ -88,11 +88,27 @@
     --duration-fast: 200ms;
     --duration-normal: 250ms;
     --duration-slow: 300ms;
+    
+    /* 字体大小系统 - 用户可调节 */
+    --font-size-base: 14px;      /* 基础字体大小 */
+    --font-size-xs: 0.75rem;     /* 12px - 极小 */
+    --font-size-sm: 0.875rem;    /* 14px - 小 */
+    --font-size-md: 1rem;        /* 16px - 中 */
+    --font-size-lg: 1.125rem;    /* 18px - 大 */
+    --font-size-xl: 1.25rem;     /* 20px - 特大 */
+    
+    /* 字体大小档位预设 */
+    /* small:  --font-size-base: 13px */
+    /* normal: --font-size-base: 14px (默认) */
+    /* medium: --font-size-base: 15px */
+    /* large:  --font-size-base: 16px */
+    /* xlarge: --font-size-base: 18px */
   }
   
   /* 全局字体设置 */
   html {
     font-family: var(--font-sans, '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif');
+    font-size: var(--font-size-base);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -125,11 +141,6 @@
   /* 禁用过渡优化性能 */
   .no-transition, .no-transition * {
     transition: none !important;
-  }
-  
-  /* 最小字号保护 - 合规要求 */
-  html {
-    font-size: 14px;
   }
   
   /* 触控热区规范 */
@@ -509,10 +520,7 @@
    响应式断点
    ============================================ */
 @media (max-width: 599px) {
-  /* Phone 移动端 */
-  html {
-    font-size: 14px;
-  }
+  /* Phone 移动端 - 使用用户设置的字体大小 */
   
   /* 触控热区 ≥48px */
   .touch-min {
@@ -534,24 +542,15 @@
 }
 
 @media (min-width: 600px) and (max-width: 959px) {
-  /* Pad竖屏 */
-  html {
-    font-size: 14px;
-  }
+  /* Pad竖屏 - 使用用户设置的字体大小 */
 }
 
 @media (min-width: 960px) and (max-width: 1279px) {
-  /* Pad横屏 / 小屏笔记本 */
-  html {
-    font-size: 14px;
-  }
+  /* Pad横屏 / 小屏笔记本 - 使用用户设置的字体大小 */
 }
 
 @media (min-width: 1280px) {
-  /* PC显示器 */
-  html {
-    font-size: 14px;
-  }
+  /* PC显示器 - 使用用户设置的字体大小 */
   
   /* PC端触控热区 ≥44px */
   .touch-min {
