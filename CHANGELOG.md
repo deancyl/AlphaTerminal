@@ -5,6 +5,42 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.29] - 2026-05-12
+
+### 新功能
+
+- **Walk-Forward 分析增强** — 智能参数推荐与快速预设
+  - 新增"智能推荐"按钮：根据股票历史数据天数自动推荐最佳窗口参数
+  - 新增快速预设：保守型(252/63天)、标准型(126/42天)、激进型(63/21天)
+  - 新增异常检测：数据不足、过度拟合风险、参数不合理等预警
+  - 新增帮助弹窗：详细解释 Walk-Forward 分析原理与使用方法
+  - 参数输入框增加提示说明，降低使用门槛
+
+- **后端 API 增强**
+  - `/api/v1/backtest/walkforward/smart-params` — 智能参数推荐接口
+  - `/api/v1/backtest/walkforward` — 返回新增 `anomaly_warnings` 字段
+
+### 移除功能
+
+- **MCP 配置模块移除** — 后端为 Mock 实现，无实际功能
+  - 移除 `MCPConfigDashboard.vue` 前端组件
+  - 移除 App.vue 中的 MCP 路由与组件引用
+  - 移除 Sidebar.vue 中的 MCP 导航项
+  - 移除键盘快捷键中的 MCP 入口
+
+- **PerformanceAnalyzer 组件移除** — 未使用的遗留组件
+
+### 技术细节
+
+- Walk-Forward 智能推荐根据策略类型调整参数：
+  - MA交叉：需要更长窗口捕捉完整周期
+  - RSI超卖/布林带：可使用较短窗口
+- 异常检测包括：数据不足警告、过度拟合风险提示、参数合理性检查
+- 前端新增 `walkForwardPresets` 预设配置数组
+- 后端 `walk_forward.py` 新增 `detect_anomalies()` 方法
+
+---
+
 ## [0.6.28] - 2026-05-11
 
 ### Bug Fixes
