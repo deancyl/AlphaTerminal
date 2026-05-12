@@ -1,8 +1,8 @@
 # AlphaTerminal 文档目录
 
 > 最后更新: 2026-05-12  
-> 当前版本: v0.6.29  
-> 开发计划: 见 [KNOWN_ISSUES_TODO.md](KNOWN_ISSUES_TODO.md)
+> 当前版本: v0.6.30  
+> 开发计划: 见 [PRD_DEVELOPMENT_PLAN.md](planning/PRD_DEVELOPMENT_PLAN.md)
 
 ---
 
