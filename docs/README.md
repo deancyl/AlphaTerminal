@@ -1,7 +1,7 @@
 # AlphaTerminal 文档目录
 
 > 最后更新: 2026-05-12  
-> 当前版本: v0.6.30  
+> 当前版本: v0.6.31  
 > 开发计划: 见 [PRD_DEVELOPMENT_PLAN.md](planning/PRD_DEVELOPMENT_PLAN.md)
 
 ---
