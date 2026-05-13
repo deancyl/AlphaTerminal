@@ -689,7 +689,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, shallowRef, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
