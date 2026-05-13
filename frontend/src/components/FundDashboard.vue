@@ -626,8 +626,19 @@ import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { formatVol, formatAmount } from '../utils/formatters.js'
 import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
+import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
 
 const fundStore = useFundStore()
+
+// Request deduplication keys
+const REQUEST_KEYS = {
+  ETF_INFO: (code) => `etf_info_${code}`,
+  ETF_HISTORY: (code, period) => `etf_history_${code}_${period}`,
+  NAV_HISTORY: (code, period) => `nav_history_${code}_${period}`,
+  PORTFOLIO: (code) => `portfolio_${code}`,
+  COMPARE: (idx) => `compare_${idx}`,
+}
+
 const { 
   selectedFundCode, 
   fundInfo, 
@@ -717,7 +728,16 @@ async function searchFund() {
 
 async function selectFund(code, retryCount = 0, maxRetries = 2) {
   if (!code) return
-  
+
+  // Abort any pending requests for the previous fund code
+  const prevCode = selectedFundCode.value
+  if (prevCode && prevCode !== code) {
+    abortPendingRequest(REQUEST_KEYS.ETF_INFO(prevCode))
+    abortPendingRequest(REQUEST_KEYS.ETF_HISTORY(prevCode, klinePeriod.value))
+    abortPendingRequest(REQUEST_KEYS.NAV_HISTORY(prevCode, navPeriod.value))
+    abortPendingRequest(REQUEST_KEYS.PORTFOLIO(prevCode))
+  }
+
   if (retryCount === 0) {
     loading.value = true
     autoLoading.value = true
@@ -961,26 +981,30 @@ function getCompareReturnColor(val) {
 async function loadETFInfo(code) {
   loadingFundInfo.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/etf/info?code=${code}`)
-    const data = extractData(res)
-    if (data) {
-      fundInfo.value = {
-        code: data.code || code,
-        name: data.name || '-',
-        price: data.price || '-',
-        change_pct: data.change_pct ? parseFloat(data.change_pct).toFixed(2) : '-',
-        change: data.change || 0,
-        volume: data.volume || 0,
-        amount: data.amount || 0,
-        iopv: data.iopv || '-',
-        premium_rate: data.premium_rate ? parseFloat(data.premium_rate).toFixed(2) : '-',
-        bids: data.bids || [],
-        asks: data.asks || [],
+    await dedupedFetch(REQUEST_KEYS.ETF_INFO(code), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/etf/info?code=${code}`, { signal })
+      const data = extractData(res)
+      if (data) {
+        fundInfo.value = {
+          code: data.code || code,
+          name: data.name || '-',
+          price: data.price || '-',
+          change_pct: data.change_pct ? parseFloat(data.change_pct).toFixed(2) : '-',
+          change: data.change || 0,
+          volume: data.volume || 0,
+          amount: data.amount || 0,
+          iopv: data.iopv || '-',
+          premium_rate: data.premium_rate ? parseFloat(data.premium_rate).toFixed(2) : '-',
+          bids: data.bids || [],
+          asks: data.asks || [],
+        }
+        dataSource.value = data.source || 'unknown'
       }
-      dataSource.value = data.source || 'unknown'
-    }
+    }, { debounce: 50 })
   } catch (e) {
-    logger.warn('[ETF Info] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[ETF Info] 获取失败:', e)
+    }
   } finally {
     loadingFundInfo.value = false
   }
@@ -990,17 +1014,20 @@ async function loadETFHistory(period) {
   klinePeriod.value = period
   const code = selectedFundCode.value
   if (!code) return
-  
+
   loadingETFHistory.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`)
-    const data = extractData(res)
-    klineHistory.value = Array.isArray(data) ? data : []
-    
+    await dedupedFetch(REQUEST_KEYS.ETF_HISTORY(code, period), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`, { signal })
+      const data = extractData(res)
+      klineHistory.value = Array.isArray(data) ? data : []
+    }, { debounce: 50 })
     await nextTick()
     renderKlineChart()
   } catch (e) {
-    logger.warn('[ETF History] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[ETF History] 获取失败:', e)
+    }
   } finally {
     loadingETFHistory.value = false
   }
@@ -1076,22 +1103,24 @@ async function loadNAVHistory(period) {
   navPeriod.value = period
   const code = selectedFundCode.value
   if (!code) return
-  
+
   loadingNAVHistory.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`)
-    const data = extractData(res)
-    navHistory.value = Array.isArray(data) ? data : []
-    
+    await dedupedFetch(REQUEST_KEYS.NAV_HISTORY(code, period), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`, { signal })
+      const data = extractData(res)
+      navHistory.value = Array.isArray(data) ? data : []
+    }, { debounce: 50 })
     console.log('[NAV History] 获取成功，数据条数:', navHistory.value.length)
     console.log('[NAV History] 第一条数据:', navHistory.value[0])
     console.log('[NAV History] navChartRef:', !!navChartRef.value)
-    
     await nextTick()
     console.log('[NAV History] after nextTick, navChartRef:', !!navChartRef.value)
     renderNavChart()
   } catch (e) {
-    logger.warn('[NAV History] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[NAV History] 获取失败:', e)
+    }
   } finally {
     loadingNAVHistory.value = false
   }
@@ -1099,32 +1128,35 @@ async function loadNAVHistory(period) {
 
 async function loadPortfolio(code) {
   try {
-    const res = await apiFetch(`/api/v1/fund/portfolio/${code}`)
-    const data = extractData(res)
-    if (data) {
-      topHoldings.value = (data.stocks || []).slice(0, 10)
-      fundInfo.value = { ...fundInfo.value, quarter: data.quarter || '' }
-      
-      if (data.assets && data.assets.length > 0) {
-        assetAllocation.value = data.assets.map((a, i) => ({
-          name: a.name,
-          value: a.ratio,
-          color: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'][i % 5]
-        }))
-      } else {
-        assetAllocation.value = [
-          { name: '股票', value: 85.5, color: '#60a5fa' },
-          { name: '债券', value: 5.2, color: '#34d399' },
-          { name: '现金', value: 8.3, color: '#fbbf24' },
-          { name: '其他', value: 1.0, color: '#a78bfa' }
-        ]
+    await dedupedFetch(REQUEST_KEYS.PORTFOLIO(code), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/portfolio/${code}`, { signal })
+      const data = extractData(res)
+      if (data) {
+        topHoldings.value = (data.stocks || []).slice(0, 10)
+        fundInfo.value = { ...fundInfo.value, quarter: data.quarter || '' }
+
+        if (data.assets && data.assets.length > 0) {
+          assetAllocation.value = data.assets.map((a, i) => ({
+            name: a.name,
+            value: a.ratio,
+            color: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'][i % 5]
+          }))
+        } else {
+          assetAllocation.value = [
+            { name: '股票', value: 85.5, color: '#60a5fa' },
+            { name: '债券', value: 5.2, color: '#34d399' },
+            { name: '现金', value: 8.3, color: '#fbbf24' },
+            { name: '其他', value: 1.0, color: '#a78bfa' }
+          ]
+        }
       }
-      
-      await nextTick()
-      renderAssetChart()
-    }
+    }, { debounce: 50 })
+    await nextTick()
+    renderAssetChart()
   } catch (e) {
-    logger.warn('[Portfolio] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[Portfolio] 获取失败:', e)
+    }
   }
 }
 
@@ -1394,6 +1426,8 @@ onUnmounted(() => {
   navChart.value = null
   assetChart.value = null
   compareChart.value = null
+  // Abort all pending requests to prevent memory leaks
+  abortAllPendingRequests()
 })
 
 // 监听选项卡切换
