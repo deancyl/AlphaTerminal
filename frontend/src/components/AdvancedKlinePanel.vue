@@ -202,10 +202,19 @@ function _etfCode(sym) {
   return sym.replace(/^(sh|sz|hk|us)/i, '')
 }
 
-function rebuildChartData() {
-  processedChartData.value = histData.value.length
-    ? buildChartData(histData.value, period.value, indicatorParams.value, overlayData.value)
-    : { isEmpty: true }
+async function rebuildChartData() {
+  if (!histData.value.length) {
+    processedChartData.value = { isEmpty: true }
+    return
+  }
+  // Use Web Worker for heavy indicator calculations (off-main-thread)
+  processedChartData.value = await buildChartData(
+    histData.value,
+    period.value,
+    indicatorParams.value,
+    overlayData.value,
+    { useWorker: true, timeout: 10000 }
+  )
 }
 
 // visibleHist：视图窗口数据（由 datazoom 决定）
@@ -537,7 +546,7 @@ function onShapesCleared() {}
 // ── 监听响应 ────────────────────────────────────────────────────
 // 指标/周期变化 → 重建图表数据
 watch([period, yAxisType, subChartTab, indicatorParams], () => {
-  rebuildChartData()
+  rebuildChartData() // async, fire-and-forget
 })
 
 watch(currentSymbol, () => {

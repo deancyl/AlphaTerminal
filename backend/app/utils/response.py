@@ -9,14 +9,17 @@
     "code": 0,           # 0 表示成功，非 0 表示错误
     "message": "success", # 响应消息
     "data": {...},        # 响应数据
-    "timestamp": 1234567890,  # 时间戳（毫秒）
-    "trace_id": "abc123"  # 请求追踪ID（可选）
+    "error": {            # 错误详情（成功时为 null）
+        "details": {},    # 附加错误详情
+        "trace_id": "abc123",  # 请求追踪ID
+        "timestamp": "2024-01-01T00:00:00"  # ISO格式时间戳
+    }
 }
 """
 
-import time
 import uuid
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any, Optional, Dict
 
 
 class ErrorCode:
@@ -33,83 +36,75 @@ class ErrorCode:
     CALCULATION_ERROR = 320
 
 
+def generate_trace_id() -> str:
+    """Generate unique trace ID for debugging (8 chars)."""
+    return str(uuid.uuid4())[:8]
+
+
 def success_response(
     data: Any,
-    message: str = "success",
-    trace_id: Optional[str] = None
+    message: str = "success"
 ) -> dict:
     """
-    创建成功响应
+    Standardized success response format.
     
     Args:
-        data: 响应数据
-        message: 响应消息，默认 "success"
-        trace_id: 请求追踪ID，可选
+        data: Response data
+        message: Response message, defaults to "success"
     
     Returns:
-        标准格式的成功响应字典
-    
-    Example:
-        >>> success_response({"user": "Alice"})
-        {"code": 0, "message": "success", "data": {"user": "Alice"}, "timestamp": 1234567890}
+        JSON response with consistent structure
     """
-    response = {
+    return {
         "code": ErrorCode.SUCCESS,
         "message": message,
         "data": data,
-        "timestamp": int(time.time() * 1000)
+        "error": None,
     }
-    
-    if trace_id:
-        response["trace_id"] = trace_id
-    
-    return response
 
 
 def error_response(
-    code: int,
-    message: str,
-    data: Optional[Any] = None,
-    trace_id: Optional[str] = None
+    code_or_message,
+    message: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+    code: Optional[int] = None
 ) -> dict:
     """
-    创建错误响应
+    Standardized error response format.
+    
+    Supports two calling conventions:
+    1. error_response(code, message, details) - standard form
+    2. error_response(message, code=X) - shorthand form
     
     Args:
-        code: 错误码，使用 ErrorCode 常量
-        message: 错误消息
-        data: 附加错误数据，可选
-        trace_id: 请求追踪ID，可选
+        code_or_message: Error code (int) or message (str)
+        message: Error message (when first arg is code)
+        details: Optional additional error details (e.g., validation errors)
+        code: Error code (when using shorthand form)
     
     Returns:
-        标准格式的错误响应字典
-    
-    Example:
-        >>> error_response(ErrorCode.NOT_FOUND, "用户不存在")
-        {"code": 104, "message": "用户不存在", "data": None, "timestamp": 1234567890}
+        JSON response with consistent structure including trace_id
     """
-    response = {
-        "code": code,
-        "message": message,
-        "data": data,
-        "timestamp": int(time.time() * 1000)
+    # Detect calling convention
+    if isinstance(code_or_message, int):
+        # Standard form: error_response(code, message, details)
+        actual_code = code_or_message
+        actual_message = message or "Error"
+    else:
+        # Shorthand form: error_response(message, code=X)
+        actual_code = code if code is not None else ErrorCode.INTERNAL_ERROR
+        actual_message = str(code_or_message)
+    
+    return {
+        "code": actual_code,
+        "message": actual_message,
+        "data": None,
+        "error": {
+            "details": details or {},
+            "trace_id": generate_trace_id(),
+            "timestamp": datetime.now().isoformat(),
+        }
     }
-    
-    if trace_id:
-        response["trace_id"] = trace_id
-    
-    return response
 
 
-def generate_trace_id() -> str:
-    """
-    生成请求追踪ID
-    
-    Returns:
-        UUID 格式的追踪ID
-    
-    Example:
-        >>> generate_trace_id()
-        "550e8400-e29b-41d4-a716-446655440000"
-    """
-    return str(uuid.uuid4())
+

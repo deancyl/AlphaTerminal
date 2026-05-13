@@ -6,6 +6,9 @@ import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useAbortableRequest } from '../composables/useAbortableRequest.js'
+import { useTheme } from '../composables/useTheme.js'
+
+const { getChartColors, onThemeChange } = useTheme()
 
 const chartRef = ref(null)
 const chartInstance = shallowRef(null)
@@ -39,19 +42,28 @@ const renderChart = async (dataList) => {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }
 
+  // Get theme-aware colors
+  const colors = getChartColors()
+
   const dates = dataList.map(item => item.date)
   const values = dataList.map(item => (item.main_net || 0) / 100000000)
   const option = {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText },
+    },
     grid: { top: '15%', right: '5%', bottom: '15%', left: '15%' },
-    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: '#94a3b8' } },
-    yAxis: { type: 'value', axisLabel: { fontSize: 9, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#334155' } } },
+    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: colors.chartText } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 9, color: colors.chartText }, splitLine: { lineStyle: { color: colors.chartGrid } } },
     series: [{
       name: '主力净额(亿)',
       type: 'bar',
       data: values,
-      itemStyle: { color: (p) => p.value > 0 ? '#ef4444' : '#22c55e' }
+      itemStyle: { color: (p) => p.value > 0 ? colors.bullish : colors.bearish }
     }]
   }
   chartInstance.value.setOption(option)
@@ -94,6 +106,25 @@ useResizeObserver(chartRef, (entries) => {
 onMounted(() => {
   loadData()
   timer = setInterval(loadData, 300000)
+})
+
+// Re-render chart on theme change
+onThemeChange(() => {
+  if (chartInstance.value) {
+    const colors = getChartColors()
+    chartInstance.value.setOption({
+      tooltip: {
+        backgroundColor: colors.tooltipBg,
+        borderColor: colors.tooltipBorder,
+        textStyle: { color: colors.tooltipText },
+      },
+      xAxis: { axisLabel: { color: colors.chartText } },
+      yAxis: { axisLabel: { color: colors.chartText }, splitLine: { lineStyle: { color: colors.chartGrid } } },
+      series: [{
+        itemStyle: { color: (p) => p.value > 0 ? colors.bullish : colors.bearish }
+      }],
+    })
+  }
 })
 
 onUnmounted(() => {

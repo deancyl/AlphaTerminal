@@ -101,7 +101,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content=error_response(
             code=ErrorCode.VALIDATION_ERROR,
             message="请求参数验证失败",
-            data={"errors": errors}
+            details={"errors": errors}
         )
     )
 
@@ -125,7 +125,7 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
         content=error_response(
             code=ErrorCode.INTERNAL_ERROR,
             message="服务器内部错误",
-            data={"detail": "请联系管理员"} if not __debug__ else {"error": str(exc)}
+            details={"detail": "请联系管理员"} if not __debug__ else {"error": str(exc)}
         )
     )
 

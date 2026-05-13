@@ -165,11 +165,24 @@ const activeSubCharts = computed(() => {
   return ['VOL', activeSubChart.value]
 })
 
-const processedChartData = computed(() =>
-  histData.value.length
-    ? buildChartData(histData.value, period.value, {}, [])
-    : { isEmpty: true }
-)
+// Chart data ref (async worker-based calculation)
+const processedChartData = ref({ isEmpty: true })
+
+// Rebuild chart data using Web Worker
+async function rebuildChartData() {
+  if (!histData.value.length) {
+    processedChartData.value = { isEmpty: true }
+    return
+  }
+  // Use Web Worker for heavy indicator calculations (off-main-thread)
+  processedChartData.value = await buildChartData(
+    histData.value,
+    period.value,
+    {},
+    [],
+    { useWorker: true, timeout: 10000 }
+  )
+}
 
 // ── Period ────────────────────────────────────────────────────
 const periods = [
@@ -202,6 +215,8 @@ const handleTickUpdate = useThrottleFn((t) => {
     hold:   t.hold != null ? t.hold : last.hold,
   }
   histData.value = arr
+  // Rebuild chart data after tick update (debounced by throttle)
+  rebuildChartData()
 }, 150)
 
 watch(liveTick, (t) => { handleTickUpdate(t) })
@@ -226,6 +241,8 @@ async function fetchData() {
     latestPrice.value  = last.close
     latestChange.value = 0
     latestHold.value   = last.hold ?? null
+    // Rebuild chart data using Web Worker
+    rebuildChartData()
   } catch (e) {
     chartError.value = `加载失败: ${e.message}`
   }
@@ -246,7 +263,6 @@ function loadSymbol() {
 
 // ── 监听 ──────────────────────────────────────────────────────
 watch(period, () => { fetchData() })
-// 注意：不要在这里给 processedChartData 赋值！它是 computed，会自动更新
 // activeSubChart 的变化会通过 activeSubCharts computed 传递给子组件
 
 watch(() => props.symbol, (s) => {

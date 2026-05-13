@@ -1,20 +1,61 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
+const buildTime = new Date().toISOString()
+const commitHash = execSync('git rev-parse --short HEAD 2>/dev/null || echo "unknown"').toString().trim()
+
+function versionJsonPlugin() {
+  return {
+    name: 'version-json',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/version.json') {
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(JSON.stringify({ version: pkg.version, commit: commitHash, buildTime }, null, 2))
+          return
+        }
+        next()
+      })
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url === '/version.json') {
+          const versionPath = resolve(__dirname, 'dist/version.json')
+          if (existsSync(versionPath)) {
+            res.setHeader('Content-Type', 'application/json')
+            res.setHeader('Cache-Control', 'no-store')
+            res.end(readFileSync(versionPath, 'utf-8'))
+            return
+          }
+        }
+        next()
+      })
+    },
+    closeBundle() {
+      writeFileSync(
+        resolve(__dirname, 'dist/version.json'),
+        JSON.stringify({ version: pkg.version, commit: commitHash, buildTime }, null, 2)
+      )
+    }
+  }
+}
 
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [vue()],
+  plugins: [vue(), versionJsonPlugin()],
   server: {
     host: '0.0.0.0',
     port: 60100,
+    strictPort: true,
     allowedHosts: ['finance.deancylnextcloud.eu.org'],
     proxy: {
       '/api': {
@@ -27,7 +68,7 @@ export default defineConfig({
       },
       '/ws': {
         target: 'ws://127.0.0.1:8002',
-        ws: true,           // 启用 WebSocket 代理
+        ws: true,
         changeOrigin: true,
       },
     },
@@ -35,6 +76,7 @@ export default defineConfig({
   preview: {
     host: '0.0.0.0',
     port: 60100,
+    strictPort: true,
     allowedHosts: ['finance.deancylnextcloud.eu.org'],
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',

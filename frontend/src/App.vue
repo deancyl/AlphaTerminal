@@ -2,6 +2,9 @@
   <!-- ━━━ 离线提示横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <OfflineBanner />
   
+  <!-- ━━━ 版本更新检测 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <VersionChecker />
+  
   <!-- Teleport 全屏到 body，脱离主界面 DOM 树，强制 100vw/100vh -->
   <Teleport to="body">
     <div
@@ -321,6 +324,7 @@ import ToastContainer from './components/ToastContainer.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
 import StatusBar from './components/StatusBar.vue'
+import VersionChecker from './components/VersionChecker.vue'
 
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))

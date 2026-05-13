@@ -79,6 +79,12 @@ const STATUS_COLORS = {
 // ============================================
 // 主题配置（完整版）
 // ============================================
+
+// Color Naming Convention:
+// --color-up/--color-bullish: Rising price (red in CN, green in Intl)
+// --color-down/--color-bearish: Falling price (green in CN, red in Intl)
+// --color-danger/--color-success: Generic status colors (not market-specific)
+
 const THEME_CONFIG = {
   // ============================================
   // 1. 专业深色主题 (DARK) - 默认
@@ -104,6 +110,12 @@ const THEME_CONFIG = {
     '--color-neutral': MARKET_COLORS.neutral,
     '--color-neutral-bg': 'rgba(176,184,204,0.10)',
     '--color-neutral-border': 'rgba(176,184,204,0.25)',
+    
+    // Semantic aliases for market colors (clearer naming)
+    '--color-bullish': MARKET_COLORS.up,      // Same as --color-up
+    '--color-bearish': MARKET_COLORS.down,    // Same as --color-down
+    '--color-bullish-bg': 'rgba(230,57,70,0.15)',
+    '--color-bearish-bg': 'rgba(26,147,111,0.15)',
     
     // ── 功能状态色 ──
     '--color-warning': STATUS_COLORS.warning,
@@ -273,6 +285,12 @@ const THEME_CONFIG = {
     '--color-neutral-bg': 'rgba(176,184,204,0.12)',
     '--color-neutral-border': 'rgba(176,184,204,0.28)',
     
+    // Semantic aliases for market colors (clearer naming)
+    '--color-bullish': '#FF4D4F',      // Same as --color-up
+    '--color-bearish': '#52C41A',    // Same as --color-down
+    '--color-bullish-bg': 'rgba(255,77,79,0.20)',
+    '--color-bearish-bg': 'rgba(82,196,26,0.20)',
+    
     // 功能状态色
     '--color-warning': '#FFCC00',
     '--color-warning-bg': 'rgba(255,204,0,0.18)',
@@ -437,6 +455,12 @@ const THEME_CONFIG = {
     '--color-neutral-bg': 'rgba(176,184,204,0.10)',
     '--color-neutral-border': 'rgba(176,184,204,0.25)',
     
+    // Semantic aliases for market colors (clearer naming)
+    '--color-bullish': '#FF4D4F',      // Same as --color-up
+    '--color-bearish': '#52C41A',    // Same as --color-down
+    '--color-bullish-bg': 'rgba(255,77,79,0.15)',
+    '--color-bearish-bg': 'rgba(82,196,26,0.15)',
+    
     '--color-warning': '#FAAD14',
     '--color-warning-bg': 'rgba(250,173,20,0.15)',
     '--color-warning-border': 'rgba(250,173,20,0.30)',
@@ -587,6 +611,12 @@ const THEME_CONFIG = {
     '--color-neutral': '#868E96',
     '--color-neutral-bg': 'rgba(134,142,150,0.08)',
     '--color-neutral-border': 'rgba(134,142,150,0.20)',
+    
+    // Semantic aliases for market colors (clearer naming)
+    '--color-bullish': '#CF1322',      // Same as --color-up
+    '--color-bearish': '#389E0D',    // Same as --color-down
+    '--color-bullish-bg': 'rgba(207,19,34,0.08)',
+    '--color-bearish-bg': 'rgba(56,158,13,0.08)',
     
     '--color-warning': '#FF7D00',
     '--color-warning-bg': 'rgba(255,125,0,0.10)',

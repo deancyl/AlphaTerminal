@@ -14,10 +14,24 @@ from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback_async
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_fetcher import akshare_breaker
+from app.services.data_cache import get_cache
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Cache TTL constants
+CACHE_TTL_QUOTE = 5          # 5 seconds for real-time quote
+CACHE_TTL_QUOTE_DETAIL = 30  # 30 seconds for detailed quote
+
+# Cache helper
+_cache = None
+
+def _get_cache():
+    global _cache
+    if _cache is None:
+        _cache = get_cache()
+    return _cache
 
 
 # ── Symbol Validation ─────────────────────────────────────────────────────────
@@ -211,20 +225,27 @@ async def market_quote(symbol: str):
     返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
     """
     norm = _validate_symbol(symbol)
-    rows = get_price_history(_unprefix(norm), limit=2)  # 最新+昨日（realtime表存无前缀）
+    cache = _get_cache()
+    cache_key = f"quote:{norm}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[Cache] Hit: {cache_key}")
+        return success_response(cached)
+    
+    rows = get_price_history(_unprefix(norm), limit=2)
     if not rows:
         return success_response(None, 'no data')
-    latest = rows[0]  # DESC，最新在前
+    latest = rows[0]
     prev   = rows[1] if len(rows) > 1 else latest
     close  = float(latest.get('close') or 0)
     prev_c = float(prev.get('close') or close)
     chg    = close - prev_c
     chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
     
-    # Get data timestamp from database row
     data_timestamp = latest.get('timestamp') or latest.get('updated_at') or latest.get('date')
     
-    return success_response({
+    result = {
         'symbol': norm,
         'price': close,
         'change': round(chg, 3),
@@ -235,7 +256,11 @@ async def market_quote(symbol: str):
         'turnover_rate': float(latest.get('turnover_rate') or 0),
         'timestamp': data_timestamp,
         'response_time': datetime.now().isoformat(),
-    })
+    }
+    
+    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
+    
+    return success_response(result)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -274,6 +299,13 @@ async def market_quote_detail(symbol: str):
       concepts: [{name, change_pct}, ...]
     """
     norm = _validate_symbol(symbol)
+    cache = _get_cache()
+    cache_key = f"quote_detail:{norm}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[Cache] Hit: {cache_key}")
+        return success_response(cached)
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
     db_sym = _unprefix(norm)   # 'sh000001' → '000001'
@@ -425,6 +457,9 @@ async def market_quote_detail(symbol: str):
         "response_time": datetime.now().isoformat(),
         "data_freshness_seconds": _calculate_freshness_seconds(latest_row.get('date') or ''),
     }
+    
+    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
+    
     return success_response(result)
 
 
@@ -566,3 +601,15 @@ async def get_order_book(symbol: str):
     except Exception as e:
         logger.error(f"order_book error: {e}")
         return error_response(500, str(e))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Cache Stats Endpoint
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/market/cache/stats")
+async def cache_stats():
+    """Get cache statistics for quote endpoints."""
+    cache = _get_cache()
+    stats = cache.get_stats()
+    return success_response(stats)
