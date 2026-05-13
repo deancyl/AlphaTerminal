@@ -175,19 +175,20 @@ async def market_stocks(
 
 @router.get("/debug/scheduler")
 async def debug_scheduler():
-    """
-    调度器心跳调试接口
-    返回各后台任务的最后成功时间
-    """
     return success_response({
         "news_last_success":  get_last_news_time() or "从未成功",
         "spot_cache_ready":  is_spot_ready(),
     })
 
 
+@router.get("/debug/writer-status")
+async def debug_writer_status():
+    from app.db.db_writer import is_writer_healthy
+    return success_response(is_writer_healthy())
+
+
 @router.post("/debug/trigger")
 async def debug_trigger():
-    """手动触发一次全量刷新（调试用）"""
     trigger_spot_fetch()
     trigger_news_fetch()
     return success_response({"status": "triggered", "message": "已触发后台刷新，请稍后查看 /debug/scheduler"})

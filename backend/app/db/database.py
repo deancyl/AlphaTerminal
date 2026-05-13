@@ -457,16 +457,18 @@ def search_stocks(
             conditions.append("mktcap <= ?")
             args.append(float(max_mktcap) * 1e8)
 
-        # 排序字段白名单 + 排序方向严格验证
         ORDER_FIELDS = {
             'code': 'code', 'name': 'name', 'price': 'price',
             'change_pct': 'change_pct', 'turnover': 'turnover',
             'volume': 'volume', 'amount': 'amount',
             'per': 'per', 'pb': 'pb', 'mktcap': 'mktcap',
         }
-        order_col = ORDER_FIELDS.get(sort_by, 'change_pct')
-        # 严格验证排序方向，防止 SQL 注入
-        order_dir = 'DESC' if sort_dir.upper() == 'DESC' else 'ASC'
+        if sort_by not in ORDER_FIELDS:
+            raise ValueError(f"Invalid sort_by: '{sort_by}'. Must be one of: {list(ORDER_FIELDS.keys())}")
+        order_col = ORDER_FIELDS[sort_by]
+        if sort_dir.upper() not in ('ASC', 'DESC'):
+            raise ValueError(f"Invalid sort_dir: '{sort_dir}'. Must be 'asc' or 'desc'")
+        order_dir = sort_dir.upper()
 
         where_clause = " AND ".join(conditions)
 

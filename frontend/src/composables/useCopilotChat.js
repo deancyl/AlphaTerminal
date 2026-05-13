@@ -1,6 +1,6 @@
 import { getCachedResponse, setCachedResponse, cleanCache } from './useCopilotCache.js'
 
-let currentAbortController = null
+let currentController = null
 
 export async function sendToLLM(text, contextOptions, callbacks) {
   const { ctxMarket, ctxRates, ctxNews, ctxPortfolio, ctxHistorical, selectedProvider, selectedModel, portfolioId, currentSymbol } = contextOptions
@@ -80,8 +80,8 @@ ${positionLines}
       return
     }
     
-    if (currentAbortController) currentAbortController.abort()
-    currentAbortController = new AbortController()
+    if (currentController) currentController.abort('New request started')
+    currentController = new AbortController()
     
     const response = await fetch('/api/v1/chat', {
       method: 'POST',
@@ -97,7 +97,7 @@ ${positionLines}
         hist_period: 'daily',
         hist_limit: 60,
       }),
-      signal: currentAbortController.signal
+      signal: currentController.signal
     })
     
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -155,17 +155,17 @@ ${positionLines}
     if (err.name === 'AbortError') return
     if (onError) onError(err)
   } finally {
-    currentAbortController = null
+    currentController = null
   }
 }
 
 export function getCurrentAbortController() {
-  return currentAbortController
+  return currentController
 }
 
 export function abortCurrentRequest() {
-  if (currentAbortController) {
-    currentAbortController.abort()
-    currentAbortController = null
+  if (currentController) {
+    currentController.abort('Request cancelled')
+    currentController = null
   }
 }

@@ -4,6 +4,8 @@
     :class="isMobile ? 'panel-mobile' : 'panel-desktop'"
     :style="isMobile ? {} : { width: panelWidth + 'px' }"
   >
+    <LoadingSpinner v-if="loading" />
+    <template v-else>
     <!-- ═══ Module 1: 基础行情与估值 ═════════════════════════════════ -->
     <div class="px-3 py-2.5 border-b border-theme">
 
@@ -223,15 +225,20 @@
 
     <!-- ═══ 数据时间戳 ═══════════════════════════════════════════════ -->
     <div class="px-3 py-2 mt-auto">
-      <div class="text-[10px] text-theme-muted text-center">
-        {{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}
+      <div class="text-[10px] text-theme-muted text-center flex items-center justify-center gap-1.5">
+        <span>{{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}</span>
+        <FreshnessIndicator :timestamp="data.timestamp" />
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import FreshnessIndicator from './FreshnessIndicator.vue'
+import { safeNumber, safePct } from '../utils/typeCoercion.js'
 
 const props = defineProps({
   symbol:       { type: String,  default: '' },
@@ -244,6 +251,7 @@ const props = defineProps({
   latestCandle: { type: Object,  default: null },
   isMobile:     { type: Boolean, default: false },
   panelWidth:   { type: Number,  default: 300 },
+  loading:      { type: Boolean, default: false },
 })
 
 // snapshotData 优先，否则用 realtimeData + latestCandle 合并
@@ -259,39 +267,43 @@ const cdl = computed(() => props.latestCandle)
 
 // 最新价格（优先取K线数据，否则取API数据）
 const displayPrice = computed(() => {
-  if (cdl.value?.close != null) return cdl.value.close.toFixed(3)
-  if (data.value.price != null && data.value.price > 0) return data.value.price.toFixed(3)
+  const cdlClose = safeNumber(cdl.value?.close, null)
+  const dataPrice = safeNumber(data.value?.price, null)
+  if (cdlClose !== null) return cdlClose.toFixed(3)
+  if (dataPrice !== null && dataPrice > 0) return dataPrice.toFixed(3)
   return '--'
 })
 
 const displayChange = computed(() => {
-  if (cdl.value?.change != null) {
-    const c = cdl.value.change
-    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  const cdlChange = safeNumber(cdl.value?.change, null)
+  const dataChange = safeNumber(data.value?.change, null)
+  if (cdlChange !== null) {
+    return (cdlChange >= 0 ? '+' : '') + cdlChange.toFixed(3)
   }
-  if (data.value.change != null && data.value.change !== 0) {
-    const c = data.value.change
-    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  if (dataChange !== null && dataChange !== 0) {
+    return (dataChange >= 0 ? '+' : '') + dataChange.toFixed(3)
   }
   return '--'
 })
 
 const displayChangePct = computed(() => {
-  if (cdl.value?.change_pct != null) {
-    const c = cdl.value.change_pct
-    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  const cdlPct = safePct(cdl.value?.change_pct, null)
+  const dataPct = safePct(data.value?.change_pct, null)
+  if (cdlPct !== null) {
+    return (cdlPct >= 0 ? '+' : '') + cdlPct.toFixed(2) + '%'
   }
-  if (data.value.change_pct != null && data.value.change_pct !== 0) {
-    const c = data.value.change_pct
-    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  if (dataPct !== null && dataPct !== 0) {
+    return (dataPct >= 0 ? '+' : '') + dataPct.toFixed(2) + '%'
   }
   return '--'
 })
 
 // change_pct 用于颜色判定
 const _changePct = computed(() => {
-  if (cdl.value?.change_pct != null) return cdl.value.change_pct
-  if (data.value.change_pct != null) return data.value.change_pct
+  const cdlPct = safePct(cdl.value?.change_pct, null)
+  const dataPct = safePct(data.value?.change_pct, null)
+  if (cdlPct !== null) return cdlPct
+  if (dataPct !== null) return dataPct
   return null
 })
 
@@ -308,10 +320,14 @@ const priceColorClass = computed(() => {
 })
 // ── 52周位置 ───────────────────────────────────────────────────
 const pricePosition = computed(() => {
-  const { price, high_52w, low_52w } = data.value
-  if (price == null || high_52w == null || low_52w == null) return 50
-  if (high_52w === low_52w) return 50
-  return Math.min(100, Math.max(0, ((price - low_52w) / (high_52w - low_52w)) * 100))
+  const price = safeNumber(data.value?.price, null)
+  const high52w = safeNumber(data.value?.high_52w, null)
+  const low52w = safeNumber(data.value?.low_52w, null)
+  
+  if (price === null || high52w === null || low52w === null) return 50
+  if (high52w === low52w) return 50
+  
+  return Math.min(100, Math.max(0, ((price - low52w) / (high52w - low52w)) * 100))
 })
 
 // ── 判断是否为指数 ──────────────────────────────────────────────

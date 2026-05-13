@@ -10,7 +10,7 @@
  *   // 模板中：
  *   <span :class="flashClass">{{ price }}</span>
  */
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 
 export function usePriceFlash() {
   const flashClass = ref('')
@@ -47,6 +47,10 @@ export function usePriceFlash() {
       flashTimer = null
     }
   }
+  
+  onUnmounted(() => {
+    clearFlash()
+  })
   
   return {
     flashClass,

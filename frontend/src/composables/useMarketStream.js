@@ -21,6 +21,7 @@
 import { ref, computed, watch, onUnmounted, shallowRef, triggerRef } from 'vue'
 import { logger } from '../utils/logger.js'
 import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
+import { usePageVisibility } from './usePageVisibility.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -81,8 +82,9 @@ function _notifyTick() {
 }
 
 function _newConnection() {
-  if (_ws) return
+  if (_ws || _connecting) return
 
+  _connecting = true
   globalWsStatus.value = 'connecting'
   globalError.value = null
   globalConnectionAttempts.value++
@@ -94,23 +96,28 @@ function _newConnection() {
     logger.error('[MarketStream] WebSocket 创建失败:', e)
     globalWsStatus.value = 'failed'
     globalError.value = 'WebSocket 创建失败'
+    _connecting = false
     _scheduleRetry()
     return
   }
 
   _ws.onopen = () => {
+    _connecting = false
     globalWsStatus.value = 'connected'
     globalError.value = null
     globalLastConnectedAt.value = Date.now()
     globalConnectionAttempts.value = 0
     _retryDelay = 2000
     _retryCount = 0
+    _lastMessageTime = Date.now()
+    _startHealthCheck()
     // 重连时重新订阅所有仍有引用的 symbol
     const activeSyms = [...subscribedSymRefCount.keys()]
     if (activeSyms.length) _doSubscribe(activeSyms)
   }
 
   _ws.onmessage = (event) => {
+    _lastMessageTime = Date.now()
     try {
       const data = JSON.parse(event.data)
       // 忽略控制消息（pong心跳、订阅确认）
@@ -177,6 +184,8 @@ function _newConnection() {
     }
     globalWsStatus.value = 'disconnected'
     _ws = null
+    _connecting = false
+    _stopHealthCheck()
 
     // 1000 = 正常关闭（disconnect 调用），不重连
     // 1006 = abnormal closure，需要重连
@@ -240,9 +249,18 @@ function _scheduleRetry() {
 
 // ── 心跳管理（setInterval 句柄必须保存，disconnect 时清理）────────
 let _heartbeatTimer = null
+let _connecting = false
+let _lastMessageTime = 0
+let _healthCheckTimer = null
 
-function _startHeartbeat() {
+// 心跳间隔：可见时 30s，隐藏时 120s
+const HEARTBEAT_VISIBLE = 30_000
+const HEARTBEAT_HIDDEN = 120_000
+let _currentHeartbeatInterval = HEARTBEAT_VISIBLE
+
+function _startHeartbeat(interval = _currentHeartbeatInterval) {
   if (_heartbeatTimer) return
+  _currentHeartbeatInterval = interval
   _heartbeatTimer = setInterval(() => {
     if (_ws && _ws.readyState === WebSocket.OPEN) {
       try {
@@ -251,13 +269,46 @@ function _startHeartbeat() {
         // WS 已在 closing 状态，静默忽略
       }
     }
-  }, 30_000)
+  }, interval)
 }
 
 function _stopHeartbeat() {
   if (_heartbeatTimer) {
     clearInterval(_heartbeatTimer)
     _heartbeatTimer = null
+  }
+}
+
+function _restartHeartbeat(newInterval) {
+  _stopHeartbeat()
+  _startHeartbeat(newInterval)
+}
+
+// ── 健康检查（检测僵尸连接）──────────────────────────────
+function _startHealthCheck() {
+  if (_healthCheckTimer) return
+  _healthCheckTimer = setInterval(() => {
+    // 如果超过 60 秒没有收到消息，认为连接已死
+    if (_lastMessageTime && Date.now() - _lastMessageTime > 60000) {
+      logger.warn('[MarketStream] 连接超时（60s 无消息），强制重连')
+      if (_ws) {
+        _ws.onclose = null
+        _ws.onerror = null
+        _ws.close(1006, 'health_check_timeout')
+        _ws = null
+      }
+      _stopHealthCheck()
+      if (subscribedSymRefCount.size > 0 && _retryCount < _MAX_RETRIES) {
+        _scheduleRetry()
+      }
+    }
+  }, 30000) // 每 30 秒检查一次
+}
+
+function _stopHealthCheck() {
+  if (_healthCheckTimer) {
+    clearInterval(_healthCheckTimer)
+    _healthCheckTimer = null
   }
 }
 
@@ -380,6 +431,13 @@ export function useMarketStream(initialSymbol = '') {
 
   // 启动心跳
   _startHeartbeat()
+
+  // 监听页面可见性变化，调整心跳频率
+  const { isVisible } = usePageVisibility()
+  watch(isVisible, (visible) => {
+    const newInterval = visible ? HEARTBEAT_VISIBLE : HEARTBEAT_HIDDEN
+    _restartHeartbeat(newInterval)
+  })
 
   // 自动 unsubscribe 旧 symbol（组件切换股票时）
   let _prevSymbol = initialSymbol

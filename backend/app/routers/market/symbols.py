@@ -4,7 +4,7 @@ Symbol-related endpoints extracted from market.py
 import logging
 import threading
 from datetime import datetime
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Query, HTTPException
 
 from app.utils.response import success_response, error_response, ErrorCode
 
@@ -248,8 +248,10 @@ def search_stocks_api(
     min_pe: float = None, max_pe: float = None,
     min_pb: float = None, max_pb: float = None,
     min_mktcap: float = None, max_mktcap: float = None,
-    sort_by: str = 'change_pct', sort_dir: str = 'desc',
-    page: int = 1, page_size: int = 50,
+    sort_by: str = Query('change_pct', description="排序字段: change_pct|turnover|volume|per|pb|mktcap|code|name|price"),
+    sort_dir: str = Query('desc', description="排序方向: asc|desc"),
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(50, ge=1, le=200, description="每页条数(1-200)"),
 ):
     """
     全市场个股服务端搜索+过滤+排序+分页

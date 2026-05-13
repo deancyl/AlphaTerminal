@@ -136,6 +136,7 @@
         :name="props.name"
         :realtimeData="quoteData"
         :latestCandle="latestCandle"
+        :loading="loading"
         class="quote-panel-wrapper"
       />
     </div>

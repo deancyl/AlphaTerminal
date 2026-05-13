@@ -24,6 +24,12 @@ _write_queue: queue.Queue = queue.Queue()
 _shutdown_flag = threading.Event()
 _writer_thread: threading.Thread | None = None
 
+# ── 健康监控（Iteration 1-3 新增）───────────────────────────────────────
+_last_heartbeat: float = 0.0
+_items_processed: int = 0
+_writer_start_time: float = 0.0
+_heartbeat_lock = threading.Lock()
+
 # ── 数据库路径（与 database.py 保持一致）───────────────────────
 _db_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))),
@@ -209,21 +215,15 @@ def _write_buffer(conn, rows):
 
 
 def db_writer_loop():
-    """
-    DBWriterThread 主体：死循环从队列取任务执行。
-    退出条件：_shutdown_flag 被 set() 且队列完全清空。
-    """
     conn = None
     try:
         conn = _get_conn()
         logger.info("[DBWriter] 🟢 started (queue maxsize=%s)", _write_queue.maxsize)
         while True:
             try:
-                # block=True, timeout=1 — 每秒检查一次 shutdown_flag
                 task = _write_queue.get(block=True, timeout=1.0)
             except queue.Empty:
                 if _shutdown_flag.is_set():
-                    # 队列已空，退出
                     break
                 continue
 
@@ -260,6 +260,11 @@ def db_writer_loop():
                 elapsed = (time.monotonic() - t0) * 1000
                 logger.debug(f"[DBWriter] completed in {elapsed:.1f}ms")
 
+                with _heartbeat_lock:
+                    global _last_heartbeat, _items_processed
+                    _last_heartbeat = time.time()
+                    _items_processed += 1
+
             except Exception as e:
                 logger.error(f"[DBWriter] task execution error: {e}", exc_info=True)
 
@@ -280,33 +285,41 @@ def db_writer_loop():
 # ═══════════════════════════════════════════════════════════════
 
 def enqueue(task: dict):
-    """
-    将写入任务投入队列，立即返回（< 1ms）。
-    task = {"type": T_DAILY|T_PERIODIC|T_REALTIME|T_ALLSTOCKS|T_BUFFER,
-            "rows": [...], "period": "weekly" (optional)}
-    """
     _write_queue.put(task)
     qsize = _write_queue.qsize()
     logger.debug(f"[DBQueue] enqueued {task.get('type')} ({len(task.get('rows', []))} rows), queue_size={qsize}")
+    ensure_writer_running()
+
+
+def ensure_writer_running():
+    global _writer_thread
+    if _writer_thread is None or not _writer_thread.is_alive():
+        logger.warning("[DBQueue] writer thread not running, starting...")
+        start_writer()
+
+
+def is_writer_healthy() -> dict:
+    with _heartbeat_lock:
+        return {
+            "is_alive": _writer_thread.is_alive() if _writer_thread else False,
+            "queue_size": _write_queue.qsize(),
+            "last_heartbeat": _last_heartbeat,
+            "items_processed": _items_processed,
+            "uptime": time.time() - _writer_start_time if _writer_start_time > 0 else 0,
+        }
 
 
 def start_writer():
-    """在 lifespan 启动时调用（main.py）"""
-    global _writer_thread
+    global _writer_thread, _writer_start_time
     if _writer_thread is None or not _writer_thread.is_alive():
         _shutdown_flag.clear()
+        _writer_start_time = time.time()
         _writer_thread = threading.Thread(target=db_writer_loop, name="DBWriter", daemon=True)
         _writer_thread.start()
         logger.info("[DBWriter] thread started")
 
 
 def stop_writer():
-    """
-    在 lifespan 关闭时调用（main.py）：
-    1. 通知 writer 停止（shutdown_flag）
-    2. 等待最多 30s 让队列排空
-    3. 强制终止（daemon 线程会被外层进程终止）
-    """
     logger.info("[DBWriter] initiating graceful shutdown...")
     _shutdown_flag.set()
 
@@ -314,7 +327,6 @@ def stop_writer():
         remaining = _write_queue.qsize()
         if remaining > 0:
             logger.info(f"[DBWriter] waiting for {remaining} tasks to flush (max 30s)...")
-        # 等待队列自然排空（最多 30s）
         _writer_thread.join(timeout=30)
         if _writer_thread.is_alive():
             logger.warning(f"[DBWriter] ⚠️  {remaining} tasks still in queue after 30s timeout")

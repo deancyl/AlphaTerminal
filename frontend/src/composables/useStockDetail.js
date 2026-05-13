@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { formatNumber, formatMoney, formatVolume, formatHolderShares, formatHolderPct } from '../utils/formatters.js'
+import { useAbortableRequest } from './useAbortableRequest.js'
 
 /**
  * Composable for shared stock detail logic
@@ -200,3 +201,5 @@ export function useStockQuote() {
     changeClass
   }
 }
+
+export { useF9Data } from './useF9Data.js'

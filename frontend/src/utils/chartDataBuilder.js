@@ -2,6 +2,7 @@
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI, calcOBV, calcDMI, calcCCI } from './indicators.js'
 import { buildXAxisLabels } from './symbols.js'
 import { UP, DOWN } from './indicators.js'
+import { safeNumber } from './typeCoercion.js'
 
 /**
  * 将原始 K 线数据转换为图表渲染所需的全套结构化数据
@@ -18,24 +19,32 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
 
   // 1. 基础 X 轴与 K线序列
   const times = buildXAxisLabels(rawHist, period)
-  const closes = rawHist.map(h => h.close)
-  const highs = rawHist.map(h => h.high)
-  const lows = rawHist.map(h => h.low)
-  const opens = rawHist.map(h => h.open)
+  const closes = rawHist.map(h => safeNumber(h.close, null))
+  const highs = rawHist.map(h => safeNumber(h.high, null))
+  const lows = rawHist.map(h => safeNumber(h.low, null))
+  const opens = rawHist.map(h => safeNumber(h.open, null))
 
   // ECharts Candlestick: [open, close, lowest, highest]
-  const klineData = rawHist.map(h => [h.open, h.close, h.low, h.high])
+  const klineData = rawHist.map(h => [
+    safeNumber(h.open, null),
+    safeNumber(h.close, null),
+    safeNumber(h.low, null),
+    safeNumber(h.high, null)
+  ])
 
   // 成交量序列（含期货持仓量 / ΔOI / 涨跌方向）
-  const oiValues = rawHist.map(h => h.hold ?? null)
+  const oiValues = rawHist.map(h => safeNumber(h.hold, null))
   const volumes = rawHist.map((h, i) => {
-    const priceUp = h.close >= h.open
+    const closeVal = safeNumber(h.close, 0)
+    const openVal = safeNumber(h.open, 0)
+    const priceUp = closeVal >= openVal
     // ΔOI = 当根持仓 - 前根持仓（增仓为正，减仓为负）
-    const prevOI = i > 0 ? (rawHist[i - 1].hold ?? null) : null
-    const deltaOI = (prevOI != null && h.hold != null) ? h.hold - prevOI : null
+    const prevOI = i > 0 ? safeNumber(rawHist[i - 1].hold, null) : null
+    const currOI = safeNumber(h.hold, null)
+    const deltaOI = (prevOI != null && currOI != null) ? currOI - prevOI : null
     return {
-      value:    h.volume,
-      oi:       h.hold ?? null,        // 持仓量（期货独有）
+      value:    safeNumber(h.volume, 0),
+      oi:       currOI,                // 持仓量（期货独有）
       deltaOI,                          // 持仓变化（增仓正，减仓负）
       priceUp,                          // 当根涨跌方向
       itemStyle: { color: priceUp ? UP + '44' : DOWN + '44' },
@@ -43,6 +52,11 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   })
 
   // 2. 主图叠加指标 (MA, BOLL)
+  // Filter out NaN values for indicator calculations
+  const validCloses = closes.filter(v => v != null && !isNaN(v))
+  const validHighs = highs.filter(v => v != null && !isNaN(v))
+  const validLows = lows.filter(v => v != null && !isNaN(v))
+  
   const maData = {
     ma5: calcMA(closes, 5),
     ma10: calcMA(closes, 10),
@@ -69,7 +83,8 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
 
   // OBV（能量潮）
   const obvParams = indicatorParams.OBV || {}
-  subChartData.OBV = calcOBV(closes, rawHist.map(h => h.volume))
+  const volumesForOBV = rawHist.map(h => safeNumber(h.volume, 0))
+  subChartData.OBV = calcOBV(closes, volumesForOBV)
 
   // DMI（趋向指标）
   const dmiParams = indicatorParams.DMI || { period: 14 }
@@ -85,14 +100,14 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   if (overlayData.length > 0) {
     const ovMap = {}
     for (const d of overlayData) {
-      if (d.date && d.close != null) ovMap[d.date] = d.close
+      const closeVal = safeNumber(d.close, null)
+      if (d.date && closeVal != null) ovMap[d.date] = closeVal
     }
     // 按主图时间对齐，未找到的日期填充 null
     overlaySeriesData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
   }
 
   // 过滤无效值，计算有效数据的极值
-  const validCloses = closes.filter(v => v != null && !isNaN(v))
   if (validCloses.length === 0) {
     return { isEmpty: true }
   }
@@ -109,7 +124,7 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   //    用途：股债跷跷板（沪深300≈4000点 vs 10年国债收益率≈2.5%）
   let overlayYAxis = null
   if (overlayData.length > 0) {
-    const ovCloses = overlayData.map(d => d.close).filter(v => v != null)
+    const ovCloses = overlayData.map(d => safeNumber(d.close, null)).filter(v => v != null)
     if (ovCloses.length > 0) {
       let ovMin = ovCloses[0], ovMax = ovCloses[0]
       for (let i = 1; i < ovCloses.length; i++) {
@@ -175,7 +190,8 @@ export function buildOverlaySeries(rawHist, overlayData, color = '#f97316') {
   // 构建 {date -> close} 快速查找表
   const ovMap = {}
   for (const d of overlayData) {
-    if (d.date && d.close != null) ovMap[d.date] = d.close
+    const closeVal = safeNumber(d.close, null)
+    if (d.date && closeVal != null) ovMap[d.date] = closeVal
   }
 
   // 按主图时间轴对齐，index 对应主图数据下标（用于 xAxis index 对齐）

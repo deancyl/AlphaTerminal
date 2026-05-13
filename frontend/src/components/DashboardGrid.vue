@@ -69,74 +69,76 @@
     <div class="grid-stack-item"
          data-widget-id="chart"
          gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
-        <!-- 标题行 -->
-        <div class="flex items-center justify-between mb-1 shrink-0">
-          <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
-          <!-- 全屏按钮：独立一行，位于右上角 -->
-          <button
-            class="px-1.5 py-0 text-[10px] rounded border border-theme/40 text-theme-muted hover:text-terminal-accent hover:border-terminal-accent/50 transition-colors"
-            @click="handleFullscreenClick()"
-            aria-label="全屏显示图表"
-            type="button"
-          >全屏</button>
+      <WidgetErrorBoundary widget-name="IndexLineChart">
+        <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
+          <!-- 标题行 -->
+          <div class="flex items-center justify-between mb-1 shrink-0">
+            <span class="text-terminal-accent font-bold text-sm">📈 指标图表</span>
+            <!-- 全屏按钮：独立一行，位于右上角 -->
+            <button
+              class="px-1.5 py-0 text-[10px] rounded border border-theme/40 text-theme-muted hover:text-terminal-accent hover:border-terminal-accent/50 transition-colors"
+              @click="handleFullscreenClick()"
+              aria-label="全屏显示图表"
+              type="button"
+            >全屏</button>
+          </div>
+          <!-- 指数切换行 -->
+          <div class="flex items-center gap-1 mb-1 shrink-0" role="group" aria-label="指数选择">
+            <button v-for="idx in indexOptions" :key="idx.symbol"
+                    class="px-2 py-0.5 text-[10px] rounded border transition"
+                    :class="selectedIndex === idx.symbol
+                      ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
+                      : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    @click="switchIndex(idx)"
+                    :aria-pressed="selectedIndex === idx.symbol"
+                    :aria-label="`切换到${idx.name}`"
+                    type="button"
+            >
+              {{ idx.name }}
+            </button>
+          </div>
+          <!-- Period selector -->
+          <div class="flex items-center gap-1 mb-2 shrink-0" role="group" aria-label="周期选择">
+            <button v-for="p in periods" :key="p.key"
+                    class="px-2 py-0.5 text-[10px] rounded border transition"
+                    :class="selectedPeriod === p.key
+                      ? 'bg-[var(--color-info-bg)] border-blue-500/50 text-[var(--color-info)]'
+                      : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    @click="switchPeriod(p.key)"
+                    :aria-pressed="selectedPeriod === p.key"
+                    :aria-label="`切换到${p.label}`"
+                    type="button"
+            >
+              {{ p.label }}
+            </button>
+            <!-- Indicator toggles -->
+            <span class="ml-2 text-theme-tertiary text-[9px]" aria-hidden="true">指标:</span>
+            <button v-for="ind in indicators" :key="ind.key"
+                    class="px-1.5 py-0.5 text-[9px] rounded border transition"
+                    :class="activeIndicators.includes(ind.key)
+                      ? 'bg-[var(--color-primary-bg)] border-purple-500/50 text-[var(--color-primary)]'
+                      : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
+                    @click="toggleIndicator(ind.key)"
+                    :aria-pressed="activeIndicators.includes(ind.key)"
+                    :aria-label="`${activeIndicators.includes(ind.key) ? '隐藏' : '显示'}${ind.label}指标`"
+                    type="button"
+            >
+              {{ ind.label }}
+            </button>
+          </div>
+          <div class="flex-1 min-h-0">
+            <!-- IndexLineChart 内部已显示名称，这里不再重复显示 -->
+            <IndexLineChart
+              :key="`${selectedIndex}-${selectedPeriod}`"
+              :symbol="selectedIndex"
+              :name="currentIndexName"
+              :color="currentIndexOption.color"
+              :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
+              :indicators="activeIndicators"
+            />
+          </div>
         </div>
-        <!-- 指数切换行 -->
-        <div class="flex items-center gap-1 mb-1 shrink-0" role="group" aria-label="指数选择">
-          <button v-for="idx in indexOptions" :key="idx.symbol"
-                  class="px-2 py-0.5 text-[10px] rounded border transition"
-                  :class="selectedIndex === idx.symbol
-                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="switchIndex(idx)"
-                  :aria-pressed="selectedIndex === idx.symbol"
-                  :aria-label="`切换到${idx.name}`"
-                  type="button"
-          >
-            {{ idx.name }}
-          </button>
-        </div>
-        <!-- Period selector -->
-        <div class="flex items-center gap-1 mb-2 shrink-0" role="group" aria-label="周期选择">
-          <button v-for="p in periods" :key="p.key"
-                  class="px-2 py-0.5 text-[10px] rounded border transition"
-                  :class="selectedPeriod === p.key
-                    ? 'bg-[var(--color-info-bg)] border-blue-500/50 text-[var(--color-info)]'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="switchPeriod(p.key)"
-                  :aria-pressed="selectedPeriod === p.key"
-                  :aria-label="`切换到${p.label}`"
-                  type="button"
-          >
-            {{ p.label }}
-          </button>
-          <!-- Indicator toggles -->
-          <span class="ml-2 text-theme-tertiary text-[9px]" aria-hidden="true">指标:</span>
-          <button v-for="ind in indicators" :key="ind.key"
-                  class="px-1.5 py-0.5 text-[9px] rounded border transition"
-                  :class="activeIndicators.includes(ind.key)
-                    ? 'bg-[var(--color-primary-bg)] border-purple-500/50 text-[var(--color-primary)]'
-                    : 'bg-terminal-bg border-theme text-theme-tertiary hover:border-gray-500'"
-                  @click="toggleIndicator(ind.key)"
-                  :aria-pressed="activeIndicators.includes(ind.key)"
-                  :aria-label="`${activeIndicators.includes(ind.key) ? '隐藏' : '显示'}${ind.label}指标`"
-                  type="button"
-          >
-            {{ ind.label }}
-          </button>
-        </div>
-        <div class="flex-1 min-h-0">
-          <!-- IndexLineChart 内部已显示名称，这里不再重复显示 -->
-          <IndexLineChart
-            :key="`${selectedIndex}-${selectedPeriod}`"
-            :symbol="selectedIndex"
-            :name="currentIndexName"
-            :color="currentIndexOption.color"
-            :url="`/api/v1/market/history/${selectedIndex}?period=${selectedPeriod}`"
-            :indicators="activeIndicators"
-          />
-        </div>
-      </div>
+      </WidgetErrorBoundary>
     </div>
 
     <!-- ━━━ Widget 2：市场情绪直方图（K线正下方，左侧8列）━━━━━━━━━━━━━ -->
@@ -144,19 +146,26 @@
     <div class="grid-stack-item"
          data-widget-id="sentiment"
          gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <div class="text-terminal-accent font-bold text-sm mb-2 shrink-0">🌡️ A股市场情绪</div>
-        <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
-      </div>
+      <WidgetErrorBoundary widget-name="SentimentGauge">
+        <div class="grid-stack-item-content terminal-panel p-3">
+          <div class="flex items-center justify-between mb-2 shrink-0">
+            <span class="text-terminal-accent font-bold text-sm">🌡️ A股市场情绪</span>
+            <FreshnessIndicator :timestamp="timestamp" />
+          </div>
+          <SentimentGauge :market-data="marketData" :macro-data="macroData" @symbol-click="handleWindClick" />
+        </div>
+      </WidgetErrorBoundary>
     </div>
 
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="news"
          gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <NewsFeed />
-      </div>
+      <WidgetErrorBoundary widget-name="NewsFeed">
+        <div class="grid-stack-item-content terminal-panel p-3">
+          <NewsFeed />
+        </div>
+      </WidgetErrorBoundary>
     </div>
 
     <!-- ━━━ Widget 4：风向标（右上，右侧4列）━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -167,7 +176,11 @@
         <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
         <div class="text-[10px] text-theme-tertiary mb-1 flex items-center justify-between">
           <span>🌐 市场风向标</span>
-          <span class="text-[9px] opacity-60">{{ windItems.length }}标的</span>
+          <FreshnessIndicator :timestamp="timestamp" />
+        </div>
+        <!-- Error display -->
+        <div v-if="macroError" class="text-[10px] text-red-400 mb-1 px-1 py-0.5 bg-red-400/10 rounded">
+          ⚠️ {{ macroError }}
         </div>
         <!-- 两列卡片网格：消除垂直留白，充分利用右侧宽度（密度升级） -->
         <div class="grid grid-cols-2 gap-1 p-0.5">
@@ -204,18 +217,22 @@
     <div class="grid-stack-item"
          data-widget-id="fundflow"
          gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-2">
-        <FundFlowPanel />
-      </div>
+      <WidgetErrorBoundary widget-name="FundFlowPanel">
+        <div class="grid-stack-item-content terminal-panel p-2">
+          <FundFlowPanel />
+        </div>
+      </WidgetErrorBoundary>
     </div>
 
     <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="sectors"
          gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
-      <div class="grid-stack-item-content terminal-panel p-2">
-        <HotSectors @sector-click="handleSectorClick" />
-      </div>
+      <WidgetErrorBoundary widget-name="HotSectors">
+        <div class="grid-stack-item-content terminal-panel p-2">
+          <HotSectors @sector-click="handleSectorClick" />
+        </div>
+      </WidgetErrorBoundary>
     </div>
 
     <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
@@ -225,7 +242,10 @@
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
-          <span class="text-theme-tertiary text-[10px]">{{ tsDisplay }}</span>
+          <div class="flex items-center gap-2">
+            <FreshnessIndicator :timestamp="timestamp" />
+            <span class="text-theme-tertiary text-[10px]">{{ tsDisplay }}</span>
+          </div>
         </div>
         <div class="flex-1 overflow-auto">
           <table class="w-full text-xs">
@@ -260,27 +280,32 @@
     <div class="grid-stack-item"
          data-widget-id="screener"
          gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
-      <div class="grid-stack-item-content terminal-panel p-3">
-        <StockScreener @symbol-click="handleScreenerClick" />
-      </div>
+      <WidgetErrorBoundary widget-name="StockScreener">
+        <div class="grid-stack-item-content terminal-panel p-3">
+          <StockScreener @symbol-click="handleScreenerClick" />
+        </div>
+      </WidgetErrorBoundary>
     </div>
 
     </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
-import { useBreakpoints, breakpointsTailwind, useIntervalFn, useDocumentVisibility, useDebounceFn } from '@vueuse/core'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, onErrorCaptured } from 'vue'
+import { useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
 import { formatPrice } from '../utils/formatters.js'
 import { usePullToRefresh } from '../composables/usePullToRefresh.js'
+import { useSmartPolling } from '../composables/useSmartPolling.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
 import HotSectors        from './HotSectors.vue'
 import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
+import WidgetErrorBoundary from './WidgetErrorBoundary.vue'
+import FreshnessIndicator from './FreshnessIndicator.vue'
 
 // ── Layout Persistence Constants ─────────────────────────────────────
 const LAYOUT_STORAGE_KEY = 'alphaterminal_grid_layout'
@@ -329,6 +354,33 @@ const gridRef          = ref(null)
 const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
+const dashboardError   = ref(null)
+
+// ── Error Capture Safety Net ─────────────────────────────────────
+onErrorCaptured((err, instance, info) => {
+  console.error('[DashboardGrid] Uncaught error:', err)
+  console.error('[DashboardGrid] Component:', instance?.$options?.name || 'unknown')
+  console.error('[DashboardGrid] Info:', info)
+  
+  dashboardError.value = {
+    message: err.message || String(err),
+    component: instance?.$options?.name || 'unknown',
+    info,
+    timestamp: Date.now(),
+  }
+  
+  // Report to monitoring if available
+  if (typeof window !== 'undefined' && typeof window.reportError === 'function') {
+    try {
+      window.reportError(err)
+    } catch (e) {
+      console.error('[DashboardGrid] Failed to report error:', e)
+    }
+  }
+  
+  // Prevent propagation to App.vue
+  return false
+})
 
 // ── Layout Persistence Functions ─────────────────────────────────────
 function saveLayout() {
@@ -654,31 +706,48 @@ const macroData  = ref([])
 const ratesData  = ref([])
 const globalData = ref([])
 
+// Error states for each data source
+const macroError  = ref(null)
+const ratesError  = ref(null)
+const globalError = ref(null)
+
 async function fetchLowFreq() {
+  // Fetch macro data
   try {
     const d = await apiFetch('/api/v1/market/macro')
     macroData.value = d?.macro || d?.data?.macro || d || []
-  } catch { /* silent */ }
+    macroError.value = null
+  } catch (e) {
+    macroError.value = e?.message || 'Failed to fetch macro data'
+  }
+  
+  // Fetch rates data
   try {
     const d = await apiFetch('/api/v1/market/rates')
     ratesData.value = d?.rates || d?.data?.rates || d || []
-  } catch { /* silent */ }
+    ratesError.value = null
+  } catch (e) {
+    ratesError.value = e?.message || 'Failed to fetch rates data'
+  }
+  
+  // Fetch global data
   try {
     const d = await apiFetch('/api/v1/market/global')
     globalData.value = d?.global || d?.data?.global || d || []
-  } catch { /* silent */ }
+    globalError.value = null
+  } catch (e) {
+    globalError.value = e?.message || 'Failed to fetch global data'
+  }
 }
 
-const { pause: pauseLow, resume: resumeLow } = useIntervalFn(fetchLowFreq, 300_000, { immediate: false })
-const visibility = useDocumentVisibility()
-
-watch(visibility, (v) => {
-  if (v === 'visible') { resumeLow(); fetchLowFreq() }
-  else { pauseLow() }
+// Use smart polling: pause when tab hidden, resume + refresh when visible
+const { start: startLowPolling, stop: stopLowPolling } = useSmartPolling(fetchLowFreq, {
+  interval: 300_000,
+  pauseWhenHidden: true,
 })
 
 onMounted(async () => {
-  fetchLowFreq()
+  startLowPolling()
   await nextTick()
   if (!isMobile.value && typeof window !== 'undefined' && window.GridStack && document.querySelector('.grid-stack')) {
     grid = GridStack.init({
@@ -712,7 +781,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   grid?.destroy(false)
-  pauseLow()
+  stopLowPolling()
 })
 
 // Phase 5: 格式化宏观价格（带单位）
