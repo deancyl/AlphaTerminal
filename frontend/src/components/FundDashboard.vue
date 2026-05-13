@@ -131,42 +131,51 @@
       <div v-if="activeTab === 'etf'" class="space-y-4">
         <!-- 核心指标（ETF 特有） -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
-            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
-              {{ fundInfo?.price ?? '-' }}
+          <!-- Loading skeleton for core metrics -->
+          <template v-if="loadingFundInfo">
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3" v-for="n in 6" :key="n">
+              <div class="skeleton h-3 w-12 rounded-sm mb-2"></div>
+              <div class="skeleton h-5 w-16 rounded-sm"></div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">涨跌幅</div>
-            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
-              {{ fundInfo?.change_pct ?? '-' }}%
+          </template>
+          <template v-else>
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
+              <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
+                {{ fundInfo?.price ?? '-' }}
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">IOPV 净值</div>
-            <div class="text-lg font-bold text-theme-primary">
-              {{ fundInfo?.iopv ?? '-' }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">涨跌幅</div>
+              <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
+                {{ fundInfo?.change_pct ?? '-' }}%
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">折溢价率</div>
-            <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
-              {{ fundInfo?.premium_rate ?? '-' }}%
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">IOPV 净值</div>
+              <div class="text-lg font-bold text-theme-primary">
+                {{ fundInfo?.iopv ?? '-' }}
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">成交量</div>
-            <div class="text-sm font-bold text-theme-primary">
-              {{ formatVolume(fundInfo?.volume) }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">折溢价率</div>
+              <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
+                {{ fundInfo?.premium_rate ?? '-' }}%
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
-            <div class="text-sm font-bold text-theme-primary">
-              {{ formatAmount(fundInfo?.amount) }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">成交量</div>
+              <div class="text-sm font-bold text-theme-primary">
+                {{ formatVolume(fundInfo?.volume) }}
+              </div>
             </div>
-          </div>
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
+              <div class="text-sm font-bold text-theme-primary">
+                {{ formatAmount(fundInfo?.amount) }}
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- 买卖盘五档 -->
@@ -177,7 +186,10 @@
               <span class="text-terminal-accent font-bold text-sm">📗 买盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
-            <div class="space-y-1">
+            <div v-if="loadingFundInfo" class="space-y-1">
+              <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
+            </div>
+            <div v-else class="space-y-1">
               <div v-for="bid in fundInfo?.bids || []" :key="bid.level" 
                    class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="bid.level === 1 ? 'bg-[var(--color-danger-bg)]' : ''">
@@ -194,7 +206,10 @@
               <span class="text-terminal-accent font-bold text-sm">📕 卖盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
-            <div class="space-y-1">
+            <div v-if="loadingFundInfo" class="space-y-1">
+              <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
+            </div>
+            <div v-else class="space-y-1">
               <div v-for="ask in fundInfo?.asks || []" :key="ask.level" 
                    class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="ask.level === 1 ? 'bg-[var(--color-success-bg)]' : ''">
@@ -222,7 +237,13 @@
               >{{ p.label }}</button>
             </div>
           </div>
-          <div ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
+          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div class="text-center">
+              <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+              <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
+            </div>
+          </div>
+          <div v-else ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
         </div>
       </div>
 
@@ -231,56 +252,78 @@
         
         <!-- A. 头部概览区 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <h2 class="text-xl font-bold text-theme-primary">{{ fundInfo?.name ?? '-' }}</h2>
-              <div class="text-xs text-theme-tertiary mt-1">
-                代码：{{ selectedFundCode }} | 类型：{{ fundInfo?.type ?? '-' }} | 成立：{{ fundInfo?.found_date ?? '-' }}
+          <!-- Loading state for header -->
+          <div v-if="loadingFundInfo" class="space-y-4">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="skeleton h-6 w-48 rounded-sm mb-2"></div>
+                <div class="skeleton h-4 w-64 rounded-sm"></div>
+              </div>
+              <div class="text-right">
+                <div class="skeleton h-8 w-20 rounded-sm mb-1"></div>
+                <div class="skeleton h-3 w-24 rounded-sm"></div>
               </div>
             </div>
-            <div class="text-right">
-              <div class="text-3xl font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">
-                {{ fundInfo?.nav ?? '-' }}
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm" v-for="n in 8" :key="n">
+                <div class="skeleton h-3 w-10 rounded-sm mx-auto mb-1"></div>
+                <div class="skeleton h-4 w-12 rounded-sm mx-auto"></div>
               </div>
-              <div class="text-xs text-theme-tertiary">单位净值 ({{ fundInfo?.nav_date ?? '-' }})</div>
             </div>
           </div>
-          
-          <!-- 详细指标网格 -->
-          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">累计净值</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
+          <!-- Actual content -->
+          <template v-else>
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h2 class="text-xl font-bold text-theme-primary">{{ fundInfo?.name ?? '-' }}</h2>
+                <div class="text-xs text-theme-tertiary mt-1">
+                  代码：{{ selectedFundCode }} | 类型：{{ fundInfo?.type ?? '-' }} | 成立：{{ fundInfo?.found_date ?? '-' }}
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-3xl font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">
+                  {{ fundInfo?.nav ?? '-' }}
+                </div>
+                <div class="text-xs text-theme-tertiary">单位净值 ({{ fundInfo?.nav_date ?? '-' }})</div>
+              </div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">日涨跌</div>
-              <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
+            
+            <!-- 详细指标网格 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">累计净值</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">日涨跌</div>
+                <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">基金规模</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">晨星评级</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">申购费率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">赎回费率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">分红频率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-[10px] text-theme-tertiary">基金经理</div>
+                <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
+              </div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">基金规模</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">晨星评级</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">申购费率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">赎回费率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">分红频率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">基金经理</div>
-              <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
-            </div>
-          </div>
+          </template>
         </div>
 
         <!-- B. 阶段收益追踪表 (Trailing Returns) -->
@@ -369,7 +412,13 @@
                 >{{ p.label }}</button>
               </div>
             </div>
-            <div ref="navChartRef" class="w-full" style="height: 280px;"></div>
+            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center" style="height: 280px;">
+              <div class="text-center">
+                <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+                <div class="text-xs text-theme-tertiary">加载净值数据...</div>
+              </div>
+            </div>
+            <div v-else ref="navChartRef" class="w-full" style="height: 280px;"></div>
           </div>
 
           <!-- 资产配置饼图 -->
@@ -378,17 +427,25 @@
               <span class="text-terminal-accent font-bold text-sm">🎯 资产配置</span>
               <span class="text-[10px] text-theme-tertiary">X-Ray</span>
             </div>
-            <div ref="assetChartRef" class="w-full" style="height: 200px;"></div>
-            <div class="mt-3 space-y-1">
-              <div v-for="(item, i) in assetAllocation" :key="i" 
-                   class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full" :style="{ background: item.color }"></span>
-                  <span class="text-theme-secondary">{{ item.name }}</span>
-                </div>
-                <span class="text-theme-primary font-bold">{{ item.value }}%</span>
+            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center" style="height: 200px;">
+              <div class="text-center">
+                <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+                <div class="text-xs text-theme-tertiary">加载资产配置...</div>
               </div>
             </div>
+            <template v-else>
+              <div ref="assetChartRef" class="w-full" style="height: 200px;"></div>
+              <div class="mt-3 space-y-1">
+                <div v-for="(item, i) in assetAllocation" :key="i" 
+                     class="flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full" :style="{ background: item.color }"></span>
+                    <span class="text-theme-secondary">{{ item.name }}</span>
+                  </div>
+                  <span class="text-theme-primary font-bold">{{ item.value }}%</span>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
@@ -398,7 +455,16 @@
             <span class="text-terminal-accent font-bold text-sm">📊 十大重仓股</span>
             <span class="text-[10px] text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
           </div>
-          <div class="space-y-2">
+          <div v-if="loadingPortfolio" class="space-y-2">
+            <div class="flex items-center gap-3" v-for="n in 5" :key="n">
+              <div class="skeleton h-3 w-4 rounded-sm"></div>
+              <div class="flex-1">
+                <div class="skeleton h-4 w-full rounded-sm mb-1"></div>
+                <div class="skeleton h-1.5 w-full rounded-sm"></div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="space-y-2">
             <div v-for="(stock, i) in topHoldings" :key="i" class="flex items-center gap-3">
               <span class="text-[10px] text-theme-tertiary w-4 text-right">{{ i + 1 }}</span>
               <div class="flex-1">
@@ -462,7 +528,13 @@
             <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
           </div>
-          <div ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
+          <div v-if="loadingCompare" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div class="text-center">
+              <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+              <div class="text-xs text-theme-tertiary">加载对比数据...</div>
+            </div>
+          </div>
+          <div v-else ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
         </div>
 
         <!-- 对比表格：移动端优化 -->
@@ -470,7 +542,10 @@
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
           </div>
-          <div class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
+          <div v-if="loadingCompare" class="space-y-2">
+            <div class="skeleton h-8 rounded-sm" v-for="n in 5" :key="n"></div>
+          </div>
+          <div v-else class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
             <table class="w-full text-xs min-w-[300px]">
               <thead>
                 <tr class="border-b border-theme-secondary">
@@ -535,6 +610,13 @@ const autoLoadFailed = ref(false)
 const searchQuery = ref('')
 const activeTab = ref('open')
 
+// Granular loading states for each async operation
+const loadingFundInfo = ref(false)
+const loadingNAVHistory = ref(false)
+const loadingPortfolio = ref(false)
+const loadingCompare = ref(false)
+const loadingETFHistory = ref(false)
+
 const compareInput = ref('')
 const compareChartRef = ref(null)
 const compareChart = shallowRef(null)
@@ -598,14 +680,27 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
   
   try {
     if (activeTab.value === 'etf') {
+      loadingFundInfo.value = true
+      loadingETFHistory.value = true
       await Promise.all([
         loadETFInfo(code),
         loadETFHistory(klinePeriod.value),
       ])
     } else {
+      // Load fund info with granular loading
+      loadingFundInfo.value = true
       await fundStore.fetchFundInfo(code)
+      loadingFundInfo.value = false
+      
+      // Load NAV history with granular loading
+      loadingNAVHistory.value = true
       await fundStore.fetchNavHistory(code, navPeriod.value)
+      loadingNAVHistory.value = false
+      
+      // Load portfolio with granular loading
+      loadingPortfolio.value = true
       await fundStore.fetchPortfolio(code)
+      loadingPortfolio.value = false
     }
     
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -625,6 +720,10 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
   } finally {
     loading.value = false
     autoLoading.value = false
+    loadingFundInfo.value = false
+    loadingNAVHistory.value = false
+    loadingPortfolio.value = false
+    loadingETFHistory.value = false
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 100))
     if (activeTab.value === 'etf') {
@@ -672,47 +771,52 @@ function clearCompareFunds() {
 async function loadCompareData() {
   if (compareFunds.value.length < 2) return
 
-  for (const fund of compareFunds.value) {
-    try {
-      // 加载基金基本信息
-      const infoRes = await apiFetch(`/api/v1/fund/open/info?code=${fund.code}`)
-      const infoData = extractData(infoRes)
-      if (infoData) {
-        fund.name = infoData.name || fund.code
-      }
-
-      // 加载历史净值（用于对比图）
-      const navRes = await apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`)
-      const navData = extractData(navRes)
-      if (Array.isArray(navData)) {
-        fund.history = navData.map(d => ({
-          date: d.date,
-          nav: parseFloat(d.nav) || 0,
-        }))
-      }
-
-      // 加载阶段收益（真实 API）
-      const returnsRes = await apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
-      const returnsData = extractData(returnsRes)
-      if (returnsData && returnsData.returns) {
-        fund.returns = {
-          '1m': returnsData.returns['1m'] ?? '-',
-          '3m': returnsData.returns['3m'] ?? '-',
-          '6m': returnsData.returns['6m'] ?? '-',
-          '1y': returnsData.returns['1y'] ?? '-',
-          '3y': returnsData.returns['3y'] ?? '-',
+  loadingCompare.value = true
+  try {
+    for (const fund of compareFunds.value) {
+      try {
+        // 加载基金基本信息
+        const infoRes = await apiFetch(`/api/v1/fund/open/info?code=${fund.code}`)
+        const infoData = extractData(infoRes)
+        if (infoData) {
+          fund.name = infoData.name || fund.code
         }
-      } else {
+
+        // 加载历史净值（用于对比图）
+        const navRes = await apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`)
+        const navData = extractData(navRes)
+        if (Array.isArray(navData)) {
+          fund.history = navData.map(d => ({
+            date: d.date,
+            nav: parseFloat(d.nav) || 0,
+          }))
+        }
+
+        // 加载阶段收益（真实 API）
+        const returnsRes = await apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
+        const returnsData = extractData(returnsRes)
+        if (returnsData && returnsData.returns) {
+          fund.returns = {
+            '1m': returnsData.returns['1m'] ?? '-',
+            '3m': returnsData.returns['3m'] ?? '-',
+            '6m': returnsData.returns['6m'] ?? '-',
+            '1y': returnsData.returns['1y'] ?? '-',
+            '3y': returnsData.returns['3y'] ?? '-',
+          }
+        } else {
+          fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
+        }
+      } catch (e) {
+        logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
         fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
       }
-    } catch (e) {
-      logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
-      fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
     }
-  }
 
-  await nextTick()
-  renderCompareChart()
+    await nextTick()
+    renderCompareChart()
+  } finally {
+    loadingCompare.value = false
+  }
 }
 
 function renderCompareChart() {
@@ -784,6 +888,7 @@ function getCompareReturnColor(val) {
 // ── ETF 相关 ───────────────────────────────────────────────────
 
 async function loadETFInfo(code) {
+  loadingFundInfo.value = true
   try {
     const res = await apiFetch(`/api/v1/fund/etf/info?code=${code}`)
     const data = extractData(res)
@@ -805,6 +910,8 @@ async function loadETFInfo(code) {
     }
   } catch (e) {
     logger.warn('[ETF Info] 获取失败:', e)
+  } finally {
+    loadingFundInfo.value = false
   }
 }
 
@@ -813,6 +920,7 @@ async function loadETFHistory(period) {
   const code = selectedFundCode.value
   if (!code) return
   
+  loadingETFHistory.value = true
   try {
     const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`)
     const data = extractData(res)
@@ -822,6 +930,8 @@ async function loadETFHistory(period) {
     renderKlineChart()
   } catch (e) {
     logger.warn('[ETF History] 获取失败:', e)
+  } finally {
+    loadingETFHistory.value = false
   }
 }
 
@@ -896,6 +1006,7 @@ async function loadNAVHistory(period) {
   const code = selectedFundCode.value
   if (!code) return
   
+  loadingNAVHistory.value = true
   try {
     const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`)
     const data = extractData(res)
@@ -910,6 +1021,8 @@ async function loadNAVHistory(period) {
     renderNavChart()
   } catch (e) {
     logger.warn('[NAV History] 获取失败:', e)
+  } finally {
+    loadingNAVHistory.value = false
   }
 }
 
