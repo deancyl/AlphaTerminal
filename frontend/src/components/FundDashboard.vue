@@ -58,6 +58,44 @@
             </button>
           </div>
         </div>
+
+        <!-- 数据新鲜度指示器 -->
+        <div v-if="fundInfo" class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-3">
+            <!-- 基金信息新鲜度 -->
+            <div v-if="fundInfoTimestamp" class="flex items-center gap-1">
+              <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.icon }}</span>
+              <span class="text-theme-tertiary">信息:</span>
+              <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.ageText }}</span>
+            </div>
+            <!-- 净值历史新鲜度 -->
+            <div v-if="navHistoryTimestamp && activeTab !== 'etf'" class="flex items-center gap-1">
+              <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.icon }}</span>
+              <span class="text-theme-tertiary">净值:</span>
+              <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.ageText }}</span>
+            </div>
+            <!-- 持仓新鲜度 -->
+            <div v-if="portfolioTimestamp && activeTab !== 'etf'" class="flex items-center gap-1">
+              <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.icon }}</span>
+              <span class="text-theme-tertiary">持仓:</span>
+              <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.ageText }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- 过期警告 -->
+            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-[10px]">
+              ⚠️ 数据已过期，请刷新
+            </span>
+            <!-- 刷新按钮 -->
+            <button 
+              @click="refreshAllData"
+              :disabled="loading || autoLoading"
+              class="px-2 py-0.5 rounded-sm border border-theme-secondary text-theme-tertiary hover:border-terminal-accent hover:text-terminal-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🔄 刷新
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -627,6 +665,7 @@ import { logger } from '../utils/logger.js'
 import { formatVol, formatAmount } from '../utils/formatters.js'
 import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
+import { getFreshness } from '../utils/freshness.js'
 
 const fundStore = useFundStore()
 
@@ -690,6 +729,42 @@ const comparePeriods = [
   { key: '1y', label: '近1年' },
   { key: '3y', label: '近3年' },
 ]
+
+// ── 数据新鲜度追踪 ───────────────────────────────────────────────
+const fundInfoTimestamp = ref(null)
+const navHistoryTimestamp = ref(null)
+const portfolioTimestamp = ref(null)
+const freshnessTick = ref(0) // 用于触发 freshness 显示更新
+let freshnessInterval = null
+
+// 计算各数据新鲜度状态（依赖 freshnessTick 以支持30秒刷新）
+const fundInfoFreshness = computed(() => {
+  freshnessTick.value // 引用以建立响应式依赖
+  return getFreshness(fundInfoTimestamp.value)
+})
+const navHistoryFreshness = computed(() => {
+  freshnessTick.value
+  return getFreshness(navHistoryTimestamp.value)
+})
+const portfolioFreshness = computed(() => {
+  freshnessTick.value
+  return getFreshness(portfolioTimestamp.value)
+})
+
+// 判断是否有数据已过期（> 5分钟）
+const hasStaleData = computed(() => {
+  return fundInfoTimestamp.value && fundInfoFreshness.value.status === 'EXPIRED' ||
+         navHistoryTimestamp.value && navHistoryFreshness.value.status === 'EXPIRED' ||
+         portfolioTimestamp.value && portfolioFreshness.value.status === 'EXPIRED'
+})
+
+// 刷新所有数据
+function refreshAllData() {
+  const code = selectedFundCode.value
+  if (code) {
+    selectFund(code)
+  }
+}
 
 const quickETFs = FUND_QUICK_LIST.etf
 const quickFunds = FUND_QUICK_LIST.open
@@ -757,6 +832,7 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
       loadingFundInfo.value = true
       await fundStore.fetchFundInfo(code)
       loadingFundInfo.value = false
+      fundInfoTimestamp.value = Date.now()
       
       // Load NAV history with granular loading
       loadingNAVHistory.value = true
@@ -999,6 +1075,7 @@ async function loadETFInfo(code) {
           asks: data.asks || [],
         }
         dataSource.value = data.source || 'unknown'
+        fundInfoTimestamp.value = Date.now()
       }
     }, { debounce: 50 })
   } catch (e) {
@@ -1021,6 +1098,7 @@ async function loadETFHistory(period) {
       const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`, { signal })
       const data = extractData(res)
       klineHistory.value = Array.isArray(data) ? data : []
+      navHistoryTimestamp.value = Date.now()
     }, { debounce: 50 })
     await nextTick()
     renderKlineChart()
@@ -1110,6 +1188,7 @@ async function loadNAVHistory(period) {
       const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`, { signal })
       const data = extractData(res)
       navHistory.value = Array.isArray(data) ? data : []
+      navHistoryTimestamp.value = Date.now()
     }, { debounce: 50 })
     console.log('[NAV History] 获取成功，数据条数:', navHistory.value.length)
     console.log('[NAV History] 第一条数据:', navHistory.value[0])
@@ -1149,6 +1228,7 @@ async function loadPortfolio(code) {
             { name: '其他', value: 1.0, color: '#a78bfa' }
           ]
         }
+        portfolioTimestamp.value = Date.now()
       }
     }, { debounce: 50 })
     await nextTick()
@@ -1407,6 +1487,11 @@ function retryCompareChart() {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   
+  // 启动新鲜度定时更新（每30秒刷新显示）
+  freshnessInterval = setInterval(() => {
+    freshnessTick.value++
+  }, 30000)
+  
   // 默认加载第一个快捷基金（根据当前选项卡）
   if (activeTab.value === 'etf' && quickETFs.length > 0) {
     selectFund(quickETFs[0].code)
@@ -1428,6 +1513,11 @@ onUnmounted(() => {
   compareChart.value = null
   // Abort all pending requests to prevent memory leaks
   abortAllPendingRequests()
+  // 清理新鲜度定时器
+  if (freshnessInterval) {
+    clearInterval(freshnessInterval)
+    freshnessInterval = null
+  }
 })
 
 // 监听选项卡切换
