@@ -129,7 +129,7 @@ function sleep(ms) {
 /**
  * @param {string} url - 请求 URL
  * @param {Object} options - 选项
- * @param {number} options.timeoutMs - 超时时间 (默认 8000ms)
+ * @param {number} options.timeoutMs - 超时时间 (默认 TIMEOUTS.API_DEFAULT)
  * @param {number} options.retries - 重试次数 (默认 0)
  * @param {string} options.method - HTTP方法 (默认 GET)
  * @param {Object} options.headers - 请求头
@@ -148,7 +148,7 @@ function calculateRetryDelay(attempt) {
 }
 
 export async function apiFetch(url, options = {}) {
-  const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
+  const { timeoutMs = TIMEOUTS.API_DEFAULT, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
 
   if (!isNetworkOnline()) {

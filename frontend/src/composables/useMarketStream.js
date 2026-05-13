@@ -23,6 +23,7 @@ import { logger } from '../utils/logger.js'
 import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
 import { usePageVisibility } from './usePageVisibility.js'
 import { acquireLock, releaseLock } from '../utils/connectionLock.js'
+import { TIMEOUTS } from '../utils/constants.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -44,8 +45,8 @@ if (!WS_BASE && typeof window !== 'undefined') {
 // ── 模块级单例状态（所有组件共享）───────────────────────────────
 let _ws = null
 let _retryTimer = null
-let _retryDelay = 2000
-const _MAX_DELAY = 30000
+let _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
+const _MAX_DELAY = TIMEOUTS.WS_RECONNECT_MAX
 const _MAX_RETRIES = 10  // 最大重试次数
 let _retryCount = 0      // 当前重试计数
 const _connectedCount = ref(0)
@@ -112,7 +113,7 @@ function _newConnection() {
     globalError.value = null
     globalLastConnectedAt.value = Date.now()
     globalConnectionAttempts.value = 0
-    _retryDelay = 2000
+    _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
     _retryCount = 0
     _lastMessageTime = Date.now()
     _startHealthCheck()
@@ -272,8 +273,8 @@ let _healthCheckTimer = null
 let _pingSentTime = 0 // Timestamp when ping was sent
 
 // 心跳间隔：可见时 30s，隐藏时 120s
-const HEARTBEAT_VISIBLE = 30_000
-const HEARTBEAT_HIDDEN = 120_000
+const HEARTBEAT_VISIBLE = TIMEOUTS.WS_HEARTBEAT_VISIBLE
+const HEARTBEAT_HIDDEN = TIMEOUTS.WS_HEARTBEAT_HIDDEN
 let _currentHeartbeatInterval = HEARTBEAT_VISIBLE
 
 function _startHeartbeat(interval = _currentHeartbeatInterval) {
@@ -321,7 +322,7 @@ function _startHealthCheck() {
         _scheduleRetry()
       }
     }
-  }, 30000) // 每 30 秒检查一次
+  }, TIMEOUTS.WS_HEALTH_CHECK_INTERVAL) // 每 30 秒检查一次
 }
 
 function _stopHealthCheck() {
@@ -420,7 +421,7 @@ export function useMarketStream(initialSymbol = '') {
           Object.keys(tickHistory).forEach(k => delete tickHistory[k])
           globalTicks.value = {}
           _retryCount = 0
-          _retryDelay = 2000
+          _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
         }
       }, 200)
     }
@@ -443,7 +444,7 @@ export function useMarketStream(initialSymbol = '') {
       _ws = null
     }
     _retryCount = 0
-    _retryDelay = 2000
+    _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
     globalWsStatus.value = 'idle'
     _newConnection()
   }

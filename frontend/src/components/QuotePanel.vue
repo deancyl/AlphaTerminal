@@ -1,6 +1,9 @@
 <template>
   <div
     class="quote-panel flex flex-col bg-theme border-l border-theme overflow-y-auto"
+    role="region"
+    aria-label="股票行情面板"
+    aria-live="polite"
     :class="isMobile ? 'panel-mobile' : 'panel-desktop'"
     :style="isMobile ? {} : { width: panelWidth + 'px' }"
   >
@@ -16,7 +19,7 @@
           <div class="text-[10px] text-theme-tertiary font-mono mt-0.5">{{ symbol }}</div>
         </div>
         <!-- 最新价（大字醒目） -->
-        <div class="text-right">
+        <div class="text-right" role="status" aria-label="最新价格">
           <div class="flex items-baseline justify-end gap-1.5">
             <span class="text-[28px] font-mono font-bold leading-none" :class="priceColorClass">
               {{ displayPrice }}
@@ -260,6 +263,7 @@ import { safeNumber, safePct } from '../utils/typeCoercion.js'
 import { getUnifiedPrice, getSourceStyle, getPriceConsistency } from '../utils/priceSourceTracker.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { useTheme } from '../composables/useTheme.js'
+import { debounce } from '../utils/debounce.js'
 
 const { getChartColors, onThemeChange } = useTheme()
 
@@ -547,23 +551,32 @@ onThemeChange(() => {
 watch(fundDonutData, () => { nextTick(renderDonut) }, { immediate: true })
 
 let _donutRO = null
+let _debouncedResize = null
+
 onMounted(() => {
   nextTick(renderDonut)
   if (fundDonutRef.value) {
+    _debouncedResize = debounce(() => {
+      if (donutInstance && !donutInstance.isDisposed()) {
+        donutInstance.resize()
+      }
+    }, 150, { leading: false, trailing: true })
+    
     _donutRO = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        console.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-        donutInstance?.resize()
+        _debouncedResize()
       }
     })
     _donutRO.observe(fundDonutRef.value)
   }
 })
 onUnmounted(() => {
+  if (_debouncedResize) {
+    _debouncedResize.cancel()
+  }
   _donutRO?.disconnect()
   if (donutInstance) {
-    console.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
     donutInstance.dispose()
     donutInstance = null
   }

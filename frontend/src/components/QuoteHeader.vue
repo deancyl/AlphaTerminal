@@ -59,7 +59,7 @@
       <div class="flex items-center gap-0.5 shrink-0" role="group" aria-label="周期选择">
         <button
           v-for="p in periods" :key="p.key"
-          class="w-5 h-5 flex items-center justify-center rounded-sm text-[10px] font-mono transition-colors"
+          class="w-5 h-5 flex items-center justify-center rounded-sm text-[10px] font-mono transition-colors focus:outline-none focus:ring-1 focus:ring-cyan-400"
           :class="period === p.key
             ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]'
             : 'text-theme-muted hover:text-theme-primary'"
@@ -174,6 +174,8 @@
             <div v-else-if="overlaySearchQuery.length > 0" class="px-3 py-2 text-[10px] text-theme-muted">
               无结果，请尝试输入如 sh000300
             </div>
+          </div>
+        </div>
 
         <!-- 导出 -->
         <div class="relative" v-click-outside="() => showExport = false">
@@ -211,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { exportCSV as utilExportCSV } from '../utils/symbols.js'
 
 const props = defineProps({
