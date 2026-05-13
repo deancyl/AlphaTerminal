@@ -226,13 +226,13 @@
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm">📈 K 线走势</span>
             <div class="flex gap-1">
-              <button 
-                v-for="p in klinePeriods" 
+              <button
+                v-for="p in klinePeriods"
                 :key="p.key"
                 @click="loadETFHistory(p.key)"
                 class="px-2 py-0.5 text-[10px] rounded-sm border transition"
-                :class="klinePeriod === p.key 
-                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+                :class="klinePeriod === p.key
+                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                   : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
               >{{ p.label }}</button>
             </div>
@@ -241,6 +241,16 @@
             <div class="text-center">
               <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
               <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
+            </div>
+          </div>
+          <div v-else-if="klineError" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div class="text-center">
+              <div class="text-2xl mb-2">⚠️</div>
+              <div class="text-sm text-theme-muted mb-2">{{ klineError }}</div>
+              <button @click="retryKlineChart"
+                class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                🔄 重试
+              </button>
             </div>
           </div>
           <div v-else ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
@@ -418,6 +428,16 @@
                 <div class="text-xs text-theme-tertiary">加载净值数据...</div>
               </div>
             </div>
+            <div v-else-if="navChartError" class="w-full flex items-center justify-center" style="height: 280px;">
+              <div class="text-center">
+                <div class="text-2xl mb-2">⚠️</div>
+                <div class="text-sm text-theme-muted mb-2">{{ navChartError }}</div>
+                <button @click="retryNavChart"
+                  class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                  🔄 重试
+                </button>
+              </div>
+            </div>
             <div v-else ref="navChartRef" class="w-full" style="height: 280px;"></div>
           </div>
 
@@ -431,6 +451,16 @@
               <div class="text-center">
                 <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
                 <div class="text-xs text-theme-tertiary">加载资产配置...</div>
+              </div>
+            </div>
+            <div v-else-if="assetChartError" class="w-full flex items-center justify-center" style="height: 200px;">
+              <div class="text-center">
+                <div class="text-2xl mb-2">⚠️</div>
+                <div class="text-sm text-theme-muted mb-2">{{ assetChartError }}</div>
+                <button @click="retryAssetChart"
+                  class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                  🔄 重试
+                </button>
               </div>
             </div>
             <template v-else>
@@ -534,6 +564,16 @@
               <div class="text-xs text-theme-tertiary">加载对比数据...</div>
             </div>
           </div>
+          <div v-else-if="compareChartError" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div class="text-center">
+              <div class="text-2xl mb-2">⚠️</div>
+              <div class="text-sm text-theme-muted mb-2">{{ compareChartError }}</div>
+              <button @click="retryCompareChart"
+                class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                🔄 重试
+              </button>
+            </div>
+          </div>
           <div v-else ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
         </div>
 
@@ -616,6 +656,12 @@ const loadingNAVHistory = ref(false)
 const loadingPortfolio = ref(false)
 const loadingCompare = ref(false)
 const loadingETFHistory = ref(false)
+
+// Error states for each chart
+const klineError = ref(null)
+const navChartError = ref(null)
+const assetChartError = ref(null)
+const compareChartError = ref(null)
 
 const compareInput = ref('')
 const compareChartRef = ref(null)
@@ -820,61 +866,86 @@ async function loadCompareData() {
 }
 
 function renderCompareChart() {
-  if (!compareChartRef.value || compareFunds.value.length < 2) return
+  // Clear previous error
+  compareChartError.value = null
+  
+  if (!compareChartRef.value || compareFunds.value.length < 2) {
+    compareChartError.value = '请选择至少2只基金进行对比'
+    return
+  }
+  
   const echarts = getEcharts()
-  if (!echarts) return
-
-  if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
-    if (compareChart.value) {
-      try { compareChart.value.dispose() } catch (e) {}
-    }
-    compareChart.value = echarts.init(compareChartRef.value)
+  if (!echarts) {
+    compareChartError.value = '图表库未加载'
+    return
   }
-
-  // 归一化处理：以第一天为基准 1.0
-  const series = compareFunds.value.map((fund, idx) => {
-    if (!fund.history || fund.history.length === 0) return null
-    const baseNav = fund.history[0].nav
-    const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
-    return {
-      name: fund.name,
-      type: 'line',
-      smooth: true,
-      symbol: 'none',
-      data,
-      lineStyle: { width: 2 },
-      itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
-    }
-  }).filter(Boolean)
-
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: function(params) {
-        let html = `<div style="font-size:12px">${params[0].axisValue}</div>`
-        params.forEach(p => {
-          html += `<div style="font-size:11px">${p.marker} ${p.seriesName}: ${p.value[1]}</div>`
-        })
-        return html
+  
+  try {
+    if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
+      if (compareChart.value) {
+        try { compareChart.value.dispose() } catch (e) {}
       }
-    },
-    legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
-    xAxis: {
-      type: 'time',
-      axisLine: { lineStyle: { color: '#374151' } },
-      axisLabel: { color: '#6b7280', fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#374151' } },
-      axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
-      splitLine: { lineStyle: { color: '#1f2937' } },
-    },
-    series,
+      compareChart.value = echarts.init(compareChartRef.value)
+    }
+
+    // 归一化处理：以第一天为基准 1.0
+    const series = compareFunds.value.map((fund, idx) => {
+      if (!fund.history || fund.history.length === 0) return null
+      const baseNav = fund.history[0].nav
+      const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
+      return {
+        name: fund.name,
+        type: 'line',
+        smooth: true,
+        symbol: 'none',
+        data,
+        lineStyle: { width: 2 },
+        itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
+      }
+    }).filter(Boolean)
+    
+    if (series.length === 0) {
+      compareChartError.value = '暂无对比数据'
+      return
+    }
+
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: function(params) {
+          let html = `<div style="font-size:12px">${params[0].axisValue}</div>`
+          params.forEach(p => {
+            html += `<div style="font-size:11px">${p.marker} ${p.seriesName}: ${p.value[1]}</div>`
+          })
+          return html
+        }
+      },
+      legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
+      xAxis: {
+        type: 'time',
+        axisLine: { lineStyle: { color: '#374151' } },
+        axisLabel: { color: '#6b7280', fontSize: 10 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#374151' } },
+        axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
+        splitLine: { lineStyle: { color: '#1f2937' } },
+      },
+      series,
+    }
+    compareChart.value.setOption(option, true)
+    compareChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 对比图表渲染失败:', e)
+    compareChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    // Dispose broken chart instance
+    if (compareChart.value) {
+      try { compareChart.value.dispose() } catch (err) {}
+      compareChart.value = null
+    }
   }
-  compareChart.value.setOption(option, true)
-  compareChart.value.resize()
 }
 
 function getCompareReturnColor(val) {
@@ -1060,128 +1131,191 @@ async function loadPortfolio(code) {
 // ── ECharts 渲染 ───────────────────────────────────────────────
 
 function renderKlineChart() {
-  if (!klineChartRef.value || !window.echarts) return
+  // Clear previous error
+  klineError.value = null
   
-  const echarts = window.echarts
-  
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
-    if (klineChart.value) {
-      try { klineChart.value.dispose() } catch (e) {}
-    }
-    klineChart.value = echarts.init(klineChartRef.value)
+  if (!klineChartRef.value || !window.echarts) {
+    klineError.value = '图表容器未就绪'
+    return
   }
   
-  const data = klineHistory.value.map(d => ({
-    date: d.date || d.trade_date,
-    value: d.close || d.nav
-  })).reverse()
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    grid: { top: 10, right: 10, bottom: 20, left: 40 },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.date),
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10 },
-      splitLine: { lineStyle: { color: '#374151' } }
-    },
-    series: [{
-      type: 'line',
-      data: data.map(d => d.value),
-      smooth: false,
-      lineStyle: { color: '#60a5fa', width: 1.5 },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
-            { offset: 1, color: 'rgba(96, 165, 250, 0)' }
-          ]
-        }
+  try {
+    const echarts = window.echarts
+    
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
+      if (klineChart.value) {
+        try { klineChart.value.dispose() } catch (e) {}
       }
-    }]
+      klineChart.value = echarts.init(klineChartRef.value)
+    }
+    
+    const data = klineHistory.value.map(d => ({
+      date: d.date || d.trade_date,
+      value: d.close || d.nav
+    })).reverse()
+    
+    if (!data || data.length === 0) {
+      klineError.value = '暂无 K 线数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'axis' },
+      grid: { top: 10, right: 10, bottom: 20, left: 40 },
+      xAxis: {
+        type: 'category',
+        data: data.map(d => d.date),
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#374151' } }
+      },
+      series: [{
+        type: 'line',
+        data: data.map(d => d.value),
+        smooth: false,
+        lineStyle: { color: '#60a5fa', width: 1.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
+              { offset: 1, color: 'rgba(96, 165, 250, 0)' }
+            ]
+          }
+        }
+      }]
+    }
+    klineChart.value.setOption(option)
+    klineChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] K线图表渲染失败:', e)
+    klineError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    // Dispose broken chart instance
+    if (klineChart.value) {
+      try { klineChart.value.dispose() } catch (err) {}
+      klineChart.value = null
+    }
   }
-  klineChart.value.setOption(option)
-  klineChart.value.resize()
 }
 
 function renderNavChart() {
-  if (!navChartRef.value || !window.echarts) return
+  // Clear previous error
+  navChartError.value = null
   
-  const echarts = window.echarts
+  if (!navChartRef.value || !window.echarts) {
+    navChartError.value = '图表容器未就绪'
+    return
+  }
   
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
-    if (navChart.value) {
-      try { navChart.value.dispose() } catch (e) {}
+  try {
+    const echarts = window.echarts
+    
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
+      if (navChart.value) {
+        try { navChart.value.dispose() } catch (e) {}
+      }
+      navChart.value = echarts.init(navChartRef.value)
     }
-    navChart.value = echarts.init(navChartRef.value)
+    
+    const data = navHistory.value.map(d => ({
+      date: d.date,
+      nav: d.nav,
+      accumulated: d.accumulated_nav
+    }))
+    
+    if (!data || data.length === 0) {
+      navChartError.value = '暂无净值数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
+      grid: { top: 30, right: 10, bottom: 20, left: 40 },
+      xAxis: {
+        type: 'category',
+        data: data.map(d => d.date),
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#374151' } }
+      },
+      series: [
+        { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
+        { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
+      ]
+    }
+    navChart.value.setOption(option)
+    navChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 净值图表渲染失败:', e)
+    navChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    // Dispose broken chart instance
+    if (navChart.value) {
+      try { navChart.value.dispose() } catch (err) {}
+      navChart.value = null
+    }
   }
-  
-  const data = navHistory.value.map(d => ({
-    date: d.date,
-    nav: d.nav,
-    accumulated: d.accumulated_nav
-  }))
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
-    grid: { top: 30, right: 10, bottom: 20, left: 40 },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.date),
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10 },
-      splitLine: { lineStyle: { color: '#374151' } }
-    },
-    series: [
-      { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
-      { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
-    ]
-  }
-  navChart.value.setOption(option)
-  navChart.value.resize()
 }
 
 function renderAssetChart() {
-  if (!assetChartRef.value || !window.echarts) return
+  // Clear previous error
+  assetChartError.value = null
   
-  const echarts = window.echarts
+  if (!assetChartRef.value || !window.echarts) {
+    assetChartError.value = '图表容器未就绪'
+    return
+  }
   
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
-    if (assetChart.value) {
-      try { assetChart.value.dispose() } catch (e) {}
+  try {
+    const echarts = window.echarts
+    
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
+      if (assetChart.value) {
+        try { assetChart.value.dispose() } catch (e) {}
+      }
+      assetChart.value = echarts.init(assetChartRef.value)
     }
-    assetChart.value = echarts.init(assetChartRef.value)
+    
+    if (!assetAllocation.value || assetAllocation.value.length === 0) {
+      assetChartError.value = '暂无资产配置数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'item' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '50%'],
+        itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
+        label: { show: false },
+        data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
+      }]
+    }
+    assetChart.value.setOption(option)
+    assetChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 资产配置图表渲染失败:', e)
+    assetChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    // Dispose broken chart instance
+    if (assetChart.value) {
+      try { assetChart.value.dispose() } catch (err) {}
+      assetChart.value = null
+    }
   }
-  
-  const option = {
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['50%', '50%'],
-      itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
-      label: { show: false },
-      data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
-    }]
-  }
-  assetChart.value.setOption(option)
-  assetChart.value.resize()
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────
@@ -1214,6 +1348,28 @@ function handleResize() {
   navChart.value?.resize()
   assetChart.value?.resize()
   compareChart.value?.resize()
+}
+
+// ── 图表错误重试函数 ─────────────────────────────────────────────
+
+function retryKlineChart() {
+  klineError.value = null
+  renderKlineChart()
+}
+
+function retryNavChart() {
+  navChartError.value = null
+  renderNavChart()
+}
+
+function retryAssetChart() {
+  assetChartError.value = null
+  renderAssetChart()
+}
+
+function retryCompareChart() {
+  compareChartError.value = null
+  renderCompareChart()
 }
 
 onMounted(() => {
