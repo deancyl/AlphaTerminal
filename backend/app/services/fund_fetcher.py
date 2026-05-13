@@ -704,7 +704,7 @@ class FundFetcher:
         # 计算日收益率
         returns = []
         for i in range(1, len(navs)):
-            if navs[i-1] > 0:
+            if navs[i-1] > 1e-6:  # Use float threshold to prevent division by zero
                 r = (navs[i] - navs[i-1]) / navs[i-1]
                 returns.append(r)
         
@@ -716,14 +716,15 @@ class FundFetcher:
         # 计算最大回撤
         cumulative = np.cumprod(1 + returns)
         running_max = np.maximum.accumulate(cumulative)
-        drawdowns = (cumulative - running_max) / running_max
+        drawdowns = np.where(running_max > 1e-6, (cumulative - running_max) / running_max, 0)
         max_drawdown = float(np.min(drawdowns)) * 100  # 转为百分比
         
         # 计算夏普比率（假设无风险利率 2% 年化）
         rf_daily = 0.02 / 252
         excess_returns = returns - rf_daily
-        if np.std(returns) > 0:
-            sharpe = float(np.mean(excess_returns) / np.std(returns) * np.sqrt(252))
+        std_returns = np.std(returns)
+        if std_returns > 1e-6:
+            sharpe = float(np.mean(excess_returns) / std_returns * np.sqrt(252))
         else:
             sharpe = 0.0
         
