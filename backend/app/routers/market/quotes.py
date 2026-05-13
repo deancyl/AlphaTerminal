@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Path, Query
 import httpx
 
 from app.db import get_latest_prices, get_price_history, get_daily_history
@@ -20,7 +20,76 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# ── Symbol Validation ─────────────────────────────────────────────────────────
+
+SYMBOL_PATTERN = re.compile(r'^(sh|sz|hk|us|jp)?[0-9A-Za-z]{1,10}$')
+
+
+def _validate_symbol(symbol: str) -> str:
+    """
+    Validate and normalize symbol format.
+    
+    Valid formats:
+    - 6-digit codes: '000001', '600519'
+    - With prefix: 'sh000001', 'sz399001'
+    - US indices: 'NDX', 'SPX', 'DJI'
+    - HK indices: 'HSI'
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol is required")
+    
+    s = symbol.strip()
+    
+    if len(s) > 20:
+        raise HTTPException(status_code=400, detail=f"Symbol too long: {len(s)} chars (max 20)")
+    
+    if not SYMBOL_PATTERN.match(s):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid symbol format: '{symbol}'. Expected format: [sh|sz|hk|us|jp][0-9A-Z]{{1,10}}"
+        )
+    
+    return _normalize_symbol(s)
+
+
 # ── Helper functions (copied from market.py) ─────────────────────────────────
+
+def _safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:
+    """Safe division with zero-division protection."""
+    if denominator is None or denominator == 0:
+        return default
+    if numerator is None:
+        return default
+    return numerator / denominator
+
+
+def _calc_amplitude(latest: dict, prev_close: float) -> float:
+    """Calculate amplitude with zero-division protection."""
+    if not prev_close or prev_close == 0:
+        return 0.0
+    high = float(latest.get('high') or 0)
+    low = float(latest.get('low') or 0)
+    if high == 0 or low == 0:
+        return 0.0
+    return round((high - low) / prev_close * 100, 2)
+
+
+def _calculate_freshness_seconds(timestamp_str: str) -> int:
+    """Calculate seconds since data was captured."""
+    if not timestamp_str:
+        return -1  # Unknown
+    
+    try:
+        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S']:
+            try:
+                dt = datetime.strptime(str(timestamp_str)[:19], fmt)
+                return int((datetime.now() - dt).total_seconds())
+            except ValueError:
+                continue
+        return -1
+    except Exception:
+        return -1
+
 
 async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
     """
@@ -141,7 +210,7 @@ async def market_quote(symbol: str):
     轻量实时行情（专用于高频轮询，不含历史数据）
     返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
     """
-    norm = _normalize_symbol(symbol)
+    norm = _validate_symbol(symbol)
     rows = get_price_history(_unprefix(norm), limit=2)  # 最新+昨日（realtime表存无前缀）
     if not rows:
         return success_response(None, 'no data')
@@ -150,17 +219,22 @@ async def market_quote(symbol: str):
     close  = float(latest.get('close') or 0)
     prev_c = float(prev.get('close') or close)
     chg    = close - prev_c
-    chg_pct = (chg / prev_c * 100) if prev_c else 0
+    chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
+    
+    # Get data timestamp from database row
+    data_timestamp = latest.get('timestamp') or latest.get('updated_at') or latest.get('date')
+    
     return success_response({
-        'symbol':       norm,
-        'price':        close,
-        'change':       round(chg, 3),
-        'change_pct':   round(chg_pct, 2),
-        'volume':       float(latest.get('volume') or 0),
-        'amount':       float(latest.get('amount') or 0),
-        'amplitude':    round((float(latest.get('high') or 0) - float(latest.get('low') or 0)) / prev_c * 100, 2) if latest.get('high') and latest.get('low') and prev_c and prev_c != 0 else 0,
+        'symbol': norm,
+        'price': close,
+        'change': round(chg, 3),
+        'change_pct': round(chg_pct, 2),
+        'volume': float(latest.get('volume') or 0),
+        'amount': float(latest.get('amount') or 0),
+        'amplitude': _calc_amplitude(latest, prev_c),
         'turnover_rate': float(latest.get('turnover_rate') or 0),
-        'timestamp':     datetime.now().isoformat(),
+        'timestamp': data_timestamp,
+        'response_time': datetime.now().isoformat(),
     })
 
 
@@ -199,7 +273,7 @@ async def market_quote_detail(symbol: str):
       industry, industry_change_pct,
       concepts: [{name, change_pct}, ...]
     """
-    norm = _normalize_symbol(symbol)
+    norm = _validate_symbol(symbol)
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
     db_sym = _unprefix(norm)   # 'sh000001' → '000001'
@@ -235,9 +309,9 @@ async def market_quote_detail(symbol: str):
     # 振幅 = (最高-最低)/昨收 × 100；当日仅一价时用 (现价-昨收)/昨收
     prev_close = float(prev_row.get('close') or 0.0)
     if low_ and low_ > 0 and high_ != low_:
-        amplitude = round((high_ - low_) / prev_close * 100, 2) if prev_close else None
+        amplitude = round(_safe_divide(high_ - low_, prev_close) * 100, 2) if prev_close else None
     else:
-        amplitude = round(abs(price - prev_close) / prev_close * 100, 2) if prev_close and prev_close > 0 else None
+        amplitude = round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2) if prev_close and prev_close > 0 else None
 
     def _period_return(hist, n):
         """最近 n 日收益率（DESC 排序：最新在前）"""
@@ -346,6 +420,10 @@ async def market_quote_detail(symbol: str):
         "industry":               industry,
         "industry_change_pct":   industry_change_pct,
         "concepts":              concepts,
+        # ── Timestamps ──
+        "timestamp": latest_row.get('date') or latest_row.get('timestamp'),
+        "response_time": datetime.now().isoformat(),
+        "data_freshness_seconds": _calculate_freshness_seconds(latest_row.get('date') or ''),
     }
     return success_response(result)
 
@@ -362,15 +440,16 @@ async def market_quote_v2(symbol: str):
     直接从数据源获取实时报价，不依赖本地数据库。
     支持熔断器自动降级（失败3次自动切换到备用数据源）。
     """
+    validated = _validate_symbol(symbol)
     try:
         fetcher = FetcherFactory.get_fetcher()
         if not fetcher:
             return error_response(404, "无可用数据源")
 
-        data = await fetcher.get_quote(symbol)
+        data = await fetcher.get_quote(validated)
 
         if not data:
-            return error_response(404, f"获取 {symbol} 数据失败")
+            return error_response(404, f"获取 {validated} 数据失败")
 
         return success_response({
             "symbol": data.get("symbol", symbol),
@@ -398,7 +477,7 @@ async def market_quote_v2(symbol: str):
 @router.get("/market/order_book/{symbol}")
 async def get_order_book(symbol: str):
     """Level 2 10档买卖盘口数据（实时）"""
-    norm = _normalize_symbol(symbol)
+    norm = _validate_symbol(symbol)
 
     # 转换为新浪格式
     # 判断是否为指数（上证sh000001, 深证sz399001等）
