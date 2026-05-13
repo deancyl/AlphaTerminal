@@ -334,7 +334,7 @@
       </div>
 
       <!-- 公募基金面板（专业级） -->
-      <div v-else-if="activeTab === 'open'" role="tabpanel" aria-label="公募基金详情" class="space-y-4">
+      <div v-else-if="activeTab === 'open'" role="tabpanel" id="panel-open" aria-labelledby="tab-open" tabindex="-1" class="space-y-4">
         
         <!-- A. 头部概览区 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
@@ -598,7 +598,7 @@
       </div>
 
       <!-- 基金对比面板 -->
-      <div v-if="activeTab === 'compare'" role="tabpanel" aria-label="基金对比" class="space-y-4">
+      <div v-if="activeTab === 'compare'" role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabindex="-1" class="space-y-4">
         <!-- 基金选择器 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
