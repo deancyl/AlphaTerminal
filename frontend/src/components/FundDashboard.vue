@@ -35,24 +35,32 @@
             <input 
               v-model="searchQuery" 
               @keyup.enter="searchFund"
+              @keyup.escape="clearSearch"
               :placeholder="activeTab === 'etf' ? '输入 ETF 代码（如 510300）' : '输入基金代码/名称/拼音'"
               class="w-full bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none"
+              title="按 Enter 搜索，Esc 清空"
             />
             <button 
               @click="searchFund"
               class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 text-xs bg-terminal-accent/20 text-terminal-accent rounded-sm hover:bg-terminal-accent/30 transition"
             >🔍</button>
           </div>
-          <!-- 快捷列表 -->
-          <div class="flex gap-1 flex-wrap">
+          <!-- 快捷列表 (方向键切换) -->
+          <div 
+            class="flex gap-1 flex-wrap"
+            @keyup.left="navigateQuickList(-1)"
+            @keyup.right="navigateQuickList(1)"
+          >
             <button 
-              v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)" 
+              v-for="(f, idx) in (activeTab === 'etf' ? quickETFs : quickFunds)" 
               :key="f.code"
               @click="selectFund(f.code)"
+              :tabindex="0"
               class="px-3 py-2.5 text-xs rounded-sm border transition-colors whitespace-nowrap min-h-[44px]"
               :class="selectedFundCode === f.code 
                 ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                 : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
+              :title="`${f.name} (${f.code}) - 左右箭头切换`"
             >
               {{ f.name }}
             </button>
@@ -143,13 +151,15 @@
 
         <!-- 快捷基金按钮 -->
         <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
-          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：</div>
+          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：<span class="text-[10px]">(方向键/ Tab 导航)</span></div>
           <div class="flex flex-wrap gap-2 justify-center">
             <button
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
+              :tabindex="0"
               class="px-3 py-2.5 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent min-h-[44px]"
+              :title="`${f.name} (${f.code})`"
             >
               {{ f.name }}
             </button>
@@ -699,6 +709,7 @@ const autoLoading = ref(false)
 const autoLoadFailed = ref(false)
 const searchQuery = ref('')
 const activeTab = ref('open')
+const quickListFocusedIndex = ref(-1) // -1 means no selection, for arrow key navigation
 
 // Granular loading states for each async operation
 const loadingFundInfo = ref(false)
@@ -799,6 +810,31 @@ async function searchFund() {
   const query = searchQuery.value.trim()
   if (!query) return
   await selectFund(query)
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  quickListFocusedIndex.value = -1
+}
+
+function navigateQuickList(direction) {
+  const list = activeTab.value === 'etf' ? quickETFs : quickFunds
+  if (list.length === 0) return
+  
+  // Update focused index
+  if (quickListFocusedIndex.value === -1) {
+    // Start from currently selected fund, or first item
+    const currentIdx = list.findIndex(f => f.code === selectedFundCode.value)
+    quickListFocusedIndex.value = currentIdx >= 0 ? currentIdx : 0
+  } else {
+    quickListFocusedIndex.value = (quickListFocusedIndex.value + direction + list.length) % list.length
+  }
+  
+  // Select the fund at the new index
+  const fund = list[quickListFocusedIndex.value]
+  if (fund) {
+    selectFund(fund.code)
+  }
 }
 
 async function selectFund(code, retryCount = 0, maxRetries = 2) {
