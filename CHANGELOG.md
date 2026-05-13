@@ -5,6 +5,113 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.32] - 2026-05-13
+
+### 新功能
+
+- **50次迭代优化 — 股票行情数据面板全面升级**
+  - 38个优化任务完成，覆盖5个主要领域
+  - 37个文件修改，5180行新增，295行删除
+  - 10个新的工具函数和组件
+
+### 核心修复 (Wave 1)
+
+- **DB Writer 健康监控** — 添加心跳检测和自动重启机制
+  - 新增 `_last_heartbeat`, `_items_processed`, `_writer_start_time` 监控变量
+  - 新增 `ensure_writer_running()` 和 `is_writer_healthy()` 函数
+  - 新增 `/debug/writer-status` 监控端点
+
+- **API 参数验证** — 严格的 sort_by 和分页参数验证
+  - `database.py` 添加 ValueError 抛出
+  - `symbols.py` 添加 FastAPI Query 验证
+
+- **WebSocket 竞态条件修复** — 连接锁 + 健康检查机制
+  - 添加 `_connecting` 连接锁防止并发连接
+  - 添加 `_lastMessageTime` 和健康检查定时器
+  - 60秒无消息自动重连
+
+### 加载状态 + 错误边界 (Wave 2)
+
+- **useLoadingState composable** — 可复用的加载状态管理
+  - 支持超时检测（默认30秒）
+  - 自动清理定时器
+
+- **WidgetErrorBoundary 组件** — 细粒度错误隔离
+  - 捕获子组件错误，显示友好提示
+  - 支持重试按钮
+  - 阻止错误传播
+
+- **DashboardGrid 错误处理** — 完善的错误状态管理
+  - API失败显示错误消息
+  - `onErrorCaptured` 安全网
+
+### 缓存 LRU + 可见性检测 (Wave 3)
+
+- **LRU 缓存工具** — 防止内存泄漏
+  - 最大100条缓存限制
+  - 自动淘汰最旧条目
+
+- **usePageVisibility composable** — 标签页可见性检测
+  - 实时追踪 `document.visibilityState`
+  - `wasHidden` 标记返回事件
+
+- **useSmartPolling composable** — 智能轮询
+  - 标签页隐藏时暂停轮询
+  - 返回时立即刷新数据
+
+- **WebSocket 心跳优化** — 根据可见性调整频率
+  - 可见时：30秒心跳
+  - 隐藏时：120秒心跳
+
+### 数据新鲜度 + 类型安全 (Wave 4)
+
+- **FreshnessIndicator 组件** — 数据新鲜度指示器
+  - 🟢 实时 (<1分钟)
+  - 🟡 5分钟内
+  - 🟠 1小时内
+  - 🔴 过期
+
+- **类型安全工具** — 防止运行时错误
+  - `safeNumber()`, `safeInt()`, `safePct()`, `safePrice()`
+  - formatters.js, chartDataBuilder.js, copilotData.js 全面应用
+
+### 请求取消 (Wave 5)
+
+- **useAbortableRequest composable** — 可取消的请求
+  - AbortController 管理
+  - 组件卸载自动取消
+
+- **F9 数据获取** — 支持请求取消
+  - 股票切换时取消前一个请求
+
+- **Copilot 聊天** — 支持请求取消
+  - 新消息发送时取消前一个请求
+
+### 新增组件
+
+- ConvertibleBondPanel — 可转债面板
+- ForexDashboard — 外汇看板
+- EsgDashboard — ESG看板
+- ResearchDashboard — 研报复盘看板
+- VersionChecker — 版本检查器
+- MobileCardTable, MobileScrollableTabs, SwapButton — 移动端组件
+
+### 技术细节
+
+- 新增文件：
+  - `frontend/src/composables/useLoadingState.js`
+  - `frontend/src/composables/usePageVisibility.js`
+  - `frontend/src/composables/useSmartPolling.js`
+  - `frontend/src/composables/useAbortableRequest.js`
+  - `frontend/src/utils/lruCache.js`
+  - `frontend/src/utils/freshness.js`
+  - `frontend/src/utils/typeCoercion.js`
+  - `frontend/src/components/WidgetErrorBoundary.vue`
+  - `frontend/src/components/FreshnessIndicator.vue`
+  - `frontend/src/composables/useF9Data.js`
+
+---
+
 ## [0.6.29] - 2026-05-12
 
 ### 新功能
