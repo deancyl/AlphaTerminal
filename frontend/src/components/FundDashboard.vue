@@ -676,6 +676,7 @@ import { formatVol, formatAmount } from '../utils/formatters.js'
 import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
 import { getFreshness } from '../utils/freshness.js'
+import { debounce } from '../utils/cache.js'
 
 const fundStore = useFundStore()
 
@@ -803,6 +804,9 @@ const assetChartRef = ref(null)
 const klineChart = shallowRef(null)
 const navChart = shallowRef(null)
 const assetChart = shallowRef(null)
+
+// ResizeObserver references for cleanup
+const resizeObservers = []
 
 // ── API 调用 ────────────────────────────────────────────────────
 
@@ -1018,6 +1022,8 @@ function renderCompareChart() {
         try { compareChart.value.dispose() } catch (e) {}
       }
       compareChart.value = echarts.init(compareChartRef.value)
+      // Setup ResizeObserver for new chart instance
+      setupChartResizeObserver(compareChartRef, compareChart.value)
     }
 
     // 归一化处理：以第一天为基准 1.0
@@ -1289,13 +1295,15 @@ function renderKlineChart() {
   
   try {
     const echarts = window.echarts
-    
+
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
       if (klineChart.value) {
         try { klineChart.value.dispose() } catch (e) {}
       }
       klineChart.value = echarts.init(klineChartRef.value)
+      // Setup ResizeObserver for new chart instance
+      setupChartResizeObserver(klineChartRef, klineChart.value)
     }
     
     const data = klineHistory.value.map(d => ({
@@ -1363,13 +1371,15 @@ function renderNavChart() {
   
   try {
     const echarts = window.echarts
-    
+
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
       if (navChart.value) {
         try { navChart.value.dispose() } catch (e) {}
       }
       navChart.value = echarts.init(navChartRef.value)
+      // Setup ResizeObserver for new chart instance
+      setupChartResizeObserver(navChartRef, navChart.value)
     }
     
     const data = navHistory.value.map(d => ({
@@ -1428,13 +1438,15 @@ function renderAssetChart() {
   
   try {
     const echarts = window.echarts
-    
+
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
       if (assetChart.value) {
         try { assetChart.value.dispose() } catch (e) {}
       }
       assetChart.value = echarts.init(assetChartRef.value)
+      // Setup ResizeObserver for new chart instance
+      setupChartResizeObserver(assetChartRef, assetChart.value)
     }
     
     if (!assetAllocation.value || assetAllocation.value.length === 0) {
@@ -1498,6 +1510,27 @@ function handleResize() {
   compareChart.value?.resize()
 }
 
+// Setup ResizeObserver for a chart container
+function setupChartResizeObserver(chartRef, chartInstance) {
+  if (!chartRef.value || !chartInstance) return
+
+  const debouncedResize = debounce(() => {
+    chartInstance.resize()
+  }, 100)
+
+  const observer = new ResizeObserver(debouncedResize)
+  observer.observe(chartRef.value)
+  resizeObservers.push(observer)
+}
+
+// Setup all chart resize observers
+function setupAllChartResizeObservers() {
+  if (klineChart.value) setupChartResizeObserver(klineChartRef, klineChart.value)
+  if (navChart.value) setupChartResizeObserver(navChartRef, navChart.value)
+  if (assetChart.value) setupChartResizeObserver(assetChartRef, assetChart.value)
+  if (compareChart.value) setupChartResizeObserver(compareChartRef, compareChart.value)
+}
+
 // ── 图表错误重试函数 ─────────────────────────────────────────────
 
 function retryKlineChart() {
@@ -1522,12 +1555,17 @@ function retryCompareChart() {
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
-  
+
   // 启动新鲜度定时更新（每30秒刷新显示）
   freshnessInterval = setInterval(() => {
     freshnessTick.value++
   }, 30000)
-  
+
+  // Setup ResizeObserver for charts after mount
+  nextTick(() => {
+    setupAllChartResizeObservers()
+  })
+
   // 默认加载第一个快捷基金（根据当前选项卡）
   if (activeTab.value === 'etf' && quickETFs.length > 0) {
     selectFund(quickETFs[0].code)
@@ -1538,6 +1576,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+
+  // Cleanup ResizeObservers
+  resizeObservers.forEach(observer => {
+    try { observer.disconnect() } catch (e) {}
+  })
+  resizeObservers.length = 0
+
   if (klineChart.value) { try { klineChart.value.dispose() } catch (e) {} }
   if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
   if (assetChart.value) { try { assetChart.value.dispose() } catch (e) {} }
