@@ -9,7 +9,9 @@
           <button
             @click="activeTab = 'etf'"
             role="tab"
+            id="tab-etf"
             :aria-selected="activeTab === 'etf'"
+            aria-controls="panel-etf"
             tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'etf'
@@ -19,7 +21,9 @@
           <button
             @click="activeTab = 'open'"
             role="tab"
+            id="tab-open"
             :aria-selected="activeTab === 'open'"
+            aria-controls="panel-open"
             tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'open'
@@ -29,7 +33,9 @@
           <button
             @click="activeTab = 'compare'"
             role="tab"
+            id="tab-compare"
             :aria-selected="activeTab === 'compare'"
+            aria-controls="panel-compare"
             tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'compare'
@@ -196,7 +202,7 @@
     <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
       
       <!-- ETF 面板 -->
-      <div v-if="activeTab === 'etf'" role="tabpanel" aria-label="ETF 基金详情" class="space-y-4">
+      <div v-if="activeTab === 'etf'" role="tabpanel" id="panel-etf" aria-labelledby="tab-etf" tabindex="-1" class="space-y-4">
         <!-- 核心指标（ETF 特有） -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <!-- Loading skeleton for core metrics -->
@@ -828,8 +834,12 @@ const klineChart = shallowRef(null)
 const navChart = shallowRef(null)
 const assetChart = shallowRef(null)
 
+// Request ID tracking to prevent race conditions on rapid fund switching
+const selectFundRequestId = ref(0)
+
 // ResizeObserver references for cleanup
-const resizeObservers = []
+const chartObservers = new Map() // Map<HTMLElement, ResizeObserver>
+const resizeObservers = [] // Keep for backward compatibility
 
 // ── API 调用 ────────────────────────────────────────────────────
 
@@ -867,6 +877,9 @@ function navigateQuickList(direction) {
 async function selectFund(code, retryCount = 0, maxRetries = 2) {
   if (!code) return
 
+  // Increment request ID to invalidate previous requests
+  const currentRequestId = ++selectFundRequestId.value
+
   // Abort any pending requests for the previous fund code
   const prevCode = selectedFundCode.value
   if (prevCode && prevCode !== code) {
@@ -890,52 +903,101 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
         loadETFInfo(code),
         loadETFHistory(klinePeriod.value),
       ])
+      
+      // Check if request is still valid after await
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after ETF data load, aborting')
+        return
+      }
     } else {
       // Load fund info with granular loading
       loadingFundInfo.value = true
       await fundStore.fetchFundInfo(code)
+      
+      // Check if request is still valid after await
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after fund info load, aborting')
+        return
+      }
+      
       loadingFundInfo.value = false
       fundInfoTimestamp.value = Date.now()
       
       // Load NAV history with granular loading
       loadingNAVHistory.value = true
       await fundStore.fetchNavHistory(code, navPeriod.value)
+      
+      // Check if request is still valid after await
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after NAV history load, aborting')
+        return
+      }
+      
       loadingNAVHistory.value = false
       
       // Load portfolio with granular loading
       loadingPortfolio.value = true
       await fundStore.fetchPortfolio(code)
+      
+      // Check if request is still valid after await
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after portfolio load, aborting')
+        return
+      }
+      
       loadingPortfolio.value = false
+    }
+    
+    // Final check before updating success state
+    if (currentRequestId !== selectFundRequestId.value) {
+      logger.debug('[selectFund] Request superseded before success update, aborting')
+      return
     }
     
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     autoLoadFailed.value = false
   } catch (e) {
+    // Check if request is still valid before handling error
+    if (currentRequestId !== selectFundRequestId.value) {
+      logger.debug('[selectFund] Request superseded, ignoring error')
+      return
+    }
+    
     logger.error('[FundDashboard] 加载失败:', e)
     
     if (retryCount < maxRetries) {
       const delay = Math.pow(2, retryCount) * 1000
       logger.warn(`[FundDashboard] 重试 ${retryCount + 1}/${maxRetries}，等待 ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
+      
+      // Check if request is still valid after retry delay
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded during retry delay, aborting')
+        return
+      }
+      
       return selectFund(code, retryCount + 1, maxRetries)
     } else {
       autoLoadFailed.value = true
       logger.error('[FundDashboard] 自动加载失败，已达最大重试次数')
     }
   } finally {
-    loading.value = false
-    autoLoading.value = false
-    loadingFundInfo.value = false
-    loadingNAVHistory.value = false
-    loadingPortfolio.value = false
-    loadingETFHistory.value = false
-    await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 100))
-    if (activeTab.value === 'etf') {
-      renderKlineChart()
-    } else {
-      renderNavChart()
-      renderAssetChart()
+    // Only update UI if this is still the current request
+    if (currentRequestId === selectFundRequestId.value) {
+      loading.value = false
+      autoLoading.value = false
+      loadingFundInfo.value = false
+      loadingNAVHistory.value = false
+      loadingPortfolio.value = false
+      loadingETFHistory.value = false
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 100))
+      if (activeTab.value === 'etf') {
+        renderKlineChart()
+      } else {
+        renderNavChart()
+        renderAssetChart()
+      }
     }
   }
 }
@@ -978,29 +1040,41 @@ async function loadCompareData() {
 
   loadingCompare.value = true
   try {
-    for (const fund of compareFunds.value) {
-      try {
-        // 加载基金基本信息
-        const infoRes = await apiFetch(`/api/v1/fund/open/info?code=${fund.code}`)
+    // Parallel fetch all funds
+    const results = await Promise.allSettled(
+      compareFunds.value.map(async (fund) => {
+        // Parallel fetch all data for this fund
+        const [infoRes, navRes, returnsRes] = await Promise.all([
+          apiFetch(`/api/v1/fund/open/info?code=${fund.code}`),
+          apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`),
+          apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
+        ])
+        
         const infoData = extractData(infoRes)
+        const navData = extractData(navRes)
+        const returnsData = extractData(returnsRes)
+        
+        return { fund, infoData, navData, returnsData }
+      })
+    )
+    
+    // Process results
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        const { fund, infoData, navData, returnsData } = result.value
+        
         if (infoData) {
           fund.name = infoData.name || fund.code
         }
-
-        // 加载历史净值（用于对比图）
-        const navRes = await apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`)
-        const navData = extractData(navRes)
+        
         if (Array.isArray(navData)) {
           fund.history = navData.map(d => ({
             date: d.date,
             nav: parseFloat(d.nav) || 0,
           }))
         }
-
-        // 加载阶段收益（真实 API）
-        const returnsRes = await apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
-        const returnsData = extractData(returnsRes)
-        if (returnsData && returnsData.returns) {
+        
+        if (returnsData?.returns) {
           fund.returns = {
             '1m': returnsData.returns['1m'] ?? '-',
             '3m': returnsData.returns['3m'] ?? '-',
@@ -1011,11 +1085,11 @@ async function loadCompareData() {
         } else {
           fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
         }
-      } catch (e) {
-        logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
-        fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
+      } else {
+        logger.warn(`[Compare] 加载基金 ${idx} 失败:`, result.reason)
+        compareFunds.value[idx].returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
       }
-    }
+    })
 
     await nextTick()
     renderCompareChart()
