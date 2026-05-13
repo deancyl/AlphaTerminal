@@ -4,7 +4,7 @@
     :class="isMobile ? 'panel-mobile' : 'panel-desktop'"
     :style="isMobile ? {} : { width: panelWidth + 'px' }"
   >
-    <LoadingSpinner v-if="loading" />
+    <LoadingSpinner v-if="loading || !hasValidData" />
     <template v-else>
     <!-- ═══ Module 1: 基础行情与估值 ═════════════════════════════════ -->
     <div class="px-3 py-2.5 border-b border-theme">
@@ -274,7 +274,31 @@ const props = defineProps({
 })
 
 // snapshotData 优先，否则用 realtimeData + latestCandle 合并
-const data = computed(() => props.snapshotData || props.realtimeData)
+const data = computed(() => {
+  const snapshot = props.snapshotData
+  const realtime = props.realtimeData
+
+  // Check if snapshot has actual data (not just empty object)
+  const hasSnapshot = snapshot && Object.keys(snapshot).length > 0
+  // Check if realtime has valid price
+  const hasRealtime = realtime &&
+                      Object.keys(realtime).length > 0 &&
+                      realtime.price != null &&
+                      realtime.price > 0
+
+  if (hasSnapshot) return snapshot
+  if (hasRealtime) return realtime
+  return {} // Empty fallback
+})
+
+const hasValidData = computed(() => {
+  const d = data.value
+  return d &&
+         Object.keys(d).length > 0 &&
+         d.price != null &&
+         d.price > 0
+})
+
 const isCrosshair = computed(() => !!props.snapshotData)
 
 // 名称：优先用 realtimeData.name，其次 props.name
