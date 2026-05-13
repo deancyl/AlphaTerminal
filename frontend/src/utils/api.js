@@ -14,6 +14,7 @@ import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js
 import { toast } from '../composables/useToast.js'
 import { isNetworkOnline } from '../composables/useNetworkStatus.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests } from './requestDedup.js'
+import { TIMEOUTS } from './constants.js'
 
 // ── API 基础 URL ─────────────────────────────────────────────────
 // 始终使用相对路径，让前端代理（Vite proxy）转发到后端
@@ -301,4 +302,46 @@ export {
   dedupedFetch,
   abortPendingRequest,
   abortAllPendingRequests
+}
+
+/**
+ * Fetch quote with automatic deduplication.
+ */
+export async function fetchQuote(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE } = options
+  const cacheKey = `quote:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/quote/${symbol}`,
+    { timeoutMs, debounce: 100 }
+  )
+}
+
+/**
+ * Fetch quote detail with automatic deduplication.
+ */
+export async function fetchQuoteDetail(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE_DETAIL } = options
+  const cacheKey = `quote_detail:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/quote_detail/${symbol}`,
+    { timeoutMs, debounce: 100 }
+  )
+}
+
+/**
+ * Fetch order book with automatic deduplication.
+ */
+export async function fetchOrderBook(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE } = options
+  const cacheKey = `order_book:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/order_book/${symbol}`,
+    { timeoutMs, debounce: 50 }
+  )
 }
