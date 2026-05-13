@@ -114,7 +114,7 @@
           </div>
           <div class="flex items-center gap-2">
             <!-- 过期警告 -->
-            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-[10px]" role="alert" aria-live="assertive">
+            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-xs" role="alert" aria-live="assertive">
               ⚠️ 数据已过期，请刷新
             </span>
             <!-- 刷新按钮 -->
@@ -176,7 +176,7 @@
 
         <!-- 快捷基金按钮 -->
         <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
-          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：<span class="text-[10px]">(方向键/ Tab 导航)</span></div>
+          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：<span class="text-xs">(方向键/ Tab 导航)</span></div>
           <div class="flex flex-wrap gap-2 justify-center" role="group" aria-label="快捷基金列表">
             <button
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
@@ -214,37 +214,37 @@
           </template>
           <template v-else>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
+              <div class="text-xs text-theme-tertiary mb-1">最新价</div>
               <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
                 {{ fundInfo?.price ?? '-' }}
               </div>
             </div>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">涨跌幅</div>
+              <div class="text-xs text-theme-tertiary mb-1">涨跌幅</div>
               <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
                 {{ fundInfo?.change_pct ?? '-' }}%
               </div>
             </div>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">IOPV 净值</div>
+              <div class="text-xs text-theme-tertiary mb-1">IOPV 净值</div>
               <div class="text-lg font-bold text-theme-primary">
                 {{ fundInfo?.iopv ?? '-' }}
               </div>
             </div>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">折溢价率</div>
+              <div class="text-xs text-theme-tertiary mb-1">折溢价率</div>
               <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
                 {{ fundInfo?.premium_rate ?? '-' }}%
               </div>
             </div>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">成交量</div>
+              <div class="text-xs text-theme-tertiary mb-1">成交量</div>
               <div class="text-sm font-bold text-theme-primary">
                 {{ formatVolume(fundInfo?.volume) }}
               </div>
             </div>
             <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-              <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
+              <div class="text-xs text-theme-tertiary mb-1">成交额</div>
               <div class="text-sm font-bold text-theme-primary">
                 {{ formatAmount(fundInfo?.amount) }}
               </div>
@@ -258,7 +258,7 @@
           <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="买盘五档">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📗 买盘五档</span>
-              <span class="text-[10px] text-theme-tertiary">实时</span>
+              <span class="text-xs text-theme-tertiary">实时</span>
             </div>
             <div v-if="loadingFundInfo" class="space-y-1">
               <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
@@ -278,7 +278,7 @@
           <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="卖盘五档">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📕 卖盘五档</span>
-              <span class="text-[10px] text-theme-tertiary">实时</span>
+              <span class="text-xs text-theme-tertiary">实时</span>
             </div>
             <div v-if="loadingFundInfo" class="space-y-1">
               <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
@@ -377,35 +377,35 @@
             <!-- 详细指标网格 -->
             <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">累计净值</div>
+                <div class="text-xs text-theme-tertiary">累计净值</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">日涨跌</div>
+                <div class="text-xs text-theme-tertiary">日涨跌</div>
                 <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">基金规模</div>
+                <div class="text-xs text-theme-tertiary">基金规模</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">晨星评级</div>
+                <div class="text-xs text-theme-tertiary">晨星评级</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">申购费率</div>
+                <div class="text-xs text-theme-tertiary">申购费率</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">赎回费率</div>
+                <div class="text-xs text-theme-tertiary">赎回费率</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">分红频率</div>
+                <div class="text-xs text-theme-tertiary">分红频率</div>
                 <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
               </div>
               <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-                <div class="text-[10px] text-theme-tertiary">基金经理</div>
+                <div class="text-xs text-theme-tertiary">基金经理</div>
                 <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
               </div>
             </div>
@@ -416,7 +416,7 @@
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 阶段收益追踪</span>
-            <span class="text-[10px] text-theme-tertiary">与同类平均及基准对比</span>
+            <span class="text-xs text-theme-tertiary">与同类平均及基准对比</span>
           </div>
           <div class="overflow-x-auto scrollbar-hide">
             <table class="w-full text-xs whitespace-nowrap" aria-label="阶段收益追踪表">
@@ -458,24 +458,24 @@
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">夏普比率</div>
+              <div class="text-xs text-theme-tertiary mb-1">夏普比率</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.sharpe ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Sharpe Ratio</div>
+              <div class="text-xs text-theme-muted">Sharpe Ratio</div>
             </div>
             <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">最大回撤</div>
+              <div class="text-xs text-theme-tertiary mb-1">最大回撤</div>
               <div class="text-lg font-bold text-[var(--color-danger)]">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
-              <div class="text-[10px] text-theme-muted">Max Drawdown</div>
+              <div class="text-xs text-theme-muted">Max Drawdown</div>
             </div>
             <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">阿尔法</div>
+              <div class="text-xs text-theme-tertiary mb-1">阿尔法</div>
               <div class="text-lg font-bold" :class="getChangeColor(riskMetrics.alpha)">{{ riskMetrics.alpha ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Alpha</div>
+              <div class="text-xs text-theme-muted">Alpha</div>
             </div>
             <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">贝塔</div>
+              <div class="text-xs text-theme-tertiary mb-1">贝塔</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.beta ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Beta</div>
+              <div class="text-xs text-theme-muted">Beta</div>
             </div>
           </div>
         </div>
@@ -523,7 +523,7 @@
           <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
               <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🎯 资产配置</span>
-              <span class="text-[10px] text-theme-tertiary">X-Ray</span>
+              <span class="text-xs text-theme-tertiary">X-Ray</span>
             </div>
             <div v-if="loadingPortfolio" class="w-full flex items-center justify-center h-48 sm:h-56" role="status" aria-live="polite">
               <div class="text-center">
@@ -561,7 +561,7 @@
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 十大重仓股</span>
-            <span class="text-[10px] text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
+            <span class="text-xs text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
           </div>
           <div v-if="loadingPortfolio" class="space-y-2">
             <div class="flex items-center gap-3" v-for="n in 5" :key="n">
@@ -574,7 +574,7 @@
           </div>
           <div v-else class="space-y-2">
             <div v-for="(stock, i) in topHoldings" :key="i" class="flex items-center gap-3">
-              <span class="text-[10px] text-theme-tertiary w-4 text-right">{{ i + 1 }}</span>
+              <span class="text-xs text-theme-tertiary w-4 text-right">{{ i + 1 }}</span>
               <div class="flex-1">
                 <div class="flex items-center justify-between text-xs mb-1">
                   <span class="text-theme-primary font-medium">{{ stock.name }} ({{ stock.code }})</span>
@@ -603,7 +603,7 @@
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🔀 基金对比</span>
-            <span class="text-[10px] text-theme-tertiary">最多选择 3 只基金</span>
+            <span class="text-xs text-theme-tertiary">最多选择 3 只基金</span>
           </div>
           <div class="flex flex-wrap gap-2 mb-3" role="group" aria-label="已选择的基金">
             <div v-for="(fund, idx) in compareFunds" :key="fund.code"
@@ -633,7 +633,7 @@
         <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="净值走势对比图表">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 净值走势对比</span>
-            <span class="text-[10px] text-theme-tertiary">归一化对比</span>
+            <span class="text-xs text-theme-tertiary">归一化对比</span>
           </div>
           <div v-if="loadingCompare" class="w-full flex items-center justify-center h-64 sm:h-80" role="status" aria-live="polite">
             <div class="text-center">
@@ -705,8 +705,10 @@ import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPe
 import { getFreshness } from '../utils/freshness.js'
 import { debounce } from '../utils/cache.js'
 import EmptyState from './f9/EmptyState.vue'
+import { useToast } from '../composables/useToast.js'
 
 const fundStore = useFundStore()
+const { success, error, warning, info } = useToast()
 
 // Request deduplication keys
 const REQUEST_KEYS = {
@@ -1006,7 +1008,10 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
 
 function addCompareFund() {
   const code = compareInput.value.trim()
-  if (!code) return
+  if (!code) {
+    warning('请输入基金代码')
+    return
+  }
   
   const result = fundStore.addCompareFund({
     code,
@@ -1016,16 +1021,19 @@ function addCompareFund() {
   })
   
   if (!result.success) {
-    console.warn(result.message)
+    warning(result.message)
     return
   }
   
   compareInput.value = ''
+  success(`已添加 ${code} 到对比列表`)
   loadCompareData()
 }
 
 function removeCompareFund(idx) {
+  const fundName = compareFunds.value[idx]?.name || `基金 ${idx + 1}`
   fundStore.removeCompareFund(idx)
+  info(`已移除 ${fundName}`)
   if (compareFunds.value.length >= 2) {
     renderCompareChart()
   }
@@ -1449,11 +1457,9 @@ function renderKlineChart() {
   } catch (e) {
     logger.error('[FundDashboard] K线图表渲染失败:', e)
     klineError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance
-    if (klineChart.value) {
-      try { klineChart.value.dispose() } catch (err) {}
-      klineChart.value = null
-    }
+    // Dispose broken chart instance and clean up ResizeObserver
+    disposeChartWithError(klineChartRef, klineChart.value)
+    klineChart.value = null
   }
 }
 
@@ -1516,11 +1522,9 @@ function renderNavChart() {
   } catch (e) {
     logger.error('[FundDashboard] 净值图表渲染失败:', e)
     navChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance
-    if (navChart.value) {
-      try { navChart.value.dispose() } catch (err) {}
-      navChart.value = null
-    }
+    // Dispose broken chart instance and clean up ResizeObserver
+    disposeChartWithError(navChartRef, navChart.value)
+    navChart.value = null
   }
 }
 
@@ -1567,11 +1571,9 @@ function renderAssetChart() {
   } catch (e) {
     logger.error('[FundDashboard] 资产配置图表渲染失败:', e)
     assetChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance
-    if (assetChart.value) {
-      try { assetChart.value.dispose() } catch (err) {}
-      assetChart.value = null
-    }
+    // Dispose broken chart instance and clean up ResizeObserver
+    disposeChartWithError(assetChartRef, assetChart.value)
+    assetChart.value = null
   }
 }
 
@@ -1612,12 +1614,38 @@ function setupChartResizeObserver(chartRef, chartInstance) {
   if (!chartRef.value || !chartInstance) return
 
   const debouncedResize = debounce(() => {
-    chartInstance.resize()
+    try {
+      if (chartInstance && !chartInstance.isDisposed?.()) {
+        chartInstance.resize()
+      }
+    } catch (e) {
+      // Ignore errors from disposed charts
+    }
   }, 100)
 
   const observer = new ResizeObserver(debouncedResize)
   observer.observe(chartRef.value)
+  
+  // Track observer with its element
+  chartObservers.set(chartRef.value, observer)
   resizeObservers.push(observer)
+}
+
+// Helper to dispose chart and clean up its ResizeObserver
+function disposeChartWithError(chartRef, chartInstance) {
+  // Disconnect and remove ResizeObserver
+  const observer = chartObservers.get(chartRef.value)
+  if (observer) {
+    observer.disconnect()
+    chartObservers.delete(chartRef.value)
+    const idx = resizeObservers.indexOf(observer)
+    if (idx > -1) resizeObservers.splice(idx, 1)
+  }
+  
+  // Dispose chart
+  if (chartInstance) {
+    try { chartInstance.dispose() } catch (e) {}
+  }
 }
 
 // Setup all chart resize observers
@@ -1699,16 +1727,24 @@ onUnmounted(() => {
 })
 
 // 监听选项卡切换
-watch(activeTab, () => {
+watch(activeTab, (newTab) => {
   searchQuery.value = ''
   fundInfo.value = null
   selectedFundCode.value = ''
-  // 切换到对比标签时，如果有足够的基金，重新渲染对比图
-  if (activeTab.value === 'compare' && compareFunds.value.length >= 2) {
-    nextTick(() => {
+
+  // Focus the new panel for keyboard navigation
+  nextTick(() => {
+    const panelId = `panel-${newTab}`
+    const panel = document.getElementById(panelId)
+    if (panel) {
+      panel.focus()
+    }
+
+    // Re-render compare chart if needed
+    if (newTab === 'compare' && compareFunds.value.length >= 2) {
       setTimeout(() => renderCompareChart(), 100)
-    })
-  }
+    }
+  })
 })
 </script>
 
