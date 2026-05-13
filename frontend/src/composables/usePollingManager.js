@@ -14,7 +14,7 @@
  * - low: Infrequent updates (Historical data) - 300s default
  */
 
-import { ref, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { usePageVisibility } from './usePageVisibility.js'
 
 const PRIORITIES = {
@@ -24,13 +24,51 @@ const PRIORITIES = {
   low: 300000
 }
 
+const POLLING_STRATEGIES = {
+  WS_FIRST: 'ws_first',        // Try WS first, poll on failure
+  POLLING_ALWAYS: 'polling',   // Always poll (for non-WS data)
+  HYBRID: 'hybrid'            // Both in parallel
+}
+
 const tasks = ref(new Map())
 const isPaused = ref(false)
 const isInitialized = ref(false)
 let schedulerTimer = null
 
-export function usePollingManager() {
+export function usePollingManager(options = {}) {
+  const {
+    strategy = POLLING_STRATEGIES.WS_FIRST,
+    wsStatusRef = null
+  } = options
+  
   const { isVisible, wasHidden } = usePageVisibility()
+  
+  const isRunning = ref(false)
+  
+  const shouldPoll = computed(() => {
+    if (strategy === POLLING_STRATEGIES.POLLING_ALWAYS) {
+      return true
+    }
+    
+    if (strategy === POLLING_STRATEGIES.WS_FIRST && wsStatusRef) {
+      const status = wsStatusRef.value
+      return status === 'failed' || status === 'disconnected'
+    }
+    
+    return true
+  })
+  
+  function startPolling() {
+    if (isRunning.value) return
+    isRunning.value = true
+    startScheduler()
+  }
+  
+  function stopPolling() {
+    if (!isRunning.value) return
+    isRunning.value = false
+    stopScheduler()
+  }
   
   function register(id, fn, priority = 'normal', options = {}) {
     const interval = options.interval || PRIORITIES[priority] || PRIORITIES.normal
@@ -163,6 +201,16 @@ export function usePollingManager() {
         resumeAll(true)
       }
     })
+    
+    if (wsStatusRef) {
+      watch(shouldPoll, (poll) => {
+        if (poll && !isRunning.value) {
+          startPolling()
+        } else if (!poll && isRunning.value) {
+          stopPolling()
+        }
+      }, { immediate: true })
+    }
   }
   
   onMounted(() => {
@@ -181,8 +229,13 @@ export function usePollingManager() {
     getAllTasks,
     isPaused,
     isVisible,
-    PRIORITIES
+    PRIORITIES,
+    shouldPoll,
+    POLLING_STRATEGIES,
+    startPolling,
+    stopPolling,
+    isRunning
   }
 }
 
-export { PRIORITIES }
+export { PRIORITIES, POLLING_STRATEGIES }
