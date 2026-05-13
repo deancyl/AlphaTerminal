@@ -645,12 +645,15 @@ function bindHoverEvents() {
     const raw = chartInstance.getOption()
     const seriesData = raw.series
 
+    // Bounds check: ensure idx is within valid range
+    const histRaw = _sanitize(raw._rawHist || [])
+    if (idx == null || idx < 0 || idx >= histRaw.length) return
+
     if (chartType.value === 'line') {
       // 分时：series[0]=价格, series[1]=均价, series[2]=成交量
       const priceData = seriesData[0]?.data?.[idx]
       const volData   = seriesData[2]?.data?.[idx]
       const times     = raw.xAxis?.[0]?.data || []
-      const histRaw = _sanitize(raw._rawHist || [])
       const h = histRaw[idx] || {}
       hoverBar.value = {
         price: priceData != null ? Number(priceData) : null,
@@ -667,7 +670,6 @@ function bindHoverEvents() {
       const candleData = seriesData[0]?.data?.[idx]
       const volData    = seriesData[3]?.data?.[idx]
       const times      = raw.xAxis?.[0]?.data || []
-      const histRaw = _sanitize(raw._rawHist || [])
       const h = histRaw[idx] || {}
       hoverBar.value = {
         price: candleData ? Number(candleData[1]) : null,

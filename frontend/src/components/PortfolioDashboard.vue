@@ -58,8 +58,14 @@
       </div>
     </div>
 
+    <!-- 加载状态 -->
+    <LoadingSpinner v-if="loading" text="加载投资组合数据..." />
+    
+    <!-- 错误状态 -->
+    <ErrorDisplay v-else-if="error" :error="error" :retry="loadPortfolioData" />
+
     <!-- 无账户时显示引导 -->
-    <div v-if="portfolioList.length === 0 && !loading" class="flex-1 flex items-center justify-center py-12">
+    <div v-else-if="portfolioList.length === 0" class="flex-1 flex items-center justify-center py-12">
       <div class="text-center">
         <div class="text-6xl mb-4">🏦</div>
         <div class="text-lg text-terminal-accent font-bold mb-2">欢迎使用投资组合管理</div>
@@ -118,7 +124,7 @@
     </div>
 
     <!-- 无持仓时显示 -->
-    <div v-if="portfolioList.length > 0 && positions.length === 0 && !loading && selectedPortfolioId !== null" class="flex-1 flex items-center justify-center py-8">
+    <div v-else-if="positions.length === 0 && selectedPortfolioId !== null" class="flex-1 flex items-center justify-center py-8">
       <div class="text-center">
         <div class="text-5xl mb-3">📭</div>
         <div class="text-base text-terminal-accent font-bold mb-2">暂无持仓</div>
@@ -147,8 +153,10 @@
       </div>
     </div>
 
-    <!-- Phase 4: PnL 三分卡片 -->
-    <div v-if="selectedPortfolioId !== null" class="pnl-cards-row">
+    <!-- 主内容区域（有持仓时显示） -->
+    <div v-else>
+      <!-- Phase 4: PnL 三分卡片 -->
+      <div v-if="selectedPortfolioId !== null" class="pnl-cards-row">
       <div class="pnl-card">
         <div class="pnl-card-label">💰 现金余额</div>
         <div class="pnl-card-value">¥{{ (cashBalance||0).toLocaleString() }}</div>
@@ -202,6 +210,7 @@
     <!-- 归因分析 -->
     <div v-if="activeTab === 'analysis'" class="mt-4">
       <AttributionPanel :portfolioId="selectedPortfolioId" />
+    </div>
     </div>
   </div>
 
@@ -291,7 +300,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { apiFetch } from '../utils/api.js';
 import OpenLotsPanel from './OpenLotsPanel.vue';
 import PositionPieChart from './PositionPieChart.vue';
@@ -301,12 +310,15 @@ import RiskPanel from './RiskPanel.vue';
 import BenchmarkPanel from './BenchmarkPanel.vue';
 import SimulatedTradeModal from './SimulatedTradeModal.vue';
 import ConservationAuditCard from './ConservationAuditCard.vue';
+import LoadingSpinner from './f9/LoadingSpinner.vue';
+import ErrorDisplay from './f9/ErrorDisplay.vue';
 
 // ── 常量 ─────────────────────────────────────────────────────────
 const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR'];
 
 // ── State ────────────────────────────────────────────────────────
 const loading = ref(false);
+const error = ref('');
 const positions = ref([]);
 const portfolioList = ref([]);
 const showCreateModal = ref(false);
@@ -315,8 +327,10 @@ const showTradeModal = ref(false);
 const activeTab = ref('positions');
 const filterSector = ref('');
 const filterPositionType = ref('');
-const sortBy = ref('change_pct');
 
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+
+const sortBy = ref('change_pct');
 const cashBalance  = ref(0);
 const dailyPnl     = ref(0);
 const realizedPnl  = ref(0);
@@ -423,14 +437,18 @@ function pnlClass(v) {
 async function loadPortfolioData() {
   if (!selectedPortfolioId.value) return;
   loading.value = true;
+  error.value = '';
   const pid = selectedPortfolioId.value;
   const agg = isAggregated.value ? '?include_children=true' : '';
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // 使用 /pnl 端点获取聚合视图（包含 cash_balance + 全量 PnL）
-    const res = await apiFetch(`/api/v1/portfolio/${pid}/pnl${agg}`);
+    const res = await apiFetch(`/api/v1/portfolio/${pid}/pnl${agg}`, { signal: _fetchController.signal });
     const data = res.data || res;
     // positions 端点返回 { positions: [...] }（无 data 包装）
-    const posRes = await apiFetch(`/api/v1/portfolio/${pid}/positions${agg}`);
+    const posRes = await apiFetch(`/api/v1/portfolio/${pid}/positions${agg}`, { signal: _fetchController.signal });
     positions.value = posRes.positions || posRes.data?.positions || [];
     cashBalance.value  = data.cash_balance   || 0;
     dailyPnl.value      = data.daily_pnl      || 0;
@@ -438,21 +456,34 @@ async function loadPortfolioData() {
     unrealizedPnl.value = data.unrealized_pnl || 0;
     totalPnl.value     = data.total_pnl      || 0;
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     console.warn('[Portfolio] loadPortfolioData failed', e.message);
+    error.value = e.message || '加载投资组合数据失败';
     positions.value = [];
   } finally {
+    _fetchController = null;
     loading.value = false;
   }
 }
 
 async function loadPortfolios() {
   try {
-    const res = await apiFetch('/api/v1/portfolio/');
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch('/api/v1/portfolio/', { signal: _fetchController.signal });
     portfolioList.value = res.portfolios || [];
     if (portfolioList.value.length && selectedPortfolioId.value === null) {
       selectedPortfolioId.value = portfolioList.value[0].id;
     }
-  } catch (e) { console.warn('[Portfolio] loadPortfolios failed', e.message); }
+  } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
+    console.warn('[Portfolio] loadPortfolios failed', e.message);
+  } finally {
+    _fetchController = null;
+  }
 }
 
 onMounted(async () => {
@@ -462,6 +493,12 @@ onMounted(async () => {
   } catch (e) {
     console.error('[Portfolio] Mount failed:', e);
   }
+});
+
+onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort();
+  _fetchController = null;
 });
 
 watch(selectedPortfolioId, loadPortfolioData);

@@ -2,16 +2,16 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">盈利预测</h2>
     
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载盈利预测数据..." />
     
-    <div v-else-if="error" class="text-center py-8 text-red-400">
-      {{ error }}
-    </div>
+    <ErrorDisplay 
+      v-else-if="error" 
+      :error="error" 
+      :retry="() => emit('retry')" 
+    />
     
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请先查询股票代码
+      请输入股票代码查看盈利预测
     </div>
     
     <div v-else class="space-y-4">
@@ -78,9 +78,14 @@
 </template>
 
 <script setup>
-defineProps({
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
+
+const props = defineProps({
   data: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' }
 })
+
+const emit = defineEmits(['retry'])
 </script>

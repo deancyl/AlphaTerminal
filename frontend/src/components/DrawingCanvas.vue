@@ -10,6 +10,8 @@
       @dblclick="onDblClick"
       @contextmenu.prevent="onContextMenu"
       @mouseleave="onMouseLeave"
+      aria-label="画布绘图区域"
+      role="img"
     />
 
     <div v-if="hoverInfo.show" class="hover-tooltip" :style="{ left: hoverInfo.x + 'px', top: hoverInfo.y + 'px' }">
@@ -30,6 +32,7 @@
         @keydown.enter="commitInlineEdit"
         @keydown.escape="cancelInlineEdit"
         @blur="commitInlineEdit"
+        aria-label="画布上的内联文本"
       />
     </div>
 
@@ -53,20 +56,20 @@
       </div>
     </div>
 
-    <div v-if="styleEditor.show" class="style-editor" :style="{ left: styleEditor.x + 'px', top: styleEditor.y + 'px' }">
+    <div v-if="styleEditor.show" class="style-editor" :style="{ left: styleEditor.x + 'px', top: styleEditor.y + 'px' }" role="dialog" aria-label="编辑画线样式">
       <div class="editor-title">编辑画线样式</div>
       <div class="editor-row">
         <label>颜色</label>
-        <input type="color" v-model="styleEditor.color" @change="applyStyle">
+        <input type="color" v-model="styleEditor.color" @change="applyStyle" aria-label="画线颜色">
       </div>
       <div class="editor-row">
         <label>线宽</label>
-        <input type="range" v-model.number="styleEditor.lineWidth" min="1" max="5" step="0.5" @input="applyStyle">
+        <input type="range" v-model.number="styleEditor.lineWidth" min="1" max="5" step="0.5" @input="applyStyle" aria-label="画线宽度" :aria-valuenow="styleEditor.lineWidth">
         <span>{{ styleEditor.lineWidth }}px</span>
       </div>
       <div class="editor-row">
         <label>线型</label>
-        <select v-model="styleEditor.lineDash" @change="applyStyle">
+        <select v-model="styleEditor.lineDash" @change="applyStyle" aria-label="画线线型">
           <option value="">实线</option>
           <option value="5,3">虚线</option>
           <option value="10,3,2,3">点划线</option>
@@ -75,10 +78,10 @@
       </div>
       <div class="editor-row" v-if="styleEditor.shape?.type === 'text'">
         <label>文字</label>
-        <input type="text" v-model="styleEditor.text" @change="applyStyle">
+        <input type="text" v-model="styleEditor.text" @change="applyStyle" aria-label="画线文字">
       </div>
       <div class="editor-actions">
-        <button @click="styleEditor.show = false">关闭</button>
+        <button @click="styleEditor.show = false" aria-label="关闭样式编辑器">关闭</button>
       </div>
     </div>
   </div>

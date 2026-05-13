@@ -1,5 +1,12 @@
 <template>
-  <div class="flex flex-col min-w-0 overflow-hidden" style="height: 100%;">
+  <div 
+    class="flex flex-col min-w-0 overflow-hidden" 
+    style="height: 100%;"
+    tabindex="0"
+    @keydown="handleKeydown"
+    @focus="handleContainerFocus"
+    @blur="handleContainerBlur"
+  >
     <div class="flex items-center justify-between mb-2 shrink-0">
       <div class="flex items-center gap-1.5">
         <span class="text-terminal-accent font-bold text-sm">🔥 行业风口</span>
@@ -22,13 +29,25 @@
         :style="{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }"
       >
         <div
-          v-for="sec in displaySectors"
+          v-for="(sec, idx) in displaySectors"
           :key="sec.name"
-          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded-sm border cursor-pointer transition-all hover:opacity-80 min-w-0 overflow-hidden"
-          :class="(sec.change_pct || 0) >= 0
-            ? 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)] hover:border-bullish/60'
-            : 'bg-[var(--color-success-bg)] border-[var(--color-success-border)] hover:border-bearish/60'"
+          :ref="el => { if (el) sectorRefs[idx] = el }"
+          class="flex flex-col items-center justify-center px-1.5 py-1.5 rounded-sm border cursor-pointer transition-all min-w-0 overflow-hidden"
+          :class="[
+            (sec.change_pct || 0) >= 0
+              ? 'bg-[var(--color-danger-bg)] border-[var(--color-danger-border)]'
+              : 'bg-[var(--color-success-bg)] border-[var(--color-success-border)]',
+            focusedIndex === idx 
+              ? 'ring-2 ring-[var(--color-accent)] ring-offset-1 ring-offset-terminal-bg scale-[1.02] z-10'
+              : 'hover:opacity-80',
+            focusedIndex === idx && (sec.change_pct || 0) >= 0 
+              ? 'hover:border-bullish/60' 
+              : focusedIndex === idx 
+                ? 'hover:border-bearish/60'
+                : ''
+          ]"
           @click="handleClick(sec)"
+          @mouseenter="focusedIndex = idx"
           :title="`${sec.name} (点击查看领涨股 ${sec.top_stock?.name || '无'})`"
         >
           <!-- 板块名称：强制截断 -->
@@ -74,6 +93,7 @@ import { useWindowSize } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { apiFetch } from '../utils/api.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 const emit = defineEmits(['sector-click'])
 
@@ -84,7 +104,12 @@ const isRefreshing = ref(false)
 const tsDisplay = ref('')
 const showAllSectors = ref(false)
 const cacheAge = ref(0) // seconds
-let refreshTimer = null
+const focusedIndex = ref(-1)
+const isContainerFocused = ref(false)
+const sectorRefs = ref([])
+let unregisterPolling = null
+
+const { register } = usePollingManager()
 
 // 响应式列数（根据容器宽度估算）
 const { width: winWidth } = useWindowSize()
@@ -125,6 +150,100 @@ function handleClick(sec) {
   emit('sector-click', sec)
 }
 
+// Keyboard navigation handlers
+function handleContainerFocus() {
+  isContainerFocused.value = true
+  if (focusedIndex.value === -1 && displaySectors.value.length > 0) {
+    focusedIndex.value = 0
+  }
+}
+
+function handleContainerBlur() {
+  isContainerFocused.value = false
+}
+
+function handleKeydown(event) {
+  const totalItems = displaySectors.value.length
+  if (totalItems === 0) return
+
+  const cols = gridCols.value
+  
+  switch (event.key) {
+    case 'ArrowRight':
+      event.preventDefault()
+      if (focusedIndex.value < totalItems - 1) {
+        focusedIndex.value++
+        scrollToFocused()
+      }
+      break
+      
+    case 'ArrowLeft':
+      event.preventDefault()
+      if (focusedIndex.value > 0) {
+        focusedIndex.value--
+        scrollToFocused()
+      }
+      break
+      
+    case 'ArrowDown':
+      event.preventDefault()
+      if (focusedIndex.value + cols < totalItems) {
+        focusedIndex.value += cols
+        scrollToFocused()
+      } else if (focusedIndex.value < totalItems - 1) {
+        // Move to last item if can't go full row down
+        focusedIndex.value = totalItems - 1
+        scrollToFocused()
+      }
+      break
+      
+    case 'ArrowUp':
+      event.preventDefault()
+      if (focusedIndex.value - cols >= 0) {
+        focusedIndex.value -= cols
+        scrollToFocused()
+      } else if (focusedIndex.value > 0) {
+        // Move to first item if can't go full row up
+        focusedIndex.value = 0
+        scrollToFocused()
+      }
+      break
+      
+    case 'Enter':
+    case ' ':
+      event.preventDefault()
+      if (focusedIndex.value >= 0 && focusedIndex.value < totalItems) {
+        handleClick(displaySectors.value[focusedIndex.value])
+      }
+      break
+      
+    case 'Escape':
+      event.preventDefault()
+      focusedIndex.value = -1
+      break
+      
+    case 'Home':
+      event.preventDefault()
+      focusedIndex.value = 0
+      scrollToFocused()
+      break
+      
+    case 'End':
+      event.preventDefault()
+      focusedIndex.value = totalItems - 1
+      scrollToFocused()
+      break
+  }
+}
+
+function scrollToFocused() {
+  // Ensure the focused item is visible in scroll container
+  const el = sectorRefs.value[focusedIndex.value]
+  if (el && el.scrollIntoView) {
+    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+  }
+}
+
 async function refreshSectors() {
   if (isRefreshing.value) return
   isRefreshing.value = true
@@ -146,12 +265,25 @@ async function refreshSectors() {
   }
 }
 
+function setupPolling() {
+  if (unregisterPolling) unregisterPolling()
+  unregisterPolling = register(
+    'hot-sectors',
+    fetchSectors,
+    'normal',
+    { interval: 5 * 60 * 1000 }
+  )
+}
+
 onMounted(() => {
   fetchSectors()
-  refreshTimer = setInterval(fetchSectors, 5 * 60 * 1000) // 5分钟刷新
+  setupPolling()
 })
 
 onUnmounted(() => {
-  clearInterval(refreshTimer)
+  if (unregisterPolling) {
+    unregisterPolling()
+    unregisterPolling = null
+  }
 })
 </script>

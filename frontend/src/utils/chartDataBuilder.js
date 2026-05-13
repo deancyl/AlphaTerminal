@@ -3,6 +3,7 @@ import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI, calcOBV, calcDMI, calcCCI
 import { buildXAxisLabels } from './symbols.js'
 import { UP, DOWN } from './indicators.js'
 import { safeNumber } from './typeCoercion.js'
+import { indicatorWorker } from '../composables/useIndicatorWorker.js'
 
 /**
  * 将原始 K 线数据转换为图表渲染所需的全套结构化数据
@@ -10,12 +11,15 @@ import { safeNumber } from './typeCoercion.js'
  * @param {String} period - 当前周期 (daily, 1min, etc.)
  * @param {Object} indicatorParams - 指标参数配置 { MACD: { fast: 12, slow: 26, signal: 9 }, BOLL: {...}, ... }
  * @param {Array} overlayData - (可选) 叠加标的的数据
- * @returns {Object} 结构化图表数据
+ * @param {Object} options - { useWorker: boolean, timeout: number }
+ * @returns {Object|Promise<Object>} 结构化图表数据 (async if useWorker=true)
  */
-export function buildChartData(rawHist, period, indicatorParams = {}, overlayData = []) {
+export function buildChartData(rawHist, period, indicatorParams = {}, overlayData = [], options = {}) {
   if (!rawHist || !rawHist.length) {
     return { isEmpty: true }
   }
+
+  const { useWorker = false, timeout = 5000 } = options
 
   // 1. 基础 X 轴与 K线序列
   const times = buildXAxisLabels(rawHist, period)
@@ -38,25 +42,88 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     const closeVal = safeNumber(h.close, 0)
     const openVal = safeNumber(h.open, 0)
     const priceUp = closeVal >= openVal
-    // ΔOI = 当根持仓 - 前根持仓（增仓为正，减仓为负）
     const prevOI = i > 0 ? safeNumber(rawHist[i - 1].hold, null) : null
     const currOI = safeNumber(h.hold, null)
     const deltaOI = (prevOI != null && currOI != null) ? currOI - prevOI : null
     return {
       value:    safeNumber(h.volume, 0),
-      oi:       currOI,                // 持仓量（期货独有）
-      deltaOI,                          // 持仓变化（增仓正，减仓负）
-      priceUp,                          // 当根涨跌方向
+      oi:       currOI,
+      deltaOI,
+      priceUp,
       itemStyle: { color: priceUp ? UP + '44' : DOWN + '44' },
     }
   })
 
-  // 2. 主图叠加指标 (MA, BOLL)
   // Filter out NaN values for indicator calculations
   const validCloses = closes.filter(v => v != null && !isNaN(v))
   const validHighs = highs.filter(v => v != null && !isNaN(v))
   const validLows = lows.filter(v => v != null && !isNaN(v))
-  
+  const volumesForOBV = rawHist.map(h => safeNumber(h.volume, 0))
+
+  // Worker-based calculation (async)
+  if (useWorker && indicatorWorker.isAvailable()) {
+    return buildChartDataWithWorker(
+      rawHist, times, klineData, volumes, closes, highs, lows, volumesForOBV,
+      indicatorParams, overlayData, timeout
+    )
+  }
+
+  // Main thread calculation (sync fallback)
+  return buildChartDataSync(
+    rawHist, times, klineData, volumes, closes, highs, lows, volumesForOBV,
+    indicatorParams, overlayData, validCloses
+  )
+}
+
+/**
+ * Build chart data using Web Worker (async)
+ */
+async function buildChartDataWithWorker(
+  rawHist, times, klineData, volumes, closes, highs, lows, volumesForOBV,
+  indicatorParams, overlayData, timeout
+) {
+  const workerData = { closes, highs, lows, volumes: volumesForOBV }
+  const workerParams = {
+    bollPeriod: indicatorParams.BOLL?.period || 20,
+    bollStdDev: indicatorParams.BOLL?.stdDev || 2,
+    macdFast: indicatorParams.MACD?.fast || 12,
+    macdSlow: indicatorParams.MACD?.slow || 26,
+    macdSignal: indicatorParams.MACD?.signal || 9,
+    kdjN: indicatorParams.KDJ?.n || 9,
+    rsiPeriod: indicatorParams.RSI?.period || 14,
+    dmiPeriod: indicatorParams.DMI?.period || 14,
+    cciPeriod: indicatorParams.CCI?.period || 14,
+  }
+
+  try {
+    const indicators = await indicatorWorker.calculateAll(workerData, workerParams, { timeout })
+
+    // Build result with worker-calculated indicators
+    const result = buildChartResult(
+      rawHist, times, klineData, volumes, closes,
+      indicators, indicatorParams, overlayData
+    )
+
+    return result
+  } catch (e) {
+    console.warn('[chartDataBuilder] Worker failed, falling back to sync:', e.message)
+    // Fallback to sync calculation
+    const validCloses = closes.filter(v => v != null && !isNaN(v))
+    return buildChartDataSync(
+      rawHist, times, klineData, volumes, closes, highs, lows, volumesForOBV,
+      indicatorParams, overlayData, validCloses
+    )
+  }
+}
+
+/**
+ * Build chart data on main thread (sync)
+ */
+function buildChartDataSync(
+  rawHist, times, klineData, volumes, closes, highs, lows, volumesForOBV,
+  indicatorParams, overlayData, validCloses
+) {
+  // 2. 主图叠加指标 (MA, BOLL)
   const maData = {
     ma5: calcMA(closes, 5),
     ma10: calcMA(closes, 10),
@@ -82,8 +149,6 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   subChartData.RSI = calcRSI(closes, rsiParams.period)
 
   // OBV（能量潮）
-  const obvParams = indicatorParams.OBV || {}
-  const volumesForOBV = rawHist.map(h => safeNumber(h.volume, 0))
   subChartData.OBV = calcOBV(closes, volumesForOBV)
 
   // DMI（趋向指标）
@@ -95,6 +160,41 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   const cciRaw = calcCCI ? calcCCI(closes, highs, lows, cciParams.period) : null
   if (cciRaw) subChartData.CCI = cciRaw
 
+  const indicators = {
+    maData,
+    bollData,
+    subChartData,
+  }
+
+  return buildChartResult(
+    rawHist, times, klineData, volumes, closes,
+    indicators, indicatorParams, overlayData
+  )
+}
+
+/**
+ * Build final chart result object
+ */
+function buildChartResult(
+  rawHist, times, klineData, volumes, closes,
+  indicators, indicatorParams, overlayData
+) {
+  // Extract indicators (from worker or sync)
+  const maData = indicators.maData || {
+    ma5: indicators.ma5,
+    ma10: indicators.ma10,
+    ma20: indicators.ma20,
+  }
+  const bollData = indicators.bollData || indicators.boll
+  const subChartData = indicators.subChartData || {
+    MACD: indicators.macd,
+    KDJ: indicators.kdj,
+    RSI: indicators.rsi,
+    OBV: indicators.obv,
+    DMI: indicators.dmi,
+    CCI: indicators.cci,
+  }
+
   // 4. 叠加标的处理 (对比图)
   let overlaySeriesData = []
   if (overlayData.length > 0) {
@@ -103,14 +203,15 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
       const closeVal = safeNumber(d.close, null)
       if (d.date && closeVal != null) ovMap[d.date] = closeVal
     }
-    // 按主图时间对齐，未找到的日期填充 null
     overlaySeriesData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
   }
 
   // 过滤无效值，计算有效数据的极值
+  const validCloses = closes.filter(v => v != null && !isNaN(v))
   if (validCloses.length === 0) {
     return { isEmpty: true }
   }
+
   let yMin = validCloses[0], yMax = validCloses[0]
   for (let i = 1; i < validCloses.length; i++) {
     if (validCloses[i] < yMin) yMin = validCloses[i]
@@ -120,8 +221,6 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
   yMax = +(yMax * 1.003).toFixed(2)
 
   // 6. 叠加标的 Y 轴自适应（双 Y 轴核心）
-  //    策略：若叠加数据与主图量级差异 > 10x，切换为 min-max 归一化显示（0~100 范围）
-  //    用途：股债跷跷板（沪深300≈4000点 vs 10年国债收益率≈2.5%）
   let overlayYAxis = null
   if (overlayData.length > 0) {
     const ovCloses = overlayData.map(d => safeNumber(d.close, null)).filter(v => v != null)
@@ -135,17 +234,13 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
       const ovRange = ovMax - ovMin
 
       if (mainRange > 0 && ovRange > 0 && (mainRange / ovRange > 10 || ovRange / mainRange > 10)) {
-        // 量级差异过大：使用归一化右侧 Y 轴（0~100 范围）
         overlayYAxis = { type: 'normalized', min: ovMin, max: ovMax }
       } else {
-        // 量级相近：使用原始值右侧 Y 轴（双轴各自用真实值）
         overlayYAxis = { type: 'original' }
       }
     }
   }
 
-  // overlayYAxis 返回 ECharts 原生 yAxis 配置对象，供调用方直接注入到 grid + yAxis 数组
-  // 右侧双轴：主轴在 left='55'，对比轴在 right='8'，关闭网格线防止视觉干扰
   const _rawOverlayYAxis = overlayYAxis ? {
     scale: true,
     splitLine: { show: false },
@@ -167,8 +262,8 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
     maData,
     bollData,
     subChartData,
-    overlaySeriesData,   // [[index, price], ...] 按主图时间轴对齐
-    overlayYAxis: _rawOverlayYAxis,  // ECharts yAxis 配置对象（可注入）
+    overlaySeriesData,
+    overlayYAxis: _rawOverlayYAxis,
     yMin,
     yMax,
   }
@@ -187,17 +282,14 @@ export function buildChartData(rawHist, period, indicatorParams = {}, overlayDat
 export function buildOverlaySeries(rawHist, overlayData, color = '#f97316') {
   if (!rawHist?.length || !overlayData?.length) return { series: [], hasOverlay: false }
 
-  // 构建 {date -> close} 快速查找表
   const ovMap = {}
   for (const d of overlayData) {
     const closeVal = safeNumber(d.close, null)
     if (d.date && closeVal != null) ovMap[d.date] = closeVal
   }
 
-  // 按主图时间轴对齐，index 对应主图数据下标（用于 xAxis index 对齐）
   const compareData = rawHist.map((h, i) => [i, ovMap[h.date] ?? null])
 
-  // 过滤掉全 null 的头尾段（避免对比线在无数据区域突兀延伸）
   const firstValid = compareData.findIndex(d => d[1] !== null)
   const lastValid = compareData.length - 1 - [...compareData].reverse().findIndex(d => d[1] !== null)
   const trimmed = firstValid >= 0 ? compareData.slice(firstValid, lastValid + 1) : []
@@ -208,14 +300,14 @@ export function buildOverlaySeries(rawHist, overlayData, color = '#f97316') {
       name: '对比',
       type: 'line',
       data: trimmed,
-      yAxisIndex: 1,           // 绑定右侧 Y 轴
-      symbol: 'none',         // 关闭小圆点，保持图表清爽
+      yAxisIndex: 1,
+      symbol: 'none',
       lineStyle: { color, width: 1.5, type: 'solid' },
       itemStyle: { color },
       tooltip: { show: true },
-      z: 3,                   // 渲染在 K 线（z=2）之上
+      z: 3,
       smooth: false,
-      sampling: 'lttb',       // 大数据下采样
+      sampling: 'lttb',
     }],
   }
 }

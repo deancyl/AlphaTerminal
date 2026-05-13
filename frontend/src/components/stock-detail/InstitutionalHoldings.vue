@@ -2,16 +2,12 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">机构持股</h2>
     
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载机构持股数据..." />
     
-    <div v-else-if="error" class="text-center py-8 text-red-400">
-      {{ error }}
-    </div>
+    <ErrorDisplay v-else-if="error" :error="error" :retry="onRetry" />
     
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询
+      请输入股票代码查看机构持股
     </div>
     
     <div v-else class="space-y-4">
@@ -85,12 +81,20 @@
 import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' }
 })
+
+const emit = defineEmits(['retry'])
+
+function onRetry() {
+  emit('retry')
+}
 
 const { formatHolderShares, formatHolderPct, getChangeClass } = useStockDetail()
 

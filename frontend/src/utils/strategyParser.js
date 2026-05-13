@@ -8,6 +8,8 @@
  * - @strategy key value (e.g., stopLossPct 2)
  */
 
+import { safeParseFloat } from './safeParse.js'
+
 /**
  * Parse strategy code annotations
  * @param {string} code - Strategy code with annotations
@@ -78,17 +80,17 @@ export function parseAnnotations(code) {
 
       // Map strategy settings
       if (settingKey === 'stopLossPct') {
-        result.strategySettings.stopLossPct = parseFloat(settingValue) || 2.0
+        result.strategySettings.stopLossPct = safeParseFloat(settingValue, 2.0)
       } else if (settingKey === 'takeProfitPct') {
-        result.strategySettings.takeProfitPct = parseFloat(settingValue) || 6.0
+        result.strategySettings.takeProfitPct = safeParseFloat(settingValue, 6.0)
       } else if (settingKey === 'entryPct') {
-        result.strategySettings.entryPct = parseFloat(settingValue) || 1.0
+        result.strategySettings.entryPct = safeParseFloat(settingValue, 1.0)
       } else if (settingKey === 'trailingEnabled') {
         result.strategySettings.trailingEnabled = settingValue.toLowerCase() === 'true'
       } else if (settingKey === 'trailingStopPct') {
-        result.strategySettings.trailingStopPct = parseFloat(settingValue) || 0.0
+        result.strategySettings.trailingStopPct = safeParseFloat(settingValue, 0.0)
       } else if (settingKey === 'trailingActivationPct') {
-        result.strategySettings.trailingActivationPct = parseFloat(settingValue) || 0.0
+        result.strategySettings.trailingActivationPct = safeParseFloat(settingValue, 0.0)
       } else if (settingKey === 'tradeDirection') {
         result.strategySettings.tradeDirection = settingValue.toLowerCase()
       }

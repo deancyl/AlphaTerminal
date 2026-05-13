@@ -1,5 +1,23 @@
 <template>
   <div class="flex flex-col md:flex-row w-full h-full overflow-hidden" role="main" aria-label="回测实验室">
+    
+    <!-- Error display for caught errors -->
+    <div v-if="componentError" class="flex-1 flex flex-col items-center justify-center p-8" role="alert" aria-live="assertive">
+      <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+      <div class="text-lg text-terminal-dim mb-2">回测实验室加载失败</div>
+      <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+      <button
+        class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+        @click="handleRetry"
+        aria-label="重试加载"
+        type="button"
+      >
+        重试
+      </button>
+    </div>
+
+    <!-- Main content (hidden when error) -->
+    <template v-else>
 
     <!-- ═══════════════ 左侧边栏 ═══════════════ -->
     <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3" role="form" aria-label="回测参数配置">
@@ -433,14 +451,51 @@
         </div>
       </div>
     </main>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 import BacktestChart from './BacktestChart.vue'
+
+// ── Error Boundary State ─────────────────────────────────────────────
+const componentError = ref(null)
+
+onErrorCaptured((err, instance, info) => {
+  console.error('[BacktestDashboard] Uncaught error:', err)
+  console.error('[BacktestDashboard] Component:', instance?.$options?.name || 'unknown')
+  console.error('[BacktestDashboard] Info:', info)
+  
+  componentError.value = {
+    message: err.message || String(err),
+    component: instance?.$options?.name || 'unknown',
+    info,
+    timestamp: Date.now(),
+  }
+  
+  // Report to monitoring if available
+  if (typeof window !== 'undefined' && typeof window.reportError === 'function') {
+    try {
+      window.reportError(err)
+    } catch (e) {
+      console.error('[BacktestDashboard] Failed to report error:', e)
+    }
+  }
+  
+  // Prevent propagation to parent
+  return false
+})
+
+function handleRetry() {
+  componentError.value = null
+  // Reset state for retry
+  backtestResult.value = null
+  histData.value = []
+  statusMsg.value = ''
+}
 
 // ── 已知标的字典（用于联想显示，不依赖外部请求）────────────────
 const KNOWN_SYMBOLS = [
@@ -545,6 +600,12 @@ onMounted(async () => {
   await portfolioStore.fetchPortfolios()
 })
 
+onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
+})
+
 // portfolioStore.portfolios 在 reactive 代理中已自动解包，无需 .value
 // 显示所有账户（包括主账户和子账户），用 parent_id 判断层级
 const portfolioOptions = computed(() => {
@@ -576,7 +637,10 @@ async function onPortfolioChange() {
   if (!pid) return
   positionTagsLoading.value = true
   try {
-    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`)
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`, { signal: _fetchController.signal })
     const list = Array.isArray(d) ? d : (d?.positions || [])
     positionTags.value = list.map(p => ({
       symbol:     p.symbol || '',
@@ -584,8 +648,11 @@ async function onPortfolioChange() {
       normalized: normalizeSymbol(p.symbol),
     }))
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     positionTags.value = []
   } finally {
+    _fetchController = null
     positionTagsLoading.value = false
   }
 }
@@ -637,6 +704,8 @@ const showTrades    = ref(false)
 const chartWrapRef  = ref(null)
 const chartRef      = ref(null)  // BacktestChart 实例，用于联动
 
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+
 function presetDates(preset) {
   const end = new Date()
   const start = new Date()
@@ -660,12 +729,16 @@ async function runBacktest() {
   histData.value = []
 
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     const { start_date, end_date } = presetDates(windowPreset.value)
     const sym = symbol.value.trim() || 'sh600519'
 
     statusMsg.value = '📡 拉取历史数据...'
     const histResp = await apiFetch(
-      `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`
+      `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`,
+      { signal: _fetchController.signal }
     )
     // 统一解包: apiFetch 已解包 data，需兼容 history 在不同层级
     const histDataRaw = histResp?.data?.history || histResp?.history || histResp || []
@@ -703,6 +776,7 @@ async function runBacktest() {
           }
         })(),
       },
+      signal: _fetchController.signal,
     })
 
     // 兼容后端报错格式 {code, message, ...}
@@ -716,8 +790,11 @@ async function runBacktest() {
     statusMsg.value = `✅ 完成 ${data.trades_count||0} 笔交易`
     chartKey.value++
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     statusMsg.value = `❌ ${e.message || '回测失败'}`
   } finally {
+    _fetchController = null
     running.value = false
   }
 }

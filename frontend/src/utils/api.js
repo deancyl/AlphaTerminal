@@ -12,6 +12,8 @@ import { logger } from './logger.js'
 import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
 import { toast } from '../composables/useToast.js'
+import { isNetworkOnline } from '../composables/useNetworkStatus.js'
+import { dedupedFetch, abortPendingRequest, abortAllPendingRequests } from './requestDedup.js'
 
 // ── API 基础 URL ─────────────────────────────────────────────────
 // 始终使用相对路径，让前端代理（Vite proxy）转发到后端
@@ -148,6 +150,10 @@ export async function apiFetch(url, options = {}) {
   const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
 
+  if (!isNetworkOnline()) {
+    throw new Error('网络已断开，请检查连接')
+  }
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -282,4 +288,17 @@ export async function apiFetchValidated(url, schema, options = {}) {
   }
   
   return result.data
+}
+
+export async function apiFetchDeduped(key, url, options = {}) {
+  const { debounce = 100, ...fetchOptions } = options
+  return dedupedFetch(key, async (signal) => {
+    return apiFetch(url, { ...fetchOptions, signal })
+  }, { debounce })
+}
+
+export { 
+  dedupedFetch,
+  abortPendingRequest,
+  abortAllPendingRequests
 }

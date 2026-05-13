@@ -232,6 +232,7 @@ const trendChartRef = ref(null)
 const comparisonChartRef = ref(null)
 let trendChartInstance = null
 let comparisonChartInstance = null
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
 
 // Currency converter
 const convertAmount = ref(100)
@@ -273,7 +274,10 @@ async function fetchData() {
   error.value = null
   
   try {
-    const res = await apiFetch('/api/v1/forex/quotes', { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch('/api/v1/forex/quotes', { timeoutMs: 30000, signal: _fetchController.signal })
     
     if (res?.quotes) {
       forexData.value = res.quotes
@@ -286,9 +290,12 @@ async function fetchData() {
       }
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: '外汇数据' })
     error.value = userMessage || '获取外汇数据失败'
   } finally {
+    _fetchController = null
     loading.value = false
   }
 }
@@ -297,7 +304,10 @@ async function fetchHistory() {
   if (!selectedPair.value) return
   
   try {
-    const res = await apiFetch(`/api/v1/forex/history/${selectedPair.value.replace('/', '')}?days=${selectedDays.value}`, { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch(`/api/v1/forex/history/${selectedPair.value.replace('/', '')}?days=${selectedDays.value}`, { timeoutMs: 30000, signal: _fetchController.signal })
     
     if (res?.history) {
       currentHistory.value = res.history
@@ -305,7 +315,11 @@ async function fetchHistory() {
       drawChartFromData()
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     handleError(e, { context: '外汇历史数据', silent: true })
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -314,10 +328,13 @@ async function fetchComparison() {
   
   comparing.value = true
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // Fetch both currencies in parallel
     const [res1, res2] = await Promise.all([
-      apiFetch(`/api/v1/forex/history/${compareCurrency1.value}CNY?days=${selectedDays.value}`, { timeoutMs: 30000 }),
-      apiFetch(`/api/v1/forex/history/${compareCurrency2.value}CNY?days=${selectedDays.value}`, { timeoutMs: 30000 })
+      apiFetch(`/api/v1/forex/history/${compareCurrency1.value}CNY?days=${selectedDays.value}`, { timeoutMs: 30000, signal: _fetchController.signal }),
+      apiFetch(`/api/v1/forex/history/${compareCurrency2.value}CNY?days=${selectedDays.value}`, { timeoutMs: 30000, signal: _fetchController.signal })
     ])
     
     comparisonData1.value = res1?.history || []
@@ -326,8 +343,11 @@ async function fetchComparison() {
     await nextTick()
     drawComparisonChart()
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     handleError(e, { context: '外汇对比数据', silent: true })
   } finally {
+    _fetchController = null
     comparing.value = false
   }
 }
@@ -616,6 +636,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
   clearTimeout(resizeTimer)
   trendChartInstance?.dispose()
   comparisonChartInstance?.dispose()

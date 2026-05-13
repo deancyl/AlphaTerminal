@@ -1,18 +1,25 @@
 <template>
-  <div class="w-full h-full" style="min-height:120px">
+  <div ref="lazyRef" class="w-full h-full" style="min-height:120px">
     <div class="topbar">期货主力合约</div>
-    <div ref="chartRef" class="chart-area"></div>
+    <div v-if="!isVisible" class="chart-area flex flex-col p-3 gap-2">
+      <div class="skeleton h-3 w-24 rounded-sm"></div>
+      <div class="flex-1 skeleton rounded-sm"></div>
+    </div>
+    <div v-else ref="chartRef" class="chart-area"></div>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { useLazyLoad } from '../composables/useLazyLoad.js'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   futuresData: { type: Array, default: () => [] },
 })
 
+const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootMargin: '50px' })
 const chartRef    = ref(null)
 const hasData     = ref(false)
 let chartInstance = null
@@ -96,8 +103,7 @@ const debouncedInit = useDebounceFn(init, 100)
 
 let ro = null
 onMounted(() => {
-  init()
-  if (chartRef.value) { ro = new ResizeObserver(() => chartInstance && chartInstance.resize()); ro.observe(chartRef.value) }
+  if (chartRef.value) { ro = createResizeObserver(chartInstance); ro.observe(chartRef.value) }
 })
 onUnmounted(() => {
   ro && ro.disconnect()
@@ -106,7 +112,9 @@ onUnmounted(() => {
     chartInstance = null
   }
 })
-watch(() => props.futuresData, () => { debouncedInit() }, { deep: true })
+watch([() => props.futuresData, isVisible], () => { 
+  if (isVisible.value) debouncedInit() 
+}, { deep: true })
 </script>
 
 <style scoped>

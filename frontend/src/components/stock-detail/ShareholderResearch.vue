@@ -2,16 +2,12 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">股东研究</h2>
     
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载股东数据..." />
     
-    <div v-else-if="error" class="text-center py-8 text-red-400">
-      {{ error }}
-    </div>
+    <ErrorDisplay v-else-if="error" :error="error" :retry="retry" />
     
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请先查询股票代码
+      请输入股票代码查看股东信息
     </div>
     
     <div v-else class="space-y-4">
@@ -138,11 +134,14 @@
 
 <script setup>
 import { useStockDetail } from '../../composables/useStockDetail'
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
 defineProps({
   data: { type: Object, default: null },
   loading: { type: Boolean, default: false },
-  error: { type: String, default: '' }
+  error: { type: String, default: '' },
+  retry: { type: Function, default: null }
 })
 
 const { formatNumber } = useStockDetail()

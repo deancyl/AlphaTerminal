@@ -5,12 +5,15 @@ const getEcharts = () => window.echarts
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const chartRef = ref(null)
 const chartInstance = shallowRef(null)
 const isLoading = ref(true)
 const hasData = ref(false)
 let timer = null
+
+const { createSignal, complete, abort: abortRequests } = useAbortableRequest()
 
 // ── 渲染入口：永远在 nextTick + DOM 尺寸已就绪后执行 ──────────────────────
 const renderChart = async (dataList) => {
@@ -57,8 +60,9 @@ const renderChart = async (dataList) => {
 
 // ── 数据获取 ────────────────────────────────────────────────────────────
 const loadData = async () => {
+  const signal = createSignal()
   try {
-    const res = await apiFetch('/api/v1/market/fund_flow')
+    const res = await apiFetch('/api/v1/market/fund_flow', { signal })
     const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : [])
     if (items.length > 0) {
       hasData.value = true
@@ -68,9 +72,12 @@ const loadData = async () => {
       hasData.value = false
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.error('[FundFlow] Fetch failed', e)
     hasData.value = false
   } finally {
+    complete()
     isLoading.value = false
   }
 }
@@ -91,6 +98,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  abortRequests('Component unmounted')
   if (chartInstance.value) {
     chartInstance.value.dispose()
     chartInstance.value = null

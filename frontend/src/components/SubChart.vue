@@ -100,10 +100,11 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
-// echarts 从 CDN 加载 via window.echarts
+
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { buildXAxisLabels } from '../utils/symbols.js'
 import { UP, DOWN } from '../utils/indicators.js'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 
 
@@ -235,7 +236,7 @@ function render() {
 onMounted(() => {
   if (!chartRef.value || !window.echarts) return
   chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  resizeObserver = new ResizeObserver(() => chartInstance?.resize())
+  resizeObserver = createResizeObserver(chartInstance)
   resizeObserver.observe(chartRef.value)
   render()
 })

@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full h-full relative flex flex-col" style="min-height: 120px">
+  <div ref="lazyRef" class="w-full h-full relative flex flex-col" style="min-height: 120px">
     <!-- 顶部标签 -->
     <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
       <span class="text-[10px] font-mono text-terminal-dim">📐 期限结构</span>
@@ -18,7 +18,7 @@
     <div v-if="props.hasError" class="flex-1 flex items-center justify-center">
       <span class="text-bullish text-xs">{{ error || '加载失败' }}</span>
     </div>
-    <div v-else-if="props.isLoading" class="flex-1 flex flex-col p-3 gap-2">
+    <div v-else-if="props.isLoading || !isVisible" class="flex-1 flex flex-col p-3 gap-2">
       <div class="skeleton h-3 w-24 rounded-sm"></div>
       <div class="flex-1 skeleton rounded-sm"></div>
       <div class="flex gap-2">
@@ -37,6 +37,8 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useLazyLoad } from '../composables/useLazyLoad.js'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   symbol:    { type: String, default: 'RB' },
@@ -45,6 +47,7 @@ const props = defineProps({
   hasError:  { type: Boolean, default: false },
 })
 
+const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootMargin: '50px' })
 const chartRef  = ref(null)
 const chartInst = ref(null)
 const error     = ref('')
@@ -169,7 +172,7 @@ async function initChart() {
 onMounted(() => {
   initChart()
   if (chartRef.value) {
-    ro = new ResizeObserver(() => chartInst.value?.resize())
+    ro = createResizeObserver(chartInst.value)
     ro.observe(chartRef.value)
   }
 })
@@ -179,5 +182,7 @@ onUnmounted(() => {
   chartInst.value?.dispose()
 })
 
-watch([() => props.data, () => props.symbol], () => { initChart() })
+watch([() => props.data, () => props.symbol, isVisible], () => { 
+  if (isVisible.value) initChart() 
+})
 </script>

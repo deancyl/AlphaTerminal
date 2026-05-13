@@ -1,5 +1,11 @@
 <template>
-  <div class="flex flex-col w-full h-full overflow-hidden">
+  <div 
+    class="flex flex-col w-full h-full overflow-hidden"
+    ref="containerRef"
+    tabindex="0"
+    @keydown="handleKeydown"
+    @focus="onContainerFocus"
+  >
 
     <!-- 顶部栏 -->
     <div class="shrink-0 flex items-center justify-between px-2 py-1 border-b border-theme bg-terminal-panel/80">
@@ -41,7 +47,14 @@
         <div
           v-for="(ask, i) in displayAsks"
           :key="'a' + i"
-          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
+          :ref="el => { if (el) askRefs[i] = el }"
+          :class="[
+            'relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default transition-colors',
+            isFocused('ask', i) 
+              ? 'bg-cyan-500/20 ring-1 ring-cyan-400/50 ring-inset' 
+              : 'hover:bg-theme-tertiary/20'
+          ]"
+          @click="selectPrice(ask.price, 'ask', i)"
         >
           <!-- 深度条：右侧延伸，绿色=卖盘压力（绿色背景） -->
           <div
@@ -80,7 +93,14 @@
         <div
           v-for="(bid, i) in displayBids"
           :key="'b' + i"
-          class="relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default hover:bg-theme-tertiary/20 transition-colors"
+          :ref="el => { if (el) bidRefs[i] = el }"
+          :class="[
+            'relative grid grid-cols-3 gap-0.5 px-1 py-px text-[10px] cursor-default transition-colors',
+            isFocused('bid', i) 
+              ? 'bg-cyan-500/20 ring-1 ring-cyan-400/50 ring-inset' 
+              : 'hover:bg-theme-tertiary/20'
+          ]"
+          @click="selectPrice(bid.price, 'bid', i)"
         >
           <!-- 深度条：右侧延伸，红色=买盘支撑（红色背景） -->
           <div
@@ -140,6 +160,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { formatPrice, formatVol } from '../utils/formatters.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 const props = defineProps({
   symbol: { type: String, default: 'sh600519' },
@@ -150,10 +171,20 @@ const data        = ref(null)
 const loading     = ref(false)
 const error        = ref(null)
 const lastUpdateTime = ref('')
-const priceDir     = ref('')    // 'up' | 'down' | ''
+const priceDir     = ref('')
 const midPrice     = ref(0)
 let prevPrice      = 0
-let refreshTimer   = null
+let unregisterPolling = null
+
+const { register } = usePollingManager()
+
+// ── 键盘导航状态 ───────────────────────────────────────────────────
+const containerRef = ref(null)
+const askRefs = ref([])
+const bidRefs = ref([])
+const focusedSection = ref('bid')  // 'ask' | 'bid'
+const focusedIndex = ref(0)        // 0-4 for each section
+const isContainerFocused = ref(false)
 
 // ── 盘口数据 ───────────────────────────────────────────────────
 const displayAsks = computed(() =>
@@ -203,7 +234,7 @@ function changeSymbol() {
   if (s) emit('update:symbol', s)
 }
 
-const emit = defineEmits(['update:symbol'])
+const emit = defineEmits(['update:symbol', 'price-selected'])
 
 // ── 数据获取 ──────────────────────────────────────────────────
 async function fetchOrderBook() {
@@ -239,22 +270,112 @@ async function fetchOrderBook() {
   }
 }
 
-// ── 生命周期 ───────────────────────────────────────────────────
+// ── 键盘导航 ───────────────────────────────────────────────────
+function isFocused(section, index) {
+  return focusedSection.value === section && focusedIndex.value === index
+}
+
+function onContainerFocus() {
+  isContainerFocused.value = true
+}
+
+function handleKeydown(e) {
+  const totalAsks = displayAsks.value.length
+  const totalBids = displayBids.value.length
+  
+  switch (e.key) {
+    case 'ArrowUp':
+      e.preventDefault()
+      if (focusedIndex.value > 0) {
+        focusedIndex.value--
+      } else if (focusedSection.value === 'bid' && totalAsks > 0) {
+        // 从买盘顶部跳到卖盘底部
+        focusedSection.value = 'ask'
+        focusedIndex.value = totalAsks - 1
+      }
+      break
+      
+    case 'ArrowDown':
+      e.preventDefault()
+      const maxIndex = focusedSection.value === 'ask' ? totalAsks - 1 : totalBids - 1
+      if (focusedIndex.value < maxIndex) {
+        focusedIndex.value++
+      } else if (focusedSection.value === 'ask' && totalBids > 0) {
+        // 从卖盘底部跳到买盘顶部
+        focusedSection.value = 'bid'
+        focusedIndex.value = 0
+      }
+      break
+      
+    case 'Tab':
+      e.preventDefault()
+      // Tab 切换买卖盘
+      if (focusedSection.value === 'ask' && totalBids > 0) {
+        focusedSection.value = 'bid'
+        focusedIndex.value = Math.min(focusedIndex.value, totalBids - 1)
+      } else if (focusedSection.value === 'bid' && totalAsks > 0) {
+        focusedSection.value = 'ask'
+        focusedIndex.value = Math.min(focusedIndex.value, totalAsks - 1)
+      }
+      break
+      
+    case 'Enter':
+      e.preventDefault()
+      selectFocusedPrice()
+      break
+  }
+}
+
+function selectFocusedPrice() {
+  const items = focusedSection.value === 'ask' ? displayAsks.value : displayBids.value
+  const item = items[focusedIndex.value]
+  if (item) {
+    emit('price-selected', {
+      price: item.price,
+      volume: item.volume,
+      side: focusedSection.value
+    })
+  }
+}
+
+function selectPrice(price, section, index) {
+  focusedSection.value = section
+  focusedIndex.value = index
+  emit('price-selected', {
+    price: price,
+    side: section
+  })
+}
+
+function setupPolling() {
+  if (unregisterPolling) {
+    unregisterPolling()
+  }
+  unregisterPolling = register(
+    `order-book-${props.symbol}`,
+    fetchOrderBook,
+    'critical',
+    { interval: 3000 }
+  )
+}
+
 watch(() => props.symbol, (s) => {
   localSymbol.value = s
   prevPrice = 0
   priceDir.value = ''
   fetchOrderBook()
+  setupPolling()
 }, { immediate: false })
 
 onMounted(() => {
   fetchOrderBook()
-  // 3 秒轮询（盘口高频场景）
-  refreshTimer = setInterval(fetchOrderBook, 3000)
+  setupPolling()
 })
 
 onBeforeUnmount(() => {
-  if (refreshTimer) clearInterval(refreshTimer)
-  refreshTimer = null
+  if (unregisterPolling) {
+    unregisterPolling()
+    unregisterPolling = null
+  }
 })
 </script>

@@ -2,16 +2,16 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">融资融券</h2>
 
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载融资融券数据..." />
 
-    <div v-else-if="error" class="text-center py-8 text-terminal-dim">
-      {{ error }}
-    </div>
+    <ErrorDisplay
+      v-else-if="error"
+      :error="error"
+      :retry="onRetry"
+    />
 
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询融资融券数据
+      请输入股票代码查看融资融券
     </div>
 
     <div v-else class="space-y-4">
@@ -93,12 +93,16 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' }
 })
+
+const emit = defineEmits(['retry'])
 
 const { formatMoney, formatVolume } = useStockDetail()
 
@@ -236,5 +240,9 @@ onUnmounted(() => {
 
 function handleResize() {
   chartInstance?.resize()
+}
+
+function onRetry() {
+  emit('retry')
 }
 </script>

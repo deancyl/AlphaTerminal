@@ -2,12 +2,10 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">公司概况</h2>
     
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载公司概况..." />
     
     <div v-else-if="!stockInfo" class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询
+      请输入股票代码查看公司概况
     </div>
     
     <div v-else class="space-y-4">
@@ -62,6 +60,7 @@
 </template>
 
 <script setup>
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
 import { useStockDetail } from '../../composables/useStockDetail'
 
 const props = defineProps({

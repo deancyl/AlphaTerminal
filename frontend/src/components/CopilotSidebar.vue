@@ -13,6 +13,7 @@
       :providers="providers"
       :currentModels="currentModels"
       :portfolioList="portfolioList"
+      :isLoadingPortfolio="isLoadingPortfolio"
       v-model:selectedPortfolioId="selectedPortfolioId"
     />
     <CopilotMessageList ref="messageListRef" :messages="messages" />
@@ -47,6 +48,7 @@ import CopilotInput from './copilot/CopilotInput.vue'
 const messages = ref([])
 const inputText = ref('')
 const isLoading = ref(false)
+const isLoadingPortfolio = ref(false)
 const messageListRef = ref(null)
 const ctxMarket = ref(true)
 const ctxRates = ref(false)
@@ -105,6 +107,7 @@ const emit = defineEmits([
 const { currentSymbol } = useMarketStore()
 
 async function loadPortfolioList() {
+  isLoadingPortfolio.value = true
   try {
     const res = await apiFetch('/api/v1/portfolio/')
     portfolioList.value = res.portfolios || []
@@ -113,6 +116,8 @@ async function loadPortfolioList() {
     }
   } catch (e) {
     logger.debug('[Copilot] Failed to load portfolio list:', e.message)
+  } finally {
+    isLoadingPortfolio.value = false
   }
 }
 

@@ -49,6 +49,10 @@
         <span>☰</span> 菜单
       </button>
 
+      <LoadingSpinner v-if="loading" text="加载管理面板..." />
+      <ErrorDisplay v-else-if="error" :error="error" :retry="onRetry" />
+
+      <template v-else>
       <!-- 数据源控制 -->
       <DataSourcePanel
         v-if="activeTab === 'sources'"
@@ -145,6 +149,7 @@
         @refresh="refreshLogs"
         @update:logLevel="logLevel = $event"
       />
+      </template>
     </main>
 
     <!-- 确认对话框 -->
@@ -192,6 +197,8 @@ import LogsPanel from './admin/LogsPanel.vue'
 import AgentTokensPanel from './admin/AgentTokensPanel.vue'
 import McpPanel from './admin/McpPanel.vue'
 import LayoutPanel from './admin/LayoutPanel.vue'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import ErrorDisplay from './f9/ErrorDisplay.vue'
 
 const emit = defineEmits(['navigate', 'clear-layout'])
 
@@ -201,6 +208,8 @@ const mobileNavOpen = ref(false)
 const logLevel = ref('ALL')
 const proxyUrl = ref('')
 const probeData = ref(null)
+const loading = ref(true)
+const error = ref(null)
 
 // Placeholder functions for agent_tokens and mcp
 function refreshAgentTokens() {
@@ -784,13 +793,36 @@ async function refreshSystemMetrics() {
 
 // ── Lifecycle Hooks ──────────────────────────────────────────────────────────
 
+function onRetry() {
+  error.value = null
+  loading.value = true
+  initializeData()
+}
+
+async function initializeData() {
+  try {
+    await Promise.all([
+      refreshSourceStatus(),
+      refreshScheduler(),
+      refreshSystemMetrics(),
+      refreshLogs(),
+      refreshDbStatus(),
+      loadLlmConfig(),
+      refreshWatchdog()
+    ])
+  } catch (e) {
+    logger.error('[AdminDashboard] initializeData failed:', e)
+    error.value = e.message || '加载管理面板失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
-  refreshSourceStatus()
-  refreshScheduler()
-  refreshSystemMetrics()
-  refreshLogs()
-  refreshDbStatus()
-  loadLlmConfig()
-  refreshWatchdog().catch(e => logger.error('[AdminDashboard] refreshWatchdog failed:', e))
+  initializeData().catch(e => {
+    logger.error('[AdminDashboard] onMounted failed:', e)
+    error.value = e.message || '加载管理面板失败'
+    loading.value = false
+  })
 })
 </script>

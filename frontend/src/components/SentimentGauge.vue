@@ -1,8 +1,15 @@
 <template>
   <div class="flex flex-col gap-2 h-full overflow-visible">
 
+    <!-- Loading State -->
+    <div v-if="loading" class="flex items-center justify-center py-8">
+      <div class="text-[10px] text-terminal-dim flex items-center gap-1">
+        <span class="animate-spin">⟳</span> 加载市场情绪数据...
+      </div>
+    </div>
+
     <!-- ── A股上涨家数折线图（全天走势，15秒轮询）───────────── -->
-    <div class="bg-terminal-bg rounded-sm border border-theme p-2">
+    <div v-if="!loading" class="bg-terminal-bg rounded-sm border border-theme p-2">
       <div class="flex items-center justify-between mb-1">
         <span class="text-[10px] text-terminal-dim">📈 全天走势</span>
         <span class="text-[10px] text-terminal-dim">{{ intradayUpdateTime }}</span>
@@ -12,7 +19,7 @@
     </div>
 
     <!-- ── A股涨跌分布直方图 ─────────────────────────────────── -->
-    <div class="bg-terminal-bg rounded-sm border border-theme p-3">
+    <div v-if="!loading" class="bg-terminal-bg rounded-sm border border-theme p-3">
       <!-- 标题栏：情绪 + 资讯面（移动端由外层panel提供标题，这里不重复） -->
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
@@ -107,7 +114,8 @@ import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
 import { apiFetch } from '../utils/api.js'
 import { formatPrice } from '../utils/formatters.js'
-import { getECharts } from '../utils/lazyEcharts.js'
+import { getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -119,12 +127,16 @@ const chartEl        = ref(null)
 const chartHeight     = 150
 const intradayEl      = ref(null)
 const intradayHeight  = 120
+const loading         = ref(true)
 let   chartInst       = null
 let   intradayInst    = null
-let   refreshTimer    = null
-let   intradayTimer   = null
 let   resizeObserver  = null
 let   unsubNewsRefresh = null
+let   _fetchController = null
+let   unregisterIntraday = null
+let   unregisterHistogram = null
+
+const { register } = usePollingManager()
 
 // 上涨家数全天走势数据（每15秒轮询追加一个点，最多240个点=1小时）
 const intradayData = ref([])   // [{time: '09:31', advance: 1234}, ...]
@@ -260,8 +272,11 @@ function initIntradayChart() {
 
 async function fetchIntraday() {
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
-    const d = await apiFetch('/api/v1/market/sentiment/intraday')
+    const d = await apiFetch('/api/v1/market/sentiment/intraday', { signal: _fetchController.signal })
     if (!d) return
     // d 已经是解包后的对象，直接访问 intraday
     const intraday = d.intraday || []
@@ -273,7 +288,11 @@ async function fetchIntraday() {
       }
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     logger.warn('[SentimentGauge] intraday fetch failed:', e.message)
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -343,8 +362,11 @@ function initChart() {
 
 async function fetchHistogram() {
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // apiFetch 自动解包: 返回 d.data (标准格式) 或 d (旧格式)
-    const payload = await apiFetch('/api/v1/market/sentiment/histogram')
+    const payload = await apiFetch('/api/v1/market/sentiment/histogram', { signal: _fetchController.signal })
     if (!payload) return
     // Phase 4: 提取 news_sentiment 字段
     if (payload.news_sentiment) {
@@ -363,7 +385,12 @@ async function fetchHistogram() {
       chartInst.setOption(buildHistogramOption(payload.buckets), true)
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     logger.warn('[SentimentGauge] fetch failed:', e.message)
+  } finally {
+    _fetchController = null
+    loading.value = false
   }
 }
 
@@ -374,26 +401,41 @@ const debouncedUpdate = useDebounceFn(() => {
 watch(data, () => { debouncedUpdate() })
 
 onMounted(async () => {
-  // Wait for ECharts to be lazy-loaded (fixes race condition on page refresh)
   await getECharts()
   
   await fetchHistogram()
   initChart()
   initIntradayChart()
 
-  // 折线图：每15秒轮询上涨家数走势
   await fetchIntraday()
-  intradayTimer = setInterval(fetchIntraday, 15_000)
+  
+  unregisterIntraday = register(
+    'sentiment-intraday',
+    fetchIntraday,
+    'high',
+    { interval: 15000 }
+  )
+  
+  unregisterHistogram = register(
+    'sentiment-histogram',
+    fetchHistogram,
+    'normal',
+    { interval: 3 * 60 * 1000 }
+  )
 
-  resizeObserver = new ResizeObserver(() => {
-    chartInst?.resize()
-    intradayInst?.resize()
-  })
+  let resizeTimer = null
+  const debouncedResize = () => {
+    if (resizeTimer) clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      chartInst?.resize()
+      intradayInst?.resize()
+      resizeTimer = null
+    }, 150)
+  }
+  resizeObserver = new ResizeObserver(debouncedResize)
   if (chartEl.value) resizeObserver.observe(chartEl.value)
   if (intradayEl.value) resizeObserver.observe(intradayEl.value)
-  refreshTimer = setInterval(fetchHistogram, 3 * 60 * 1000)
 
-  // Phase 4: 监听 NewsFeed 刷新事件，联动拉取最新情绪数据
   unsubNewsRefresh = busOn('news-refreshed', (payload) => {
     logger.log('[SentimentGauge] news-refreshed event, re-fetching...', payload)
     fetchHistogram()
@@ -401,8 +443,16 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  clearInterval(refreshTimer)
-  clearInterval(intradayTimer)
+  _fetchController?.abort()
+  _fetchController = null
+  if (unregisterIntraday) {
+    unregisterIntraday()
+    unregisterIntraday = null
+  }
+  if (unregisterHistogram) {
+    unregisterHistogram()
+    unregisterHistogram = null
+  }
   resizeObserver?.disconnect()
   unsubNewsRefresh?.()
   chartInst?.dispose()

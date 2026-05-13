@@ -585,6 +585,8 @@ const compareSymbols = ref('')
 const compareData = ref([])
 const compareError = ref(null)
 
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+
 // 计算是否有ESG分数
 const hasEsgScores = computed(() => {
   return ratings.value.some(r => 
@@ -595,15 +597,22 @@ const hasEsgScores = computed(() => {
 async function fetchRankData() {
   rankError.value = null
   try {
-    const res = await apiFetch(`/api/v1/esg/rank?page=${page.value}&page_size=${pageSize.value}&sort_by=${sortField.value}&sort_order=${sortOrder.value}`, { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch(`/api/v1/esg/rank?page=${page.value}&page_size=${pageSize.value}&sort_by=${sortField.value}&sort_order=${sortOrder.value}`, { timeoutMs: 30000, signal: _fetchController.signal })
     if (res?.items) {
       rankItems.value = res.items
       totalPages.value = res.total_pages || Math.ceil((res.total || res.items.length) / pageSize.value)
       lastUpdate.value = new Date().toISOString()
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: 'ESG排名' })
     rankError.value = userMessage || '获取ESG排名失败'
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -658,13 +667,20 @@ function exportCSV() {
 async function fetchCarbonData() {
   carbonError.value = null
   try {
-    const res = await apiFetch('/api/v1/esg/carbon', { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch('/api/v1/esg/carbon', { timeoutMs: 30000, signal: _fetchController.signal })
     if (res?.carbon_data) {
       carbonData.value = res.carbon_data
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: '碳排放数据' })
     carbonError.value = userMessage || '获取碳排放数据失败'
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -676,17 +692,23 @@ async function searchRating() {
   ratingError.value = null
   
   try {
-    const res = await apiFetch(`/api/v1/esg/rating/${symbolInput.value.trim()}`, { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch(`/api/v1/esg/rating/${symbolInput.value.trim()}`, { timeoutMs: 30000, signal: _fetchController.signal })
     if (res?.ratings) {
       ratings.value = res.ratings
       await nextTick()
       drawRadarChart()
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: 'ESG评级' })
     ratingError.value = userMessage || '获取ESG评级失败'
     ratings.value = []
   } finally {
+    _fetchController = null
     loading.value = false
   }
 }
@@ -698,17 +720,23 @@ async function fetchHistoryData() {
   loading.value = true
   
   try {
-    const res = await apiFetch(`/api/v1/esg/history/${historySymbol.value.trim()}?months=12`, { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch(`/api/v1/esg/history/${historySymbol.value.trim()}?months=12`, { timeoutMs: 30000, signal: _fetchController.signal })
     if (res?.history) {
       historyData.value = res.history
       await nextTick()
       drawHistoryChart()
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: 'ESG历史趋势' })
     historyError.value = userMessage || '获取历史趋势失败'
     historyData.value = []
   } finally {
+    _fetchController = null
     loading.value = false
   }
 }
@@ -792,15 +820,21 @@ async function fetchCompareData() {
   loading.value = true
   
   try {
-    const res = await apiFetch(`/api/v1/esg/compare?symbols=${symbols.join(',')}`, { timeoutMs: 30000 })
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const res = await apiFetch(`/api/v1/esg/compare?symbols=${symbols.join(',')}`, { timeoutMs: 30000, signal: _fetchController.signal })
     if (res?.comparison) {
       compareData.value = res.comparison
     }
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     const { userMessage } = handleError(e, { context: 'ESG对比分析' })
     compareError.value = userMessage || '获取对比数据失败'
     compareData.value = []
   } finally {
+    _fetchController = null
     loading.value = false
   }
 }
@@ -934,6 +968,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
   radarChartInstance?.dispose()
   historyChartInstance?.dispose()
   window.removeEventListener('resize', handleResize)

@@ -2,16 +2,12 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">公司公告</h2>
     
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载公司公告..." />
     
-    <div v-else-if="error" class="text-center py-8 text-red-400">
-      {{ error }}
-    </div>
+    <ErrorDisplay v-else-if="error" :error="error" :retry="retry" />
     
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询
+      请输入股票代码查看公告
     </div>
     
     <div v-else class="space-y-4">
@@ -93,11 +89,14 @@
 <script setup>
 import { computed } from 'vue'
 import { useStockDetail } from '../../composables/useStockDetail'
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
   loading: { type: Boolean, default: false },
   error: { type: String, default: '' },
+  retry: { type: Function, default: null },
   currentPage: { type: Number, default: 1 },
   pageSize: { type: Number, default: 20 }
 })

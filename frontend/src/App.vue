@@ -1,4 +1,7 @@
 <template>
+  <!-- ━━━ 离线提示横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <OfflineBanner />
+  
   <!-- Teleport 全屏到 body，脱离主界面 DOM 树，强制 100vw/100vh -->
   <Teleport to="body">
     <div
@@ -34,6 +37,7 @@
       <button 
         class="px-6 py-2 bg-terminal-accent text-white rounded hover:bg-terminal-accent/80 transition"
         @click="clearError"
+        aria-label="重试加载"
       >
         重试
       </button>
@@ -73,6 +77,8 @@
             class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
             @click="isSidebarOpen = !isSidebarOpen"
             title="切换侧边栏"
+            aria-label="切换侧边栏"
+            :aria-expanded="isSidebarOpen"
           >
             ☰
           </button>
@@ -82,6 +88,7 @@
             class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
             @click="cycleTheme"
             :title="`当前主题: ${currentTheme}, 点击切换`"
+            aria-label="切换主题"
           >
             {{ THEME_ICONS[currentTheme] || '🌙' }}
           </button>
@@ -102,6 +109,8 @@
               : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'"
             @click="toggleLock"
             :title="isLocked ? '点击解锁网格（允许拖拽）' : '点击锁定网格（禁止拖拽）'"
+            aria-label="锁定或解锁网格布局"
+            :aria-pressed="isLocked"
           >
             <span v-if="isLocked">🔒</span>
             <span v-else>🔓</span>
@@ -113,6 +122,7 @@
             class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
             @click="resetGridLayout"
             title="重置为默认布局"
+            aria-label="重置为默认布局"
           >
             <span>↺</span>
             重置布局
@@ -121,6 +131,8 @@
 <button
             class="btn-xs flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs leading-none relative"
             @click="toggleCopilot"
+            aria-label="打开或关闭AI助手"
+            :aria-expanded="isCopilotOpen"
           >
             <span v-if="isCopilotOpen">⏭ 收起</span>
             <span v-else>🤖 AI</span>
@@ -229,6 +241,16 @@
           </div>
         </div>
       </div>
+      
+      <!-- ━━━ 底部状态栏 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+      <StatusBar
+        :connection-status="wsStatus"
+        :latency="latency"
+        :last-connected-at="lastConnectedAt"
+        :connection-attempts="connectionAttempts"
+        :market-status="marketStatus"
+        @reconnect="manualReconnect"
+      />
     </main>
 
     <!-- ━━━ 快捷键帮助面板 ━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -297,6 +319,8 @@ import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
+import OfflineBanner from './components/OfflineBanner.vue'
+import StatusBar from './components/StatusBar.vue'
 
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
@@ -320,6 +344,7 @@ import { useTheme } from './composables/useTheme.js'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
 import { useToast } from './composables/useToast.js'
 import { useSwipe } from './composables/useSwipe.js'
+import { useMarketStream } from './composables/useMarketStream.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 import { preloadECharts } from './utils/lazyEcharts.js'
@@ -327,6 +352,7 @@ import { preloadECharts } from './utils/lazyEcharts.js'
 const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
 const { success: toastSuccess, info: toastInfo } = useToast()
+const { wsStatus, latency, manualReconnect, lastConnectedAt, connectionAttempts } = useMarketStream()
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark, cycleTheme, THEME_ICONS } = useTheme()
@@ -579,6 +605,22 @@ const derivativesData = ref([])
 const currentTime     = ref('')
 const watchList       = ref([])   // 自选股列表
 const preFetchedKlineData = ref(null) // 预取的K线数据
+
+// Market status computed from current time
+const marketStatus = computed(() => {
+  const now = new Date()
+  const hour = now.getHours()
+  const minute = now.getMinutes()
+  const time = hour * 60 + minute
+  const day = now.getDay()
+  
+  if (day === 0 || day === 6) return 'closed'
+  if (time >= 9 * 60 + 15 && time < 11 * 60 + 30) return 'open'
+  if (time >= 13 * 60 && time < 15 * 60) return 'open'
+  if (time >= 9 * 60 && time < 9 * 60 + 15) return 'pre'
+  if (time >= 15 * 60 && time < 15 * 60 + 30) return 'post'
+  return 'closed'
+})
 
 let clockTimer = null
 

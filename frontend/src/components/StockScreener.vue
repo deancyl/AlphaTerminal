@@ -95,9 +95,19 @@
             <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pb')">PB</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody ref="tableBody" tabindex="0"
+               @keydown="handleKeydown"
+               @focus="handleTableFocus"
+               role="listbox"
+               aria-label="股票列表">
           <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
-              class="border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer"
+              :ref="setRowRef"
+              :class="[
+                'border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer',
+                { 'bg-terminal-accent/20 ring-1 ring-terminal-accent ring-inset': focusedRowIndex === index }
+              ]"
+              :aria-selected="focusedRowIndex === index"
+              role="option"
               @click="handleClick(stock)"
               @contextmenu.prevent="handleContextMenu($event, stock)">
             <td class="px-2 py-1.5 text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</td>
@@ -163,7 +173,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
@@ -249,6 +259,9 @@ const searchQuery = ref('')
 const showMobileFilter = ref(false)  // 移动端筛选面板显示状态
 const sortBy      = ref('change_pct')
 const sortDir     = ref('desc')
+const focusedRowIndex = ref(-1)  // 键盘导航：当前聚焦行索引
+const tableBody   = ref(null)    // tbody ref for focus management
+const rowRefs     = shallowRef([])      // row element refs for scrolling
 
 // ── 过滤条件 ─────────────────────────────────────────────────────────
 const flt = ref({
@@ -329,6 +342,12 @@ function goPage(p) {
 // ── 搜索/过滤变化 → 重置到第1页，深度监听所有筛框 ─────────────────────
 watch(flt, () => { currentPage.value = 1; debouncedFetch() }, { deep: true })
 
+// ── 数据变化时重置键盘导航焦点和行 refs ────────────────────────────────
+watch(stocks, (newStocks) => {
+  focusedRowIndex.value = -1
+  rowRefs.value = new Array(newStocks.length).fill(null)
+}, { immediate: false })
+
 // ── 点击个股 ──────────────────────────────────────────────────────────
 function handleClick(stock) {
   // 确保数字代码加上 sh/sz 前缀（normalizeSymbol 依赖 registry 加载，
@@ -341,6 +360,58 @@ function handleClick(stock) {
   setSymbol(sym, stock.name, (stock.change_pct || 0) >= 0 ? '#ef232a' : '#14b143')
   // 同步 selectedIndex，触发 IndexLineChart 刷新（通过 emit 通知父组件）
   emit('symbol-click', { symbol: sym, name: stock.name })
+}
+
+// ── 键盘导航 ──────────────────────────────────────────────────────────
+function handleKeydown(event) {
+  const stockCount = stocks.value.length
+  if (stockCount === 0) return
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusedRowIndex.value = Math.min(focusedRowIndex.value + 1, stockCount - 1)
+      scrollFocusedRowIntoView()
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      focusedRowIndex.value = Math.max(focusedRowIndex.value - 1, 0)
+      scrollFocusedRowIntoView()
+      break
+    case 'Enter':
+      event.preventDefault()
+      if (focusedRowIndex.value >= 0 && focusedRowIndex.value < stockCount) {
+        handleClick(stocks.value[focusedRowIndex.value])
+      }
+      break
+    case 'Escape':
+      focusedRowIndex.value = -1
+      break
+  }
+}
+
+function handleTableFocus() {
+  // When table receives focus, select first row if none selected
+  if (focusedRowIndex.value < 0 && stocks.value.length > 0) {
+    focusedRowIndex.value = 0
+  }
+}
+
+function scrollFocusedRowIntoView() {
+  // Use nextTick to ensure DOM is updated
+  nextTick(() => {
+    const row = rowRefs.value[focusedRowIndex.value]
+    if (row && row.scrollIntoView) {
+      row.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  })
+}
+
+// Set row ref for keyboard navigation scrolling
+function setRowRef(el, index) {
+  if (el) {
+    rowRefs.value[index] = el
+  }
 }
 
 // ── 重置过滤 ───────────────────────────────────────────────────────────

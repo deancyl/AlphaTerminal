@@ -85,7 +85,7 @@
     </div>
 
     <div v-else class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询财务数据
+      请输入股票代码查看财务数据
     </div>
   </div>
 </template>

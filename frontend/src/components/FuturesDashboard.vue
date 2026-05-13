@@ -1,6 +1,11 @@
 <template>
   <div class="flex flex-col h-full overflow-auto gap-3 p-4">
 
+    <!-- Loading State -->
+    <div v-if="isLoading" class="flex items-center justify-center py-8">
+      <LoadingSpinner text="加载期货数据..." />
+    </div>
+
     <!-- 顶部核心卡片：股指期货主力 -->
     <!-- 移动端：水平滚动，桌面端：等分布局 -->
     <div class="flex gap-2 md:gap-3 shrink-0 overflow-x-auto pb-1 md:pb-0 scrollbar-hide">
@@ -117,6 +122,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import FuturesMainChart from './FuturesMainChart.vue'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
 import { apiFetch } from '../utils/api.js'
 
 const emit = defineEmits(['open-futures'])
@@ -124,6 +130,7 @@ const emit = defineEmits(['open-futures'])
 const futuresCards     = ref([])
 const commodityBlocks  = ref([])
 const commodityUpdateTime = ref('')
+const isLoading = ref(false)
 
 // 板块分组 + 板块平均涨跌幅
 const commoditySectors = computed(() => {
@@ -146,6 +153,7 @@ function openFuturesCard(card) {
 }
 
 async function fetchFuturesData() {
+  isLoading.value = true
   try {
     const [mi, mc] = await Promise.all([
       apiFetch('/api/v1/futures/main_indexes'),
@@ -163,6 +171,8 @@ async function fetchFuturesData() {
     }
   } catch (e) {
     logger.warn('[FuturesDashboard] fetch failed:', e)
+  } finally {
+    isLoading.value = false
   }
 }
 

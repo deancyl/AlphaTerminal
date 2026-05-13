@@ -1,6 +1,16 @@
-import { getCachedResponse, setCachedResponse, cleanCache } from './useCopilotCache.js'
+import { getCachedResponse, setCachedResponse, cleanCache, useCopilotCacheLifecycle } from './useCopilotCache.js'
 
 let currentController = null
+
+export function useCopilotChat() {
+  useCopilotCacheLifecycle()
+
+  return {
+    sendToLLM,
+    abortCurrentRequest,
+    getCurrentAbortController
+  }
+}
 
 export async function sendToLLM(text, contextOptions, callbacks) {
   const { ctxMarket, ctxRates, ctxNews, ctxPortfolio, ctxHistorical, selectedProvider, selectedModel, portfolioId, currentSymbol } = contextOptions

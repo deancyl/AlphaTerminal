@@ -22,6 +22,7 @@ import { ref, computed, watch, onUnmounted, shallowRef, triggerRef } from 'vue'
 import { logger } from '../utils/logger.js'
 import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
 import { usePageVisibility } from './usePageVisibility.js'
+import { acquireLock, releaseLock } from '../utils/connectionLock.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -60,6 +61,7 @@ const globalWsStatus = ref('idle')
 const globalError = ref(null)
 const globalLastConnectedAt = ref(null)
 const globalConnectionAttempts = ref(0)
+const globalLatency = ref(null) // WebSocket latency in ms
 
 // 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
 const subscribedSymRefCount = new Map()
@@ -83,6 +85,7 @@ function _notifyTick() {
 
 function _newConnection() {
   if (_ws || _connecting) return
+  if (!acquireLock()) return
 
   _connecting = true
   globalWsStatus.value = 'connecting'
@@ -93,6 +96,7 @@ function _newConnection() {
   try {
     _ws = new WebSocket(url)
   } catch (e) {
+    releaseLock()
     logger.error('[MarketStream] WebSocket 创建失败:', e)
     globalWsStatus.value = 'failed'
     globalError.value = 'WebSocket 创建失败'
@@ -102,6 +106,7 @@ function _newConnection() {
   }
 
   _ws.onopen = () => {
+    releaseLock()
     _connecting = false
     globalWsStatus.value = 'connected'
     globalError.value = null
@@ -120,8 +125,18 @@ function _newConnection() {
     _lastMessageTime = Date.now()
     try {
       const data = JSON.parse(event.data)
-      // 忽略控制消息（pong心跳、订阅确认）
-      if (data.type === 'pong' || data.type === 'subscribed' || data.type === 'unsubscribed') return
+      
+      // Handle pong response - calculate latency
+      if (data.type === 'pong') {
+        if (_pingSentTime > 0) {
+          globalLatency.value = Date.now() - _pingSentTime
+          _pingSentTime = 0
+        }
+        return
+      }
+      
+      // Ignore other control messages
+      if (data.type === 'subscribed' || data.type === 'unsubscribed') return
 
       // tick 消息处理（data.type === 'tick' 或兼容旧格式无 type 字段）
       const sym = data.symbol
@@ -161,12 +176,14 @@ function _newConnection() {
   }
 
   _ws.onerror = (e) => {
+    releaseLock()
     logger.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
     globalWsStatus.value = 'connected' // onerror 之后必触发 onclose，不单独设置
   }
 
   _ws.onclose = (e) => {
+    releaseLock()
     logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
     const wasConnected = globalWsStatus.value === 'connected'
 
@@ -252,6 +269,7 @@ let _heartbeatTimer = null
 let _connecting = false
 let _lastMessageTime = 0
 let _healthCheckTimer = null
+let _pingSentTime = 0 // Timestamp when ping was sent
 
 // 心跳间隔：可见时 30s，隐藏时 120s
 const HEARTBEAT_VISIBLE = 30_000
@@ -264,6 +282,7 @@ function _startHeartbeat(interval = _currentHeartbeatInterval) {
   _heartbeatTimer = setInterval(() => {
     if (_ws && _ws.readyState === WebSocket.OPEN) {
       try {
+        _pingSentTime = Date.now()
         _ws.send(JSON.stringify({ action: 'ping' }))
       } catch (_) {
         // WS 已在 closing 状态，静默忽略
@@ -470,6 +489,7 @@ export function useMarketStream(initialSymbol = '') {
     manualReconnect,
     lastConnectedAt: globalLastConnectedAt,
     connectionAttempts: globalConnectionAttempts,
+    latency: globalLatency,
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
@@ -478,6 +498,7 @@ export function useMarketStream(initialSymbol = '') {
       wsStatus: globalWsStatus.value,
       lastConnectedAt: globalLastConnectedAt.value,
       connectionAttempts: globalConnectionAttempts.value,
+      latency: globalLatency.value,
     }),
   }
 }

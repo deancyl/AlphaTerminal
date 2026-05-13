@@ -37,6 +37,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   tenors10y: { type: Object, default: null },   // {date, yield}[]
@@ -156,7 +157,7 @@ async function initChart() {
 onMounted(() => {
   initChart()
   if (chartRef.value) {
-    ro = new ResizeObserver(() => chartInst.value?.resize())
+    ro = createResizeObserver(chartInst.value)
     ro.observe(chartRef.value)
   }
 })

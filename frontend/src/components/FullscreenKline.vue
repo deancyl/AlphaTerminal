@@ -172,7 +172,7 @@ import { useBreakpoints, breakpointsTailwind, useThrottleFn } from '@vueuse/core
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
-import { initChart, getECharts } from '../utils/lazyEcharts.js'
+import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import { calcMA, calcMACD, calcKDJ, calcRSI, calcBOLL, calcOBV, calcDMI, calcCCI } from '../utils/indicators.js'
@@ -246,6 +246,7 @@ const latestChange = ref(0)
 const chartEl = ref(null)
 let chart = null
 let refreshTimer = null  // F1修复: K线自动刷新定时器
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
 
 // 十字指针状态
 const crosshairRef = ref(null)
@@ -403,6 +404,9 @@ async function fetchData() {
   chartError.value = ''
 
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     const params = new URLSearchParams({
       period: period.value,
       limit: '500',
@@ -410,7 +414,7 @@ async function fetchData() {
     })
 
     // 修复: 使用 apiFetch 兼容统一响应格式 {code, message, data}
-    const d = await apiFetch(`/api/v1/market/history/${props.symbol}?${params}`)
+    const d = await apiFetch(`/api/v1/market/history/${props.symbol}?${params}`, { signal: _fetchController.signal })
     const historyArray = d?.history || d || []
 
     if (!Array.isArray(historyArray) || historyArray.length === 0) {
@@ -431,9 +435,12 @@ async function fetchData() {
     renderChart()
 
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     chartError.value = `加载失败: ${e.message}`
     logger.error('[FullscreenKline] fetchData error:', e)
   } finally {
+    _fetchController = null
     loading.value = false
   }
 }
@@ -442,11 +449,18 @@ async function fetchData() {
 async function fetchQuote() {
   if (!props.symbol) return
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // 修复: 使用正确的实时行情端点
-    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
+    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`, { signal: _fetchController.signal })
     if (d) quoteData.value = d.data || d
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     logger.warn('[FullscreenKline] fetchQuote error:', e.message)
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -469,13 +483,19 @@ async function renderChart() {
     }
     // 初始化 ResizeObserver（替换全局 window.resize）
     if (chartEl.value) {
-      const ro = new ResizeObserver((entries) => {
+      let resizeTimer = null
+      const debouncedResize = (entries) => {
         const { width, height } = entries[0].contentRect
         if (width > 0 && height > 0) {
-          console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-          chart?.resize()
+          if (resizeTimer) clearTimeout(resizeTimer)
+          resizeTimer = setTimeout(() => {
+            console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+            chart?.resize()
+            resizeTimer = null
+          }, 150)
         }
-      })
+      }
+      const ro = new ResizeObserver(debouncedResize)
       ro.observe(chartEl.value)
       // 清理时通过 onBeforeUnmount 处理
       _fullscreenRO = ro
@@ -707,6 +727,9 @@ onMounted(async () => {
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
 onBeforeUnmount(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
   if (chart) {
     console.debug(`[ECharts] 🗑️  disposed instance for fullscreenKline: ${props.symbol}`)
     chart.dispose()
@@ -722,8 +745,11 @@ onBeforeUnmount(() => {
   _fullscreenRO = null
 })
 
-onUnmounted(() => { 
+onUnmounted(() => {
   // 双重保险：onUnmounted 也清理一次
+  // Cancel any pending fetch requests (in case onBeforeUnmount didn't run)
+  _fetchController?.abort()
+  _fetchController = null
   if (chart) {
     chart.dispose()
     chart = null

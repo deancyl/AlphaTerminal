@@ -9,7 +9,7 @@ import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
-import { initChart, getECharts } from '../utils/lazyEcharts.js'
+import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 
 
 
@@ -352,10 +352,7 @@ onMounted(async () => {
     })
 
     // ResizeObserver for resize only (not init)
-    _ro = new ResizeObserver(() => {
-      if (!_isInitialized || !chart) return
-      chart.resize()
-    })
+    _ro = createResizeObserver(chart)
     _ro.observe(chartEl.value)
 
   } catch (e) {

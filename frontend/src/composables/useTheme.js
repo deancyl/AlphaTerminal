@@ -41,6 +41,19 @@ export const THEME_ICONS = {
 }
 
 // ============================================
+// 颜色模式定义（CN/Intl）
+// ============================================
+export const COLOR_MODES = {
+  cn: { up: '#E63946', down: '#1A936F' },   // 中国：红涨绿跌
+  intl: { up: '#1A936F', down: '#E63946' }  // 国际：绿涨红跌
+}
+
+export const COLOR_MODE_NAMES = {
+  cn: '中国惯例（红涨绿跌）',
+  intl: '国际惯例（绿涨红跌）'
+}
+
+// ============================================
 // 规范色彩定义（遵循万德金融终端UI/UX设计规范 v1.0）
 // ============================================
 const BRAND_COLORS = {
@@ -844,6 +857,7 @@ let watchInitialized = false
 export function useTheme() {
   onMounted(() => {
     initTheme()
+    initColorMode()
   })
 
   if (!watchInitialized) {
@@ -866,5 +880,54 @@ export function useTheme() {
     THEMES,
     THEME_NAMES,
     THEME_ICONS,
+    // Color mode exports
+    colorMode: readonly(currentColorMode),
+    currentColorMode,
+    setColorMode,
+    cycleColorMode,
+    COLOR_MODES,
+    COLOR_MODE_NAMES,
   }
+}
+
+// ============================================
+// 颜色模式管理（CN/Intl）
+// ============================================
+const currentColorMode = ref('cn')
+let colorModeInitialized = false
+
+function initColorMode() {
+  if (colorModeInitialized) return
+  const saved = localStorage.getItem('alphaterminal-colorMode')
+  if (saved && (saved === 'cn' || saved === 'intl')) {
+    currentColorMode.value = saved
+  } else {
+    currentColorMode.value = 'cn'
+  }
+  applyColorMode(currentColorMode.value)
+  colorModeInitialized = true
+}
+
+function applyColorMode(mode) {
+  const colors = COLOR_MODES[mode] || COLOR_MODES.cn
+  const root = document.documentElement
+  
+  root.style.setProperty('--color-up', colors.up)
+  root.style.setProperty('--color-down', colors.down)
+  
+  root.setAttribute('data-color-mode', mode)
+  logger.log(`[ColorMode] 已切换至: ${COLOR_MODE_NAMES[mode]}`)
+}
+
+function setColorMode(mode) {
+  if (mode === 'cn' || mode === 'intl') {
+    currentColorMode.value = mode
+    localStorage.setItem('alphaterminal-colorMode', mode)
+    applyColorMode(mode)
+  }
+}
+
+function cycleColorMode() {
+  const next = currentColorMode.value === 'cn' ? 'intl' : 'cn'
+  setColorMode(next)
 }

@@ -13,6 +13,7 @@ from app.services.fetchers import FetcherFactory
 from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback_async
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_fetcher import akshare_breaker
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,62 @@ router = APIRouter()
 
 
 # ── Helper functions (copied from market.py) ─────────────────────────────────
+
+async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
+    """
+    Fallback: Fetch historical daily data from AkShare when database is empty.
+    Returns list of dicts with 'date', 'open', 'high', 'low', 'close', 'volume'.
+    Sorted DESC (newest first).
+    """
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fallback for {symbol}")
+        return []
+    
+    # Map symbol to AkShare format
+    ak_symbol_map = {
+        "000001": "sh000001", "000300": "sh000300", "399001": "sz399001",
+        "399006": "sz399006", "000688": "sh000688",
+        "600519": "sh600519",  # 个股示例
+    }
+    ak_sym = ak_symbol_map.get(symbol)
+    if not ak_sym:
+        # Try to construct AkShare symbol from prefix
+        if symbol.startswith('6'):
+            ak_sym = f"sh{symbol}"
+        elif symbol.startswith(('0', '3')):
+            ak_sym = f"sz{symbol}"
+        else:
+            logger.warning(f"[AkShare] No mapping for symbol: {symbol}")
+            return []
+    
+    try:
+        import akshare as ak
+        with akshare_breaker:
+            df = ak.stock_zh_index_daily(symbol=ak_sym) if symbol in ak_symbol_map else ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+        
+        if df is None or df.empty:
+            return []
+        
+        # AkShare returns columns: ['date', 'open', 'high', 'low', 'close', 'volume']
+        date_col = df.columns[0]
+        rows = []
+        for i in range(len(df) - 1, max(-1, len(df) - limit - 1), -1):  # DESC order
+            try:
+                rows.append({
+                    'date': str(df.iloc[i][date_col])[:10],
+                    'open': float(df.iloc[i]['open']),
+                    'high': float(df.iloc[i]['high']),
+                    'low': float(df.iloc[i]['low']),
+                    'close': float(df.iloc[i]['close']),
+                    'volume': int(df.iloc[i]['volume']) if 'volume' in df.columns else 0,
+                })
+            except Exception:
+                continue
+        logger.info(f"[AkShare] Fetched {len(rows)} historical bars for {symbol}")
+        return rows
+    except Exception as e:
+        logger.error(f"[AkShare] Failed to fetch history for {symbol}: {e}")
+        return []
 
 def _normalize_symbol(raw: str) -> str:
     """
@@ -158,11 +215,11 @@ async def market_quote_detail(symbol: str):
     market     = w.get('market') or 'AShare'
 
     # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
-    # 优化：将原来的3次查询（get_price_history limit=2 + get_daily_history limit=250 + limit=9999）
-    # 合并为1次查询（limit=400），足够覆盖所有需求
-    # market_data_daily 存无前缀代码，用 db_sym 查询
-    _HIST_LIMIT = 400  # 252(52周) + 60 + 20 + 5 + buffer
+    _HIST_LIMIT = 400
     hist_all = get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0) if callable(get_daily_history) else []
+    
+    if not hist_all:
+        hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
 
     # 实时快照：从 hist_all 前2条获取（最新 + 前一日）
     latest_row = hist_all[0] if hist_all else {}

@@ -292,10 +292,16 @@ import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 // 响应式断点检测
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px 为手机端
+
+// Separate abort controllers for news and sentiment to avoid race condition
+const { createSignal: createNewsSignal, complete: completeNews, abort: abortNews } = useAbortableRequest()
+const { createSignal: createSentimentSignal, complete: completeSentiment, abort: abortSentiment } = useAbortableRequest()
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
@@ -307,9 +313,12 @@ const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
 const listEl       = ref(null)
-const refreshTimer  = ref(null)
 const forceRefreshCounter = ref(0)
 const lastRefreshTime = ref(null)
+let unregisterNews = null
+let unregisterSentiment = null
+
+const { register } = usePollingManager()
 
 // ── 舆情情感数据 ──────────────────────────────────────────────
 const sentiment = ref({
@@ -321,7 +330,6 @@ const sentiment = ref({
   keywords: [],
   timestamp: '',
 })
-const sentimentTimer = ref(null)
 
 const filteredTotal = computed(() => filteredItems.value.length)
 
@@ -351,8 +359,9 @@ function getItemSentiment(item) {
 
 
 async function fetchSentiment() {
+  const signal = createSentimentSignal()
   try {
-    const res = await fetch(`/api/v1/market/sentiment/news?_t=${Date.now()}`)
+    const res = await fetch(`/api/v1/market/sentiment/news?_t=${Date.now()}`, { signal })
     if (!res.ok) return
     const json = await res.json()
     const data = (json && json.code === 0) ? json.data : json
@@ -360,7 +369,11 @@ async function fetchSentiment() {
       sentiment.value = { ...data }
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.debug('[NewsFeed] sentiment fetch failed:', e.message)
+  } finally {
+    completeSentiment()
   }
 }
 
@@ -638,6 +651,7 @@ function closeModal() {
 // ── 数据拉取 ──────────────────────────────────────────────────────────
 async function fetchNews(quiet = false, isTimer = false) {
   if (!quiet) isRefreshing.value = true
+  const signal = createNewsSignal()
   try {
     if (isTimer) {
       forceRefreshCounter.value = (forceRefreshCounter.value || 0) + 1
@@ -646,7 +660,7 @@ async function fetchNews(quiet = false, isTimer = false) {
     const url = useForce
       ? '/api/v1/news/force_refresh'
       : `/api/v1/news/flash?_t=${Date.now()}`
-    const res = await fetch(url, useForce ? { method: 'POST' } : {})
+    const res = await fetch(url, useForce ? { method: 'POST', signal } : { signal })
     if (!res.ok) {
       let errMsg = `HTTP ${res.status}`
       try {
@@ -712,9 +726,12 @@ async function fetchNews(quiet = false, isTimer = false) {
       if (!quiet) busEmit('news-refreshed', { count: newItems.length, sources: [...new Set(newItems.map(it => it.source))] })
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.warn('[NewsFeed] fetch failed:', e.message)
     if (!quiet) refreshMsg.value = `抓取失败: ${e.message}`
   } finally {
+    completeNews()
     if (!quiet) isRefreshing.value = false
   }
 }
@@ -725,17 +742,42 @@ async function manualRefresh() {
   await Promise.all([fetchNews(false), fetchSentiment()])
 }
 
-function startAutoRefresh() {
-  fetchNews(true)
-  fetchSentiment()
-  refreshTimer.value = setInterval(() => fetchNews(true, true), 2 * 60 * 1000)
-  sentimentTimer.value = setInterval(() => fetchSentiment(), 60 * 1000)
+function setupPolling() {
+  if (unregisterNews) unregisterNews()
+  if (unregisterSentiment) unregisterSentiment()
+  
+  unregisterNews = register(
+    'news-feed',
+    () => fetchNews(true, true),
+    'normal',
+    { interval: 2 * 60 * 1000 }
+  )
+  
+  unregisterSentiment = register(
+    'news-sentiment',
+    fetchSentiment,
+    'normal',
+    { interval: 60 * 1000 }
+  )
 }
 
-onMounted(startAutoRefresh)
+onMounted(() => {
+  fetchNews(true)
+  fetchSentiment()
+  setupPolling()
+})
+
 onUnmounted(() => {
-  if (refreshTimer.value) clearInterval(refreshTimer.value)
-  if (sentimentTimer.value) clearInterval(sentimentTimer.value)
+  if (unregisterNews) {
+    unregisterNews()
+    unregisterNews = null
+  }
+  if (unregisterSentiment) {
+    unregisterSentiment()
+    unregisterSentiment = null
+  }
+  abortNews('Component unmounted')
+  abortSentiment('Component unmounted')
 })
 </script>
 

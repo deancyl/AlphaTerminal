@@ -10,6 +10,7 @@ const props = defineProps({
   providers: { type: Array, default: () => [] },
   currentModels: { type: Array, default: () => [] },
   portfolioList: { type: Array, default: () => [] },
+  isLoadingPortfolio: Boolean,
   selectedPortfolioId: [String, Number]
 })
 
@@ -68,13 +69,19 @@ const emit = defineEmits([
   </div>
 
   <!-- 投资组合选择器 -->
-  <div v-if="ctxPortfolio && portfolioList.length > 0"
+  <div v-if="ctxPortfolio"
        class="px-4 py-2 border-b border-theme-secondary flex items-center gap-2 shrink-0">
     <span class="text-[10px] text-terminal-dim shrink-0">💼 组合</span>
-    <select :value="selectedPortfolioId" @change="emit('update:selectedPortfolioId', $event.target.value)"
+    <select v-if="isLoadingPortfolio"
+            class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
+                   text-theme-dim cursor-wait">
+      <option>加载中...</option>
+    </select>
+    <select v-else-if="portfolioList.length > 0" :value="selectedPortfolioId" @change="emit('update:selectedPortfolioId', $event.target.value)"
             class="flex-1 bg-terminal-bg border border-theme rounded-sm px-2 py-1 text-[11px]
                    text-theme-primary focus:outline-none focus:border-terminal-accent/60 cursor-pointer">
       <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }}</option>
     </select>
+    <span v-else class="flex-1 text-[11px] text-terminal-dim">暂无可用组合</span>
   </div>
 </template>

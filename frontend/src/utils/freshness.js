@@ -3,46 +3,48 @@
  */
 
 const THRESHOLDS = {
-  FRESH: { ms: 60 * 1000, icon: '🟢', label: 'Fresh', color: '#22c55e' },
-  RECENT: { ms: 5 * 60 * 1000, icon: '🟡', label: 'Recent', color: '#eab308' },
-  STALE: { ms: 60 * 60 * 1000, icon: '🟠', label: 'Stale', color: '#f97316' },
-  EXPIRED: { ms: Infinity, icon: '🔴', label: 'Expired', color: '#ef4444' }
+  FRESH: { ms: 5 * 1000, icon: '●', label: '实时', labelEn: 'Live', color: 'var(--color-success)' },
+  RECENT: { ms: 30 * 1000, icon: '●', label: '近期', labelEn: 'Recent', color: 'var(--color-warning)' },
+  STALE: { ms: 60 * 1000, icon: '●', label: '稍旧', labelEn: 'Stale', color: 'var(--color-warning)' },
+  EXPIRED: { ms: Infinity, icon: '●', label: '过期', labelEn: 'Expired', color: 'var(--color-danger)' }
 };
 
 /**
- * Format age in milliseconds to human-readable text
+ * Format age in milliseconds to Chinese human-readable text
  * @param {number} ms - Age in milliseconds
- * @returns {string} Human-readable age text
+ * @returns {string} Human-readable age text in Chinese
  */
 export function formatAge(ms) {
-  if (ms == null || ms < 0) return 'unknown';
+  if (ms == null || ms < 0) return '无数据';
   
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
   
-  if (days > 0) return `${days}d ${hours % 24}h ago`;
-  if (hours > 0) return `${hours}h ${minutes % 60}m ago`;
-  if (minutes > 0) return `${minutes}m ago`;
-  if (seconds > 0) return `${seconds}s ago`;
-  return 'just now';
+  if (days > 0) return `${days}天前`;
+  if (hours > 0) return `${hours}小时前`;
+  if (minutes > 0) return `${minutes}分钟前`;
+  if (seconds > 0) return `${seconds}秒前`;
+  return '刚刚';
 }
 
 /**
  * Get freshness status for a timestamp
  * @param {number|string|Date|null|undefined} timestamp - The timestamp to check
- * @returns {{ status: string, icon: string, label: string, color: string, ageMs: number, ageText: string }}
+ * @returns {{ status: string, icon: string, label: string, color: string, ageMs: number, ageText: string, isLive: boolean }}
  */
 export function getFreshness(timestamp) {
   if (timestamp == null) {
     return {
       status: 'UNKNOWN',
-      icon: '⚪',
-      label: 'Unknown',
-      color: '#6b7280',
+      icon: '●',
+      label: '无数据',
+      labelEn: 'No data',
+      color: 'var(--text-tertiary)',
       ageMs: -1,
-      ageText: 'no data'
+      ageText: '无数据',
+      isLive: false
     };
   }
   
@@ -58,22 +60,26 @@ export function getFreshness(timestamp) {
   } else {
     return {
       status: 'UNKNOWN',
-      icon: '⚪',
-      label: 'Unknown',
-      color: '#6b7280',
+      icon: '●',
+      label: '无数据',
+      labelEn: 'Invalid',
+      color: 'var(--text-tertiary)',
       ageMs: -1,
-      ageText: 'invalid'
+      ageText: '无效',
+      isLive: false
     };
   }
   
   if (isNaN(ts)) {
     return {
       status: 'UNKNOWN',
-      icon: '⚪',
-      label: 'Unknown',
-      color: '#6b7280',
+      icon: '●',
+      label: '无数据',
+      labelEn: 'Invalid',
+      color: 'var(--text-tertiary)',
       ageMs: -1,
-      ageText: 'invalid'
+      ageText: '无效',
+      isLive: false
     };
   }
   
@@ -90,14 +96,18 @@ export function getFreshness(timestamp) {
     threshold = THRESHOLDS.EXPIRED;
   }
   
+  const status = threshold === THRESHOLDS.EXPIRED ? 'EXPIRED' : 
+                 threshold === THRESHOLDS.STALE ? 'STALE' :
+                 threshold === THRESHOLDS.RECENT ? 'RECENT' : 'FRESH';
+  
   return {
-    status: threshold === THRESHOLDS.EXPIRED ? 'EXPIRED' : 
-            threshold === THRESHOLDS.STALE ? 'STALE' :
-            threshold === THRESHOLDS.RECENT ? 'RECENT' : 'FRESH',
+    status,
     icon: threshold.icon,
     label: threshold.label,
+    labelEn: threshold.labelEn,
     color: threshold.color,
     ageMs,
-    ageText: formatAge(ageMs)
+    ageText: formatAge(ageMs),
+    isLive: status === 'FRESH'
   };
 }

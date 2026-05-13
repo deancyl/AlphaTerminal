@@ -34,12 +34,42 @@
 
     <!-- 指数卡片网格 -->
     <div class="flex-1 overflow-y-auto p-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <!-- Loading State -->
+      <LoadingSpinner v-if="loading && allIndexes.length === 0" text="加载全球指数数据..." />
+      
+      <!-- Error State -->
+      <ErrorDisplay 
+        v-else-if="error && allIndexes.length === 0" 
+        :error="error" 
+        :retry="refreshAll" 
+      />
+      
+      <!-- Empty State -->
+      <EmptyState 
+        v-else-if="!loading && filteredIndexes.length === 0" 
+        icon="🌍" 
+        message="暂无指数数据" 
+        hint="请检查网络连接或稍后重试" 
+      />
+      
+      <!-- Data Grid -->
+      <div 
+        v-else 
+        ref="indexGrid"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+        tabindex="0"
+        @keydown="handleKeydown"
+      >
         <div
-          v-for="index in filteredIndexes"
+          v-for="(index, idx) in filteredIndexes"
           :key="index.symbol"
-          class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 hover:border-terminal-accent/30 transition cursor-pointer"
+          :data-index="idx"
+          class="bg-terminal-panel rounded-sm border p-4 transition cursor-pointer"
+          :class="focusedIndex === idx 
+            ? 'border-terminal-accent ring-1 ring-terminal-accent/30' 
+            : 'border-theme-secondary hover:border-terminal-accent/30'"
           @click="selectIndex(index)"
+          @mouseenter="focusedIndex = idx"
         >
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
@@ -95,14 +125,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import ErrorDisplay from './f9/ErrorDisplay.vue'
+import EmptyState from './f9/EmptyState.vue'
 
 const loading = ref(false)
+const error = ref('')
 const activeRegion = ref('all')
 const selectedIndex = ref(null)
 const detailChart = ref(null)
+const indexGrid = ref(null)
+const focusedIndex = ref(0)
 let chart = null
 
 const regions = [
@@ -139,6 +175,12 @@ const allIndexes = ref([
 const filteredIndexes = computed(() => {
   if (activeRegion.value === 'all') return allIndexes.value
   return allIndexes.value.filter(idx => idx.region === activeRegion.value)
+})
+
+// Reset focus when region changes
+watch(activeRegion, () => {
+  focusedIndex.value = 0
+  nextTick(() => indexGrid.value?.focus())
 })
 
 // 生成模拟走势图数据
@@ -233,6 +275,7 @@ function renderDetailChart() {
 
 async function refreshAll() {
   loading.value = true
+  error.value = ''
   try {
     // 尝试从API获取实时数据
     const data = await apiFetch('/api/v1/market/global')
@@ -253,6 +296,7 @@ async function refreshAll() {
     }
   } catch (e) {
     logger.warn('[GlobalIndex] API fetch failed, using mock data:', e.message)
+    error.value = '获取全球指数数据失败，显示模拟数据'
   } finally {
     loading.value = false
   }
@@ -261,6 +305,8 @@ async function refreshAll() {
 onMounted(() => {
   refreshAll()
   window.addEventListener('resize', handleResize)
+  // Focus grid for keyboard navigation
+  nextTick(() => indexGrid.value?.focus())
 })
 
 onBeforeUnmount(() => {
@@ -273,5 +319,54 @@ onBeforeUnmount(() => {
 
 function handleResize() {
   chart?.resize()
+}
+
+// Keyboard navigation
+function handleKeydown(e) {
+  const total = filteredIndexes.value.length
+  if (total === 0) return
+  
+  // Get grid columns based on viewport
+  const cols = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 768 ? 2 : 1
+  
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault()
+      focusedIndex.value = Math.min(focusedIndex.value + cols, total - 1)
+      scrollToFocused()
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      focusedIndex.value = Math.max(focusedIndex.value - cols, 0)
+      scrollToFocused()
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      focusedIndex.value = Math.min(focusedIndex.value + 1, total - 1)
+      scrollToFocused()
+      break
+    case 'ArrowLeft':
+      e.preventDefault()
+      focusedIndex.value = Math.max(focusedIndex.value - 1, 0)
+      scrollToFocused()
+      break
+    case 'Enter':
+    case ' ':
+      e.preventDefault()
+      if (filteredIndexes.value[focusedIndex.value]) {
+        selectIndex(filteredIndexes.value[focusedIndex.value])
+      }
+      break
+    case 'Escape':
+      selectedIndex.value = null
+      break
+  }
+}
+
+function scrollToFocused() {
+  nextTick(() => {
+    const el = indexGrid.value?.querySelector(`[data-index="${focusedIndex.value}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 </script>

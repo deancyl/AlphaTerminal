@@ -583,6 +583,7 @@ function handleScreenerClick({ symbol, name }) {
 }
 
 let grid = null
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
 
 // ── 指数选项（K线切换）──────────────────────────────────────────
 const indexOptions = [
@@ -712,31 +713,43 @@ const ratesError  = ref(null)
 const globalError = ref(null)
 
 async function fetchLowFreq() {
+  // Abort any pending request before starting a new one
+  _fetchController?.abort()
+  _fetchController = new AbortController()
+
   // Fetch macro data
   try {
-    const d = await apiFetch('/api/v1/market/macro')
+    const d = await apiFetch('/api/v1/market/macro', { signal: _fetchController.signal })
     macroData.value = d?.macro || d?.data?.macro || d || []
     macroError.value = null
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     macroError.value = e?.message || 'Failed to fetch macro data'
   }
   
   // Fetch rates data
   try {
-    const d = await apiFetch('/api/v1/market/rates')
+    const d = await apiFetch('/api/v1/market/rates', { signal: _fetchController.signal })
     ratesData.value = d?.rates || d?.data?.rates || d || []
     ratesError.value = null
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     ratesError.value = e?.message || 'Failed to fetch rates data'
   }
   
   // Fetch global data
   try {
-    const d = await apiFetch('/api/v1/market/global')
+    const d = await apiFetch('/api/v1/market/global', { signal: _fetchController.signal })
     globalData.value = d?.global || d?.data?.global || d || []
     globalError.value = null
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     globalError.value = e?.message || 'Failed to fetch global data'
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -780,6 +793,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
   grid?.destroy(false)
   stopLowPolling()
 })
