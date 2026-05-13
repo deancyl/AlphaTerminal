@@ -1,65 +1,82 @@
 <template>
-  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto overflow-x-hidden">
-    
+  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto overflow-x-hidden" role="main" aria-label="基金看板">
+
     <!-- 顶部：选项卡 + 搜索 -->
     <div class="p-4 border-b border-theme-secondary shrink-0 bg-terminal-panel/50">
       <div class="flex flex-col gap-3">
         <!-- 选项卡 -->
-        <div class="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
-          <button 
+        <div class="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1" role="tablist" aria-label="基金类型选择">
+          <button
             @click="activeTab = 'etf'"
+            role="tab"
+            :aria-selected="activeTab === 'etf'"
+            tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
-            :class="activeTab === 'etf' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            :class="activeTab === 'etf'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >📊 场内基金 (ETF/LOF)</button>
-          <button 
+          <button
             @click="activeTab = 'open'"
+            role="tab"
+            :aria-selected="activeTab === 'open'"
+            tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
-            :class="activeTab === 'open' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            :class="activeTab === 'open'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >💰 场外公募基金</button>
-          <button 
+          <button
             @click="activeTab = 'compare'"
+            role="tab"
+            :aria-selected="activeTab === 'compare'"
+            tabindex="0"
             class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
-            :class="activeTab === 'compare' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            :class="activeTab === 'compare'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >🔀 基金对比</button>
         </div>
         
         <!-- 搜索栏（ETF/公募基金）-->
-        <div v-if="activeTab !== 'compare'" class="flex items-center gap-2">
+        <div v-if="activeTab !== 'compare'" class="flex items-center gap-2" role="search">
           <div class="relative flex-1">
-            <input 
-              v-model="searchQuery" 
+            <label :for="searchInputId" class="sr-only">搜索基金</label>
+            <input
+              :id="searchInputId"
+              v-model="searchQuery"
               @keyup.enter="searchFund"
               @keyup.escape="clearSearch"
               :placeholder="activeTab === 'etf' ? '输入 ETF 代码（如 510300）' : '输入基金代码/名称/拼音'"
               class="w-full bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none"
               title="按 Enter 搜索，Esc 清空"
+              aria-describedby="search-hint"
             />
-            <button 
+            <button
               @click="searchFund"
+              :aria-label="activeTab === 'etf' ? '搜索 ETF 基金' : '搜索公募基金'"
               class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 text-xs bg-terminal-accent/20 text-terminal-accent rounded-sm hover:bg-terminal-accent/30 transition"
             >🔍</button>
           </div>
+          <span id="search-hint" class="sr-only">按 Enter 键搜索，Esc 键清空输入</span>
           <!-- 快捷列表 (方向键切换) -->
-          <div 
+          <div
             class="flex gap-1 flex-wrap"
+            role="group"
+            aria-label="快捷基金列表"
             @keyup.left="navigateQuickList(-1)"
             @keyup.right="navigateQuickList(1)"
           >
-            <button 
-              v-for="(f, idx) in (activeTab === 'etf' ? quickETFs : quickFunds)" 
+            <button
+              v-for="(f, idx) in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
               :tabindex="0"
               class="px-3 py-2.5 text-xs rounded-sm border transition-colors whitespace-nowrap min-h-[44px]"
-              :class="selectedFundCode === f.code 
-                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+              :class="selectedFundCode === f.code
+                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                 : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
+              :aria-label="`${f.name}，代码 ${f.code}`"
               :title="`${f.name} (${f.code}) - 左右箭头切换`"
             >
               {{ f.name }}
@@ -68,22 +85,22 @@
         </div>
 
         <!-- 数据新鲜度指示器 -->
-        <div v-if="fundInfo" class="flex items-center justify-between text-xs">
+        <div v-if="fundInfo" class="flex items-center justify-between text-xs" role="status" aria-live="polite">
           <div class="flex items-center gap-3">
             <!-- 基金信息新鲜度 -->
-            <div v-if="fundInfoTimestamp" class="flex items-center gap-1">
+            <div v-if="fundInfoTimestamp" class="flex items-center gap-1" :aria-label="`基金信息更新时间：${fundInfoFreshness.ageText}`">
               <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.icon }}</span>
               <span class="text-theme-tertiary">信息:</span>
               <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.ageText }}</span>
             </div>
             <!-- 净值历史新鲜度 -->
-            <div v-if="navHistoryTimestamp && activeTab !== 'etf'" class="flex items-center gap-1">
+            <div v-if="navHistoryTimestamp && activeTab !== 'etf'" class="flex items-center gap-1" :aria-label="`净值数据更新时间：${navHistoryFreshness.ageText}`">
               <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.icon }}</span>
               <span class="text-theme-tertiary">净值:</span>
               <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.ageText }}</span>
             </div>
             <!-- 持仓新鲜度 -->
-            <div v-if="portfolioTimestamp && activeTab !== 'etf'" class="flex items-center gap-1">
+            <div v-if="portfolioTimestamp && activeTab !== 'etf'" class="flex items-center gap-1" :aria-label="`持仓数据更新时间：${portfolioFreshness.ageText}`">
               <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.icon }}</span>
               <span class="text-theme-tertiary">持仓:</span>
               <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.ageText }}</span>
@@ -91,13 +108,14 @@
           </div>
           <div class="flex items-center gap-2">
             <!-- 过期警告 -->
-            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-[10px]">
+            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-[10px]" role="alert" aria-live="assertive">
               ⚠️ 数据已过期，请刷新
             </span>
             <!-- 刷新按钮 -->
-            <button 
+            <button
               @click="refreshAllData"
               :disabled="loading || autoLoading"
+              :aria-label="loading || autoLoading ? '数据加载中，请稍候' : '刷新所有数据'"
               class="px-2 py-0.5 rounded-sm border border-theme-secondary text-theme-tertiary hover:border-terminal-accent hover:text-terminal-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               🔄 刷新
@@ -108,7 +126,7 @@
     </div>
 
     <!-- 加载中（包括自动加载） -->
-    <div v-if="loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
+    <div v-if="loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden" aria-live="polite" aria-busy="true" aria-label="加载基金数据中">
       <!-- 顶部指标骨架 -->
       <div class="grid grid-cols-3 gap-3">
         <div class="skeleton h-16 rounded-sm" v-for="n in 3" :key="n"></div>
@@ -122,15 +140,16 @@
     </div>
 
     <!-- 自动加载失败 -->
-    <div v-else-if="autoLoadFailed && !fundInfo" class="flex-1 flex items-center justify-center">
+    <div v-else-if="autoLoadFailed && !fundInfo" class="flex-1 flex items-center justify-center" role="alert" aria-live="assertive">
       <div class="text-center">
         <div class="text-4xl mb-3">⚠️</div>
         <div class="text-theme-muted text-sm mb-3">自动加载失败</div>
         <div class="text-xs text-theme-tertiary mb-4">
           请检查网络连接后重试
         </div>
-        <button 
+        <button
           @click="retryAutoLoad"
+          aria-label="重试自动加载"
           class="px-4 py-2 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition"
         >
           🔄 重试
@@ -139,9 +158,9 @@
     </div>
 
     <!-- 无数据（仅 ETF/公募基金显示） -->
-    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading && !autoLoading" class="flex-1 flex items-center justify-center">
+    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading && !autoLoading" class="flex-1 flex items-center justify-center" role="region" :aria-label="activeTab === 'etf' ? 'ETF 基金查询' : '公募基金查询'">
       <div class="text-center py-12">
-        <div class="text-6xl mb-4">📊</div>
+        <div class="text-6xl mb-4" aria-hidden="true">📊</div>
         <div class="text-lg text-terminal-accent font-bold mb-2">
           {{ activeTab === 'etf' ? 'ETF 基金查询' : '公募基金查询' }}
         </div>
@@ -152,13 +171,14 @@
         <!-- 快捷基金按钮 -->
         <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
           <div class="text-xs text-terminal-dim mb-3">💡 快速查询：<span class="text-[10px]">(方向键/ Tab 导航)</span></div>
-          <div class="flex flex-wrap gap-2 justify-center">
+          <div class="flex flex-wrap gap-2 justify-center" role="group" aria-label="快捷基金列表">
             <button
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
               :tabindex="0"
               class="px-3 py-2.5 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent min-h-[44px]"
+              :aria-label="`${f.name}，代码 ${f.code}`"
               :title="`${f.name} (${f.code})`"
             >
               {{ f.name }}
@@ -176,7 +196,7 @@
     <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
       
       <!-- ETF 面板 -->
-      <div v-if="activeTab === 'etf'" class="space-y-4">
+      <div v-if="activeTab === 'etf'" role="tabpanel" aria-label="ETF 基金详情" class="space-y-4">
         <!-- 核心指标（ETF 特有） -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <!-- Loading skeleton for core metrics -->
@@ -229,9 +249,9 @@
         <!-- 买卖盘五档 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- 买盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="买盘五档">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📗 买盘五档</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📗 买盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
             <div v-if="loadingFundInfo" class="space-y-1">
@@ -249,9 +269,9 @@
           </div>
           
           <!-- 卖盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="卖盘五档">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📕 卖盘五档</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📕 卖盘五档</span>
               <span class="text-[10px] text-theme-tertiary">实时</span>
             </div>
             <div v-if="loadingFundInfo" class="space-y-1">
@@ -272,12 +292,14 @@
         <!-- K 线走势图 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📈 K 线走势</span>
-            <div class="flex gap-1">
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 K 线走势</span>
+            <div class="flex gap-1" role="group" aria-label="K线周期选择">
               <button
                 v-for="p in klinePeriods"
                 :key="p.key"
                 @click="loadETFHistory(p.key)"
+                :aria-label="`切换到${p.label}K线`"
+                :aria-pressed="klinePeriod === p.key"
                 class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
                 :class="klinePeriod === p.key
                   ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
@@ -285,17 +307,17 @@
               >{{ p.label }}</button>
             </div>
           </div>
-          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72">
+          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72" role="status" aria-live="polite">
             <div class="text-center">
-              <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+              <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
               <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
             </div>
           </div>
-          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72">
+          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72" role="alert" aria-live="assertive">
             <div class="text-center">
-              <div class="text-2xl mb-2">⚠️</div>
+              <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
               <div class="text-sm text-theme-muted mb-2">{{ klineError }}</div>
-              <button @click="retryKlineChart"
+              <button @click="retryKlineChart" aria-label="重试加载K线数据"
                 class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
                 🔄 重试
               </button>
@@ -306,7 +328,7 @@
       </div>
 
       <!-- 公募基金面板（专业级） -->
-      <div v-else-if="activeTab === 'open'" class="space-y-4">
+      <div v-else-if="activeTab === 'open'" role="tabpanel" aria-label="公募基金详情" class="space-y-4">
         
         <!-- A. 头部概览区 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
@@ -387,35 +409,35 @@
         <!-- B. 阶段收益追踪表 (Trailing Returns) -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 阶段收益追踪</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 阶段收益追踪</span>
             <span class="text-[10px] text-theme-tertiary">与同类平均及基准对比</span>
           </div>
           <div class="overflow-x-auto scrollbar-hide">
-            <table class="w-full text-xs whitespace-nowrap">
+            <table class="w-full text-xs whitespace-nowrap" aria-label="阶段收益追踪表">
               <thead class="border-b border-theme">
                 <tr class="text-terminal-dim">
-                  <th class="px-2 py-2 text-left font-normal">指标</th>
-                  <th class="px-2 py-2 text-right font-normal">1 周</th>
-                  <th class="px-2 py-2 text-right font-normal">1 月</th>
-                  <th class="px-2 py-2 text-right font-normal">3 月</th>
-                  <th class="px-2 py-2 text-right font-normal">6 月</th>
-                  <th class="px-2 py-2 text-right font-normal">YTD</th>
-                  <th class="px-2 py-2 text-right font-normal">1 年</th>
-                  <th class="px-2 py-2 text-right font-normal">3 年</th>
-                  <th class="px-2 py-2 text-right font-normal">5 年</th>
+                  <th class="px-2 py-2 text-left font-normal" scope="col">指标</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 周</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">3 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">6 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">YTD</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 年</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">3 年</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">5 年</th>
                 </tr>
               </thead>
               <tbody>
                 <tr class="border-b border-theme/30">
-                  <td class="px-2 py-2 text-theme-primary font-medium">本基金</td>
+                  <td class="px-2 py-2 text-theme-primary font-medium" scope="row">本基金</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right" :class="getChangeColor(trailingReturns.fund[p])">{{ trailingReturns.fund[p] ?? '-' }}%</td>
                 </tr>
                 <tr class="border-b border-theme/30 bg-theme-hover/20">
-                  <td class="px-2 py-2 text-theme-secondary">同类平均</td>
+                  <td class="px-2 py-2 text-theme-secondary" scope="row">同类平均</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right text-theme-secondary">{{ trailingReturns.category[p] ?? '-' }}%</td>
                 </tr>
                 <tr>
-                  <td class="px-2 py-2 text-theme-secondary">基准指数</td>
+                  <td class="px-2 py-2 text-theme-secondary" scope="row">基准指数</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right text-theme-secondary">{{ trailingReturns.benchmark[p] ?? '-' }}%</td>
                 </tr>
               </tbody>
@@ -426,7 +448,7 @@
         <!-- C. 风险与波动指标 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">⚠️ 风险指标</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">⚠️ 风险指标</span>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="p-3 bg-terminal-bg/50 rounded-sm">
@@ -457,30 +479,32 @@
           <!-- 净值走势图 -->
           <div class="lg:col-span-2 bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📈 净值走势</span>
-              <div class="flex gap-1">
-                <button 
-                  v-for="p in navPeriods" 
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 净值走势</span>
+              <div class="flex gap-1" role="group" aria-label="净值周期选择">
+                <button
+                  v-for="p in navPeriods"
                   :key="p.key"
                   @click="loadNAVHistory(p.key)"
+                  :aria-label="`切换到近${p.label}净值`"
+                  :aria-pressed="navPeriod === p.key"
                   class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
-                  :class="navPeriod === p.key 
-                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+                  :class="navPeriod === p.key
+                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                     : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
                 >{{ p.label }}</button>
               </div>
             </div>
-            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center h-64 sm:h-72">
+            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center h-64 sm:h-72" role="status" aria-live="polite">
               <div class="text-center">
-                <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+                <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
                 <div class="text-xs text-theme-tertiary">加载净值数据...</div>
               </div>
             </div>
-            <div v-else-if="navChartError" class="w-full flex items-center justify-center h-64 sm:h-72">
+            <div v-else-if="navChartError" class="w-full flex items-center justify-center h-64 sm:h-72" role="alert" aria-live="assertive">
               <div class="text-center">
-                <div class="text-2xl mb-2">⚠️</div>
+                <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
                 <div class="text-sm text-theme-muted mb-2">{{ navChartError }}</div>
-                <button @click="retryNavChart"
+                <button @click="retryNavChart" aria-label="重试加载净值数据"
                   class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
                   🔄 重试
                 </button>
@@ -492,20 +516,20 @@
           <!-- 资产配置饼图 -->
           <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">🎯 资产配置</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🎯 资产配置</span>
               <span class="text-[10px] text-theme-tertiary">X-Ray</span>
             </div>
-            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center h-48 sm:h-56">
+            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center h-48 sm:h-56" role="status" aria-live="polite">
               <div class="text-center">
-                <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+                <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
                 <div class="text-xs text-theme-tertiary">加载资产配置...</div>
               </div>
             </div>
-            <div v-else-if="assetChartError" class="w-full flex items-center justify-center h-48 sm:h-56">
+            <div v-else-if="assetChartError" class="w-full flex items-center justify-center h-48 sm:h-56" role="alert" aria-live="assertive">
               <div class="text-center">
-                <div class="text-2xl mb-2">⚠️</div>
+                <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
                 <div class="text-sm text-theme-muted mb-2">{{ assetChartError }}</div>
-                <button @click="retryAssetChart"
+                <button @click="retryAssetChart" aria-label="重试加载资产配置"
                   class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
                   🔄 重试
                 </button>
@@ -530,7 +554,7 @@
         <!-- E. 重仓股（带进度条可视化） -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 十大重仓股</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 十大重仓股</span>
             <span class="text-[10px] text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
           </div>
           <div v-if="loadingPortfolio" class="space-y-2">
@@ -568,30 +592,31 @@
       </div>
 
       <!-- 基金对比面板 -->
-      <div v-if="activeTab === 'compare'" class="space-y-4">
+      <div v-if="activeTab === 'compare'" role="tabpanel" aria-label="基金对比" class="space-y-4">
         <!-- 基金选择器 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">🔀 基金对比</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🔀 基金对比</span>
             <span class="text-[10px] text-theme-tertiary">最多选择 3 只基金</span>
           </div>
-          <div class="flex flex-wrap gap-2 mb-3">
+          <div class="flex flex-wrap gap-2 mb-3" role="group" aria-label="已选择的基金">
             <div v-for="(fund, idx) in compareFunds" :key="fund.code"
                  class="flex items-center gap-1 px-2 py-1 rounded-sm border text-xs"
                  :class="compareColors[idx]">
               <span>{{ fund.name }}</span>
-              <button @click="removeCompareFund(idx)" class="hover:text-[var(--color-danger)]">×</button>
+              <button @click="removeCompareFund(idx)" :aria-label="`移除基金${fund.name}`" class="hover:text-[var(--color-danger)]">×</button>
             </div>
           </div>
           <div class="flex gap-2">
-            <input v-model="compareInput" @keyup.enter="addCompareFund"
+            <label for="compare-fund-input" class="sr-only">输入基金代码</label>
+            <input id="compare-fund-input" v-model="compareInput" @keyup.enter="addCompareFund"
                    placeholder="输入基金代码添加"
                    class="flex-1 bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none" />
-            <button @click="addCompareFund"
+            <button @click="addCompareFund" aria-label="添加基金到对比"
                     class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition">
               添加
             </button>
-            <button @click="clearCompareFunds"
+            <button @click="clearCompareFunds" aria-label="清空所有已选基金"
                     class="px-3 py-1.5 bg-terminal-panel text-theme-tertiary rounded-sm text-sm hover:text-theme-primary transition">
               清空
             </button>
@@ -599,22 +624,22 @@
         </div>
 
         <!-- 对比图表 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="净值走势对比图表">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
           </div>
-          <div v-if="loadingCompare" class="w-full flex items-center justify-center h-64 sm:h-80">
+          <div v-if="loadingCompare" class="w-full flex items-center justify-center h-64 sm:h-80" role="status" aria-live="polite">
             <div class="text-center">
-              <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
+              <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
               <div class="text-xs text-theme-tertiary">加载对比数据...</div>
             </div>
           </div>
-          <div v-else-if="compareChartError" class="w-full flex items-center justify-center h-64 sm:h-80">
+          <div v-else-if="compareChartError" class="w-full flex items-center justify-center h-64 sm:h-80" role="alert" aria-live="assertive">
             <div class="text-center">
-              <div class="text-2xl mb-2">⚠️</div>
+              <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
               <div class="text-sm text-theme-muted mb-2">{{ compareChartError }}</div>
-              <button @click="retryCompareChart"
+              <button @click="retryCompareChart" aria-label="重试加载对比数据"
                 class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
                 🔄 重试
               </button>
@@ -624,27 +649,27 @@
         </div>
 
         <!-- 对比表格：移动端优化 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-3 md:p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-3 md:p-4" role="region" aria-label="收益对比表格">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 收益对比</span>
           </div>
           <div v-if="loadingCompare" class="space-y-2">
             <div class="skeleton h-8 rounded-sm" v-for="n in 5" :key="n"></div>
           </div>
           <div v-else class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
-            <table class="w-full text-xs min-w-[300px]">
+            <table class="w-full text-xs min-w-[300px]" aria-label="收益对比表">
               <thead>
                 <tr class="border-b border-theme-secondary">
-                  <th class="text-left py-2 px-1 md:px-2 text-theme-tertiary">指标</th>
+                  <th class="text-left py-2 px-1 md:px-2 text-theme-tertiary" scope="col">指标</th>
                   <th v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2"
-                      :class="compareColorsText[idx]">
+                      :class="compareColorsText[idx]" scope="col">
                     <span class="truncate max-w-[80px] inline-block">{{ fund.name }}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="period in comparePeriods" :key="period.key" class="border-b border-theme/30">
-                  <td class="py-2 px-1 md:px-2 text-theme-secondary">{{ period.label }}</td>
+                  <td class="py-2 px-1 md:px-2 text-theme-secondary" scope="row">{{ period.label }}</td>
                   <td v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2 font-mono"
                       :class="getCompareReturnColor(fund.returns?.[period.key])">
                     {{ fund.returns?.[period.key] ?? '-' }}%
@@ -706,6 +731,7 @@ const loading = ref(false)
 const autoLoading = ref(false)
 const autoLoadFailed = ref(false)
 const searchQuery = ref('')
+const searchInputId = 'fund-search-input'
 const activeTab = ref('open')
 const quickListFocusedIndex = ref(-1) // -1 means no selection, for arrow key navigation
 
