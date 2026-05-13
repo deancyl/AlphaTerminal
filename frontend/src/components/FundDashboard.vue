@@ -1714,6 +1714,7 @@ onUnmounted(() => {
     try { observer.disconnect() } catch (e) {}
   })
   resizeObservers.length = 0
+  chartObservers.clear()
 
   if (klineChart.value) { try { klineChart.value.dispose() } catch (e) {} }
   if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
