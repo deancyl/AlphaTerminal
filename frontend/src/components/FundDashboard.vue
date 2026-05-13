@@ -557,9 +557,7 @@
                 </div>
               </div>
             </div>
-            <div v-if="topHoldings.length === 0" class="text-center text-theme-muted text-sm py-8">
-              暂无重仓股数据
-            </div>
+            <EmptyState v-if="topHoldings.length === 0" icon="📊" message="暂无重仓股数据" hint="该基金暂未披露持仓信息" />
           </div>
         </div>
 
@@ -658,9 +656,7 @@
         </div>
 
         <!-- 提示 -->
-        <div v-if="compareFunds.length < 2" class="text-center py-8 text-theme-tertiary text-sm">
-          请至少添加 2 只基金进行对比
-        </div>
+        <EmptyState v-if="compareFunds.length < 2" icon="🔀" message="请至少添加 2 只基金进行对比" hint="在下方搜索框输入基金代码添加" />
       </div>
 
     </div>
@@ -677,6 +673,7 @@ import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
 import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
 import { getFreshness } from '../utils/freshness.js'
 import { debounce } from '../utils/cache.js'
+import EmptyState from './f9/EmptyState.vue'
 
 const fundStore = useFundStore()
 
