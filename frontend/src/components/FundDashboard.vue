@@ -506,26 +506,35 @@
 
 <script setup>
 import { ref, shallowRef, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { formatVol, formatAmount } from '../utils/formatters.js'
+import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
 
-// ECharts 通过 CDN 加载，使用全局变量
+const fundStore = useFundStore()
+const { 
+  selectedFundCode, 
+  fundInfo, 
+  navHistory, 
+  topHoldings, 
+  assetAllocation,
+  trailingReturns, 
+  riskMetrics,
+  compareFunds,
+  loading: storeLoading,
+  dataSource,
+  lastUpdateTime 
+} = storeToRefs(fundStore)
+
 const getEcharts = () => window.echarts
 
-// ── 状态 ────────────────────────────────────────────────────────
 const loading = ref(false)
 const autoLoading = ref(false)
 const autoLoadFailed = ref(false)
 const searchQuery = ref('')
-const selectedFundCode = ref('')
-const activeTab = ref('open') // 'etf' | 'open' | 'compare'
-const fundInfo = ref(null)
-const dataSource = ref('')
-const lastUpdateTime = ref('')
+const activeTab = ref('open')
 
-// ── 基金对比状态 ────────────────────────────────────────────────
-const compareFunds = ref([])
 const compareInput = ref('')
 const compareChartRef = ref(null)
 const compareChart = shallowRef(null)
@@ -543,23 +552,9 @@ const comparePeriods = [
   { key: '3y', label: '近3年' },
 ]
 
-// 快捷列表
-const quickETFs = [
-  { code: '510300', name: '沪深 300ETF' },
-  { code: '510500', name: '中证 500ETF' },
-  { code: '159915', name: '创业板 ETF' },
-  { code: '518880', name: '黄金 ETF' },
-  { code: '513050', name: '中概互联 ETF' },
-]
+const quickETFs = FUND_QUICK_LIST.etf
+const quickFunds = FUND_QUICK_LIST.open
 
-const quickFunds = [
-  { code: '005827', name: '易方达蓝筹' },
-  { code: '000311', name: '景顺长城沪深 300' },
-  { code: '110011', name: '易方达中小盘' },
-  { code: '007119', name: '睿远成长价值' },
-]
-
-// 周期选项
 const klinePeriods = [
   { key: 'daily', label: '日 K' },
   { key: 'weekly', label: '周 K' },
@@ -575,29 +570,8 @@ const navPeriods = [
 ]
 const navPeriod = ref('6m')
 
-// 数据
 const klineHistory = ref([])
-const navHistory = ref([])
-const topHoldings = ref([])
-const assetAllocation = ref([])
 
-// 阶段收益追踪（Trailing Returns）
-const trailingReturns = reactive({
-  periods: ['1w', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y'],
-  fund: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-  category: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-  benchmark: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-})
-
-// 风险指标
-const riskMetrics = reactive({
-  sharpe: null,
-  max_drawdown: null,
-  alpha: null,
-  beta: null,
-})
-
-// Chart refs
 const klineChartRef = ref(null)
 const navChartRef = ref(null)
 const assetChartRef = ref(null)
@@ -615,16 +589,12 @@ async function searchFund() {
 
 async function selectFund(code, retryCount = 0, maxRetries = 2) {
   if (!code) return
-  selectedFundCode.value = code
   
-  // Set loading state based on whether this is an auto-load
   if (retryCount === 0) {
     loading.value = true
     autoLoading.value = true
     autoLoadFailed.value = false
   }
-  
-  dataSource.value = ''
   
   try {
     if (activeTab.value === 'etf') {
@@ -633,11 +603,9 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
         loadETFHistory(klinePeriod.value),
       ])
     } else {
-      await Promise.all([
-        loadOpenFundInfo(code),
-        loadNAVHistory(navPeriod.value),
-        loadPortfolio(code),
-      ])
+      await fundStore.fetchFundInfo(code)
+      await fundStore.fetchNavHistory(code, navPeriod.value)
+      await fundStore.fetchPortfolio(code)
     }
     
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -645,9 +613,8 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
   } catch (e) {
     logger.error('[FundDashboard] 加载失败:', e)
     
-    // Retry logic with exponential backoff
     if (retryCount < maxRetries) {
-      const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s...
+      const delay = Math.pow(2, retryCount) * 1000
       logger.warn(`[FundDashboard] 重试 ${retryCount + 1}/${maxRetries}，等待 ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
       return selectFund(code, retryCount + 1, maxRetries)
@@ -658,7 +625,6 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
   } finally {
     loading.value = false
     autoLoading.value = false
-    // 等待 DOM 更新完成后再渲染图表
     await nextTick()
     await new Promise(resolve => setTimeout(resolve, 100))
     if (activeTab.value === 'etf') {
@@ -675,34 +641,32 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
 function addCompareFund() {
   const code = compareInput.value.trim()
   if (!code) return
-  if (compareFunds.value.length >= 3) {
-    alert('最多只能对比 3 只基金')
-    return
-  }
-  if (compareFunds.value.some(f => f.code === code)) {
-    alert('该基金已在对比列表中')
-    return
-  }
-  // 添加到列表（先占位，后续异步加载数据）
-  compareFunds.value.push({
+  
+  const result = fundStore.addCompareFund({
     code,
-    name: code, // 临时名称
+    name: code,
     returns: {},
     history: [],
   })
+  
+  if (!result.success) {
+    console.warn(result.message)
+    return
+  }
+  
   compareInput.value = ''
   loadCompareData()
 }
 
 function removeCompareFund(idx) {
-  compareFunds.value.splice(idx, 1)
+  fundStore.removeCompareFund(idx)
   if (compareFunds.value.length >= 2) {
     renderCompareChart()
   }
 }
 
 function clearCompareFunds() {
-  compareFunds.value = []
+  fundStore.clearCompareFunds()
 }
 
 async function loadCompareData() {
