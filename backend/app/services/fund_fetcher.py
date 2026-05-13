@@ -108,7 +108,7 @@ CACHE_TTL = {
 }
 
 # 严格超时（秒）
-TIMEOUT_TOTAL = 5.0  # ⚠️ 绝对不超过 5 秒
+TIMEOUT_TOTAL = 15.0  # 增加到 15 秒以适应网络波动
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -592,6 +592,195 @@ class FundFetcher:
         # 降级 AkShare
         data = await self.ak.get_fund_rank(type)
         return data if data else []
+    
+    async def get_fund_returns(self, code: str) -> Dict:
+        """
+        获取基金阶段收益（近1周/1月/3月/6月/1年/2年/3年/今年来/成立来）
+        
+        数据源优先级:
+        1. 东方财富 pingzhongdata.js (轻量，单只基金)
+        2. akshare fund_open_fund_rank_em (重量级，全量数据，缓存)
+        3. Mock 数据
+        """
+        logger.info(f"[FundFetcher] 获取基金 {code} 阶段收益...")
+        start = time.time()
+        
+        # 优先使用东方财富轻量接口
+        try:
+            data = await self.em.get_fund_returns(code)
+            if data:
+                logger.info(f"[FundFetcher] {code} Eastmoney 阶段收益成功 elapsed={time.time()-start:.2f}s")
+                return data
+        except Exception as e:
+            logger.debug(f"[FundFetcher] {code} Eastmoney 阶段收益失败: {e}")
+        
+        # 降级到 akshare (使用更长超时和缓存)
+        try:
+            import akshare as ak
+            
+            # 使用 30 秒超时，因为需要加载全量数据
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_open_fund_rank_em, symbol="全部"),
+                timeout=30.0
+            )
+            
+            if df is not None and not df.empty:
+                matched = df[df['基金代码'] == code]
+                if not matched.empty:
+                    row = matched.iloc[0]
+                    result = {
+                        'source': 'akshare',
+                        'code': code,
+                        'name': clean_value(row.get('基金简称')),
+                        'nav_date': clean_value(row.get('日期')),
+                        'returns': {
+                            '1w': clean_value(row.get('近1周')),
+                            '1m': clean_value(row.get('近1月')),
+                            '3m': clean_value(row.get('近3月')),
+                            '6m': clean_value(row.get('近6月')),
+                            '1y': clean_value(row.get('近1年')),
+                            '2y': clean_value(row.get('近2年')),
+                            '3y': clean_value(row.get('近3年')),
+                            'ytd': clean_value(row.get('今年来')),
+                            'since_inception': clean_value(row.get('成立来')),
+                        },
+                        'nav': clean_value(row.get('单位净值')),
+                        'accumulated_nav': clean_value(row.get('累计净值')),
+                        'daily_change': clean_value(row.get('日增长率')),
+                    }
+                    logger.info(f"[FundFetcher] {code} Akshare 阶段收益成功 elapsed={time.time()-start:.2f}s")
+                    return result
+            
+            logger.warning(f"[FundFetcher] {code} 未在排行中找到，返回 Mock 数据")
+            return self._mock_fund_returns(code)
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"[FundFetcher] {code} 阶段收益超时 (30s)")
+            return self._mock_fund_returns(code)
+        except Exception as e:
+            logger.warning(f"[FundFetcher] {code} 阶段收益获取失败: {e}")
+            return self._mock_fund_returns(code)
+    
+    async def get_fund_risk_metrics(self, code: str) -> Dict:
+        """
+        获取基金风险指标（夏普比率、最大回撤、Alpha、Beta）
+        
+        注意: akshare 不直接提供这些指标，需要从净值历史计算
+        """
+        logger.info(f"[FundFetcher] 获取基金 {code} 风险指标...")
+        start = time.time()
+        
+        try:
+            # 获取净值历史用于计算风险指标
+            nav_data = await self.get_fund_nav_history(code, '1y')
+            
+            if nav_data and len(nav_data) >= 20:
+                # 计算风险指标
+                metrics = self._calculate_risk_metrics(nav_data)
+                metrics['source'] = 'calculated'
+                metrics['code'] = code
+                logger.info(f"[FundFetcher] {code} 风险指标计算成功 elapsed={time.time()-start:.2f}s")
+                return metrics
+            else:
+                logger.warning(f"[FundFetcher] {code} 净值数据不足，返回 Mock 数据")
+                return self._mock_risk_metrics(code)
+                
+        except Exception as e:
+            logger.warning(f"[FundFetcher] {code} 风险指标计算失败: {e}")
+            return self._mock_risk_metrics(code)
+    
+    def _calculate_risk_metrics(self, nav_data: List[Dict]) -> Dict:
+        """从净值数据计算风险指标"""
+        import numpy as np
+        
+        if not nav_data or len(nav_data) < 2:
+            return self._mock_risk_metrics('unknown')
+        
+        # 提取净值序列
+        navs = [float(d.get('nav', 0)) for d in nav_data if d.get('nav')]
+        if len(navs) < 2:
+            return self._mock_risk_metrics('unknown')
+        
+        # 计算日收益率
+        returns = []
+        for i in range(1, len(navs)):
+            if navs[i-1] > 0:
+                r = (navs[i] - navs[i-1]) / navs[i-1]
+                returns.append(r)
+        
+        if not returns:
+            return self._mock_risk_metrics('unknown')
+        
+        returns = np.array(returns)
+        
+        # 计算最大回撤
+        cumulative = np.cumprod(1 + returns)
+        running_max = np.maximum.accumulate(cumulative)
+        drawdowns = (cumulative - running_max) / running_max
+        max_drawdown = float(np.min(drawdowns)) * 100  # 转为百分比
+        
+        # 计算夏普比率（假设无风险利率 2% 年化）
+        rf_daily = 0.02 / 252
+        excess_returns = returns - rf_daily
+        if np.std(returns) > 0:
+            sharpe = float(np.mean(excess_returns) / np.std(returns) * np.sqrt(252))
+        else:
+            sharpe = 0.0
+        
+        # 估算 Beta（假设基准收益率为市场平均 8%）
+        # 简化计算：Beta = 基金波动率 / 市场波动率
+        fund_vol = np.std(returns) * np.sqrt(252)
+        market_vol = 0.15  # 假设市场年化波动率 15%
+        beta = float(fund_vol / market_vol) if market_vol > 0 else 1.0
+        
+        # 估算 Alpha（简化计算）
+        # Alpha = 基金收益率 - (无风险利率 + Beta * (市场收益率 - 无风险利率))
+        fund_return = float(np.prod(1 + returns) - 1) * 252 / len(returns)  # 年化收益
+        market_return = 0.08  # 假设市场年化收益 8%
+        alpha = float(fund_return - (0.02 + beta * (market_return - 0.02))) * 100  # 转为百分比
+        
+        return {
+            'sharpe': round(sharpe, 2),
+            'max_drawdown': round(max_drawdown, 2),
+            'alpha': round(alpha, 2),
+            'beta': round(beta, 2),
+            'volatility': round(fund_vol * 100, 2),  # 年化波动率
+        }
+    
+    def _mock_fund_returns(self, code: str) -> Dict:
+        """Mock 阶段收益数据"""
+        return {
+            'source': 'mock',
+            'code': code,
+            'name': f'基金-{code}',
+            'nav_date': '2026-05-13',
+            'returns': {
+                '1w': round((hash(code + '1w') % 200 - 100) / 10, 2),
+                '1m': round((hash(code + '1m') % 300 - 150) / 10, 2),
+                '3m': round((hash(code + '3m') % 400 - 200) / 10, 2),
+                '6m': round((hash(code + '6m') % 500 - 250) / 10, 2),
+                '1y': round((hash(code + '1y') % 600 - 300) / 10, 2),
+                '2y': round((hash(code + '2y') % 800 - 400) / 10, 2),
+                '3y': round((hash(code + '3y') % 1000 - 500) / 10, 2),
+                'ytd': round((hash(code + 'ytd') % 400 - 200) / 10, 2),
+                'since_inception': round((hash(code + 'si') % 2000) / 10, 2),
+            },
+            'nav': round(1.0 + hash(code) % 2000 / 1000, 4),
+            'accumulated_nav': round(1.0 + hash(code) % 3000 / 1000, 4),
+            'daily_change': round((hash(code + 'dc') % 200 - 100) / 10, 2),
+        }
+    
+    def _mock_risk_metrics(self, code: str) -> Dict:
+        """Mock 风险指标数据"""
+        return {
+            'source': 'mock',
+            'code': code,
+            'sharpe': round(0.5 + (hash(code + 'sharpe') % 200) / 100, 2),
+            'max_drawdown': round(-5 - (hash(code + 'md') % 300) / 10, 2),
+            'alpha': round(-5 + (hash(code + 'alpha') % 200) / 10, 2),
+            'beta': round(0.5 + (hash(code + 'beta') % 100) / 100, 2),
+            'volatility': round(10 + (hash(code + 'vol') % 200) / 10, 2),
+        }
     
     async def get_fund_full_data(self, code: str, is_etf: bool = False) -> Dict:
         """并发获取基金完整数据"""

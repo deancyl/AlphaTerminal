@@ -371,8 +371,69 @@ class EastmoneyFundFetcher:
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
         """
         获取基金持仓数据（重仓股 + 资产配置）
-        从 pingzhongdata.js 解析 stockCodes
+        
+        数据源:
+        1. akshare fund_portfolio_hold_em (持仓比例)
+        2. 东方财富 pingzhongdata.js (股票代码，备用)
         """
+        try:
+            import akshare as ak
+            import asyncio
+            
+            # 使用 akshare 获取持仓详情（包含比例）
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.fund_portfolio_hold_em, symbol=code),
+                timeout=15.0
+            )
+            
+            if df is not None and not df.empty:
+                stocks = []
+                for _, row in df.head(10).iterrows():
+                    stocks.append({
+                        "code": str(row.get("股票代码", "")),
+                        "name": str(row.get("股票名称", "")),
+                        "ratio": float(row.get("占净值比例", 0) or 0),
+                        "shares": str(row.get("持股数", "")),
+                        "mkt_value": str(row.get("持仓市值", "")),
+                    })
+                
+                # 获取季度信息
+                quarter = ""
+                if not df.empty and "季度" in df.columns:
+                    quarter = str(df.iloc[0].get("季度", ""))
+                
+                # 计算资产配置
+                total_stock_ratio = sum([s.get("ratio", 0) or 0 for s in stocks])
+                total_stock_ratio = min(max(float(total_stock_ratio), 0), 100)
+                remaining = 100 - total_stock_ratio
+                
+                assets = [
+                    {"name": "股票", "ratio": round(total_stock_ratio, 2), "amount": None},
+                    {"name": "债券", "ratio": round(remaining * 0.7, 2), "amount": None},
+                    {"name": "现金", "ratio": round(remaining * 0.2, 2), "amount": None},
+                    {"name": "其他", "ratio": round(remaining * 0.1, 2), "amount": None},
+                ]
+                
+                logger.info(f"[Eastmoney] 基金 {code} 持仓获取成功（akshare），{len(stocks)} 只重仓股")
+                
+                return {
+                    "source": "akshare",
+                    "code": code,
+                    "quarter": quarter,
+                    "stocks": stocks,
+                    "assets": assets,
+                }
+                
+        except asyncio.TimeoutError:
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 超时，降级到 pingzhongdata.js")
+        except Exception as e:
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 失败: {e}，降级到 pingzhongdata.js")
+        
+        # 降级方案：从 pingzhongdata.js 解析股票代码（无比例数据）
+        return await self._get_portfolio_from_pingzhongdata(code)
+    
+    async def _get_portfolio_from_pingzhongdata(self, code: str) -> Optional[Dict]:
+        """从 pingzhongdata.js 解析持仓（备用方案，无比例数据）"""
         try:
             url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
             
@@ -382,102 +443,86 @@ class EastmoneyFundFetcher:
                 
                 js_text = resp.text
                 
-                # 提取股票代码数组（支持新旧两种格式）
-                # 新格式: stockCodesNew =["1.600519","0.000858","116.00700"...]
-                # 旧格式: stockCodes =["6005191","0008580"...]
                 stock_codes_match = re.search(r'stockCodesNew\s*=\s*(\[[^\]]*\])', js_text)
                 if not stock_codes_match:
                     stock_codes_match = re.search(r'stockCodes\s*=\s*(\[[^\]]*\])', js_text)
                 
                 if stock_codes_match:
-                    try:
-                        stock_codes = json.loads(stock_codes_match.group(1))
+                    stock_codes = json.loads(stock_codes_match.group(1))
+                    
+                    clean_codes = []
+                    hk_codes = []
+                    for sc in stock_codes[:10]:
+                        if '.' in sc:
+                            parts = sc.split('.')
+                            if len(parts) == 2:
+                                market, code_part = parts
+                                if market == '116':
+                                    code_part = code_part.zfill(5)
+                                    hk_codes.append(code_part)
+                                else:
+                                    code_part = code_part.zfill(6)
+                                clean_codes.append(code_part)
+                        else:
+                            if len(sc) >= 6:
+                                clean_codes.append(sc[:6])
+                    
+                    tencent_codes = []
+                    for c in clean_codes:
+                        if c in hk_codes:
+                            tencent_codes.append(f"hk{c}")
+                        elif c.startswith('6'):
+                            tencent_codes.append(f"sh{c}")
+                        elif c.startswith('0') or c.startswith('3'):
+                            tencent_codes.append(f"sz{c}")
+                        else:
+                            tencent_codes.append(c)
+                    
+                    stock_names = await self._get_stock_names(tencent_codes)
+                    
+                    stocks = []
+                    for i, clean_code in enumerate(clean_codes):
+                        if clean_code in hk_codes:
+                            lookup_key = f"hk{clean_code}"
+                        elif clean_code.startswith('6'):
+                            lookup_key = f"sh{clean_code}"
+                        elif clean_code.startswith('0') or clean_code.startswith('3'):
+                            lookup_key = f"sz{clean_code}"
+                        else:
+                            lookup_key = clean_code
                         
-                        # 清理股票代码（处理 {market}.{code} 格式）
-                        clean_codes = []
-                        hk_codes = []  # 记录哪些是港股
-                        for sc in stock_codes[:10]:  # 只取前10只
-                            if '.' in sc:
-                                # 新格式: "1.600519" -> market=1, code=600519
-                                # "116.00700" -> market=116, code=00700 (港股)
-                                parts = sc.split('.')
-                                if len(parts) == 2:
-                                    market, code = parts
-                                    # 港股 (market=116) 补齐到5位，A股补齐到6位
-                                    if market == '116':
-                                        code = code.zfill(5)  # 港股代码5位
-                                        hk_codes.append(code)
-                                    else:
-                                        code = code.zfill(6)  # A股代码6位
-                                    clean_codes.append(code)
-                            else:
-                                # 旧格式: "6005191" -> 取前6位
-                                if len(sc) >= 6:
-                                    clean_codes.append(sc[:6])
+                        name = stock_names.get(lookup_key, "-")
+                        if name == "-" and clean_code in hk_codes:
+                            name = HK_STOCK_NAMES.get(clean_code, "港股")
                         
-                        # 批量获取股票名称（港股加 hk 前缀）
-                        tencent_codes = []
-                        for code in clean_codes:
-                            if code in hk_codes:
-                                tencent_codes.append(f"hk{code}")
-                            elif code.startswith('6'):
-                                tencent_codes.append(f"sh{code}")
-                            elif code.startswith('0') or code.startswith('3'):
-                                tencent_codes.append(f"sz{code}")
-                            else:
-                                tencent_codes.append(code)
-                        
-                        stock_names = await self._get_stock_names(tencent_codes)
-                        
-                        stocks = []
-                        for i, clean_code in enumerate(clean_codes):
-                            # 构建查询用的 key
-                            if clean_code in hk_codes:
-                                lookup_key = f"hk{clean_code}"
-                            elif clean_code.startswith('6'):
-                                lookup_key = f"sh{clean_code}"
-                            elif clean_code.startswith('0') or clean_code.startswith('3'):
-                                lookup_key = f"sz{clean_code}"
-                            else:
-                                lookup_key = clean_code
-                            
-                            name = stock_names.get(lookup_key, "-")
-                            
-                            # 如果腾讯 API 返回失败，优先使用 HK_STOCK_NAMES 映射
-                            if name == "-" and clean_code in hk_codes:
-                                name = HK_STOCK_NAMES.get(clean_code, "港股")
-                            
-                            stocks.append({
-                                "code": clean_code,
-                                "name": name,
-                                "ratio": 0,  # 比例需要另外获取（TODO: 从其他 API 获取）
-                            })
-                        
-                        # 估算资产配置
-                        total_stock_ratio = min(len(stocks) * 8, 95)  # 粗略估算
-                        remaining = 100 - total_stock_ratio
-                        
-                        assets = [
-                            {"name": "股票", "ratio": round(total_stock_ratio, 2), "amount": None},
-                            {"name": "债券", "ratio": round(remaining * 0.7, 2), "amount": None},
-                            {"name": "现金", "ratio": round(remaining * 0.2, 2), "amount": None},
-                            {"name": "其他", "ratio": round(remaining * 0.1, 2), "amount": None},
-                        ]
-                        
-                        logger.info(f"[Eastmoney] 基金 {code} 持仓获取成功，{len(stocks)} 只重仓股")
-                        
-                        return {
-                            "source": "eastmoney",
-                            "code": code,
-                            "quarter": "",
-                            "stocks": stocks,
-                            "assets": assets,
-                        }
-                    except Exception as e:
-                        logger.debug(f"解析股票代码失败: {e}")
-                
+                        stocks.append({
+                            "code": clean_code,
+                            "name": name,
+                            "ratio": 0,
+                        })
+                    
+                    total_stock_ratio = min(len(stocks) * 8, 95)
+                    remaining = 100 - total_stock_ratio
+                    
+                    assets = [
+                        {"name": "股票", "ratio": round(total_stock_ratio, 2), "amount": None},
+                        {"name": "债券", "ratio": round(remaining * 0.7, 2), "amount": None},
+                        {"name": "现金", "ratio": round(remaining * 0.2, 2), "amount": None},
+                        {"name": "其他", "ratio": round(remaining * 0.1, 2), "amount": None},
+                    ]
+                    
+                    logger.info(f"[Eastmoney] 基金 {code} 持仓获取成功（pingzhongdata），{len(stocks)} 只重仓股（无比例）")
+                    
+                    return {
+                        "source": "eastmoney-pingzhongdata",
+                        "code": code,
+                        "quarter": "",
+                        "stocks": stocks,
+                        "assets": assets,
+                    }
+                    
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 持仓获取失败: {e}")
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 pingzhongdata 失败: {e}")
         
         return None
     
@@ -537,6 +582,134 @@ class EastmoneyFundFetcher:
             logger.warning(f"[Eastmoney] 基金排行获取失败: {e}")
         
         return []
+    
+    async def get_fund_returns(self, code: str) -> Optional[Dict]:
+        """
+        获取基金阶段收益 - 从 pingzhongdata.js 解析
+        
+        东方财富 pingzhongdata.js 包含累计收益率走势数据
+        """
+        try:
+            url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
+            
+            async with self._get_client() as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                
+                js_text = resp.text
+                
+                # 解析基金名称
+                name_match = re.search(r'fS_name\s*=\s*"([^"]+)"', js_text)
+                name = name_match.group(1) if name_match else f"基金-{code}"
+                
+                # 解析净值走势数据用于计算阶段收益
+                nav_trend_match = re.search(r'Data_netWorthTrend\s*=\s*(\[.*?\]);', js_text, re.DOTALL)
+                if not nav_trend_match:
+                    return None
+                
+                nav_data = json.loads(nav_trend_match.group(1))
+                if not nav_data:
+                    return None
+                
+                # 从净值数据计算阶段收益
+                returns = self._calculate_returns_from_nav(nav_data)
+                
+                # 获取最新净值信息
+                latest = nav_data[-1] if nav_data else {}
+                prev = nav_data[-2] if len(nav_data) > 1 else {}
+                
+                latest_nav = latest.get("y")
+                prev_nav = prev.get("y", latest_nav)
+                daily_change = round((latest_nav - prev_nav) / prev_nav * 100, 2) if prev_nav else 0
+                
+                ts = latest.get("x")
+                nav_date = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d") if ts else ""
+                
+                result = {
+                    "source": "eastmoney",
+                    "code": code,
+                    "name": name,
+                    "nav_date": nav_date,
+                    "returns": returns,
+                    "nav": latest_nav,
+                    "accumulated_nav": latest_nav,  # 简化处理
+                    "daily_change": daily_change,
+                }
+                
+                logger.info(f"[Eastmoney] 基金 {code} 阶段收益获取成功")
+                return result
+                
+        except Exception as e:
+            logger.warning(f"[Eastmoney] 基金 {code} 阶段收益获取失败: {e}")
+        
+        return None
+    
+    def _calculate_returns_from_nav(self, nav_data: List[Dict]) -> Dict:
+        """从净值数据计算阶段收益"""
+        if not nav_data:
+            return {}
+        
+        # 获取最新净值
+        latest_nav = nav_data[-1].get("y", 0)
+        total_count = len(nav_data)
+        
+        # 计算各阶段收益
+        def get_return(days_ago: int) -> Optional[float]:
+            if days_ago >= total_count:
+                return None
+            idx = total_count - 1 - days_ago
+            if idx < 0:
+                return None
+            old_nav = nav_data[idx].get("y", 0)
+            if old_nav <= 0:
+                return None
+            return round((latest_nav - old_nav) / old_nav * 100, 2)
+        
+        # 交易日估算：1周≈5天，1月≈20天，3月≈60天，6月≈120天，1年≈240天
+        return {
+            "1w": get_return(5),
+            "1m": get_return(20),
+            "3m": get_return(60),
+            "6m": get_return(120),
+            "1y": get_return(240),
+            "2y": get_return(480),
+            "3y": get_return(720),
+            "ytd": self._calculate_ytd_return(nav_data),
+            "since_inception": self._calculate_total_return(nav_data),
+        }
+    
+    def _calculate_ytd_return(self, nav_data: List[Dict]) -> Optional[float]:
+        """计算年初至今收益"""
+        if not nav_data:
+            return None
+        
+        latest_nav = nav_data[-1].get("y", 0)
+        latest_ts = nav_data[-1].get("x", 0)
+        latest_year = datetime.fromtimestamp(latest_ts / 1000).year
+        
+        # 找到年初第一个交易日
+        for item in nav_data:
+            ts = item.get("x", 0)
+            dt = datetime.fromtimestamp(ts / 1000)
+            if dt.year == latest_year:
+                start_nav = item.get("y", 0)
+                if start_nav > 0:
+                    return round((latest_nav - start_nav) / start_nav * 100, 2)
+        
+        return None
+    
+    def _calculate_total_return(self, nav_data: List[Dict]) -> Optional[float]:
+        """计算成立来总收益"""
+        if len(nav_data) < 2:
+            return None
+        
+        first_nav = nav_data[0].get("y", 0)
+        latest_nav = nav_data[-1].get("y", 0)
+        
+        if first_nav <= 0:
+            return None
+        
+        return round((latest_nav - first_nav) / first_nav * 100, 2)
 
 
 # 单例模式

@@ -25,6 +25,8 @@
     "vue": "^3.5.13",
     "vue-echarts": "^7.0.3",
     "vue-grid-layout": "^3.0.0-beta1",
+    "vue-router": "^4.6.4",
+    "vue-toastification": "^2.0.0-rc.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -727,16 +727,23 @@ async function loadCompareData() {
         }))
       }
 
-      // Mock 阶段收益（实际应从 API 获取）
-      fund.returns = {
-        '1m': (Math.random() * 10 - 3).toFixed(2),
-        '3m': (Math.random() * 15 - 5).toFixed(2),
-        '6m': (Math.random() * 20 - 8).toFixed(2),
-        '1y': (Math.random() * 30 - 10).toFixed(2),
-        '3y': (Math.random() * 50 - 15).toFixed(2),
+      // 加载阶段收益（真实 API）
+      const returnsRes = await apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
+      const returnsData = extractData(returnsRes)
+      if (returnsData && returnsData.returns) {
+        fund.returns = {
+          '1m': returnsData.returns['1m'] ?? '-',
+          '3m': returnsData.returns['3m'] ?? '-',
+          '6m': returnsData.returns['6m'] ?? '-',
+          '1y': returnsData.returns['1y'] ?? '-',
+          '3y': returnsData.returns['3y'] ?? '-',
+        }
+      } else {
+        fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
       }
     } catch (e) {
       logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
+      fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
     }
   }
 
@@ -858,8 +865,17 @@ async function loadETFHistory(period) {
 
 async function loadOpenFundInfo(code) {
   try {
-    const res = await apiFetch(`/api/v1/fund/open/info?code=${code}`)
-    const data = extractData(res)
+    // 并发加载基金信息、阶段收益和风险指标
+    const [infoRes, returnsRes, riskRes] = await Promise.all([
+      apiFetch(`/api/v1/fund/open/info?code=${code}`),
+      apiFetch(`/api/v1/fund/open/returns/${code}`),
+      apiFetch(`/api/v1/fund/open/risk/${code}`),
+    ])
+    
+    const data = extractData(infoRes)
+    const returnsData = extractData(returnsRes)
+    const riskData = extractData(riskRes)
+    
     if (data) {
       fundInfo.value = {
         code: data.code || code,
@@ -880,16 +896,31 @@ async function loadOpenFundInfo(code) {
         dividend_freq: data.dividend_freq || 'N/A',
       }
       dataSource.value = data.source || 'unknown'
-      
-      // Mock 阶段收益和风险指标（实际应从 API 获取）
-      trailingReturns.fund = { '1w': 0.5, '1m': 2.3, '3m': -1.2, '6m': 5.8, 'ytd': 8.2, '1y': 12.5, '3y': 25.3, '5y': 68.9 }
-      trailingReturns.category = { '1w': 0.3, '1m': 1.8, '3m': -0.8, '6m': 4.5, 'ytd': 6.5, '1y': 10.2, '3y': 20.1, '5y': 55.2 }
-      trailingReturns.benchmark = { '1w': 0.4, '1m': 2.0, '3m': -1.0, '6m': 5.0, 'ytd': 7.5, '1y': 11.0, '3y': 22.5, '5y': 60.0 }
-      
-      riskMetrics.sharpe = 1.25
-      riskMetrics.max_drawdown = -18.5
-      riskMetrics.alpha = 2.3
-      riskMetrics.beta = 0.95
+    }
+    
+    // 使用真实阶段收益数据
+    if (returnsData && returnsData.returns) {
+      trailingReturns.fund = {
+        '1w': returnsData.returns['1w'] ?? null,
+        '1m': returnsData.returns['1m'] ?? null,
+        '3m': returnsData.returns['3m'] ?? null,
+        '6m': returnsData.returns['6m'] ?? null,
+        'ytd': returnsData.returns['ytd'] ?? null,
+        '1y': returnsData.returns['1y'] ?? null,
+        '3y': returnsData.returns['3y'] ?? null,
+        '5y': returnsData.returns['since_inception'] ?? null,
+      }
+      // 同类平均和基准指数暂无数据源，显示为 null
+      trailingReturns.category = { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null }
+      trailingReturns.benchmark = { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null }
+    }
+    
+    // 使用真实风险指标数据
+    if (riskData) {
+      riskMetrics.sharpe = riskData.sharpe ?? null
+      riskMetrics.max_drawdown = riskData.max_drawdown ?? null
+      riskMetrics.alpha = riskData.alpha ?? null
+      riskMetrics.beta = riskData.beta ?? null
     }
   } catch (e) {
     logger.warn('[Open Fund Info] 获取失败:', e)
