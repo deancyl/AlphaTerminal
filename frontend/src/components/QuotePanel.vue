@@ -258,6 +258,10 @@ import LoadingSpinner from './f9/LoadingSpinner.vue'
 import FreshnessIndicator from './FreshnessIndicator.vue'
 import { safeNumber, safePct } from '../utils/typeCoercion.js'
 import { getUnifiedPrice, getSourceStyle, getPriceConsistency } from '../utils/priceSourceTracker.js'
+import { useMarketStream } from '../composables/useMarketStream.js'
+import { useTheme } from '../composables/useTheme.js'
+
+const { getChartColors, onThemeChange } = useTheme()
 
 const props = defineProps({
   symbol:       { type: String,  default: '' },
@@ -272,6 +276,9 @@ const props = defineProps({
   panelWidth:   { type: Number,  default: 300 },
   loading:      { type: Boolean, default: false },
 })
+
+// Connect to WebSocket for this symbol
+const { tick: wsTick } = useMarketStream(props.symbol)
 
 // snapshotData 优先，否则用 realtimeData + latestCandle 合并
 const data = computed(() => {
@@ -307,7 +314,7 @@ const panelName = computed(() => data.value.name || props.name || props.symbol)
 // ── 统一价格源（优先级：WS tick > K线 > API > 快照）───────────────────────
 const unifiedPriceSource = computed(() => {
   return getUnifiedPrice({
-    wsTick: null, // TODO: WebSocket tick data when available
+    wsTick: wsTick.value,  // NOW CONNECTED! (was null before)
     latestCandle: props.latestCandle,
     realtimeData: props.realtimeData,
     snapshotData: props.snapshotData
@@ -318,7 +325,7 @@ const priceSourceStyle = computed(() => getSourceStyle(unifiedPriceSource.value.
 
 const priceConsistency = computed(() => {
   return getPriceConsistency({
-    wsTick: null,
+    wsTick: wsTick.value,  // NOW CONNECTED!
     latestCandle: props.latestCandle,
     realtimeData: props.realtimeData
   })
@@ -505,18 +512,17 @@ function renderDonut() {
     donutInstance = window.echarts.init(fundDonutRef.value, null, { renderer: 'canvas' })
   }
 
-  const style = getComputedStyle(document.documentElement)
-  const colorUp = style.getPropertyValue('--color-up').trim() || '#E63946'
-  const colorDown = style.getPropertyValue('--color-down').trim() || '#1A936F'
+  // Get theme-aware colors
+  const colors = getChartColors()
 
   donutInstance.setOption({
     backgroundColor: 'transparent',
     tooltip: {
       show: true,
       trigger: 'item',
-      backgroundColor: 'rgba(26,30,46,0.95)',
-      borderColor: '#4b5563',
-      textStyle: { color: '#9ca3af', fontSize: 10 },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText, fontSize: 10 },
       formatter: '{b}: {c} ({d}%)',
     },
     series: [{
@@ -526,12 +532,17 @@ function renderDonut() {
       avoidLabelOverlap: false,
       label: { show: false },
       data: [
-        { value: fd.inAmt,  name: '流入', itemStyle: { color: colorUp } },
-        { value: fd.outAmt, name: '流出', itemStyle: { color: colorDown } },
+        { value: fd.inAmt,  name: '流入', itemStyle: { color: colors.bullish } },
+        { value: fd.outAmt, name: '流出', itemStyle: { color: colors.bearish } },
       ],
     }],
   })
 }
+
+// Re-render on theme change
+onThemeChange(() => {
+  nextTick(renderDonut)
+})
 
 watch(fundDonutData, () => { nextTick(renderDonut) }, { immediate: true })
 
