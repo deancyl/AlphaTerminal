@@ -1,28 +1,28 @@
 <template>
-  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto">
+  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto overflow-x-hidden">
     
     <!-- 顶部：选项卡 + 搜索 -->
     <div class="p-4 border-b border-theme-secondary shrink-0 bg-terminal-panel/50">
       <div class="flex flex-col gap-3">
         <!-- 选项卡 -->
-        <div class="flex gap-2">
+        <div class="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
           <button 
             @click="activeTab = 'etf'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'etf' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >📊 场内基金 (ETF/LOF)</button>
           <button 
             @click="activeTab = 'open'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'open' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >💰 场外公募基金</button>
           <button 
             @click="activeTab = 'compare'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
             :class="activeTab === 'compare' 
               ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
@@ -49,7 +49,7 @@
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)" 
               :key="f.code"
               @click="selectFund(f.code)"
-              class="px-2 py-1 text-xs rounded-sm border transition-colors whitespace-nowrap"
+              class="px-3 py-2.5 text-xs rounded-sm border transition-colors whitespace-nowrap min-h-[44px]"
               :class="selectedFundCode === f.code 
                 ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                 : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
@@ -100,7 +100,7 @@
     </div>
 
     <!-- 加载中（包括自动加载） -->
-    <div v-if="loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <div v-if="loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
       <!-- 顶部指标骨架 -->
       <div class="grid grid-cols-3 gap-3">
         <div class="skeleton h-16 rounded-sm" v-for="n in 3" :key="n"></div>
@@ -149,7 +149,7 @@
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
-              class="px-3 py-2 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent"
+              class="px-3 py-2.5 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent min-h-[44px]"
             >
               {{ f.name }}
             </button>
@@ -163,7 +163,7 @@
     </div>
 
     <!-- 主内容区（ETF/公募基金/对比） -->
-    <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
       
       <!-- ETF 面板 -->
       <div v-if="activeTab === 'etf'" class="space-y-4">
@@ -268,20 +268,20 @@
                 v-for="p in klinePeriods"
                 :key="p.key"
                 @click="loadETFHistory(p.key)"
-                class="px-2 py-0.5 text-[10px] rounded-sm border transition"
+                class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
                 :class="klinePeriod === p.key
                   ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                   : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
               >{{ p.label }}</button>
             </div>
           </div>
-          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center" style="height: 280px;">
+          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72">
             <div class="text-center">
               <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
               <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
             </div>
           </div>
-          <div v-else-if="klineError" class="w-full flex items-center justify-center" style="height: 280px;">
+          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72">
             <div class="text-center">
               <div class="text-2xl mb-2">⚠️</div>
               <div class="text-sm text-theme-muted mb-2">{{ klineError }}</div>
@@ -291,7 +291,7 @@
               </button>
             </div>
           </div>
-          <div v-else ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
+          <div v-else ref="klineChartRef" class="w-full h-64 sm:h-72"></div>
         </div>
       </div>
 
@@ -323,7 +323,7 @@
           <template v-else>
             <div class="flex items-start justify-between mb-4">
               <div>
-                <h2 class="text-xl font-bold text-theme-primary">{{ fundInfo?.name ?? '-' }}</h2>
+                <h2 class="text-xl font-bold text-theme-primary truncate" :title="fundInfo?.name">{{ fundInfo?.name ?? '-' }}</h2>
                 <div class="text-xs text-theme-tertiary mt-1">
                   代码：{{ selectedFundCode }} | 类型：{{ fundInfo?.type ?? '-' }} | 成立：{{ fundInfo?.found_date ?? '-' }}
                 </div>
@@ -453,20 +453,20 @@
                   v-for="p in navPeriods" 
                   :key="p.key"
                   @click="loadNAVHistory(p.key)"
-                  class="px-2 py-0.5 text-[10px] rounded-sm border transition"
+                  class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
                   :class="navPeriod === p.key 
                     ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
                     : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
                 >{{ p.label }}</button>
               </div>
             </div>
-            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center h-64 sm:h-72">
               <div class="text-center">
                 <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
                 <div class="text-xs text-theme-tertiary">加载净值数据...</div>
               </div>
             </div>
-            <div v-else-if="navChartError" class="w-full flex items-center justify-center" style="height: 280px;">
+            <div v-else-if="navChartError" class="w-full flex items-center justify-center h-64 sm:h-72">
               <div class="text-center">
                 <div class="text-2xl mb-2">⚠️</div>
                 <div class="text-sm text-theme-muted mb-2">{{ navChartError }}</div>
@@ -476,7 +476,7 @@
                 </button>
               </div>
             </div>
-            <div v-else ref="navChartRef" class="w-full" style="height: 280px;"></div>
+            <div v-else ref="navChartRef" class="w-full h-64 sm:h-72"></div>
           </div>
 
           <!-- 资产配置饼图 -->
@@ -485,13 +485,13 @@
               <span class="text-terminal-accent font-bold text-sm">🎯 资产配置</span>
               <span class="text-[10px] text-theme-tertiary">X-Ray</span>
             </div>
-            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center" style="height: 200px;">
+            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center h-48 sm:h-56">
               <div class="text-center">
                 <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
                 <div class="text-xs text-theme-tertiary">加载资产配置...</div>
               </div>
             </div>
-            <div v-else-if="assetChartError" class="w-full flex items-center justify-center" style="height: 200px;">
+            <div v-else-if="assetChartError" class="w-full flex items-center justify-center h-48 sm:h-56">
               <div class="text-center">
                 <div class="text-2xl mb-2">⚠️</div>
                 <div class="text-sm text-theme-muted mb-2">{{ assetChartError }}</div>
@@ -502,7 +502,7 @@
               </div>
             </div>
             <template v-else>
-              <div ref="assetChartRef" class="w-full" style="height: 200px;"></div>
+              <div ref="assetChartRef" class="w-full h-48 sm:h-56"></div>
               <div class="mt-3 space-y-1">
                 <div v-for="(item, i) in assetAllocation" :key="i" 
                      class="flex items-center justify-between text-xs">
@@ -596,13 +596,13 @@
             <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
             <span class="text-[10px] text-theme-tertiary">归一化对比</span>
           </div>
-          <div v-if="loadingCompare" class="w-full flex items-center justify-center" style="height: 280px;">
+          <div v-if="loadingCompare" class="w-full flex items-center justify-center h-64 sm:h-80">
             <div class="text-center">
               <div class="inline-block animate-spin text-2xl mb-2">⏳</div>
               <div class="text-xs text-theme-tertiary">加载对比数据...</div>
             </div>
           </div>
-          <div v-else-if="compareChartError" class="w-full flex items-center justify-center" style="height: 280px;">
+          <div v-else-if="compareChartError" class="w-full flex items-center justify-center h-64 sm:h-80">
             <div class="text-center">
               <div class="text-2xl mb-2">⚠️</div>
               <div class="text-sm text-theme-muted mb-2">{{ compareChartError }}</div>
@@ -612,7 +612,7 @@
               </button>
             </div>
           </div>
-          <div v-else ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
+          <div v-else ref="compareChartRef" class="w-full h-64 sm:h-80"></div>
         </div>
 
         <!-- 对比表格：移动端优化 -->
