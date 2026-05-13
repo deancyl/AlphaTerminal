@@ -416,10 +416,10 @@
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 阶段收益追踪</span>
-            <span class="text-xs text-theme-tertiary">与同类平均及基准对比</span>
+            <span class="text-[10px] text-theme-tertiary">与同类平均及基准对比</span>
           </div>
-          <div class="overflow-x-auto scrollbar-hide">
-            <table class="w-full text-xs whitespace-nowrap" aria-label="阶段收益追踪表">
+          <div class="overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table class="w-full text-xs min-w-[600px] whitespace-nowrap" aria-label="阶段收益追踪表">
               <thead class="border-b border-theme">
                 <tr class="text-terminal-dim">
                   <th class="px-2 py-2 text-left font-normal" scope="col">指标</th>
@@ -1040,7 +1040,16 @@ function removeCompareFund(idx) {
 }
 
 function clearCompareFunds() {
-  fundStore.clearCompareFunds()
+  const count = compareFunds.value.length
+  if (count === 0) {
+    info('对比列表已为空')
+    return
+  }
+  
+  if (confirm(`确定要清空 ${count} 只对比基金吗？`)) {
+    fundStore.clearCompareFunds()
+    success('已清空对比列表')
+  }
 }
 
 async function loadCompareData() {
@@ -1183,11 +1192,9 @@ function renderCompareChart() {
   } catch (e) {
     logger.error('[FundDashboard] 对比图表渲染失败:', e)
     compareChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance
-    if (compareChart.value) {
-      try { compareChart.value.dispose() } catch (err) {}
-      compareChart.value = null
-    }
+    // Dispose broken chart instance and clean up ResizeObserver
+    disposeChartWithError(compareChartRef, compareChart.value)
+    compareChart.value = null
   }
 }
 
