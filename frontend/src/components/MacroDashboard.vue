@@ -20,6 +20,27 @@
       </div>
     </div>
 
+    <div v-if="errorSummary" class="mx-3 md:mx-4 mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-start gap-2">
+          <span class="text-warning text-lg">⚠️</span>
+          <div>
+            <p class="text-sm font-medium text-warning">部分数据加载失败</p>
+            <p class="text-xs text-terminal-dim mt-1">
+              {{ errorSummary.count }} 个数据源加载失败: {{ errorSummary.keys.join(', ') }}
+            </p>
+          </div>
+        </div>
+        <button 
+          class="px-3 py-1.5 rounded-sm text-xs bg-warning/20 text-warning hover:bg-warning/30 transition shrink-0"
+          @click="retryFailed"
+          :disabled="loading"
+        >
+          重试失败项
+        </button>
+      </div>
+    </div>
+
     <!-- 主内容区域 - 可滚动 -->
     <div class="flex-1 overflow-y-auto">
       <!-- 骨架加载器 -->
@@ -282,18 +303,42 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useGracefulDegradation } from '../composables/useGracefulDegradation.js'
 import { useApiError } from '../composables/useApiError.js'
+import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
 
 const echarts = window.echarts
-const { handleError } = useApiError({ showToast: false })
+const { handleError, getErrorCategory } = useApiError({ showToast: true })
 
 const loading = ref(false)
-const error = ref(null)
 const overview = ref(null)
 const calendar = ref([])
 const lastUpdate = ref(null)
+const errorSummary = ref(null)
+
+const {
+  requestStates,
+  errors,
+  fetchAll,
+  getAnyLoading,
+  getFailedKeys,
+  getErrorSummary,
+  retryAll,
+} = useGracefulDegradation({
+  onPartialSuccess: ({ successCount, failCount, total, errors }) => {
+    const failedContexts = Object.values(errors).map(e => e.context).filter(Boolean)
+    const message = failCount > 0 
+      ? `${failCount}/${total} 个数据源加载失败: ${failedContexts.join(', ')}`
+      : `${successCount}/${total} 个数据源加载成功`
+    handleError(new Error(message), { context: '宏观数据', silent: false })
+  },
+  onAllFailed: (errors) => {
+    const failedContexts = Object.values(errors).map(e => e.context).filter(Boolean)
+    handleError(new Error(`所有 ${failedContexts.length} 个数据源加载失败`), { context: '宏观数据', silent: false })
+  },
+})
 
 const gdpChart = ref(null)
 const cpiChart = ref(null)
@@ -303,6 +348,8 @@ const m2Chart = ref(null)
 const socialFinancingChart = ref(null)
 const industrialProductionChart = ref(null)
 const unemploymentChart = ref(null)
+
+const chartManager = useChartManager()
 
 let gdpChartInstance = null
 let cpiChartInstance = null
@@ -315,54 +362,114 @@ let unemploymentChartInstance = null
 
 async function fetchAllData() {
   loading.value = true
-  error.value = null
+  errorSummary.value = null
 
-  try {
-    const [
-      overviewRes,
-      calendarRes,
-      gdpRes,
-      cpiRes,
-      pmiRes,
-      ppiRes,
-      m2Res,
-      socialRes,
-      industrialRes,
-      unemploymentRes
-    ] = await Promise.all([
-      apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '宏观概览', silent: true }); return null }),
-      apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '经济日历', silent: true }); return null }),
-      apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'GDP数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'CPI数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'PMI数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'PPI数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: 'M2数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '社融数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '工业增加值数据', silent: true }); return null }),
-      apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }).catch(e => { handleError(e, { context: '失业率数据', silent: true }); return null })
-    ])
+  const requests = [
+    { key: 'overview', fetchFn: () => apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }), context: { context: '宏观概览' } },
+    { key: 'calendar', fetchFn: () => apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }), context: { context: '经济日历' } },
+    { key: 'gdp', fetchFn: () => apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }), context: { context: 'GDP数据' } },
+    { key: 'cpi', fetchFn: () => apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }), context: { context: 'CPI数据' } },
+    { key: 'pmi', fetchFn: () => apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }), context: { context: 'PMI数据' } },
+    { key: 'ppi', fetchFn: () => apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }), context: { context: 'PPI数据' } },
+    { key: 'm2', fetchFn: () => apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }), context: { context: 'M2数据' } },
+    { key: 'socialFinancing', fetchFn: () => apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }), context: { context: '社融数据' } },
+    { key: 'industrial', fetchFn: () => apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }), context: { context: '工业增加值数据' } },
+    { key: 'unemployment', fetchFn: () => apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }), context: { context: '失业率数据' } },
+  ]
 
-    // Process results
-    if (overviewRes?.overview) {
-      overview.value = overviewRes.overview
-      lastUpdate.value = overviewRes.last_update
-    }
-    if (calendarRes?.calendar) calendar.value = calendarRes.calendar
-    if (gdpRes?.data) drawGDPChart(gdpRes.data)
-    if (cpiRes?.data) drawCPIChart(cpiRes.data)
-    if (pmiRes?.data) drawPMIChart(pmiRes.data)
-    if (ppiRes?.data) drawPPIChart(ppiRes.data)
-    if (m2Res?.data) drawM2Chart(m2Res.data)
-    if (socialRes?.data) drawSocialFinancingChart(socialRes.data)
-    if (industrialRes?.data) drawIndustrialProductionChart(industrialRes.data)
-    if (unemploymentRes?.data) drawUnemploymentChart(unemploymentRes.data)
+  const { results, successCount, failCount, allFailed } = await fetchAll(requests)
 
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '宏观数据' })
-    error.value = userMessage
-  } finally {
-    loading.value = false
+  const [
+    overviewRes,
+    calendarRes,
+    gdpRes,
+    cpiRes,
+    pmiRes,
+    ppiRes,
+    m2Res,
+    socialRes,
+    industrialRes,
+    unemploymentRes,
+  ] = results.map(r => r.data)
+
+  if (overviewRes?.overview) {
+    overview.value = overviewRes.overview
+    lastUpdate.value = overviewRes.last_update
   }
+  if (calendarRes?.calendar) calendar.value = calendarRes.calendar
+  if (gdpRes?.data) drawGDPChart(gdpRes.data)
+  if (cpiRes?.data) drawCPIChart(cpiRes.data)
+  if (pmiRes?.data) drawPMIChart(pmiRes.data)
+  if (ppiRes?.data) drawPPIChart(ppiRes.data)
+  if (m2Res?.data) drawM2Chart(m2Res.data)
+  if (socialRes?.data) drawSocialFinancingChart(socialRes.data)
+  if (industrialRes?.data) drawIndustrialProductionChart(industrialRes.data)
+  if (unemploymentRes?.data) drawUnemploymentChart(unemploymentRes.data)
+
+  if (failCount > 0) {
+    errorSummary.value = getErrorSummary()
+  }
+
+  loading.value = false
+}
+
+async function refreshAll() {
+  await fetchAllData()
+}
+
+async function retryFailed() {
+  const failedKeys = getFailedKeys()
+  if (failedKeys.length === 0) return
+
+  loading.value = true
+  errorSummary.value = null
+
+  const retryRequests = failedKeys.map(key => {
+    const requestMap = {
+      overview: { fetchFn: () => apiFetch('/api/v1/macro/overview', { timeoutMs: 30000 }), context: { context: '宏观概览' } },
+      calendar: { fetchFn: () => apiFetch('/api/v1/macro/calendar', { timeoutMs: 30000 }), context: { context: '经济日历' } },
+      gdp: { fetchFn: () => apiFetch('/api/v1/macro/gdp?limit=20', { timeoutMs: 30000 }), context: { context: 'GDP数据' } },
+      cpi: { fetchFn: () => apiFetch('/api/v1/macro/cpi?limit=24', { timeoutMs: 30000 }), context: { context: 'CPI数据' } },
+      pmi: { fetchFn: () => apiFetch('/api/v1/macro/pmi?limit=24', { timeoutMs: 30000 }), context: { context: 'PMI数据' } },
+      ppi: { fetchFn: () => apiFetch('/api/v1/macro/ppi?limit=24', { timeoutMs: 30000 }), context: { context: 'PPI数据' } },
+      m2: { fetchFn: () => apiFetch('/api/v1/macro/m2?limit=24', { timeoutMs: 30000 }), context: { context: 'M2数据' } },
+      socialFinancing: { fetchFn: () => apiFetch('/api/v1/macro/social_financing?limit=24', { timeoutMs: 30000 }), context: { context: '社融数据' } },
+      industrial: { fetchFn: () => apiFetch('/api/v1/macro/industrial_production?limit=24', { timeoutMs: 30000 }), context: { context: '工业增加值数据' } },
+      unemployment: { fetchFn: () => apiFetch('/api/v1/macro/unemployment?limit=24', { timeoutMs: 30000 }), context: { context: '失业率数据' } },
+    }
+    return { key, ...requestMap[key] }
+  })
+
+  const { results, failCount } = await fetchAll(retryRequests)
+
+  results.forEach((result, index) => {
+    if (result.success && result.data) {
+      const key = retryRequests[index].key
+      if (key === 'overview' && result.data.overview) {
+        overview.value = result.data.overview
+        lastUpdate.value = result.data.last_update
+      } else if (key === 'calendar' && result.data.calendar) {
+        calendar.value = result.data.calendar
+      } else if (result.data?.data) {
+        const drawFunctions = {
+          gdp: drawGDPChart,
+          cpi: drawCPIChart,
+          pmi: drawPMIChart,
+          ppi: drawPPIChart,
+          m2: drawM2Chart,
+          socialFinancing: drawSocialFinancingChart,
+          industrial: drawIndustrialProductionChart,
+          unemployment: drawUnemploymentChart,
+        }
+        if (drawFunctions[key]) {
+          drawFunctions[key](result.data.data)
+        }
+      }
+    }
+  })
+
+  errorSummary.value = failCount > 0 ? getErrorSummary() : null
+  loading.value = false
 }
 
 function getChartColors() {
@@ -801,10 +908,6 @@ function drawUnemploymentChart(data) {
   })
 }
 
-async function refreshAll() {
-  await fetchAllData()
-}
-
 function formatNumber(val) {
   if (val === null || val === undefined) return '--'
   return Number(val).toFixed(2)
@@ -849,64 +952,47 @@ let resizeTimer = null
 function handleResize() {
   clearTimeout(resizeTimer)
   resizeTimer = setTimeout(() => {
-    gdpChartInstance?.resize()
-    cpiChartInstance?.resize()
-    pmiChartInstance?.resize()
-    ppiChartInstance?.resize()
-    m2ChartInstance?.resize()
-    socialFinancingChartInstance?.resize()
-    industrialProductionChartInstance?.resize()
-    unemploymentChartInstance?.resize()
+    chartManager.resizeAll()
   }, 150)
 }
 
 onMounted(async () => {
   await nextTick()
-  
-  const chartRefs = [
-    { ref: gdpChart.value, name: 'GDP', instance: 'gdpChartInstance' },
-    { ref: cpiChart.value, name: 'CPI', instance: 'cpiChartInstance' },
-    { ref: pmiChart.value, name: 'PMI', instance: 'pmiChartInstance' },
-    { ref: ppiChart.value, name: 'PPI', instance: 'ppiChartInstance' },
-    { ref: m2Chart.value, name: 'M2', instance: 'm2ChartInstance' },
-    { ref: socialFinancingChart.value, name: 'SocialFinancing', instance: 'socialFinancingChartInstance' },
-    { ref: industrialProductionChart.value, name: 'IndustrialProduction', instance: 'industrialProductionChartInstance' },
-    { ref: unemploymentChart.value, name: 'Unemployment', instance: 'unemploymentChartInstance' },
+
+  const chartConfigs = [
+    { ref: gdpChart.value, id: 'gdpChart', setter: (v) => gdpChartInstance = v },
+    { ref: cpiChart.value, id: 'cpiChart', setter: (v) => cpiChartInstance = v },
+    { ref: pmiChart.value, id: 'pmiChart', setter: (v) => pmiChartInstance = v },
+    { ref: ppiChart.value, id: 'ppiChart', setter: (v) => ppiChartInstance = v },
+    { ref: m2Chart.value, id: 'm2Chart', setter: (v) => m2ChartInstance = v },
+    { ref: socialFinancingChart.value, id: 'socialFinancingChart', setter: (v) => socialFinancingChartInstance = v },
+    { ref: industrialProductionChart.value, id: 'industrialProductionChart', setter: (v) => industrialProductionChartInstance = v },
+    { ref: unemploymentChart.value, id: 'unemploymentChart', setter: (v) => unemploymentChartInstance = v },
   ]
-  
-  chartRefs.forEach(({ ref, name }) => {
+
+  chartConfigs.forEach(({ ref, id, setter }) => {
     if (ref) {
       try {
-        if (name === 'GDP') gdpChartInstance = echarts.init(ref)
-        else if (name === 'CPI') cpiChartInstance = echarts.init(ref)
-        else if (name === 'PMI') pmiChartInstance = echarts.init(ref)
-        else if (name === 'PPI') ppiChartInstance = echarts.init(ref)
-        else if (name === 'M2') m2ChartInstance = echarts.init(ref)
-        else if (name === 'SocialFinancing') socialFinancingChartInstance = echarts.init(ref)
-        else if (name === 'IndustrialProduction') industrialProductionChartInstance = echarts.init(ref)
-        else if (name === 'Unemployment') unemploymentChartInstance = echarts.init(ref)
+        const instance = echarts.init(ref)
+        setter(instance)
+        chartManager.register(id, instance, ref)
       } catch (e) {
-        console.warn(`[MacroDashboard] Failed to init ${name} chart:`, e.message)
+        console.warn(`[MacroDashboard] Failed to init ${id} chart:`, e.message)
       }
     }
   })
-  
+
   await refreshAll()
-  
+
   window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   clearTimeout(resizeTimer)
   window.removeEventListener('resize', handleResize)
-  try { gdpChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] GDP dispose error:', e.message) }
-  try { cpiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] CPI dispose error:', e.message) }
-  try { pmiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] PMI dispose error:', e.message) }
-  try { ppiChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] PPI dispose error:', e.message) }
-  try { m2ChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] M2 dispose error:', e.message) }
-  try { socialFinancingChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] SocialFinancing dispose error:', e.message) }
-  try { industrialProductionChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] IndustrialProduction dispose error:', e.message) }
-  try { unemploymentChartInstance?.dispose() } catch (e) { console.warn('[MacroDashboard] Unemployment dispose error:', e.message) }
+
+  chartManager.disposeAll()
+
   gdpChartInstance = null
   cpiChartInstance = null
   pmiChartInstance = null

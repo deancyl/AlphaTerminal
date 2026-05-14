@@ -125,15 +125,21 @@
       </div>
     </div>
 
-    <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
+    <!-- ── 新闻列表（虚拟化滚动） ───────────────────────── -->
     <div
       ref="listEl"
-      class="flex-1 overflow-y-auto mt-2 min-h-0"
+      class="flex-1 overflow-hidden mt-2 min-h-0"
     >
-      <div class="flex flex-col">
+      <RecycleScroller
+        ref="scrollerRef"
+        class="h-full"
+        :items="virtualizedNewsItems"
+        :item-size="64"
+        key-field="id"
+        :buffer="300"
+        v-slot="{ item, index }"
+      >
         <div
-          v-for="item in pagedItems"
-          :key="item.id || item.title"
           class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
           @click="openModal(item, $event)"
         >
@@ -155,20 +161,20 @@
             {{ item.title }}
           </p>
         </div>
-        <!-- 骨架屏 -->
-        <div v-if="isRefreshing && !pagedItems.length" class="flex flex-col">
-          <div v-for="i in 5" :key="i" class="py-3 px-2 -mx-2 border-b border-theme-secondary">
-            <div class="flex items-center gap-2 mb-2">
-              <div class="w-10 h-3.5 rounded-sm bg-terminal-panel"></div>
-              <div class="w-12 h-3 rounded-sm bg-terminal-panel"></div>
-            </div>
-            <div class="h-4 rounded-sm bg-terminal-panel w-full mb-1.5"></div>
-            <div class="h-4 rounded-sm bg-terminal-panel w-2/3"></div>
+      </RecycleScroller>
+      <!-- 骨架屏 -->
+      <div v-if="isRefreshing && !pagedItems.length" class="flex flex-col">
+        <div v-for="i in 5" :key="i" class="py-3 px-2 -mx-2 border-b border-theme-secondary">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-10 h-3.5 rounded-sm bg-terminal-panel"></div>
+            <div class="w-12 h-3 rounded-sm bg-terminal-panel"></div>
           </div>
+          <div class="h-4 rounded-sm bg-terminal-panel w-full mb-1.5"></div>
+          <div class="h-4 rounded-sm bg-terminal-panel w-2/3"></div>
         </div>
-        <div v-else-if="!pagedItems.length" class="text-center py-12 text-theme-tertiary text-sm">
-          暂无符合条件的快讯
-        </div>
+      </div>
+      <div v-else-if="!pagedItems.length" class="text-center py-12 text-theme-tertiary text-sm">
+        暂无符合条件的快讯
       </div>
     </div>
 
@@ -313,6 +319,7 @@ const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
 const listEl       = ref(null)
+const scrollerRef  = ref(null)
 const forceRefreshCounter = ref(0)
 const lastRefreshTime = ref(null)
 let unregisterNews = null
@@ -535,6 +542,14 @@ const totalPages = computed(() => Math.max(1, Math.ceil(filteredItems.value.leng
 const pagedItems = computed(() => {
   const start = (currentPage.value - 1) * PAGE_SIZE.value
   return filteredItems.value.slice(start, start + PAGE_SIZE.value)
+})
+
+// ── 虚拟化新闻列表 ─────────────────────────────────────────────────────
+const virtualizedNewsItems = computed(() => {
+  return pagedItems.value.map((item, index) => ({
+    ...item,
+    id: item.id || item.title || `news-${index}`,
+  }))
 })
 
 const visiblePages = computed(() => {

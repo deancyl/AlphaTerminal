@@ -160,6 +160,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { formatPrice, formatVol } from '../utils/formatters.js'
+import { safeDivide, safePercent } from '../utils/safeMath.js'
 import { usePollingManager } from '../composables/usePollingManager.js'
 
 const props = defineProps({
@@ -215,9 +216,7 @@ const totalBidVol = computed(() =>
 const weibi = computed(() => {
   const buy = totalBidVol.value
   const sell = totalAskVol.value
-  const total = buy + sell
-  if (!total) return 0
-  return (buy - sell) / total * 100
+  return safePercent(buy - sell, buy + sell)
 })
 
 // 委差 = 买入总量 - 卖出总量
@@ -254,7 +253,7 @@ async function fetchOrderBook() {
     const bids = data.value.bids || []
     const allPrices = asks.map(a => a.price).concat(bids.map(b => b.price)).filter(p => p > 0)
     if (allPrices.length) {
-      const mp = allPrices.reduce((a, b) => a + b, 0) / allPrices.length
+      const mp = safeDivide(allPrices.reduce((a, b) => a + b, 0), allPrices.length)
       if (mp > prevPrice)  priceDir.value = 'up'
       else if (mp < prevPrice) priceDir.value = 'down'
       else priceDir.value = ''

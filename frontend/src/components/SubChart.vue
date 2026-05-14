@@ -105,6 +105,7 @@ import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicator
 import { buildXAxisLabels } from '../utils/symbols.js'
 import { UP, DOWN } from '../utils/indicators.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 
 
@@ -243,7 +244,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   resizeObserver?.disconnect()
-  chartInstance?.dispose()
+  safeDispose(chartInstance)
 })
 
 const debouncedRender = useDebounceFn(() => nextTick(render), 150)

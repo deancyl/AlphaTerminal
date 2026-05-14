@@ -55,6 +55,58 @@ class StrategyUpdate(BaseModel):
     take_profit_pct: Optional[float] = None
 
 
+class CodeValidateRequest(BaseModel):
+    code: str
+
+
+class CodeValidateResponse(BaseModel):
+    is_valid: bool
+    errors: List[str] = []
+    warnings: List[str] = []
+    security_score: int = 100
+
+
+@router.post("/validate")
+async def validate_strategy_code(request: CodeValidateRequest):
+    """
+    Validate strategy code without executing it.
+    
+    Performs comprehensive security validation including:
+    - AST-based security analysis
+    - Forbidden import detection
+    - Dangerous function call detection
+    - Infinite loop detection
+    - Memory bomb detection
+    
+    Returns validation result without executing the code.
+    """
+    try:
+        from app.services.strategy.ast_validator import get_security_report
+        
+        report = get_security_report(request.code)
+        
+        security_score = 100
+        if report.violations:
+            security_score = max(0, 100 - len(report.violations) * 20)
+        if report.warnings:
+            security_score = max(0, security_score - len(report.warnings) * 5)
+        
+        return CodeValidateResponse(
+            is_valid=report.is_valid,
+            errors=[str(v) for v in report.violations],
+            warnings=[str(w) for w in report.warnings],
+            security_score=security_score,
+        )
+    except Exception as e:
+        logger.error(f"[Strategy] Validation error: {e}")
+        return CodeValidateResponse(
+            is_valid=False,
+            errors=[f"Validation failed: {str(e)}"],
+            warnings=[],
+            security_score=0,
+        )
+
+
 def _get_history_data(symbol: str, start_date: str, end_date: str) -> Optional[Dict]:
     """获取历史数据"""
     try:
@@ -462,5 +514,5 @@ async def backtest_saved_strategy(strategy_id: str, request: BacktestRequest):
             raise HTTPException(status_code=404, detail="策略不存在")
         strategy_data = _strategies_db[strategy_id]
         request.code = strategy_data["code"]
-    
+
     return await run_backtest(request)

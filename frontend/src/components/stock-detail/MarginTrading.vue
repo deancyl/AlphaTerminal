@@ -93,6 +93,7 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import { safeDispose } from '../../utils/chartManager.js'
 import LoadingSpinner from '../f9/LoadingSpinner.vue'
 import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
@@ -235,7 +236,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  chartInstance?.dispose()
+  safeDispose(chartInstance)
 })
 
 function handleResize() {

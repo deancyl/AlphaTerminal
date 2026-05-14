@@ -2,6 +2,10 @@
 可转债行情路由
 数据源：akshare bond_zh_cov, bond_zh_hs_cov_spot, bond_cov_comparison, bond_zh_cov_value_analysis
 缓存策略：5 分钟 TTL，后台异步刷新
+
+Timeout Behavior:
+    Background refresh threads have 30s timeout.
+    API endpoints return 504 on timeout.
 """
 import asyncio
 import logging
@@ -11,18 +15,18 @@ from datetime import datetime
 from fastapi import APIRouter
 import akshare as ak
 from app.utils.response import success_response, error_response, ErrorCode
+from app.config.timeout import BOND_REFRESH_TIMEOUT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── 缓存 ────────────────────────────────────────────────────────
 _COV_LIST_CACHE = {}
 _COV_LIST_CACHE_TIME = 0
 _COV_SPOT_CACHE = {}
 _COV_SPOT_CACHE_TIME = 0
 _COV_COMPARE_CACHE = {}
 _COV_COMPARE_CACHE_TIME = 0
-_CACHE_TTL = 300  # 5 分钟
+_CACHE_TTL = 300
 _CACHE_LOCK = threading.RLock()
 _REFRESH_SEM = threading.Semaphore(1)
 
@@ -109,7 +113,6 @@ _MOCK_COV_COMPARE = [
 
 
 def _fetch_cov_list():
-    """后台抓取可转债列表（akshare bond_zh_cov，5秒超时兜底Mock）"""
     global _COV_LIST_CACHE, _COV_LIST_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -117,7 +120,21 @@ def _fetch_cov_list():
         import warnings
         warnings.filterwarnings("ignore")
         
-        df = ak.bond_zh_cov()
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("akshare call timed out")
+        
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(int(BOND_REFRESH_TIMEOUT))
+        
+        try:
+            df = ak.bond_zh_cov()
+            signal.alarm(0)
+        except TimeoutError:
+            signal.alarm(0)
+            raise
+        
         if df is not None and not df.empty:
             bonds = []
             for _, row in df.iterrows():
@@ -151,10 +168,11 @@ def _fetch_cov_list():
                 _COV_LIST_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] list fetched, total: {len(bonds)}")
             return
+    except TimeoutError:
+        logger.warning(f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}")
     
-    # 降级兜底：静态 Mock
     with _CACHE_LOCK:
         _COV_LIST_CACHE = {
             "bonds": _MOCK_COV_LIST,
@@ -167,7 +185,6 @@ def _fetch_cov_list():
 
 
 def _fetch_cov_spot():
-    """后台抓取可转债实时行情（akshare bond_zh_hs_cov_spot）"""
     global _COV_SPOT_CACHE, _COV_SPOT_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -175,7 +192,21 @@ def _fetch_cov_spot():
         import warnings
         warnings.filterwarnings("ignore")
         
-        df = ak.bond_zh_hs_cov_spot()
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("akshare call timed out")
+        
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(int(BOND_REFRESH_TIMEOUT))
+        
+        try:
+            df = ak.bond_zh_hs_cov_spot()
+            signal.alarm(0)
+        except TimeoutError:
+            signal.alarm(0)
+            raise
+        
         if df is not None and not df.empty:
             spots = []
             for _, row in df.iterrows():
@@ -206,10 +237,11 @@ def _fetch_cov_spot():
                 _COV_SPOT_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] spot fetched, total: {len(spots)}")
             return
+    except TimeoutError:
+        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}")
     
-    # 降级兜底：静态 Mock
     with _CACHE_LOCK:
         _COV_SPOT_CACHE = {
             "spots": _MOCK_COV_SPOT,
@@ -222,7 +254,6 @@ def _fetch_cov_spot():
 
 
 def _fetch_cov_compare():
-    """后台抓取可转债比价表（akshare bond_cov_comparison）"""
     global _COV_COMPARE_CACHE, _COV_COMPARE_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -230,7 +261,21 @@ def _fetch_cov_compare():
         import warnings
         warnings.filterwarnings("ignore")
         
-        df = ak.bond_cov_comparison()
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("akshare call timed out")
+        
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(int(BOND_REFRESH_TIMEOUT))
+        
+        try:
+            df = ak.bond_cov_comparison()
+            signal.alarm(0)
+        except TimeoutError:
+            signal.alarm(0)
+            raise
+        
         if df is not None and not df.empty:
             compares = []
             for _, row in df.iterrows():
@@ -263,10 +308,11 @@ def _fetch_cov_compare():
                 _COV_COMPARE_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] compare fetched, total: {len(compares)}")
             return
+    except TimeoutError:
+        logger.warning(f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}")
     
-    # 降级兜底：静态 Mock
     with _CACHE_LOCK:
         _COV_COMPARE_CACHE = {
             "compares": _MOCK_COV_COMPARE,
@@ -445,26 +491,14 @@ async def convertible_bond_comparison():
 
 @router.get("/bond/convertible/{symbol}/value")
 async def convertible_bond_value(symbol: str):
-    """
-    可转债价值分析
-    返回：历史转股价值、纯债价值趋势
-    
-    参数：
-      symbol: 债券代码（如 113527）
-    
-    字段说明：
-      date: 日期
-      close: 收盘价
-      pure_bond_value: 纯债价值
-      conversion_value: 转股价值
-      pure_bond_premium: 纯债溢价率(%)
-      conversion_premium: 转股溢价率(%)
-    """
     try:
         import warnings
         warnings.filterwarnings("ignore")
         
-        df = await asyncio.to_thread(ak.bond_zh_cov_value_analysis, symbol=symbol)
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_zh_cov_value_analysis, symbol=symbol),
+            timeout=BOND_REFRESH_TIMEOUT
+        )
         
         if df is not None and not df.empty:
             values = []
@@ -491,9 +525,11 @@ async def convertible_bond_value(symbol: str):
             })
         else:
             raise ValueError("empty dataframe")
+    except asyncio.TimeoutError:
+        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis timed out for {symbol}")
+        return error_response("请求超时，请稍后重试", code=504)
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis failed for {symbol}: {e}")
-        # 返回空数据而不是错误，让前端可以正常显示
         return success_response({
             "symbol": symbol,
             "values": [],

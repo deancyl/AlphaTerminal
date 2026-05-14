@@ -214,14 +214,25 @@
     </div>
   </div>
 
-  <!-- 新建账户弹窗 -->
+<!-- 新建账户弹窗 -->
   <div v-if="showCreateModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showCreateModal = false">
     <div role="dialog" class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-full max-w-[384px] mx-4">
       <h3 class="text-theme-primary font-bold mb-4">新建账户</h3>
       <div class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">账户名称</label>
-          <input v-model="newAccount.name" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" placeholder="如：我的子基金" />
+          <input
+            v-model="newAccount.name"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="createAccountField('name')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            placeholder="如：我的子基金"
+            @blur="handleCreateAccountBlur('name')"
+            @input="handleCreateAccountInput('name', newAccount.name)"
+            aria-label="账户名称"
+          />
+          <div v-if="createAccountField('name')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ createAccountField('name')?.error }}
+          </div>
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">账户类型</label>
@@ -236,14 +247,35 @@
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">初始本金</label>
-          <input v-model.number="newAccount.initialCapital" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" placeholder="0.00" />
+          <input
+            v-model.number="newAccount.initialCapital"
+            type="number"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="createAccountField('initialCapital')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            placeholder="0.00"
+            @blur="handleCreateAccountBlur('initialCapital')"
+            @input="handleCreateAccountInput('initialCapital', newAccount.initialCapital)"
+            aria-label="初始本金"
+          />
+          <div v-if="createAccountField('initialCapital')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ createAccountField('initialCapital')?.error }}
+          </div>
         </div>
         <div v-if="newAccount.type !== 'main'">
           <label class="text-[var(--text-secondary)] text-xs">所属主账户</label>
-          <select v-model="newAccount.parentId" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
+          <select
+            v-model="newAccount.parentId"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="createAccountField('parentId')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            @blur="handleCreateAccountBlur('parentId')"
+            @change="handleCreateAccountInput('parentId', newAccount.parentId)"
+          >
             <option value="">请选择主账户...</option>
             <option v-for="p in selectableParentList" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
+          <div v-if="createAccountField('parentId')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ createAccountField('parentId')?.error }}
+          </div>
           <div v-if="selectableParentList.length === 0" class="text-[var(--color-warning)] text-xs mt-1">
             ⚠️ 没有可用的主账户，请先创建一个主账户
           </div>
@@ -252,7 +284,11 @@
       </div>
       <div class="flex gap-2 mt-4 justify-end">
         <button @click="showCreateModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
-        <button @click="createAccount" class="btn-primary px-4 py-2">创建</button>
+        <button
+          @click="createAccount"
+          :disabled="!isCreateAccountValid && createAccountField('name')?.touched"
+          class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >创建</button>
       </div>
     </div>
   </div>
@@ -264,25 +300,64 @@
       <div class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">从账户</label>
-          <select v-model="transfer.from" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
+          <select
+            v-model="transfer.from"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="transferField('from')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            @blur="handleTransferBlur('from')"
+            @change="handleTransferInput('from', transfer.from)"
+          >
+            <option value="">请选择...</option>
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
+          <div v-if="transferField('from')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ transferField('from')?.error }}
+          </div>
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">到账户</label>
-          <select v-model="transfer.to" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1">
+          <select
+            v-model="transfer.to"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="transferField('to')?.showError || isSameAccount ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            @blur="handleTransferBlur('to')"
+            @change="handleTransferInput('to', transfer.to)"
+          >
+            <option value="">请选择...</option>
             <option v-for="p in portfolioList" :key="p.id" :value="p.id">{{ p.name }} ({{ p.type }})</option>
           </select>
+          <div v-if="transferField('to')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ transferField('to')?.error }}
+          </div>
+          <div v-if="isSameAccount" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ 转出账户和转入账户不能相同
+          </div>
         </div>
         <div>
           <label class="text-[var(--text-secondary)] text-xs">金额 (¥)</label>
-          <input v-model.number="transfer.amount" type="number" class="w-full bg-[var(--bg-secondary)] border border-[var(--border-primary)] rounded-sm px-3 py-2 text-theme-primary mt-1" />
+          <input
+            v-model.number="transfer.amount"
+            type="number"
+            class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
+            :class="transferField('amount')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
+            placeholder="0.00"
+            @blur="handleTransferBlur('amount')"
+            @input="handleTransferInput('amount', transfer.amount)"
+            aria-label="划转金额"
+          />
+          <div v-if="transferField('amount')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
+            ⚠️ {{ transferField('amount')?.error }}
+          </div>
         </div>
         <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
         <button @click="showTransferModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
-        <button @click="handleTransfer" class="btn-primary px-4 py-2">确认划转</button>
+        <button
+          @click="handleTransfer"
+          :disabled="!isTransferValid"
+          class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >确认划转</button>
       </div>
     </div>
   </div>
@@ -300,8 +375,9 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue';
 import { apiFetch } from '../utils/api.js';
+import { useValidation } from '../composables/useValidation.js';
 import OpenLotsPanel from './OpenLotsPanel.vue';
 import PositionPieChart from './PositionPieChart.vue';
 import AttributionPanel from './AttributionPanel.vue';
@@ -341,6 +417,129 @@ const newAccount = ref({ name: '', type: 'main', initialCapital: 0, parentId: nu
 const transfer  = ref({ from: null, to: null, amount: 0 });
 const createError   = ref('');
 const transferError = ref('');
+
+// ── 表单验证状态 ─────────────────────────────────────────────────
+const {
+  fields: createAccountFields,
+  field: createAccountField,
+  validateField: validateCreateAccountField,
+  validateAll: validateCreateAccountAll,
+  handleInput: handleCreateAccountInput,
+  handleBlur: handleCreateAccountBlur,
+  resetAll: resetCreateAccount,
+  isValid: isCreateAccountValid,
+} = useValidation({
+  name: { value: '', rules: [{ name: 'required', message: '请输入账户名称' }] },
+  initialCapital: { value: 0, rules: [{ name: 'min', params: 0, message: '初始本金不能为负数' }] },
+  parentId: { value: null, rules: [{ name: 'required', message: '请选择所属主账户' }] },
+})
+
+const {
+  fields: transferFields,
+  field: transferField,
+  validateField: validateTransferField,
+  validateAll: validateTransferAll,
+  handleInput: handleTransferInput,
+  handleBlur: handleTransferBlur,
+  resetAll: resetTransfer,
+  isValid: isTransferValid,
+} = useValidation({
+  from: { value: null, rules: [{ name: 'required', message: '请选择转出账户' }] },
+  to: { value: null, rules: [{ name: 'required', message: '请选择转入账户' }] },
+  amount: { value: 0, rules: [{ name: 'required', message: '请输入划转金额' }, { name: 'min', params: 0.01, message: '划转金额必须大于0' }] },
+})
+
+// 检查两个账户是否相同（用于划转）
+const isSameAccount = computed(() =>
+  transfer.value.from !== null &&
+  transfer.value.to !== null &&
+  transfer.value.from === transfer.value.to
+)
+
+// 同步 newAccount 到验证字段
+watch(() => newAccount.value.name, (val) => {
+  createAccountFields.name.value = val
+})
+watch(() => newAccount.value.initialCapital, (val) => {
+  createAccountFields.initialCapital.value = val
+})
+watch(() => newAccount.value.parentId, (val) => {
+  createAccountFields.parentId.value = val
+})
+
+// 同步 transfer 到验证字段
+watch(() => transfer.value.from, (val) => {
+  transferFields.from.value = val
+})
+watch(() => transfer.value.to, (val) => {
+  transferFields.to.value = val
+})
+watch(() => transfer.value.amount, (val) => {
+  transferFields.amount.value = val
+})
+
+// ── 账户表单验证状态（用于模板）────────────────────────────────────
+const accountValidation = reactive({
+  name: { error: '', showError: false },
+  capital: { error: '', showError: false },
+  parent: { error: '', showError: false },
+})
+
+function validateAccountField(field) {
+  if (field === 'name') {
+    accountValidation.name.error = ''
+    accountValidation.name.showError = false
+    if (!newAccount.value.name.trim()) {
+      accountValidation.name.error = '请输入账户名称'
+      accountValidation.name.showError = true
+    }
+  } else if (field === 'capital') {
+    accountValidation.capital.error = ''
+    accountValidation.capital.showError = false
+    if (newAccount.value.initialCapital < 0) {
+      accountValidation.capital.error = '初始本金不能为负数'
+      accountValidation.capital.showError = true
+    }
+  } else if (field === 'parent') {
+    accountValidation.parent.error = ''
+    accountValidation.parent.showError = false
+    if (newAccount.value.type !== 'main' && !newAccount.value.parentId) {
+      accountValidation.parent.error = '请选择所属主账户'
+      accountValidation.parent.showError = true
+    }
+  }
+}
+
+function handleAccountInput(field) {
+  if (accountValidation[field].showError) {
+    validateAccountField(field)
+  }
+}
+
+function handleCapitalInput() {
+  if (accountValidation.capital.showError) {
+    validateAccountField('capital')
+  }
+}
+
+const isAccountFormValid = computed(() => {
+  if (!newAccount.value.name.trim()) return false
+  if (newAccount.value.initialCapital < 0) return false
+  if (newAccount.value.type !== 'main' && !newAccount.value.parentId) return false
+  return true
+})
+
+// 重置验证状态
+watch(showCreateModal, (show) => {
+  if (!show) {
+    accountValidation.name.error = ''
+    accountValidation.name.showError = false
+    accountValidation.capital.error = ''
+    accountValidation.capital.showError = false
+    accountValidation.parent.error = ''
+    accountValidation.parent.showError = false
+  }
+})
 
 // ── Computed ────────────────────────────────────────────────────
 const selectedPortfolioId = ref(null);
@@ -506,7 +705,17 @@ watch(selectedPortfolioId, loadPortfolioData);
 // ── Actions ─────────────────────────────────────────────────
 async function createAccount() {
   createError.value = '';
-  if (!newAccount.value.name.trim()) { createError.value = '请填写账户名称'; return; }
+  // 验证所有字段
+  const isValid = await validateCreateAccountAll()
+  // 额外检查 parentId 当类型为 portfolio 时
+  if (newAccount.value.type !== 'main' && !newAccount.value.parentId) {
+    createAccountFields.parentId.error = '请选择所属主账户'
+    return
+  }
+  if (!isValid) {
+    createError.value = '请修正表单中的错误'
+    return
+  }
   try {
     const res = await apiFetch('/api/v1/portfolio/', {
       method: 'POST',
@@ -520,6 +729,7 @@ async function createAccount() {
     if (res.code === 0 || res.code === undefined) {
       showCreateModal.value = false;
       newAccount.value = { name: '', type: 'main', initialCapital: 0, parentId: null };
+      resetCreateAccount()
       await loadPortfolios();
     } else {
       createError.value = res.message || '创建失败';
@@ -528,8 +738,18 @@ async function createAccount() {
 }
 
 async function handleTransfer() {
-  if (!canTransfer.value) { transferError.value = '请选择账户和金额'; return; }
   transferError.value = '';
+  // 验证所有字段
+  const isValid = await validateTransferAll()
+  // 检查两个账户是否相同
+  if (isSameAccount.value) {
+    transferFields.to.error = '转出账户和转入账户不能相同'
+    return
+  }
+  if (!isValid) {
+    transferError.value = '请修正表单中的错误'
+    return
+  }
   try {
     const res = await apiFetch('/api/v1/portfolio/transfer/direct', {
       method: 'POST',
@@ -542,6 +762,7 @@ async function handleTransfer() {
     if (res.code === 0) {
       showTransferModal.value = false;
       transfer.value = { from: null, to: null, amount: 0 };
+      resetTransfer()
     } else {
       transferError.value = res.message || '划转失败';
     }

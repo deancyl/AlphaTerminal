@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Union
 logger = logging.getLogger(__name__)
 
 # Debug mode flag - set via environment variable for 20 debug cycles
-DEBUG_MODE = os.getenv("AGENT_DB_DEBUG", "true").lower() == "true"
+DEBUG_MODE = os.getenv("AGENT_DB_DEBUG", "false").lower() == "true"
 
 if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)

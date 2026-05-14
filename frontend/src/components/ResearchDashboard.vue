@@ -256,6 +256,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const { handleError } = useApiError({ showToast: false })
 
@@ -503,8 +504,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   clearTimeout(resizeTimer)
-  institutionChartInstance?.dispose()
-  ratingChartInstance?.dispose()
+  safeDispose(institutionChartInstance)
+  safeDispose(ratingChartInstance)
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
 })

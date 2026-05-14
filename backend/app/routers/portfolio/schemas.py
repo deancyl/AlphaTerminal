@@ -17,98 +17,112 @@ Models:
 """
 
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Portfolio Models ──────────────────────────────────────────────
 
 class PortfolioIn(BaseModel):
     """Request model for creating a new portfolio/account."""
-    name: str
-    type: str = "portfolio"   # portfolio | account | strategy | group
-    parent_id: Optional[int] = None
-    currency: str = "CNY"  # CNY | USD | HKD
-    asset_class: str = "mixed"  # stock | bond | fund | futures | options | mixed
-    strategy: Optional[str] = None  # value | growth | balanced | index | quant
-    benchmark: Optional[str] = None  # 000001 | 000300 | 399001 | 399006
-    status: str = "active"  # active | frozen | closed
-    initial_capital: float = 0.0
-    description: Optional[str] = None
+    name: str = Field(..., min_length=1, max_length=100, description="账户名称")
+    type: str = Field(default="portfolio", pattern="^(portfolio|account|strategy|group|main)$")
+    parent_id: Optional[int] = Field(default=None, ge=1, description="父账户ID")
+    currency: str = Field(default="CNY", pattern="^(CNY|USD|HKD|EUR)$")
+    asset_class: str = Field(default="mixed", pattern="^(stock|bond|fund|futures|options|mixed)$")
+    strategy: Optional[str] = Field(default=None, pattern="^(value|growth|balanced|index|quant)$")
+    benchmark: Optional[str] = Field(default=None, max_length=20)
+    status: str = Field(default="active", pattern="^(active|frozen|closed)$")
+    initial_capital: float = Field(default=0.0, ge=0, description="初始本金")
+    description: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('账户名称不能为空')
+        return v.strip()
 
 
 class PortfolioUpdate(BaseModel):
     """Request model for updating portfolio properties."""
-    name: Optional[str] = None
-    type: Optional[str] = None
-    parent_id: Optional[int] = None
-    currency: Optional[str] = None
-    asset_class: Optional[str] = None
-    strategy: Optional[str] = None
-    benchmark: Optional[str] = None
-    status: Optional[str] = None
-    initial_capital: Optional[float] = None
-    description: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    type: Optional[str] = Field(default=None, pattern="^(portfolio|account|strategy|group|main)$")
+    parent_id: Optional[int] = Field(default=None, ge=1)
+    currency: Optional[str] = Field(default=None, pattern="^(CNY|USD|HKD|EUR)$")
+    asset_class: Optional[str] = Field(default=None, pattern="^(stock|bond|fund|futures|options|mixed)$")
+    strategy: Optional[str] = Field(default=None, pattern="^(value|growth|balanced|index|quant)$")
+    benchmark: Optional[str] = Field(default=None, max_length=20)
+    status: Optional[str] = Field(default=None, pattern="^(active|frozen|closed)$")
+    initial_capital: Optional[float] = Field(default=None, ge=0)
+    description: Optional[str] = Field(default=None, max_length=500)
 
 
 # ── Position Models ──────────────────────────────────────────────
 
 class PositionIn(BaseModel):
     """Request model for creating/updating a position."""
-    portfolio_id: int
-    symbol: str
-    shares: int
-    avg_cost: float
+    portfolio_id: int = Field(..., ge=1, description="账户ID")
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    shares: int = Field(..., ge=0, description="持仓数量")
+    avg_cost: float = Field(..., ge=0, description="平均成本")
 
 
 class PositionUpdate(BaseModel):
     """Request model for updating position shares and/or average cost."""
-    shares: Optional[int] = None
-    avg_cost: Optional[float] = None
+    shares: Optional[int] = Field(default=None, ge=0)
+    avg_cost: Optional[float] = Field(default=None, ge=0)
 
 
 # ── Transaction Models ──────────────────────────────────────────────
 
 class TransactionIn(BaseModel):
     """Request model for recording a financial transaction."""
-    portfolio_id: int
-    type: str          # deposit | withdraw | transfer_in | transfer_out | dividend | fee
-    amount: float
-    balance_after: float
-    counterparty_id: Optional[int] = None
-    related_symbol: Optional[str] = None
-    note: Optional[str] = None
-    operator: str = "user"
+    portfolio_id: int = Field(..., ge=1, description="账户ID")
+    type: str = Field(..., pattern="^(deposit|withdraw|transfer_in|transfer_out|dividend|fee)$")
+    amount: float = Field(..., description="金额")
+    balance_after: float = Field(..., ge=0, description="交易后余额")
+    counterparty_id: Optional[int] = Field(default=None, ge=1)
+    related_symbol: Optional[str] = Field(default=None, max_length=20)
+    note: Optional[str] = Field(default=None, max_length=500)
+    operator: str = Field(default="user", max_length=50)
 
 
 class TransferIn(BaseModel):
     """Request model for transferring funds between accounts."""
-    from_portfolio_id: int
-    to_portfolio_id: int
-    amount: float
-    note: Optional[str] = None
+    from_portfolio_id: int = Field(..., ge=1, description="转出账户ID")
+    to_portfolio_id: int = Field(..., ge=1, description="转入账户ID")
+    amount: float = Field(..., gt=0, description="划转金额")
+    note: Optional[str] = Field(default=None, max_length=500)
+
+    @field_validator('to_portfolio_id')
+    @classmethod
+    def validate_different_accounts(cls, v: int, info) -> int:
+        if 'from_portfolio_id' in info.data and info.data['from_portfolio_id'] == v:
+            raise ValueError('转出账户和转入账户不能相同')
+        return v
 
 
 class CashOpIn(BaseModel):
     """Request model for cash deposit/withdrawal operations."""
-    amount: float
-    operator: str = "user"
-    note: Optional[str] = None
+    amount: float = Field(..., description="金额")
+    operator: str = Field(default="user", max_length=50)
+    note: Optional[str] = Field(default=None, max_length=500)
 
 
 # ── Lot Trading Models ──────────────────────────────────────────────
 
 class BuyIn(BaseModel):
     """Request model for buying a lot (opening position)."""
-    symbol:    str
-    shares:    int
-    buy_price: float
-    buy_date:  Optional[str] = None
-    order_id:  Optional[str] = None
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    shares: int = Field(..., gt=0, description="买入数量")
+    buy_price: float = Field(..., gt=0, description="买入价格")
+    buy_date: Optional[str] = Field(default=None, max_length=10)
+    order_id: Optional[str] = Field(default=None, max_length=50)
 
 
 class SellIn(BaseModel):
     """Request model for selling a lot (closing position via FIFO)."""
-    symbol:    str
-    shares:    int
-    sell_price: float
-    order_id:  Optional[str] = None
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    shares: int = Field(..., gt=0, description="卖出数量")
+    sell_price: float = Field(..., gt=0, description="卖出价格")
+    order_id: Optional[str] = Field(default=None, max_length=50)

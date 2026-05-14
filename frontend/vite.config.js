@@ -10,6 +10,17 @@ const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8')
 const buildTime = new Date().toISOString()
 const commitHash = execSync('git rev-parse --short HEAD 2>/dev/null || echo "unknown"').toString().trim()
 
+const backendHost = process.env.VITE_BACKEND_HOST || '127.0.0.1'
+const backendPort = process.env.VITE_BACKEND_PORT || '8002'
+const backendUrl = `http://${backendHost}:${backendPort}`
+const backendWsUrl = `ws://${backendHost}:${backendPort}`
+
+// Allowed hosts for dev server - comma-separated env var or fallback to specific domains
+const allowedHostsEnv = process.env.VITE_ALLOWED_HOSTS || ''
+const allowedHosts = allowedHostsEnv
+  ? allowedHostsEnv.split(',').map(h => h.trim())
+  : ['finance.deancylnextcloud.eu.org']
+
 function versionJsonPlugin() {
   return {
     name: 'version-json',
@@ -56,18 +67,18 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 60100,
     strictPort: true,
-    allowedHosts: ['finance.deancylnextcloud.eu.org'],
+    allowedHosts,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8002',
+        target: backendUrl,
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://127.0.0.1:8002',
+        target: backendUrl,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://127.0.0.1:8002',
+        target: backendWsUrl,
         ws: true,
         changeOrigin: true,
       },
@@ -77,7 +88,7 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 60100,
     strictPort: true,
-    allowedHosts: ['finance.deancylnextcloud.eu.org'],
+    allowedHosts,
     headers: {
       'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
@@ -85,15 +96,15 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8002',
+        target: backendUrl,
         changeOrigin: true,
       },
       '/health': {
-        target: 'http://127.0.0.1:8002',
+        target: backendUrl,
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://127.0.0.1:8002',
+        target: backendWsUrl,
         ws: true,
         changeOrigin: true,
       },

@@ -110,6 +110,7 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   visible:   { type: Boolean, default: false },
@@ -278,5 +279,5 @@ watch(() => props.visible, (v) => { if (v) fetchHistory() })
 watch(() => props.tenor,   ()  => { if (props.visible) fetchHistory() })
 watch(() => props.period,  ()  => { if (props.visible) fetchHistory() })
 
-onUnmounted(() => { chartInst.value?.dispose(); chartInst.value = null })
+onUnmounted(() => { safeDispose(chartInst.value); chartInst.value = null })
 </script>

@@ -75,6 +75,8 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import { safeAverage } from '../../utils/safeMath.js'
+import { safeDispose } from '../../utils/chartManager.js'
 import LoadingSpinner from '../f9/LoadingSpinner.vue'
 import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
@@ -117,10 +119,10 @@ async function renderRadarChart() {
     p.roe !== null && p.pe !== null && p.pb !== null && p.revenue_growth !== null
   )
   
-  const avgRoe = validPeers.reduce((sum, p) => sum + p.roe, 0) / validPeers.length
-  const avgPe = validPeers.reduce((sum, p) => sum + p.pe, 0) / validPeers.length
-  const avgPb = validPeers.reduce((sum, p) => sum + p.pb, 0) / validPeers.length
-  const avgGrowth = validPeers.reduce((sum, p) => sum + p.revenue_growth, 0) / validPeers.length
+  const avgRoe = safeAverage(validPeers.map(p => p.roe))
+  const avgPe = safeAverage(validPeers.map(p => p.pe))
+  const avgPb = safeAverage(validPeers.map(p => p.pb))
+  const avgGrowth = safeAverage(validPeers.map(p => p.revenue_growth))
   
   const option = {
     backgroundColor: 'transparent',
@@ -199,7 +201,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  radarChartInstance?.dispose()
+  safeDispose(radarChartInstance)
 })
 
 function handleResize() {

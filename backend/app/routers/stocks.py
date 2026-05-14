@@ -1,6 +1,11 @@
 """
 涨跌停/异动/北向资金 API
 数据来源: akshare 东方财富
+
+Timeout Behavior:
+    Quote fetching has 10s timeout.
+    Search endpoint has 5s timeout.
+    Returns 504 on timeout.
 """
 import asyncio
 import logging
@@ -12,22 +17,17 @@ from fastapi import APIRouter
 import httpx
 import pandas as pd
 from app.utils.response import success_response, error_response, ErrorCode
-
-# 代理由 proxy_config.py 统一管理，从环境变量读取
-# 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
+from app.config.timeout import SEARCH_TIMEOUT, QUOTE_TIMEOUT
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 线程池执行器用于运行阻塞代码（根据CPU核心数动态配置）
-import os
 CPU_COUNT = os.cpu_count() or 4
 _executor = ThreadPoolExecutor(max_workers=min(8, CPU_COUNT * 2), thread_name_prefix="stocks_api_")
 
-# 缓存配置（带大小限制和过期清理）
 _CACHE = {}
-_CACHE_TTL = 300  # 5分钟
-_MAX_CACHE_SIZE = 30  # 最大缓存条目数
+_CACHE_TTL = 300
+_MAX_CACHE_SIZE = 30
 
 
 def _cleanup_expired():
@@ -74,10 +74,6 @@ def _cache_or_fetch(key, fetch_fn, ttl=_CACHE_TTL):
 
 @router.get("/limit_up")
 async def get_limit_up():
-    """
-    获取今日涨停股票列表
-    来源: akshare stock_zt_pool_em
-    """
     def fetch():
         import akshare as ak
         today = datetime.now().strftime('%Y%m%d')
@@ -85,7 +81,6 @@ async def get_limit_up():
             df = ak.stock_zt_pool_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            # 向量化处理
             df_work = df.copy()
             df_work['code'] = df_work['代码'].astype(str)
             df_work['symbol'] = df_work['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
@@ -108,18 +103,20 @@ async def get_limit_up():
             logger.warning(f"[Stocks] limit_up fetch error: {e}")
             return []
 
-    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_up', fetch))
-    return success_response({'limit_up': data, 'count': len(data)})
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_up', fetch)),
+            timeout=QUOTE_TIMEOUT
+        )
+        return success_response({'limit_up': data, 'count': len(data)})
+    except asyncio.TimeoutError:
+        logger.warning("[Stocks] limit_up timeout")
+        return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/limit_down")
 async def get_limit_down():
-    """
-    获取今日跌停股票列表
-    来源: akshare stock_zt_pool_dtgc_em
-    """
     def fetch():
         import akshare as ak
         today = datetime.now().strftime('%Y%m%d')
@@ -127,7 +124,6 @@ async def get_limit_down():
             df = ak.stock_zt_pool_dtgc_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            # 向量化处理
             df_work = df.copy()
             df_work['code'] = df_work['代码'].astype(str)
             df_work['symbol'] = df_work['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
@@ -148,18 +144,20 @@ async def get_limit_down():
             logger.warning(f"[Stocks] limit_down fetch error: {e}")
             return []
 
-    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_down', fetch))
-    return success_response({'limit_down': data, 'count': len(data)})
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_down', fetch)),
+            timeout=QUOTE_TIMEOUT
+        )
+        return success_response({'limit_down': data, 'count': len(data)})
+    except asyncio.TimeoutError:
+        logger.warning("[Stocks] limit_down timeout")
+        return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/unusual")
 async def get_unusual():
-    """
-    获取异动股票（涨幅大或换手率高）
-    来源: 基于涨停池 + 强势股 + 炸板股综合
-    """
     def fetch():
         import akshare as ak
         today = datetime.now().strftime('%Y%m%d')
@@ -167,11 +165,9 @@ async def get_unusual():
             df = ak.stock_zt_pool_em(date=today)
             if df is None or len(df) == 0:
                 return []
-            # 向量化处理
             df_work = df.copy()
             df_work['turnover_rate'] = df_work['换手率'].apply(lambda x: float(x) if x else 0)
             df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
-            # 筛选异动股票
             df_filtered = df_work[(df_work['turnover_rate'] > 5) | (df_work['change_pct'] >= 9.5)]
             df_filtered['code'] = df_filtered['代码'].astype(str)
             df_filtered['symbol'] = df_filtered['code'].apply(lambda x: 'sh' + x if x.startswith('6') else 'sz' + x)
@@ -189,10 +185,16 @@ async def get_unusual():
             logger.warning(f"[Stocks] unusual fetch error: {e}")
             return []
 
-    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('unusual', fetch))
-    return success_response({'unusual': data, 'count': len(data)})
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _cache_or_fetch('unusual', fetch)),
+            timeout=QUOTE_TIMEOUT
+        )
+        return success_response({'unusual': data, 'count': len(data)})
+    except asyncio.TimeoutError:
+        logger.warning("[Stocks] unusual timeout")
+        return error_response("请求超时，请稍后重试", code=504)
 
 
 # 缓存的股票列表
@@ -306,9 +308,6 @@ def _search_stocks_local(q):
 
 @router.get("/search")
 async def search_stocks(q: str = ""):
-    """
-    搜索股票代码和名称
-    """
     logger.info(f"[Stocks] search called with q='{q}'")
     
     if not q or len(q) < 1:
@@ -318,12 +317,12 @@ async def search_stocks(q: str = ""):
     try:
         results = await asyncio.wait_for(
             loop.run_in_executor(_executor, _search_stocks_local, q),
-            timeout=10.0
+            timeout=SEARCH_TIMEOUT
         )
         logger.info(f"[Stocks] search returned {len(results)} results")
     except asyncio.TimeoutError:
         logger.warning("[Stocks] search timeout")
-        results = []
+        return error_response("搜索超时，请稍后重试", code=504)
     except Exception as e:
         logger.warning(f"[Stocks] search error: {e}")
         results = []
@@ -333,13 +332,8 @@ async def search_stocks(q: str = ""):
 
 @router.get("/quote")
 async def get_quote(symbol: str):
-    """
-    获取单个股票实时行情
-    来源: 腾讯 qt.gtimg.cn + akshare 补充信息
-    """
     def fetch():
         try:
-            # symbol 格式: sh600519 或 sz000001，如果没有前缀则自动添加
             sym = symbol
             bare_symbol = symbol.replace('sh', '').replace('sz', '')
             if not sym.startswith('sh') and not sym.startswith('sz'):
@@ -349,7 +343,6 @@ async def get_quote(symbol: str):
                     sym = 'sz' + sym
                 bare_symbol = symbol
             
-            # 1. 从腾讯API获取实时行情
             with httpx.Client(timeout=5.0) as client:
                 resp = client.get(f"https://qt.gtimg.cn/q={sym}")
                 resp.raise_for_status()
@@ -381,7 +374,6 @@ async def get_quote(symbol: str):
                 line = line.strip()
                 if "=" not in line or "none_match" in line:
                     continue
-                # 解析格式: v_sh600519="1~贵州茅台~600519~1372.99~..."
                 try:
                     value_part = line.split("=", 1)[1].strip('";\n')
                     parts = value_part.split("~")
@@ -404,11 +396,9 @@ async def get_quote(symbol: str):
                     logger.debug(f"[Stocks] parse line error: {e}")
                     continue
             
-            # 2. 从akshare获取补充信息（上市日期、行业、股本）
             try:
                 import akshare as ak
                 
-                # Try stock_info_sh_name_code for list date (more reliable)
                 if bare_symbol.startswith('6'):
                     try:
                         info_df = ak.stock_info_sh_name_code()
@@ -421,7 +411,6 @@ async def get_quote(symbol: str):
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_info_sh_name_code error: {e}")
                 
-                # Try stock_profile_cninfo for industry and business (巨潮资讯 - more reliable)
                 try:
                     profile_df = ak.stock_profile_cninfo(symbol=bare_symbol)
                     if profile_df is not None and len(profile_df) > 0:
@@ -435,14 +424,12 @@ async def get_quote(symbol: str):
                 except Exception as e:
                     logger.debug(f"[Stocks] stock_profile_cninfo error for {bare_symbol}: {e}")
                 
-                # Try stock_individual_spot_xq for market cap and shares (雪球)
                 try:
                     exchange = "SH" if bare_symbol.startswith('6') else "SZ"
                     spot_df = ak.stock_individual_spot_xq(symbol=f"{exchange}{bare_symbol}")
                     if spot_df is not None and len(spot_df) > 0:
                         spot_data = dict(zip(spot_df['item'], spot_df['value']))
                         
-                        # Get float shares and market cap
                         float_shares = spot_data.get('流通股')
                         float_market_cap = spot_data.get('流通值')
                         
@@ -459,7 +446,6 @@ async def get_quote(symbol: str):
                 except Exception as e:
                     logger.debug(f"[Stocks] stock_individual_spot_xq error for {bare_symbol}: {e}")
                 
-                # Try stock_share_change_cninfo for total shares (巨潮资讯 - most reliable)
                 if not result.get('totalShares'):
                     try:
                         from datetime import datetime
@@ -474,7 +460,6 @@ async def get_quote(symbol: str):
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_share_change_cninfo error for {bare_symbol}: {e}")
                 
-                # Try stock_main_stock_holder as fallback for total shares (derived from top holder)
                 if not result.get('totalShares'):
                     try:
                         holder_df = ak.stock_main_stock_holder(stock=bare_symbol)
@@ -483,13 +468,11 @@ async def get_quote(symbol: str):
                             shares = first.get('持股数量')
                             ratio = first.get('持股比例')
                             if pd.notna(shares) and pd.notna(ratio) and ratio > 0:
-                                # Derive total shares from holding ratio
                                 result['totalShares'] = float(shares) / (float(ratio) / 100)
                                 logger.debug(f"[Stocks] Derived totalShares from stock_main_stock_holder: {result['totalShares']}")
                     except Exception as e:
                         logger.debug(f"[Stocks] stock_main_stock_holder error for {bare_symbol}: {e}")
                 
-                # Try stock_individual_info_em as last resort (may fail due to network)
                 if not result.get('industry') or result['industry'] == '--':
                     try:
                         info_df = ak.stock_individual_info_em(symbol=bare_symbol)
@@ -500,7 +483,6 @@ async def get_quote(symbol: str):
                             if not result.get('business') or result['business'] == '暂无主营业务数据':
                                 result['business'] = info_dict.get('主营业务', '暂无主营业务数据') or '暂无主营业务数据'
                             
-                            # Parse total shares and float shares
                             def parse_capital(value):
                                 if not value:
                                     return None
@@ -520,7 +502,6 @@ async def get_quote(symbol: str):
                             if not result.get('floatShares'):
                                 result['floatShares'] = parse_capital(info_dict.get('流通股', None))
                             
-                            # Calculate market cap
                             if result['price'] > 0:
                                 if result.get('totalShares') and not result.get('totalMarketCap'):
                                     result['totalMarketCap'] = result['price'] * result['totalShares']
@@ -537,15 +518,19 @@ async def get_quote(symbol: str):
             logger.warning(f"[Stocks] quote error for {symbol}: {e}")
             return {}
 
-    data = _cache_or_fetch(f'quote_{symbol}', fetch, ttl=10)
-    return success_response(data)
+    try:
+        data = await asyncio.wait_for(
+            asyncio.get_event_loop().run_in_executor(_executor, lambda: _cache_or_fetch(f'quote_{symbol}', fetch, ttl=10)),
+            timeout=QUOTE_TIMEOUT
+        )
+        return success_response(data)
+    except asyncio.TimeoutError:
+        logger.warning(f"[Stocks] quote timeout for {symbol}")
+        return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/limit_summary")
 async def get_limit_summary():
-    """
-    获取涨跌停汇总（市场情绪指标）
-    """
     def fetch():
         import akshare as ak
         today = datetime.now().strftime('%Y%m%d')
@@ -556,13 +541,11 @@ async def get_limit_summary():
             zt_count = len(zt_df) if zt_df is not None else 0
             dt_count = len(dt_df) if dt_df is not None else 0
             
-            # 涨停行业分布（向量化）
             industry_dist = {}
             if zt_df is not None and len(zt_df) > 0:
                 industry_counts = zt_df['所属行业'].astype(str).value_counts()
                 industry_dist = industry_counts.to_dict()
             
-            # 强势股（换手率最高的）- 兼容列名变化
             def _safe_sort_by_turnover(df):
                 if df is None or len(df) == 0:
                     return None
@@ -595,7 +578,13 @@ async def get_limit_summary():
             logger.warning(f"[Stocks] limit_summary error: {e}")
             return {'zt_count': 0, 'dt_count': 0, 'market_sentiment': '未知'}
 
-    # P2-11 修复: 使用 run_in_executor 避免阻塞事件循环
     loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_summary', fetch))
-    return success_response(data)
+    try:
+        data = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _cache_or_fetch('limit_summary', fetch)),
+            timeout=QUOTE_TIMEOUT
+        )
+        return success_response(data)
+    except asyncio.TimeoutError:
+        logger.warning("[Stocks] limit_summary timeout")
+        return error_response("请求超时，请稍后重试", code=504)

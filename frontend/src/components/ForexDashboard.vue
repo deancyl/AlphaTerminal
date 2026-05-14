@@ -219,6 +219,7 @@
 import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
+import { safeDispose } from '../utils/chartManager.js'
 import SwapButton from './mobile/SwapButton.vue'
 
 const { handleError } = useApiError({ showToast: false })
@@ -636,12 +637,11 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // Cancel any pending fetch requests
   _fetchController?.abort()
   _fetchController = null
   clearTimeout(resizeTimer)
-  trendChartInstance?.dispose()
-  comparisonChartInstance?.dispose()
+  safeDispose(trendChartInstance)
+  safeDispose(comparisonChartInstance)
   window.removeEventListener('resize', handleResize)
 })
 </script>

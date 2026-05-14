@@ -643,7 +643,6 @@ function handleFullscreenClick() {
   }
 
   const name = currentIndexName.value || indexOptions[0]?.name || '上证指数'
-  console.log('[DashboardGrid] 最终修正并发送的参数:', { symbol: finalSymbol, name, raw })
   emit('open-fullscreen', { symbol: finalSymbol, name })
 }
 function switchPeriod(p)   { selectedPeriod.value = p }

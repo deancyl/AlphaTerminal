@@ -39,6 +39,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   symbol:    { type: String, default: 'RB' },
@@ -179,7 +180,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   ro?.disconnect()
-  chartInst.value?.dispose()
+  safeDispose(chartInst.value)
 })
 
 watch([() => props.data, () => props.symbol, isVisible], () => { 

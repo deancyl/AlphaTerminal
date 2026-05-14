@@ -13,3 +13,4 @@ starlette==1.0.0
 setuptools==82.0.1
 scikit-optimize==0.9.0
 pyfolio-reloaded==0.9.5
+slowapi==0.1.9

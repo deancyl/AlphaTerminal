@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from .ast_validator import validate_strategy_ast, get_security_report
+from .sandbox import (
+    create_sandbox_namespace,
+    SecureExecutor,
+    StrategyTimeoutError,
+    StrategySecurityError,
+)
+from .audit import log_strategy_execution, compute_code_hash
 
 logger = logging.getLogger(__name__)
 
@@ -86,30 +96,55 @@ class StrategyContext:
 
 
 class ScriptStrategy:
-    def __init__(self, code: str, initial_capital: float = 100000.0, commission: float = 0.001):
+    DEFAULT_TIMEOUT = 30.0
+    
+    def __init__(
+        self, 
+        code: str, 
+        initial_capital: float = 100000.0, 
+        commission: float = 0.001,
+        timeout: float = DEFAULT_TIMEOUT,
+        validate_security: bool = True,
+    ):
         self.code = code
         self.initial_capital = initial_capital
         self.commission = commission
+        self.timeout = timeout
+        self.validate_security = validate_security
         self._namespace: Dict[str, Any] = {}
         self._compile()
 
     def _compile(self):
-        self._namespace = {
-            "pd": pd,
-            "ctx": None,
-            "OrderSide": OrderSide,
-            "OrderType": OrderType,
-            "buy": self._buy,
-            "sell": self._sell,
-            "close_position": self._close_position,
-            "log": self._log,
-        }
+        if not self.code or not self.code.strip():
+            raise ValueError("Strategy code cannot be empty")
+        
+        if self.validate_security:
+            is_valid, errors = validate_strategy_ast(self.code)
+            if not is_valid:
+                raise StrategySecurityError(
+                    f"Security validation failed: {'; '.join(errors)}"
+                )
+        
+        if self.validate_security:
+            self._namespace = create_sandbox_namespace(ctx=None)
+        else:
+            self._namespace = {"pd": pd}
+        
+        self._namespace["OrderSide"] = OrderSide
+        self._namespace["OrderType"] = OrderType
+        self._namespace["buy"] = self._buy
+        self._namespace["sell"] = self._sell
+        self._namespace["close_position"] = self._close_position
+        self._namespace["log"] = self._log
+        
         try:
             exec(self.code, self._namespace)
+        except SyntaxError as e:
+            raise ValueError(f"Strategy syntax error at line {e.lineno}: {e.msg}")
         except Exception as e:
             logger.warning(f"[ScriptStrategy] Compilation error: {e}")
             raise ValueError(f"Strategy compilation failed: {e}")
-
+    
     def _create_context(self, df: pd.DataFrame) -> StrategyContext:
         ctx = StrategyContext(df=df, balance=self.initial_capital, equity=self.initial_capital)
         self._namespace["ctx"] = ctx
@@ -160,7 +195,72 @@ class ScriptStrategy:
             finally:
                 self._namespace["ctx"] = old_ctx
 
-    def run(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def run(self, df: pd.DataFrame, user_id: str = "anonymous") -> Dict[str, Any]:
+        return self._run_with_timeout(df, user_id)
+
+    def _run_with_timeout(self, df: pd.DataFrame, user_id: str = "anonymous") -> Dict[str, Any]:
+        import signal
+        import time
+
+        def timeout_handler(signum, frame):
+            raise StrategyTimeoutError(
+                f"Strategy execution exceeded {self.timeout}s timeout"
+            )
+
+        start_time = time.time()
+        execution_status = "success"
+        error_message = None
+
+        original_handler = None
+        timeout_enabled = False
+
+        try:
+            try:
+                original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+                signal.setitimer(signal.ITIMER_REAL, self.timeout)
+                timeout_enabled = True
+            except (ValueError, OSError):
+                pass
+
+            result = self._execute_strategy(df)
+            return result
+        except StrategyTimeoutError as e:
+            execution_status = "timeout"
+            error_message = str(e)
+            raise
+        except StrategySecurityError as e:
+            execution_status = "security_error"
+            error_message = str(e)
+            raise
+        except Exception as e:
+            execution_status = "failed"
+            error_message = str(e)
+            raise
+        finally:
+            if timeout_enabled:
+                try:
+                    signal.setitimer(signal.ITIMER_REAL, 0)
+                    if original_handler is not None:
+                        signal.signal(signal.SIGALRM, original_handler)
+                except (ValueError, OSError):
+                    pass
+
+            execution_time_ms = (time.time() - start_time) * 1000
+
+            try:
+                log_strategy_execution(
+                    user_id=user_id,
+                    code=self.code,
+                    action="execute",
+                    is_validated=True,
+                    execution_status=execution_status,
+                    execution_time_ms=execution_time_ms,
+                    error_message=error_message,
+                )
+            except Exception as e:
+                logger.warning(f"[Audit] Failed to log execution: {e}")
+    
+    def _execute_strategy(self, df: pd.DataFrame) -> Dict[str, Any]:
         ctx = self._create_context(df)
 
         self.on_init(ctx)

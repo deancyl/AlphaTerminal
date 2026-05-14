@@ -137,6 +137,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   portfolioId: { type: Number, required: true },
@@ -290,8 +291,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  pieChart?.dispose()
-  barChart?.dispose()
+  safeDispose(pieChart)
+  safeDispose(barChart)
   pieChart = barChart = null
 })
 

@@ -87,6 +87,16 @@
         @confirm-action="confirmAction"
       />
 
+      <!-- 速率限制 -->
+      <RateLimitPanel
+        v-else-if="activeTab === 'ratelimit'"
+        :stats="rateLimitStats"
+        @refresh="refreshRateLimit"
+        @confirm-action="confirmAction"
+        @reset-ip="resetRateLimitIp"
+        @reset-all="resetRateLimitAll"
+      />
+
       <!-- 缓存管理 -->
       <CachePanel
         v-else-if="activeTab === 'cache'"
@@ -197,6 +207,7 @@ import LogsPanel from './admin/LogsPanel.vue'
 import AgentTokensPanel from './admin/AgentTokensPanel.vue'
 import McpPanel from './admin/McpPanel.vue'
 import LayoutPanel from './admin/LayoutPanel.vue'
+import RateLimitPanel from './admin/RateLimitPanel.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
@@ -224,6 +235,7 @@ const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'watchdog', label: '进程保活', desc: '监控后端进程状态，自动重启', icon: '🛡️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'ratelimit', label: '速率限制', desc: 'API请求频率控制和DoS防护', icon: '🚦', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
@@ -302,6 +314,14 @@ const watchdogStatus = reactive({
 })
 const watchdogLoading = ref(false)
 const watchdogError = ref(null)
+
+// ── Rate Limiting 速率限制 ──────────────────────────────────────────────────────────
+const rateLimitStats = reactive({
+  total_tracked_ips: 0,
+  blocked_requests: [],
+  endpoint_limits: {},
+  enabled: true
+})
 
 // ── 日志数据 + WebSocket 实时流 ──────────────────────────────────────────────────
 const MAX_LOGS = 300
@@ -762,6 +782,40 @@ async function manualRestart() {
   }
 }
 
+async function refreshRateLimit() {
+  try {
+    const data = await apiFetch('/api/v1/admin/ratelimit/stats')
+    if (data?.data) {
+      rateLimitStats.total_tracked_ips = data.data.total_tracked_ips || 0
+      rateLimitStats.blocked_requests = data.data.blocked_requests || []
+      rateLimitStats.endpoint_limits = data.data.endpoint_limits || {}
+      rateLimitStats.enabled = data.data.enabled ?? true
+    }
+  } catch (e) {
+    logger.error('[RateLimit] Refresh failed:', e)
+  }
+}
+
+async function resetRateLimitIp(ip) {
+  try {
+    await apiFetch('/api/v1/admin/ratelimit/reset?ip=' + encodeURIComponent(ip), { method: 'POST' })
+    toast.success(`已重置 ${ip} 的速率限制`)
+    await refreshRateLimit()
+  } catch (e) {
+    toast.error('重置失败: ' + e.message)
+  }
+}
+
+async function resetRateLimitAll() {
+  try {
+    await apiFetch('/api/v1/admin/ratelimit/reset', { method: 'POST' })
+    toast.success('已重置所有速率限制')
+    await refreshRateLimit()
+  } catch (e) {
+    toast.error('重置失败: ' + e.message)
+  }
+}
+
 async function dbMaintenance(action) {
   try {
     await apiFetch('/api/v1/admin/database/maintenance', {
@@ -808,7 +862,8 @@ async function initializeData() {
       refreshLogs(),
       refreshDbStatus(),
       loadLlmConfig(),
-      refreshWatchdog()
+      refreshWatchdog(),
+      refreshRateLimit()
     ])
   } catch (e) {
     logger.error('[AdminDashboard] initializeData failed:', e)

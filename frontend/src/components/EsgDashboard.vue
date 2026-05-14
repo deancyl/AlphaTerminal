@@ -536,6 +536,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
+import { safeDispose } from '../utils/chartManager.js'
 import MobileScrollableTabs from './mobile/MobileScrollableTabs.vue'
 
 const { handleError } = useApiError({ showToast: false })
@@ -968,11 +969,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  // Cancel any pending fetch requests
   _fetchController?.abort()
   _fetchController = null
-  radarChartInstance?.dispose()
-  historyChartInstance?.dispose()
+  safeDispose(radarChartInstance)
+  safeDispose(historyChartInstance)
   window.removeEventListener('resize', handleResize)
 })
 </script>

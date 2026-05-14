@@ -81,6 +81,7 @@
 import { ref, computed, watch, onMounted, nextTick, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import { safeDispose } from '../../utils/chartManager.js'
 import LoadingSpinner from '../f9/LoadingSpinner.vue'
 import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
@@ -324,8 +325,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  pieChartInstance?.dispose()
-  trendChartInstance?.dispose()
+  safeDispose(pieChartInstance)
+  safeDispose(trendChartInstance)
 })
 
 function handleResize() {

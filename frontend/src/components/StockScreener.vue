@@ -76,64 +76,64 @@
       </div>
     </div>
 
-    <!-- 单表结构：Sticky 表头 + 滚动 tbody + 固定分页栏 -->
-    <div class="flex-1 min-h-0 overflow-y-auto relative">
-      <div class="overflow-x-auto scrollbar-hide">
-        <table class="w-full text-xs whitespace-nowrap">
-        <thead class="bg-terminal-panel sticky top-0 z-10 shadow-sm">
-          <tr class="text-terminal-dim border-b border-theme">
-            <th class="px-2 py-1.5 text-left font-normal w-12">#</th>
-            <th class="px-2 py-1.5 text-left font-normal cursor-pointer" @click="setSort('name')">名称</th>
-            <th class="px-2 py-1.5 text-left font-normal cursor-pointer" @click="setSort('code')">代码</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('price')">最新价</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change_pct')">涨跌幅</th>
-            <!-- 电脑端显示 -->
-            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('change')">涨跌</th>
-            <th class="px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('turnover')">换手率</th>
-            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('amount')">成交额</th>
-            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pe')">PE</th>
-            <th class="hidden md:table-cell px-2 py-1.5 text-right font-normal cursor-pointer" @click="setSort('pb')">PB</th>
-          </tr>
-        </thead>
-        <tbody ref="tableBody" tabindex="0"
-               @keydown="handleKeydown"
-               @focus="handleTableFocus"
-               role="listbox"
-               aria-label="股票列表">
-          <tr v-for="(stock, index) in stocks" :key="stock.code + '-' + index"
-              :ref="setRowRef"
-              :class="[
-                'border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer',
-                { 'bg-terminal-accent/20 ring-1 ring-terminal-accent ring-inset': focusedRowIndex === index }
-              ]"
-              :aria-selected="focusedRowIndex === index"
-              role="option"
-              @click="handleClick(stock)"
-              @contextmenu.prevent="handleContextMenu($event, stock)">
-            <td class="px-2 py-1.5 text-terminal-dim">{{ stock.seq || (currentPage-1)*pageSize + index + 1 }}</td>
-            <td class="px-2 py-1.5">
-              <div class="font-medium group-hover:text-theme-accent transition-colors">{{ stock.name }}</div>
-            </td>
-            <td class="px-2 py-1.5 text-terminal-dim">{{ stock.code }}</td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change_pct)">{{ stock.price?.toFixed(2) }}</td>
-            <td class="px-2 py-1.5 text-right" :class="getColor(stock.change_pct)">
-              <span v-if="stock.change_pct > 0">+</span>{{ stock.change_pct?.toFixed(2) }}%
-            </td>
-            <!-- 电脑端显示 -->
-            <td class="hidden md:table-cell px-2 py-1.5 text-right" :class="getColor(stock.change)">
-              <span v-if="stock.change > 0">+</span>{{ stock.change?.toFixed(2) }}
-            </td>
-            <td class="px-2 py-1.5 text-right">{{ stock.turnover ? stock.turnover.toFixed(2) + '%' : '-' }}</td>
-            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ formatAmount(stock.amount) }}</td>
-            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ stock.pe ? stock.pe.toFixed(1) : '-' }}</td>
-            <td class="hidden md:table-cell px-2 py-1.5 text-right">{{ stock.pb ? stock.pb.toFixed(2) : '-' }}</td>
-          </tr>
-        </tbody>
-      </table>
+<!-- 单表结构：Sticky 表头 + 虚拟化滚动 tbody + 固定分页栏 -->
+    <div class="flex-1 min-h-0 overflow-hidden relative">
+      <!-- Sticky 表头 -->
+      <div class="shrink-0 overflow-x-auto scrollbar-hide bg-terminal-panel sticky top-0 z-10 shadow-sm">
+        <div class="flex items-center text-xs whitespace-nowrap text-terminal-dim border-b border-theme">
+          <div class="px-2 py-1.5 w-12 shrink-0">#</div>
+          <div class="px-2 py-1.5 shrink-0 cursor-pointer" @click="setSort('name')">名称</div>
+          <div class="px-2 py-1.5 shrink-0 cursor-pointer" @click="setSort('code')">代码</div>
+          <div class="px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('price')">最新价</div>
+          <div class="px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('change_pct')">涨跌幅</div>
+          <!-- 电脑端显示 -->
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('change')">涨跌</div>
+          <div class="px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('turnover')">换手率</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('amount')">成交额</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('pe')">PE</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right cursor-pointer" @click="setSort('pb')">PB</div>
+        </div>
       </div>
 
-      <!-- Sentinel for infinite scroll trigger -->
-      <div ref="sentinelEl" class="h-px w-full"></div>
+      <!-- 虚拟化滚动列表 -->
+      <RecycleScroller
+        ref="scrollerRef"
+        class="h-full overflow-x-auto scrollbar-hide"
+        :items="virtualizedStocks"
+        :item-size="32"
+        key-field="id"
+        :buffer="300"
+        v-slot="{ item, index }"
+      >
+        <div
+          :class="[
+            'flex items-center text-xs whitespace-nowrap border-b border-theme-secondary/30 hover:bg-theme-secondary/20 transition-colors group cursor-pointer',
+            { 'bg-terminal-accent/20 ring-1 ring-terminal-accent ring-inset': focusedRowIndex === index }
+          ]"
+          :aria-selected="focusedRowIndex === index"
+          role="option"
+          @click="handleClick(item)"
+          @contextmenu.prevent="handleContextMenu($event, item)"
+        >
+          <div class="px-2 py-1.5 w-12 shrink-0 text-terminal-dim">{{ item.seq || (currentPage-1)*pageSize + index + 1 }}</div>
+          <div class="px-2 py-1.5 shrink-0">
+            <div class="font-medium group-hover:text-theme-accent transition-colors">{{ item.name }}</div>
+          </div>
+          <div class="px-2 py-1.5 shrink-0 text-terminal-dim">{{ item.code }}</div>
+          <div class="px-2 py-1.5 shrink-0 text-right" :class="getColor(item.change_pct)">{{ item.price?.toFixed(2) }}</div>
+          <div class="px-2 py-1.5 shrink-0 text-right" :class="getColor(item.change_pct)">
+            <span v-if="item.change_pct > 0">+</span>{{ item.change_pct?.toFixed(2) }}%
+          </div>
+          <!-- 电脑端显示 -->
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right" :class="getColor(item.change)">
+            <span v-if="item.change > 0">+</span>{{ item.change?.toFixed(2) }}
+          </div>
+          <div class="px-2 py-1.5 shrink-0 text-right">{{ item.turnover ? item.turnover.toFixed(2) + '%' : '-' }}</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right">{{ formatAmount(item.amount) }}</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right">{{ item.pe ? item.pe.toFixed(1) : '-' }}</div>
+          <div class="hidden md:block px-2 py-1.5 shrink-0 text-right">{{ item.pb ? item.pb.toFixed(2) : '-' }}</div>
+        </div>
+      </RecycleScroller>
 
       <!-- 加载中遮罩 -->
       <div v-if="loading" class="absolute inset-0 bg-terminal-bg/50 backdrop-blur-sm flex items-center justify-center z-20">
@@ -251,6 +251,15 @@ const total        = ref(0)
 const currentPage  = ref(1)
 const pageSize     = ref(50)
 const totalPages  = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const scrollerRef  = ref(null)
+
+// ── 虚拟化股票列表 ─────────────────────────────────────────────────
+const virtualizedStocks = computed(() => {
+  return stocks.value.map((s, i) => ({
+    ...s,
+    id: s.code || `stock-${i}`,
+  }))
+})
 
 // ── 本地 UI 状态 ─────────────────────────────────────────────────────
 const loading     = ref(false)

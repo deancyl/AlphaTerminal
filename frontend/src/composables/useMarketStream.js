@@ -124,10 +124,15 @@ function _newConnection() {
 
   _ws.onmessage = (event) => {
     _lastMessageTime = Date.now()
+    _missedPongs = 0
     try {
       const data = JSON.parse(event.data)
-      
-      // Handle pong response - calculate latency
+
+      if (data.type === 'ping') {
+        _ws.send(JSON.stringify({ type: 'pong' }))
+        return
+      }
+
       if (data.type === 'pong') {
         if (_pingSentTime > 0) {
           globalLatency.value = Date.now() - _pingSentTime
@@ -135,33 +140,25 @@ function _newConnection() {
         }
         return
       }
-      
-      // Ignore other control messages
+
       if (data.type === 'subscribed' || data.type === 'unsubscribed') return
 
-      // tick 消息处理（data.type === 'tick' 或兼容旧格式无 type 字段）
       const sym = data.symbol
       if (!sym) return
 
-      // 数据淘汰机制（按 symbol 分开）
       if (!tickHistory[sym]) tickHistory[sym] = []
       tickHistory[sym].push(data)
       if (tickHistory[sym].length > MAX_TICK_HISTORY) {
         tickHistory[sym].shift()
       }
 
-      // ⚡ shallowRef 更新策略：直接替换 symbol 的 tick 对象引用，
-      // 这样 globalTicks.value 整体引用不变，只有被替换的 symbol 被更新
-      // triggerRef 标记由 _notifyTick 在 microtask 中批量触发
       globalTicks.value = {
         ...globalTicks.value,
         [sym]: data,
       }
       _tickDirty = true
-      // 在 microtask 中统一触发（合并同一 event loop 内的多次更新）
       queueMicrotask(_notifyTick)
-      
-      // 检查价格预警
+
       if (data.price) {
         const triggered = checkPriceAlerts(sym, data.price)
         for (const { rule, price } of triggered) {
@@ -270,26 +267,38 @@ let _heartbeatTimer = null
 let _connecting = false
 let _lastMessageTime = 0
 let _healthCheckTimer = null
-let _pingSentTime = 0 // Timestamp when ping was sent
+let _pingSentTime = 0
+let _missedPongs = 0
 
-// 心跳间隔：可见时 30s，隐藏时 120s
-const HEARTBEAT_VISIBLE = TIMEOUTS.WS_HEARTBEAT_VISIBLE
-const HEARTBEAT_HIDDEN = TIMEOUTS.WS_HEARTBEAT_HIDDEN
-let _currentHeartbeatInterval = HEARTBEAT_VISIBLE
+const HEARTBEAT_INTERVAL = TIMEOUTS.WS_HEARTBEAT_INTERVAL
+const PONG_TIMEOUT = TIMEOUTS.WS_PONG_TIMEOUT
+const MAX_MISSED_PONGS = TIMEOUTS.WS_MAX_MISSED_PONGS
 
-function _startHeartbeat(interval = _currentHeartbeatInterval) {
+function _startHeartbeat() {
   if (_heartbeatTimer) return
-  _currentHeartbeatInterval = interval
   _heartbeatTimer = setInterval(() => {
     if (_ws && _ws.readyState === WebSocket.OPEN) {
+      _missedPongs++
+      if (_missedPongs >= MAX_MISSED_PONGS) {
+        logger.warn(`[MarketStream] 连续${_missedPongs}次未收到pong，强制重连`)
+        _ws.onclose = null
+        _ws.onerror = null
+        _ws.close(1006, 'pong_timeout')
+        _ws = null
+        _stopHeartbeat()
+        _stopHealthCheck()
+        if (subscribedSymRefCount.size > 0 && _retryCount < _MAX_RETRIES) {
+          _scheduleRetry()
+        }
+        return
+      }
       try {
         _pingSentTime = Date.now()
-        _ws.send(JSON.stringify({ action: 'ping' }))
+        _ws.send(JSON.stringify({ type: 'ping' }))
       } catch (_) {
-        // WS 已在 closing 状态，静默忽略
       }
     }
-  }, interval)
+  }, HEARTBEAT_INTERVAL)
 }
 
 function _stopHeartbeat() {
@@ -299,18 +308,16 @@ function _stopHeartbeat() {
   }
 }
 
-function _restartHeartbeat(newInterval) {
+function _restartHeartbeat() {
   _stopHeartbeat()
-  _startHeartbeat(newInterval)
+  _startHeartbeat()
 }
 
-// ── 健康检查（检测僵尸连接）──────────────────────────────
 function _startHealthCheck() {
   if (_healthCheckTimer) return
   _healthCheckTimer = setInterval(() => {
-    // 如果超过 60 秒没有收到消息，认为连接已死
-    if (_lastMessageTime && Date.now() - _lastMessageTime > 60000) {
-      logger.warn('[MarketStream] 连接超时（60s 无消息），强制重连')
+    if (_lastMessageTime && Date.now() - _lastMessageTime > PONG_TIMEOUT + HEARTBEAT_INTERVAL) {
+      logger.warn('[MarketStream] 连接超时，强制重连')
       if (_ws) {
         _ws.onclose = null
         _ws.onerror = null
@@ -322,7 +329,7 @@ function _startHealthCheck() {
         _scheduleRetry()
       }
     }
-  }, TIMEOUTS.WS_HEALTH_CHECK_INTERVAL) // 每 30 秒检查一次
+  }, TIMEOUTS.WS_HEALTH_CHECK_INTERVAL)
 }
 
 function _stopHealthCheck() {
@@ -449,15 +456,7 @@ export function useMarketStream(initialSymbol = '') {
     _newConnection()
   }
 
-  // 启动心跳
   _startHeartbeat()
-
-  // 监听页面可见性变化，调整心跳频率
-  const { isVisible } = usePageVisibility()
-  watch(isVisible, (visible) => {
-    const newInterval = visible ? HEARTBEAT_VISIBLE : HEARTBEAT_HIDDEN
-    _restartHeartbeat(newInterval)
-  })
 
   // 自动 unsubscribe 旧 symbol（组件切换股票时）
   let _prevSymbol = initialSymbol

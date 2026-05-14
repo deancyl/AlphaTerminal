@@ -604,10 +604,10 @@ async def toggle_watchdog_endpoint(body: dict = Body(...)):
 async def manual_restart_backend():
     """手动触发后端重启（用于紧急恢复）"""
     from app.services.watchdog import _restart_backend, _watchdog_state
-    
+
     logger.warning("[Admin] 收到手动重启后端请求")
     success = _restart_backend()
-    
+
     if success:
         _watchdog_state.record_restart()
         return {
@@ -617,3 +617,94 @@ async def manual_restart_backend():
         }
     else:
         return {"code": 500, "message": "重启失败，请检查后端日志"}
+
+
+# ═══════════════════════════════════════════════════════════════
+# WebSocket 指标
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/ws/metrics")
+async def get_ws_metrics():
+    """获取 WebSocket 连接指标"""
+    from app.services.ws_manager import ws_manager
+
+    metrics = await ws_manager.get_metrics()
+    return {
+        "code": 0,
+        "data": {
+            "active_connections": metrics.get("active_connections", 0),
+            "latency_avg": metrics.get("latency_avg"),
+            "latency_min": metrics.get("latency_min"),
+            "latency_max": metrics.get("latency_max"),
+            "subscribed_symbols": metrics.get("subscribed_symbols", 0),
+        }
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Rate Limiting 管理
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/ratelimit/stats")
+async def get_rate_limit_stats():
+    """获取速率限制统计信息"""
+    from app.middleware.rate_limit import get_limiter
+    from app.config.rate_limit import ENDPOINT_LIMITS
+    
+    limiter = get_limiter()
+    stats = limiter.get_stats()
+    
+    endpoint_limits = {
+        name: {"requests": limit.requests, "period": limit.period}
+        for name, limit in ENDPOINT_LIMITS.items()
+    }
+    
+    blocked_ips = []
+    now = time.time()
+    for key, entry in stats.get("entries", {}).items():
+        if entry.get("count", 0) >= 10:
+            ip = key.split(":")[0] if ":" in key else key
+            blocked_ips.append({
+                "ip": ip,
+                "path": key.split(":", 1)[1] if ":" in key else "",
+                "count": entry.get("count", 0),
+                "reset_at": entry.get("reset_at", 0),
+                "remaining_seconds": max(0, int(entry.get("reset_at", 0) - now))
+            })
+    
+    return {
+        "code": 0,
+        "data": {
+            "total_tracked_ips": stats.get("total_keys", 0),
+            "endpoint_limits": endpoint_limits,
+            "blocked_requests": blocked_ips[:50],
+            "enabled": True
+        }
+    }
+
+
+@router.post("/ratelimit/reset")
+async def reset_rate_limit(ip: str = None):
+    """重置速率限制（可选指定IP）"""
+    from app.middleware.rate_limit import get_limiter
+    
+    limiter = get_limiter()
+    
+    if ip:
+        keys_to_reset = [k for k in limiter._storage.keys() if k.startswith(f"{ip}:")]
+        for key in keys_to_reset:
+            limiter.reset(key)
+        logger.info(f"[Admin] Reset rate limit for IP: {ip}")
+        return {
+            "code": 0,
+            "message": f"已重置 {ip} 的速率限制",
+            "data": {"reset_count": len(keys_to_reset)}
+        }
+    else:
+        limiter.reset()
+        logger.info("[Admin] Reset all rate limits")
+        return {
+            "code": 0,
+            "message": "已重置所有速率限制",
+            "data": {"reset_count": stats.get("total_keys", 0) if (stats := get_limiter().get_stats()) else 0}
+        }

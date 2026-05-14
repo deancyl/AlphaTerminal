@@ -8,6 +8,7 @@ http_client.py — 统一 HTTP 客户端（带 retry + Circuit Breaker + Pydanti
 2. 可选嵌入 CircuitBreaker（失败自动 record_failure，成功 record_success）
 3. 代理支持（从 proxy_config.py 读取）
 4. 统一的错误分类（网络错误 / 超时 / HTTP 错误 / 校验错误）
+5. 共享 AsyncClient 实例（连接池复用，减少资源消耗）
 """
 from __future__ import annotations
 
@@ -19,18 +20,75 @@ from typing import Optional, Callable, Any, Type
 import httpx
 
 from app.services.circuit_breaker import CircuitBreaker, CircuitState
+from app.config.timeout import (
+    CONNECT_TIMEOUT,
+    READ_TIMEOUT,
+    WRITE_TIMEOUT,
+    POOL_TIMEOUT,
+    MAX_CONNECTIONS,
+    MAX_KEEPALIVE_CONNECTIONS,
+    KEEPALIVE_EXPIRY,
+)
 
 logger = logging.getLogger(__name__)
 
-# 可重试的 HTTP 状态码
 RETRYABLE_STATUS_CODES = {429, 502, 503, 504, 520, 521, 522, 523, 524}
 
-# 不触发 circuit breaker 的网络错误（可能是客户端网络问题）
 NON_CB_NETWORK_ERRORS = (
     httpx.ConnectError,
     httpx.RemoteProtocolError,
     httpx.ConnectTimeout,
 )
+
+
+_shared_client: Optional[httpx.AsyncClient] = None
+_client_lock = asyncio.Lock()
+
+
+async def get_shared_client() -> httpx.AsyncClient:
+    """
+    Get or create the shared AsyncClient instance.
+    
+    Uses connection pooling for efficiency.
+    Thread-safe via asyncio.Lock.
+    """
+    global _shared_client
+    
+    if _shared_client is None or _shared_client.is_closed:
+        async with _client_lock:
+            if _shared_client is None or _shared_client.is_closed:
+                _shared_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        connect=CONNECT_TIMEOUT,
+                        read=READ_TIMEOUT,
+                        write=WRITE_TIMEOUT,
+                        pool=POOL_TIMEOUT,
+                    ),
+                    limits=httpx.Limits(
+                        max_connections=MAX_CONNECTIONS,
+                        max_keepalive_connections=MAX_KEEPALIVE_CONNECTIONS,
+                        keepalive_expiry=KEEPALIVE_EXPIRY,
+                    ),
+                    follow_redirects=True,
+                )
+                logger.info(
+                    f"[HTTPClient] Created shared client "
+                    f"(max_conn={MAX_CONNECTIONS}, keepalive={MAX_KEEPALIVE_CONNECTIONS})"
+                )
+    
+    return _shared_client
+
+
+async def close_shared_client():
+    """Close the shared AsyncClient instance."""
+    global _shared_client
+    
+    if _shared_client is not None:
+        async with _client_lock:
+            if _shared_client is not None:
+                await _shared_client.aclose()
+                _shared_client = None
+                logger.info("[HTTPClient] Closed shared client")
 
 
 class HTTPClientError(Exception):

@@ -5,7 +5,7 @@ import json
 import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
 from app.utils.response import success_response, error_response, ErrorCode
@@ -320,20 +320,40 @@ def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: floa
 
 
 class BacktestRequest(BaseModel):
-    symbol: str
-    period: str = "daily"
-    start_date: str
-    end_date: str
-    initial_capital: float = 100000
-    strategy_type: str = "ma_crossover"
-    params: Optional[Dict[str, Any]] = None
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    period: str = Field(default="daily", pattern="^(daily|weekly|monthly)$")
+    start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
+    initial_capital: float = Field(default=100000, ge=100, le=1e9, description="初始资金")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    params: Optional[Dict[str, Any]] = Field(default=None)
+
+    @field_validator('symbol')
+    @classmethod
+    def validate_symbol(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError('股票代码不能为空')
+        v = v.strip().lower()
+        if not v.startswith(('sh', 'sz', 'hk', 'us')):
+            raise ValueError('股票代码格式错误：应以 sh/sz/hk/us 开头（如 sh600519）')
+        return v
+
+    @field_validator('start_date', 'end_date')
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        from datetime import datetime as dt
+        try:
+            dt.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f'日期格式错误：{v}，应为 YYYY-MM-DD')
+        return v
 
 
 class StrategyCreateRequest(BaseModel):
-    name: str
-    description: str = ""
-    strategy_type: str = "ma_crossover"
-    params: Dict[str, Any] = {}
+    name: str = Field(..., min_length=1, max_length=100, description="策略名称")
+    description: str = Field(default="", max_length=500)
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -562,15 +582,15 @@ async def get_backtest_results(limit: int = 10):
 # ═══════════════════════════════════════════════════════════════
 
 class WalkForwardRequest(BaseModel):
-    symbol: str
-    start_date: str
-    end_date: str
-    strategy_type: str = "ma_crossover"
-    initial_capital: float = 100000
-    train_window_days: int = 252
-    test_window_days: int = 63
-    step_days: int = 63
-    mode: str = "rolling"
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
+    end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    initial_capital: float = Field(default=100000, ge=100, le=1e9)
+    train_window_days: int = Field(default=252, ge=30, le=1260)
+    test_window_days: int = Field(default=63, ge=10, le=252)
+    step_days: int = Field(default=63, ge=5, le=252)
+    mode: str = Field(default="rolling", pattern="^(rolling|expanding)$")
     param_grid: Optional[Dict[str, List[Any]]] = None
 
 
@@ -689,8 +709,8 @@ async def walkforward_analyze(req: WalkForwardRequest):
 
 
 class SmartParamsRequest(BaseModel):
-    symbol: str
-    strategy_type: str = "ma_crossover"
+    symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
 
 
 class SmartParamsResponse(BaseModel):

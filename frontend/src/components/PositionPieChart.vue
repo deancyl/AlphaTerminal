@@ -51,6 +51,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { apiFetch } from '../utils/api.js';
+import { safeDispose } from '../utils/chartManager.js';
 
 // 使用 index.html CDN 加载的全局 echarts
 async function getEcharts() {
@@ -103,19 +104,12 @@ export default {
     }
 
     async function renderChart() {
-      // Try ref first, fall back to DOM query (fixes ref binding race in Options API + setup() mix)
       const domEl = chartEl.value || document.querySelector('.echart-container');
-      if (!domEl) {
-        console.log('[PPC] renderChart: no DOM element (.echart-container) found');
-        return;
-      }
-      if (positions.value.length === 0) {
-        console.log('[PPC] renderChart: 0 positions, skip');
-        return;
-      }
-      console.log('[PPC] renderChart using', domEl.className, 'w=', domEl.offsetWidth, 'h=', domEl.offsetHeight);
+      if (!domEl) return;
+      if (positions.value.length === 0) return;
+      
       let ec;
-      try { ec = await getEcharts(); console.log('[PPC] echarts version:', ec?.version); }
+      try { ec = await getEcharts(); }
       catch(e) { console.error('[PPC] getEcharts FAILED:', e.message); return; }
 
       if (chartInstance) { chartInstance.dispose(); chartInstance = null; }
@@ -123,11 +117,9 @@ export default {
       const chartData = positions.value.map(p => ({
         name: p.symbol, value: p.market_value, itemStyle: { color: p.color },
       }));
-      console.log('[PPC] chartData:', JSON.stringify(chartData));
 
       try {
         chartInstance = ec.init(domEl, null, { renderer: 'canvas' });
-        console.log('[PPC] ec.init succeeded, instance=', !!chartInstance);
       } catch(e) { console.error('[PPC] init FAILED:', e.message); return; }
 
       try {
@@ -142,7 +134,6 @@ export default {
             itemStyle: { borderRadius: 4, borderColor: '#0f1419', borderWidth: 2 },
           }],
         });
-        console.log('[PPC] setOption ok, canvas count=', document.querySelectorAll('canvas').length);
       } catch(e) { console.error('[PPC] setOption FAILED:', e.message); }
     }
 
@@ -163,9 +154,9 @@ export default {
       window.addEventListener('resize', handleResize);
     });
 
-    onUnmounted(() => {
+onUnmounted(() => {
       window.removeEventListener('resize', handleResize);
-      chartInstance?.dispose();
+      safeDispose(chartInstance);
       chartInstance = null;
     });
 

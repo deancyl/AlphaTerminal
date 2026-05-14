@@ -116,6 +116,7 @@ import { apiFetch } from '../utils/api.js'
 import { formatPrice } from '../utils/formatters.js'
 import { getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { usePollingManager } from '../composables/usePollingManager.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -455,7 +456,7 @@ onUnmounted(() => {
   }
   resizeObserver?.disconnect()
   unsubNewsRefresh?.()
-  chartInst?.dispose()
-  intradayInst?.dispose()
+  safeDispose(chartInst)
+  safeDispose(intradayInst)
 })
 </script>

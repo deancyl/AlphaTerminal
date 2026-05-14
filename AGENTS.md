@@ -265,3 +265,382 @@ curl http://localhost:60100/api/v1/f9/600519/peers
   - `LoadingSpinner.vue` - 加载指示器
   - `ErrorDisplay.vue` - 错误显示组件
   - `TrendChart.vue` - ECharts 趋势图封装
+
+---
+
+## Strategy Security Model
+
+### Overview
+
+The strategy execution system implements a **defense-in-depth** security model to prevent code injection attacks in user-provided strategy code. All security components work together to provide comprehensive protection.
+
+### Security Architecture
+
+```
+User Strategy Code
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 1: AST Validation (ast_validator.py)                │
+│  - Parse code into Abstract Syntax Tree                     │
+│  - Detect forbidden imports (os, sys, subprocess, etc.)    │
+│  - Detect forbidden functions (eval, exec, compile, etc.)  │
+│  - Detect dangerous attribute access (__class__, etc.)     │
+│  - Detect infinite loops and memory bombs                  │
+└─────────────────────────────────────────────────────────────┘
+       │ (Pass)
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 2: Sandboxed Execution (sandbox.py)                  │
+│  - Restricted __builtins__ (no dangerous functions)        │
+│  - Whitelisted modules (pandas, numpy, math only)          │
+│  - No file system access                                    │
+│  - No network access                                        │
+│  - No system calls                                          │
+└─────────────────────────────────────────────────────────────┘
+       │ (Pass)
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 3: Timeout Protection (script_strategy.py)           │
+│  - 30 second execution timeout                              │
+│  - SIGALRM-based enforcement                                │
+│  - Automatic cleanup on timeout                             │
+└─────────────────────────────────────────────────────────────┘
+       │ (Pass)
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 4: Audit Trail (audit.py)                           │
+│  - Log all executions with user ID                         │
+│  - Store code hash for integrity                           │
+│  - Track security errors and timeouts                       │
+│  - Detect suspicious activity patterns                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Blocked Attack Patterns
+
+The security model blocks these 10 malicious code patterns:
+
+| Pattern | Description | Blocked By |
+|---------|-------------|------------|
+| `__import__('os').system('rm -rf /')` | Dynamic import attack | AST + Sandbox |
+| `open('/etc/passwd').read()` | File system access | AST + Sandbox |
+| `subprocess.Popen(['cat', '/etc/passwd'])` | Process execution | AST + Sandbox |
+| `eval("__import__('os').system('id')")` | Dynamic code execution | AST + Sandbox |
+| `exec("import os; os.system('id')")` | Dynamic code execution | AST + Sandbox |
+| `(lambda: __import__('os'))()` | Lambda-based import | AST + Sandbox |
+| `getattr(__builtins__, 'eval')('1+1')` | Reflection attack | AST + Sandbox |
+| `''.__class__.__base__.__subclasses__()` | Class introspection | AST |
+| `while True: pass` | Infinite loop | AST + Timeout |
+| `[0] * 10**10` | Memory bomb | AST |
+
+### API Endpoints
+
+#### Validate Strategy Code
+
+```bash
+POST /api/v1/strategy/validate
+Content-Type: application/json
+
+{
+  "code": "def on_bar(ctx, bar):\n    ctx.buy(bar['close'], 100)"
+}
+
+# Response
+{
+  "is_valid": true,
+  "errors": [],
+  "warnings": [],
+  "security_score": 100
+}
+```
+
+### Security Configuration
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `timeout` | 30s | Maximum execution time |
+| `validate_security` | true | Enable AST validation |
+| `allow_pandas` | true | Allow pandas import |
+| `allow_numpy` | true | Allow numpy import |
+| `max_memory_mb` | 512 | Maximum memory allocation |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| AST Validator | `/backend/app/services/strategy/ast_validator.py` |
+| Sandbox | `/backend/app/services/strategy/sandbox.py` |
+| Secure Executor | `/backend/app/services/strategy/script_strategy.py` |
+| Audit Trail | `/backend/app/services/strategy/audit.py` |
+| Security Tests | `/backend/tests/unit/test_services/test_script_strategy_security.py` |
+
+### Running Security Tests
+
+```bash
+cd backend
+pytest tests/unit/test_services/test_script_strategy_security.py -v
+```
+
+### Audit Trail Queries
+
+```bash
+# Get audit statistics
+curl http://localhost:8002/api/v1/strategy/audit/stats
+
+# Get recent executions
+curl http://localhost:8002/api/v1/strategy/audit/records?limit=10
+
+# Check suspicious activity
+curl http://localhost:8002/api/v1/strategy/audit/suspicious?user_id=xxx
+```
+
+### Best Practices
+
+1. **Always validate before execution**: Use `/api/v1/strategy/validate` endpoint
+2. **Monitor audit trail**: Check for security errors and suspicious activity
+3. **Set appropriate timeouts**: Adjust based on strategy complexity
+4. **Review code hashes**: Detect repeated malicious submissions
+5. **Rate limit submissions**: Prevent abuse of validation endpoint
+
+---
+
+## Optimization Cycle Summary (70 Iterations)
+
+### Overview
+
+A comprehensive 70-iteration optimization cycle was completed to address the top 10 QA/UX issues. The cycle spanned 12 waves covering security, reliability, UX, performance, and configuration improvements.
+
+### Key Metrics
+
+| Metric | Value |
+|--------|-------|
+| Total Iterations | 70 |
+| Waves Completed | 12 |
+| New Tests Added | 195+ |
+| Files Modified | 50+ |
+
+### Wave Summary
+
+| Wave | Focus | Key Deliverables |
+|------|-------|------------------|
+| 1-2 | Security | AST validation, sandboxed execution |
+| 3-4 | Error Handling | Safe math utilities, user-visible errors |
+| 5-6 | Reliability | Rate limiting, WebSocket heartbeat |
+| 7 | Performance | ECharts memory leak prevention |
+| 8 | Configuration | Pydantic settings, externalized values |
+| 9 | Performance | Virtual scrolling for large datasets |
+| 10 | UX | Input validation, FormField component |
+| 11 | Integration | Build verification, test suite |
+| 12 | Documentation | OPTIMIZATION_SUMMARY.md, cleanup |
+
+### Documentation
+
+See `docs/OPTIMIZATION_SUMMARY.md` for detailed wave-by-wave documentation.
+
+---
+
+## Frontend Utilities
+
+### Safe Math Utilities (`frontend/src/utils/safeMath.js`)
+
+Prevents division by zero and NaN values in calculations.
+
+```javascript
+import { safeDivide, safePercent, safeAverage } from '@/utils/safeMath'
+
+// Safe division with default value
+safeDivide(100, 0, 0)      // Returns 0 (not Infinity)
+safeDivide(100, 10, 0)     // Returns 10
+
+// Safe percentage calculation
+safePercent(50, 100, 0)    // Returns 50
+safePercent(50, 0, 0)      // Returns 0 (not NaN)
+
+// Safe average with null filtering
+safeAverage([1, null, 3])  // Returns 2
+safeAverage([])            // Returns 0
+```
+
+### Chart Manager (`frontend/src/utils/chartManager.js`)
+
+Centralized ECharts instance management with automatic cleanup.
+
+```javascript
+import { createChartManager, safeDispose, safeResize } from '@/utils/chartManager'
+
+// Create a chart manager
+const manager = createChartManager()
+
+// Register chart with auto-resize
+manager.register('myChart', chartInstance, domElement, { resizeDelay: 100 })
+
+// Safe operations (check isDisposed internally)
+safeDispose(chartInstance)
+safeResize(chartInstance)
+safeSetOption(chartInstance, option)
+
+// Cleanup all charts
+manager.disposeAll()
+```
+
+### useECharts Composable (`frontend/src/composables/useECharts.js`)
+
+Vue composable for memory-safe ECharts usage with automatic lifecycle management.
+
+```javascript
+import { useECharts } from '@/composables/useECharts'
+
+const containerRef = ref(null)
+const { initChart, setOption, resize, dispose } = useECharts(containerRef, {
+  theme: 'dark',
+  autoResize: true,
+  resizeDelay: 100
+})
+
+// Initialize chart
+onMounted(async () => {
+  const chart = await initChart()
+  setOption({ xAxis: {...}, series: [...] })
+})
+
+// Automatic cleanup on unmount
+```
+
+### FormField Component (`frontend/src/components/FormField.vue`)
+
+Reusable form field with real-time validation feedback.
+
+```vue
+<FormField
+  v-model="price"
+  label="Stock Price"
+  type="number"
+  :min="0"
+  :max="10000"
+  :error="errors.price"
+  hint="Enter a value between 0 and 10000"
+  required
+  showSuccess
+/>
+```
+
+### VirtualizedTable Component (`frontend/src/components/VirtualizedTable.vue`)
+
+High-performance table for large datasets using virtual scrolling.
+
+```vue
+<VirtualizedTable
+  :items="stockList"
+  :columns="[
+    { key: 'symbol', label: '代码', width: '80px' },
+    { key: 'name', label: '名称', width: '120px' },
+    { key: 'price', label: '价格', format: 'price', align: 'right' }
+  ]"
+  :item-size="36"
+  :buffer="200"
+  @row-click="handleRowClick"
+/>
+```
+
+---
+
+## Backend Utilities
+
+### Rate Limiting Middleware (`backend/app/middleware/rate_limit.py`)
+
+IP-based rate limiting with endpoint-specific limits.
+
+**Configuration** (`backend/app/config/rate_limit.py`):
+
+| Endpoint | Limit | Period |
+|----------|-------|--------|
+| Global | 100 | 60s |
+| /api/v1/backtest/run | 10 | 60s |
+| /api/v1/strategy/validate | 20 | 60s |
+| /api/v1/copilot/* | 30 | 60s |
+| /health/* | Exempt | - |
+
+**Response Headers**:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1699999999
+Retry-After: 45  (on 429)
+```
+
+### WebSocket Heartbeat (`backend/app/services/ws_manager.py`)
+
+Automatic connection health monitoring.
+
+**Configuration**:
+```python
+PING_INTERVAL = 25      # Send ping every 25 seconds
+PONG_TIMEOUT = 10       # Wait 10 seconds for pong
+CLEANUP_INTERVAL = 30   # Clean dead connections every 30 seconds
+```
+
+**Protocol**:
+1. Server sends `{"type": "ping"}` every 25 seconds
+2. Client must respond with `{"action": "pong"}`
+3. 3 missed pongs triggers automatic reconnect
+4. Dead connections cleaned up every 30 seconds
+
+### Pydantic Settings (`backend/app/config/settings.py`)
+
+Centralized configuration from environment variables.
+
+```python
+from app.config.settings import get_settings
+
+settings = get_settings()
+print(settings.HTTP_PROXY)
+print(settings.DEBUG_MODE)  # Default: False for security
+```
+
+**Environment Variables**:
+```bash
+HTTP_PROXY=http://192.168.1.50:7897
+ALPHA_VANTAGE_API_KEY=your_key_here
+ADMIN_API_KEY=admin_secret
+ENV=production
+DEBUG_MODE=false
+ALLOWED_ORIGINS=https://yourdomain.com
+```
+
+---
+
+## Testing
+
+### Running Tests
+
+```bash
+# Backend tests
+cd backend
+pytest tests/ -v
+
+# Specific test categories
+pytest tests/unit/test_services/test_script_strategy_security.py -v  # Security
+pytest tests/unit/test_middleware/test_rate_limit.py -v              # Rate limiting
+pytest tests/unit/test_services/test_ws_heartbeat.py -v              # WebSocket
+pytest tests/unit/test_config/test_settings.py -v                    # Config
+
+# Frontend build
+cd frontend
+npm run build
+```
+
+### Test Categories
+
+| Category | Tests | Location |
+|----------|-------|----------|
+| Security | 22 | `test_script_strategy_security.py` |
+| Rate Limiting | 33 | `test_rate_limit.py` |
+| WebSocket | 15 | `test_ws_heartbeat.py` |
+| Error Handling | 36 | Various |
+| Configuration | 46 | `test_settings.py` |
+| Performance | 14 | Various |
+
+### Expected Test Behavior
+
+Note: Rate limiting tests may show 429 responses. This is **expected behavior** as tests intentionally exceed limits to verify the middleware works correctly.

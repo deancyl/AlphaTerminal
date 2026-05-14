@@ -21,6 +21,7 @@ from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
 from app.middleware.agent_auth import audit_middleware
+from app.middleware.rate_limit import setup_rate_limiting, RateLimitConfig
 
 
 @asynccontextmanager
@@ -50,6 +51,15 @@ init_logging_queue()
 # ── Agent Authentication Middleware ───────────────────────────────────────────
 # Add audit middleware for agent API requests
 audit_middleware(app)
+
+# ── Rate Limiting Middleware ───────────────────────────────────────────────────
+# Global rate limit: 200/minute, expensive endpoints have stricter limits
+rate_limit_config = RateLimitConfig(
+    global_limit=200,
+    global_period=60,
+    enabled=True
+)
+setup_rate_limiting(app, config=rate_limit_config)
 
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
 # 允许的来源：本地开发 + 环境变量配置（生产环境应通过 ALLOWED_ORIGINS 配置）

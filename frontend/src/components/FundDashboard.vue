@@ -706,6 +706,7 @@ import { getFreshness } from '../utils/freshness.js'
 import { debounce } from '../utils/cache.js'
 import EmptyState from './f9/EmptyState.vue'
 import { useToast } from '../composables/useToast.js'
+import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
 
 const fundStore = useFundStore()
 const { success, error, warning, info } = useToast()
@@ -839,9 +840,7 @@ const assetChart = shallowRef(null)
 // Request ID tracking to prevent race conditions on rapid fund switching
 const selectFundRequestId = ref(0)
 
-// ResizeObserver references for cleanup
-const chartObservers = new Map() // Map<HTMLElement, ResizeObserver>
-const resizeObservers = [] // Keep for backward compatibility
+const chartManager = useChartManager()
 
 // ── API 调用 ────────────────────────────────────────────────────
 
@@ -1132,12 +1131,9 @@ function renderCompareChart() {
   
   try {
     if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
-      if (compareChart.value) {
-        try { compareChart.value.dispose() } catch (e) {}
-      }
+      chartManager.dispose('compareChart')
       compareChart.value = echarts.init(compareChartRef.value)
-      // Setup ResizeObserver for new chart instance
-      setupChartResizeObserver(compareChartRef, compareChart.value)
+      chartManager.register('compareChart', compareChart.value, compareChartRef.value)
     }
 
     // 归一化处理：以第一天为基准 1.0
@@ -1192,8 +1188,7 @@ function renderCompareChart() {
   } catch (e) {
     logger.error('[FundDashboard] 对比图表渲染失败:', e)
     compareChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance and clean up ResizeObserver
-    disposeChartWithError(compareChartRef, compareChart.value)
+    chartManager.dispose('compareChart')
     compareChart.value = null
   }
 }
@@ -1344,11 +1339,7 @@ async function loadNAVHistory(period) {
       navHistory.value = Array.isArray(data) ? data : []
       navHistoryTimestamp.value = Date.now()
     }, { debounce: 50 })
-    console.log('[NAV History] 获取成功，数据条数:', navHistory.value.length)
-    console.log('[NAV History] 第一条数据:', navHistory.value[0])
-    console.log('[NAV History] navChartRef:', !!navChartRef.value)
     await nextTick()
-    console.log('[NAV History] after nextTick, navChartRef:', !!navChartRef.value)
     renderNavChart()
   } catch (e) {
     if (e.name !== 'AbortError') {
@@ -1410,12 +1401,9 @@ function renderKlineChart() {
 
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
-      if (klineChart.value) {
-        try { klineChart.value.dispose() } catch (e) {}
-      }
+      chartManager.dispose('klineChart')
       klineChart.value = echarts.init(klineChartRef.value)
-      // Setup ResizeObserver for new chart instance
-      setupChartResizeObserver(klineChartRef, klineChart.value)
+      chartManager.register('klineChart', klineChart.value, klineChartRef.value)
     }
     
     const data = klineHistory.value.map(d => ({
@@ -1464,8 +1452,7 @@ function renderKlineChart() {
   } catch (e) {
     logger.error('[FundDashboard] K线图表渲染失败:', e)
     klineError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance and clean up ResizeObserver
-    disposeChartWithError(klineChartRef, klineChart.value)
+    chartManager.dispose('klineChart')
     klineChart.value = null
   }
 }
@@ -1484,12 +1471,9 @@ function renderNavChart() {
 
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
-      if (navChart.value) {
-        try { navChart.value.dispose() } catch (e) {}
-      }
+      chartManager.dispose('navChart')
       navChart.value = echarts.init(navChartRef.value)
-      // Setup ResizeObserver for new chart instance
-      setupChartResizeObserver(navChartRef, navChart.value)
+      chartManager.register('navChart', navChart.value, navChartRef.value)
     }
     
     const data = navHistory.value.map(d => ({
@@ -1529,8 +1513,7 @@ function renderNavChart() {
   } catch (e) {
     logger.error('[FundDashboard] 净值图表渲染失败:', e)
     navChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance and clean up ResizeObserver
-    disposeChartWithError(navChartRef, navChart.value)
+    chartManager.dispose('navChart')
     navChart.value = null
   }
 }
@@ -1549,12 +1532,9 @@ function renderAssetChart() {
 
     // 如果实例不存在或关联的 DOM 已改变，重新初始化
     if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
-      if (assetChart.value) {
-        try { assetChart.value.dispose() } catch (e) {}
-      }
+      chartManager.dispose('assetChart')
       assetChart.value = echarts.init(assetChartRef.value)
-      // Setup ResizeObserver for new chart instance
-      setupChartResizeObserver(assetChartRef, assetChart.value)
+      chartManager.register('assetChart', assetChart.value, assetChartRef.value)
     }
     
     if (!assetAllocation.value || assetAllocation.value.length === 0) {
@@ -1578,8 +1558,7 @@ function renderAssetChart() {
   } catch (e) {
     logger.error('[FundDashboard] 资产配置图表渲染失败:', e)
     assetChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
-    // Dispose broken chart instance and clean up ResizeObserver
-    disposeChartWithError(assetChartRef, assetChart.value)
+    chartManager.dispose('assetChart')
     assetChart.value = null
   }
 }
@@ -1610,57 +1589,7 @@ function retryAutoLoad() {
 }
 
 function handleResize() {
-  klineChart.value?.resize()
-  navChart.value?.resize()
-  assetChart.value?.resize()
-  compareChart.value?.resize()
-}
-
-// Setup ResizeObserver for a chart container
-function setupChartResizeObserver(chartRef, chartInstance) {
-  if (!chartRef.value || !chartInstance) return
-
-  const debouncedResize = debounce(() => {
-    try {
-      if (chartInstance && !chartInstance.isDisposed?.()) {
-        chartInstance.resize()
-      }
-    } catch (e) {
-      // Ignore errors from disposed charts
-    }
-  }, 100)
-
-  const observer = new ResizeObserver(debouncedResize)
-  observer.observe(chartRef.value)
-  
-  // Track observer with its element
-  chartObservers.set(chartRef.value, observer)
-  resizeObservers.push(observer)
-}
-
-// Helper to dispose chart and clean up its ResizeObserver
-function disposeChartWithError(chartRef, chartInstance) {
-  // Disconnect and remove ResizeObserver
-  const observer = chartObservers.get(chartRef.value)
-  if (observer) {
-    observer.disconnect()
-    chartObservers.delete(chartRef.value)
-    const idx = resizeObservers.indexOf(observer)
-    if (idx > -1) resizeObservers.splice(idx, 1)
-  }
-  
-  // Dispose chart
-  if (chartInstance) {
-    try { chartInstance.dispose() } catch (e) {}
-  }
-}
-
-// Setup all chart resize observers
-function setupAllChartResizeObservers() {
-  if (klineChart.value) setupChartResizeObserver(klineChartRef, klineChart.value)
-  if (navChart.value) setupChartResizeObserver(navChartRef, navChart.value)
-  if (assetChart.value) setupChartResizeObserver(assetChartRef, assetChart.value)
-  if (compareChart.value) setupChartResizeObserver(compareChartRef, compareChart.value)
+  chartManager.resizeAll()
 }
 
 // ── 图表错误重试函数 ─────────────────────────────────────────────
@@ -1688,17 +1617,10 @@ function retryCompareChart() {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
 
-  // 启动新鲜度定时更新（每30秒刷新显示）
   freshnessInterval = setInterval(() => {
     freshnessTick.value++
   }, 30000)
 
-  // Setup ResizeObserver for charts after mount
-  nextTick(() => {
-    setupAllChartResizeObservers()
-  })
-
-  // 默认加载第一个快捷基金（根据当前选项卡）
   if (activeTab.value === 'etf' && quickETFs.length > 0) {
     selectFund(quickETFs[0].code)
   } else if (activeTab.value === 'open' && quickFunds.length > 0) {
@@ -1709,25 +1631,15 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 
-  // Cleanup ResizeObservers
-  resizeObservers.forEach(observer => {
-    try { observer.disconnect() } catch (e) {}
-  })
-  resizeObservers.length = 0
-  chartObservers.clear()
+  chartManager.disposeAll()
 
-  if (klineChart.value) { try { klineChart.value.dispose() } catch (e) {} }
-  if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
-  if (assetChart.value) { try { assetChart.value.dispose() } catch (e) {} }
-  if (compareChart.value) { try { compareChart.value.dispose() } catch (e) {} }
-  // Clear references
   klineChart.value = null
   navChart.value = null
   assetChart.value = null
   compareChart.value = null
-  // Abort all pending requests to prevent memory leaks
+
   abortAllPendingRequests()
-  // 清理新鲜度定时器
+
   if (freshnessInterval) {
     clearInterval(freshnessInterval)
     freshnessInterval = null
