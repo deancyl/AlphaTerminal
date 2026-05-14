@@ -457,22 +457,22 @@
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">⚠️ 风险指标</span>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="衡量风险调整后收益，越高越好。>1为优秀，<0为亏损">
               <div class="text-xs text-theme-tertiary mb-1">夏普比率</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.sharpe ?? '-' }}</div>
               <div class="text-xs text-theme-muted">Sharpe Ratio</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="最大回撤幅度，衡量最大亏损风险。越小越好">
               <div class="text-xs text-theme-tertiary mb-1">最大回撤</div>
               <div class="text-lg font-bold text-[var(--color-danger)]">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
               <div class="text-xs text-theme-muted">Max Drawdown</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="超额收益，相对基准的主动收益。>0表示跑赢基准">
               <div class="text-xs text-theme-tertiary mb-1">阿尔法</div>
               <div class="text-lg font-bold" :class="getChangeColor(riskMetrics.alpha)">{{ riskMetrics.alpha ?? '-' }}</div>
               <div class="text-xs text-theme-muted">Alpha</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="市场敏感度，衡量相对市场的波动。1=同步，>1=高波动">
               <div class="text-xs text-theme-tertiary mb-1">贝塔</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.beta ?? '-' }}</div>
               <div class="text-xs text-theme-muted">Beta</div>
@@ -691,6 +691,8 @@
       </div>
 
     </div>
+
+    <ConfirmModal ref="confirmModal" :message="`确定要清空 ${compareFunds.length} 只对比基金吗？`" @confirmed="onConfirmClear" />
   </div>
 </template>
 
@@ -707,6 +709,7 @@ import { debounce } from '../utils/cache.js'
 import EmptyState from './f9/EmptyState.vue'
 import { useToast } from '../composables/useToast.js'
 import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
+import ConfirmModal from './ConfirmModal.vue'
 
 const fundStore = useFundStore()
 const { success, error, warning, info } = useToast()
@@ -760,6 +763,7 @@ const compareChartError = ref(null)
 const compareInput = ref('')
 const compareChartRef = ref(null)
 const compareChart = shallowRef(null)
+const confirmModal = ref(null)
 const compareColors = [
   'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-[var(--color-danger-border)]',
   'bg-[var(--color-info-bg)] text-[var(--color-info)] border-[var(--color-info-border)]',
@@ -911,42 +915,40 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
         return
       }
     } else {
-      // Load fund info with granular loading
+      // Load public fund data in parallel (matching ETF pattern)
+      const requestId = currentRequestId
       loadingFundInfo.value = true
-      await fundStore.fetchFundInfo(code)
-      
-      // Check if request is still valid after await
-      if (currentRequestId !== selectFundRequestId.value) {
-        logger.debug('[selectFund] Request superseded after fund info load, aborting')
-        return
-      }
-      
-      loadingFundInfo.value = false
-      fundInfoTimestamp.value = Date.now()
-      
-      // Load NAV history with granular loading
       loadingNAVHistory.value = true
-      await fundStore.fetchNavHistory(code, navPeriod.value)
-      
-      // Check if request is still valid after await
-      if (currentRequestId !== selectFundRequestId.value) {
-        logger.debug('[selectFund] Request superseded after NAV history load, aborting')
-        return
-      }
-      
-      loadingNAVHistory.value = false
-      
-      // Load portfolio with granular loading
       loadingPortfolio.value = true
-      await fundStore.fetchPortfolio(code)
-      
-      // Check if request is still valid after await
+
+      const results = await Promise.allSettled([
+        fundStore.fetchFundInfo(code),
+        fundStore.fetchNavHistory(code, navPeriod.value),
+        fundStore.fetchPortfolio(code)
+      ])
+
+      // Check if request is still valid after parallel load
       if (currentRequestId !== selectFundRequestId.value) {
-        logger.debug('[selectFund] Request superseded after portfolio load, aborting')
+        logger.debug('[selectFund] Request superseded after parallel load, aborting')
         return
       }
-      
-      loadingPortfolio.value = false
+
+      // Handle results - update loading states based on success/failure
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          if (idx === 0) loadingFundInfo.value = false
+          if (idx === 1) loadingNAVHistory.value = false
+          if (idx === 2) loadingPortfolio.value = false
+        } else {
+          // Log rejection reason
+          logger.warn(`[selectFund] Request ${idx} failed:`, result.reason)
+          if (idx === 0) loadingFundInfo.value = false
+          if (idx === 1) loadingNAVHistory.value = false
+          if (idx === 2) loadingPortfolio.value = false
+        }
+      })
+
+      fundInfoTimestamp.value = Date.now()
     }
     
     // Final check before updating success state
@@ -1044,11 +1046,12 @@ function clearCompareFunds() {
     info('对比列表已为空')
     return
   }
-  
-  if (confirm(`确定要清空 ${count} 只对比基金吗？`)) {
-    fundStore.clearCompareFunds()
-    success('已清空对比列表')
-  }
+  confirmModal.value?.show()
+}
+
+function onConfirmClear() {
+  fundStore.clearCompareFunds()
+  success('已清空对比列表')
 }
 
 async function loadCompareData() {
@@ -1139,7 +1142,11 @@ function renderCompareChart() {
     // 归一化处理：以第一天为基准 1.0
     const series = compareFunds.value.map((fund, idx) => {
       if (!fund.history || fund.history.length === 0) return null
-      const baseNav = fund.history[0].nav
+      const baseNav = fund.history[0]?.nav
+      if (!baseNav || baseNav === 0) {
+        logger.warn('[CompareChart] Invalid baseNav for fund:', fund.code)
+        return null
+      }
       const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
       return {
         name: fund.name,

@@ -69,16 +69,31 @@ class EastmoneyFundFetcher:
         """
         try:
             async with self._get_client() as client:
-                # 1. 获取净值数据（JS）
+                # 并行获取 JS 和 HTML 数据
                 js_url = f"https://fund.eastmoney.com/pingzhongdata/{code}.js"
-                resp = await client.get(js_url)
-                resp.raise_for_status()
-                js_text = resp.text
-                
-                # 2. 获取 HTML 页面（经理、规模）
                 html_url = f"https://fund.eastmoney.com/{code}.html"
-                resp2 = await client.get(html_url)
-                html_text = resp2.text
+                
+                js_resp, html_resp = await asyncio.gather(
+                    client.get(js_url),
+                    client.get(html_url),
+                    return_exceptions=True
+                )
+                
+                # 处理 JS 响应（必需）
+                if isinstance(js_resp, Exception):
+                    logger.warning(f"[Eastmoney] JS fetch failed: {js_resp}")
+                    return None
+                js_resp.raise_for_status()
+                js_text = js_resp.text
+                
+                # 处理 HTML 响应（可选，失败不影响主流程）
+                html_text = ""
+                if not isinstance(html_resp, Exception):
+                    try:
+                        html_resp.raise_for_status()
+                        html_text = html_resp.text
+                    except Exception as e:
+                        logger.debug(f"[Eastmoney] HTML fetch failed: {e}")
                 
                 # 解析 JS 数据
                 fund_info = self._parse_pingzhong_data(js_text, code)

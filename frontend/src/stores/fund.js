@@ -26,6 +26,7 @@ export const useFundStore = defineStore('fund', () => {
   const topHoldings = ref([])
   const assetAllocation = ref([])
   const trailingReturns = ref({
+    periods: ['1w', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y'],
     fund: {},
     category: {},
     benchmark: {},

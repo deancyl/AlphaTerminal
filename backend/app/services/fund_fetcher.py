@@ -82,16 +82,17 @@ class AsyncCache:
                 if result is not None:
                     logger.debug(f"[Cache HIT] {cache_key[:50]}...")
                     return result
-                
+
                 start = time.time()
                 result = await func(*args, **kwargs)
                 elapsed = time.time() - start
-                
+
                 if result is not None:
                     await self.set(cache_key, result, ttl)
                     logger.info(f"[{func.__name__}] 成功 elapsed={elapsed:.2f}s ttl={ttl}s")
-                
+
                 return result
+            wrapper.cached = True
             return wrapper
         return decorator
 
@@ -170,6 +171,11 @@ class EastmoneyClient:
     async def get_fund_rank(self, type: str = '全部') -> Optional[List[Dict]]:
         """获取基金排行"""
         return await self.fetcher.get_fund_rank(type)
+    
+    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='returns:')
+    async def get_fund_returns(self, code: str) -> Optional[Dict]:
+        """获取基金收益数据"""
+        return await self.fetcher.get_fund_returns(code)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -593,6 +599,7 @@ class FundFetcher:
         data = await self.ak.get_fund_rank(type)
         return data if data else []
     
+    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='returns:')
     async def get_fund_returns(self, code: str) -> Dict:
         """
         获取基金阶段收益（近1周/1月/3月/6月/1年/2年/3年/今年来/成立来）
@@ -661,6 +668,7 @@ class FundFetcher:
             logger.warning(f"[FundFetcher] {code} 阶段收益获取失败: {e}")
             return self._mock_fund_returns(code)
     
+    @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='risk:')
     async def get_fund_risk_metrics(self, code: str) -> Dict:
         """
         获取基金风险指标（夏普比率、最大回撤、Alpha、Beta）

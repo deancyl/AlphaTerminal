@@ -1,10 +1,5 @@
 import { onUnmounted } from 'vue'
-
-const logger = {
-  error: (...args) => console.error('[ChartManager]', ...args),
-  warn: (...args) => console.warn('[ChartManager]', ...args),
-  info: (...args) => console.info('[ChartManager]', ...args),
-}
+import { logger } from './logger.js'
 
 class ChartManager {
   constructor() {
@@ -30,6 +25,23 @@ class ChartManager {
   }
 
   setupResizeObserver(id, chartInstance, domElement, delay) {
+    // Disconnect old observer if exists (safeguard)
+    if (this.observers.has(id)) {
+      const oldObserver = this.observers.get(id)
+      try {
+        oldObserver.disconnect()
+      } catch (e) {
+        // Ignore disconnect errors
+      }
+      this.observers.delete(id)
+    }
+
+    // Clear old debounce timer
+    if (this.debouncers.has(id)) {
+      clearTimeout(this.debouncers.get(id))
+      this.debouncers.delete(id)
+    }
+
     if (!window.ResizeObserver) {
       logger.warn('ResizeObserver not available')
       return
