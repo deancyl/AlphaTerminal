@@ -20,3 +20,11 @@ export const TIMEOUTS = {
   DEBOUNCE_RESIZE: 150,
   DEBOUNCE_SEARCH: 300,
 }
+
+// HTTP polling endpoints for different symbol types
+export const POLLING_ENDPOINTS = {
+  DEFAULT: '/api/v1/futures/commodities',
+  COMMODITIES: '/api/v1/futures/commodities',
+  INDEXES: '/api/v1/futures/main_indexes',
+  STOCKS: '/api/v1/market/overview',
+}

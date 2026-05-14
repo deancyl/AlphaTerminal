@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full">
+  <div class="flex flex-col h-full bg-theme-secondary border-l border-agent-blue/20">
     <CopilotHeader />
     <CopilotQuickCommands :commands="quickCommands" :is-loading="isLoading" @execute="executeQuickCommand" />
     <CopilotContextSelector

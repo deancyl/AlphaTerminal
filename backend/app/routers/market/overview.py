@@ -30,9 +30,13 @@ RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
 GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
 DERIVATIVE_SYMBOLS = ["GC", "CL"]
 
-# ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
+# ── Phase 7: 宏观大宗商品缓存 ─────────────────────────────────────────────
+# Macro cache TTL: 60 seconds
+# Rationale: Commodities spot prices update every 15-30 seconds during market hours.
+# 60s TTL provides reasonable freshness while reducing external API calls.
+# For real-time updates, consider WebSocket subscription.
 _MACRO_CACHE = {}   # {symbol: {price, change_pct, name, unit, timestamp}}
-_MACRO_CACHE_TTL = 600  # 10 分钟（Phase 7 延长 TTL）
+_MACRO_CACHE_TTL = 60  # 1 minute (was 600s/10min)
 _MACRO_CACHE_LOCK = threading.RLock()  # RLock 可重入
 _LAST_FETCH_TIME = 0   # 0 = immediately refresh on first call
 _REFRESH_SEMAPHORE = threading.Semaphore(1)  # 防止并发刷新

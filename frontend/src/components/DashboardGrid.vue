@@ -36,6 +36,75 @@
       <IndexLineChart :key="selectedIndex" :symbol="selectedIndex" :name="currentIndexName" :period="selectedPeriod" class="w-full" :style="{ height: '260px' }" />
     </div>
 
+    <!-- 市场风向标：4指数 + 4宏观 -->
+    <div id="section-wind" class="terminal-panel p-2 rounded-lg shadow border border-theme/10 shrink-0">
+      <div class="text-terminal-accent font-bold text-sm mb-1">🌐 市场风向标</div>
+      <!-- Error display with aria-live for screen readers -->
+      <div v-if="macroError" 
+           role="alert" 
+           aria-live="polite" 
+           aria-atomic="true"
+           class="text-[10px] text-red-400 mb-1 px-1 py-0.5 bg-red-400/10 rounded flex items-center justify-between">
+        <span>⚠️ {{ macroError }}</span>
+        <button @click="retryMacroFetch" :disabled="macroLoading" class="px-1.5 py-0.5 bg-red-400/20 rounded">
+          <span v-if="macroLoading" class="inline-block animate-spin">⟳</span>
+          <span v-else>重试</span>
+        </button>
+      </div>
+      <!-- Loading skeleton for wind vane (8 cards in 2 columns) -->
+      <div v-if="!windItems.length && !macroError"
+           role="status"
+           :aria-busy="!windItems.length && !macroError"
+           aria-label="正在加载市场风向标数据"
+           class="grid grid-cols-2 gap-1 p-0.5">
+        <!-- Visually hidden loading text for screen readers -->
+        <span class="sr-only">正在加载市场风向标数据...</span>
+        <div v-for="i in 8" :key="`skeleton-${i}`"
+             class="bg-theme-secondary/50 rounded p-2 flex flex-col items-center justify-center animate-pulse">
+          <!-- Category badge skeleton -->
+          <div class="flex items-center gap-0.5 mb-0.5">
+            <div class="w-4 h-3 bg-theme-tertiary/30 rounded"></div>
+            <div class="w-12 h-3 bg-theme-tertiary/30 rounded"></div>
+          </div>
+          <!-- Price skeleton -->
+          <div class="w-16 h-4 bg-theme-tertiary/30 rounded mb-0.5"></div>
+          <!-- Change % skeleton -->
+          <div class="w-10 h-3 bg-theme-tertiary/30 rounded"></div>
+        </div>
+      </div>
+      <!-- 2-column grid -->
+      <div v-else ref="mobileWindContainerRef" class="grid grid-cols-2 gap-1" role="grid" aria-label="市场风向标">
+        <div v-for="(item, index) in windItems" :key="item.symbol"
+             data-wind-card
+             :tabindex="index === mobileRovingFocus.currentIndex.value ? '0' : '-1'"
+             role="gridcell"
+             :aria-label="item.name"
+             class="bg-theme-secondary/50 rounded p-2 flex flex-col cursor-pointer hover:bg-theme-tertiary/50 transition-colors focus-visible:ring-2 focus-visible:ring-terminal-accent focus-visible:ring-offset-1 focus-visible:ring-offset-terminal-bg"
+             @click="handleWindClick(item); mobileRovingFocus.handleCardClick(index)"
+             @keydown.enter="handleWindClick(item)"
+             @keydown.space.prevent="handleWindClick(item)">
+          <!-- Category badge -->
+          <div class="flex items-center gap-0.5 mb-0.5">
+            <span class="text-[8px] px-1 rounded border"
+                  :class="item.category === 'macro' ? 'border-yellow-500/40 text-yellow-400' : 'border-blue-500/40 text-blue-400'"
+                  :title="item.category === 'macro' ? '宏观大宗商品' : '股票指数'">
+              {{ item.category === 'macro' ? '宏观' : '指数' }}
+            </span>
+            <span class="text-[10px] text-theme-primary truncate" :title="item.name">{{ item.name }}</span>
+          </div>
+          <!-- Price -->
+          <div class="text-[11px] font-mono text-theme-primary">
+            {{ formatWindPrice(item) }}
+          </div>
+          <!-- Change % -->
+          <div class="text-[11px] font-mono font-bold"
+               :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+            {{ formatWindChangePct(item.change_pct) }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- A股监测：自适应高度，内部滚动 -->
     <div id="section-screener" class="terminal-panel p-2 rounded-lg shadow border border-theme/10 shrink-0" style="min-height: 280px; max-height: 50vh; overflow-y: auto;">
       <div class="text-terminal-accent font-bold text-sm mb-1 shrink-0">📊 A股监测</div>
@@ -178,35 +247,82 @@
           <span>🌐 市场风向标</span>
           <FreshnessIndicator :timestamp="timestamp" />
         </div>
-        <!-- Error display -->
-        <div v-if="macroError" class="text-[10px] text-red-400 mb-1 px-1 py-0.5 bg-red-400/10 rounded">
-          ⚠️ {{ macroError }}
-        </div>
-        <!-- 两列卡片网格：消除垂直留白，充分利用右侧宽度（密度升级） -->
-        <div class="grid grid-cols-2 gap-1 p-0.5">
-          <div
-            v-for="item in windItems" :key="item.symbol"
-            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors min-w-0 overflow-hidden"
-            @click="handleWindClick(item)"
+        <!-- Error display with retry button and aria-live for screen readers -->
+        <div v-if="macroError" 
+             role="alert" 
+             aria-live="polite" 
+             aria-atomic="true"
+             class="text-[10px] text-red-400 mb-1 px-1 py-0.5 bg-red-400/10 rounded flex items-center justify-between gap-2">
+          <span>⚠️ {{ macroError }}</span>
+          <button 
+            @click="retryMacroFetch" 
+            :disabled="macroLoading"
+            class="px-1.5 py-0.5 bg-red-400/20 rounded hover:bg-red-400/30 transition-colors disabled:opacity-50"
+            type="button"
           >
-            <!-- 标的名称（分类标签） -->
+            <span v-if="macroLoading" class="inline-block animate-spin">⟳</span>
+            <span v-else>重试</span>
+          </button>
+        </div>
+        <!-- Loading skeleton for wind vane (8 cards in 2 columns) -->
+        <div v-if="!windItems.length && !macroError"
+             role="status"
+             :aria-busy="!windItems.length && !macroError"
+             aria-label="正在加载市场风向标数据"
+             class="grid grid-cols-2 gap-1 p-0.5">
+          <!-- Visually hidden loading text for screen readers -->
+          <span class="sr-only">正在加载市场风向标数据...</span>
+          <div v-for="i in 8" :key="`skeleton-${i}`"
+               class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center animate-pulse">
+            <!-- Category badge skeleton -->
+            <div class="flex items-center gap-0.5 mb-0.5">
+              <div class="w-4 h-3 bg-theme-tertiary/30 rounded"></div>
+              <div class="w-12 h-3 bg-theme-tertiary/30 rounded"></div>
+            </div>
+            <!-- Price skeleton -->
+            <div class="w-16 h-4 bg-theme-tertiary/30 rounded mb-0.5"></div>
+            <!-- Change % skeleton -->
+            <div class="w-10 h-3 bg-theme-tertiary/30 rounded"></div>
+          </div>
+        </div>
+        <!-- Actual wind vane grid -->
+        <div v-else ref="desktopWindContainerRef" class="grid grid-cols-2 gap-1 p-0.5" role="grid" aria-label="市场风向标">
+          <div
+            v-for="(item, index) in windItems" :key="item.symbol"
+            data-wind-card
+            :tabindex="index === desktopRovingFocus.currentIndex.value ? '0' : '-1'"
+            role="gridcell"
+            :aria-label="item.name"
+            class="bg-theme-secondary/50 rounded p-1.5 flex flex-col items-center justify-center cursor-pointer hover:bg-theme-tertiary/50 transition-colors min-w-0 overflow-hidden focus-visible:ring-2 focus-visible:ring-terminal-accent focus-visible:ring-offset-1 focus-visible:ring-offset-terminal-bg"
+            @click="handleWindClick(item); desktopRovingFocus.handleCardClick(index)"
+            @keydown.enter="handleWindClick(item)"
+            @keydown.space.prevent="handleWindClick(item)"
+          >
+<!-- 标的名称（分类标签） -->
             <div class="flex items-center gap-0.5 mb-0.5">
               <span
-                class="text-[7px] px-0.5 rounded border"
-                :class="item.category === 'macro' ? 'border-[var(--color-warning-border)] text-[var(--color-warning)]' : 'border-[var(--color-info-border)] text-[var(--color-info)]'"
-              >{{ item.category === 'macro' ? '📊' : '📈' }}</span>
-              <span class="text-[9px] text-theme-primary truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
+                class="text-[7px] px-1 rounded border cursor-help"
+                :class="item.category === 'macro' ? 'border-yellow-500/40 text-yellow-400' : 'border-agent-blue/40 text-agent-blue'"
+                :title="item.category === 'macro' ? '宏观大宗商品' : '股票指数'"
+              >{{ item.category === 'macro' ? '宏观' : '指数' }}</span>
+              <span class="text-[9px] text-gray-300 truncate max-w-[60px]" :title="item.name">{{ item.name }}</span>
             </div>
             <!-- 最新价（右对齐） -->
-            <div class="text-[10px] font-mono text-theme-primary text-right w-full">
-              {{ item.category === 'macro' ? formatMacroPrice(item) : formatPrice(item.price) }}
+            <div class="text-[10px] font-mono text-gray-300 text-right w-full tabular-nums">
+              {{ formatWindPrice(item) }}
             </div>
             <!-- 涨跌幅（右对齐） -->
             <div
-              class="text-[10px] font-mono font-bold text-right w-full"
-              :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+              class="text-[10px] font-mono font-bold text-right w-full tabular-nums"
+              :class="(item.change_pct || 0) >= 0 ? 'text-market-up' : 'text-market-down'"
             >
-              {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
+              {{ formatWindChangePct(item.change_pct) }}
+            </div>
+            <!-- Timestamp for macro items -->
+            <div v-if="item.category === 'macro' && item.status"
+                 class="text-[8px] text-theme-tertiary text-right w-full mt-0.5"
+                 :title="`数据时间: ${item.status}`">
+              {{ item.status }}
             </div>
           </div>
         </div>
@@ -264,7 +380,7 @@
                 <td class="py-1 text-right font-mono text-[11px]">{{ formatPrice(item.price) }}</td>
                 <td class="py-1 text-right font-mono text-[11px]"
                     :class="(item.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                  {{ (item.change_pct || 0) >= 0 ? '+' : '' }}{{ (item.change_pct || 0).toFixed(2) }}%
+                  {{ formatChangePct(item.change_pct) }}
                 </td>
               </tr>
               <tr v-if="!chinaAllItems.length">
@@ -295,9 +411,11 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch, onErrorCaptured
 import { useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
-import { formatPrice } from '../utils/formatters.js'
+import { formatPrice, formatChangePct } from '../utils/formatters.js'
 import { usePullToRefresh } from '../composables/usePullToRefresh.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
+import { toast } from '../composables/useToast.js'
+import { useRovingFocus } from '../composables/useRovingFocus.js'
 import IndexLineChart    from './IndexLineChart.vue'
 import NewsFeed          from './NewsFeed.vue'
 import SentimentGauge    from './SentimentGauge.vue'
@@ -355,6 +473,9 @@ const selectedIndex    = ref(currentSymbol.value)
 const selectedPeriod   = ref('daily')
 const activeIndicators = ref([])
 const dashboardError   = ref(null)
+
+const mobileWindContainerRef = ref(null)
+const desktopWindContainerRef = ref(null)
 
 // ── Error Capture Safety Net ─────────────────────────────────────
 onErrorCaptured((err, instance, info) => {
@@ -488,46 +609,90 @@ defineExpose({
 })
 
 // ── 列表点击联动 ─────────────────────────────────────────────────
-// 宏观品种名称 → symbol 映射（windItems 的宏观行没有 symbol 字段）
-const _MACRO_NAME_MAP = {
-  '黄金': 'GOLD', '黄金(美元)': 'GOLD', 'XAU': 'GOLD', 'GLD': 'GOLD',
-  'WTI原油': 'WTI', 'WTI': 'WTI', 'NYMEX_WTI': 'WTI',
+// Comprehensive macro symbol mapping (Chinese/English variants → standard symbol)
+const MACRO_SYMBOL_MAP = {
+  // Gold variants
+  '黄金': 'GOLD', '黄金(美元)': 'GOLD', '黄金(人民币)': 'GOLD',
+  'XAU': 'GOLD', 'GLD': 'GOLD', 'GOLD': 'GOLD',
+  'SGE黄金': 'GOLD', 'SGE黄金(人民币)': 'GOLD',
+  'gold': 'GOLD', 'xau': 'GOLD', 'gld': 'GOLD',
+  
+  // WTI/Crude Oil variants
+  'WTI原油': 'WTI', 'WTI': 'WTI', '原油': 'WTI',
+  'NYMEX_WTI': 'WTI', 'CL': 'WTI', 'WTI原油(美元)': 'WTI',
+  'wti': 'WTI', 'wtic': 'WTI',
+  
+  // VIX variants
   'VIX': 'VIX', '恐慌指数': 'VIX', '波动率指数': 'VIX',
+  'vix': 'VIX',
+  
+  // USD/CNH variants
   'USD/CNH': 'CNHUSD', 'CNHUSD': 'CNHUSD', '离岸人民币': 'CNHUSD',
-  'DXY': 'DXY', '美元指数': 'DXY',
-  '恒指波幅': 'VHSI', 'VHKS': 'VHSI',
-  '日经225': 'N225', '日经': 'N225',
+  '人民币': 'CNHUSD', 'usd/cnh': 'CNHUSD', 'cnhusd': 'CNHUSD',
+  
+  // DXY variants
+  'DXY': 'DXY', '美元指数': 'DXY', 'dxy': 'DXY',
+  
+  // VHSI (Hang Seng Volatility) variants
+  '恒指波幅': 'VHSI', 'VHSI': 'VHSI', 'VHKS': 'VHSI',
+  'vhsi': 'VHSI',
+  
+  // Nikkei variants
+  '日经225': 'N225', '日经': 'N225', 'N225': 'N225',
+  
+  // DJI/SPX/NDX
+  'DJI': 'DJI', '道琼斯': 'DJI',
+  'SPX': 'SPX', '标普500': 'SPX',
+  'NDX': 'NDX', '纳斯达克100': 'NDX',
+}
+
+function normalizeMacroSymbol(name) {
+  if (!name) return null
+  
+  // Direct match
+  if (MACRO_SYMBOL_MAP[name]) return MACRO_SYMBOL_MAP[name]
+  
+  // Remove parentheses content and try again
+  const cleaned = name.replace(/\([^)]*\)/g, '').trim()
+  if (MACRO_SYMBOL_MAP[cleaned]) return MACRO_SYMBOL_MAP[cleaned]
+  
+  // Try lowercase
+  const lower = cleaned.toLowerCase()
+  if (MACRO_SYMBOL_MAP[lower]) return MACRO_SYMBOL_MAP[lower]
+  
+  // Log unmapped symbols for future updates
+  console.warn(`[WindVane] Unmapped macro symbol: "${name}"`)
+  return null
 }
 
 function handleWindClick(item) {
   let sym = item.symbol || item.key || ''
-  const LOWER_MACRO_MAP = {
-    '黄金': 'GOLD', 'xau': 'GOLD', 'gld': 'GOLD',
-    'wti原油': 'WTI', 'wti': 'WTI', '原油': 'WTI', 'wtic': 'WTI',
-    'vix': 'VIX', '恐慌指数': 'VIX', '波幅': 'VIX',
-    'usd/cnh': 'CNHUSD', '离岸人民币': 'CNHUSD', '人民币': 'CNHUSD',
-    'dxy': 'DXY', '美元指数': 'DXY',
-    '恒指波幅': 'VHSI', 'vhsi': 'VHSI',
-    '日经225': 'N225', '日经': 'N225',
-    // 扩展：无括号的标准名称
-    'gold': 'GOLD', 'wti': 'WTI', 'vix': 'VIX', 'cnhusd': 'CNHUSD',
-    'dji': 'DJI', 'spx': 'SPX', 'ndx': 'NDX',
-  }
-
-  // 名称特征匹配：macro 品种只有 name（中文/英文），没有标准 symbol
-  if (!/^[A-Za-z]{2,6}$/.test(sym)) {
-    // 去掉括号及其内容（如 "(美元)" "(VHSI)"），再匹配
-    const cleaned = sym.replace(/\([^)]*\)/g, '').trim()
-    const lower = cleaned.toLowerCase()
-    if (LOWER_MACRO_MAP[lower] || LOWER_MACRO_MAP[cleaned]) {
-      sym = LOWER_MACRO_MAP[cleaned] || LOWER_MACRO_MAP[lower]
+  
+  // For macro items, use comprehensive mapping
+  if (item.category === 'macro') {
+    const mapped = normalizeMacroSymbol(item.name)
+    if (mapped) {
+      sym = mapped
     } else {
-      // 兜底：去掉非字母数字后取前6字符 normalize（仅保留英文和数字）
-      const stripped = cleaned.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)
-      sym = LOWER_MACRO_MAP[stripped] || normalizeSymbol(stripped)
+      // Fallback: show toast and return
+      toast.warning('无法识别', `暂不支持 ${item.name} 的K线图`)
+      return
+    }
+  } else {
+    // For indices, use existing normalization
+    if (!/^[A-Za-z]{2,6}$/.test(sym)) {
+      const cleaned = sym.replace(/\([^)]*\)/g, '').trim()
+      const lower = cleaned.toLowerCase()
+      if (MACRO_SYMBOL_MAP[lower] || MACRO_SYMBOL_MAP[cleaned]) {
+        sym = MACRO_SYMBOL_MAP[cleaned] || MACRO_SYMBOL_MAP[lower]
+      } else {
+        // Fallback: strip non-alphanumeric and normalize
+        const stripped = cleaned.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6)
+        sym = MACRO_SYMBOL_MAP[stripped] || normalizeSymbol(stripped)
+      }
     }
   }
-
+  
   const norm = normalizeSymbol(sym)
   setSymbol(norm, item.name || sym, '#f87171')
   queueMicrotask(() => {
@@ -683,14 +848,29 @@ const windItems = computed(() => {
     category:   'macro',    // 宏观大宗
   }))
 
-  return [...indexRows, ...macroRows]
-})
+return [...indexRows, ...macroRows]
+ })
 const globalItems = computed(() => globalData.value || [])
 const chinaAllItems = computed(() => props.chinaAllData || [])
 const sectors = computed(() => props.sectorsData || [])
 
+const mobileRovingFocus = useRovingFocus({
+  containerRef: mobileWindContainerRef,
+  items: windItems,
+  columns: 2,
+  onSelect: handleWindClick
+})
+
+const desktopRovingFocus = useRovingFocus({
+  containerRef: desktopWindContainerRef,
+  items: windItems,
+  columns: 2,
+  onSelect: handleWindClick
+})
+
 const mobileAnchors = [
   { id: 'section-chart',     label: '📈 图表' },
+  { id: 'section-wind',      label: '🌐 风向标' },
   { id: 'section-screener',  label: '📊 监测' },
   { id: 'section-sentiment', label: '🌡️ 情绪' },
   { id: 'section-sectors',   label: '🔥 板块' },
@@ -702,6 +882,33 @@ function scrollToMobileSection(id) {
 }
 
 // ── 低频数据自持（宏观/利率/海外，5分钟轮询）────────────────────────
+//
+// ⚠️ Task 9 Note: Why HTTP polling instead of WebSocket for macro data?
+// 
+// WebSocket does NOT support macro symbols (GOLD, WTI, VIX, CNHUSD, VHSI) because:
+// 
+// 1. Backend Architecture:
+//    - WebSocket broadcasts from `market_data_realtime` table (scheduler.py)
+//    - Macro symbols are NOT stored in this table
+//    - They use separate caching via `_MACRO_CACHE` in overview.py
+// 
+// 2. Data Source Difference:
+//    - WebSocket symbols: A股指数, 全球指数, Shibor利率, 行业板块, 期货衍生品
+//    - Macro symbols: CNYUSD, hf_GC (SGE黄金), hf_CL (WTI原油), hkVHSI (恒指波幅)
+//    - Macro data fetched directly from Sina/Tencent APIs, not via WebSocket pipeline
+// 
+// 3. Update Frequency:
+//    - Macro data (commodities, forex, VHSI) updates every 15-30 seconds during market hours
+//    - 5-minute polling interval provides reasonable freshness
+//    - Real-time updates not critical for macro indicators
+// 
+// 4. Implementation Note:
+//    - To add WebSocket support, backend would need to:
+//      a) Store macro symbols in `market_data_realtime` table
+//      b) Add macro fetch to `fetch_all_and_buffer()` in data_fetcher.py
+//      c) Broadcast macro ticks via `_broadcast_realtime_ticks()`
+//    - Current HTTP polling approach is simpler and sufficient for macro data
+//
 const macroData  = ref([])
 const ratesData  = ref([])
 const globalData = ref([])
@@ -710,6 +917,12 @@ const globalData = ref([])
 const macroError  = ref(null)
 const ratesError  = ref(null)
 const globalError = ref(null)
+
+// Retry state for macro data
+const macroLoading = ref(false)
+const macroRetryCount = ref(0)
+const MAX_RETRIES = 5
+const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000] // Exponential backoff
 
 async function fetchLowFreq() {
   // Abort any pending request before starting a new one
@@ -752,9 +965,31 @@ async function fetchLowFreq() {
   }
 }
 
+// Retry function for macro data with exponential backoff
+async function retryMacroFetch() {
+  if (macroLoading.value) return
+  
+  macroLoading.value = true
+  try {
+    await fetchLowFreq()
+    macroRetryCount.value = 0 // Reset on success
+  } catch (e) {
+    macroRetryCount.value++
+    if (macroRetryCount.value < MAX_RETRIES) {
+      const delay = RETRY_DELAYS[Math.min(macroRetryCount.value - 1, RETRY_DELAYS.length - 1)]
+      console.warn(`[WindVane] Retry ${macroRetryCount.value}/${MAX_RETRIES} in ${delay}ms`)
+      setTimeout(retryMacroFetch, delay)
+    }
+  } finally {
+    macroLoading.value = false
+  }
+}
+
 // Use smart polling: pause when tab hidden, resume + refresh when visible
+// Note: HTTP polling is the CORRECT approach for macro data (see Task 9 analysis above)
+// WebSocket does not support macro symbols - they use separate Sina/Tencent APIs
 const { start: startLowPolling, stop: stopLowPolling } = useSmartPolling(fetchLowFreq, {
-  interval: 300_000,
+  interval: 300_000,  // 5 minutes - appropriate for macro data freshness
   pauseWhenHidden: true,
 })
 
@@ -805,6 +1040,23 @@ function formatMacroPrice(item) {
   return item.unit ? `${p} ${item.unit}` : p
 }
 
+// 格式化风向标价格（安全处理 null/undefined/NaN/Infinity）
+function formatWindPrice(item) {
+  if (item.category === 'macro') {
+    // Macro: show price with unit
+    const price = formatPrice(item.price)
+    return item.unit ? `${price} ${item.unit}` : price
+  } else {
+    // Index: show price with 2 decimals
+    return formatPrice(item.price)
+  }
+}
+
+// 格式化风向标涨跌幅（安全处理 null/undefined/NaN/Infinity）
+function formatWindChangePct(value) {
+  return formatChangePct(value)
+}
+
 // ── StockScreener / Copilot 等外部改变了 currentSymbol 时同步 selectedIndex ──
 // 防抖版：避免 rapid setSymbol 调用导致频繁更新
 let syncIndexTimer = null
@@ -840,6 +1092,54 @@ function toggleLock() {
 .grid-stack-item-content { inset: 4px; overflow: hidden; min-height: 0; border-radius: 8px; display: flex; flex-direction: column; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Screen reader only - visually hidden but accessible */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* ━━━ Focus Indicators for Interactive Elements ━━━━━━━━━━━━━━━━━━━━ */
+/* Wind vane cards - clickable market indicator cards */
+.wind-vane-card:focus-visible,
+.grid-stack-item-content [class*="cursor-pointer"]:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Ensure 3:1 contrast ratio for focus ring on dark backgrounds */
+/* #3b82f6 on #121212 has ~4.5:1 contrast ratio (passes WCAG AA) */
+.grid-stack button:focus-visible,
+.terminal-panel button:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Mobile navigation buttons */
+button:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 2px;
+}
+
+/* Table rows with click handlers */
+tr[class*="cursor-pointer"]:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: -2px;
+}
+
+/* Focus ring for wind vane grid items (2-column grid) */
+.grid-cols-2 > div[class*="cursor-pointer"]:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 2px;
+}
 
 .pull-refresh-indicator {
   position: absolute;

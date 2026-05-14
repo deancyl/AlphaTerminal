@@ -45,6 +45,8 @@ QUOTE_TIMEOUT: Final[float] = float(os.getenv("QUOTE_TIMEOUT", "10.0"))
 # Convertible bond background refresh
 BOND_REFRESH_TIMEOUT: Final[float] = float(os.getenv("BOND_REFRESH_TIMEOUT", "30.0"))
 
+MACRO_TIMEOUT: Final[float] = float(os.getenv("MACRO_TIMEOUT", "30.0"))
+
 
 # ── Connection Pool Limits ─────────────────────────────────────────────────────
 
@@ -67,6 +69,7 @@ def get_timeout_config() -> dict:
         "search": SEARCH_TIMEOUT,
         "quote": QUOTE_TIMEOUT,
         "bond_refresh": BOND_REFRESH_TIMEOUT,
+        "macro": MACRO_TIMEOUT,
         "max_connections": MAX_CONNECTIONS,
         "max_keepalive": MAX_KEEPALIVE_CONNECTIONS,
         "keepalive_expiry": KEEPALIVE_EXPIRY,

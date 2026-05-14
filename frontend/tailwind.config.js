@@ -103,6 +103,16 @@ export default {
           bg: 'var(--bearish-bg)',
           border: 'var(--bearish-border)',
         },
+        
+        // ============================================
+        // 金融终端专属色系
+        // ============================================
+        'terminal-bg': '#0a0a0a',      // 极暗背景色
+        'terminal-card': '#121212',    // 卡片背景色
+        'terminal-border': '#27272a',  // 边框色
+        'market-up': '#ef4444',        // 涨（红色）
+        'market-down': '#10b981',      // 跌（绿色）
+        'agent-blue': '#3b82f6',       // Copilot 品牌色
       },
       
       // 阴影

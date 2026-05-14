@@ -24,8 +24,13 @@ const API_BASE_URL = ''
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
 // JavaScript 单线程，使用简单变量即可
 let _consecutiveFailures = 0
-const _DEGRADE_THRESHOLD   = 3
-const _CIRCUIT_THRESHOLD   = 6
+let _firstFailureTime = null  // 首次失败时间戳
+let _lastToastTime = null     // 上次 toast 时间戳
+
+const _DEGRADE_THRESHOLD   = 5   // 提高到 5 次（原 3 次）
+const _CIRCUIT_THRESHOLD   = 10  // 提高到 10 次（原 6 次）
+const _FAILURE_WINDOW_MS   = 60000  // 失败计数窗口：60秒内的失败才累计
+const _TOAST_COOLDOWN_MS   = 30000  // Toast 冷却时间：30秒内不重复显示
 
 // ── 全局错误感知状态（供 UI 层消费）──────────────────────────────
 export const apiErrorState = reactive({
@@ -36,26 +41,49 @@ export const apiErrorState = reactive({
 })
 
 function _onFailure(url, status) {
-  // JavaScript 单线程，直接操作即可
+  const now = Date.now()
+  
+  // 如果超过窗口时间，重置计数
+  if (_firstFailureTime && (now - _firstFailureTime) > _FAILURE_WINDOW_MS) {
+    _consecutiveFailures = 0
+    _firstFailureTime = null
+  }
+  
+  // 记录首次失败时间
+  if (_consecutiveFailures === 0) {
+    _firstFailureTime = now
+  }
+  
   _consecutiveFailures++
   const n = _consecutiveFailures
   apiErrorState.failedCount = n
   apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
-  apiErrorState.lastFailedAt = Date.now()
+  apiErrorState.lastFailedAt = now
+  
+  // 检查是否应该显示 toast（考虑冷却时间）
+  const canShowToast = !_lastToastTime || (now - _lastToastTime) > _TOAST_COOLDOWN_MS
+  
   if (n >= _CIRCUIT_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
-    toast.error('数据源异常', `API 连续${n}次失败，已触发熔断保护`)
+    if (canShowToast) {
+      _lastToastTime = now
+      toast.error('数据源异常', `API 连续${n}次失败，已触发熔断保护`)
+    }
   } else if (n >= _DEGRADE_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
-    toast.warning('数据源降级', '主数据源响应异常，已切换备用数据源')
+    if (canShowToast) {
+      _lastToastTime = now
+      toast.warning('数据源降级', '主数据源响应异常，已切换备用数据源')
+    }
   }
 }
 
 function _onSuccess() {
   if (_consecutiveFailures > 0) {
     _consecutiveFailures = 0
+    _firstFailureTime = null
     apiErrorState.failedCount = 0
     apiErrorState.lastError = null
     if (apiErrorState.isDegraded) {
@@ -214,16 +242,19 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
-      // 修复: 增加网络错误 (TypeError) 和 Fetch 失败的重试
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
+      const isClientError = e.message?.match(/^HTTP 4\d{2}$/) || e.message?.includes('参数校验失败')
+      
       if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
         const backoffMs = calculateRetryDelay(attempt)
         logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying in ${backoffMs}ms...`)
         await sleep(backoffMs)
         continue
       }
-      // 记录失败（用于熔断计数）
-      _onFailure(url, e.message)
+      // 仅对服务器错误(5xx)和网络错误触发熔断计数，4xx客户端错误不触发
+      if (!isClientError) {
+        _onFailure(url, e.message)
+      }
     } finally {
       clearTimeout(timer)
     }

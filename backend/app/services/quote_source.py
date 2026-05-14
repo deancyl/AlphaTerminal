@@ -7,6 +7,7 @@
 - 上层 async 路由通过 asyncio.to_thread() 调用同步函数，避免阻塞事件循环
 - 不混用 httpx.AsyncClient（避免连接池泄漏和调试困难）
 - ✅ Circuit Breaker 保护每个数据源，防止级联故障
+- ✅ v2: 支持优先级路由（通过 fetch_by_priority）
 """
 import asyncio
 import logging
@@ -561,3 +562,70 @@ def close_circuit(source_name: str) -> bool:
         _source_status[source_name]["state"] = "closed"
         return True
     return False
+
+
+# ========== 优先级路由桥接（v2 新接口）============
+
+async def get_quote_by_priority_async(symbol: str) -> dict:
+    """
+    使用优先级路由获取行情数据（推荐使用）。
+    
+    优先级顺序由 FetcherPriority 配置决定：
+    - A股 realtime: Sina → Tencent → EastMoney
+    - 港股 hk_stocks: Tencent
+    - 美股 us_stocks: AlphaVantage
+    """
+    from app.services.fetchers import get_quote_by_priority, FetcherFactory
+    
+    if symbol.startswith('hk'):
+        data_type = "hk_stocks"
+    elif symbol.startswith('sh') or symbol.startswith('sz'):
+        data_type = "realtime"
+    else:
+        data_type = "us_stocks"
+    
+    try:
+        result = await get_quote_by_priority(symbol)
+        if result:
+            return {
+                "source": result.get("source", "priority"),
+                "latency_ms": result.get("latency_ms"),
+                "price": result.get("price"),
+                "prev_close": result.get("prev_close"),
+                "open": result.get("open"),
+                "high": result.get("high"),
+                "low": result.get("low"),
+                "pe_static": result.get("pe_static"),
+                "pe_ttm": result.get("pe_ttm"),
+                "pb": result.get("pb"),
+            }
+    except Exception as e:
+        logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback")
+    
+    return await get_quote_with_fallback_async(symbol)
+
+
+async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
+    """
+    使用优先级路由获取K线数据（推荐使用）。
+    
+    优先级顺序：AkShare → EastMoney → Sina
+    """
+    from app.services.fetchers import get_kline_by_priority
+    
+    try:
+        result = await get_kline_by_priority(symbol, period)
+        if result:
+            return {
+                "source": "priority",
+                "kline_type": period,
+                "data": result,
+                "count": len(result) if isinstance(result, list) else 0,
+            }
+    except Exception as e:
+        logger.warning(f"[priority] {symbol} K线失败: {e}")
+    
+    if period == "60min":
+        return await asyncio.to_thread(_parse_sina_kline_60min, symbol)
+    
+    return {"source": "none", "error": "K线数据获取失败", "data": []}

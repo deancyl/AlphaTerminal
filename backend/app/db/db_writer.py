@@ -42,6 +42,8 @@ T_PERIODIC  = 'periodic'    # market_data_periodic
 T_REALTIME  = 'realtime'    # flush write_buffer → market_data_realtime
 T_ALLSTOCKS = 'all_stocks' # 全市场个股 upsert
 T_BUFFER    = 'buffer'      # write_buffer INSERT
+T_CACHE_PERSIST = 'cache_persist'  # cache_persistence 表
+T_FUND_NAV  = 'fund_nav'    # fund_nav_history 表
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -214,6 +216,52 @@ def _write_buffer(conn, rows):
     return ok, 0
 
 
+def _write_cache_persist(conn, rows):
+    ok = 0
+    for item in rows:
+        try:
+            conn.execute("""
+                INSERT OR REPLACE INTO cache_persistence
+                (key, value, created_at, expires_at, hit_count, size_bytes, source)
+                VALUES (?, ?, ?, ?, 0, ?, ?)
+            """, (
+                item.get('key', ''),
+                item.get('value', ''),
+                float(item.get('created_at', time.time())),
+                float(item.get('expires_at', time.time())),
+                int(item.get('size_bytes', 0)),
+                item.get('source', '')
+            ))
+            ok += 1
+        except Exception as e:
+            logger.error(f"[DBWriter] cache_persist insert failed: key={item.get('key')}, error={e}")
+    conn.commit()
+    return ok, 0
+
+
+def _write_fund_nav(conn, rows):
+    ok = 0
+    for item in rows:
+        try:
+            conn.execute("""
+                INSERT OR REPLACE INTO fund_nav_history
+                (fund_code, nav_date, unit_nav, acc_nav, daily_growth, source)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                item.get('fund_code', ''),
+                item.get('nav_date', ''),
+                float(item.get('unit_nav', 0) or 0),
+                float(item.get('acc_nav', 0) or 0),
+                float(item.get('daily_growth', 0) or 0),
+                item.get('source', 'akshare')
+            ))
+            ok += 1
+        except Exception as e:
+            logger.error(f"[DBWriter] fund_nav insert failed: fund_code={item.get('fund_code')}, error={e}")
+    conn.commit()
+    return ok, 0
+
+
 def db_writer_loop():
     conn = None
     try:
@@ -253,6 +301,14 @@ def db_writer_loop():
                 elif task_type == T_BUFFER:
                     ok, fail = _write_buffer(conn, rows)
                     logger.info(f"[DBWriter] ✅ buffer {ok} rows")
+
+                elif task_type == T_CACHE_PERSIST:
+                    ok, fail = _write_cache_persist(conn, rows)
+                    logger.info(f"[DBWriter] ✅ cache_persist {ok} rows")
+
+                elif task_type == T_FUND_NAV:
+                    ok, fail = _write_fund_nav(conn, rows)
+                    logger.info(f"[DBWriter] ✅ fund_nav {ok} rows")
 
                 else:
                     logger.warning(f"[DBWriter] unknown task type: {task_type}")

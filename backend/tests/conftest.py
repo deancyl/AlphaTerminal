@@ -110,6 +110,16 @@ def test_client():
     """Create a test client for the FastAPI app."""
     from fastapi.testclient import TestClient
     from app.main import app
-    
+
     client = TestClient(app)
     return client
+
+
+@pytest.fixture(scope="function")
+def client():
+    """Create a function-scoped test client for the FastAPI app."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as client:
+        yield client

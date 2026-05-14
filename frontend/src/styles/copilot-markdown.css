@@ -9,7 +9,7 @@
   margin-top: 0.8em;
   margin-bottom: 0.4em;
   font-weight: 700;
-  color: var(--terminal-accent, #60a5fa);
+  color: var(--color-primary, #60a5fa);
 }
 .copilot-markdown h2 { font-size: 1.05em; border-bottom: 1px solid rgba(96,165,250,0.15); padding-bottom: 0.25em; }
 .copilot-markdown h3 { font-size: 0.95em; }
@@ -20,20 +20,24 @@
 .copilot-markdown ol { padding-left: 1.2em; margin: 0.4em 0; }
 .copilot-markdown li { margin: 0.2em 0; }
 
-.copilot-markdown strong { color: #f0f0f0; font-weight: 700; }
+.copilot-markdown strong { color: var(--text-primary, #f0f0f0); font-weight: 700; }
 .copilot-markdown em { color: #d4a574; font-style: italic; }
 .copilot-markdown code {
-  background: rgba(255,255,255,0.06);
+  background: rgba(0,0,0,0.5);
+  border: 1px solid rgba(59,130,246,0.25);
   padding: 0.1em 0.35em;
   border-radius: 3px;
   font-size: 0.85em;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  color: var(--text-primary, #e0e7ff);
 }
 .copilot-markdown pre {
-  background: rgba(0,0,0,0.35);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(59,130,246,0.3);
   border-radius: 6px;
-  padding: 0.7em;
+  position: relative;
+  padding: 1em;
+  padding-top: 2.5em;
   overflow-x: auto;
   margin: 0.5em 0;
 }
@@ -43,11 +47,57 @@
   font-size: 0.82em;
 }
 
+/* Copy button for code blocks */
+.copilot-markdown pre::before {
+  content: '📋 复制';
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  font-size: 0.7em;
+  color: var(--color-primary, #60a5fa);
+  cursor: pointer;
+  padding: 0.2em 0.5em;
+  border-radius: 3px;
+  background: rgba(59,130,246,0.1);
+  border: 1px solid rgba(59,130,246,0.2);
+  transition: all 0.2s ease;
+}
+.copilot-markdown pre:hover::before {
+  background: rgba(59,130,246,0.2);
+  border-color: rgba(59,130,246,0.4);
+}
+.copilot-markdown pre.copied::before {
+  content: '✓ 已复制';
+  color: var(--color-down, #22c55e);
+  background: rgba(34,197,94,0.1);
+  border-color: rgba(34,197,94,0.3);
+}
+.copilot-markdown pre::before {
+  content: '📋 复制';
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  font-size: 0.7em;
+  color: var(--color-primary, #60a5fa);
+  cursor: pointer;
+  user-select: none;
+}
+.copilot-markdown pre::before:hover {
+  color: var(--accent-secondary, #93c5fd);
+}
+.copilot-markdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.82em;
+  color: var(--text-primary, #e0e7ff);
+}
+
 .copilot-markdown blockquote {
   border-left: 3px solid rgba(96,165,250,0.4);
   padding-left: 0.7em;
   margin: 0.5em 0;
-  color: #9ca3af;
+  color: var(--text-secondary, #9ca3af);
   font-style: italic;
 }
 
@@ -64,14 +114,14 @@
   text-align: left;
 }
 .copilot-markdown th {
-  background: rgba(96,165,250,0.08);
-  color: #60a5fa;
+  background: rgba(59,130,246,0.1);
+  color: var(--color-primary, #60a5fa);
   font-weight: 600;
 }
 .copilot-markdown tr:nth-child(even) {
   background: rgba(255,255,255,0.015);
 }
-.copilot-markdown a { color: #60a5fa; text-decoration: underline; }
+.copilot-markdown a { color: var(--color-primary, #60a5fa); text-decoration: underline; }
 .copilot-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.8em 0; }
 
 /* ── 深度推理折叠区块 ──────────────────────────────────── */

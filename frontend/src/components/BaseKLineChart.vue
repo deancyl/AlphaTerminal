@@ -11,6 +11,14 @@ import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
 import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { waitForDimensions } from '../utils/waitForDimensions.js'
+import { 
+  MARKET_COLORS, 
+  CHART_COLORS, 
+  buildTooltipFormatter,
+  buildAxisOptions,
+  buildGridOptions,
+  buildDataZoomOptions
+} from '../utils/echartsTheme.js'
 
 
 
@@ -54,17 +62,17 @@ function buildOption(cData) {
 
   // 主图 Grid (Index 0)
   const mainHeight = subCount === 2 ? '55%' : '65%'
-  grids.push({ top: 10, height: mainHeight, left: 55, right: 8 })
+  grids.push(buildGridOptions({ top: 10, height: mainHeight, left: 55, right: 8 }))
   xAxes.push({
     type: 'category', data: times, gridIndex: 0,
     axisLabel: { show: false },
-    axisLine: { lineStyle: { color: '#374151' } },
+    axisLine: { lineStyle: { color: CHART_COLORS.AXIS_LINE } },
   })
   yAxes.push({
     type: 'value', gridIndex: 0, scale: true,
     min: yMin, max: yMax,
-    splitLine: { lineStyle: { color: '#1f2937' } },
-    axisLabel: { color: '#6b7280', fontSize: 9 },
+    splitLine: { lineStyle: { color: CHART_COLORS.SPLIT_LINE, type: 'dashed' } },
+    axisLabel: { color: CHART_COLORS.AXIS_LABEL, fontSize: 10 },
   })
 
   // 动态生成副图 Grids
@@ -73,17 +81,17 @@ function buildOption(cData) {
 
   props.subCharts.forEach((subName, index) => {
     const gridIdx = index + 1
-    grids.push({ top: `${currentTop}%`, height: subHeight, left: 55, right: 8 })
+    grids.push(buildGridOptions({ top: `${currentTop}%`, height: subHeight, left: 55, right: 8 }))
     xAxes.push({
       type: 'category', data: times, gridIndex: gridIdx,
-      axisLabel: { show: index === subCount - 1 },  // 只有最下面一个副图显示X轴日期
-      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { show: index === subCount - 1, color: CHART_COLORS.AXIS_LABEL, fontSize: 10 },
+      axisLine: { lineStyle: { color: CHART_COLORS.AXIS_LINE } },
     })
     yAxes.push({
       type: 'value', gridIndex: gridIdx,
       splitLine: { show: false },
       axisLabel: {
-        color: '#6b7280', fontSize: 9,
+        color: CHART_COLORS.AXIS_LABEL, fontSize: 10,
         formatter: subName === 'VOL' ? (v) => {
           if (v >= 1e8) return (v / 1e8).toFixed(0) + '亿'
           if (v >= 1e4) return (v / 1e4).toFixed(0) + '万'
@@ -97,13 +105,15 @@ function buildOption(cData) {
   // ── 2. 组装 Series ──
   const series = []
 
-  // 主图：K线
+  // 主图：K线 (TradingView-style colors)
   series.push({
     name: 'K线', type: 'candlestick', data: klineData,
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: {
-      color: '#ef232a', color0: '#14b143',
-      borderColor: '#ef232a', borderColor0: '#14b143',
+      color: MARKET_COLORS.UP,
+      color0: MARKET_COLORS.DOWN,
+      borderColor: MARKET_COLORS.UP,
+      borderColor0: MARKET_COLORS.DOWN,
     },
     barMaxWidth: 8,
   })
@@ -114,17 +124,17 @@ function buildOption(cData) {
       {
         name: 'MA5', type: 'line', data: maData.ma5,
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#ffffff', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
       },
       {
         name: 'MA10', type: 'line', data: maData.ma10,
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#fbbf24', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
       },
       {
         name: 'MA20', type: 'line', data: maData.ma20,
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#c084fc', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
       }
     )
 
@@ -132,15 +142,15 @@ function buildOption(cData) {
     const { series: ovSeries, hasOverlay } = buildOverlaySeries(
       props.chartData,
       overlaySeriesData ?? [],
-      '#f97316'   // 亮橙色高辨识度
+      MARKET_COLORS.OVERLAY
     )
 
     if (hasOverlay && ovSeries.length > 0) {
       yAxes.push({
         type: 'value', gridIndex: 0, position: 'right',
-        splitLine: { show: false },          // 防止副轴网格干扰主图
-        axisLine: { show: true, lineStyle: { color: '#6b7280' } },
-        axisLabel: { show: true, fontSize: 9, color: '#f97316' },
+        splitLine: { show: false },
+        axisLine: { show: true, lineStyle: { color: CHART_COLORS.AXIS_LINE } },
+        axisLabel: { show: true, fontSize: 10, color: MARKET_COLORS.OVERLAY },
       })
       series.push(...ovSeries)
     }
@@ -156,27 +166,26 @@ function buildOption(cData) {
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 8,
       })
       // OI（持仓量）：有 oi 字段时画成折线叠加在 VOL 区域
-      const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: '#f59e0b' } }))
+      const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: MARKET_COLORS.OI } }))
       if (oiData.some(v => v.value != null)) {
         series.push({
           name: 'OI', type: 'line', data: oiData,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx,
           smooth: false, symbol: 'none',
-          lineStyle: { color: '#f59e0b', width: 1.5 },
+          lineStyle: { color: MARKET_COLORS.OI, width: 1.5 },
           tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
         })
       }
 
     } else if (subName === 'D_OI') {
       // ΔOI 持仓变化柱（多空资金流向）
-      // 逻辑：涨+增仓→红(多头进攻) 跌+增仓→绿(空头进攻) 减仓→灰
       const doiData = volumes.map((v) => {
         const d = v.deltaOI
         if (d == null) return { value: null }
         const isUp = v.priceUp
-        let color = '#6b7280'  // 减仓灰
-        if (d > 0 && isUp)  color = UP       // 涨增仓 → 多头红
-        else if (d > 0 && !isUp) color = DOWN // 跌增仓 → 空头绿
+        let color = MARKET_COLORS.DELTA_OI_FLAT
+        if (d > 0 && isUp)  color = MARKET_COLORS.DELTA_OI_UP
+        else if (d > 0 && !isUp) color = MARKET_COLORS.DELTA_OI_DOWN
         return { value: d, itemStyle: { color } }
       })
       series.push({
@@ -198,18 +207,18 @@ function buildOption(cData) {
         {
           name: 'DIF', type: 'line', data: m.dif,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#60a5fa', width: 1 },
+          lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
         },
         {
           name: 'DEA', type: 'line', data: m.dea,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#f87171', width: 1 },
+          lineStyle: { color: MARKET_COLORS.DEA, width: 1 },
         },
         {
           name: 'MACD', type: 'bar',
           data: m.macd.map(v => ({
             value: Math.abs(v),
-            itemStyle: { color: v >= 0 ? '#ef232a' : '#14b143' },
+            itemStyle: { color: v >= 0 ? MARKET_COLORS.MACD_UP : MARKET_COLORS.MACD_DOWN },
           })),
           xAxisIndex: axisIdx, yAxisIndex: axisIdx,
         }
@@ -221,17 +230,17 @@ function buildOption(cData) {
         {
           name: 'K', type: 'line', data: k.k,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#ffffff', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
         },
         {
           name: 'D', type: 'line', data: k.d,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#fbbf24', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
         },
         {
           name: 'J', type: 'line', data: k.j,
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#c084fc', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
         }
       )
 
@@ -239,7 +248,7 @@ function buildOption(cData) {
       series.push({
         name: 'RSI', type: 'line', data: subChartData.RSI,
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-        lineStyle: { color: '#60a5fa', width: 1 },
+        lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
       })
     }
   })
@@ -252,54 +261,29 @@ function buildOption(cData) {
     animation: false,
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross', crossStyle: { color: '#555' } },
-      backgroundColor: '#1e2130', borderColor: '#374151',
-      textStyle: { color: '#d1d5db', fontSize: 11 },
-      // 高阶混排 formatter：同时展示 K 线 OHLCV + 对比线数值
-      formatter(params) {
-        if (!Array.isArray(params) || !params.length) return ''
-        const kp = params.find(p => p.seriesType === 'candlestick')
-        if (!kp) return ''
-        const vals = kp.data
-        if (!vals) return ''
-        const [o, c, l, hi] = vals
-        const isUp  = c >= o
-        const color = isUp ? UP : DOWN
-        const sign  = isUp ? '+' : ''
-        const chgPct = o > 0 ? ((c - o) / o * 100).toFixed(2) : '0.00'
-        const chgAbs = (c - o).toFixed(2)
-        let html = `<span style="color:#94a3b8;font-size:10px">${kp.axisValue}</span><br/>`
-        html += `<span style="color:${color}">开 ${o?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:${color}">收 ${c?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:${color}">涨跌 ${sign}${chgAbs} (${sign}${chgPct}%)</span><br/>`
-        html += `<span style="color:#6b7280">低 ${l?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:#6b7280">高 ${hi?.toFixed(2)}</span>`
-        const OV_COLOR = '#f97316'
-        const ovParams = params.filter(p => p.seriesType === 'line' && p.seriesName === '对比')
-        ovParams.forEach(p => {
-          const rawVal = p.value?.[1]
-          if (rawVal != null) {
-            html += `<br/><span style="color:${OV_COLOR}">➟ 对比 ${p.value[1]?.toFixed(4)}</span>`
-          }
-        })
-        return html
+      axisPointer: { 
+        type: 'cross', 
+        crossStyle: { color: CHART_COLORS.CROSSHAIR, type: 'dashed' },
+        lineStyle: { color: CHART_COLORS.CROSSHAIR, type: 'dashed' }
       },
+      backgroundColor: CHART_COLORS.TOOLTIP_BG,
+      borderColor: CHART_COLORS.TOOLTIP_BORDER,
+      borderWidth: 1,
+      padding: [8, 12],
+      textStyle: { 
+        color: CHART_COLORS.TOOLTIP_TEXT, 
+        fontSize: 11,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      },
+      extraCssText: 'backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 6px;',
+      formatter: (params) => buildTooltipFormatter(params, { showVolume: true, showOverlay: true }),
     },
     legend: { show: false },
     grid: grids,
     xAxis: xAxes,
     yAxis: yAxes,
     series,
-    dataZoom: [
-      { type: 'inside', xAxisIndex: allGridIndices, start: 70, end: 100 },
-      {
-        type: 'slider', xAxisIndex: allGridIndices,
-        bottom: 0, height: 16,
-        borderColor: '#374151', fillerColor: 'rgba(96,165,250,0.1)',
-        handleStyle: { color: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-      },
-    ],
+    dataZoom: buildDataZoomOptions(allGridIndices),
   }
 }
 

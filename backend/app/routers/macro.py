@@ -7,9 +7,10 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Optional, List
 from app.utils.response import success_response, error_response, ErrorCode
+from app.config.timeout import MACRO_TIMEOUT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/macro", tags=["macro"])
@@ -77,10 +78,11 @@ def _cleanup_expired():
     if expired:
         logger.info(f"[Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
 
-def get_cached(key):
-    """获取缓存数据"""
+def get_cached(key, allow_stale=False):
     _cleanup_expired()
     if key in _cache and key in _cache_ttl:
+        if allow_stale:
+            return _cache[key]
         if datetime.now() < _cache_ttl[key]:
             logger.info(f"[Cache HIT] {key}")
             return _cache[key]
@@ -103,7 +105,9 @@ def set_cached(key, value):
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
-async def get_gdp_data(limit: int = 20):
+async def get_gdp_data(
+    limit: int = Query(20, ge=1, le=100, description="返回最近N个季度，范围1-100")
+):
     """
     获取中国GDP数据
     
@@ -115,11 +119,13 @@ async def get_gdp_data(limit: int = 20):
         return cached
     
     try:
-        df = _get_ak().macro_china_gdp()
-        # 取最近N条（数据按时间降序排列，最新在最前）
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理：直接使用 df.to_dict('records')
         data = (
             df[['季度', '国内生产总值-绝对值', '国内生产总值-同比增长',
                 '第一产业-同比增长', '第二产业-同比增长', '第三产业-同比增长']]
@@ -145,9 +151,15 @@ async def get_gdp_data(limit: int = 20):
         })
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("GDP数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] GDP fetch error: {e}")
-        return error_response(f"GDP数据获取失败: {str(e)}")
+        return error_response("GDP数据获取失败，请稍后重试")
 
 # ── CPI数据 ────────────────────────────────────────────────────────
 @router.get("/cpi")
@@ -163,10 +175,13 @@ async def get_cpi_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_cpi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '全国-当月', '全国-同比增长', '全国-环比增长', '城市-同比增长', '农村-同比增长']]
             .assign(
@@ -191,9 +206,15 @@ async def get_cpi_data(limit: int = 24):
         })
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("CPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] CPI fetch error: {e}")
-        return error_response(f"CPI数据获取失败: {str(e)}")
+        return error_response("CPI数据获取失败，请稍后重试")
 
 # ── PPI数据 ────────────────────────────────────────────────────────
 @router.get("/ppi")
@@ -209,10 +230,13 @@ async def get_ppi_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_ppi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '当月', '当月同比增长', '累计']]
             .assign(
@@ -235,9 +259,15 @@ async def get_ppi_data(limit: int = 24):
         })
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("PPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PPI fetch error: {e}")
-        return error_response(f"PPI数据获取失败: {str(e)}")
+        return error_response("PPI数据获取失败，请稍后重试")
 
 # ── PMI数据 ────────────────────────────────────────────────────────
 @router.get("/pmi")
@@ -253,10 +283,13 @@ async def get_pmi_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_pmi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '制造业-指数', '制造业-同比增长', '非制造业-指数', '非制造业-同比增长']]
             .assign(
@@ -280,9 +313,15 @@ async def get_pmi_data(limit: int = 24):
         })
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("PMI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PMI fetch error: {e}")
-        return error_response(f"PMI数据获取失败: {str(e)}")
+        return error_response("PMI数据获取失败，请稍后重试")
 
 # ── 综合宏观经济指标 ────────────────────────────────────────────────
 @router.get("/overview")
@@ -436,7 +475,7 @@ async def get_macro_overview():
         return result
     except Exception as e:
         logger.error(f"[Macro] Overview fetch error: {e}")
-        return error_response(f"宏观概览获取失败: {str(e)}")
+        return error_response("宏观概览获取失败，请稍后重试")
 
 # ── 经济日历 ────────────────────────────────────────────────────────
 @router.get("/calendar")
@@ -450,12 +489,33 @@ async def get_economic_calendar():
         return cached
     
     try:
-        # 使用akshare的宏观数据获取近期发布日程
-        # 注：akshare没有专门的经济日历接口，我们用各指标的最新发布时间推算
+        loop = asyncio.get_running_loop()
         calendar_items = []
         
-        # GDP（每季度发布）
-        gdp_df = _get_ak().macro_china_gdp()
+        async def fetch_gdp():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        async def fetch_cpi():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        async def fetch_pmi():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        gdp_df, cpi_df, pmi_df = await asyncio.gather(
+            fetch_gdp(),
+            fetch_cpi(),
+            fetch_pmi()
+        )
+        
         if len(gdp_df) > 0:
             latest = gdp_df.iloc[0]
             calendar_items.append({
@@ -467,8 +527,6 @@ async def get_economic_calendar():
                 "unit": "%"
             })
         
-        # CPI（每月发布）
-        cpi_df = _get_ak().macro_china_cpi()
         if len(cpi_df) > 0:
             latest = cpi_df.iloc[0]
             calendar_items.append({
@@ -480,8 +538,6 @@ async def get_economic_calendar():
                 "unit": "%"
             })
         
-        # PMI（每月发布）
-        pmi_df = _get_ak().macro_china_pmi()
         if len(pmi_df) > 0:
             latest = pmi_df.iloc[0]
             calendar_items.append({
@@ -499,9 +555,15 @@ async def get_economic_calendar():
         })
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("经济日历获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Calendar fetch error: {e}")
-        return error_response(f"经济日历获取失败: {str(e)}")
+        return error_response("经济日历获取失败，请稍后重试")
 
 # ── M2货币供应量 ───────────────────────────────────────────────────
 @router.get("/m2")
@@ -517,10 +579,13 @@ async def get_m2_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_supply_of_money()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['统计时间', '货币和准货币（广义货币M2）同比增长', '货币和准货币（广义货币M2）']]
             .assign(
@@ -543,9 +608,15 @@ async def get_m2_data(limit: int = 24):
         
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("M2数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] M2 fetch error: {e}")
-        return error_response(f"M2数据获取失败: {str(e)}")
+        return error_response("M2数据获取失败，请稍后重试")
 
 # ── 社会融资规模 ───────────────────────────────────────────────────
 @router.get("/social_financing")
@@ -561,11 +632,13 @@ async def get_social_financing_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_shrzgm()
-        # 数据升序排列，取最后N条
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '社会融资规模增量', '其中-人民币贷款']]
             .assign(
@@ -588,9 +661,15 @@ async def get_social_financing_data(limit: int = 24):
         
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("社融数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Social financing fetch error: {e}")
-        return error_response(f"社融数据获取失败: {str(e)}")
+        return error_response("社融数据获取失败，请稍后重试")
 
 # ── 工业增加值 ─────────────────────────────────────────────────────
 @router.get("/industrial_production")
@@ -606,13 +685,14 @@ async def get_industrial_production_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_industrial_production_yoy()
-        # 过滤掉今值为NaN的数据
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df[_get_pd().notna(df['今值'])]
-        # 数据升序排列，取最后N条
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理（需处理日期格式化）
         df_work = df[['日期', '今值', '前值']].copy()
         df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
         df_work['yoy'] = df_work['今值'].apply(_safe_float)
@@ -630,9 +710,15 @@ async def get_industrial_production_data(limit: int = 24):
         
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("工业增加值数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Industrial production fetch error: {e}")
-        return error_response(f"工业增加值数据获取失败: {str(e)}")
+        return error_response("工业增加值数据获取失败，请稍后重试")
 
 # ── 失业率 ─────────────────────────────────────────────────────────
 @router.get("/unemployment")
@@ -648,13 +734,14 @@ async def get_unemployment_data(limit: int = 24):
         return cached
     
     try:
-        df = _get_ak().macro_china_urban_unemployment()
-        # 筛选全国城镇调查失业率（注意：item字段有尾随空格）
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df[df['item'].str.strip() == '全国城镇调查失业率']
-        # 数据升序排列，取最后N条
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['date', 'value']]
             .assign(
@@ -676,15 +763,23 @@ async def get_unemployment_data(limit: int = 24):
         
         set_cached(cache_key, result)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
+        stale_cached = get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("失业率数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Unemployment fetch error: {e}")
-        return error_response(f"失业率数据获取失败: {str(e)}")
+        return error_response("失业率数据获取失败，请稍后重试")
 
 # ── 批量获取 ────────────────────────────────────────────────────────
+VALID_INDICATORS = {"gdp", "cpi", "ppi", "pmi", "m2", "social_financing", "industrial_production", "unemployment"}
+
 @router.get("/batch")
 async def get_macro_batch(
     indicators: str = "gdp,cpi,ppi,pmi",
-    limit: int = 12
+    limit: int = Query(12, ge=1, le=100, description="每个指标返回最近N期数据，范围1-100")
 ):
     """
     批量获取宏观经济指标
@@ -694,6 +789,13 @@ async def get_macro_batch(
     """
     try:
         indicator_list = [i.strip().lower() for i in indicators.split(",")]
+        invalid = set(indicator_list) - VALID_INDICATORS
+        if invalid:
+            return error_response(
+                f"无效的指标: {', '.join(invalid)}. 有效指标: {', '.join(VALID_INDICATORS)}",
+                code=ErrorCode.VALIDATION_ERROR
+            )
+        
         result = {}
         
         if "gdp" in indicator_list:
@@ -790,4 +892,4 @@ async def get_macro_batch(
         })
     except Exception as e:
         logger.error(f"[Macro] Batch fetch error: {e}")
-        return error_response(f"批量获取失败: {str(e)}")
+        return error_response("批量获取失败，请稍后重试")

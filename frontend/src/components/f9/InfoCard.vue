@@ -1,21 +1,21 @@
 <template>
-  <div class="info-card bg-terminal-panel rounded-lg border border-theme-secondary p-3">
-    <div class="text-xs text-terminal-dim mb-1">{{ title }}</div>
+  <div class="info-card bg-terminal-card border border-terminal-border rounded-lg p-3 hover:bg-zinc-800/50 transition-colors">
+    <div class="text-xs text-gray-500 uppercase tracking-wider mb-1">{{ title }}</div>
     <div class="flex items-baseline gap-1">
-      <span class="text-lg font-bold font-mono text-terminal-primary">{{ displayValue }}</span>
-      <span v-if="unit" class="text-xs text-terminal-secondary">{{ unit }}</span>
+      <span class="text-lg font-bold font-mono text-gray-200 tabular-nums">{{ displayValue }}</span>
+      <span v-if="unit" class="text-xs text-gray-500">{{ unit }}</span>
     </div>
     <div v-if="change != null" class="mt-1 flex items-center gap-1">
       <span
-        class="text-xs font-mono"
-        :class="change >= 0 ? 'text-bullish' : 'text-bearish'"
+        class="text-xs font-mono tabular-nums"
+        :class="change >= 0 ? 'text-market-up' : 'text-market-down'"
       >
         {{ change >= 0 ? '+' : '' }}{{ change.toFixed(2) }}%
       </span>
       <span
         v-if="change !== 0"
         class="text-xs"
-        :class="change >= 0 ? 'text-bullish' : 'text-bearish'"
+        :class="change >= 0 ? 'text-market-up' : 'text-market-down'"
       >
         {{ change >= 0 ? '↑' : '↓' }}
       </span>
@@ -74,6 +74,6 @@ const displayValue = computed(() => {
 }
 
 .info-card:hover {
-  border-color: var(--color-accent, #3b82f6);
+  border-color: #3f3f46;
 }
 </style>

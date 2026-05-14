@@ -1,19 +1,28 @@
 // WebSocket connection lock utility for preventing race conditions
 
-let locked = false
+let _locked = false
+let _lockTimeout = null
 
 export function acquireLock() {
-  if (locked) {
+  if (_locked) {
     return false
   }
-  locked = true
+  _locked = true
+  _lockTimeout = setTimeout(() => {
+    console.warn('[connectionLock] Auto-releasing lock after 5s')
+    releaseLock()
+  }, 5000)
   return true
 }
 
 export function releaseLock() {
-  locked = false
+  _locked = false
+  if (_lockTimeout) {
+    clearTimeout(_lockTimeout)
+    _lockTimeout = null
+  }
 }
 
 export function isLocked() {
-  return locked
+  return _locked
 }

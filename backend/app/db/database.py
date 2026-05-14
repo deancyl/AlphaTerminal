@@ -235,6 +235,35 @@ def init_tables():
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_psym_portfolio ON position_summary(portfolio_id)")
 
+        # ── 高可用缓存持久化表（SQLite-backed cache）───────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cache_persistence (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                expires_at REAL NOT NULL,
+                hit_count INTEGER DEFAULT 0,
+                size_bytes INTEGER DEFAULT 0,
+                source TEXT DEFAULT ''
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_persistence(expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_source ON cache_persistence(source)")
+
+        # ── 基金净值历史表─────────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fund_nav_history (
+                fund_code TEXT NOT NULL,
+                nav_date TEXT NOT NULL,
+                unit_nav REAL,
+                acc_nav REAL,
+                daily_growth REAL,
+                source TEXT DEFAULT 'akshare',
+                PRIMARY KEY (fund_code, nav_date)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_code ON fund_nav_history(fund_code)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────

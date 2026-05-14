@@ -23,7 +23,7 @@ import { logger } from '../utils/logger.js'
 import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
 import { usePageVisibility } from './usePageVisibility.js'
 import { acquireLock, releaseLock } from '../utils/connectionLock.js'
-import { TIMEOUTS } from '../utils/constants.js'
+import { TIMEOUTS, POLLING_ENDPOINTS } from '../utils/constants.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -222,7 +222,7 @@ function _newConnection() {
     releaseLock()
     logger.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
-    globalWsStatus.value = 'connected' // onerror 之后必触发 onclose，不单独设置
+    // onerror 之后必触发 onclose，状态由 onclose 设置为 'disconnected'
   }
 
   _ws.onclose = (e) => {

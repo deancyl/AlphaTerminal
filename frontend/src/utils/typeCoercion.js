@@ -7,7 +7,11 @@ export function safeNumber(value, fallback = 0) {
     return fallback
   }
   const num = Number(value)
-  return Number.isNaN(num) ? fallback : num
+  // Handle NaN and Infinity
+  if (Number.isNaN(num) || !Number.isFinite(num)) {
+    return fallback
+  }
+  return num
 }
 
 export function safeInt(value, fallback = 0) {

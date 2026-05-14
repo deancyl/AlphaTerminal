@@ -21,6 +21,7 @@ ENDPOINT_LIMITS = {
     "market": EndpointLimit(requests=60, period=60),
     "news": EndpointLimit(requests=30, period=60),
     "futures": EndpointLimit(requests=60, period=60),
+    "macro": EndpointLimit(requests=30, period=60),
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -62,6 +63,8 @@ def get_endpoint_category(path: str) -> str:
         return "agent"
     if "/futures/" in path:
         return "futures"
+    if "/macro/" in path:
+        return "macro"
     if "/market/" in path or "/stocks/" in path:
         return "market"
     if "/news/" in path:

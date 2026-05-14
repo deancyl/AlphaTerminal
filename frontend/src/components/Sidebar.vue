@@ -1,114 +1,136 @@
 <template>
   <aside
-    v-if="isOpen"
-    class="flex-shrink-0 flex flex-col bg-terminal-panel border-r border-theme-secondary overflow-hidden h-full w-[220px]"
+    class="flex-shrink-0 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out group"
+    :class="isCollapsed ? 'w-14' : 'w-56'"
+    @mouseenter="isCollapsed = false"
+    @mouseleave="isCollapsed = true"
     role="navigation"
     aria-label="主导航菜单"
   >
-    <!-- 顶部：Logo + 关闭按钮 -->
-    <div class="flex items-center justify-between h-12 border-b border-theme-secondary shrink-0 px-4"
-    >
-      <span class="text-theme-primary font-bold text-sm whitespace-nowrap">AlphaTerminal</span>
-      <button
-        class="w-10 h-10 flex items-center justify-center rounded-sm text-theme-tertiary hover:text-terminal-accent hover:bg-theme-hover transition-colors"
-        @click="$emit('close')"
-        aria-label="关闭侧边栏"
-        type="button"
-      >
-        <span class="text-sm" aria-hidden="true">◀</span>
-      </button>
-    </div>
+    <div class="flex flex-col h-full bg-terminal-card border-r border-terminal-border">
+      <!-- Logo -->
+      <div class="flex items-center h-12 px-3 border-b border-terminal-border shrink-0">
+        <span class="text-agent-blue font-bold text-sm whitespace-nowrap overflow-hidden transition-opacity duration-200"
+              :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+          AlphaTerminal
+        </span>
+        <span v-if="isCollapsed" class="text-agent-blue font-bold text-lg">A</span>
+      </div>
 
-    <!-- 导航列表 -->
-    <nav class="flex-1 overflow-y-auto py-2 w-full" aria-label="市场行情">
-      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider" aria-hidden="true">📂 市场行情</div>
+      <!-- Navigation -->
+      <nav class="flex-1 overflow-y-auto overflow-x-hidden py-2" aria-label="市场行情">
+        <!-- Market Section -->
+        <div class="px-3 py-1.5 text-[10px] text-gray-500 uppercase tracking-wider whitespace-nowrap overflow-hidden transition-opacity duration-200"
+             :class="isCollapsed ? 'opacity-0 h-0 py-0' : 'opacity-100'">
+          市场行情
+        </div>
 
-      <button
-        v-for="item in mainNavItems"
-        :key="item.id"
-        class="w-full flex items-center gap-2.5 px-3 py-2.5 transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
-        :class="[
-          activeId === item.id
-            ? 'bg-theme-hover text-theme-primary border-r-2 border-theme-secondary'
-            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
-        ]"
-        @click="handleClick(item)"
-        :aria-current="activeId === item.id ? 'page' : undefined"
-        :aria-label="item.label"
-        type="button"
-      >
-        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
-        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
-      </button>
-
-      <!-- AI & Agent Tools Section -->
-      <div class="px-3 py-1.5 text-[10px] text-theme-tertiary uppercase tracking-wider mt-4" aria-hidden="true">🤖 AI & Agent 工具</div>
-
-      <button
-        v-for="item in aiNavItems"
-        :key="item.id"
-        class="w-full flex items-center gap-2.5 px-3 py-2.5 transition-all duration-200 relative group mx-2 my-0.5 rounded-sm"
-        :class="[
-          activeId === item.id
-            ? 'bg-theme-hover text-theme-primary border-r-2 border-theme-secondary'
-            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary border-r-transparent'
-        ]"
-        @click="handleClick(item)"
-        :aria-current="activeId === item.id ? 'page' : undefined"
-        :aria-label="item.label"
-        type="button"
-      >
-        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
-        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
-      </button>
-    </nav>
-
-    <!-- 主题切换区域 -->
-    <div class="px-3 py-3 border-t border-theme shrink-0 w-full" role="group" aria-label="主题切换">
-      <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2" aria-hidden="true">🎨 主题切换</div>
-      <div class="grid grid-cols-4 gap-1">
         <button
-          v-for="t in themeList"
-          :key="t.key"
-          class="flex flex-col items-center justify-center py-2 px-1 rounded-sm text-[10px] transition-all duration-200"
-          :class="currentTheme === t.key
-            ? 'bg-theme-accent/20 text-theme-accent border border-theme-accent/50'
-            : 'bg-theme-secondary/50 text-theme-secondary border border-transparent hover:bg-theme-hover hover:text-theme-primary'"
-          @click="setTheme(t.key)"
-          :aria-label="t.name"
-          :aria-pressed="currentTheme === t.key"
+          v-for="item in mainNavItems"
+          :key="item.id"
+          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
+          :class="[
+            activeId === item.id
+              ? 'text-white border-l-2 border-agent-blue bg-agent-blue/5'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border-l-2 border-transparent'
+          ]"
+          @click="handleClick(item)"
+          :aria-current="activeId === item.id ? 'page' : undefined"
+          :aria-label="item.label"
+          :title="isCollapsed ? item.label : undefined"
           type="button"
         >
-          <span class="text-base mb-0.5" aria-hidden="true">{{ t.icon }}</span>
-          <span class="scale-90">{{ t.shortName }}</span>
+          <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
+          <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+            {{ item.label }}
+          </span>
+        </button>
+
+        <!-- AI Tools Section -->
+        <div class="px-3 py-1.5 text-[10px] text-gray-500 uppercase tracking-wider mt-4 whitespace-nowrap overflow-hidden transition-opacity duration-200"
+             :class="isCollapsed ? 'opacity-0 h-0 py-0' : 'opacity-100'">
+          AI & Agent
+        </div>
+
+        <button
+          v-for="item in aiNavItems"
+          :key="item.id"
+          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
+          :class="[
+            activeId === item.id
+              ? 'text-white border-l-2 border-agent-blue bg-agent-blue/5'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border-l-2 border-transparent'
+          ]"
+          @click="handleClick(item)"
+          :aria-current="activeId === item.id ? 'page' : undefined"
+          :aria-label="item.label"
+          :title="isCollapsed ? item.label : undefined"
+          type="button"
+        >
+          <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
+          <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+            {{ item.label }}
+          </span>
+        </button>
+      </nav>
+
+      <!-- Theme Switcher -->
+      <div class="px-2 py-2 border-t border-terminal-border shrink-0 overflow-hidden">
+        <div class="text-[10px] text-gray-500 uppercase tracking-wider mb-2 px-1 whitespace-nowrap transition-opacity duration-200"
+             :class="isCollapsed ? 'opacity-0 h-0 mb-0' : 'opacity-100'">
+          主题
+        </div>
+        <div class="flex gap-1 justify-center">
+          <button
+            v-for="t in themeList"
+            :key="t.key"
+            class="flex items-center justify-center w-8 h-8 rounded-sm transition-all duration-200"
+            :class="currentTheme === t.key
+              ? 'bg-agent-blue/20 text-agent-blue border border-agent-blue/50'
+              : 'bg-transparent text-gray-500 border border-transparent hover:bg-white/5 hover:text-gray-300'"
+            @click="setTheme(t.key)"
+            :aria-label="t.name"
+            :aria-pressed="currentTheme === t.key"
+            :title="t.name"
+            type="button"
+          >
+            <span class="text-sm" aria-hidden="true">{{ t.icon }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin -->
+      <div class="border-t border-terminal-border shrink-0 px-1 py-2">
+        <button
+          v-for="item in adminNavItems"
+          :key="item.id"
+          class="w-full flex items-center gap-3 px-2 py-2 transition-all duration-200 rounded-sm"
+          :class="[
+            activeId === item.id
+              ? 'text-red-400 border-l-2 border-red-400 bg-red-400/5'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-white/5 border-l-2 border-transparent'
+          ]"
+          @click="handleClick(item)"
+          :aria-current="activeId === item.id ? 'page' : undefined"
+          :aria-label="item.label"
+          :title="isCollapsed ? item.label : undefined"
+          type="button"
+        >
+          <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
+          <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+            {{ item.label }}
+          </span>
         </button>
       </div>
-    </div>
-
-    <!-- 系统管理 -->
-    <div class="border-t border-theme shrink-0 px-3 py-2 w-full" role="group" aria-label="系统管理">
-      <button
-        v-for="item in adminNavItems"
-        :key="item.id"
-        class="w-full flex items-center gap-2.5 px-3 py-2 transition-colors border-r-2 rounded-sm relative group"
-        :class="[
-          activeId === item.id
-            ? 'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-r-2 border-[var(--color-danger)]'
-            : 'text-theme-secondary hover:bg-[var(--color-danger-bg)] hover:text-[var(--color-danger)] border-r-transparent'
-        ]"
-        @click="handleClick(item)"
-        :aria-current="activeId === item.id ? 'page' : undefined"
-        :aria-label="item.label"
-        type="button"
-      >
-        <span class="text-base" aria-hidden="true">{{ item.icon }}</span>
-        <span class="whitespace-nowrap text-xs">{{ item.label }}</span>
-      </button>
     </div>
   </aside>
 </template>
 
 <script setup>
+import { ref } from 'vue'
 import { useTheme, THEMES, THEME_NAMES, THEME_ICONS } from '../composables/useTheme.js'
 
 const props = defineProps({
@@ -118,6 +140,8 @@ const props = defineProps({
 const emit = defineEmits(['navigate', 'close'])
 
 const { theme: currentTheme, setTheme } = useTheme()
+
+const isCollapsed = ref(true)
 
 const mainNavItems = [
   { id: 'stock',     label: '股票行情',   icon: '📊' },
@@ -149,6 +173,5 @@ const themeList = [
 
 function handleClick(item) {
   emit('navigate', item.id)
-  emit('close')
 }
 </script>
