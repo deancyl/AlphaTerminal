@@ -11,9 +11,10 @@ import logging
 import sqlite3
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.utils.response import success_response
+from app.middleware import require_api_key
 from app.db.database import _get_conn, _lock, get_conn
 from app.services.trading import (
     execute_buy, execute_sell, get_open_lots,
@@ -36,7 +37,7 @@ router = APIRouter(tags=["portfolio"])
 # ── Buy (BUY) - Add new lot ────────────────────────────────────────────
 
 @router.post("/{portfolio_id}/lots/buy")
-async def buy_lot(portfolio_id: int, body: BuyIn):
+async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_key)):
     """
     买入时新增一个批次（lot）。
     同一标的同一日期可有多批次，但 avg_cost 独立计算。
@@ -72,7 +73,7 @@ async def buy_lot(portfolio_id: int, body: BuyIn):
 # ── Sell (SELL) - FIFO close position ─────────────────────────────────────────
 
 @router.post("/{portfolio_id}/lots/sell")
-async def sell_lot(portfolio_id: int, body: SellIn):
+async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_api_key)):
     """
     FIFO 平仓算法：
       1. 按 buy_date 升序匹配 open 批次
@@ -442,6 +443,7 @@ async def refresh_market_value(
     portfolio_id: int,
     symbol: str = Query(..., description="标的代码"),
     current_price: float = Query(..., description="当前市价"),
+    _: None = Depends(require_api_key)
 ):
     """
     批量刷新持仓聚合表的 market_value 和 unrealized_pnl。

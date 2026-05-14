@@ -76,8 +76,13 @@ const spread = computed(() => {
 
 function buildOption() {
   const data = spreadData.value
+  if (!data || data.length === 0) return null
+  
   const dates = data.map(d => d.date)
   const values = data.map(d => d.spread)
+  
+  // Guard against empty arrays
+  if (values.length === 0) return null
 
   const minV = Math.min(...values)
   const maxV = Math.max(...values)
@@ -150,8 +155,10 @@ async function initChart() {
     chartInst.value.dispose()
     chartInst.value = null
   }
+  const option = buildOption()
+  if (!option) return // Don't render if no data
   chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  chartInst.value.setOption(buildOption())
+  chartInst.value.setOption(option)
 }
 
 onMounted(() => {

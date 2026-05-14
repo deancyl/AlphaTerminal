@@ -19,8 +19,9 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   yieldCurve: { type: Object, default: null },
@@ -33,13 +34,14 @@ const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootM
 const chartRef = ref(null)
 const hasData  = ref(false)
 let chartInstance = null
+let resizeObserver = null
 
 const TENOR_ORDER  = ['3月','6月','1年','3年','5年','7年','10年','30年']
 const TENOR_LABELS = ['3M','6M','1Y','3Y','5Y','7Y','10Y','30Y']
 
 function buildChart() {
   if (!chartRef.value || !window.echarts) return
-  if (chartInstance) { chartInstance.dispose(); chartInstance = null }
+  if (chartInstance) { safeDispose(chartInstance); chartInstance = null }
 
   const tenors = props.yieldCurve || {}
   const xData = []
@@ -133,35 +135,53 @@ function buildChart() {
     series,
   }
   chartInstance.setOption(option, true)
+  
+  // Setup resize observer after chart is created
+  setupResizeObserver()
+}
+
+function setupResizeObserver() {
+  if (!chartRef.value || !window.ResizeObserver) return
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  
+  resizeObserver = new ResizeObserver(() => {
+    if (chartInstance && !chartInstance.isDisposed?.()) {
+      chartInstance.resize()
+    }
+  })
+  resizeObserver.observe(chartRef.value)
 }
 
 async function initChart() {
   await nextTick()
   if (!chartRef.value || !window.echarts) return
   if (chartInstance) {
-    chartInstance.clear()
-    chartInstance.dispose()
+    safeDispose(chartInstance)
     chartInstance = null
   }
   buildChart()
 }
 
-let resizeObserver = null
 onMounted(() => {
-  initChart()
-  if (chartRef.value) {
-    resizeObserver = createResizeObserver(chartInstance)
-    resizeObserver.observe(chartRef.value)
+  if (isVisible.value) {
+    initChart()
   }
 })
+
 onUnmounted(() => {
-  resizeObserver?.disconnect()
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (chartInstance) {
-    chartInstance.clear()
-    chartInstance.dispose()
+    safeDispose(chartInstance)
     chartInstance = null
   }
 })
+
 watch([() => props.yieldCurve, () => props.curve1m, () => props.curve1y, isVisible], () => { 
   if (isVisible.value) initChart() 
 }, { deep: true })

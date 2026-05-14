@@ -12,9 +12,10 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from typing import Any, Dict, Optional
 from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.input_validation import validate_stock_symbol, validate_pagination
 from app.services.circuit_breaker import CircuitBreakerOpen
 from app.services.data_fetcher import akshare_breaker
 from app.config.timeout import AKSHARE_TIMEOUT
@@ -117,6 +118,10 @@ async def get_shareholder_data(symbol: str):
     - 股本变动记录
     - 流通股东变化
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"shareholder_{symbol}"
     cached = get_cached(cache_key)
@@ -258,6 +263,10 @@ async def get_margin_data(symbol: str):
     获取个股融资融券数据（最近30天）
     数据来源: akshare stock_margin_detail_sse / stock_margin_detail_szse
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"margin_{symbol}"
     cached = get_cached(cache_key)
@@ -378,6 +387,10 @@ async def get_financial_data(symbol: str):
     获取股票财务指标数据
     数据来源: akshare.stock_financial_analysis_indicator
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"financial_{symbol}"
 
@@ -487,6 +500,10 @@ async def get_profit_forecast(symbol: str):
     盈利预测数据
     数据来源: akshare stock_profit_forecast_ths
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"forecast_{symbol}"
     
@@ -570,6 +587,10 @@ async def get_institution_holdings(symbol: str):
             }
         }
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"institution_{symbol}"
     cached = get_cached(cache_key)
@@ -727,6 +748,10 @@ async def get_peer_comparison(symbol: str):
             }
         }
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"peers_{symbol}"
     cached = get_cached(cache_key)
@@ -982,6 +1007,15 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     获取公司公告数据
     数据来源: akshare stock_individual_notice_report
     """
+    valid, normalized, error = validate_stock_symbol(symbol)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    symbol = normalized
+    
+    valid, page, page_size, error = validate_pagination(page, page_size)
+    if not valid:
+        return error_response(ErrorCode.BAD_REQUEST, error)
+    
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"announcements_{symbol}_{page}"
     cached = get_cached(cache_key)

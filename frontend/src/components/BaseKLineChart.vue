@@ -10,6 +10,7 @@ import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
 import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
+import { waitForDimensions } from '../utils/waitForDimensions.js'
 
 
 
@@ -323,19 +324,16 @@ onMounted(async () => {
 
   await nextTick()
 
-  // Wait for container dimensions with timeout
-  const startTime = performance.now()
-  while (chartEl.value && (chartEl.value.clientWidth === 0 || chartEl.value.clientHeight === 0)) {
-    if (performance.now() - startTime > 1000) {
-      console.error('[BaseKLineChart] Container has zero dimensions after 1s')
-      return
-    }
-    await new Promise(r => requestAnimationFrame(r))
+  // Wait for container dimensions with timeout recovery
+  const dimResult = await waitForDimensions(chartEl.value, 1000)
+  if (!dimResult.success) {
+    logger.warn('[BaseKLineChart] Container dimensions timeout, aborting init')
+    return
   }
 
   try {
-    const width = chartEl.value.clientWidth
-    const height = chartEl.value.clientHeight
+    const width = dimResult.width
+    const height = dimResult.height
     logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
 
     chart = markRaw(await initChart(chartEl.value, 'dark'))
@@ -388,8 +386,28 @@ watch(() => props.tick, (t) => {
 defineExpose({ 
   getChartInstance: () => chart,
   exportChart: async () => {
-    if (!chartEl.value) return
+    if (!chartEl.value || !chart) return
     try {
+      // Wait for chart to finish rendering with timeout fallback
+      await new Promise(resolve => {
+        const timeout = setTimeout(() => {
+          chart.off('finished')
+          resolve()
+        }, 200) // Timeout fallback in case 'finished' doesn't fire
+        
+        chart.on('finished', () => {
+          clearTimeout(timeout)
+          chart.off('finished')
+          resolve()
+        })
+        
+        // If chart is already rendered, resolve immediately
+        if (chart.isDisposed()) {
+          clearTimeout(timeout)
+          resolve()
+        }
+      })
+      
       const canvas = await html2canvas(chartEl.value, {
         backgroundColor: '#0f172a',
         scale: 2,

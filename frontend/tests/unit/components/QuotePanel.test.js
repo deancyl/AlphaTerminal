@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { ref } from 'vue'
-import QuotePanel from '../QuotePanel.vue'
+import QuotePanel from '@/components/QuotePanel.vue'
 
 // Mock useMarketStream composable
-vi.mock('../composables/useMarketStream.js', () => ({
+vi.mock('@/composables/useMarketStream.js', () => ({
   useMarketStream: () => ({
     tick: ref(null),
     subscribe: vi.fn(),
@@ -13,7 +13,7 @@ vi.mock('../composables/useMarketStream.js', () => ({
 }))
 
 // Mock useTheme composable
-vi.mock('../composables/useTheme.js', () => ({
+vi.mock('@/composables/useTheme.js', () => ({
   useTheme: () => ({
     getChartColors: () => ({
       bullish: '#ef4444',

@@ -20,11 +20,20 @@ from .rate_limit import (
     setup_rate_limiting,
 )
 
+from .api_key_auth import (
+    require_api_key,
+    optional_api_key,
+    APIKeyAuth,
+)
+
 __all__ = [
     "verify_agent_token",
     "require_scope",
     "audit_middleware",
     "get_current_token",
+    "require_api_key",
+    "optional_api_key",
+    "APIKeyAuth",
     "RateLimitMiddleware",
     "RateLimitConfig",
     "InMemoryRateLimiter",

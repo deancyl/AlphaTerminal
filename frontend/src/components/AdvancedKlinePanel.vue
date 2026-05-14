@@ -451,8 +451,29 @@ function onDataZoom({ start, end }) {
 // ── 导出 PNG ────────────────────────────────────────────────────
 async function exportPNG() {
   const inst = chartInstance.value
-  if (!inst) return
+  if (!inst || !chartContainerRef.value) return
+  
   try {
+    // Wait for chart to finish rendering with timeout fallback
+    await new Promise(resolve => {
+      const timeout = setTimeout(() => {
+        inst.off('finished')
+        resolve()
+      }, 200) // Timeout fallback in case 'finished' doesn't fire
+      
+      inst.on('finished', () => {
+        clearTimeout(timeout)
+        inst.off('finished')
+        resolve()
+      })
+      
+      // If chart is disposed, resolve immediately
+      if (inst.isDisposed()) {
+        clearTimeout(timeout)
+        resolve()
+      }
+    })
+    
     const chartUrl = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#0f172a' })
     const container = chartContainerRef.value
     const w = container.clientWidth  * 2
@@ -460,18 +481,36 @@ async function exportPNG() {
     const canvas = document.createElement('canvas')
     canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')
+    
+    // Draw chart image
     const chartImg = new Image()
-    await new Promise((resolve, reject) => { chartImg.onload = resolve; chartImg.onerror = reject; chartImg.src = chartUrl })
+    await new Promise((resolve, reject) => { 
+      chartImg.onload = resolve; 
+      chartImg.onerror = reject; 
+      chartImg.src = chartUrl 
+    })
     ctx.drawImage(chartImg, 0, 0, w, h)
+    
+    // Merge DrawingCanvas overlay if visible
     if (drawingVisible.value && drawingCanvasRef.value?.$el) {
       const dc = drawingCanvasRef.value.$el.querySelector('canvas')
-      if (dc) ctx.drawImage(dc, 0, 0, w, h)
+      if (dc) {
+        // Ensure dimensions match
+        const dcW = dc.width
+        const dcH = dc.height
+        // Scale drawing canvas to match chart dimensions
+        ctx.drawImage(dc, 0, 0, dcW, dcH, 0, 0, w, h)
+      }
     }
+    
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
     a.download = `${symbolName.value}_${period.value}_${Date.now()}.png`
     a.click()
-  } catch (e) { logger.error('PNG导出失败:', e) }
+  } catch (e) { 
+    logger.error('PNG导出失败:', e)
+    alert('图表导出失败: ' + e.message)
+  }
 }
 
 // ── 区间统计 ────────────────────────────────────────────────────

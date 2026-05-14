@@ -5,8 +5,9 @@ import logging
 import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException
+from app.middleware import require_api_key
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,18 @@ class BacktestRequest(BaseModel):
     symbol: str
     start_date: str
     end_date: str
-    initial_capital: float = 100000.0
-    commission: float = 0.001
-    slippage: float = 0.001
+    initial_capital: float = Field(default=100000.0, gt=0)
+    commission: float = Field(default=0.001, ge=0, le=0.1)
+    slippage: float = Field(default=0.001, ge=0, le=0.1)
+
+    @field_validator('start_date', 'end_date')
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+            return v
+        except ValueError:
+            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
 
 
 class OptimizeRequest(BaseModel):
@@ -30,19 +40,28 @@ class OptimizeRequest(BaseModel):
     symbol: str
     start_date: str
     end_date: str
-    initial_capital: float = 100000.0
+    initial_capital: float = Field(default=100000.0, gt=0)
     param_grid: Dict[str, List[Any]]
     metric: str = "sharpe_ratio"
 
+    @field_validator('start_date', 'end_date')
+    @classmethod
+    def validate_date_format(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+            return v
+        except ValueError:
+            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
+
 
 class StrategyCreate(BaseModel):
-    name: str
-    description: str = ""
-    code: str
-    market: str = "AStock"
+    name: str = Field(..., min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
+    code: str = Field(..., max_length=50000)
+    market: str = Field(default="AStock", pattern="^(AStock|HKStock|USStock|Crypto|Forex|Futures)$")
     parameters: Dict[str, Any] = {}
-    stop_loss_pct: float = 2.0
-    take_profit_pct: float = 6.0
+    stop_loss_pct: float = Field(default=2.0, ge=0, le=100)
+    take_profit_pct: float = Field(default=6.0, ge=0, le=100)
 
 
 class StrategyUpdate(BaseModel):
@@ -189,7 +208,7 @@ def _simulate_trades(df, signals, initial_capital=100000.0, commission=0.001):
 
 
 @router.post("/backtest")
-async def run_backtest(request: BacktestRequest):
+async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_key)):
     """运行策略回测"""
     try:
         from app.services.strategy import (
@@ -251,7 +270,7 @@ async def run_backtest(request: BacktestRequest):
 
 
 @router.post("/optimize")
-async def optimize_strategy(request: OptimizeRequest):
+async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_api_key)):
     """参数优化"""
     try:
         from app.services.strategy import (
@@ -354,7 +373,7 @@ async def list_strategies():
 
 
 @router.post("/strategies")
-async def create_strategy(request: StrategyCreate):
+async def create_strategy(request: StrategyCreate, _: None = Depends(require_api_key)):
     """创建新策略"""
     from app.services.strategy import StrategyValidator
     
@@ -417,7 +436,7 @@ async def get_strategy(strategy_id: str):
 
 
 @router.put("/strategies/{strategy_id}")
-async def update_strategy(strategy_id: str, request: StrategyUpdate):
+async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = Depends(require_api_key)):
     """更新策略"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import update_strategy as db_update, get_strategy as db_get
@@ -482,7 +501,7 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate):
 
 
 @router.delete("/strategies/{strategy_id}")
-async def delete_strategy(strategy_id: str):
+async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
     """删除策略"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import delete_strategy as db_delete
@@ -501,7 +520,7 @@ async def delete_strategy(strategy_id: str):
 
 
 @router.post("/strategies/{strategy_id}/backtest")
-async def backtest_saved_strategy(strategy_id: str, request: BacktestRequest):
+async def backtest_saved_strategy(strategy_id: str, request: BacktestRequest, _: None = Depends(require_api_key)):
     """运行已保存策略的回测"""
     if USE_DB_PERSISTENCE:
         from app.db.strategy_db import get_strategy as db_get

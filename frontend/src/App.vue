@@ -211,6 +211,8 @@
           <OptionsAnalysis v-else-if="currentView === 'options'" />
           <!-- 全球指数 -->
           <GlobalIndex v-else-if="currentView === 'global-index'" />
+          <!-- 研报平台 -->
+          <ResearchDashboard v-else-if="currentView === 'research'" />
           <!-- Walk-Forward Analysis -->
           <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
           <!-- F9 深度资料 -->
@@ -341,6 +343,7 @@ const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsA
 const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
+const ResearchDashboard = defineAsyncComponent(() => import('./components/ResearchDashboard.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'

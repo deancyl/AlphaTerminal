@@ -86,7 +86,7 @@ DATA_SOURCES = {
         "proxy": False,
         "timeout": 30,
         "weight": 20,
-        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY") or "demo",
+        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY", ""),
         "has_pepb": True,
         "has_realtime": True,
     },
@@ -323,7 +323,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         logger.warning(f"[AlphaVantage] Circuit breaker OPEN, skipping {symbol}")
         return None
     
-    api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "demo")
+    api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "")
+    if not api_key:
+        logger.warning(f"[AlphaVantage] No API key configured, skipping {symbol}")
+        return None
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
 
     # 获取代理配置

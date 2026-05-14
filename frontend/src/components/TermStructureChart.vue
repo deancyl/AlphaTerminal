@@ -11,6 +11,12 @@
         :class="curveType === 'Contango' ? 'text-bearish' : 'text-bullish'"
       >{{ curveType }}</span>
       <span class="flex-1" />
+      <button 
+        @click="$emit('refresh')"
+        class="text-[10px] px-1.5 py-0.5 rounded-sm border border-theme-secondary hover:border-terminal-accent"
+      >
+        ↻
+      </button>
       <span class="text-[10px] text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
 
@@ -47,6 +53,8 @@ const props = defineProps({
   isLoading: { type: Boolean, default: false },
   hasError:  { type: Boolean, default: false },
 })
+
+const emit = defineEmits(['refresh'])
 
 const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootMargin: '50px' })
 const chartRef  = ref(null)

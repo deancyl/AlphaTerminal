@@ -10,6 +10,7 @@ Features:
   - Comprehensive debug logging (10 cycles)
 """
 import logging
+from app.utils.safe_math import safe_divide
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, List
 from datetime import datetime
@@ -214,7 +215,12 @@ class RiskManager:
         logger.debug(f"  risk_amount: {risk_amount:.2f}")
         logger.debug(f"  risk_per_share: {risk_per_share:.2f}")
         
-        shares = risk_amount / risk_per_share
+        shares = safe_divide(risk_amount, risk_per_share, 0)
+        
+        # Validate risk_per_share is positive
+        if risk_per_share <= 0:
+            logger.warning(f"  [WARNING] Invalid risk_per_share: {risk_per_share:.2f} (entry={entry_price}, stop={stop_price})")
+            return 0
         
         # Apply maximum position size constraint
         max_position_value = capital * (self.config.max_position_size_pct / 100)

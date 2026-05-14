@@ -10,6 +10,7 @@ import sqlite3
 import logging
 from datetime import datetime
 from typing import Optional, NamedTuple
+from app.utils.safe_math import safe_divide, safe_percent, safe_round
 
 logger = logging.getLogger(__name__)
 
@@ -304,7 +305,7 @@ def calc_unrealized_pnl(portfolio_id: int, symbol: str, current_price: float) ->
     total_shares = sum(l.shares for l in lots)
     # 加权均价
     total_cost   = sum(l.shares * l.avg_cost for l in lots)
-    avg_cost     = total_cost / total_shares if total_shares else 0
+    avg_cost     = safe_divide(total_cost, total_shares, 0.0)
     market_value = total_shares * current_price
     unrealized  = market_value - total_cost
 
@@ -316,7 +317,7 @@ def calc_unrealized_pnl(portfolio_id: int, symbol: str, current_price: float) ->
         "market_value":   round(market_value, 2),
         "total_cost":      round(total_cost, 2),
         "unrealized_pnl":  round(unrealized, 2),
-        "unrealized_pnl_pct": round(unrealized / total_cost * 100, 2) if total_cost else 0,
+        "unrealized_pnl_pct": safe_round(safe_percent(unrealized, total_cost, 0.0), 2),
         "open_lots":       len(lots),
     }
 
@@ -352,7 +353,7 @@ def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
         else:
             total_shares = sum(r[0] for r in rows)
             total_cost   = sum(r[0] * r[1] for r in rows)
-            avg_cost     = total_cost / total_shares if total_shares else 0.0
+            avg_cost     = safe_divide(total_cost, total_shares, 0.0)
             now_str      = datetime.now().isoformat()
 
             conn.execute(

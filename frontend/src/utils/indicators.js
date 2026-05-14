@@ -4,6 +4,8 @@
  * 所有指标计算均为纯函数，输入 OHLCV 数组，输出指标数组
  */
 
+import { safeDivide } from './safeMath.js'
+
 export const UP = '#ef232a'
 export const DOWN = '#14b143'
 
@@ -75,7 +77,7 @@ export function calcKDJ(closes, highs, lows, n = 9) {
       if (highs[j] > rh) rh = highs[j]
       if (lows[j] < rl) rl = lows[j]
     }
-    const rsv = rh === rl ? 50 : (closes[i] - rl) / (rh - rl) * 100
+    const rsv = safeDivide(closes[i] - rl, rh - rl, 0.5) * 100
     const pk = k[i - 1] != null && k[i - 1] !== '-' ? k[i - 1] : 50
     const pd = d[i - 1] != null && d[i - 1] !== '-' ? d[i - 1] : 50
     const nk = +(2/3 * pk + 1/3 * rsv).toFixed(2)
@@ -117,8 +119,7 @@ export function calcWR(closes, highs, lows, n = 14) {
     if (i < n - 1) return null
     const rh = Math.max(...highs.slice(i - n + 1, i + 1))
     const rl = Math.min(...lows.slice(i - n + 1, i + 1))
-    if (rh === rl) return 0
-    return +((rh - closes[i]) / (rh - rl) * -100).toFixed(2)
+    return +(safeDivide(rh - closes[i], rh - rl, 0) * -100).toFixed(2)
   })
 }
 
@@ -141,8 +142,8 @@ export function calcBIAS(closes, period = 20) {
   return closes.map((_, i) => {
     if (i < period - 1) return null
     const slice = closes.slice(i - period + 1, i + 1)
-    const ma = slice.reduce((a, b) => a + b, 0) / period
-    return +((closes[i] - ma) / ma * 100).toFixed(3)
+    const ma = safeDivide(slice.reduce((a, b) => a + b, 0), period, closes[i])
+    return +(safeDivide(closes[i] - ma, ma, 0) * 100).toFixed(3)
   })
 }
 
@@ -223,7 +224,7 @@ export function calcDMI(highs, lows, closes, period = 14) {
     mdi.push(mdiVal)
     
     // 计算DX
-    const dxVal = Math.abs(pdiVal - mdiVal) / (pdiVal + mdiVal) * 100
+    const dxVal = safeDivide(Math.abs(pdiVal - mdiVal), pdiVal + mdiVal, 0) * 100
     dx.push(dxVal)
   }
   

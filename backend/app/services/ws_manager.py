@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 PING_INTERVAL = 25  # 发送 ping 间隔（秒）
 PONG_TIMEOUT = 10     # 等待 pong 响应超时（秒）
 CLEANUP_INTERVAL = 30  # 死连接清理间隔（秒）
+LOCK_TIMEOUT = 5.0  # Async lock timeout (seconds)
 
 
 class WSConnection:

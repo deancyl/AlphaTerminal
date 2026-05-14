@@ -119,6 +119,18 @@ class BuyIn(BaseModel):
     buy_date: Optional[str] = Field(default=None, max_length=10)
     order_id: Optional[str] = Field(default=None, max_length=50)
 
+    @field_validator('buy_date')
+    @classmethod
+    def validate_buy_date(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        from datetime import datetime
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+            return v
+        except ValueError:
+            raise ValueError(f'Invalid date format: {v}, expected YYYY-MM-DD')
+
 
 class SellIn(BaseModel):
     """Request model for selling a lot (closing position via FIFO)."""

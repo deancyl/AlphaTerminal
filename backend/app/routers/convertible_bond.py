@@ -112,7 +112,8 @@ _MOCK_COV_COMPARE = [
 ]
 
 
-def _fetch_cov_list():
+async def _fetch_cov_list_async():
+    """Async version with cross-platform timeout using asyncio.wait_for"""
     global _COV_LIST_CACHE, _COV_LIST_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -120,20 +121,11 @@ def _fetch_cov_list():
         import warnings
         warnings.filterwarnings("ignore")
         
-        import signal
-        
-        def timeout_handler(signum, frame):
-            raise TimeoutError("akshare call timed out")
-        
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(int(BOND_REFRESH_TIMEOUT))
-        
-        try:
-            df = ak.bond_zh_cov()
-            signal.alarm(0)
-        except TimeoutError:
-            signal.alarm(0)
-            raise
+        # Use asyncio.wait_for for cross-platform timeout
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_zh_cov),
+            timeout=float(BOND_REFRESH_TIMEOUT)
+        )
         
         if df is not None and not df.empty:
             bonds = []
@@ -168,7 +160,7 @@ def _fetch_cov_list():
                 _COV_LIST_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] list fetched, total: {len(bonds)}")
             return
-    except TimeoutError:
+    except asyncio.TimeoutError:
         logger.warning(f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}")
@@ -184,7 +176,8 @@ def _fetch_cov_list():
     logger.info("[ConvertibleBond] Using mock list fallback")
 
 
-def _fetch_cov_spot():
+async def _fetch_cov_spot_async():
+    """Async version with cross-platform timeout using asyncio.wait_for"""
     global _COV_SPOT_CACHE, _COV_SPOT_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -192,20 +185,10 @@ def _fetch_cov_spot():
         import warnings
         warnings.filterwarnings("ignore")
         
-        import signal
-        
-        def timeout_handler(signum, frame):
-            raise TimeoutError("akshare call timed out")
-        
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(int(BOND_REFRESH_TIMEOUT))
-        
-        try:
-            df = ak.bond_zh_hs_cov_spot()
-            signal.alarm(0)
-        except TimeoutError:
-            signal.alarm(0)
-            raise
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_zh_hs_cov_spot),
+            timeout=float(BOND_REFRESH_TIMEOUT)
+        )
         
         if df is not None and not df.empty:
             spots = []
@@ -237,7 +220,7 @@ def _fetch_cov_spot():
                 _COV_SPOT_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] spot fetched, total: {len(spots)}")
             return
-    except TimeoutError:
+    except asyncio.TimeoutError:
         logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}")
@@ -253,7 +236,8 @@ def _fetch_cov_spot():
     logger.info("[ConvertibleBond] Using mock spot fallback")
 
 
-def _fetch_cov_compare():
+async def _fetch_cov_compare_async():
+    """Async version with cross-platform timeout using asyncio.wait_for"""
     global _COV_COMPARE_CACHE, _COV_COMPARE_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
@@ -261,20 +245,10 @@ def _fetch_cov_compare():
         import warnings
         warnings.filterwarnings("ignore")
         
-        import signal
-        
-        def timeout_handler(signum, frame):
-            raise TimeoutError("akshare call timed out")
-        
-        signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(int(BOND_REFRESH_TIMEOUT))
-        
-        try:
-            df = ak.bond_cov_comparison()
-            signal.alarm(0)
-        except TimeoutError:
-            signal.alarm(0)
-            raise
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_cov_comparison),
+            timeout=float(BOND_REFRESH_TIMEOUT)
+        )
         
         if df is not None and not df.empty:
             compares = []
@@ -308,7 +282,7 @@ def _fetch_cov_compare():
                 _COV_COMPARE_CACHE_TIME = time.time()
             logger.info(f"[ConvertibleBond] compare fetched, total: {len(compares)}")
             return
-    except TimeoutError:
+    except asyncio.TimeoutError:
         logger.warning(f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s")
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}")
@@ -348,7 +322,7 @@ def _get_cov_list_cache() -> dict:
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
             try:
-                _fetch_cov_list()
+                asyncio.run(_fetch_cov_list_async())
             finally:
                 _REFRESH_SEM.release()
         t = threading.Thread(target=bg, daemon=True, name="cov-list-refresh")
@@ -366,7 +340,7 @@ def _get_cov_spot_cache() -> dict:
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
             try:
-                _fetch_cov_spot()
+                asyncio.run(_fetch_cov_spot_async())
             finally:
                 _REFRESH_SEM.release()
         t = threading.Thread(target=bg, daemon=True, name="cov-spot-refresh")
@@ -384,7 +358,7 @@ def _get_cov_compare_cache() -> dict:
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
             try:
-                _fetch_cov_compare()
+                asyncio.run(_fetch_cov_compare_async())
             finally:
                 _REFRESH_SEM.release()
         t = threading.Thread(target=bg, daemon=True, name="cov-compare-refresh")

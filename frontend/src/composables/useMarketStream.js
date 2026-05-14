@@ -64,12 +64,31 @@ const globalLastConnectedAt = ref(null)
 const globalConnectionAttempts = ref(0)
 const globalLatency = ref(null) // WebSocket latency in ms
 
+// HTTP polling fallback state
+const globalPollingStatus = ref(false)
+const POLLING_INTERVAL = 5000  // 5 seconds
+let _pollingTimer = null
+
+// ── Race Condition Prevention (Wave 2 Fix) ────────────────────────────────
+// Data version counter: Each update increments this, allowing us to detect stale updates
+let _dataVersion = 0
+// WS priority: WS updates always have higher priority than HTTP polling
+const WS_PRIORITY = 100
+const HTTP_PRIORITY = 1
+// Status transition debounce: Prevent rapid status changes causing flicker
+let _statusDebounceTimer = null
+const STATUS_DEBOUNCE_MS = 500
+
 // 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
 const subscribedSymRefCount = new Map()
 
 // 数据历史限制（防止内存泄漏），按 symbol 分开统计
 const MAX_TICK_HISTORY = 1000
 const tickHistory = {}
+
+const TICK_THROTTLE_MS = 50
+let _lastTickTime = 0
+let _pendingTick = null
 
 // ── 内部函数 ──────────────────────────────────────────────────
 
@@ -82,6 +101,16 @@ function _notifyTick() {
     _tickDirty = false
     triggerRef(globalTicks)
   }
+}
+
+function _setStatusDebounced(newStatus) {
+  if (_statusDebounceTimer) {
+    clearTimeout(_statusDebounceTimer)
+  }
+  _statusDebounceTimer = setTimeout(() => {
+    globalWsStatus.value = newStatus
+    _statusDebounceTimer = null
+  }, STATUS_DEBOUNCE_MS)
 }
 
 function _newConnection() {
@@ -117,7 +146,9 @@ function _newConnection() {
     _retryCount = 0
     _lastMessageTime = Date.now()
     _startHealthCheck()
-    // 重连时重新订阅所有仍有引用的 symbol
+    if (globalPollingStatus.value) {
+      _stopPolling()
+    }
     const activeSyms = [...subscribedSymRefCount.keys()]
     if (activeSyms.length) _doSubscribe(activeSyms)
   }
@@ -146,18 +177,32 @@ function _newConnection() {
       const sym = data.symbol
       if (!sym) return
 
+      _dataVersion++
+      const currentVersion = _dataVersion
+
       if (!tickHistory[sym]) tickHistory[sym] = []
-      tickHistory[sym].push(data)
+      tickHistory[sym].push({ ...data, _version: currentVersion, _priority: WS_PRIORITY })
       if (tickHistory[sym].length > MAX_TICK_HISTORY) {
         tickHistory[sym].shift()
       }
 
       globalTicks.value = {
         ...globalTicks.value,
-        [sym]: data,
+        [sym]: { ...data, _version: currentVersion, _priority: WS_PRIORITY },
       }
       _tickDirty = true
-      queueMicrotask(_notifyTick)
+
+      const now = Date.now()
+      if (now - _lastTickTime >= TICK_THROTTLE_MS) {
+        _lastTickTime = now
+        queueMicrotask(_notifyTick)
+      } else if (!_pendingTick) {
+        _pendingTick = setTimeout(() => {
+          _pendingTick = null
+          _lastTickTime = Date.now()
+          queueMicrotask(_notifyTick)
+        }, TICK_THROTTLE_MS - (now - _lastTickTime))
+      }
 
       if (data.price) {
         const triggered = checkPriceAlerts(sym, data.price)
@@ -185,7 +230,6 @@ function _newConnection() {
     logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
     const wasConnected = globalWsStatus.value === 'connected'
 
-    // ── 1006 专项诊断：HTTPS 反向代理 WebSocket 握手失败 ─────────────────────────
     if (e.code === 1006 && location.protocol === 'https:') {
       console.error(
         '%c[MarketStream] ⚠️ 1006 异常关闭（疑似反向代理拦截 WS 握手）',
@@ -202,8 +246,6 @@ function _newConnection() {
     _connecting = false
     _stopHealthCheck()
 
-    // 1000 = 正常关闭（disconnect 调用），不重连
-    // 1006 = abnormal closure，需要重连
     if (e.code !== 1000 && subscribedSymRefCount.size > 0) {
       if (_retryCount < _MAX_RETRIES) {
         _scheduleRetry()
@@ -211,6 +253,10 @@ function _newConnection() {
         globalWsStatus.value = 'failed'
         globalError.value = '连接失败次数过多，请刷新页面重试'
         logger.error('[MarketStream] 达到最大重试次数，停止重连')
+      }
+      if (_retryCount >= 3 && !globalPollingStatus.value) {
+        logger.warn('[MarketStream] Starting HTTP polling fallback')
+        _startPolling([...subscribedSymRefCount.keys()])
       }
     }
   }
@@ -339,6 +385,50 @@ function _stopHealthCheck() {
   }
 }
 
+function _startPolling(symbols) {
+  if (globalPollingStatus.value) return
+  globalPollingStatus.value = true
+  globalWsStatus.value = 'polling'
+
+  _pollingTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/v1/futures/commodities')
+      const data = await res.json()
+      if (data.data?.commodities) {
+        _dataVersion++
+        const currentVersion = _dataVersion
+        for (const item of data.data.commodities) {
+          const existing = globalTicks.value[item.symbol]
+          if (existing && existing._priority >= WS_PRIORITY) {
+            continue
+          }
+          globalTicks.value = {
+            ...globalTicks.value,
+            [item.symbol]: {
+              symbol: item.symbol,
+              price: item.price,
+              change_pct: item.change_pct,
+              _version: currentVersion,
+              _priority: HTTP_PRIORITY,
+            }
+          }
+        }
+        triggerRef(globalTicks)
+      }
+    } catch (e) {
+      logger.warn('[Polling] failed:', e)
+    }
+  }, POLLING_INTERVAL)
+}
+
+function _stopPolling() {
+  if (_pollingTimer) {
+    clearInterval(_pollingTimer)
+    _pollingTimer = null
+  }
+  globalPollingStatus.value = false
+}
+
 // ── 导出给组件的 hook ──────────────────────────────────────────
 
 export function useMarketStream(initialSymbol = '') {
@@ -415,10 +505,14 @@ export function useMarketStream(initialSymbol = '') {
     _connectedCount.value = Math.max(0, _connectedCount.value - 1)
     if (_connectedCount.value <= 0) {
       if (_disconnectTimer) clearTimeout(_disconnectTimer)
+      if (_pendingTick) clearTimeout(_pendingTick)
+      _pendingTick = null
       _disconnectTimer = setTimeout(() => {
         if (_connectedCount.value <= 0 && _ws) {
-          _stopHeartbeat()   // ⚡ 断开时清理心跳
+          _stopHeartbeat()
           clearTimeout(_retryTimer)
+          if (_pendingTick) clearTimeout(_pendingTick)
+          _pendingTick = null
           _ws.onclose = null
           _ws.onerror = null
           _ws.close(1000, 'all_disconnected')
@@ -429,6 +523,7 @@ export function useMarketStream(initialSymbol = '') {
           globalTicks.value = {}
           _retryCount = 0
           _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
+          _stopPolling()
         }
       }, 200)
     }
@@ -490,6 +585,7 @@ export function useMarketStream(initialSymbol = '') {
     lastConnectedAt: globalLastConnectedAt,
     connectionAttempts: globalConnectionAttempts,
     latency: globalLatency,
+    isPolling: globalPollingStatus,
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
@@ -499,6 +595,7 @@ export function useMarketStream(initialSymbol = '') {
       lastConnectedAt: globalLastConnectedAt.value,
       connectionAttempts: globalConnectionAttempts.value,
       latency: globalLatency.value,
+      isPolling: globalPollingStatus.value,
     }),
   }
 }

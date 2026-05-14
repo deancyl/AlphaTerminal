@@ -159,6 +159,9 @@ function updateCrosshair(x, y) {
   if (!props.chartInstance) return
   
   try {
+    // Check if chart is disposed before any operations
+    if (props.chartInstance.isDisposed?.()) return
+    
     // 转换为数据坐标
     const [dataIndex, price] = props.chartInstance.convertFromPixel({ gridIndex: 0 }, [x, y])
     
@@ -226,7 +229,11 @@ function updateCrosshair(x, y) {
     
     drawCrosshair()
   } catch (e) {
-    logger.error('Crosshair update error:', e)
+    // Silently handle disposed errors, log others as warnings
+    if (!e.message?.includes('disposed')) {
+      logger.warn('[Crosshair] update skipped:', e.message)
+    }
+    return
   }
 }
 

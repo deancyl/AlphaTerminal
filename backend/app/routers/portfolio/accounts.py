@@ -9,12 +9,12 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from app.utils.response import success_response
 from app.db.database import _get_conn, _lock
+from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 
-# Import from sibling modules
 from .schemas import PortfolioIn
-from .dependencies import require_auth_for_sensitive_ops, _row2dict, _get_all_descendants
+from .dependencies import _row2dict, _get_all_descendants
 
 router = APIRouter(tags=["portfolio"])
 
@@ -39,7 +39,7 @@ async def list_portfolios():
 
 
 @router.post("/")
-async def create_portfolio(body: PortfolioIn):
+async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)):
     """新建账户"""
     now = datetime.now().isoformat()
     with _lock:
@@ -90,7 +90,7 @@ async def create_portfolio(body: PortfolioIn):
 
 
 @router.delete("/{portfolio_id}")
-async def delete_portfolio(portfolio_id: int, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
+async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)):
     """删除账户（连带持仓和快照）- 需认证"""
     with _lock:
         conn = _get_conn()

@@ -11,9 +11,9 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body, Query
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services import quote_source
 from app.services.scheduler import scheduler
@@ -27,6 +27,37 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent   # app/routers/admin.p
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════
+# Pydantic Request Models
+# ═══════════════════════════════════════════════════════════════
+
+class LLMSettingsRequest(BaseModel):
+    provider: str = Field(..., pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$")
+    api_key: Optional[str] = Field(default=None, max_length=200)
+    base_url: Optional[str] = Field(default=None, max_length=500)
+    model: str = Field(..., max_length=100)
+
+class LLMTestRequest(BaseModel):
+    provider: str = Field(..., pattern="^(deepseek|qianwen|openai|anthropic|local|siliconflow|opencode|opencode_go|opencode_zen|kimi)$")
+    api_key: str = Field(..., min_length=1, max_length=200)
+    base_url: str = Field(..., min_length=1, max_length=500)
+    model: Optional[str] = Field(default=None, max_length=100)
+
+class WatchdogToggleRequest(BaseModel):
+    enabled: bool
+
+class SchedulerControlRequest(BaseModel):
+    action: str = Field(..., pattern="^(start|stop|pause|resume|run)$")
+
+class CacheInvalidateRequest(BaseModel):
+    cache_type: str = Field(..., pattern="^(all|market|news|macro|f9|sectors|quotes)$")
+
+class CacheWarmupRequest(BaseModel):
+    data_type: str = Field(..., pattern="^(all|overview|sectors|macro|quotes)$")
+
+class DatabaseMaintenanceRequest(BaseModel):
+    action: str = Field(..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check)$")
 
 # ═══════════════════════════════════════════════════════════════
 # 认证机制（必须在 router 定义之前，否则 NameError）
@@ -130,10 +161,10 @@ def get_llm_settings():
     return {"code": 0, "data": result}
 
 @router.post("/settings/llm")
-def save_llm_settings(body: dict = Body(...)):
+def save_llm_settings(body: LLMSettingsRequest):
     """保存 LLM 配置到数据库（永久生效）"""
     from app.db.database import get_admin_config, set_admin_config
-    provider = (body.get("provider") or "").lower()
+    provider = body.provider.lower()
     key_map  = {
         "deepseek": "llm_deepseek", 
         "qianwen": "llm_qianwen", 
@@ -147,22 +178,20 @@ def save_llm_settings(body: dict = Body(...)):
     if provider not in key_map:
         return {"code": 1, "error": f"Unknown provider: {provider}"}
     set_admin_config(key_map[provider], {
-        "api_key":  body.get("api_key", "").strip(),
-        "base_url": body.get("base_url", "").strip(),
-        "model":    body.get("model", "").strip(),
+        "api_key":  (body.api_key or "").strip(),
+        "base_url": (body.base_url or "").strip(),
+        "model":    body.model.strip(),
     })
     return {"code": 0, "message": f"{provider} 配置已保存"}
 
 @router.post("/settings/llm/test")
-def test_llm_connection(body: dict = Body(...)):
+def test_llm_connection(body: LLMTestRequest):
     """探测 LLM Provider 连接"""
     import httpx
-    provider = (body.get("provider") or "").lower()
-    api_key  = (body.get("api_key") or "").strip()
-    base_url = (body.get("base_url") or "").strip()
-    model    = (body.get("model") or "").strip()
-    if not api_key:
-        return {"code": 1, "error": "API Key 不能为空"}
+    provider = body.provider.lower()
+    api_key  = body.api_key.strip()
+    base_url = body.base_url.strip()
+    model    = (body.model or "").strip()
     defaults = {
         "deepseek": "deepseek-chat", 
         "qianwen": "qwen-plus", 
@@ -338,8 +367,9 @@ async def get_scheduler_jobs():
     }
 
 @router.post("/scheduler/jobs/{job_id}/control")
-async def control_scheduler_job(job_id: str, action: str = Body(..., embed=True)):
+async def control_scheduler_job(job_id: str, body: SchedulerControlRequest):
     """控制定时任务（pause/resume/run）"""
+    action = body.action
     if action == "pause":
         scheduler.pause_job(job_id)
         return {"message": f"任务 {job_id} 已暂停"}
@@ -361,8 +391,9 @@ async def control_scheduler_job(job_id: str, action: str = Body(..., embed=True)
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/cache/invalidate")
-async def invalidate_cache(cache_type: str = Body(..., embed=True)):
+async def invalidate_cache(body: CacheInvalidateRequest):
     """清空指定缓存"""
+    cache_type = body.cache_type
     if cache_type == "sectors":
         from app.services.sectors_cache import invalidate
         invalidate()
@@ -381,8 +412,9 @@ async def invalidate_cache(cache_type: str = Body(..., embed=True)):
         raise HTTPException(status_code=400, detail=f"Unknown cache type: {cache_type}")
 
 @router.post("/cache/warmup")
-async def warmup_cache(data_type: str = Body(..., embed=True)):
+async def warmup_cache(body: CacheWarmupRequest):
     """预热缓存"""
+    data_type = body.data_type
     if data_type == "sectors":
         from app.services.sectors_cache import warmup
         await warmup()
@@ -400,8 +432,9 @@ async def warmup_cache(data_type: str = Body(..., embed=True)):
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/database/maintenance")
-async def database_maintenance(action: str = Body(..., embed=True)):
+async def database_maintenance(body: DatabaseMaintenanceRequest):
     """数据库维护操作"""
+    action = body.action
     conn = _get_conn()
     try:
         if action == "vacuum":
@@ -495,7 +528,7 @@ async def get_system_metrics():
 
 @router.get("/system/logs")
 @router.get("/logs/recent")  # 兼容旧接口
-async def get_recent_logs(lines: int = 100):
+async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
     """获取最近日志"""
     log_file = _DEFAULT_LOG_DIR / "app.log"
     if not log_file.exists():
@@ -578,23 +611,19 @@ async def get_watchdog_status():
 
 
 @router.post("/watchdog/toggle")
-async def toggle_watchdog_endpoint(body: dict = Body(...)):
+async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
     """切换进程保活开关
     
     请求体: {"enabled": true/false}
     """
     from app.services.watchdog import toggle_watchdog
     
-    enabled = body.get("enabled")
-    if enabled is None:
-        return {"code": 400, "message": "缺少 enabled 参数"}
-    
-    success = toggle_watchdog(enabled)
+    success = toggle_watchdog(body.enabled)
     if success:
         return {
             "code": 0,
-            "message": f"进程保活已{'启用' if enabled else '禁用'}",
-            "data": {"enabled": enabled}
+            "message": f"进程保活已{'启用' if body.enabled else '禁用'}",
+            "data": {"enabled": body.enabled}
         }
     else:
         return {"code": 500, "message": "切换失败，请检查日志"}

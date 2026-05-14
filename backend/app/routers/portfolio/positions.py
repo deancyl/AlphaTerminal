@@ -25,6 +25,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.db.database import _get_conn, _lock
 from app.utils.response import success_response
+from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +106,7 @@ async def list_positions(portfolio_id: int, include_children: bool = Query(False
 
 
 @router.post("/positions")
-async def upsert_position(body: PositionIn):
+async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     """
     建仓或调仓：INSERT OR REPLACE
     shares=0 表示清仓（删除持仓）
@@ -155,7 +156,7 @@ def require_auth_for_sensitive_ops(api_key: str = None):
 
 
 @router.delete("/{portfolio_id}/positions/{symbol}")
-async def delete_position(portfolio_id: int, symbol: str, api_key: str = None, auth: bool = Depends(require_auth_for_sensitive_ops)):
+async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(require_api_key)):
     """清仓指定标的 - 需认证"""
     with _lock:
         conn = _get_conn()
@@ -485,7 +486,7 @@ async def get_snapshots(
 
 
 @router.post("/{portfolio_id}/snapshots")
-async def save_snapshot(portfolio_id: int):
+async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     """手动保存当日快照（供路由调用）"""
     return _save_snapshot_impl(portfolio_id)
 

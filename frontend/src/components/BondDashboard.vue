@@ -16,9 +16,9 @@
           <span
             v-if="bondDataSource === 'mock'"
             class="text-[10px] px-1.5 py-0.5 rounded-sm bg-[var(--color-warning-bg)] border border-[var(--color-warning-border)] text-[var(--color-warning)]"
-            title="AkShare 债券数据已停更，数据截至 2021-01-22"
+            title="数据加载失败，当前显示模拟数据"
           >
-            ⚠️ 数据截至 2021
+            ⚠️ 模拟数据
           </span>
         </div>
       </div>
@@ -57,9 +57,14 @@
       <div
         v-for="tenor in TENORS"
         :key="`${activeSource}-${tenor.key}`"
-        class="hidden sm:grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer"
+        class="hidden sm:grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer focus:bg-theme-hover focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
         :style="{ gridTemplateColumns: '56px 1fr 1fr', gap: '2px' }"
+        tabindex="0"
+        role="button"
+        :aria-label="`${tenor.label}国债收益率，点击查看历史走势`"
         @click="openHistory(tenor)"
+        @keydown.enter="openHistory(tenor)"
+        @keydown.space.prevent="openHistory(tenor)"
       >
         <!-- 期限标签 -->
         <div class="py-1.5 px-1 flex items-center">
@@ -115,9 +120,14 @@
       <div
         v-for="tenor in TENORS"
         :key="`mobile-${activeSource}-${tenor.key}`"
-        class="sm:hidden grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer"
+        class="sm:hidden grid hover:bg-theme-hover transition-colors rounded-sm cursor-pointer focus:bg-theme-hover focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
         :style="{ gridTemplateColumns: '48px 1fr 1fr', gap: '2px' }"
+        tabindex="0"
+        role="button"
+        :aria-label="`${tenor.label}国债收益率，点击查看历史走势`"
         @click="openHistory(tenor)"
+        @keydown.enter="openHistory(tenor)"
+        @keydown.space.prevent="openHistory(tenor)"
       >
         <!-- 期限标签 -->
         <div class="py-1 px-1 flex items-center">
@@ -245,28 +255,6 @@
 
     </div>
 
-    <!-- ── 收益率曲线 & 利差图表 ──────────────────────────── -->
-    <!-- 移动端：垂直堆叠，高度减小 -->
-    <div class="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-2">
-      <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
-        <YieldCurveChart
-          :yield-curve="yieldCurve"
-          :curve1m="yieldCurve1m"
-          :curve1y="yieldCurve1y"
-          :update-time="yieldUpdateTime"
-        />
-      </div>
-      <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col min-h-[140px] md:min-h-[200px]">
-        <YieldSpreadChart
-          :history10y="spreadHistory10y"
-          :history2y="spreadHistory2y"
-          :loading="spreadLoading"
-          :error="spreadError"
-          :update-time="spreadUpdateTime"
-        />
-      </div>
-    </div>
-
     <!-- ── 历史分位弹窗 ───────────────────────────────── -->
     <BondHistoryModal
       :visible="historyModalVisible"
@@ -280,6 +268,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
+import { safeDivide } from '../utils/safeMath.js'
 import YieldCurveChart from './YieldCurveChart.vue'
 import YieldSpreadChart from './YieldSpreadChart.vue'
 import BondHistoryModal from './BondHistoryModal.vue'
@@ -333,8 +322,9 @@ function getCell(tenor, source) {
 
 // 隐含税率：(国开 - 国债) / 国开 * 100%
 function impliedTaxRate(govRate, cdbRate) {
-  if (!govRate || !cdbRate || cdbRate === 0) return '--'
-  const tax = ((cdbRate - govRate) / cdbRate) * 100
+  if (govRate == null || cdbRate == null) return '--'
+  const tax = safeDivide(cdbRate - govRate, cdbRate, null) * 100
+  if (tax == null || isNaN(tax)) return '--'
   return Number(tax.toFixed(1)) + '%'
 }
 
@@ -418,14 +408,29 @@ async function fetchSpreadHistory() {
   spreadError.value   = ''
   try {
     const [data10y, data2y] = await Promise.all([
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(() => null),
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('2年')}&period=1Y`, 10000).catch(() => null),
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(e => {
+        logger.warn('[BondDashboard] 10Y history fetch failed:', e)
+        return null
+      }),
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('2年')}&period=1Y`, 10000).catch(e => {
+        logger.warn('[BondDashboard] 2Y history fetch failed:', e)
+        return null
+      }),
     ])
+    
+    // Check for timeout/network errors
+    if (data10y === null && data2y === null) {
+      spreadError.value = '请求超时，请检查网络连接'
+    } else if (data10y === null || data2y === null) {
+      spreadError.value = '部分数据加载失败，利差图可能不完整'
+    }
+    
     spreadHistory10y.value  = (data10y?.data?.history || data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadHistory2y.value   = (data2y?.data?.history || data2y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
   } catch (e) {
-    spreadError.value = e.message
+    spreadError.value = e.message || '加载利差数据失败'
+    logger.error('[BondDashboard] fetchSpreadHistory error:', e)
   } finally {
     spreadLoading.value = false
   }

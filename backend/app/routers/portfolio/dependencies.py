@@ -21,10 +21,10 @@ import logging
 from datetime import datetime, date
 from typing import Optional
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends
 
-# Import database utilities
 from app.db.database import _get_conn, _lock
+from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 

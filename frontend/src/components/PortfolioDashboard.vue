@@ -404,8 +404,6 @@ const activeTab = ref('positions');
 const filterSector = ref('');
 const filterPositionType = ref('');
 
-let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
-
 const sortBy = ref('change_pct');
 const cashBalance  = ref(0);
 const dailyPnl     = ref(0);
@@ -639,15 +637,16 @@ async function loadPortfolioData() {
   error.value = '';
   const pid = selectedPortfolioId.value;
   const agg = isAggregated.value ? '?include_children=true' : '';
+  
+  // Create a local controller for this request
+  const controller = new AbortController();
+  
   try {
-    // Abort any pending request before starting a new one
-    _fetchController?.abort()
-    _fetchController = new AbortController()
     // 使用 /pnl 端点获取聚合视图（包含 cash_balance + 全量 PnL）
-    const res = await apiFetch(`/api/v1/portfolio/${pid}/pnl${agg}`, { signal: _fetchController.signal });
+    const res = await apiFetch(`/api/v1/portfolio/${pid}/pnl${agg}`, { signal: controller.signal });
     const data = res.data || res;
     // positions 端点返回 { positions: [...] }（无 data 包装）
-    const posRes = await apiFetch(`/api/v1/portfolio/${pid}/positions${agg}`, { signal: _fetchController.signal });
+    const posRes = await apiFetch(`/api/v1/portfolio/${pid}/positions${agg}`, { signal: controller.signal });
     positions.value = posRes.positions || posRes.data?.positions || [];
     cashBalance.value  = data.cash_balance   || 0;
     dailyPnl.value      = data.daily_pnl      || 0;
@@ -661,17 +660,16 @@ async function loadPortfolioData() {
     error.value = e.message || '加载投资组合数据失败';
     positions.value = [];
   } finally {
-    _fetchController = null;
     loading.value = false;
   }
 }
 
 async function loadPortfolios() {
+  // Create a local controller for this request
+  const controller = new AbortController();
+  
   try {
-    // Abort any pending request before starting a new one
-    _fetchController?.abort()
-    _fetchController = new AbortController()
-    const res = await apiFetch('/api/v1/portfolio/', { signal: _fetchController.signal });
+    const res = await apiFetch('/api/v1/portfolio/', { signal: controller.signal });
     portfolioList.value = res.portfolios || [];
     if (portfolioList.value.length && selectedPortfolioId.value === null) {
       selectedPortfolioId.value = portfolioList.value[0].id;
@@ -680,8 +678,6 @@ async function loadPortfolios() {
     // Ignore abort errors silently
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     console.warn('[Portfolio] loadPortfolios failed', e.message);
-  } finally {
-    _fetchController = null;
   }
 }
 
@@ -695,9 +691,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  // Cancel any pending fetch requests
-  _fetchController?.abort();
-  _fetchController = null;
+  // No shared controller to clean up - each request uses its own
 });
 
 watch(selectedPortfolioId, loadPortfolioData);

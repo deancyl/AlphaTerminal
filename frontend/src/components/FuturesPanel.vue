@@ -3,12 +3,17 @@
     <!-- 顶部工具栏 -->
     <div class="flex items-center gap-2 px-3 py-1 border-b border-theme-secondary shrink-0">
       <!-- 合约代码输入 -->
-      <input
-        v-model="inputSymbol"
-        class="w-20 px-2 py-0.5 text-[11px] rounded-sm bg-theme-secondary border border-theme-secondary text-theme-primary focus:border-terminal-accent outline-none"
-        placeholder="RB / I / SC"
-        @keydown.enter="loadSymbol"
-      />
+      <div class="flex flex-col">
+        <input
+          v-model="inputSymbol"
+          class="w-20 px-2 py-0.5 text-[11px] rounded-sm bg-theme-secondary border text-theme-primary focus:border-terminal-accent outline-none"
+          :class="symbolError ? 'border-red-500' : 'border-theme-secondary'"
+          placeholder="RB / I / SC"
+          @input="validateSymbol(inputSymbol)"
+          @keydown.enter="loadSymbol"
+        />
+        <span v-if="symbolError" class="text-[9px] text-red-500 mt-0.5 leading-none">{{ symbolError }}</span>
+      </div>
       <button class="px-2 py-0.5 text-[10px] rounded-sm bg-terminal-accent text-theme-primary hover:opacity-80" @click="loadSymbol">切换</button>
 
       <!-- 视图切换：K线 / 期限结构 -->
@@ -24,6 +29,17 @@
           @click="switchToTerm"
         >期限结构</button>
       </div>
+
+      <!-- 期限结构刷新按钮 -->
+      <button 
+        v-if="viewMode === 'term'"
+        @click="refreshTermStructure"
+        class="px-2 py-0.5 text-[10px] rounded-sm border border-theme-secondary hover:border-terminal-accent"
+        :disabled="termLoading"
+      >
+        <span v-if="termLoading">⟳</span>
+        <span v-else>↻</span>
+      </button>
 
       <!-- 周期选择（仅K线模式） -->
       <div v-if="viewMode === 'kline'" class="flex gap-1">
@@ -57,6 +73,9 @@
         {{ latestChange >= 0 ? '+' : '' }}{{ latestChange?.toFixed(2) ?? '--' }}%
       </span>
       <span class="text-[10px] font-mono text-theme-tertiary">OI: {{ latestHold?.toLocaleString() ?? '--' }}</span>
+      <span v-if="wsStatus === 'polling'" class="text-[10px] text-yellow-500">
+        HTTP模式
+      </span>
     </div>
 
     <!-- 错误状态 -->
@@ -84,6 +103,7 @@
         :data="termStructureData"
         :isLoading="termLoading"
         :hasError="!!termError"
+        @refresh="refreshTermStructure"
       />
     </div>
   </div>
@@ -105,6 +125,7 @@ const emit = defineEmits(['symbol-change'])
 // ── State ─────────────────────────────────────────────────────
 const inputSymbol   = ref(props.symbol || 'IF0')
 const currentSymbol = ref(props.symbol || 'IF0')
+const symbolError   = ref('')
 const period        = ref('daily')
 const histData      = shallowRef([])
 const latestPrice   = ref(null)
@@ -122,11 +143,16 @@ const termError        = ref('')
 const termLoading      = ref(false)
 
 // ── WebSocket ─────────────────────────────────────────────────
-const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect } = useMarketStream()
+const { tick: liveTick, connect: wsConnect, disconnect: wsDisconnect, wsStatus } = useMarketStream()
 
 async function switchToTerm() {
   viewMode.value = 'term'
   await fetchTermStructure()
+}
+
+function refreshTermStructure() {
+  termError.value = ''
+  fetchTermStructure()
 }
 
 async function fetchTermStructure() {
@@ -248,7 +274,22 @@ async function fetchData() {
   }
 }
 
+// ── Symbol Validation ─────────────────────────────────────────
+function validateSymbol(value) {
+  const trimmed = (value || '').trim().toUpperCase()
+  // Valid futures symbols: 1-2 uppercase letters, optional digit
+  // Examples: RB, I, IF, IF0, SC, AU, CU
+  const valid = /^[A-Z]{1,3}[0-9]?$/.test(trimmed)
+  if (!valid && trimmed) {
+    symbolError.value = '请输入有效的期货代码（如 RB、IF0）'
+    return false
+  }
+  symbolError.value = ''
+  return true
+}
+
 function loadSymbol() {
+  if (!validateSymbol(inputSymbol.value)) return
   const s = inputSymbol.value.trim().toUpperCase()
   if (!s) return
   currentSymbol.value = s

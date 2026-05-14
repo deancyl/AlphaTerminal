@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, HTTPException, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
@@ -26,12 +26,12 @@ router = APIRouter(
 
 class MCPConfig(BaseModel):
     """MCP Server Configuration"""
-    base_url: str = "http://localhost:8765"
-    transport_mode: str = "sse"  # sse, stdio, websocket
-    port: int = 8765
-    timeout: int = 30
+    base_url: str = Field(default="http://localhost:8765", max_length=500)
+    transport_mode: str = Field(default="sse", pattern="^(sse|stdio|websocket)$")
+    port: int = Field(default=8765, ge=1, le=65535)
+    timeout: int = Field(default=30, ge=1, le=300)
     auto_start: bool = False
-    log_level: str = "INFO"
+    log_level: str = Field(default="INFO", pattern="^(DEBUG|INFO|WARNING|ERROR|CRITICAL)$")
 
 
 class MCPTool(BaseModel):

@@ -70,12 +70,89 @@ SINA_HEADERS = {
 }
 
 
+async def _fetch_index_futures_realtime():
+    """
+    Fetch real-time index futures data from akshare.
+    Returns tuple: (index_futures_list, source_str)
+    """
+    import akshare as ak
+    import warnings
+    warnings.filterwarnings("ignore")
+    
+    index_futures = []
+    source = "mock"
+    
+    # Define contracts to fetch: (symbol, name, akshare_symbol_name)
+    contracts = [
+        ("IF", "IF 沪深300", "沪深300指数期货"),
+        ("IC", "IC 中证500", "中证500指数期货"),
+        ("IM", "IM 中证1000", "中证1000"),
+    ]
+    
+    for symbol, name, ak_symbol_name in contracts:
+        try:
+            # Use asyncio.wait_for for 5 second timeout
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_realtime, symbol=ak_symbol_name),
+                timeout=5.0
+            )
+            
+            if df is not None and len(df) > 0:
+                # Get the main contract (first row, symbol ends with 0)
+                main_row = df[df['symbol'].str.endswith('0')].iloc[0] if len(df[df['symbol'].str.endswith('0')]) > 0 else df.iloc[0]
+                
+                price = main_row.get("trade", 0)
+                change_pct = main_row.get("changepercent", 0)
+                position = main_row.get("position", 0)
+                
+                # Format position
+                if position:
+                    pos_val = float(position)
+                    if pos_val >= 10000:
+                        pos_str = f"{pos_val/10000:.1f}万手"
+                    else:
+                        pos_str = f"{int(pos_val)}手"
+                else:
+                    pos_str = "N/A"
+                
+                index_futures.append({
+                    "symbol": symbol,
+                    "name": name,
+                    "price": round(float(price), 2) if price else 0,
+                    "change_pct": round(float(change_pct), 2) if change_pct else 0,
+                    "position": pos_str,
+                    "note": f"IM{symbol}",
+                })
+                source = "real"
+                logger.info(f"[Futures] Fetched real data for {symbol}: price={price}")
+        except asyncio.TimeoutError:
+            logger.warning(f"[Futures] Timeout fetching {symbol}")
+        except Exception as e:
+            logger.warning(f"[Futures] Failed to fetch {symbol}: {e}")
+    
+    # Fallback to mock if all failed
+    if not index_futures:
+        logger.warning("[Futures] All index futures fetch failed, using mock data")
+        index_futures = _MOCK_INDEX_FUTURES
+        source = "mock"
+    elif len(index_futures) < 3:
+        # If we got some but not all, add mock data for missing ones
+        logger.warning(f"[Futures] Only fetched {len(index_futures)} futures, adding mock for missing")
+        fetched_symbols = [f["symbol"] for f in index_futures]
+        for mock in _MOCK_INDEX_FUTURES:
+            if mock["symbol"] not in fetched_symbols:
+                index_futures.append(mock)
+    
+    return index_futures, source
+
+
 def _fetch_futures_data():
     """后台抓取期货数据（腾讯 qt.gtimg.cn + akshare，5秒超时兜底Mock）"""
     global _FUTURES_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
     spot_data = {}
     fetch_success = False
+    index_source = "mock"
 
     try:
         # 腾讯 qt.gtimg.cn 国内期货现货（直连不过代理）
@@ -139,21 +216,28 @@ def _fetch_futures_data():
             "sector_emoji": sector_key[1],
         })
 
-    # Mock 股指期货主力（IF/IC/IM，当作数据可用时）
-    index_futures = [
-        {"symbol": "IF",  "name": "IF 沪深300",   "price": 4448.2,  "change_pct": -0.93, "position": "8.2万手", "note": "IMIF"},
-        {"symbol": "IC",  "name": "IC 中证500",   "price": 6102.4,  "change_pct": +0.31, "position": "6.5万手", "note": "IMIC"},
-        {"symbol": "IM",  "name": "IM 中证1000",  "price": 6438.8,  "change_pct": +0.72, "position": "5.1万手", "note": "IMIM"},
-    ]
+    # Fetch real index futures data (synchronously in thread)
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            index_futures, index_source = loop.run_until_complete(_fetch_index_futures_realtime())
+        finally:
+            loop.close()
+    except Exception as e:
+        logger.warning(f"[Futures] Index futures fetch failed: {e}, using mock")
+        index_futures = _MOCK_INDEX_FUTURES
+        index_source = "mock"
 
     with _CACHE_LOCK:
         _FUTURES_CACHE = {
             "index_futures": index_futures,
             "commodities":   commodities,
             "update_time":   now_str,
+            "index_source":  index_source,
         }
         _LAST_FETCH_TIME = time.time()
-    logger.info(f"[Futures] cached {len(commodities)} commodities + {len(index_futures)} index futures")
+    logger.info(f"[Futures] cached {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
 
 
 def _get_futures_cache() -> dict:
@@ -174,6 +258,114 @@ def _get_futures_cache() -> dict:
         return dict(_FUTURES_CACHE) if _FUTURES_CACHE else {}
 
 
+@router.get("/futures/index_history")
+async def futures_index_history(symbol: str = "IF", period: str = "daily", limit: int = 200):
+    """
+    股指期货历史K线数据
+    
+    参数:
+      symbol: 品种代码 (IF/IC/IM)
+      period: 周期 (daily/1min/5min/15min/30min/60min)
+      limit: 返回条数 (默认200)
+    
+    返回:
+      symbol: 品种代码
+      history: K线数据 [{date, open, close, high, low, volume, hold}]
+    """
+    # 验证品种代码
+    valid_symbols = ["IF", "IC", "IM"]
+    if symbol.upper() not in valid_symbols:
+        logger.warning(f"[futures_index_history] Invalid symbol: {symbol}")
+        return success_response({
+            "symbol": symbol.upper(),
+            "history": [],
+            "message": f"暂不支持品种: {symbol}，支持: {', '.join(valid_symbols)}"
+        })
+    
+    symbol = symbol.upper()
+    
+    try:
+        import akshare as ak
+        import warnings
+        warnings.filterwarnings("ignore")
+        
+        # 主力合约代码（加0后缀）
+        contract_symbol = f"{symbol}0"
+        
+        # 根据周期选择API
+        if period == "daily":
+            # 日线数据
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_daily_sina, symbol=contract_symbol),
+                timeout=10.0
+            )
+        else:
+            # 分钟数据
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_minute_sina, symbol=contract_symbol),
+                timeout=10.0
+            )
+        
+        # 处理数据
+        history = []
+        if df is not None and not df.empty:
+            # 重命名列（akshare返回的列名可能不同）
+            df = df.rename(columns={
+                'date': 'date',
+                'open': 'open',
+                'high': 'high',
+                'low': 'low',
+                'close': 'close',
+                'volume': 'volume',
+                'hold': 'hold',
+                'open_interest': 'hold',
+                '持仓量': 'hold',
+            })
+            
+            # 取最后 limit 条
+            df = df.tail(limit)
+            
+            for _, row in df.iterrows():
+                try:
+                    item = {
+                        "date": str(row.get("date", "")),
+                        "open": float(row.get("open", 0)) if row.get("open") else 0,
+                        "close": float(row.get("close", 0)) if row.get("close") else 0,
+                        "high": float(row.get("high", 0)) if row.get("high") else 0,
+                        "low": float(row.get("low", 0)) if row.get("low") else 0,
+                        "volume": int(row.get("volume", 0)) if row.get("volume") else 0,
+                        "hold": int(row.get("hold", 0)) if row.get("hold") else 0,
+                    }
+                    history.append(item)
+                except Exception as e:
+                    logger.debug(f"[futures_index_history] Skip row: {e}")
+                    continue
+        
+        logger.info(f"[futures_index_history] {symbol}({period}): {len(history)} bars")
+        return success_response({
+            "symbol": symbol,
+            "period": period,
+            "history": history,
+        })
+        
+    except asyncio.TimeoutError:
+        logger.warning(f"[futures_index_history] Timeout for {symbol}")
+        return success_response({
+            "symbol": symbol,
+            "period": period,
+            "history": [],
+            "message": "数据获取超时，请稍后重试"
+        })
+    except Exception as e:
+        logger.warning(f"[futures_index_history] Failed for {symbol}: {type(e).__name__}: {e}")
+        return success_response({
+            "symbol": symbol,
+            "period": period,
+            "history": [],
+            "message": f"获取数据失败: {str(e)}"
+        })
+
+
 @router.get("/futures/main_indexes")
 async def futures_main_indexes():
     """
@@ -184,7 +376,7 @@ async def futures_main_indexes():
         return success_response({
             "index_futures": cache.get("index_futures", []),
             "update_time":  cache.get("update_time", ""),
-            "source": "mock",
+            "source":       cache.get("index_source", "mock"),
         })
     except Exception as e:
         logger.error(f"[futures_main_indexes] 错误: {e}")
@@ -248,7 +440,19 @@ async def futures_term_structure(symbol: str = "RB"):
         import akshare as ak, warnings
         warnings.filterwarnings("ignore")
         # 同步 IO 放入线程池，避免阻塞 FastAPI 事件循环
-        df = await asyncio.to_thread(ak.futures_zh_realtime, symbol=zh_name)
+        # 添加 10 秒超时保护
+        try:
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_realtime, symbol=zh_name),
+                timeout=10.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"[Futures] term_structure timeout for {prefix}")
+            return error_response(ErrorCode.INTERNAL_ERROR, "数据源响应超时，请稍后重试", {
+                "symbol": prefix,
+                "name": zh_name,
+                "term_structure": []
+            })
 
         curves = []
         for _, row in df.iterrows():
@@ -305,7 +509,11 @@ async def futures_term_structure(symbol: str = "RB"):
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期限结构失败: {type(e).__name__}: {str(e)}", {"symbol": prefix, "name": zh_name, "term_structure": []})
 
 
-# ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
+# ── Mock 数据（仅作为 Fallback，确保服务稳定性）────────────────
+# ⚠️ 注意：Mock 数据是备用数据源，不是主数据源
+# 主数据源：akshare futures_zh_realtime（实时数据）
+# 当主数据源失败时，Mock 数据确保 API 不返回空结果
+# 请勿删除：用于启动初始化和网络异常时的降级处理
 _MOCK_COMMODITIES = [
     {"symbol": "RB0", "name": "螺纹钢",   "unit": "元/吨", "price": 3850, "change_pct": +1.28, "tick": ""},
     {"symbol": "HC0", "name": "热卷",     "unit": "元/吨", "price": 3920, "change_pct": -0.54, "tick": ""},
@@ -321,6 +529,7 @@ _MOCK_COMMODITIES = [
     {"symbol": "UR0", "name": "尿素",     "unit": "元/吨", "price": 2180, "change_pct": +2.44, "tick": ""},
 ]
 
+# 股指期货 Mock 数据（Fallback 用，请勿删除）
 _MOCK_INDEX_FUTURES = [
     {"symbol": "IF",  "name": "IF 沪深300",   "price": 4448.2,  "change_pct": -0.93, "position": "8.2万手", "note": "IMIF"},
     {"symbol": "IC",  "name": "IC 中证500",   "price": 6102.4,  "change_pct": +0.31, "position": "6.5万手", "note": "IMIC"},
@@ -329,7 +538,12 @@ _MOCK_INDEX_FUTURES = [
 
 
 def _init_mock_cache():
-    """同步填充 Mock 数据，保证 API 启动后立即可用"""
+    """
+    初始化 Mock 缓存（Fallback 策略）
+    
+    注意：此函数在模块加载时立即执行，确保 API 启动后立即可用。
+    Mock 数据仅作为降级方案，真实数据由 _fetch_futures_data() 获取。
+    """
     global _FUTURES_CACHE, _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
     with _CACHE_LOCK:
@@ -337,6 +551,7 @@ def _init_mock_cache():
             "index_futures": _MOCK_INDEX_FUTURES,
             "commodities":   _MOCK_COMMODITIES,
             "update_time":   now_str,
+            "index_source":  "mock",
         }
         _LAST_FETCH_TIME = time.time()
     logger.info("[Futures] Mock cache initialized")

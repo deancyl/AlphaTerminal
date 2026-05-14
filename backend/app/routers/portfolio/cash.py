@@ -16,9 +16,10 @@ import sqlite3
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.utils.response import success_response
+from app.middleware import require_api_key
 from .schemas import TransactionIn, TransferIn, CashOpIn
 from .dependencies import (
     _get_conn,
@@ -38,7 +39,7 @@ router = APIRouter(tags=["portfolio"])
 # ══════════════════════════════════════════════════════════════
 
 @router.post("/transfer")
-async def transfer(body: TransactionIn):
+async def transfer(body: TransactionIn, _: None = Depends(require_api_key)):
     """
     资金划转（子账户间）
     body.type = 'transfer_out' / 'transfer_in'（通常前端只传一方）
@@ -48,7 +49,7 @@ async def transfer(body: TransactionIn):
 
 
 @router.post("/transfer/direct")
-async def transfer_direct(body: TransferIn):
+async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
     """直接划转：原子操作，同时更新两个账户的 cash_balance 并写流水"""
     if body.amount <= 0:
         raise HTTPException(400, "划转金额必须为正数")
@@ -88,7 +89,7 @@ async def get_cash(portfolio_id: int):
 
 
 @router.post("/{portfolio_id}/cash/deposit")
-async def cash_deposit(portfolio_id: int, body: CashOpIn):
+async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
     """充值：账户现金增加 + 写 deposit 流水"""
     if body.amount <= 0:
         raise HTTPException(400, "充值金额必须为正数")
@@ -117,7 +118,7 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn):
 
 
 @router.post("/{portfolio_id}/cash/withdraw")
-async def cash_withdraw(portfolio_id: int, body: CashOpIn):
+async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
     """提现：账户现金减少 + 写 withdraw 流水"""
     if body.amount <= 0:
         raise HTTPException(400, "提现金额必须为正数")

@@ -5,6 +5,65 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.33] - 2026-05-14
+
+### 核心修复
+
+- **投资组合模块 — AbortController 竞态条件修复**
+  - 修复 `Cannot read properties of null (reading 'signal')` 错误
+  - 问题原因：`loadPortfolios()` 和 `loadPortfolioData()` 共享 `_fetchController` 变量
+  - 解决方案：每个请求使用独立的本地 AbortController
+  - 消除了请求间的竞态条件
+
+### 新增功能
+
+- **API Key 认证中间件** — 支持 Agent 网关安全认证
+  - 新增 `api_key_auth.py` 中间件
+  - 支持 X-API-Key header 认证
+  - 可配置白名单路径
+
+- **研究复盘模块** — 新增研究复盘看板
+  - 新增 `research.py` 路由
+  - 支持研报数据展示
+
+- **输入验证工具** — 后端输入验证增强
+  - 新增 `input_validation.py` 工具模块
+  - 统一的参数验证函数
+
+- **安全数学工具** — 后端安全计算
+  - 新增 `safe_math.py` 工具模块
+  - 防止除零和 NaN 错误
+
+### 测试增强
+
+- **E2E 测试框架** — 端到端测试基础设施
+  - 新增 `tests/e2e/` 目录
+  - 新增 `tests/fixtures/` 测试夹具
+
+- **期货模块测试** — 新增期货相关测试
+  - `test_futures_real_data.py` — 真实数据集成测试
+  - `test_futures_rate_limit.py` — 速率限制测试
+  - `test_bond.py` — 债券模块测试
+
+- **前端单元测试** — 新增前端测试
+  - `FuturesDashboard.ux.test.js` — UX 测试
+  - `safeMath.spec.js` — 安全数学工具测试
+  - `waitForDimensions.spec.js` — 尺寸等待工具测试
+  - `indicators.edge.spec.js` — 指标边缘情况测试
+  - `useMarketStream.race.spec.js` — 市场流竞态测试
+
+### 其他改进
+
+- **前端组件优化** — 多个组件改进
+  - PortfolioDashboard — AbortController 修复
+  - FuturesDashboard — 加载状态优化
+  - BondDashboard — 错误处理增强
+  - FullscreenKline — 图表性能优化
+
+- **样式改进** — 新增过渡动画
+  - 添加 fade 过渡效果
+  - 优化加载状态显示
+
 ## [0.6.32] - 2026-05-13
 
 ### 新功能

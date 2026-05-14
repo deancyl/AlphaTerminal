@@ -153,7 +153,7 @@
       >
         <div
           v-if="showDetail"
-          class="fixed inset-0 z-[100000] bg-terminal-bg"
+          class="fixed inset-0 z-[10010] bg-terminal-bg"
         >
           <StockDetail
             :symbol="props.symbol"
@@ -176,6 +176,7 @@ import { initChart, getECharts, createResizeObserver } from '../utils/lazyEchart
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import { calcMA, calcMACD, calcKDJ, calcRSI, calcBOLL, calcOBV, calcDMI, calcCCI } from '../utils/indicators.js'
+import { waitForDimensions } from '../utils/waitForDimensions.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
@@ -195,8 +196,16 @@ const emit = defineEmits(['close', 'symbol-change'])
 const toggleMobileLandscape = async () => {
   try {
     if (!document.fullscreenElement) {
+      // Step 1: Enter fullscreen (works on most devices)
       await document.documentElement.requestFullscreen()
-      await screen.orientation?.lock('landscape')
+      
+      // Step 2: Try orientation lock (optional, may fail on iOS)
+      try {
+        await screen.orientation?.lock('landscape')
+      } catch (orientErr) {
+        // iOS doesn't support orientation lock - show guidance
+        console.info('[Landscape] Orientation lock not supported, user must rotate manually')
+      }
     } else {
       await document.exitFullscreen()
       screen.orientation?.unlock()
@@ -204,8 +213,11 @@ const toggleMobileLandscape = async () => {
     // 全屏切换完成后触发图表重绘
     setTimeout(handleResize, 150)
   } catch (e) {
-    console.warn('横屏切换失败(可能是iOS限制):', e)
-    alert('当前设备或浏览器不支持强制横屏，请手动旋转手机。')
+    // Only show error if fullscreen failed (not orientation lock)
+    if (!document.fullscreenElement) {
+      console.error('[Landscape] Fullscreen failed:', e)
+      alert('无法进入全屏模式，请检查浏览器设置')
+    }
   }
 }
 
@@ -221,14 +233,8 @@ const isMobile = computed(() => {
   }
 })
 
-// ── 全屏黑屏修复：确保 DOM 有真实像素尺寸后再 init ECharts ──────────────────
-async function waitForDimensions(el, timeout = 1000) {
-  const start = performance.now()
-  while (el && (el.clientWidth === 0 || el.clientHeight === 0)) {
-    if (performance.now() - start > timeout) break
-    await new Promise(r => requestAnimationFrame(r))
-  }
-}
+// ── 全屏黑屏修复：使用 waitForDimensions utility 确保容器有有效尺寸 ──────────────────
+// waitForDimensions 已移至 utils/waitForDimensions.js，提供超时恢复和 fallback 机制
 
 // Pinia Store
 const drawingStore = useDrawingStore()
@@ -247,6 +253,7 @@ const chartEl = ref(null)
 let chart = null
 let refreshTimer = null  // F1修复: K线自动刷新定时器
 let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+let _currentRequestId = 0    // Request ID: only show errors for current request
 
 // 十字指针状态
 const crosshairRef = ref(null)
@@ -400,8 +407,9 @@ function handleWindowKeydown(e) {
 // 获取历史数据
 async function fetchData() {
   if (!props.symbol) return
+  const requestId = ++_currentRequestId
   loading.value = true
-  chartError.value = ''
+  chartError.value = ''  // Clear previous error
 
   try {
     // Abort any pending request before starting a new one
@@ -431,17 +439,27 @@ async function fetchData() {
 
     // ── 全屏黑屏修复：nextTick 确保 DOM 已挂载，再等物理尺寸，再渲染 ──
     await nextTick()
-    await waitForDimensions(chartEl.value)
+    const dimResult = await waitForDimensions(chartEl.value, 1000)
+    if (!dimResult.success) {
+      chartError.value = '图表容器尺寸异常，请稍后重试'
+      logger.warn('[FullscreenKline] waitForDimensions timeout, dimensions:', dimResult.width, 'x', dimResult.height)
+      return
+    }
     renderChart()
 
   } catch (e) {
     // Ignore abort errors silently
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
-    chartError.value = `加载失败: ${e.message}`
-    logger.error('[FullscreenKline] fetchData error:', e)
+    // Only show error if this is the current request
+    if (requestId === _currentRequestId) {
+      chartError.value = `加载失败: ${e.message}`
+      logger.error('[FullscreenKline] fetchData error:', e)
+    }
   } finally {
     _fetchController = null
-    loading.value = false
+    if (requestId === _currentRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -470,7 +488,12 @@ async function renderChart() {
 
   // ── 全屏黑屏修复：等 DOM 拿到真实尺寸后再 init ──────────────────────
   await nextTick()
-  await waitForDimensions(chartEl.value)
+  const dimResult = await waitForDimensions(chartEl.value, 1000)
+  if (!dimResult.success) {
+    chartError.value = '图表初始化失败，请刷新页面'
+    logger.warn('[FullscreenKline] renderChart: waitForDimensions timeout')
+    return
+  }
   if (!chartEl.value) return
 
   if (!chart) {
@@ -758,7 +781,7 @@ onUnmounted(() => {
 </script>
 
 <style>
-.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; z-index: 99999; outline: none; }
+.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; z-index: 10000; outline: none; }
 
 .kline-header { height: 48px; background: var(--panel-bg); border-bottom: 1px solid var(--border-primary); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
 .header-left { display: flex; align-items: center; gap: 8px; min-width: 150px; }

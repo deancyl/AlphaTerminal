@@ -202,8 +202,14 @@ async function renderChart() {
   chartInst.value.resize()
 
   const data  = historyData.value
+  if (!data || data.length === 0) return
+  
   const dates = data.map(d => d.date)
   const yields = data.map(d => d.yield)
+  
+  // Guard against empty arrays
+  if (yields.length === 0) return
+  
   const cur   = currentYield.value
   const minY  = Math.min(...yields)
   const maxY  = Math.max(...yields)

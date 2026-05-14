@@ -50,12 +50,16 @@ function buildChart() {
     const base = fut.price || 0
     const chg  = fut.change_pct || 0
     const color = chg >= 0 ? '#f87171' : '#4ade80'
-    const history = categories.map((_, i) => {
-      const noise = (Math.random() - 0.5) * base * 0.01
-      const trend = (i / 19) * base * chg * -0.005
-      return parseFloat((base * (1 + trend / base + noise / base)).toFixed(2))
-    })
-    history[history.length - 1] = base
+    
+    // Use real history if available, fallback to flat line
+    let history = []
+    if (fut.history && fut.history.length > 0) {
+      history = fut.history.slice(-20).map(bar => bar.close)
+    } else {
+      // Fallback: flat line at current price
+      history = Array(20).fill(base)
+    }
+    
     return {
       name: fut.name || fut.symbol,
       type: 'line',
@@ -99,7 +103,7 @@ function buildChart() {
 
 async function init() { await nextTick(); buildChart() }
 
-const debouncedInit = useDebounceFn(init, 100)
+const debouncedInit = useDebounceFn(init, 300)
 
 let ro = null
 onMounted(() => {

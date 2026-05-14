@@ -4,11 +4,12 @@
 import json
 import logging
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
 from app.utils.response import success_response, error_response, ErrorCode
+from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +400,7 @@ async def get_strategies():
 
 
 @router.post("/strategies")
-async def create_strategy(req: StrategyCreateRequest):
+async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_api_key)):
     """创建新策略"""
     # 验证 params 复杂度
     params = _validate_params(req.params)
@@ -426,7 +427,7 @@ async def create_strategy(req: StrategyCreateRequest):
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/run")
-async def run_backtest(req: BacktestRequest):
+async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key)):
     """执行回测"""
     # ── 第一步：入参解析与校验 ───────────────────────────────────
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
@@ -595,7 +596,7 @@ class WalkForwardRequest(BaseModel):
 
 
 @router.post("/walkforward/analyze")
-async def walkforward_analyze(req: WalkForwardRequest):
+async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require_api_key)):
     """Walk-Forward Analysis for out-of-sample validation"""
     from app.services.backtest.walk_forward import WalkForwardAnalyzer
     
@@ -724,7 +725,7 @@ class SmartParamsResponse(BaseModel):
 
 
 @router.post("/walkforward/smart-params")
-async def get_smart_params(req: SmartParamsRequest):
+async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_api_key)):
     """
     Smart parameter recommendation based on available data and strategy type.
     """

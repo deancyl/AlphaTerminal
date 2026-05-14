@@ -8,10 +8,11 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 
 from ..db.database import get_conn
+from ..middleware import require_api_key
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -74,7 +75,8 @@ def _generate_json(data: List[Dict[str, Any]], filename: str) -> StreamingRespon
 async def export_portfolio(
     portfolio_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
-    include_history: bool = Query(False, description="包含历史快照数据")
+    include_history: bool = Query(False, description="包含历史快照数据"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出投资组合数据
@@ -170,7 +172,8 @@ async def export_portfolio(
 @router.post("/backtest/result")
 async def export_backtest_result(
     request: Dict[str, Any],
-    format: str = Query("excel", regex="^(csv|excel|json)$")
+    format: str = Query("excel", regex="^(csv|excel|json)$"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出回测结果（从前端传入的完整结果数据）
@@ -243,7 +246,8 @@ async def export_backtest_result(
 async def export_backtest(
     backtest_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
-    include_trades: bool = Query(True, description="包含交易记录")
+    include_trades: bool = Query(True, description="包含交易记录"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出回测结果
@@ -330,7 +334,8 @@ async def export_backtest(
 @router.post("/screener")
 async def export_screener(
     filters: Dict[str, Any],
-    format: str = Query("csv", regex="^(csv|excel|json)$")
+    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出筛选器结果
@@ -365,7 +370,8 @@ async def export_market_history(
     period: str = Query("daily", regex="^(daily|weekly|monthly)$"),
     format: str = Query("csv", regex="^(csv|excel|json)$"),
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出历史行情数据

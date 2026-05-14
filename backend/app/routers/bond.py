@@ -281,9 +281,14 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             percentile = None
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
+        date_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
+        curve_name_col = df.columns[0]
+        gov_bond_df = df[df[curve_name_col] == '中债国债收益率曲线']
+        if gov_bond_df.empty:
+            gov_bond_df = df
         history = [
             {"date": str(r[0]), "yield": float(r[1])}
-            for r in df[[df.columns[0], tenor_col]].dropna().tail(n_rows).values
+            for r in gov_bond_df[[date_col, tenor_col]].dropna().tail(n_rows).values
         ]
         return success_response({
             "tenor": tenor,
