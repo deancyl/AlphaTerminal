@@ -11,16 +11,14 @@ import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
 import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { waitForDimensions } from '../utils/waitForDimensions.js'
+import { useTheme } from '../composables/useTheme.js'
 import { 
-  MARKET_COLORS, 
-  CHART_COLORS, 
+  getDynamicMarketColors,
+  getDynamicChartColors,
   buildTooltipFormatter,
-  buildAxisOptions,
   buildGridOptions,
   buildDataZoomOptions
 } from '../utils/echartsTheme.js'
-
-
 
 const emit = defineEmits(['datazoom'])
 
@@ -40,12 +38,17 @@ const props = defineProps({
 const chartEl = ref(null)
 let chart = null
 let _ro = null
-let _lastChartData = null   // 保留引用用于 tick patch
-let _isInitialized = false  // 初始化完成标记
+let _lastChartData = null
+let _isInitialized = false
+let _unsubscribeTheme = null
 
-// ── 动态构建 ECharts Option ──────────────────────────────────────
+const { activeTheme, onThemeChange } = useTheme()
+
 function buildOption(cData) {
   if (!cData || cData.isEmpty) return {}
+
+  const MARKET_COLORS = getDynamicMarketColors()
+  const CHART_COLORS = getDynamicChartColors()
 
   const {
     times, klineData, volumes,
@@ -344,12 +347,24 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   _ro?.disconnect()
+  _unsubscribeTheme?.()
   _isInitialized = false
   if (chart) {
     logger.debug(`[ECharts] 🗑️  disposed instance for: ${props.symbol}`)
     chart.dispose()
     chart = null
   }
+})
+
+function updateChartTheme() {
+  if (!chart || !_lastChartData || _lastChartData.isEmpty) return
+  const newOption = buildOption(_lastChartData)
+  chart.setOption(newOption, { notMerge: false })
+  logger.debug(`[BaseKLineChart] Theme updated to: ${activeTheme.value}`)
+}
+
+_unsubscribeTheme = onThemeChange(() => {
+  updateChartTheme()
 })
 
 // 核心 watcher：chartData 或 subCharts 变化时合并更新（节流 200ms）

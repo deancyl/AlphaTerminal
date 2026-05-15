@@ -8,147 +8,191 @@ export default {
   theme: {
     extend: {
       colors: {
-        // ============================================
-        // 主题感知颜色 - 使用 CSS 变量
-        // ============================================
         theme: {
-          // 背景
           bg: {
-            primary: 'var(--bg-primary)',
-            secondary: 'var(--bg-secondary)',
-            tertiary: 'var(--bg-tertiary)',
-            hover: 'var(--bg-hover)',
-            active: 'var(--bg-active)',
+            base: 'var(--bg-base)',
+            surface: 'var(--bg-surface)',
+            hover: 'var(--bg-surface-hover)',
+            elevated: 'var(--bg-elevated)',
+            overlay: 'var(--bg-overlay)',
+            glass: 'var(--bg-glass)',
           },
-          // 文字
           text: {
             primary: 'var(--text-primary)',
             secondary: 'var(--text-secondary)',
-            tertiary: 'var(--text-tertiary)',
             muted: 'var(--text-muted)',
+            disabled: 'var(--text-disabled)',
+            placeholder: 'var(--text-placeholder)',
+            inverse: 'var(--text-inverse)',
           },
-          // 边框
           border: {
-            primary: 'var(--border-primary)',
-            secondary: 'var(--border-secondary)',
+            base: 'var(--border-base)',
+            light: 'var(--border-light)',
+            focus: 'var(--border-focus)',
             hover: 'var(--border-hover)',
           },
-          // 强调色
-          accent: {
-            DEFAULT: 'var(--accent-primary)',
-            secondary: 'var(--accent-secondary)',
-            bg: 'var(--accent-bg)',
-            border: 'var(--accent-border)',
+          primary: {
+            DEFAULT: 'var(--color-primary)',
+            hover: 'var(--color-primary-hover)',
+            light: 'var(--color-primary-light)',
+            dark: 'var(--color-primary-dark)',
+            bg: 'var(--color-primary-bg)',
+            border: 'var(--color-primary-border)',
           },
-          // 面板
-          panel: {
-            DEFAULT: 'var(--panel-bg)',
-            elevated: 'var(--panel-bg-elevated)',
-            hover: 'var(--panel-bg-hover)',
+          bull: {
+            DEFAULT: 'var(--color-bull)',
+            light: 'var(--color-bull-light)',
+            bg: 'var(--color-bull-bg)',
+            border: 'var(--color-bull-border)',
           },
-          // 涨跌
-          bullish: {
-            DEFAULT: 'var(--bullish)',
-            light: 'var(--bullish-light)',
-            bg: 'var(--bullish-bg)',
-            border: 'var(--bullish-border)',
+          bear: {
+            DEFAULT: 'var(--color-bear)',
+            light: 'var(--color-bear-light)',
+            bg: 'var(--color-bear-bg)',
+            border: 'var(--color-bear-border)',
           },
-          bearish: {
-            DEFAULT: 'var(--bearish)',
-            light: 'var(--bearish-light)',
-            bg: 'var(--bearish-bg)',
-            border: 'var(--bearish-border)',
+          neutral: {
+            DEFAULT: 'var(--color-neutral)',
+            bg: 'var(--color-neutral-bg)',
+            border: 'var(--color-neutral-border)',
           },
-          // 状态
-          status: {
-            live: 'var(--status-live)',
-            warning: 'var(--status-warning)',
-            error: 'var(--status-error)',
-            info: 'var(--status-info)',
-            success: 'var(--status-success)',
+          warning: {
+            DEFAULT: 'var(--color-warning)',
+            bg: 'var(--color-warning-bg)',
+            border: 'var(--color-warning-border)',
           },
-          // 图表
+          danger: {
+            DEFAULT: 'var(--color-danger)',
+            bg: 'var(--color-danger-bg)',
+            border: 'var(--color-danger-border)',
+          },
+          success: {
+            DEFAULT: 'var(--color-success)',
+            bg: 'var(--color-success-bg)',
+            border: 'var(--color-success-border)',
+          },
+          info: {
+            DEFAULT: 'var(--color-info)',
+            bg: 'var(--color-info-bg)',
+            border: 'var(--color-info-border)',
+          },
           chart: {
+            bg: 'var(--chart-bg)',
             grid: 'var(--chart-grid)',
             text: 'var(--chart-text)',
             line: 'var(--chart-line)',
             area: 'var(--chart-area)',
+            crosshair: 'var(--chart-crosshair)',
           },
         },
-        
-        // ============================================
-        // 保留原有 terminal 颜色（向后兼容）
-        // ============================================
-        terminal: {
-          bg: 'var(--bg-primary)',
-          panel: 'var(--panel-bg)',
-          accent: 'var(--accent-primary)',
-          dim: 'var(--text-tertiary)'
+        bull: {
+          DEFAULT: 'var(--color-bull)',
+          light: 'var(--color-bull-light)',
+          bg: 'var(--color-bull-bg)',
+          border: 'var(--color-bull-border)',
         },
-        
-        // ============================================
-        // 专业金融色调（向后兼容）
-        // ============================================
-        bullish: {
-          DEFAULT: 'var(--bullish)',
-          light: 'var(--bullish-light)',
-          dark: '#b91c1c',
-          bg: 'var(--bullish-bg)',
-          border: 'var(--bullish-border)',
+        bear: {
+          DEFAULT: 'var(--color-bear)',
+          light: 'var(--color-bear-light)',
+          bg: 'var(--color-bear-bg)',
+          border: 'var(--color-bear-border)',
         },
-        bearish: {
-          DEFAULT: 'var(--bearish)',
-          light: 'var(--bearish-light)',
-          dark: '#166534',
-          bg: 'var(--bearish-bg)',
-          border: 'var(--bearish-border)',
+        primary: {
+          DEFAULT: 'var(--color-primary)',
+          hover: 'var(--color-primary-hover)',
+          light: 'var(--color-primary-light)',
+          dark: 'var(--color-primary-dark)',
+          bg: 'var(--color-primary-bg)',
+          border: 'var(--color-primary-border)',
         },
-        
-        // ============================================
-        // 金融终端专属色系
-        // ============================================
-        'terminal-bg': '#0a0a0a',      // 极暗背景色
-        'terminal-card': '#121212',    // 卡片背景色
-        'terminal-border': '#27272a',  // 边框色
-        'market-up': '#ef4444',        // 涨（红色）
-        'market-down': '#10b981',      // 跌（绿色）
-        'agent-blue': '#3b82f6',       // Copilot 品牌色
       },
-      
-      // 阴影
       boxShadow: {
         'theme-sm': 'var(--shadow-sm)',
         'theme-md': 'var(--shadow-md)',
         'theme-lg': 'var(--shadow-lg)',
+        'theme-xl': 'var(--shadow-xl)',
+        'theme-glow': 'var(--shadow-glow)',
       },
-      
-      // 背景色快捷访问
       backgroundColor: {
-        'theme-primary': 'var(--bg-primary)',
-        'theme-secondary': 'var(--bg-secondary)',
-        'theme-panel': 'var(--panel-bg)',
+        'base': 'var(--bg-base)',
+        'surface': 'var(--bg-surface)',
+        'surface-hover': 'var(--bg-surface-hover)',
+        'elevated': 'var(--bg-elevated)',
+        'overlay': 'var(--bg-overlay)',
+        'glass': 'var(--bg-glass)',
+        'bull': 'var(--color-bull-bg)',
+        'bear': 'var(--color-bear-bg)',
+        'primary': 'var(--color-primary-bg)',
+        'terminal-bg': 'var(--bg-base)',
+        'terminal-panel': 'var(--bg-surface)',
+        'theme-primary': 'var(--bg-base)',
+        'theme-secondary': 'var(--bg-surface)',
+        'theme-panel': 'var(--bg-surface)',
       },
-      
-      // 文字色快捷访问
       textColor: {
+        'primary': 'var(--text-primary)',
+        'secondary': 'var(--text-secondary)',
+        'muted': 'var(--text-muted)',
+        'disabled': 'var(--text-disabled)',
+        'placeholder': 'var(--text-placeholder)',
+        'inverse': 'var(--text-inverse)',
+        'bull': 'var(--color-bull)',
+        'bear': 'var(--color-bear)',
+        'accent': 'var(--color-primary)',
+        'terminal': 'var(--text-primary)',
+        'terminal-dim': 'var(--text-secondary)',
+        'terminal-accent': 'var(--color-primary)',
         'theme-primary': 'var(--text-primary)',
         'theme-secondary': 'var(--text-secondary)',
-        'theme-tertiary': 'var(--text-tertiary)',
+        'theme-tertiary': 'var(--text-muted)',
       },
-      
-      // 边框色快捷访问
       borderColor: {
-        'theme': 'var(--border-primary)',
-        'theme-secondary': 'var(--border-secondary)',
+        'base': 'var(--border-base)',
+        'light': 'var(--border-light)',
+        'focus': 'var(--border-focus)',
+        'hover': 'var(--border-hover)',
+        'bull': 'var(--color-bull-border)',
+        'bear': 'var(--color-bear-border)',
+        'primary': 'var(--color-primary-border)',
+        'theme': 'var(--border-base)',
+        'theme-secondary': 'var(--border-light)',
+        'theme-hover': 'var(--border-hover)',
+        'theme-accent': 'var(--color-primary-border)',
+        'terminal-border': 'var(--border-base)',
       },
-      
-      // 圆角系统 - 万德规范
       borderRadius: {
-        'sm': 'var(--radius-sm)',    // 4px PC默认
-        'md': 'var(--radius-md)',    // 4px
-        'lg': 'var(--radius-lg)',    // 8px 移动端
-        'xl': 'var(--radius-xl)',    // 8px
-      }
+        'sm': 'var(--radius-sm)',
+        'md': 'var(--radius-md)',
+        'lg': 'var(--radius-lg)',
+        'xl': 'var(--radius-xl)',
+        'full': 'var(--radius-full)',
+      },
+      spacing: {
+        'xs': 'var(--space-xs)',
+        'sm': 'var(--space-sm)',
+        'md': 'var(--space-md)',
+        'lg': 'var(--space-lg)',
+        'xl': 'var(--space-xl)',
+        '2xl': 'var(--space-2xl)',
+      },
+      transitionDuration: {
+        'micro': 'var(--duration-micro)',
+        'fast': 'var(--duration-fast)',
+        'normal': 'var(--duration-normal)',
+        'slow': 'var(--duration-slow)',
+      },
+      zIndex: {
+        'base': 'var(--z-base)',
+        'dropdown': 'var(--z-dropdown)',
+        'sticky': 'var(--z-sticky)',
+        'fixed': 'var(--z-fixed)',
+        'modal-backdrop': 'var(--z-modal-backdrop)',
+        'modal': 'var(--z-modal)',
+        'popover': 'var(--z-popover)',
+        'tooltip': 'var(--z-tooltip)',
+        'toast': 'var(--z-toast)',
+        'max': 'var(--z-max)',
+      },
     },
   },
   plugins: [],
