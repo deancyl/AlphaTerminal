@@ -1,7 +1,13 @@
 <template>
-  <div class="connection-status flex items-center gap-1.5" :class="statusClass">
+  <div 
+    class="connection-status flex items-center gap-1.5" 
+    :class="statusClass"
+    role="status"
+    aria-live="polite"
+    :aria-label="`WebSocket连接状态: ${statusText}`"
+  >
     <!-- Status indicator -->
-    <div class="status-indicator">
+    <div class="status-indicator" aria-hidden="true">
       <!-- Idle: Gray dot -->
       <span
         v-if="status === 'idle'"
@@ -58,7 +64,7 @@
       </svg>
     </div>
 
-    <!-- Status text -->
+    <!-- Status text (screen reader will announce this) -->
     <span class="status-text text-xs">
       {{ statusText }}
     </span>
@@ -67,6 +73,7 @@
     <span
       v-if="status === 'connected' && latency !== null"
       class="latency text-[10px] text-[var(--text-tertiary)]"
+      :aria-label="`延迟: ${latency}毫秒`"
     >
       {{ latency }}ms
     </span>
@@ -75,6 +82,7 @@
     <span
       v-if="status === 'disconnected' && retryCountdown !== null"
       class="retry-countdown text-[10px] text-[var(--text-tertiary)]"
+      :aria-label="`${retryCountdown}秒后重试`"
     >
       {{ retryCountdown }}s
     </span>
@@ -82,8 +90,10 @@
     <!-- Manual retry button (failed state) -->
     <button
       v-if="status === 'failed'"
-      class="retry-btn px-1.5 py-0.5 rounded text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary-bg)] transition-colors"
+      class="retry-btn px-1.5 py-0.5 rounded text-[10px] text-[var(--color-primary)] hover:bg-[var(--color-primary-bg)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent-primary)] focus:ring-offset-1"
       @click="handleRetry"
+      aria-label="重新连接"
+      type="button"
     >
       重试
     </button>
@@ -214,6 +224,12 @@ function handleRetry() {
 
 .retry-btn:hover {
   background-color: rgba(15, 82, 186, 0.2);
+}
+
+/* Focus ring for retry button */
+.retry-btn:focus-visible {
+  outline: 2px solid var(--accent-primary, #3b82f6);
+  outline-offset: 2px;
 }
 
 /* Reduced motion support */

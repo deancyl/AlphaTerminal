@@ -56,8 +56,8 @@ def _get_llm_config(provider: str) -> dict:
                 "base_url": db_cfg.get("base_url", ""),
                 "model":    db_cfg.get("model", ""),
             }
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[COPILOT] Failed to load LLM config from database: {type(e).__name__}: {e}")
     # 2. 环境变量（.env 文件）
     defaults = {
         "deepseek": {"api_key": os.getenv("DEEPSEEK_API_KEY",""), "base_url": os.getenv("DEEPSEEK_API_BASE","https://api.deepseek.com"), "model": os.getenv("DEEPSEEK_MODEL","deepseek-chat")},

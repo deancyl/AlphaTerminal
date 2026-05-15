@@ -137,7 +137,9 @@
     <!-- K线主图：左侧 8列，高度6单位 -->
     <div class="grid-stack-item"
          data-widget-id="chart"
-         gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+         gs-x="0" gs-y="0" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4"
+         role="region"
+         aria-label="指标图表面板">
       <WidgetErrorBoundary widget-name="IndexLineChart">
         <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
           <!-- 标题行 -->
@@ -214,7 +216,9 @@
     <!-- 情绪面板扩展至 10 单位高度（800px），彻底消除滚动条 -->
     <div class="grid-stack-item"
          data-widget-id="sentiment"
-         gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8">
+         gs-x="0" gs-y="6" gs-w="8" gs-h="10" gs-min-w="4" gs-min-h="8"
+         role="region"
+         aria-label="市场情绪面板">
       <WidgetErrorBoundary widget-name="SentimentGauge">
         <div class="grid-stack-item-content terminal-panel p-3">
           <div class="flex items-center justify-between mb-2 shrink-0">
@@ -229,7 +233,9 @@
     <!-- ━━━ Widget 3：快讯新闻（情绪图下方，16起）━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="news"
-         gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4">
+         gs-x="0" gs-y="16" gs-w="8" gs-h="6" gs-min-w="4" gs-min-h="4"
+         role="region"
+         aria-label="新闻快讯面板">
       <WidgetErrorBoundary widget-name="NewsFeed">
         <div class="grid-stack-item-content terminal-panel p-3">
           <NewsFeed />
@@ -240,7 +246,9 @@
     <!-- ━━━ Widget 4：风向标（右上，右侧4列）━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="wind"
-         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="0" gs-w="4" gs-h="6" gs-min-w="3" gs-min-h="3"
+         role="region"
+         aria-label="市场风向标面板">
       <div class="grid-stack-item-content terminal-panel p-2">
         <!-- Phase 5: 8个风向标（4指数 + 4宏观）两列卡片网格（密度升级：padding 20%） -->
         <div class="text-[10px] text-theme-tertiary mb-1 flex items-center justify-between">
@@ -332,7 +340,9 @@
     <!-- ━━━ Widget 5：资金流向（独立，右侧4列，6起）━━━━━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="fundflow"
-         gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
+         gs-x="8" gs-y="6" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4"
+         role="region"
+         aria-label="资金流向面板">
       <WidgetErrorBoundary widget-name="FundFlowPanel">
         <div class="grid-stack-item-content terminal-panel p-2">
           <FundFlowPanel />
@@ -343,7 +353,9 @@
     <!-- ━━━ Widget 5.1：行业风口（独立，右侧4列，11起）━━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="sectors"
-         gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4">
+         gs-x="8" gs-y="11" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="4"
+         role="region"
+         aria-label="行业板块面板">
       <WidgetErrorBoundary widget-name="HotSectors">
         <div class="grid-stack-item-content terminal-panel p-2">
           <HotSectors @sector-click="handleSectorClick" />
@@ -354,7 +366,9 @@
     <!-- ━━━ Widget 6：国内市场指数（右侧4列，16起，填补Y=16空挡）━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="china"
-         gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3">
+         gs-x="8" gs-y="16" gs-w="4" gs-h="5" gs-min-w="3" gs-min-h="3"
+         role="region"
+         aria-label="国内指数面板">
       <div class="grid-stack-item-content terminal-panel p-4 flex flex-col">
         <div class="flex items-center justify-between mb-2 shrink-0">
           <span class="text-terminal-accent font-bold text-sm">🇨🇳 国内指数</span>
@@ -395,7 +409,9 @@
     <!-- ━━━ Widget 7：全市场个股透视看板（底部全宽12列，21起）━━━━━━━━━━━ -->
     <div class="grid-stack-item"
          data-widget-id="screener"
-         gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5">
+         gs-x="0" gs-y="21" gs-w="12" gs-h="8" gs-min-w="6" gs-min-h="5"
+         role="region"
+         aria-label="个股监测面板">
       <WidgetErrorBoundary widget-name="StockScreener">
         <div class="grid-stack-item-content terminal-panel p-3">
           <StockScreener @symbol-click="handleScreenerClick" />

@@ -161,6 +161,14 @@ def _verify_admin(admin_auth: Optional[str], x_admin_auth: Optional[str] = None)
     auth_value = x_admin_auth or admin_auth
     if auth_value is None:
         return False
+    
+    # Check if it's a session token (64 char hex)
+    if len(auth_value) == 64 and all(c in '0123456789abcdef' for c in auth_value.lower()):
+        from app.routers.admin import _validate_admin_session, _cleanup_expired_sessions
+        _cleanup_expired_sessions()
+        return _validate_admin_session(auth_value)
+    
+    # Legacy support for admin_ prefixed tokens (deprecated)
     return auth_value.startswith("admin_") or auth_value == "admin_ui"
 
 

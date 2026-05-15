@@ -8,7 +8,10 @@ import time
 import os
 import psutil
 import sqlite3
-from datetime import datetime
+import hashlib
+import secrets
+import jwt
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body, Query
@@ -19,6 +22,7 @@ from app.services import quote_source
 from app.services.scheduler import scheduler
 from app.services.sectors_cache import is_ready as sectors_cache_ready
 from app.db.database import _get_conn, _db_path
+from app.config.settings import get_settings
 
 # ── 动态路径配置（解决硬编码路径问题）────────────────────────────────────────
 # BASE_DIR = AlphaTerminal 项目根目录
@@ -27,6 +31,99 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent   # app/routers/admin.p
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
+
+# ═══════════════════════════════════════════════════════════════
+# Admin Session Token Management
+# ═══════════════════════════════════════════════════════════════
+
+# In-memory session store (expires after ADMIN_SESSION_EXPIRY_HOURS)
+_admin_sessions: Dict[str, Dict[str, Any]] = {}
+ADMIN_SESSION_EXPIRY_HOURS = 24
+
+# JWT Configuration
+JWT_SECRET_KEY = secrets.token_hex(32)  # Generated once at startup
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRY_HOURS = 24
+
+def _generate_session_token(admin_key: str) -> str:
+    """Generate a secure session token using HMAC-SHA256."""
+    timestamp = str(int(time.time()))
+    random_bytes = secrets.token_hex(16)
+    payload = f"{admin_key}:{timestamp}:{random_bytes}"
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+def _create_admin_session(admin_key: str) -> str:
+    """Create a new admin session and return the session token."""
+    session_token = _generate_session_token(admin_key)
+    expires_at = datetime.now() + timedelta(hours=ADMIN_SESSION_EXPIRY_HOURS)
+    _admin_sessions[session_token] = {
+        "created_at": datetime.now().isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "ip": "unknown",  # Will be updated on first use
+    }
+    logger.info(f"[Admin] Created new admin session, expires at {expires_at}")
+    return session_token
+
+def _validate_admin_session(session_token: str, client_ip: str = "unknown") -> bool:
+    """Validate an admin session token. Returns True if valid, False otherwise."""
+    if not session_token:
+        return False
+    
+    session = _admin_sessions.get(session_token)
+    if not session:
+        return False
+    
+    # Check expiry
+    expires_at = datetime.fromisoformat(session["expires_at"])
+    if datetime.now() > expires_at:
+        del _admin_sessions[session_token]
+        logger.info(f"[Admin] Session expired for IP {client_ip}")
+        return False
+    
+    # Update IP on first use
+    if session["ip"] == "unknown":
+        session["ip"] = client_ip
+    
+    return True
+
+def _cleanup_expired_sessions():
+    """Remove expired sessions from memory."""
+    now = datetime.now()
+    expired = [
+        token for token, session in _admin_sessions.items()
+        if now > datetime.fromisoformat(session["expires_at"])
+    ]
+    for token in expired:
+        del _admin_sessions[token]
+    if expired:
+        logger.info(f"[Admin] Cleaned up {len(expired)} expired sessions")
+
+def _generate_jwt_token(admin_key: str) -> tuple[str, datetime]:
+    """Generate a JWT token with expiry."""
+    expires_at = datetime.now() + timedelta(hours=JWT_EXPIRY_HOURS)
+    payload = {
+        "admin_key_hash": hashlib.sha256(admin_key.encode()).hexdigest()[:16],
+        "iat": datetime.now(),
+        "exp": expires_at,
+        "type": "admin_access"
+    }
+    token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+    return token, expires_at
+
+def _validate_jwt_token(token: str) -> tuple[bool, str]:
+    """
+    Validate a JWT token.
+    Returns (is_valid, error_message).
+    """
+    try:
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+        if payload.get("type") != "admin_access":
+            return False, "Invalid token type"
+        return True, ""
+    except jwt.ExpiredSignatureError:
+        return False, "Token expired"
+    except jwt.InvalidTokenError as e:
+        return False, f"Invalid token: {str(e)}"
 
 # ═══════════════════════════════════════════════════════════════
 # Pydantic Request Models
@@ -112,6 +209,151 @@ def admin_read_auth(api_key: str = None):
 def admin_write_auth(api_key: str = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
     return verify_admin_key(api_key)
+
+# Unauthenticated router for session token endpoint
+session_router = APIRouter(prefix="/admin", tags=["admin"])
+
+@session_router.post("/session")
+def get_admin_session(
+    x_forwarded_for: str = Header(None),
+    x_admin_api_key: str = Header(None, alias="X-Admin-Api-Key"),
+):
+    """
+    Get admin session token for UI authentication.
+    
+    Requires X-Admin-Api-Key header with the configured ADMIN_API_KEY.
+    Returns a session token valid for 24 hours.
+    
+    This endpoint is intentionally unauthenticated (no Depends) because
+    it's the authentication entry point for the admin UI.
+    """
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    
+    settings = get_settings()
+    configured_key = settings.ADMIN_API_KEY
+    
+    if not configured_key:
+        raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
+    
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+    
+    if x_admin_api_key != configured_key:
+        _record_failure(client_ip)
+        logger.warning(f"[Admin] Invalid API key attempt from IP {client_ip}")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    _cleanup_expired_sessions()
+    session_token = _create_admin_session(configured_key)
+    
+    logger.info(f"[Admin] Session token issued for IP {client_ip}")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "session_token": session_token,
+            "expires_at": _admin_sessions[session_token]["expires_at"],
+            "expires_in_hours": ADMIN_SESSION_EXPIRY_HOURS,
+        }
+    }
+
+@session_router.get("/session/validate")
+def validate_admin_session(
+    x_forwarded_for: str = Header(None),
+    x_admin_session: str = Header(None, alias="X-Admin-Session"),
+):
+    """Validate an admin session token."""
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    
+    if not x_admin_session:
+        return {"code": 1, "message": "No session token provided", "data": {"valid": False}}
+    
+    _cleanup_expired_sessions()
+    is_valid = _validate_admin_session(x_admin_session, client_ip)
+    
+    if is_valid:
+        session = _admin_sessions.get(x_admin_session)
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "valid": True,
+                "expires_at": session["expires_at"],
+                "ip": session["ip"],
+            }
+        }
+    else:
+        return {"code": 1, "message": "Session expired or invalid", "data": {"valid": False}}
+
+@session_router.post("/token")
+def get_admin_token(
+    x_forwarded_for: str = Header(None),
+    x_admin_api_key: str = Header(None, alias="X-Admin-Api-Key"),
+):
+    """
+    Get admin JWT token for UI authentication.
+    
+    Requires X-Admin-Api-Key header with the configured ADMIN_API_KEY.
+    Returns a JWT token valid for 24 hours.
+    """
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    
+    settings = get_settings()
+    configured_key = settings.ADMIN_API_KEY
+    
+    if not configured_key:
+        raise HTTPException(status_code=400, detail="ADMIN_API_KEY not configured")
+    
+    if not _check_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
+    
+    if x_admin_api_key != configured_key:
+        _record_failure(client_ip)
+        logger.warning(f"[Admin] Invalid API key attempt from IP {client_ip}")
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    
+    _cleanup_expired_sessions()
+    jwt_token, expires_at = _generate_jwt_token(configured_key)
+    
+    logger.info(f"[Admin] JWT token issued for IP {client_ip}, expires at {expires_at}")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "token": jwt_token,
+            "expires_at": expires_at.isoformat(),
+            "expires_in_hours": JWT_EXPIRY_HOURS,
+        }
+    }
+
+@session_router.get("/token/validate")
+def validate_admin_token(
+    x_forwarded_for: str = Header(None),
+    x_admin_token: str = Header(None, alias="X-Admin-Token"),
+):
+    """
+    Validate an admin JWT token.
+    Returns 401 if token is invalid or expired.
+    """
+    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    
+    if not x_admin_token:
+        raise HTTPException(status_code=401, detail="No token provided")
+    
+    _cleanup_expired_sessions()
+    is_valid, error_msg = _validate_jwt_token(x_admin_token)
+    
+    if is_valid:
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {"valid": True}
+        }
+    else:
+        logger.info(f"[Admin] Token validation failed for IP {client_ip}: {error_msg}")
+        raise HTTPException(status_code=401, detail=error_msg)
 
 # router 定义（在 verify_admin_key 之后）
 router = APIRouter(

@@ -9,9 +9,31 @@ import logging
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.ws_manager import ws_manager, WSConnection, PING_INTERVAL, PONG_TIMEOUT
+from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def validate_origin(origin: str) -> bool:
+    """Validate WebSocket connection origin against allowed origins."""
+    if not origin:
+        return False
+    
+    settings = get_settings()
+    allowed_origins = settings.get_allowed_origins_list()
+    
+    if allowed_origins == ["*"]:
+        return True
+    
+    origin_lower = origin.lower()
+    for allowed in allowed_origins:
+        if allowed.lower() == origin_lower:
+            return True
+        if allowed.endswith("*") and origin_lower.startswith(allowed[:-1].lower()):
+            return True
+    
+    return False
 
 
 @router.websocket("/ws/market")
@@ -45,6 +67,12 @@ async def ws_market(ws: WebSocket):
       - symbol 订阅匹配不区分大小写（后端统一转小写处理）
       - 服务端每 25 秒发送 ping，客户端需在 10 秒内响应 pong
     """
+    origin = ws.headers.get("origin", "") or ws.headers.get("Origin", "")
+    if not validate_origin(origin):
+        logger.warning(f"WebSocket connection rejected from invalid origin: {origin}")
+        await ws.close(code=1008, reason="Invalid origin")
+        return
+    
     await ws.accept()
 
     conn = await ws_manager.connect(ws)
@@ -53,8 +81,8 @@ async def ws_market(ws: WebSocket):
     async def send_json(data):
         try:
             await ws.send_text(json.dumps(data, ensure_ascii=False))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[WS] Failed to send message: {type(e).__name__}: {e}")
 
     async def handle_message(raw: str):
         nonlocal ping_time
@@ -68,11 +96,17 @@ async def ws_market(ws: WebSocket):
         symbols = msg.get("symbols", [])
 
         if action == "subscribe":
-            await ws_manager.subscribe(conn, symbols)
-            await send_json({
-                "type": "subscribed",
-                "symbols": list(await conn.get_symbols())
-            })
+            success, error = await ws_manager.subscribe(conn, symbols)
+            if success:
+                await send_json({
+                    "type": "subscribed",
+                    "symbols": list(await conn.get_symbols())
+                })
+            else:
+                await send_json({
+                    "type": "error",
+                    "message": error
+                })
 
         elif action == "unsubscribe":
             await ws_manager.unsubscribe(conn, symbols)

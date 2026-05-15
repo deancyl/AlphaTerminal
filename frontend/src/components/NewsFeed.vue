@@ -1,11 +1,13 @@
 <template>
-  <div class="flex flex-col min-h-0 h-full overflow-hidden">
+  <div class="flex flex-col min-h-0 h-full overflow-hidden" role="region" aria-label="新闻快讯">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-1">
       <div class="flex items-center gap-2">
-        <span class="text-theme-primary font-semibold text-sm">快讯</span>
-        <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10">
+        <span class="text-theme-primary font-semibold text-sm" id="news-feed-title">快讯</span>
+        <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10"
+              aria-live="polite"
+              role="status">
           {{ filteredTotal }} 条
         </span>
       </div>
@@ -129,6 +131,9 @@
     <div
       ref="listEl"
       class="flex-1 overflow-hidden mt-2 min-h-0"
+      role="list"
+      aria-label="新闻列表"
+      aria-describedby="news-feed-title"
     >
       <RecycleScroller
         ref="scrollerRef"
@@ -139,10 +144,13 @@
         :buffer="300"
         v-slot="{ item, index }"
       >
-        <div
-          class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
-          @click="openModal(item, $event)"
-        >
+<div
+           class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
+           role="listitem"
+           :tabindex="0"
+           @click="openModal(item, $event)"
+           @keydown.enter="openModal(item, $event)"
+         >
           <!-- 第一行：时间 + 标签 + 情绪 + 来源 -->
           <div class="flex items-center gap-1.5">
             <span class="text-[11px] text-theme-tertiary font-mono w-10 shrink-0">{{ formatTime(item.time) }}</span>

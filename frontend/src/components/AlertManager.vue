@@ -1,8 +1,8 @@
 <template>
-  <div class="alert-manager" role="region" aria-label="价格预警管理">
+  <div class="alert-manager" role="region" aria-label="价格预警管理" tabindex="-1">
     <!-- 标题栏 -->
     <div class="flex items-center justify-between mb-3">
-      <span class="text-terminal-accent font-bold text-sm">🔔 价格预警</span>
+      <span class="text-terminal-accent font-bold text-sm" id="alert-manager-title">🔔 价格预警</span>
       <div class="flex gap-2">
         <button
           v-if="notificationPermission !== 'granted'"
@@ -30,8 +30,8 @@
     </div>
 
     <!-- 预警规则列表 -->
-    <div class="space-y-2 max-h-60 overflow-y-auto" role="list" aria-label="预警规则列表">
-      <div v-if="alertRules.length === 0" class="text-center text-[var(--text-muted)] text-xs py-4">
+    <div class="space-y-2 max-h-60 overflow-y-auto" role="list" aria-label="预警规则列表" aria-describedby="alert-manager-title">
+      <div v-if="alertRules.length === 0" class="text-center text-[var(--text-muted)] text-xs py-4" role="status">
         暂无预警规则，点击"添加"创建
       </div>
       
@@ -41,6 +41,8 @@
         class="p-2 bg-terminal-panel border border-theme rounded-sm text-xs"
         :class="{ 'opacity-50': !rule.enabled }"
         role="listitem"
+        :tabindex="0"
+        @keydown.enter="toggleRule(rule.id)"
       >
         <div class="flex items-center justify-between">
           <div class="flex-1">

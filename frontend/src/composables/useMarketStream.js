@@ -24,6 +24,7 @@ import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNot
 import { usePageVisibility } from './usePageVisibility.js'
 import { acquireLock, releaseLock } from '../utils/connectionLock.js'
 import { TIMEOUTS, POLLING_ENDPOINTS } from '../utils/constants.js'
+import { CircularBuffer } from '../utils/circularBuffer.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -69,6 +70,126 @@ const globalPollingStatus = ref(false)
 const POLLING_INTERVAL = 5000  // 5 seconds
 let _pollingTimer = null
 
+// ── Connection State Machine (Race Condition Fix) ────────────────────────────────
+// States: IDLE, CONNECTING, CONNECTED, DISCONNECTING, RECONNECTING
+const ConnectionState = {
+  IDLE: 'idle',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  DISCONNECTING: 'disconnecting',
+  RECONNECTING: 'reconnecting'
+}
+
+// Valid state transitions map
+const VALID_TRANSITIONS = {
+  [ConnectionState.IDLE]: [ConnectionState.CONNECTING, ConnectionState.RECONNECTING],
+  [ConnectionState.CONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING],
+  [ConnectionState.CONNECTED]: [ConnectionState.DISCONNECTING, ConnectionState.RECONNECTING],
+  [ConnectionState.DISCONNECTING]: [ConnectionState.IDLE, ConnectionState.CONNECTED],
+  [ConnectionState.RECONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING]
+}
+
+// Single source of truth for connection state
+let _connectionState = ConnectionState.IDLE
+
+// Operation lock to prevent concurrent connect/disconnect
+let _operationLock = false
+let _operationPromise = null
+
+/**
+ * Atomic state transition with validation
+ * @param {string} from - Expected current state
+ * @param {string} to - Target state
+ * @returns {boolean} - Whether transition succeeded
+ */
+function _transitionState(from, to) {
+  if (_connectionState !== from) {
+    logger.warn(`[MarketStream] Invalid state transition: expected ${from}, current is ${_connectionState}, target ${to}`)
+    return false
+  }
+  
+  if (!VALID_TRANSITIONS[from]?.includes(to)) {
+    logger.warn(`[MarketStream] Forbidden state transition: ${from} → ${to}`)
+    return false
+  }
+  
+  const oldState = _connectionState
+  _connectionState = to
+  globalWsStatus.value = to
+  logger.log(`[MarketStream] State transition: ${oldState} → ${to}`)
+  return true
+}
+
+/**
+ * Try to transition state (no validation of current state)
+ * @param {string} to - Target state
+ * @returns {boolean} - Whether transition succeeded
+ */
+function _tryTransitionTo(to) {
+  const from = _connectionState
+  if (!VALID_TRANSITIONS[from]?.includes(to)) {
+    logger.warn(`[MarketStream] Forbidden state transition: ${from} → ${to}`)
+    return false
+  }
+  
+  _connectionState = to
+  globalWsStatus.value = to
+  logger.log(`[MarketStream] State transition: ${from} → ${to}`)
+  return true
+}
+
+/**
+ * Acquire operation lock
+ * @returns {Promise<boolean>} - Whether lock was acquired
+ */
+async function _acquireOperationLock() {
+  if (_operationLock) {
+    // Wait for existing operation to complete
+    if (_operationPromise) {
+      try {
+        await _operationPromise
+      } catch (e) {
+        // Ignore errors from previous operation
+      }
+    }
+    // Check again after waiting
+    if (_operationLock) {
+      logger.warn('[MarketStream] Failed to acquire operation lock after waiting')
+      return false
+    }
+  }
+  _operationLock = true
+  return true
+}
+
+/**
+ * Release operation lock
+ */
+function _releaseOperationLock() {
+  _operationLock = false
+  _operationPromise = null
+}
+
+/**
+ * Execute operation with lock
+ * @param {Function} operation - Async operation to execute
+ * @returns {Promise<any>} - Operation result
+ */
+async function _withLock(operation) {
+  const acquired = await _acquireOperationLock()
+  if (!acquired) {
+    logger.warn('[MarketStream] Operation rejected: lock not acquired')
+    return null
+  }
+  
+  try {
+    _operationPromise = operation()
+    return await _operationPromise
+  } finally {
+    _releaseOperationLock()
+  }
+}
+
 // ── Race Condition Prevention (Wave 2 Fix) ────────────────────────────────
 // Data version counter: Each update increments this, allowing us to detect stale updates
 let _dataVersion = 0
@@ -82,7 +203,7 @@ const STATUS_DEBOUNCE_MS = 500
 // 当前已订阅的符号集合（引用计数 Map：key=symbol, value=refcount）
 const subscribedSymRefCount = new Map()
 
-// 数据历史限制（防止内存泄漏），按 symbol 分开统计
+// 数据历史限制（使用 CircularBuffer 避免 shift() 的 O(n) 性能开销）
 const MAX_TICK_HISTORY = 1000
 const tickHistory = {}
 
@@ -114,11 +235,28 @@ function _setStatusDebounced(newStatus) {
 }
 
 function _newConnection() {
-  if (_ws || _connecting) return
-  if (!acquireLock()) return
+  // State machine check: only allow connection from IDLE or RECONNECTING
+  if (_connectionState !== ConnectionState.IDLE && _connectionState !== ConnectionState.RECONNECTING) {
+    logger.warn(`[MarketStream] _newConnection rejected: current state is ${_connectionState}`)
+    return
+  }
+  
+  if (_ws) {
+    logger.warn('[MarketStream] _newConnection rejected: connection already exists')
+    return
+  }
+  
+  if (!acquireLock()) {
+    logger.warn('[MarketStream] _newConnection rejected: connection lock not acquired')
+    return
+  }
 
-  _connecting = true
-  globalWsStatus.value = 'connecting'
+  // Transition to CONNECTING
+  if (!_tryTransitionTo(ConnectionState.CONNECTING)) {
+    releaseLock()
+    return
+  }
+  
   globalError.value = null
   globalConnectionAttempts.value++
   const url = `${WS_BASE}/ws/market`
@@ -128,17 +266,15 @@ function _newConnection() {
   } catch (e) {
     releaseLock()
     logger.error('[MarketStream] WebSocket 创建失败:', e)
-    globalWsStatus.value = 'failed'
+    _tryTransitionTo(ConnectionState.IDLE)
     globalError.value = 'WebSocket 创建失败'
-    _connecting = false
     _scheduleRetry()
     return
   }
 
   _ws.onopen = () => {
     releaseLock()
-    _connecting = false
-    globalWsStatus.value = 'connected'
+    _transitionState(ConnectionState.CONNECTING, ConnectionState.CONNECTED)
     globalError.value = null
     globalLastConnectedAt.value = Date.now()
     globalConnectionAttempts.value = 0
@@ -180,16 +316,11 @@ function _newConnection() {
       _dataVersion++
       const currentVersion = _dataVersion
 
-      if (!tickHistory[sym]) tickHistory[sym] = []
+      if (!tickHistory[sym]) tickHistory[sym] = new CircularBuffer(MAX_TICK_HISTORY)
       tickHistory[sym].push({ ...data, _version: currentVersion, _priority: WS_PRIORITY })
-      if (tickHistory[sym].length > MAX_TICK_HISTORY) {
-        tickHistory[sym].shift()
-      }
 
-      globalTicks.value = {
-        ...globalTicks.value,
-        [sym]: { ...data, _version: currentVersion, _priority: WS_PRIORITY },
-      }
+      // Use Object.assign for better memory performance (avoid spread operator creating new objects)
+      globalTicks.value[sym] = Object.assign({}, data, { _version: currentVersion, _priority: WS_PRIORITY })
       _tickDirty = true
 
       const now = Date.now()
@@ -222,13 +353,12 @@ function _newConnection() {
     releaseLock()
     logger.error('[MarketStream] WS 错误:', e)
     globalError.value = 'WS 连接错误'
-    // onerror 之后必触发 onclose，状态由 onclose 设置为 'disconnected'
+    // onerror 之后必触发 onclose，状态由 onclose 设置
   }
 
   _ws.onclose = (e) => {
     releaseLock()
     logger.log('[MarketStream] 连接关闭:', e.code, e.reason)
-    const wasConnected = globalWsStatus.value === 'connected'
 
     if (e.code === 1006 && location.protocol === 'https:') {
       console.error(
@@ -241,16 +371,16 @@ function _newConnection() {
         '\n  4. 或在前端 .env 中设 VITE_WS_BASE=http://内网IP:端口（绕过代理直连，仅限内网）'
       )
     }
-    globalWsStatus.value = 'disconnected'
+    
+    // Transition to IDLE
+    _transitionState(_connectionState, ConnectionState.IDLE)
     _ws = null
-    _connecting = false
     _stopHealthCheck()
 
     if (e.code !== 1000 && subscribedSymRefCount.size > 0) {
       if (_retryCount < _MAX_RETRIES) {
         _scheduleRetry()
       } else {
-        globalWsStatus.value = 'failed'
         globalError.value = '连接失败次数过多，请刷新页面重试'
         logger.error('[MarketStream] 达到最大重试次数，停止重连')
       }
@@ -292,9 +422,14 @@ function _doUnsubscribe(syms) {
  */
 function _scheduleRetry() {
   if (_retryCount >= _MAX_RETRIES) return
-
+  
+  // Transition to RECONNECTING
+  if (!_tryTransitionTo(ConnectionState.RECONNECTING)) {
+    logger.warn('[MarketStream] _scheduleRetry rejected: cannot transition to RECONNECTING')
+    return
+  }
+  
   clearTimeout(_retryTimer)
-  globalWsStatus.value = 'connecting'
   _retryCount++
 
   // jitter: 实际延迟 = base * (0.75 + random * 0.5)，即 ±25%
@@ -302,15 +437,16 @@ function _scheduleRetry() {
   logger.log(`[MarketStream] ${(jitter / 1000).toFixed(1)}s后第${_retryCount}次重连（jitter ±25%）...`)
 
   _retryTimer = setTimeout(() => {
-    if (subscribedSymRefCount.size > 0 && !_ws) _newConnection()
+    if (subscribedSymRefCount.size > 0 && !_ws && _connectionState === ConnectionState.RECONNECTING) {
+      _newConnection()
+    }
   }, jitter)
 
   _retryDelay = Math.min(_retryDelay * 1.5, _MAX_DELAY)
 }
 
-// ── 心跳管理（setInterval 句柄必须保存，disconnect 时清理）────────
+// ── 心跳管理（setinterval 句柄必须保存，disconnect 时清理）────────
 let _heartbeatTimer = null
-let _connecting = false
 let _lastMessageTime = 0
 let _healthCheckTimer = null
 let _pingSentTime = 0
@@ -402,16 +538,14 @@ function _startPolling(symbols) {
           if (existing && existing._priority >= WS_PRIORITY) {
             continue
           }
-          globalTicks.value = {
-            ...globalTicks.value,
-            [item.symbol]: {
+          // Use Object.assign for better memory performance
+          globalTicks.value[item.symbol] = Object.assign({}, {
               symbol: item.symbol,
               price: item.price,
               change_pct: item.change_pct,
               _version: currentVersion,
               _priority: HTTP_PRIORITY,
-            }
-          }
+            })
         }
         triggerRef(globalTicks)
       }
@@ -434,11 +568,10 @@ function _stopPolling() {
 export function useMarketStream(initialSymbol = '') {
   const localSymbol = ref(initialSymbol)
 
-  // 组件 mount 时注册（使用引用计数）
   _connectedCount.value++
   if (initialSymbol) {
     subscribedSymRefCount.set(initialSymbol, (subscribedSymRefCount.get(initialSymbol) || 0) + 1)
-    if (!_ws && globalWsStatus.value === 'idle') {
+    if (!_ws && _connectionState === ConnectionState.IDLE) {
       _newConnection()
     } else if (_ws && _ws.readyState === WebSocket.OPEN) {
       _doSubscribe([initialSymbol])
@@ -446,7 +579,6 @@ export function useMarketStream(initialSymbol = '') {
   }
 
   function connect(symOrList) {
-    // ── 防空：空值/undefined 直接忽略 ──
     if (!symOrList || String(symOrList) === 'undefined') return
 
     cancelPendingDisconnect()
@@ -464,8 +596,13 @@ export function useMarketStream(initialSymbol = '') {
       }
     })
 
+    // State machine check: only connect if IDLE or DISCONNECTED
     if (!_ws) {
-      _newConnection()
+      if (_connectionState === ConnectionState.IDLE) {
+        _newConnection()
+      } else {
+        logger.warn(`[MarketStream] connect() rejected: current state is ${_connectionState}`)
+      }
     } else if (_ws.readyState === WebSocket.OPEN) {
       if (newSyms.length) _doSubscribe(newSyms)
     }
@@ -486,10 +623,9 @@ export function useMarketStream(initialSymbol = '') {
       } else if (count === 1) {
         subscribedSymRefCount.delete(sym)
         symsToDrop.push(sym)
-        // 清理 globalTicks 中的该 symbol（替换引用，触发 shallowRef 更新）
-        const next = { ...globalTicks.value }
-        delete next[sym]
-        globalTicks.value = next
+        // 清理 globalTicks 中的该 symbol（直接删除属性，避免创建新对象）
+        delete globalTicks.value[sym]
+        _tickDirty = true
         delete tickHistory[sym]
       }
     })
@@ -508,7 +644,20 @@ export function useMarketStream(initialSymbol = '') {
       if (_pendingTick) clearTimeout(_pendingTick)
       _pendingTick = null
       _disconnectTimer = setTimeout(() => {
+        // State machine check: only disconnect if CONNECTED or RECONNECTING
         if (_connectedCount.value <= 0 && _ws) {
+          if (_connectionState !== ConnectionState.CONNECTED && 
+              _connectionState !== ConnectionState.RECONNECTING) {
+            logger.warn(`[MarketStream] disconnect() rejected: current state is ${_connectionState}`)
+            return
+          }
+          
+          // Transition to DISCONNECTING
+          if (!_tryTransitionTo(ConnectionState.DISCONNECTING)) {
+            logger.warn('[MarketStream] disconnect() failed to transition to DISCONNECTING')
+            return
+          }
+          
           _stopHeartbeat()
           clearTimeout(_retryTimer)
           if (_pendingTick) clearTimeout(_pendingTick)
@@ -517,7 +666,10 @@ export function useMarketStream(initialSymbol = '') {
           _ws.onerror = null
           _ws.close(1000, 'all_disconnected')
           _ws = null
-          globalWsStatus.value = 'idle'
+          
+          // Transition to IDLE
+          _transitionState(ConnectionState.DISCONNECTING, ConnectionState.IDLE)
+          
           subscribedSymRefCount.clear()
           Object.keys(tickHistory).forEach(k => delete tickHistory[k])
           globalTicks.value = {}
@@ -537,6 +689,7 @@ export function useMarketStream(initialSymbol = '') {
   }
 
   function manualReconnect() {
+    // Force disconnect regardless of state
     if (_ws) {
       _stopHeartbeat()
       clearTimeout(_retryTimer)
@@ -545,9 +698,14 @@ export function useMarketStream(initialSymbol = '') {
       _ws.close(1000, 'manual_reconnect')
       _ws = null
     }
+    
+    // Reset state to IDLE
+    _connectionState = ConnectionState.IDLE
+    globalWsStatus.value = ConnectionState.IDLE
     _retryCount = 0
     _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
-    globalWsStatus.value = 'idle'
+    
+    // Start new connection
     _newConnection()
   }
 
@@ -574,8 +732,8 @@ export function useMarketStream(initialSymbol = '') {
     tick: computed(() => localSymbol.value ? globalTicks.value[localSymbol.value] : null),
     ticks: globalTicks,
     wsStatus: globalWsStatus,
-    connected: computed(() => globalWsStatus.value === 'connected'),
-    reconnecting: computed(() => globalWsStatus.value === 'connecting'),
+    connected: computed(() => _connectionState === ConnectionState.CONNECTED),
+    reconnecting: computed(() => _connectionState === ConnectionState.CONNECTING || _connectionState === ConnectionState.RECONNECTING),
     error: globalError,
     symbol: localSymbol,
     connect,
@@ -586,12 +744,14 @@ export function useMarketStream(initialSymbol = '') {
     connectionAttempts: globalConnectionAttempts,
     latency: globalLatency,
     isPolling: globalPollingStatus,
+    connectionState: computed(() => _connectionState),
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,
       retryCount: _retryCount,
       connectionCount: _connectedCount.value,
       wsStatus: globalWsStatus.value,
+      connectionState: _connectionState,
       lastConnectedAt: globalLastConnectedAt.value,
       connectionAttempts: globalConnectionAttempts.value,
       latency: globalLatency.value,

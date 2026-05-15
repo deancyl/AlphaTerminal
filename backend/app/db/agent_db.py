@@ -208,8 +208,8 @@ def get_conn():
         try:
             conn.rollback()
             logger.debug("[AGENT_DB_CTX] Transaction rolled back")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}")
         raise
 
 

@@ -1,14 +1,26 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 
-// ── Markdown 渲染器配置 ──────────────────────────────────────
-// P1-7 Fix: html:false 防止 XSS（LLM 输出中的恶意 HTML 通过 v-html 直接渲染）
 const mdParser = new MarkdownIt({
-  html: false,      // 禁止原始 HTML 标签，保证 v-html 渲染安全
+  html: false,
   linkify: true,
   typographer: true,
-  breaks: true,     // 换行符 → <br>
+  breaks: true,
 })
+
+const defaultFenceRenderer = mdParser.renderer.rules.fence || function(tokens, idx, options, env, self) {
+  return self.renderToken(tokens, idx, options, env, self)
+}
+
+mdParser.renderer.rules.fence = function(tokens, idx, options, env, self) {
+  const token = tokens[idx]
+  const code = token.content.trim()
+  const info = token.info ? token.info.trim() : ''
+  const langClass = info ? ` language-${info}` : ''
+  const encodedCode = encodeURIComponent(code)
+  
+  return `<pre class="group" data-code="${encodedCode}"><code class="${langClass}">${mdParser.utils.escapeHtml(code)}</code></pre>`
+}
 
 /** 解析 Markdown + 折叠 thinking 思考链（DeepSeek R1 推理内容） */
 export function renderMarkdown(raw) {

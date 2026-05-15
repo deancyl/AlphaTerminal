@@ -64,8 +64,8 @@ def get_conn():
         # 发生异常时回滚事务
         try:
             conn.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[DB_CTX] Rollback failed: {type(e).__name__}: {e}")
         raise
 
 def _get_conn():

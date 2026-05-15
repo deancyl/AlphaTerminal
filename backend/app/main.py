@@ -22,6 +22,8 @@ from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
 from app.middleware.agent_auth import audit_middleware
 from app.middleware.rate_limit import setup_rate_limiting, RateLimitConfig
+from app.config.settings import get_settings
+from app.services.executor_manager import executor_manager, ExecutorStatus
 
 
 @asynccontextmanager
@@ -31,12 +33,33 @@ async def lifespan(app: FastAPI):
     start_writer()         # DB 异步写入线程
     start_scheduler()
     init_watchdog()        # 进程保活监控（从配置加载开关状态）
+    
+    # 注册核心服务到 ExecutorManager
+    executor_manager.register("scheduler", type('SchedulerProxy', (), {
+        'shutdown': lambda: stop_scheduler()
+    })(), shutdown_method="shutdown")
+    
+    executor_manager.register("db_writer", type('DBWriterProxy', (), {
+        'shutdown': lambda: stop_writer()
+    })(), shutdown_method="shutdown")
+    
+    executor_manager.register("watchdog", type('WatchdogProxy', (), {
+        'shutdown': lambda: stop_watchdog()
+    })(), shutdown_method="shutdown")
 
     yield
+    
     # 关闭时：优雅退出 — 等待队列排空
-    stop_writer()          # DB 写入队列 graceful shutdown（最多30s）
-    stop_scheduler()
-    stop_watchdog()        # 停止 watchdog 线程
+    logger.info("[Lifespan] Starting graceful shutdown...")
+    
+    # 使用 ExecutorManager 统一管理关闭
+    shutdown_results = await executor_manager.shutdown_all(timeout=30.0)
+    
+    failed_shutdowns = [name for name, success in shutdown_results.items() if not success]
+    if failed_shutdowns:
+        logger.warning(f"[Lifespan] Some executors failed to shutdown: {failed_shutdowns}")
+    else:
+        logger.info("[Lifespan] All executors shutdown successfully")
 
 
 app = FastAPI(
@@ -62,25 +85,19 @@ rate_limit_config = RateLimitConfig(
 setup_rate_limiting(app, config=rate_limit_config)
 
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
-# 允许的来源：本地开发 + 环境变量配置（生产环境应通过 ALLOWED_ORIGINS 配置）
-_allowed_origins = [
-    "http://localhost:60100",
-    "http://127.0.0.1:60100",
-    "http://0.0.0.0:60100",
-]
-# 从环境变量添加额外的允许来源
-_extra_origins = os.environ.get("ALLOWED_ORIGINS", "")
-if _extra_origins:
-    _allowed_origins.extend([o.strip() for o in _extra_origins.split(",") if o.strip()])
+# 使用 Settings 类统一管理 CORS 配置
+settings = get_settings()
+_cors_origins = settings.get_allowed_origins_list()
 
-# ── CORS 配置：开发环境允许所有来源，生产环境使用白名单 ─────────────────
-_is_production = os.environ.get("ENV", "development") == "production"
-
-if _is_production:
-    _cors_origins = _allowed_origins.copy()
+# 生产环境强制白名单模式
+if settings.is_production():
     # 生产环境必须配置 ALLOWED_ORIGINS，否则只允许 localhost
-    if not _cors_origins:
-        _cors_origins = ["http://localhost:60100"]
+    if _cors_origins == ["*"]:
+        logger.warning("Production mode with wildcard CORS is insecure. Please set ALLOWED_ORIGINS environment variable.")
+        _cors_origins = [
+            "http://localhost:60100",
+            "http://127.0.0.1:60100",
+        ]
 else:
     # 开发环境允许所有来源（便于调试）
     _cors_origins = ["*"]
@@ -153,6 +170,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+app.include_router(admin.session_router, prefix="/api/v1", tags=["admin"])
 app.include_router(admin_source.router, prefix="/api/v1", tags=["admin"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])

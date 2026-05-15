@@ -56,8 +56,8 @@ def _fetch_bond_data():
             if col in row and row[col] is not None:
                 try:
                     tenors[col] = round(float(row[col]), 4)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"[BOND] Failed to parse tenor value '{col}': {type(e).__name__}: {e}")
         return tenors
 
     def calc_spreads(gov_row, other_row):
@@ -270,8 +270,8 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             if val is not None:
                 try:
                     numeric.append(float(val))
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"[BOND] Failed to parse yield value: {type(e).__name__}: {e}")
         if not numeric:
             raise ValueError(f"no numeric data in column: {tenor_col}")
         current_yield = numeric[-1] if numeric else None

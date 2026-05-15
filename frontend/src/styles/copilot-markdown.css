@@ -1,6 +1,7 @@
 /* ── Copilot Markdown 渲染样式 ──────────────────────────── */
 .copilot-markdown {
   line-height: 1.65;
+  color: #e5e7eb; /* gray-200 */
 }
 .copilot-markdown h1,
 .copilot-markdown h2,
@@ -32,8 +33,8 @@
   color: var(--text-primary, #e0e7ff);
 }
 .copilot-markdown pre {
-  background: rgba(0,0,0,0.6);
-  border: 1px solid rgba(59,130,246,0.3);
+  background: rgba(0,0,0,0.7);
+  border: 1px solid rgba(59,130,246,0.4);
   border-radius: 6px;
   position: relative;
   padding: 1em;
@@ -45,52 +46,7 @@
   background: none;
   padding: 0;
   font-size: 0.82em;
-}
-
-/* Copy button for code blocks */
-.copilot-markdown pre::before {
-  content: '📋 复制';
-  position: absolute;
-  top: 0.5em;
-  right: 0.5em;
-  font-size: 0.7em;
-  color: var(--color-primary, #60a5fa);
-  cursor: pointer;
-  padding: 0.2em 0.5em;
-  border-radius: 3px;
-  background: rgba(59,130,246,0.1);
-  border: 1px solid rgba(59,130,246,0.2);
-  transition: all 0.2s ease;
-}
-.copilot-markdown pre:hover::before {
-  background: rgba(59,130,246,0.2);
-  border-color: rgba(59,130,246,0.4);
-}
-.copilot-markdown pre.copied::before {
-  content: '✓ 已复制';
-  color: var(--color-down, #22c55e);
-  background: rgba(34,197,94,0.1);
-  border-color: rgba(34,197,94,0.3);
-}
-.copilot-markdown pre::before {
-  content: '📋 复制';
-  position: absolute;
-  top: 0.5em;
-  right: 0.5em;
-  font-size: 0.7em;
-  color: var(--color-primary, #60a5fa);
-  cursor: pointer;
-  user-select: none;
-}
-.copilot-markdown pre::before:hover {
-  color: var(--accent-secondary, #93c5fd);
-}
-.copilot-markdown pre code {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 0.82em;
-  color: var(--text-primary, #e0e7ff);
+  color: #e5e7eb;
 }
 
 .copilot-markdown blockquote {
