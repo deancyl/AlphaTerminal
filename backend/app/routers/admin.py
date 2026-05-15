@@ -3,6 +3,7 @@ Admin 系统控制路由 - 数据源、调度器、缓存、数据库、网络�
 """
 
 import asyncio
+import json
 import logging
 import time
 import os
@@ -157,6 +158,41 @@ class DatabaseMaintenanceRequest(BaseModel):
     action: str = Field(..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check)$")
 
 # ═══════════════════════════════════════════════════════════════
+# Multi-Model Management Request Models
+# ═══════════════════════════════════════════════════════════════
+
+class ModelConfigRequest(BaseModel):
+    provider: str = Field(..., min_length=1, max_length=50)
+    model_id: str = Field(..., min_length=1, max_length=100)
+    api_key: Optional[str] = Field(default=None, max_length=500)
+    base_url: Optional[str] = Field(default=None, max_length=500)
+    context_length: Optional[int] = Field(default=128000, ge=1, le=10000000)
+    concurrency_limit: Optional[int] = Field(default=10, ge=1, le=1000)
+    enabled: Optional[bool] = Field(default=True)
+
+class ModelUpdateRequest(BaseModel):
+    provider: str = Field(..., min_length=1, max_length=50)
+    model_id: str = Field(..., min_length=1, max_length=100)
+    context_length: Optional[int] = Field(default=None, ge=1, le=10000000)
+    concurrency_limit: Optional[int] = Field(default=None, ge=1, le=1000)
+    enabled: Optional[bool] = Field(default=None)
+
+class SetDefaultModelRequest(BaseModel):
+    provider: str = Field(..., min_length=1, max_length=50)
+    model_id: str = Field(..., min_length=1, max_length=100)
+
+class TestConnectionRequest(BaseModel):
+    provider: str = Field(..., min_length=1, max_length=50)
+    model_id: str = Field(..., min_length=1, max_length=100)
+
+class CustomPricingRequest(BaseModel):
+    model_id: str = Field(..., min_length=1, max_length=100)
+    provider: str = Field(..., min_length=1, max_length=50)
+    input_price_per_million: float = Field(..., ge=0)
+    output_price_per_million: float = Field(..., ge=0)
+    currency: str = Field(default="USD", max_length=10)
+
+# ═══════════════════════════════════════════════════════════════
 # 认证机制（必须在 router 定义之前，否则 NameError）
 # ═══════════════════════════════════════════════════════════════
 
@@ -182,7 +218,7 @@ def _record_failure(client_ip: str):
         _auth_failures[client_ip] = []
     _auth_failures[client_ip].append(_time.time())
 
-def verify_admin_key(api_key: str = None, x_forwarded_for: str = Header(None)):
+def verify_admin_key(api_key: Optional[str] = None, x_forwarded_for: str = Header(None)):
     """Admin API 密钥校验（带速率限制）"""
     # 获取客户端 IP（支持代理）
     client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
@@ -202,11 +238,11 @@ def verify_admin_key(api_key: str = None, x_forwarded_for: str = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
-def admin_read_auth(api_key: str = None):
+def admin_read_auth(api_key: Optional[str] = None):
     """读操作认证 - GET 类接口"""
     return verify_admin_key(api_key)
 
-def admin_write_auth(api_key: str = None):
+def admin_write_auth(api_key: Optional[str] = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
     return verify_admin_key(api_key)
 
@@ -273,14 +309,14 @@ def validate_admin_session(
     is_valid = _validate_admin_session(x_admin_session, client_ip)
     
     if is_valid:
-        session = _admin_sessions.get(x_admin_session)
+        session = _admin_sessions.get(x_admin_session, {})
         return {
             "code": 0,
             "message": "success",
             "data": {
                 "valid": True,
-                "expires_at": session["expires_at"],
-                "ip": session["ip"],
+                "expires_at": session.get("expires_at"),
+                "ip": session.get("ip"),
             }
         }
     else:
@@ -425,6 +461,192 @@ def save_llm_settings(body: LLMSettingsRequest):
         "model":    body.model.strip(),
     })
     return {"code": 0, "message": f"{provider} 配置已保存"}
+
+# ═══════════════════════════════════════════════════════════════
+# Multi-Model Management Endpoints
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/models/all")
+def get_all_models():
+    """Get all configured models across all providers"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    providers = service.get_all_providers()
+    
+    result = {}
+    for provider_name, provider_state in providers.items():
+        models_data = []
+        for model_id, model in provider_state.models.items():
+            models_data.append({
+                "model_id": model.model_id,
+                "enabled": model.enabled,
+                "is_default": model.is_default,
+                "max_concurrent": model.max_concurrent,
+                "context_length": model.context_length,
+                "api_key_masked": _mask_key(model.api_key),
+                "base_url": model.base_url
+            })
+        result[provider_name] = {
+            "provider": provider_name,
+            "enabled": provider_state.enabled,
+            "default_model": provider_state.default_model,
+            "model_count": len(models_data),
+            "models": models_data
+        }
+    
+    return {"code": 0, "data": result}
+
+@router.get("/models/{provider}")
+def get_provider_models(provider: str):
+    """Get models for a specific provider"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    providers = service.get_all_providers()
+    
+    provider_lower = provider.lower()
+    if provider_lower not in providers:
+        return {"code": 1, "error": f"Provider '{provider}' not found"}
+    
+    provider_state = providers[provider_lower]
+    models_data = []
+    for model_id, model in provider_state.models.items():
+        models_data.append({
+            "model_id": model.model_id,
+            "enabled": model.enabled,
+            "is_default": model.is_default,
+            "max_concurrent": model.max_concurrent,
+            "context_length": model.context_length,
+            "api_key_masked": _mask_key(model.api_key),
+            "base_url": model.base_url
+        })
+    
+    return {
+        "code": 0,
+        "data": {
+            "provider": provider_lower,
+            "enabled": provider_state.enabled,
+            "default_model": provider_state.default_model,
+            "models": models_data
+        }
+    }
+
+@router.post("/models/add")
+def add_model(body: ModelConfigRequest):
+    """Add a new model configuration"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    
+    config = {
+        "enabled": body.enabled,
+        "max_concurrent": body.concurrency_limit,
+        "context_length": body.context_length,
+        "metadata": {}
+    }
+    
+    success = service.add_model(body.provider.lower(), body.model_id, config)
+    
+    if success:
+        return {"code": 0, "message": f"Model '{body.model_id}' added to provider '{body.provider}'"}
+    else:
+        return {"code": 1, "error": f"Failed to add model '{body.model_id}'"}
+
+@router.patch("/models/update")
+def update_model(body: ModelUpdateRequest):
+    """Update model configuration"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    
+    updates = {}
+    if body.context_length is not None:
+        updates["context_length"] = body.context_length
+    if body.concurrency_limit is not None:
+        updates["max_concurrent"] = body.concurrency_limit
+    if body.enabled is not None:
+        updates["enabled"] = body.enabled
+    
+    if not updates:
+        return {"code": 1, "error": "No fields to update"}
+    
+    success = service.update_model(body.provider.lower(), body.model_id, updates)
+    
+    if success:
+        return {"code": 0, "message": f"Model '{body.model_id}' updated"}
+    else:
+        return {"code": 1, "error": f"Failed to update model '{body.model_id}'"}
+
+@router.delete("/models/{provider}/{model_id}")
+def remove_model(provider: str, model_id: str):
+    """Remove a model from a provider"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    success = service.remove_model(provider.lower(), model_id)
+    
+    if success:
+        return {"code": 0, "message": f"Model '{model_id}' removed from '{provider}'"}
+    else:
+        return {"code": 1, "error": f"Failed to remove model '{model_id}'"}
+
+@router.post("/models/set-default")
+def set_default_model(body: SetDefaultModelRequest):
+    """Set the default model for a provider"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    success = service.set_default(body.provider.lower(), body.model_id)
+    
+    if success:
+        return {"code": 0, "message": f"Default model set to '{body.model_id}' for '{body.provider}'"}
+    else:
+        return {"code": 1, "error": f"Failed to set default model"}
+
+@router.post("/models/test")
+def test_model_connection(body: TestConnectionRequest):
+    """Test connection to a model"""
+    from app.services.model_config_service import get_model_config_service
+    
+    service = get_model_config_service()
+    result = service.test_connection(body.provider.lower(), body.model_id)
+    
+    if result.get("success"):
+        return {"code": 0, "data": result}
+    else:
+        return {"code": 1, "error": result.get("error", "Connection test failed"), "data": result}
+
+@router.get("/models/pricing/catalog")
+def get_pricing_catalog():
+    """Get pricing catalog for all models"""
+    from app.db.seed_pricing_catalog import get_all_pricing
+    
+    pricing = get_all_pricing()
+    return {"code": 0, "data": pricing}
+
+@router.post("/models/pricing/add")
+def add_custom_pricing(body: CustomPricingRequest):
+    """Add custom pricing for a model"""
+    from app.db.seed_pricing_catalog import seed_pricing_catalog
+    
+    custom_model = {
+        "model_id": body.model_id,
+        "provider": body.provider,
+        "display_name": body.model_id,
+        "input_cost_per_token": body.input_price_per_million / 1e6,
+        "output_cost_per_token": body.output_price_per_million / 1e6,
+        "context_length": 4096,
+        "metadata": json.dumps({"currency": body.currency, "custom": True})
+    }
+    
+    result = seed_pricing_catalog(models=[custom_model], force=True)
+    
+    if result.get("inserted", 0) > 0 or result.get("updated", 0) > 0:
+        return {"code": 0, "message": f"Custom pricing added for '{body.model_id}'", "data": result}
+    else:
+        return {"code": 1, "error": f"Failed to add custom pricing", "data": result}
+
 
 @router.post("/settings/llm/test")
 def test_llm_connection(body: LLMTestRequest):
@@ -784,6 +1006,222 @@ async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
 
 
 # ═══════════════════════════════════════════════════════════════
+# Token Usage Query Endpoints
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/tokens/stats")
+def get_token_stats(
+    start_time: Optional[str] = Query(default=None),
+    end_time: Optional[str] = Query(default=None)
+):
+    """Get total token usage statistics"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    stats = service.get_total_stats(start_time, end_time)
+    
+    return {"code": 0, "data": stats}
+
+@router.get("/tokens/history")
+def get_token_history(
+    model_id: Optional[str] = Query(default=None),
+    session_id: Optional[str] = Query(default=None),
+    user_id: Optional[str] = Query(default=None),
+    start_date: Optional[str] = Query(default=None),
+    end_date: Optional[str] = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000)
+):
+    """Get token usage history with filters"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    history = service.get_usage_history(
+        model_id=model_id,
+        session_id=session_id,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit
+    )
+    
+    return {"code": 0, "data": history, "count": len(history)}
+
+@router.get("/tokens/aggregated")
+def get_token_aggregated(
+    aggregate_type: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
+    limit: int = Query(default=30, ge=1, le=365)
+):
+    """Get aggregated token usage statistics for charts"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    aggregated = service.get_aggregated_stats(aggregate_type, limit)
+    
+    return {"code": 0, "data": aggregated, "count": len(aggregated)}
+
+@router.get("/tokens/breakdown/models")
+def get_token_breakdown_models(
+    start_time: Optional[str] = Query(default=None),
+    end_time: Optional[str] = Query(default=None)
+):
+    """Get token usage breakdown by model"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    breakdown = service.get_model_breakdown(start_time, end_time)
+    
+    return {"code": 0, "data": breakdown, "count": len(breakdown)}
+
+@router.get("/tokens/breakdown/providers")
+def get_token_breakdown_providers(
+    days: int = Query(default=30, ge=1, le=365)
+):
+    """Get token usage breakdown by provider"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    breakdown = service.get_provider_breakdown(days)
+    
+    return {"code": 0, "data": breakdown, "count": len(breakdown)}
+
+@router.get("/tokens/session/{session_id}")
+def get_session_token_usage(session_id: str):
+    """Get token usage for a specific session"""
+    from app.services.token_tracking_service import get_token_tracking_service
+    
+    service = get_token_tracking_service()
+    history = service.get_usage_history(session_id=session_id, limit=1000)
+    
+    total_tokens = sum(r.get("total_tokens", 0) for r in history)
+    total_cost = sum(r.get("cost_usd", 0) for r in history)
+    total_requests = len(history)
+    
+    return {
+        "code": 0,
+        "data": {
+            "session_id": session_id,
+            "total_requests": total_requests,
+            "total_tokens": total_tokens,
+            "total_cost_usd": total_cost,
+            "history": history[:100]
+        }
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Session Management Endpoints
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/sessions/active")
+def get_active_sessions(
+    limit: int = Query(default=100, ge=1, le=1000)
+):
+    """Get all active sessions"""
+    from app.services.session_manager import get_session_manager
+    
+    manager = get_session_manager()
+    sessions = manager.get_active_sessions(limit)
+    
+    return {
+        "code": 0,
+        "data": [s.to_dict() for s in sessions],
+        "count": len(sessions)
+    }
+
+@router.get("/sessions/stats")
+def get_sessions_stats():
+    """Get global session statistics"""
+    from app.services.session_manager import get_session_manager
+    
+    manager = get_session_manager()
+    stats = manager.get_global_stats()
+    
+    return {"code": 0, "data": stats}
+
+@router.get("/sessions/{session_id}")
+def get_session_details(session_id: str):
+    """Get session details by ID"""
+    from app.services.session_manager import get_session_manager
+    
+    manager = get_session_manager()
+    session = manager.get_session(session_id)
+    
+    if not session:
+        return {"code": 1, "error": f"Session '{session_id}' not found"}
+    
+    return {"code": 0, "data": session.to_dict()}
+
+@router.delete("/sessions/{session_id}")
+def terminate_session(session_id: str):
+    """Terminate a session"""
+    from app.services.session_manager import get_session_manager
+    
+    manager = get_session_manager()
+    success = manager.delete_session(session_id)
+    
+    if success:
+        return {"code": 0, "message": f"Session '{session_id}' terminated"}
+    else:
+        return {"code": 1, "error": f"Failed to terminate session '{session_id}'"}
+
+@router.post("/sessions/cleanup")
+def trigger_session_cleanup():
+    """Manually trigger session cleanup"""
+    from app.db import session_db
+    
+    deleted = session_db.cleanup_expired_sessions()
+    
+    return {"code": 0, "message": f"Cleaned up {deleted} expired sessions", "data": {"deleted_count": deleted}}
+
+@router.get("/sessions/{session_id}/conversations")
+def get_session_conversations(session_id: str):
+    """Get conversation history for a session"""
+    from app.db import session_db
+    
+    session = session_db.get_session(session_id)
+    if not session:
+        return {"code": 1, "error": f"Session '{session_id}' not found"}
+    
+    conversations = session_db.get_session_conversations(session_id) if hasattr(session_db, 'get_session_conversations') else []
+    
+    return {"code": 0, "data": conversations, "count": len(conversations)}
+
+
+# ═══════════════════════════════════════════════════════════════
+# WebSocket Real-time Token Updates
+# ═══════════════════════════════════════════════════════════════
+
+_token_stream_connections: set = set()
+_token_stream_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+@router.websocket("/tokens/stream")
+async def token_stream_ws(websocket: WebSocket):
+    """WebSocket for real-time token usage updates"""
+    await websocket.accept()
+    conn_id = f"token_ws_{int(time.time())}_{secrets.token_hex(4)}"
+    _token_stream_connections.add(conn_id)
+    
+    await websocket.send_json({
+        "type": "connected",
+        "conn_id": conn_id,
+        "timestamp": int(time.time())
+    })
+    
+    try:
+        while True:
+            try:
+                update = await asyncio.wait_for(_token_stream_queue.get(), timeout=30.0)
+                await websocket.send_json(update)
+            except asyncio.TimeoutError:
+                await websocket.send_json({
+                    "type": "heartbeat",
+                    "timestamp": int(time.time())
+                })
+    except WebSocketDisconnect:
+        _token_stream_connections.discard(conn_id)
+
+
+# ═══════════════════════════════════════════════════════════════
 # WebSocket 实时日志流
 # ═══════════════════════════════════════════════════════════════
 
@@ -792,11 +1230,8 @@ async def log_stream_ws(websocket: WebSocket):
     """WebSocket实时日志流"""
     await websocket.accept()
     
-    # 如果日志队列不存在，创建一个
-    if not hasattr(log_stream_ws, '_log_queue'):
-        log_stream_ws._log_queue = asyncio.Queue(maxsize=100)
-    
-    queue = log_stream_ws._log_queue
+    # 使用模块级日志队列
+    queue = _log_queue
     
     async def log_writer():
         """日志写入队列的 handler（供外部调用）"""
@@ -955,7 +1390,7 @@ async def get_rate_limit_stats():
 
 
 @router.post("/ratelimit/reset")
-async def reset_rate_limit(ip: str = None):
+async def reset_rate_limit(ip: Optional[str] = None):
     """重置速率限制（可选指定IP）"""
     from app.middleware.rate_limit import get_limiter
     

@@ -2,10 +2,13 @@
 import { ref, watch, nextTick } from 'vue'
 import { mdRender } from '../../composables/useCopilotMarkdown.js'
 import CopyButton from './CopyButton.vue'
+import ErrorRetry from './ErrorRetry.vue'
 
 const props = defineProps({
   messages: { type: Array, default: () => [] }
 })
+
+const emit = defineEmits(['retry'])
 
 const historyEl = ref(null)
 defineExpose({ historyEl })
@@ -44,8 +47,15 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
 </script>
 
 <template>
-  <div ref="historyEl" class="flex-1 overflow-y-auto p-4 space-y-3">
-    <div v-if="messages.length === 0" class="text-center mt-12">
+  <div
+    ref="historyEl"
+    class="flex-1 overflow-y-auto p-4 space-y-3"
+    role="log"
+    aria-label="对话历史"
+    aria-live="polite"
+    aria-atomic="false"
+  >
+    <div v-if="messages.length === 0" class="text-center mt-12" role="status">
       <div class="text-4xl mb-3">💬</div>
       <p class="text-terminal-dim text-sm">开始一场投研对话</p>
       <div class="mt-4 text-xs text-terminal-dim/70 space-y-1">
@@ -55,7 +65,13 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
       </div>
     </div>
 
-    <div v-for="(msg, i) in messages" :key="i" class="text-sm whitespace-pre-wrap leading-relaxed">
+    <div
+      v-for="(msg, i) in messages"
+      :key="i"
+      class="text-sm whitespace-pre-wrap leading-relaxed"
+      :role="msg.role === 'user' ? 'presentation' : 'article'"
+      :aria-label="msg.role === 'user' ? '用户消息' : 'AI回复'"
+    >
       <!-- User message - minimal style, right aligned -->
       <div v-if="msg.role === 'user'"
            class="mr-4 ml-8 text-right">
@@ -63,7 +79,7 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
         <div class="text-gray-300">{{ msg.content }}</div>
       </div>
 
-      <!-- AI message - full width, no bubble -->
+<!-- AI message - full width, no bubble -->
       <div v-else
            class="mr-4"
            :class="msg.isError ? 'border border-red-500/30 rounded p-3' : ''">
@@ -75,6 +91,14 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
           <span v-html="msg.renderedContent || mdRender(msg.displayedContent)"></span>
           <span v-if="msg.streaming" class="animate-pulse text-agent-blue">▌</span>
         </div>
+        <!-- Error retry button -->
+        <ErrorRetry
+          v-if="msg.isError && msg.errorType"
+          :error="msg.error"
+          :error-type="msg.errorType"
+          :message-index="i"
+          @retry="emit('retry', i)"
+        />
       </div>
     </div>
   </div>

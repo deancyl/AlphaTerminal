@@ -8,6 +8,7 @@ This module contains analytics endpoints extracted from portfolio.py:
 - GET /{portfolio_id}/benchmark - Benchmark comparison analysis
 """
 
+import asyncio
 import math
 import sqlite3
 import logging
@@ -23,6 +24,9 @@ from app.middleware import require_api_key
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["portfolio-analytics"])
+
+# Timeout constant for all portfolio endpoints
+PORTFOLIO_TIMEOUT = 30  # seconds
 
 
 # ══════════════════════════════════════════════════════════════
@@ -95,220 +99,226 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
       - risk_metrics     日VaR(95%)、年化波动率、夏普比率
       - total_exposure   各 category 的总仓位占比
     """
-    from app.services.sentiment_engine import SpotCache
+    async def _inner():
+        from app.services.sentiment_engine import SpotCache
 
-    # ── 1. 获取持仓（WAL 模式并发读）────────────────────────────
-    conn = _get_conn()
-    try:
-        if include_children:
-            all_ids = [portfolio_id]
-            cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
-            all_ids += [r[0] for r in cur]
-            ph = ','.join(['?'] * len(all_ids))
-            rows = conn.execute(
-                f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
-                tuple(all_ids)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
-                (portfolio_id,)
-            ).fetchall()
-    finally:
-        conn.close()
-
-    if not rows:
-        return success_response({"attribution": [], "risk_metrics": None, "total_exposure": []})
-
-    # ── 2. 获取最新价格 ────────────────────────────────────────
-    spot = SpotCache.get_stocks()
-    price_map = {}
-    for s in spot:
-        code = s.get("code", "")
-        price_map[code] = s
-        if len(code) > 2:
-            price_map[code[2:]] = s
-            price_map[code.lower()] = s
-            price_map[code.upper()] = s
-
-    if len(price_map) < 10:
-        conn2 = _get_conn()
+        # ── 1. 获取持仓（WAL 模式并发读）────────────────────────────
+        conn = _get_conn()
         try:
-            db_rows = conn2.execute(
-                "SELECT symbol, name, price, change_pct FROM market_all_stocks WHERE price > 0"
-            ).fetchall()
-            for r in db_rows:
-                sym, name, price, chg_pct = r
-                price_map[sym] = {"code": sym, "name": name, "price": float(price or 0), "chg_pct": float(chg_pct or 0)}
-                if len(sym) > 2:
-                    price_map[sym[2:]] = price_map[sym]
-        finally:
-            conn2.close()
-
-    # ── 3. 逐条计算持仓盈亏并分类 ──────────────────────────────
-    groups = {}
-
-    for symbol, shares, avg_cost in rows:
-        info = price_map.get(symbol, {}) or {}
-        if not info and len(symbol) == 6:
-            info = price_map.get(f"sh{symbol}", {}) or {}
-            if not info:
-                info = price_map.get(f"sz{symbol}", {}) or {}
-        if not info:
-            info = price_map.get(symbol[2:]) if len(symbol) > 2 else {}
-
-        price        = info.get("price", avg_cost)
-        name         = info.get("name", symbol)
-        market_value = shares * price
-        cost         = shares * avg_cost
-        pnl          = market_value - cost
-        pnl_pct      = (pnl / cost * 100) if cost > 0 else 0.0
-
-        cls = _classify_asset(symbol, name)
-        cat = cls["category"]
-
-        if cat not in groups:
-            groups[cat] = {
-                "category":     cat,
-                "sub_category": cls["sub_category"],
-                "is_index":     cls["is_index"],
-                "market_value": 0.0,
-                "cost":         0.0,
-                "pnl":          0.0,
-                "positions":    [],
-            }
-        groups[cat]["market_value"] += market_value
-        groups[cat]["cost"]         += cost
-        groups[cat]["pnl"]          += pnl
-        groups[cat]["positions"].append({
-            "symbol":       symbol,
-            "name":         name,
-            "shares":       shares,
-            "avg_cost":     avg_cost,
-            "price":        price,
-            "market_value": round(market_value, 2),
-            "cost":         round(cost, 2),
-            "pnl":          round(pnl, 2),
-            "pnl_pct":      round(pnl_pct, 2),
-        })
-
-    # ── 4. 汇总计算（防御性容错）──────────────────────────────
-    try:
-        total_mv    = sum(g["market_value"] for g in groups.values())
-        total_cost  = sum(g["cost"]        for g in groups.values())
-        total_pnl   = sum(g["pnl"]         for g in groups.values())
-
-        # 极端边界：所有持仓市值和盈亏均为 0（价格全失效），返回空数据避免后续除零
-        if total_mv <= 0 and total_pnl == 0:
-            return success_response({"attribution": [], "risk_metrics": None, "total_exposure": [],
-                        "summary": {"total_market_value": 0, "total_cost": 0, "total_pnl": 0, "total_pnl_pct": 0}})
-
-        attribution = []
-        for g in groups.values():
-            w  = g["market_value"] / total_mv if total_mv > 0 else 0
-            pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
-            attribution.append({
-                "category":        g["category"],
-                "sub_category":    g["sub_category"],
-                "is_index":        g["is_index"],
-                "market_value":    round(g["market_value"], 2),
-                "cost":            round(g["cost"], 2),
-                "pnl":             round(g["pnl"], 2),
-                "weight":          round(w * 100, 2),
-                "pnl_contrib_pct": round(pc, 2),
-                "position_count":  len(g["positions"]),
-                "positions":       g["positions"][:5],
-            })
-
-        attribution.sort(key=lambda x: x["market_value"], reverse=True)
-
-        # ── 5. 底层资产配置 ─────────────────────────────────────
-        total_exposure = [
-            {"name": g["sub_category"], "category": g["category"],
-             "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
-            for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
-        ]
-
-        # ── 6. 风险指标 ─────────────────────────────────────────
-        risk_metrics = None
-        try:
-            conn3 = _get_conn()
-            try:
-                snap_rows = conn3.execute(
-                    "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
+            if include_children:
+                all_ids = [portfolio_id]
+                cur = conn.execute("SELECT id FROM portfolios WHERE parent_id=?", (portfolio_id,)).fetchall()
+                all_ids += [r[0] for r in cur]
+                ph = ','.join(['?'] * len(all_ids))
+                rows = conn.execute(
+                    f"SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id IN ({ph})",
+                    tuple(all_ids)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT symbol, shares, avg_cost FROM positions WHERE portfolio_id=?",
                     (portfolio_id,)
                 ).fetchall()
+        finally:
+            conn.close()
+
+        if not rows:
+            return success_response({"attribution": [], "risk_metrics": None, "total_exposure": []})
+
+        # ── 2. 获取最新价格 ────────────────────────────────────────
+        spot = SpotCache.get_stocks()
+        price_map = {}
+        for s in spot:
+            code = s.get("code", "")
+            price_map[code] = s
+            if len(code) > 2:
+                price_map[code[2:]] = s
+                price_map[code.lower()] = s
+                price_map[code.upper()] = s
+
+        if len(price_map) < 10:
+            conn2 = _get_conn()
+            try:
+                db_rows = conn2.execute(
+                    "SELECT symbol, name, price, change_pct FROM market_all_stocks WHERE price > 0"
+                ).fetchall()
+                for r in db_rows:
+                    sym, name, price, chg_pct = r
+                    price_map[sym] = {"code": sym, "name": name, "price": float(price or 0), "chg_pct": float(chg_pct or 0)}
+                    if len(sym) > 2:
+                        price_map[sym[2:]] = price_map[sym]
             finally:
-                conn3.close()
+                conn2.close()
 
-            if snap_rows and len(snap_rows) >= 5:
-                assets  = [float(r[1]) for r in snap_rows]
-                returns = [(assets[i] - assets[i-1]) / assets[i-1]
-                           for i in range(1, len(assets)) if assets[i-1] > 0]
+        # ── 3. 逐条计算持仓盈亏并分类 ──────────────────────────────
+        groups = {}
 
-                if returns:
-                    mean_ret  = sum(returns) / len(returns)
-                    variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
-                    daily_vol = math.sqrt(variance)
-                    ann_vol   = daily_vol * math.sqrt(252)
+        for symbol, shares, avg_cost in rows:
+            info = price_map.get(symbol, {}) or {}
+            if not info and len(symbol) == 6:
+                info = price_map.get(f"sh{symbol}", {}) or {}
+                if not info:
+                    info = price_map.get(f"sz{symbol}", {}) or {}
+            if not info:
+                info = price_map.get(symbol[2:]) if len(symbol) > 2 else {}
 
-                    try:
-                        z_95 = NormalDist().inv_cdf(0.95)
-                    except Exception:
-                        logger.debug("[Portfolio Attribution] NormalDist 不可用，使用默认 z_95=1.645")
-                        z_95 = 1.645
+            price        = info.get("price", avg_cost)
+            name         = info.get("name", symbol)
+            market_value = shares * price
+            cost         = shares * avg_cost
+            pnl          = market_value - cost
+            pnl_pct      = (pnl / cost * 100) if cost > 0 else 0.0
 
-                    latest_asset = assets[-1]
-                    var_daily_95 = latest_asset * z_95 * daily_vol
+            cls = _classify_asset(symbol, name)
+            cat = cls["category"]
 
-                    risk_free     = 0.03
-                    years         = max(len(assets) / 252, 0.01)
-                    total_ret     = (assets[-1] - assets[0]) / assets[0]
-                    ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
-                    sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
+            if cat not in groups:
+                groups[cat] = {
+                    "category":     cat,
+                    "sub_category": cls["sub_category"],
+                    "is_index":     cls["is_index"],
+                    "market_value": 0.0,
+                    "cost":         0.0,
+                    "pnl":          0.0,
+                    "positions":    [],
+                }
+            groups[cat]["market_value"] += market_value
+            groups[cat]["cost"]         += cost
+            groups[cat]["pnl"]          += pnl
+            groups[cat]["positions"].append({
+                "symbol":       symbol,
+                "name":         name,
+                "shares":       shares,
+                "avg_cost":     avg_cost,
+                "price":        price,
+                "market_value": round(market_value, 2),
+                "cost":         round(cost, 2),
+                "pnl":          round(pnl, 2),
+                "pnl_pct":      round(pnl_pct, 2),
+            })
 
-                    risk_metrics = {
-                        "var_daily_95":      round(var_daily_95, 2),
-                        "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
-                        "annual_volatility": round(ann_vol * 100, 2),
-                        "sharpe_ratio":      round(sharpe, 2),
-                        "total_return_pct":  round(total_ret * 100, 2),
-                        "annual_return_pct": round(ann_ret * 100, 2),
-                        "days":              len(assets),
-                    }
+        # ── 4. 汇总计算（防御性容错）──────────────────────────────
+        try:
+            total_mv    = sum(g["market_value"] for g in groups.values())
+            total_cost  = sum(g["cost"]        for g in groups.values())
+            total_pnl   = sum(g["pnl"]         for g in groups.values())
+
+            # 极端边界：所有持仓市值和盈亏均为 0（价格全失效），返回空数据避免后续除零
+            if total_mv <= 0 and total_pnl == 0:
+                return success_response({"attribution": [], "risk_metrics": None, "total_exposure": [],
+                            "summary": {"total_market_value": 0, "total_cost": 0, "total_pnl": 0, "total_pnl_pct": 0}})
+
+            attribution = []
+            for g in groups.values():
+                w  = g["market_value"] / total_mv if total_mv > 0 else 0
+                pc = g["pnl"] / total_pnl * 100   if total_pnl != 0 else 0
+                attribution.append({
+                    "category":        g["category"],
+                    "sub_category":    g["sub_category"],
+                    "is_index":        g["is_index"],
+                    "market_value":    round(g["market_value"], 2),
+                    "cost":            round(g["cost"], 2),
+                    "pnl":             round(g["pnl"], 2),
+                    "weight":          round(w * 100, 2),
+                    "pnl_contrib_pct": round(pc, 2),
+                    "position_count":  len(g["positions"]),
+                    "positions":       g["positions"][:5],
+                })
+
+            attribution.sort(key=lambda x: x["market_value"], reverse=True)
+
+            # ── 5. 底层资产配置 ─────────────────────────────────────
+            total_exposure = [
+                {"name": g["sub_category"], "category": g["category"],
+                 "value": round(g["market_value"], 2), "weight": round(g["market_value"] / total_mv * 100, 2)}
+                for g in sorted(groups.values(), key=lambda x: x["market_value"], reverse=True)
+            ]
+
+            # ── 6. 风险指标 ─────────────────────────────────────────
+            risk_metrics = None
+            try:
+                conn3 = _get_conn()
+                try:
+                    snap_rows = conn3.execute(
+                        "SELECT date, total_asset FROM portfolio_snapshots WHERE portfolio_id=? ORDER BY date ASC LIMIT 60",
+                        (portfolio_id,)
+                    ).fetchall()
+                finally:
+                    conn3.close()
+
+                if snap_rows and len(snap_rows) >= 5:
+                    assets  = [float(r[1]) for r in snap_rows]
+                    returns = [(assets[i] - assets[i-1]) / assets[i-1]
+                               for i in range(1, len(assets)) if assets[i-1] > 0]
+
+                    if returns:
+                        mean_ret  = sum(returns) / len(returns)
+                        variance  = sum((r - mean_ret) ** 2 for r in returns) / len(returns)
+                        daily_vol = math.sqrt(variance)
+                        ann_vol   = daily_vol * math.sqrt(252)
+
+                        try:
+                            z_95 = NormalDist().inv_cdf(0.95)
+                        except Exception:
+                            logger.debug("[Portfolio Attribution] NormalDist 不可用，使用默认 z_95=1.645")
+                            z_95 = 1.645
+
+                        latest_asset = assets[-1]
+                        var_daily_95 = latest_asset * z_95 * daily_vol
+
+                        risk_free     = 0.03
+                        years         = max(len(assets) / 252, 0.01)
+                        total_ret     = (assets[-1] - assets[0]) / assets[0]
+                        ann_ret       = (1 + total_ret) ** (1 / years) - 1 if years > 0 else 0
+                        sharpe        = (ann_ret - risk_free) / ann_vol if ann_vol > 0 else 0
+
+                        risk_metrics = {
+                            "var_daily_95":      round(var_daily_95, 2),
+                            "var_daily_95_pct": round(var_daily_95 / latest_asset * 100, 2),
+                            "annual_volatility": round(ann_vol * 100, 2),
+                            "sharpe_ratio":      round(sharpe, 2),
+                            "total_return_pct":  round(total_ret * 100, 2),
+                            "annual_return_pct": round(ann_ret * 100, 2),
+                            "days":              len(assets),
+                        }
+            except sqlite3.OperationalError as e:
+                logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}")
+            except ValueError as e:
+                logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}")
+            except ZeroDivisionError as e:
+                logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}")
+            except Exception as e:
+                logger.warning(f"[Attribution] risk_metrics error: {e}")
+
+            return success_response({
+                "attribution":    attribution,
+                "total_exposure":  total_exposure,
+                "risk_metrics":    risk_metrics,
+                "summary": {
+                    "total_market_value": round(total_mv, 2),
+                    "total_cost":        round(total_cost, 2),
+                    "total_pnl":         round(total_pnl, 2),
+                    "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
+                },
+            })
+
         except sqlite3.OperationalError as e:
-            logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}")
+            logger.error(f"[Attribution] 数据库操作错误: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="数据库操作失败，请稍后重试")
         except ValueError as e:
-            logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}")
+            logger.error(f"[Attribution] 数据格式错误: {e}", exc_info=True)
+            raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
         except ZeroDivisionError as e:
-            logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}")
+            logger.error(f"[Attribution] 计算错误（除零）: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="归因计算时发生除零错误，请检查数据")
         except Exception as e:
-            logger.warning(f"[Attribution] risk_metrics error: {e}")
-
-        return success_response({
-            "attribution":    attribution,
-            "total_exposure":  total_exposure,
-            "risk_metrics":    risk_metrics,
-            "summary": {
-                "total_market_value": round(total_mv, 2),
-                "total_cost":        round(total_cost, 2),
-                "total_pnl":         round(total_pnl, 2),
-                "total_pnl_pct":     round((total_pnl / total_cost * 100) if total_cost else 0, 2),
-            },
-        })
-
-    except sqlite3.OperationalError as e:
-        logger.error(f"[Attribution] 数据库操作错误: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="数据库操作失败，请稍后重试")
-    except ValueError as e:
-        logger.error(f"[Attribution] 数据格式错误: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail=f"数据格式错误: {str(e)}")
-    except ZeroDivisionError as e:
-        logger.error(f"[Attribution] 计算错误（除零）: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="归因计算时发生除零错误，请检查数据")
-    except Exception as e:
-        logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")
+            logger.error(f"[Attribution] 计算异常: {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail="归因计算时发生错误，请检查是否有异常交易数据")
+    
+    try:
+        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Attribution analysis timeout")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -327,7 +337,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     - 最大回撤、索提诺比率、卡玛比率
     - 胜率、Beta、Alpha
     """
-    try:
+    async def _inner():
         conn = _get_conn()
         try:
             # 1. 获取组合历史净值（最近252个交易日，约1年）
@@ -472,7 +482,11 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
             
         finally:
             conn.close()
-            
+    
+    try:
+        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Performance metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Performance] 数据库操作错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
@@ -504,7 +518,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
     - CVaR（Expected Shortfall）
     - 风险贡献度
     """
-    try:
+    async def _inner():
         conn = _get_conn()
         try:
             # 1. 获取组合历史净值（最近252个交易日）
@@ -613,7 +627,11 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
             
         finally:
             conn.close()
-            
+    
+    try:
+        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Risk metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Risk] 数据库操作错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")
@@ -645,7 +663,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
     - 跟踪误差
     - 月度/季度收益对比
     """
-    try:
+    async def _inner():
         conn = _get_conn()
         try:
             # 1. 获取组合历史净值
@@ -777,7 +795,11 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
             
         finally:
             conn.close()
-            
+    
+    try:
+        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, "Benchmark comparison timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Benchmark] 数据库操作错误: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"数据库操作失败: {str(e)}")

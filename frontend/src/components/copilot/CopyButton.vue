@@ -27,7 +27,9 @@ const handleCopy = async () => {
            focus:outline-none focus:ring-2 focus:ring-agent-blue"
     :class="copied ? 'text-bearish border-bearish/30 bg-bearish/10' : 'text-agent-blue'"
     @click="handleCopy"
-    aria-label="复制代码"
+    :aria-label="copied ? '已复制' : '复制代码'"
+    :aria-pressed="copied"
+    role="button"
   >
     <span v-if="copied">✓ 已复制</span>
     <span v-else>📋 复制</span>

@@ -564,6 +564,43 @@ def close_circuit(source_name: str) -> bool:
     return False
 
 
+def clear_cache():
+    """清空行情数据源缓存（重置所有数据源的熔断状态和失败计数）"""
+    global _source_status
+    for source_name in _source_status:
+        _source_status[source_name] = {
+            "status": "unknown",
+            "latency": None,
+            "fail_count": 0,
+            "history": [],
+            "state": "closed"
+        }
+    logger.info("[QuoteSource] Cache cleared - all source statuses reset")
+
+
+async def warmup():
+    """预热行情数据源（探测所有数据源）"""
+    sources = DATA_SOURCES.keys()
+    results = {}
+    current_source_name = _current_source
+    for name in sources:
+        try:
+            result = await test_source_async(name)
+            current_state = _source_status.get(name, {})
+            history = current_state.get("history", [])
+            results[name] = {
+                **result,
+                "state": current_state.get("state", "unknown"),
+                "fail_count": current_state.get("fail_count", 0),
+                "is_primary": name == current_source_name,
+                "history": history[-5:] if history else []
+            }
+        except Exception as e:
+            results[name] = {"status": "error", "latency": None, "state": "unknown", "fail_count": 0, "is_primary": name == current_source_name, "history": [], "error": str(e)}
+    logger.info(f"[QuoteSource] Warmup complete: {len(results)} sources probed")
+    return results
+
+
 # ========== 优先级路由桥接（v2 新接口）============
 
 async def get_quote_by_priority_async(symbol: str) -> dict:

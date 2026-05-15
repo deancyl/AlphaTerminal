@@ -62,6 +62,11 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  resolve: {
+    alias: {
+      '@': resolve(__dirname, './src'),
+    },
+  },
   plugins: [vue(), versionJsonPlugin()],
   server: {
     host: '0.0.0.0',

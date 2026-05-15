@@ -989,3 +989,188 @@ series.push({
 | ECharts Theme | `frontend/src/utils/echartsTheme.js` |
 | K-Line Chart | `frontend/src/components/BaseKLineChart.vue` |
 | FOUC Script | `frontend/index.html` |
+
+---
+
+## Multi-Model Configuration System (v0.7.0)
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  ModelConfigService (Singleton)                              │
+│  - Hot-reload: reads from DB on each request                 │
+│  - Multi-model: multiple models per provider                 │
+│  - Config versioning for session binding                     │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  model_config_db (SQLite)                                    │
+│  - Provider configs: llm_openai, llm_deepseek, etc.          │
+│  - Model configs: enabled, max_concurrent, context_length    │
+│  - Config versions for rollback                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Configuration Schema
+
+```python
+@dataclass
+class ModelInstance:
+    model_id: str          # Model identifier
+    provider: str          # Provider name
+    api_key: str           # API key (shared per provider)
+    base_url: str          # API base URL
+    enabled: bool          # Model enabled status
+    is_default: bool       # Default model for provider
+    max_concurrent: int    # Max concurrent requests
+    context_length: int    # Context window size
+    metadata: Dict         # Additional metadata
+```
+
+### Hot-Reload Mechanism
+
+- **No in-memory caching**: Each `get_model()` call reads from DB
+- **Immediate updates**: Config changes take effect instantly
+- **Fallback**: Environment variables if DB config missing
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/config/providers` | GET | Get all provider configs |
+| `/api/v1/config/models/{provider}` | GET | Get models for provider |
+| `/api/v1/config/models/{provider}/{model}` | POST | Add new model |
+| `/api/v1/config/models/{provider}/{model}` | PUT | Update model config |
+| `/api/v1/config/models/{provider}/{model}` | DELETE | Remove model |
+| `/api/v1/config/test/{provider}/{model}` | POST | Test connection |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Service | `backend/app/services/model_config_service.py` |
+| DB Helpers | `backend/app/db/model_config_db.py` |
+| Router | `backend/app/routers/config.py` |
+| Tests | `backend/tests/unit/test_services/test_model_config_service.py` |
+
+---
+
+## Token Monitoring System (v0.7.0)
+
+### Tracking Flow
+
+```
+LLM Request → TokenTrackingService.track_usage()
+    │
+    ├── Calculate cost (pricing catalog)
+    │
+    ├── Log to token_usage_logs table
+    │
+    └── Background aggregation thread (5 min)
+        │
+        └── Aggregate hourly/daily stats
+```
+
+### Cost Calculation
+
+Uses pricing catalog (`seed_pricing_catalog`) for accurate costs:
+
+```python
+# Example: GPT-4 pricing
+prompt_rate = 0.03 / 1000  # $0.03 per 1K prompt tokens
+completion_rate = 0.06 / 1000  # $0.06 per 1K completion tokens
+
+cost = prompt_tokens * prompt_rate + completion_tokens * completion_rate
+```
+
+### WebSocket Real-Time Updates
+
+Token usage broadcasts via WebSocket:
+
+```json
+{
+  "type": "token_usage",
+  "data": {
+    "model_id": "gpt-4",
+    "prompt_tokens": 100,
+    "completion_tokens": 50,
+    "cost_usd": 0.003
+  }
+}
+```
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/tokens/history` | GET | Get usage history |
+| `/api/v1/tokens/stats` | GET | Get aggregated stats |
+| `/api/v1/tokens/breakdown/models` | GET | Model breakdown |
+| `/api/v1/tokens/breakdown/providers` | GET | Provider breakdown |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Service | `backend/app/services/token_tracking_service.py` |
+| DB Helpers | `backend/app/db/token_usage_db.py` |
+| Pricing Catalog | `backend/app/db/seed_pricing_catalog.py` |
+| Tests | `backend/tests/unit/test_services/test_token_tracking_service.py` |
+
+---
+
+## Session Management (v0.7.0)
+
+### Session Lifecycle
+
+```
+Create Session → Bind Config Version → Bind Models
+    │
+    ├── Active: touch_session() extends TTL
+    │
+    ├── Usage: update_session_usage() tracks tokens/cost
+    │
+    └── Expired: cleanup thread removes (60s interval)
+```
+
+### Config Binding
+
+Sessions bind to specific config versions:
+
+```python
+session = session_manager.create_or_get_session(
+    session_id="abc123",
+    user_id="user-1",
+    config_version=5  # Bind to config version 5
+)
+
+# Get bound model
+model = session_manager.get_bound_model("abc123", "openai")
+# Returns: "gpt-4" (from session's bound_models)
+```
+
+### TTL and Cleanup
+
+- **Default TTL**: 30 minutes
+- **Cleanup interval**: 60 seconds
+- **Background thread**: Daemon thread removes expired sessions
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/session/create` | POST | Create new session |
+| `/api/v1/session/{id}` | GET | Get session state |
+| `/api/v1/session/{id}/bind` | POST | Bind model to session |
+| `/api/v1/session/{id}/extend` | POST | Extend session TTL |
+| `/api/v1/session/{id}` | DELETE | Delete session |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Service | `backend/app/services/session_manager.py` |
+| DB Helpers | `backend/app/db/session_db.py` |
+| Tests | `backend/tests/unit/test_services/test_session_manager.py` |

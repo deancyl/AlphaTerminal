@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     AGENT_DB_DEBUG: bool = False
     AGENT_AUTH_DEBUG: bool = False
     
+    # Copilot Timeout Configuration (seconds)
+    COPILOT_TIMEOUT_SECONDS: int = 120
+    COPILOT_STREAM_TIMEOUT_SECONDS: int = 180
+    COPILOT_CONNECT_TIMEOUT_SECONDS: int = 10
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

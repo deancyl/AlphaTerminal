@@ -49,12 +49,21 @@
         <option value="symbol">按代码</option>
       </select>
       <button @click="loadPortfolioData" class="text-terminal-dim hover:text-terminal-primary">↺</button>
-      <div class="flex gap-2 flex-wrap w-full sm:w-auto sm:ml-auto">
-        <button @click="activeTab = 'positions'" :class="activeTab==='positions'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">持仓</button>
-        <button @click="activeTab = 'performance'" :class="activeTab==='performance'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">业绩评价</button>
-        <button @click="activeTab = 'risk'" :class="activeTab==='risk'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">风险分析</button>
-        <button @click="activeTab = 'benchmark'" :class="activeTab==='benchmark'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">基准对比</button>
-        <button @click="activeTab = 'analysis'" :class="activeTab==='analysis'?'text-terminal-accent':'text-[var(--text-muted)]'" class="text-xs whitespace-nowrap">归因分析</button>
+      <div class="flex gap-2 flex-wrap w-full sm:w-auto sm:ml-auto" role="tablist" aria-label="投资组合视图" @keydown="handleTabKeydown">
+        <button
+          v-for="tab in tabs"
+          :key="tab.id"
+          role="tab"
+          :id="'tab-' + tab.id"
+          :aria-selected="activeTab === tab.id"
+          :aria-controls="'panel-' + tab.id"
+          :tabindex="activeTab === tab.id ? 0 : -1"
+          @click="activeTab = tab.id"
+          :class="activeTab === tab.id ? 'text-terminal-accent' : 'text-[var(--text-muted)]'"
+          class="text-xs whitespace-nowrap"
+        >
+          {{ tab.label }}
+        </button>
       </div>
     </div>
 
@@ -155,6 +164,8 @@
 
     <!-- 主内容区域（有持仓时显示） -->
     <div v-else>
+      <!-- 持仓视图 -->
+      <div v-if="activeTab === 'positions'" role="tabpanel" id="panel-positions" aria-labelledby="tab-positions">
       <!-- Phase 4: PnL 三分卡片 -->
       <div v-if="selectedPortfolioId !== null" class="pnl-cards-row">
       <div class="pnl-card">
@@ -191,24 +202,25 @@
 
     <!-- Phase 4: Open Lots 批次明细 -->
     <OpenLotsPanel v-if="selectedPortfolioId" :portfolioId="selectedPortfolioId" :includeChildren="isAggregated" />
+    </div>
 
     <!-- 业绩评价 -->
-    <div v-if="activeTab === 'performance'" class="mt-4 flex-1 min-h-0">
+    <div v-if="activeTab === 'performance'" role="tabpanel" id="panel-performance" aria-labelledby="tab-performance" class="mt-4 flex-1 min-h-0">
       <PerformancePanel :portfolioId="selectedPortfolioId" />
     </div>
 
     <!-- 风险分析 -->
-    <div v-if="activeTab === 'risk'" class="mt-4 flex-1 min-h-0">
+    <div v-if="activeTab === 'risk'" role="tabpanel" id="panel-risk" aria-labelledby="tab-risk" class="mt-4 flex-1 min-h-0">
       <RiskPanel :portfolioId="selectedPortfolioId" />
     </div>
 
     <!-- 基准对比 -->
-    <div v-if="activeTab === 'benchmark'" class="mt-4 flex-1 min-h-0">
+    <div v-if="activeTab === 'benchmark'" role="tabpanel" id="panel-benchmark" aria-labelledby="tab-benchmark" class="mt-4 flex-1 min-h-0">
       <BenchmarkPanel :portfolioId="selectedPortfolioId" />
     </div>
 
     <!-- 归因分析 -->
-    <div v-if="activeTab === 'analysis'" class="mt-4">
+    <div v-if="activeTab === 'analysis'" role="tabpanel" id="panel-analysis" aria-labelledby="tab-analysis" class="mt-4">
       <AttributionPanel :portfolioId="selectedPortfolioId" />
     </div>
     </div>
@@ -294,14 +306,23 @@
   </div>
 
   <!-- 资金划转弹窗 -->
-  <div v-if="showTransferModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" @click.self="showTransferModal = false">
+  <div
+    v-if="showTransferModal"
+    class="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="transfer-modal-title"
+    @click.self="showTransferModal = false"
+    @keydown.escape="showTransferModal = false"
+  >
     <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-80">
-      <h3 class="text-theme-primary font-bold mb-4">资金划转</h3>
+      <h3 id="transfer-modal-title" class="text-theme-primary font-bold mb-4">资金划转</h3>
       <div class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">从账户</label>
           <select
             v-model="transfer.from"
+            aria-label="转出账户"
             class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
             :class="transferField('from')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
             @blur="handleTransferBlur('from')"
@@ -318,6 +339,7 @@
           <label class="text-[var(--text-secondary)] text-xs">到账户</label>
           <select
             v-model="transfer.to"
+            aria-label="转入账户"
             class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
             :class="transferField('to')?.showError || isSameAccount ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
             @blur="handleTransferBlur('to')"
@@ -338,12 +360,12 @@
           <input
             v-model.number="transfer.amount"
             type="number"
+            aria-label="划转金额"
             class="w-full bg-[var(--bg-secondary)] border rounded-sm px-3 py-2 text-theme-primary mt-1"
             :class="transferField('amount')?.showError ? 'border-[var(--color-danger)]' : 'border-[var(--border-primary)]'"
             placeholder="0.00"
             @blur="handleTransferBlur('amount')"
             @input="handleTransferInput('amount', transfer.amount)"
-            aria-label="划转金额"
           />
           <div v-if="transferField('amount')?.showError" class="text-[var(--color-danger)] text-xs mt-1">
             ⚠️ {{ transferField('amount')?.error }}
@@ -352,10 +374,11 @@
         <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
       </div>
       <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showTransferModal = false" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
+        <button @click="showTransferModal = false" aria-label="取消资金划转" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
         <button
           @click="handleTransfer"
           :disabled="!isTransferValid"
+          aria-label="确认资金划转"
           class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >确认划转</button>
       </div>
@@ -392,6 +415,15 @@ import ErrorDisplay from './f9/ErrorDisplay.vue';
 // ── 常量 ─────────────────────────────────────────────────────────
 const CURRENCIES = ['CNY', 'USD', 'HKD', 'EUR'];
 
+// ── Tab 配置 ─────────────────────────────────────────────────────
+const tabs = [
+  { id: 'positions', label: '持仓' },
+  { id: 'performance', label: '业绩评价' },
+  { id: 'risk', label: '风险分析' },
+  { id: 'benchmark', label: '基准对比' },
+  { id: 'analysis', label: '归因分析' },
+];
+
 // ── State ────────────────────────────────────────────────────────
 const loading = ref(false);
 const error = ref('');
@@ -415,6 +447,15 @@ const newAccount = ref({ name: '', type: 'main', initialCapital: 0, parentId: nu
 const transfer  = ref({ from: null, to: null, amount: 0 });
 const createError   = ref('');
 const transferError = ref('');
+
+// ── Debounce Utility ─────────────────────────────────────────────
+function debounce(fn, delay) {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn(...args), delay);
+  };
+}
 
 // ── 表单验证状态 ─────────────────────────────────────────────────
 const {
@@ -454,27 +495,23 @@ const isSameAccount = computed(() =>
   transfer.value.from === transfer.value.to
 )
 
-// 同步 newAccount 到验证字段
-watch(() => newAccount.value.name, (val) => {
-  createAccountFields.name.value = val
-})
-watch(() => newAccount.value.initialCapital, (val) => {
-  createAccountFields.initialCapital.value = val
-})
-watch(() => newAccount.value.parentId, (val) => {
-  createAccountFields.parentId.value = val
-})
+// ── Debounced sync functions (300ms) ───────────────────────────────
+const syncName = debounce((val) => { createAccountFields.name.value = val }, 300);
+const syncCapital = debounce((val) => { createAccountFields.initialCapital.value = val }, 300);
+const syncParentId = debounce((val) => { createAccountFields.parentId.value = val }, 300);
+const syncFrom = debounce((val) => { transferFields.from.value = val }, 300);
+const syncTo = debounce((val) => { transferFields.to.value = val }, 300);
+const syncAmount = debounce((val) => { transferFields.amount.value = val }, 300);
 
-// 同步 transfer 到验证字段
-watch(() => transfer.value.from, (val) => {
-  transferFields.from.value = val
-})
-watch(() => transfer.value.to, (val) => {
-  transferFields.to.value = val
-})
-watch(() => transfer.value.amount, (val) => {
-  transferFields.amount.value = val
-})
+// 同步 newAccount 到验证字段（debounced）
+watch(() => newAccount.value.name, syncName);
+watch(() => newAccount.value.initialCapital, syncCapital);
+watch(() => newAccount.value.parentId, syncParentId);
+
+// 同步 transfer 到验证字段（debounced）
+watch(() => transfer.value.from, syncFrom);
+watch(() => transfer.value.to, syncTo);
+watch(() => transfer.value.amount, syncAmount);
 
 // ── 账户表单验证状态（用于模板）────────────────────────────────────
 const accountValidation = reactive({
@@ -628,6 +665,34 @@ function fmtPnl(v) {
 function pnlClass(v) {
   if (!v && v !== 0) return 'pnl-zero';
   return v > 0 ? 'pnl-pos' : 'pnl-neg';
+}
+
+// ── Tab 键盘导航 ────────────────────────────────────────────────
+function handleTabKeydown(e) {
+  const currentIndex = tabs.findIndex(t => t.id === activeTab.value);
+  let newIndex;
+
+  switch (e.key) {
+    case 'ArrowLeft':
+      newIndex = currentIndex > 0 ? currentIndex - 1 : tabs.length - 1;
+      break;
+    case 'ArrowRight':
+      newIndex = currentIndex < tabs.length - 1 ? currentIndex + 1 : 0;
+      break;
+    case 'Home':
+      newIndex = 0;
+      break;
+    case 'End':
+      newIndex = tabs.length - 1;
+      break;
+    default:
+      return;
+  }
+
+  e.preventDefault();
+  activeTab.value = tabs[newIndex].id;
+  // Focus the new tab
+  document.getElementById(`tab-${tabs[newIndex].id}`)?.focus();
 }
 
 // ── Load ────────────────────────────────────────────────────

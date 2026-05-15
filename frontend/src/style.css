@@ -138,6 +138,12 @@
     --color-info-bg: rgba(15, 82, 186, 0.15);
     --color-info-border: rgba(15, 82, 186, 0.30);
 
+    /* ── Copilot Agent 专用色 ── */
+    --color-agent-blue: #60A5FA;
+    --color-agent-blue-hover: #93C5FD;
+    --color-agent-blue-bg: rgba(96, 165, 250, 0.10);
+    --color-agent-blue-border: rgba(96, 165, 250, 0.30);
+
     /* ── 图表配色 ── */
     --chart-bg: transparent;
     --chart-grid: #1C2333;
@@ -224,6 +230,12 @@
     --color-info: #44AAFF;
     --color-info-bg: rgba(68, 170, 255, 0.18);
     --color-info-border: rgba(68, 170, 255, 0.35);
+
+    /* ── Copilot Agent 专用色 ── */
+    --color-agent-blue: #60A5FA;
+    --color-agent-blue-hover: #93C5FD;
+    --color-agent-blue-bg: rgba(96, 165, 250, 0.12);
+    --color-agent-blue-border: rgba(96, 165, 250, 0.35);
 
     /* ── 图表配色 ── */
     --chart-bg: transparent;
@@ -312,6 +324,12 @@
     --color-info-bg: rgba(24, 144, 255, 0.15);
     --color-info-border: rgba(24, 144, 255, 0.30);
 
+    /* ── Copilot Agent 专用色 ── */
+    --color-agent-blue: #1890FF;
+    --color-agent-blue-hover: #40A9FF;
+    --color-agent-blue-bg: rgba(24, 144, 255, 0.10);
+    --color-agent-blue-border: rgba(24, 144, 255, 0.30);
+
     /* ── 图表配色 ── */
     --chart-bg: transparent;
     --chart-grid: #2A3142;
@@ -398,6 +416,12 @@
     --color-info: #0F52BA;
     --color-info-bg: rgba(15, 82, 186, 0.10);
     --color-info-border: rgba(15, 82, 186, 0.25);
+
+    /* ── Copilot Agent 专用色 ── */
+    --color-agent-blue: #2563EB;
+    --color-agent-blue-hover: #3B82F6;
+    --color-agent-blue-bg: rgba(37, 99, 235, 0.08);
+    --color-agent-blue-border: rgba(37, 99, 235, 0.25);
 
     /* ── 图表配色 ── */
     --chart-bg: transparent;
@@ -748,14 +772,17 @@
   .text-bull { color: var(--color-bull); }
   .text-bear { color: var(--color-bear); }
   .text-neutral { color: var(--text-muted); }
+  .text-agent-blue { color: var(--color-agent-blue); }
 
   .bg-bull { background-color: var(--color-bull-bg); }
   .bg-bear { background-color: var(--color-bear-bg); }
   .bg-neutral { background-color: var(--bg-surface-hover); }
+  .bg-agent-blue { background-color: var(--color-agent-blue-bg); }
 
   .border-bull { border-color: var(--color-bull-border); }
   .border-bear { border-color: var(--color-bear-border); }
   .border-neutral { border-color: var(--border-base); }
+  .border-agent-blue { border-color: var(--color-agent-blue-border); }
 
   .text-theme { color: var(--text-primary); }
   .text-theme-secondary { color: var(--text-secondary); }

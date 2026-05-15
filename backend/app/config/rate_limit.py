@@ -15,6 +15,7 @@ class EndpointLimit:
 
 
 ENDPOINT_LIMITS = {
+    "copilot": EndpointLimit(requests=30, period=60),
     "f9_deep": EndpointLimit(requests=10, period=60),
     "backtest": EndpointLimit(requests=5, period=60),
     "agent": EndpointLimit(requests=100, period=60),
@@ -55,6 +56,8 @@ class RateLimitConfig:
 
 
 def get_endpoint_category(path: str) -> str:
+    if "/chat" in path or "/copilot/" in path:
+        return "copilot"
     if "/f9/" in path:
         return "f9_deep"
     if "/backtest/" in path:

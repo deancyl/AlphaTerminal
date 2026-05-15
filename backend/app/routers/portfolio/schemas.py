@@ -79,7 +79,7 @@ class TransactionIn(BaseModel):
     """Request model for recording a financial transaction."""
     portfolio_id: int = Field(..., ge=1, description="账户ID")
     type: str = Field(..., pattern="^(deposit|withdraw|transfer_in|transfer_out|dividend|fee)$")
-    amount: float = Field(..., description="金额")
+    amount: float = Field(..., ge=0, description="金额")
     balance_after: float = Field(..., ge=0, description="交易后余额")
     counterparty_id: Optional[int] = Field(default=None, ge=1)
     related_symbol: Optional[str] = Field(default=None, max_length=20)
@@ -104,7 +104,7 @@ class TransferIn(BaseModel):
 
 class CashOpIn(BaseModel):
     """Request model for cash deposit/withdrawal operations."""
-    amount: float = Field(..., description="金额")
+    amount: float = Field(..., ge=0, description="金额")
     operator: str = Field(default="user", max_length=50)
     note: Optional[str] = Field(default=None, max_length=500)
 

@@ -84,6 +84,12 @@ export default {
             area: 'var(--chart-area)',
             crosshair: 'var(--chart-crosshair)',
           },
+          agent: {
+            blue: 'var(--color-agent-blue)',
+            'blue-hover': 'var(--color-agent-blue-hover)',
+            'blue-bg': 'var(--color-agent-blue-bg)',
+            'blue-border': 'var(--color-agent-blue-border)',
+          },
         },
         bull: {
           DEFAULT: 'var(--color-bull)',
@@ -104,6 +110,12 @@ export default {
           dark: 'var(--color-primary-dark)',
           bg: 'var(--color-primary-bg)',
           border: 'var(--color-primary-border)',
+        },
+        agent: {
+          blue: 'var(--color-agent-blue)',
+          'blue-hover': 'var(--color-agent-blue-hover)',
+          'blue-bg': 'var(--color-agent-blue-bg)',
+          'blue-border': 'var(--color-agent-blue-border)',
         },
       },
       boxShadow: {
@@ -128,6 +140,7 @@ export default {
         'theme-primary': 'var(--bg-base)',
         'theme-secondary': 'var(--bg-surface)',
         'theme-panel': 'var(--bg-surface)',
+        'agent-blue': 'var(--color-agent-blue-bg)',
       },
       textColor: {
         'primary': 'var(--text-primary)',
@@ -145,6 +158,7 @@ export default {
         'theme-primary': 'var(--text-primary)',
         'theme-secondary': 'var(--text-secondary)',
         'theme-tertiary': 'var(--text-muted)',
+        'agent-blue': 'var(--color-agent-blue)',
       },
       borderColor: {
         'base': 'var(--border-base)',
@@ -159,6 +173,7 @@ export default {
         'theme-hover': 'var(--border-hover)',
         'theme-accent': 'var(--color-primary-border)',
         'terminal-border': 'var(--border-base)',
+        'agent-blue': 'var(--color-agent-blue-border)',
       },
       borderRadius: {
         'sm': 'var(--radius-sm)',

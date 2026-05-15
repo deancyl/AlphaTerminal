@@ -1,7 +1,7 @@
 /* ── Copilot Markdown 渲染样式 ──────────────────────────── */
 .copilot-markdown {
   line-height: 1.65;
-  color: #e5e7eb; /* gray-200 */
+  color: var(--text-primary);
 }
 .copilot-markdown h1,
 .copilot-markdown h2,
@@ -10,9 +10,9 @@
   margin-top: 0.8em;
   margin-bottom: 0.4em;
   font-weight: 700;
-  color: var(--color-primary, #60a5fa);
+  color: var(--color-primary);
 }
-.copilot-markdown h2 { font-size: 1.05em; border-bottom: 1px solid rgba(96,165,250,0.15); padding-bottom: 0.25em; }
+.copilot-markdown h2 { font-size: 1.05em; border-bottom: 1px solid var(--border-light); padding-bottom: 0.25em; }
 .copilot-markdown h3 { font-size: 0.95em; }
 .copilot-markdown h4 { font-size: 0.9em; }
 
@@ -21,20 +21,20 @@
 .copilot-markdown ol { padding-left: 1.2em; margin: 0.4em 0; }
 .copilot-markdown li { margin: 0.2em 0; }
 
-.copilot-markdown strong { color: var(--text-primary, #f0f0f0); font-weight: 700; }
-.copilot-markdown em { color: #d4a574; font-style: italic; }
+.copilot-markdown strong { color: var(--text-primary); font-weight: 700; }
+.copilot-markdown em { color: var(--color-warning); font-style: italic; }
 .copilot-markdown code {
-  background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(59,130,246,0.25);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-base);
   padding: 0.1em 0.35em;
   border-radius: 3px;
   font-size: 0.85em;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  color: var(--text-primary, #e0e7ff);
+  color: var(--text-primary);
 }
 .copilot-markdown pre {
-  background: rgba(0,0,0,0.7);
-  border: 1px solid rgba(59,130,246,0.4);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   position: relative;
   padding: 1em;
@@ -46,14 +46,14 @@
   background: none;
   padding: 0;
   font-size: 0.82em;
-  color: #e5e7eb;
+  color: var(--text-primary);
 }
 
 .copilot-markdown blockquote {
-  border-left: 3px solid rgba(96,165,250,0.4);
+  border-left: 3px solid var(--border-base);
   padding-left: 0.7em;
   margin: 0.5em 0;
-  color: var(--text-secondary, #9ca3af);
+  color: var(--text-secondary);
   font-style: italic;
 }
 
@@ -65,22 +65,23 @@
 }
 .copilot-markdown th,
 .copilot-markdown td {
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border-light);
   padding: 0.35em 0.5em;
   text-align: left;
 }
 .copilot-markdown th {
-  background: rgba(59,130,246,0.1);
-  color: var(--color-primary, #60a5fa);
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
   font-weight: 600;
 }
 .copilot-markdown tr:nth-child(even) {
-  background: rgba(255,255,255,0.015);
+  background: var(--bg-surface-hover);
 }
-.copilot-markdown a { color: var(--color-primary, #60a5fa); text-decoration: underline; }
-.copilot-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 0.8em 0; }
+.copilot-markdown a { color: var(--color-primary); text-decoration: underline; }
+.copilot-markdown hr { border: none; border-top: 1px solid var(--border-light); margin: 0.8em 0; }
 
 /* ── 深度推理折叠区块 ──────────────────────────────────── */
+/* Intentional brand color: purple for thinking blocks - kept for visual distinction */
 .copilot-thinking {
   margin: 0.4em 0;
   border: 1px solid rgba(168,85,247,0.2);
@@ -92,7 +93,7 @@
   cursor: pointer;
   padding: 0.4em 0.7em;
   font-size: 0.8em;
-  color: #a855f7;
+  color: #a855f7; /* Intentional brand color for thinking blocks */
   user-select: none;
 }
 .copilot-thinking summary:hover { background: rgba(168,85,247,0.08); }
@@ -100,7 +101,7 @@
 .copilot-thinking-content {
   padding: 0.5em 0.7em;
   font-size: 0.8em;
-  color: #a78bfa;
+  color: #a78bfa; /* Intentional brand color for thinking blocks */
   line-height: 1.55;
   white-space: pre-wrap;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;

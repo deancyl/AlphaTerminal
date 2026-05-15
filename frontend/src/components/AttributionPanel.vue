@@ -123,6 +123,11 @@
     </div>
 
     <!-- 空状态 -->
+    <ErrorDisplay
+      v-else-if="error"
+      :error="error"
+      :retry="loadAttribution"
+    />
     <div
       v-else-if="!loading"
       class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[11px] gap-2"
@@ -138,6 +143,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { safeDispose } from '../utils/chartManager.js'
+import ErrorDisplay from './f9/ErrorDisplay.vue'
 
 const props = defineProps({
   portfolioId: { type: Number, required: true },
@@ -145,6 +151,7 @@ const props = defineProps({
 
 const includeChildren = ref(false)
 const loading = ref(false)
+const error = ref('')
 const data = ref(null)
 const pieEl  = ref(null)
 const barEl  = ref(null)
@@ -167,6 +174,7 @@ const riskCards = computed(() => {
 async function loadAttribution() {
   if (loading.value) return
   loading.value = true
+  error.value = ''
   try {
     const resp = await apiFetch(
       `/api/v1/portfolio/${props.portfolioId}/attribution?include_children=${includeChildren.value}`
@@ -176,6 +184,7 @@ async function loadAttribution() {
     renderCharts()
   } catch (e) {
     logger.error('[AttributionPanel] loadAttribution error:', e)
+    error.value = e.message || '加载归因数据失败'
   } finally {
     loading.value = false
   }

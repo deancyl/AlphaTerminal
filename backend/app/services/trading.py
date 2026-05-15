@@ -214,15 +214,18 @@ def get_open_lots(
     portfolio_id: int,
     symbol: Optional[str] = None,
     include_children: bool = False,
+    limit: int = 0,
+    offset: int = 0,
 ) -> list[LotRecord]:
     """
     获取未平批次（可指定标的或全部）。
     当 include_children=True 时，使用递归 CTE 将所有后代子账户的批次一并返回。
+    limit > 0 时启用分页。
     """
     conn = _get_lots_conn()
     try:
+        paginate = limit > 0
         if include_children:
-            # 递归 CTE：展开整棵子树
             descendants_cte = """
                 WITH RECURSIVE subtree AS (
                     SELECT id FROM portfolios WHERE id = ?
@@ -236,58 +239,110 @@ def get_open_lots(
                 return []
             placeholders = ','.join(['?' for _ in desc_ids])
             if symbol:
-                rows = conn.execute(
-                    f"""
+                sql = f"""
                     SELECT id, portfolio_id, symbol, shares, avg_cost,
                            buy_date, buy_order_id, status, closed_at,
                            realized_pnl, created_at
-                      FROM position_lots
-                     WHERE portfolio_id IN ({placeholders})
-                       AND symbol=? AND status='open'
-                     ORDER BY buy_date ASC, id ASC
-                    """,
-                    (*desc_ids, symbol),
-                ).fetchall()
+                       FROM position_lots
+                      WHERE portfolio_id IN ({placeholders})
+                        AND symbol=? AND status='open'
+                      ORDER BY buy_date ASC, id ASC
+                """
+                params = (*desc_ids, symbol)
             else:
-                rows = conn.execute(
-                    f"""
+                sql = f"""
                     SELECT id, portfolio_id, symbol, shares, avg_cost,
                            buy_date, buy_order_id, status, closed_at,
                            realized_pnl, created_at
-                      FROM position_lots
-                     WHERE portfolio_id IN ({placeholders})
-                       AND status='open'
-                     ORDER BY buy_date ASC, id ASC
-                    """,
-                    tuple(desc_ids),
-                ).fetchall()
+                       FROM position_lots
+                      WHERE portfolio_id IN ({placeholders})
+                        AND status='open'
+                      ORDER BY buy_date ASC, id ASC
+                """
+                params = tuple(desc_ids)
+            if paginate:
+                sql += " LIMIT ? OFFSET ?"
+                params = params + (limit, offset)
+            rows = conn.execute(sql, params).fetchall()
         else:
             if symbol:
-                rows = conn.execute(
-                    """
+                sql = """
                     SELECT id, portfolio_id, symbol, shares, avg_cost,
                            buy_date, buy_order_id, status, closed_at,
                            realized_pnl, created_at
-                      FROM position_lots
-                     WHERE portfolio_id=? AND symbol=? AND status='open'
-                     ORDER BY buy_date ASC, id ASC
-                    """,
-                    (portfolio_id, symbol),
-                ).fetchall()
+                       FROM position_lots
+                      WHERE portfolio_id=? AND symbol=? AND status='open'
+                      ORDER BY buy_date ASC, id ASC
+                """
+                params = (portfolio_id, symbol)
             else:
-                rows = conn.execute(
-                    """
+                sql = """
                     SELECT id, portfolio_id, symbol, shares, avg_cost,
                            buy_date, buy_order_id, status, closed_at,
                            realized_pnl, created_at
-                      FROM position_lots
-                     WHERE portfolio_id=? AND status='open'
-                     ORDER BY buy_date ASC, id ASC
-                    """,
-                    (portfolio_id,),
-                ).fetchall()
+                       FROM position_lots
+                      WHERE portfolio_id=? AND status='open'
+                      ORDER BY buy_date ASC, id ASC
+                """
+                params = (portfolio_id,)
+            if paginate:
+                sql += " LIMIT ? OFFSET ?"
+                params = params + (limit, offset)
+            rows = conn.execute(sql, params).fetchall()
 
         return [LotRecord(*r) for r in rows]
+    finally:
+        conn.close()
+
+
+def count_open_lots(
+    portfolio_id: int,
+    symbol: Optional[str] = None,
+    include_children: bool = False,
+) -> int:
+    """
+    Count total open lots (for pagination metadata).
+    """
+    conn = _get_lots_conn()
+    try:
+        if include_children:
+            descendants_cte = """
+                WITH RECURSIVE subtree AS (
+                    SELECT id FROM portfolios WHERE id = ?
+                    UNION ALL
+                    SELECT p.id FROM portfolios p JOIN subtree s ON p.parent_id = s.id
+                )
+            """
+            base = f"{descendants_cte} SELECT id FROM subtree WHERE id != ?"
+            desc_ids = [r[0] for r in conn.execute(base, (portfolio_id, portfolio_id)).fetchall()]
+            if not desc_ids:
+                return 0
+            placeholders = ','.join(['?' for _ in desc_ids])
+            if symbol:
+                row = conn.execute(
+                    f"""SELECT COUNT(*) FROM position_lots
+                        WHERE portfolio_id IN ({placeholders}) AND symbol=? AND status='open'""",
+                    (*desc_ids, symbol),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    f"""SELECT COUNT(*) FROM position_lots
+                        WHERE portfolio_id IN ({placeholders}) AND status='open'""",
+                    tuple(desc_ids),
+                ).fetchone()
+        else:
+            if symbol:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM position_lots WHERE portfolio_id=? AND symbol=? AND status='open'",
+                    (portfolio_id, symbol),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM position_lots WHERE portfolio_id=? AND status='open'",
+                    (portfolio_id,),
+                ).fetchone()
+
+        return row[0] if row else 0
     finally:
         conn.close()
 

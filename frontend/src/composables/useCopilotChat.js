@@ -1,6 +1,58 @@
-import { getCachedResponse, setCachedResponse, cleanCache, useCopilotCacheLifecycle } from './useCopilotCache.js'
+import { getCachedResponse, setCachedResponse, cleanCache, useCopilotCacheLifecycle } from './useCopilotCache'
+import { withRetry, RETRY_PRESETS } from '@/utils/retry'
 
 let currentController = null
+let retryCount = 0
+
+// Session management for continuity
+const SESSION_STORAGE_KEY = 'copilot_session_id'
+
+/**
+ * Generate a UUID v4 (cross-browser compatible)
+ * @returns {string} UUID string
+ */
+function generateUUID() {
+  // Use crypto.randomUUID if available (modern browsers, HTTPS only)
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  // Fallback: RFC 4122 compliant UUID v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
+  })
+}
+
+/**
+ * Get or create a session ID for conversation continuity
+ * @returns {string} Session ID
+ */
+export function getSessionId() {
+  let sessionId = localStorage.getItem(SESSION_STORAGE_KEY)
+  if (!sessionId) {
+    sessionId = generateUUID()
+    localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+  }
+  return sessionId
+}
+
+/**
+ * Update session ID from server response
+ * @param {string} sessionId - New session ID from server
+ */
+export function updateSessionId(sessionId) {
+  if (sessionId) {
+    localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+  }
+}
+
+/**
+ * Clear session ID to start a new conversation
+ */
+export function clearSessionId() {
+  localStorage.removeItem(SESSION_STORAGE_KEY)
+}
 
 export function useCopilotChat() {
   useCopilotCacheLifecycle()
@@ -8,13 +60,18 @@ export function useCopilotChat() {
   return {
     sendToLLM,
     abortCurrentRequest,
-    getCurrentAbortController
+    getCurrentAbortController,
+    getSessionId,
+    updateSessionId,
+    clearSessionId,
+    getRetryCount: () => retryCount,
+    resetRetryCount: () => { retryCount = 0 },
   }
 }
 
 export async function sendToLLM(text, contextOptions, callbacks) {
   const { ctxMarket, ctxRates, ctxNews, ctxPortfolio, ctxHistorical, selectedProvider, selectedModel, portfolioId, currentSymbol } = contextOptions
-  const { onStart, onMessage, onComplete, onError, onCached } = callbacks
+  const { onStart, onMessage, onComplete, onError, onCached, onRetry, onProgress } = callbacks
 
   cleanCache()
   const cachedResponse = getCachedResponse(text)
@@ -93,24 +150,51 @@ ${positionLines}
     if (currentController) currentController.abort('New request started')
     currentController = new AbortController()
     
-    const response = await fetch('/api/v1/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-      body: JSON.stringify({ 
-        prompt: text,
-        context: context || undefined,
-        provider: selectedProvider,
-        model: selectedModel || undefined,
-        portfolio_id: ctxPortfolio ? portfolioId : undefined,
-        include_historical: ctxHistorical,
-        hist_symbol: ctxHistorical ? currentSymbol : undefined,
-        hist_period: 'daily',
-        hist_limit: 60,
-      }),
-      signal: currentController.signal
-    })
+    retryCount = 0
     
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const response = await withRetry(
+      async () => {
+        const res = await fetch('/api/v1/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+          body: JSON.stringify({ 
+            prompt: text,
+            context: context || undefined,
+            provider: selectedProvider,
+            model: selectedModel || undefined,
+            portfolio_id: ctxPortfolio ? portfolioId : undefined,
+            include_historical: ctxHistorical,
+            hist_symbol: ctxHistorical ? currentSymbol : undefined,
+            hist_period: 'daily',
+            hist_limit: 60,
+            session_id: getSessionId(),
+          }),
+          signal: currentController.signal
+        })
+        
+        if (!res.ok) {
+          const error = new Error(`HTTP ${res.status}`)
+          error.status = res.status
+          error.response = res
+          throw error
+        }
+        
+        return res
+      },
+      {
+        ...RETRY_PRESETS.llm,
+        onRetry: (attempt, err, delay) => {
+          retryCount = attempt
+          if (onRetry) onRetry(attempt, err, delay)
+          console.warn(`[Copilot] Retry attempt ${attempt}/${RETRY_PRESETS.llm.maxAttempts} after ${delay}ms:`, err.message)
+        }
+      }
+    )
+    
+    const responseSessionId = response.headers.get('X-Session-Id')
+    if (responseSessionId) {
+      updateSessionId(responseSessionId)
+    }
     
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -137,6 +221,7 @@ ${positionLines}
             const thinkEnd = '\u003C/think\u003E'
             const combined = thinkStart + fullReasoning + thinkEnd + '\n' + fullContent
             if (onMessage) onMessage(combined, fullReasoning)
+            if (onProgress) onProgress(fullContent.length + fullReasoning.length)
           }
           
           if (data.content !== undefined) {
@@ -145,6 +230,7 @@ ${positionLines}
             const thinkEnd = '\u003C/think\u003E'
             const displayText = fullReasoning ? thinkStart + fullReasoning + thinkEnd + '\n' + fullContent : fullContent
             if (onMessage) onMessage(displayText, fullReasoning)
+            if (onProgress) onProgress(fullContent.length + fullReasoning.length)
           }
           
           if (data.done) {

@@ -207,18 +207,22 @@ async function initSearch() {
 const filtered = computed(() => {
   if (!query.value.trim()) return []
   if (!fuse) return []
-  return fuse.search(query.value).map(r => r.item)
+  const results = fuse.search(query.value)
+  return results?.map(r => r.item) || []
 })
 
 const defaultItems = computed(() => {
-  return symbolRegistry.value
-    .filter(s => s.type === 'index')
+  const registry = symbolRegistry.value || []
+  return registry
+    .filter(s => s?.type === 'index')
     .slice(0, 8)
 })
 
 const groupedResults = computed(() => {
   const groups = {}
-  for (const item of filtered.value) {
+  const items = filtered.value || []
+  for (const item of items) {
+    if (!item) continue
     const g = marketLabel(item.market)
     if (!groups[g]) groups[g] = []
     groups[g].push(item)
