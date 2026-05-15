@@ -3,7 +3,7 @@
 > Date: 2026-05-08
 > Version: v0.8.0
 > Status: ✅ All Phases Complete
-> Prerequisite: v0.7.0-alpha (Phase 1 complete)
+> Prerequisite: v0.6.38 (Phase 1 complete)
 
 ---
 
@@ -131,7 +131,7 @@ All 12 development tasks have been successfully completed:
 ---
 
 ### ✅ Phase 5: TA-Lib/pandas-ta Integration
-**Status:** Already implemented in Phase 1 (v0.7.0-alpha)
+**Status:** Already implemented in Phase 1 (v0.6.38)
 
 **Existing Implementation:**
 - `backend/app/services/strategy/indicator_strategy.py` - IndicatorStrategy DSL
@@ -143,7 +143,7 @@ All 12 development tasks have been successfully completed:
 ---
 
 ### ✅ Phase 6: Live Paper Trading
-**Status:** Already implemented in Phase 1 (v0.7.0-alpha)
+**Status:** Already implemented in Phase 1 (v0.6.38)
 
 **Existing Implementation:**
 - `backend/app/services/agent/paper_trading.py` - Paper trading engine

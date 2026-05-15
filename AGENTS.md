@@ -992,7 +992,7 @@ series.push({
 
 ---
 
-## Multi-Model Configuration System (v0.7.0)
+## Multi-Model Configuration System (v0.6.38)
 
 ### Architecture Overview
 
@@ -1057,7 +1057,7 @@ class ModelInstance:
 
 ---
 
-## Token Monitoring System (v0.7.0)
+## Token Monitoring System (v0.6.38)
 
 ### Tracking Flow
 
@@ -1121,7 +1121,7 @@ Token usage broadcasts via WebSocket:
 
 ---
 
-## Session Management (v0.7.0)
+## Session Management (v0.6.38)
 
 ### Session Lifecycle
 
@@ -1177,7 +1177,7 @@ model = session_manager.get_bound_model("abc123", "openai")
 
 ---
 
-## Portfolio Module Optimization Summary (v0.7.0)
+## Portfolio Module Optimization Summary (v0.6.38)
 
 ### Overview
 
