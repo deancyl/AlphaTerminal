@@ -784,3 +784,96 @@ npm run build
 ### Expected Test Behavior
 
 Note: Rate limiting tests may show 429 responses. This is **expected behavior** as tests intentionally exceed limits to verify the middleware works correctly.
+
+---
+
+## Copilot UI Components (v0.6.36)
+
+### Overview
+
+The Copilot sidebar provides an AI-powered investment research assistant with enhanced UI styling.
+
+### Component Structure
+
+```
+frontend/src/components/copilot/
+├── CopilotHeader.vue          # Header with title and controls
+├── CopilotQuickCommands.vue   # Quick command buttons
+├── CopilotContextSelector.vue # Context and model selection
+├── CopilotMessageList.vue     # Message display with markdown
+├── CopilotInput.vue           # Auto-expand input textarea
+└── CopyButton.vue             # Hover-to-reveal copy button
+```
+
+### UI Features
+
+| Feature | Description |
+|---------|-------------|
+| **Visual Separation** | `bg-theme-secondary` background, darker than main area |
+| **User Bubble** | Minimal style - no background/border, right-aligned |
+| **AI Messages** | Full-width markdown, `text-gray-200` color |
+| **Code Blocks** | Darker background, hover-to-reveal copy button |
+| **Input Area** | Auto-expand textarea (max 150px/6 rows) |
+| **Send Button** | Glowing effect with `animate-pulse` |
+
+### CopyButton Component
+
+```vue
+<template>
+  <button
+    class="absolute top-2 right-2 px-2 py-1 rounded text-xs
+           opacity-0 group-hover:opacity-100 transition-opacity duration-200
+           bg-agent-blue/10 border border-agent-blue/30"
+    @click="handleCopy"
+    aria-label="复制代码"
+  >
+    <span v-if="copied">✓ 已复制</span>
+    <span v-else>📋 复制</span>
+  </button>
+</template>
+```
+
+### Markdown Renderer
+
+Custom MarkdownIt fence renderer wraps code blocks with `group` class:
+
+```javascript
+mdParser.renderer.rules.fence = function(tokens, idx, options, env, self) {
+  const code = token.content.trim()
+  const encodedCode = encodeURIComponent(code)
+  return `<pre class="group" data-code="${encodedCode}">...</pre>`
+}
+```
+
+### CSS Styles
+
+File: `frontend/src/styles/copilot-markdown.css`
+
+| Selector | Changes |
+|----------|---------|
+| `.copilot-markdown` | Added `color: #e5e7eb` (gray-200) |
+| `.copilot-markdown pre` | Enhanced background (rgba(0,0,0,0.7)), stronger border |
+| `.copilot-markdown pre code` | `color: #e5e7eb` |
+| Removed | Old `::before` pseudo-element for copy button |
+
+### Auto-expand Textarea
+
+```javascript
+function autoResize() {
+  const textarea = textareaRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  const newHeight = Math.min(textarea.scrollHeight, 150)
+  textarea.style.height = newHeight + 'px'
+}
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| CopyButton | `frontend/src/components/copilot/CopyButton.vue` |
+| Message List | `frontend/src/components/copilot/CopilotMessageList.vue` |
+| Input | `frontend/src/components/copilot/CopilotInput.vue` |
+| Markdown CSS | `frontend/src/styles/copilot-markdown.css` |
+| Markdown Renderer | `frontend/src/composables/useCopilotMarkdown.js` |
