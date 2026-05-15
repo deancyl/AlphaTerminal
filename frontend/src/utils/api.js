@@ -176,7 +176,7 @@ function calculateRetryDelay(attempt) {
 }
 
 export async function apiFetch(url, options = {}) {
-  const { timeoutMs = TIMEOUTS.API_DEFAULT, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
+  const { timeoutMs = TIMEOUTS.API_DEFAULT, retries = 2, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
 
   if (!isNetworkOnline()) {

@@ -315,8 +315,10 @@ function stopQuotePolling() {
   }
 }
 
-// ── 数据获取 ────────────────────────────────────────────────────
+let fetchHistoryRequestId = 0
+
 async function fetchHistory(append = false) {
+  const currentRequestId = ++fetchHistoryRequestId
   const sym = currentSymbol.value
   if (!sym) return
   isLoading.value = true
@@ -330,13 +332,13 @@ async function fetchHistory(append = false) {
     })
     if (drillDownDate.value) params.set('trade_date', drillDownDate.value)
 
-    // ETF 代码路由：场内ETF（51/15/16/56开头）走专用基金API
     const url = _isEtfCode(sym)
       ? `/api/v1/fund/etf/history?code=${_etfCode(sym)}&${params}`
       : `/api/v1/market/history/${sym}?${params}`
     const data = await apiFetch(url)
 
-    // 统一解包: data.history
+    if (currentRequestId !== fetchHistoryRequestId) return
+
     const payload = data?.data || data
     isFetching.value = payload?.fetching ?? data?.fetching ?? false
 
@@ -371,9 +373,12 @@ async function fetchHistory(append = false) {
 
     rebuildChartData()
   } catch (e) {
+    if (currentRequestId !== fetchHistoryRequestId) return
     logger.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
   } finally {
-    isLoading.value = false
+    if (currentRequestId === fetchHistoryRequestId) {
+      isLoading.value = false
+    }
   }
 }
 

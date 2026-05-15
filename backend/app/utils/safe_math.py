@@ -5,6 +5,7 @@ Mirrors frontend/src/utils/safeMath.js for consistency.
 
 from typing import Union, List, Optional
 import math
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 
 
 def safe_divide(dividend: Union[int, float], divisor: Union[int, float], default_value: float = 0.0) -> float:
@@ -112,3 +113,75 @@ def safe_round(value: Union[int, float], decimals: int = 2, default_value: float
         return default_value
     
     return round(float(value), decimals)
+
+
+def precise_pnl(shares: Union[int, float], sell_price: Union[int, float], avg_cost: Union[int, float], decimals: int = 4) -> float:
+    """
+    Calculate PnL with Decimal precision to avoid floating-point errors.
+    
+    Args:
+        shares: Number of shares
+        sell_price: Sell price per share
+        avg_cost: Average cost per share
+        decimals: Number of decimal places for result (default: 4)
+    
+    Returns:
+        Realized PnL with precise calculation
+    
+    Examples:
+        >>> precise_pnl(100, 10.5, 10.0)
+        50.0
+        >>> precise_pnl(100, 10.123456789, 10.0)
+        12.3457
+    """
+    try:
+        s = Decimal(str(shares))
+        sp = Decimal(str(sell_price))
+        ac = Decimal(str(avg_cost))
+        result = s * (sp - ac)
+        quantize_str = '0.' + '0' * decimals
+        return float(result.quantize(Decimal(quantize_str), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError, TypeError):
+        return 0.0
+
+
+def precise_multiply(*values: Union[int, float], decimals: int = 4) -> float:
+    """
+    Multiply values with Decimal precision.
+    
+    Args:
+        *values: Values to multiply
+        decimals: Number of decimal places for result
+    
+    Returns:
+        Product with precise calculation
+    """
+    try:
+        result = Decimal('1')
+        for v in values:
+            result *= Decimal(str(v))
+        quantize_str = '0.' + '0' * decimals
+        return float(result.quantize(Decimal(quantize_str), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError, TypeError):
+        return 0.0
+
+
+def precise_add(*values: Union[int, float], decimals: int = 4) -> float:
+    """
+    Add values with Decimal precision.
+    
+    Args:
+        *values: Values to add
+        decimals: Number of decimal places for result
+    
+    Returns:
+        Sum with precise calculation
+    """
+    try:
+        result = Decimal('0')
+        for v in values:
+            result += Decimal(str(v))
+        quantize_str = '0.' + '0' * decimals
+        return float(result.quantize(Decimal(quantize_str), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, ValueError, TypeError):
+        return 0.0

@@ -155,15 +155,20 @@ function refreshTermStructure() {
   fetchTermStructure()
 }
 
+let fetchTermStructureRequestId = 0
+
 async function fetchTermStructure() {
   const prefix = inputSymbol.value.trim().toUpperCase().replace(/0$/, '')
   if (!prefix) return
+  const currentRequestId = ++fetchTermStructureRequestId
   termError.value = ''
   termLoading.value = true
   try {
     const res = await fetch(`/api/v1/futures/term_structure?symbol=${prefix}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
+    // Ignore stale responses
+    if (currentRequestId !== fetchTermStructureRequestId) return
     if (data.code !== 0 && data.code !== undefined) {
       termError.value = data.message || '加载失败'
       return
@@ -172,9 +177,12 @@ async function fetchTermStructure() {
     termName.value   = data.data?.name || ''
     termStructureData.value = data.data?.term_structure || []
   } catch (e) {
+    if (currentRequestId !== fetchTermStructureRequestId) return
     termError.value = `加载失败: ${e.message}`
   } finally {
-    termLoading.value = false
+    if (currentRequestId === fetchTermStructureRequestId) {
+      termLoading.value = false
+    }
   }
 }
 
@@ -248,8 +256,11 @@ const handleTickUpdate = useThrottleFn((t) => {
 watch(liveTick, (t) => { handleTickUpdate(t) })
 
 // ── 数据拉取 ─────────────────────────────────────────────────
+let fetchDataRequestId = 0
+
 async function fetchData() {
   if (!currentSymbol.value) return
+  const currentRequestId = ++fetchDataRequestId
   chartError.value = ''
   try {
     const params = new URLSearchParams({
@@ -260,6 +271,8 @@ async function fetchData() {
     const res = await fetch(`/api/v1/market/futures/${currentSymbol.value}?${params}`)
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
+    // Ignore stale responses
+    if (currentRequestId !== fetchDataRequestId) return
     if (data.error) { chartError.value = data.error; return }
     histData.value = data.history || []
     if (!histData.value.length) { chartError.value = '暂无数据'; return }
@@ -270,6 +283,7 @@ async function fetchData() {
     // Rebuild chart data using Web Worker
     rebuildChartData()
   } catch (e) {
+    if (currentRequestId !== fetchDataRequestId) return
     chartError.value = `加载失败: ${e.message}`
   }
 }

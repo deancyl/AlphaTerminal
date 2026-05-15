@@ -115,6 +115,7 @@ const storage = useDrawingStorage()
 
 const canvasRef = ref(null)
 const inlineInputRef = ref(null)
+let _canvasResizeObserver = null
 
 const inlineEdit = ref({ visible: false, x: 0, y: 0, text: '', shapeId: null })
 const ctxMenu = ref({ show: false, x: 0, y: 0, targetId: null })
@@ -352,14 +353,18 @@ onMounted(() => {
   document.addEventListener('click', handleDocClick)
   
   if (canvasRef.value?.parentElement) {
-    const ro = new ResizeObserver(() => resizeCanvas())
-    ro.observe(canvasRef.value.parentElement)
+    _canvasResizeObserver = new ResizeObserver(() => resizeCanvas())
+    _canvasResizeObserver.observe(canvasRef.value.parentElement)
   }
   
   onUnmounted(() => {
     renderer.cancelAnimation()
     window.removeEventListener('resize', resizeCanvas)
     document.removeEventListener('click', handleDocClick)
+    if (_canvasResizeObserver) {
+      _canvasResizeObserver.disconnect()
+      _canvasResizeObserver = null
+    }
   })
 })
 

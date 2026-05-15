@@ -440,6 +440,8 @@ onMounted(debouncedFetch)
 // ── 无限滚动触底触发（双重保险：IntersectionObserver + scroll 兜底）────────
 let _observer = null
 let _scrollHandler = null
+let _tableResizeObserver = null
+let _sentinelResizeObserver = null
 
 function tryAutoNextPage() {
   if (loading.value) return
@@ -450,13 +452,13 @@ function tryAutoNextPage() {
 function setupSentinel(scrollContainer) {
   // 防御：sentinelEl 尚未挂载时等待下一帧
   if (!sentinelEl.value) {
-    const ro = new ResizeObserver(() => {
+    _sentinelResizeObserver = new ResizeObserver(() => {
       if (sentinelEl.value) {
-        ro.disconnect()
+        _sentinelResizeObserver.disconnect()
         setupSentinel(scrollContainer)
       }
     })
-    ro.observe(scrollContainer)
+    _sentinelResizeObserver.observe(scrollContainer)
     return
   }
 
@@ -485,18 +487,20 @@ onMounted(() => {
   const tableWrapper = sentinelEl.value?.closest('.overflow-y-auto')
   if (tableWrapper) {
     // 表格高度可能为 0（数据未加载），等数据渲染后再初始化
-    const ro = new ResizeObserver(() => {
+    _tableResizeObserver = new ResizeObserver(() => {
       if (tableWrapper.clientHeight > 0) {
-        ro.disconnect()
+        _tableResizeObserver.disconnect()
         setupSentinel(tableWrapper)
       }
     })
-    ro.observe(tableWrapper)
+    _tableResizeObserver.observe(tableWrapper)
   }
 })
 
 onUnmounted(() => {
   _observer?.disconnect()
+  _tableResizeObserver?.disconnect()
+  _sentinelResizeObserver?.disconnect()
   const tableWrapper = sentinelEl.value?.closest('.overflow-y-auto')
   if (tableWrapper && _scrollHandler) {
     tableWrapper.removeEventListener('scroll', _scrollHandler)

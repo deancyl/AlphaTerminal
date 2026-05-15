@@ -213,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { exportCSV as utilExportCSV } from '../utils/symbols.js'
 
 const props = defineProps({
@@ -294,45 +294,6 @@ async function applyOverlaySearch() {
   overlaySearchResults.value = [{ symbol: q, name: q }]
 }
 
-// 点击外部关闭面板
-const vClickOutsideOverlay = {
-  mounted(el, binding) {
-    el._ovClickOutside = (e) => {
-      if (!el.closest('.relative')?.contains(e.target) && !el.querySelector('.absolute')?.contains(e.target)) {
-        binding.value(e)
-      }
-    }
-    setTimeout(() => document.addEventListener('click', el._ovClickOutside), 0)
-  },
-  unmounted(el) { document.removeEventListener('click', el._ovClickOutside) },
-}
-
-// 加载全市场A股符号缓存（搜索用）
-async function loadOverlaySymbolCache() {
-  if (overlaySearchCache.value._symbols) return
-  isLoadingOverlayCache.value = true
-  try {
-    const resp = await fetch('/api/v1/market/symbols')
-    const json = await resp.json()
-    if (json?.data?.symbols) {
-      overlaySearchCache.value._symbols = json.data.symbols
-    }
-  } catch { /* silent */ }
-  finally {
-    isLoadingOverlayCache.value = false
-  }
-}
-
-// 面板打开时加载缓存
-watch(showOverlayPanel, (v) => {
-  if (v) loadOverlaySymbolCache()
-})
-
-function doExport(mode) {
-  const hist = mode === 'visible' ? props.visibleHist : props.fullHist
-  utilExportCSV(hist, props.indicators, `${props.name || props.symbol}_${props.period}.csv`)
-}
-
 // Click outside directive
 const vClickOutside = {
   mounted(el, binding) {
@@ -341,4 +302,34 @@ const vClickOutside = {
   },
   unmounted(el) { document.removeEventListener('click', el._clickOutsideHandler) },
 }
+
+// Timer reference for cleanup
+let clickOutsideTimer = null
+
+// Click outside directive for overlay
+const vClickOutsideOverlay = {
+  mounted(el, binding) {
+    el._ovClickOutside = (e) => {
+      if (!el.closest('.relative')?.contains(e.target) && !el.querySelector('.absolute')?.contains(e.target)) {
+        binding.value(e)
+      }
+    }
+    clickOutsideTimer = setTimeout(() => document.addEventListener('click', el._ovClickOutside), 0)
+  },
+  unmounted(el) {
+    if (clickOutsideTimer) {
+      clearTimeout(clickOutsideTimer)
+      clickOutsideTimer = null
+    }
+    document.removeEventListener('click', el._ovClickOutside)
+  },
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (clickOutsideTimer) {
+    clearTimeout(clickOutsideTimer)
+    clickOutsideTimer = null
+  }
+})
 </script>

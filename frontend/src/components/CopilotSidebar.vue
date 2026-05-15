@@ -29,7 +29,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { mdRender } from '../composables/useCopilotMarkdown.js'
 import { showMarket, showSectors, showNorthFlow, showLimitUp, showLimitDown, showUnusual } from '../composables/useCopilotData.js'
 import { parseCommand } from '../composables/useCopilotCommands.js'
@@ -371,6 +371,13 @@ async function addToWatch(keyword) {
   emit('open-chart', { symbol: stock.symbol, name: stock.name, addToWatch: true })
   addAssistantMessage(`⭐ 已添加「${stock.name}(${stock.symbol})」到自选股`)
 }
+// Lifecycle cleanup
+onUnmounted(() => {
+  if (timeoutWarningTimer) {
+    clearTimeout(timeoutWarningTimer)
+    timeoutWarningTimer = null
+  }
+})
 </script>
 
 <style src="../styles/copilot-markdown.css"></style>

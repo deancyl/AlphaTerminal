@@ -10,7 +10,7 @@ import sqlite3
 import logging
 from datetime import datetime
 from typing import Optional, NamedTuple
-from app.utils.safe_math import safe_divide, safe_percent, safe_round
+from app.utils.safe_math import safe_divide, safe_percent, safe_round, precise_pnl
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +59,10 @@ def execute_sell(
     shares:       int,
     sell_price:   float,
     order_id:    Optional[str] = None,
+    conn:        Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
 ) -> SellResult:
     """
-    FIFO 平仓算法
+    FIFO 平仓算法（并发安全版本）
     ─────────────────────────────────────────────────────────────────────
     规则：
       1. 从 status='open' 的批次中，按 buy_date ASC（早的先平）
@@ -69,6 +70,10 @@ def execute_sell(
       3. 批次完全平仓（shares→0）时标记 status='closed'
       4. 部分平仓时：avg_cost 不变，仅 shares 减少
       5. realized_pnl 在每笔 lot 平仓时立即计算
+    
+    并发安全：
+      - 使用 BEGIN IMMEDIATE TRANSACTION 在读取前获取写锁
+      - 支持外部传入连接，确保与现金更新在同一事务内
     ─────────────────────────────────────────────────────────────────────
     返回：SellResult(total_realized_pnl, lots_closed[], shares_remaining, sell_price, timestamp)
     """
@@ -83,8 +88,19 @@ def execute_sell(
     total_realized_pnl = 0.0
     remaining = shares
 
-    conn = _get_lots_conn()
+    # 使用外部连接或创建新连接
+    external_conn = conn is not None
+    if conn is None:
+        conn = _get_lots_conn()
+    
+    # 标记是否由本函数管理事务（外部连接时由调用方管理）
+    manage_transaction = not external_conn
+    
     try:
+        # ── 并发安全：BEGIN IMMEDIATE 在读取前获取写锁 ──
+        if manage_transaction:
+            conn.execute("BEGIN IMMEDIATE TRANSACTION")
+        
         # 按 buy_date 升序（老批次优先）
         open_lots = conn.execute(
             """
@@ -112,7 +128,7 @@ def execute_sell(
 
             # 本次从此批次中平掉的股数
             closed = min(lot_shares, remaining)
-            pnl_this = closed * (sell_price - lot_avg_cost)
+            pnl_this = precise_pnl(closed, sell_price, lot_avg_cost)
 
             new_shares = lot_shares - closed
             new_status = 'closed' if new_shares == 0 else 'open'
@@ -141,14 +157,18 @@ def execute_sell(
             remaining -= closed
 
     except Exception as e:
-        conn.rollback()
+        if manage_transaction:
+            conn.rollback()
         logger.error(f"[Trading] execute_sell rollback due to error: {e}")
         raise
     else:
-        conn.commit()
-        upsert_position_summary(portfolio_id, symbol)
+        if manage_transaction:
+            conn.commit()
+            upsert_position_summary(portfolio_id, symbol, conn=conn)
     finally:
-        conn.close()
+        # 仅关闭本函数创建的连接
+        if not external_conn:
+            conn.close()
 
     return SellResult(
         total_realized_pnl=round(total_realized_pnl, 2),
@@ -195,7 +215,7 @@ def execute_buy(
         conn.close()
 
     return LotRecord(
-        id=new_id,
+        id=new_id or 0,
         portfolio_id=portfolio_id,
         symbol=symbol,
         shares=shares,
@@ -378,7 +398,7 @@ def calc_unrealized_pnl(portfolio_id: int, symbol: str, current_price: float) ->
 
 # ── Phase 3: 持仓聚合表（position_summary）读写 ────────────────────────
 
-def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
+def upsert_position_summary(portfolio_id: int, symbol: str, conn: Optional[sqlite3.Connection] = None) -> None:
     """
     当持仓批次发生变动（buy/sell）后，重新计算并 UPSERT position_summary。
     计算逻辑：
@@ -388,7 +408,9 @@ def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
       unrealized_pnl = market_value - Σ(shares × avg_cost)
     注：market_value 和 unrealized_pnl 由外部调用方在已知 current_price 时更新。
     """
-    conn = _get_lots_conn()
+    external_conn = conn is not None
+    if conn is None:
+        conn = _get_lots_conn()
     try:
         rows = conn.execute(
             """
@@ -400,7 +422,6 @@ def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
         ).fetchall()
 
         if not rows:
-            # 无 open 批次 → 删除聚合记录
             conn.execute(
                 "DELETE FROM position_summary WHERE portfolio_id=? AND symbol=?",
                 (portfolio_id, symbol),
@@ -423,9 +444,11 @@ def upsert_position_summary(portfolio_id: int, symbol: str) -> None:
                 """,
                 (portfolio_id, symbol, total_shares, avg_cost, now_str),
             )
-        conn.commit()
+        if not external_conn:
+            conn.commit()
     finally:
-        conn.close()
+        if not external_conn:
+            conn.close()
 
 
 def update_market_value(portfolio_id: int, symbol: str, current_price: float) -> dict:
@@ -478,7 +501,7 @@ def update_market_value(portfolio_id: int, symbol: str, current_price: float) ->
 
 def get_position_summary(
     portfolio_id: int,
-    symbol: str = None,
+    symbol: Optional[str] = None,
     include_children: bool = False,
 ) -> list[dict]:
     """

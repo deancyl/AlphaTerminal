@@ -183,6 +183,8 @@
           <FundDashboard v-else-if="currentView === 'fund'" />
           <!-- 期货行情 -->
           <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
+          <!-- 外汇行情 -->
+          <ForexDashboard v-else-if="currentView === 'forex'" />
           <!-- 策略中心 -->
           <StrategyCenter v-else-if="currentView === 'strategy-center'" />
           <!-- 系统管理 -->
@@ -315,6 +317,7 @@ import VersionChecker from './components/VersionChecker.vue'
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
 const FuturesDashboard = defineAsyncComponent(() => import('./components/FuturesDashboard.vue'))
+const ForexDashboard   = defineAsyncComponent(() => import('./components/ForexDashboard.vue'))
 const PortfolioDashboard = defineAsyncComponent(() => import('./components/PortfolioDashboard.vue'))
 const FundDashboard   = defineAsyncComponent(() => import('./components/FundDashboard.vue'))
 const StrategyCenter   = defineAsyncComponent(() => import('./components/StrategyCenter.vue'))

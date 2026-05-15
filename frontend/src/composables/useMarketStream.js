@@ -21,10 +21,10 @@
 import { ref, computed, watch, onUnmounted, shallowRef, triggerRef } from 'vue'
 import { logger } from '../utils/logger.js'
 import { checkPriceAlerts, sendNotification, recordAlertTrigger } from './useNotifications.js'
-import { usePageVisibility } from './usePageVisibility.js'
 import { acquireLock, releaseLock } from '../utils/connectionLock.js'
-import { TIMEOUTS, POLLING_ENDPOINTS } from '../utils/constants.js'
+import { TIMEOUTS } from '../utils/constants.js'
 import { CircularBuffer } from '../utils/circularBuffer.js'
+import { useNetworkStatus, isNetworkOnline } from './useNetworkStatus.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -69,6 +69,51 @@ const globalLatency = ref(null) // WebSocket latency in ms
 const globalPollingStatus = ref(false)
 const POLLING_INTERVAL = 5000  // 5 seconds
 let _pollingTimer = null
+
+// ── P0-2: Subscription Queue (防止 WS 未就绪时订阅丢失) ────────────────────────────────
+// 当 WS 未连接时，订阅请求存入队列，连接就绪后批量发送
+const _pendingSubscriptions = new Set()
+const _MAX_PENDING_QUEUE = 500  // 防止内存泄漏
+
+// ── P0-1: Network Status Awareness (网络状态感知) ────────────────────────────────
+// 追踪网络状态，网络恢复后自动重连
+const globalNetworkOnline = ref(navigator.onLine)
+let _networkOnlineHandler = null
+let _networkOfflineHandler = null
+let _networkListenerRegistered = false
+
+function _registerNetworkListeners() {
+  if (_networkListenerRegistered) return
+  _networkOnlineHandler = () => {
+    globalNetworkOnline.value = true
+    logger.log('[MarketStream] 网络已恢复，尝试重连...')
+    // 网络恢复后立即重连（如果有待订阅的符号）
+    if (subscribedSymRefCount.size > 0 && !_ws && _connectionState === ConnectionState.IDLE) {
+      _newConnection()
+    }
+  }
+  _networkOfflineHandler = () => {
+    globalNetworkOnline.value = false
+    logger.warn('[MarketStream] 网络已断开，暂停重连')
+    // 网络断开时停止重连计时器
+    if (_retryTimer) {
+      clearTimeout(_retryTimer)
+      _retryTimer = null
+    }
+  }
+  window.addEventListener('online', _networkOnlineHandler)
+  window.addEventListener('offline', _networkOfflineHandler)
+  _networkListenerRegistered = true
+}
+
+function _unregisterNetworkListeners() {
+  if (!_networkListenerRegistered) return
+  window.removeEventListener('online', _networkOnlineHandler)
+  window.removeEventListener('offline', _networkOfflineHandler)
+  _networkOnlineHandler = null
+  _networkOfflineHandler = null
+  _networkListenerRegistered = false
+}
 
 // ── Connection State Machine (Race Condition Fix) ────────────────────────────────
 // States: IDLE, CONNECTING, CONNECTED, DISCONNECTING, RECONNECTING
@@ -282,11 +327,13 @@ function _newConnection() {
     _retryCount = 0
     _lastMessageTime = Date.now()
     _startHealthCheck()
+    _registerNetworkListeners()
     if (globalPollingStatus.value) {
       _stopPolling()
     }
     const activeSyms = [...subscribedSymRefCount.keys()]
     if (activeSyms.length) _doSubscribe(activeSyms)
+    _flushPendingSubscriptions()
   }
 
   _ws.onmessage = (event) => {
@@ -384,8 +431,8 @@ function _newConnection() {
         globalError.value = '连接失败次数过多，请刷新页面重试'
         logger.error('[MarketStream] 达到最大重试次数，停止重连')
       }
-      if (_retryCount >= 3 && !globalPollingStatus.value) {
-        logger.warn('[MarketStream] Starting HTTP polling fallback')
+      if (_retryCount >= 2 && !globalPollingStatus.value) {
+        logger.warn('[MarketStream] Starting HTTP polling fallback (retry >= 2)')
         _startPolling([...subscribedSymRefCount.keys()])
       }
     }
@@ -393,17 +440,37 @@ function _newConnection() {
 }
 
 function _doSubscribe(syms) {
-  if (!_ws || _ws.readyState !== WebSocket.OPEN) return
   if (!syms || !syms.length) return
-  // ── 防空：过滤掉 undefined / 空字符串 / 'undefined' 字符串 ──
   const cleanSyms = syms.filter(s => s && String(s) !== 'undefined' && String(s).trim() !== '')
   if (!cleanSyms.length) return
+
+  // P0-2: 如果 WS 未就绪，存入队列等待连接后发送
+  if (!_ws || _ws.readyState !== WebSocket.OPEN) {
+    for (const sym of cleanSyms) {
+      if (_pendingSubscriptions.size < _MAX_PENDING_QUEUE) {
+        _pendingSubscriptions.add(sym)
+      }
+    }
+    logger.log(`[MarketStream] WS 未就绪，${cleanSyms.length} 个订阅已入队（队列: ${_pendingSubscriptions.size}）`)
+    return
+  }
+
   try {
     const payload = { action: 'subscribe', symbols: cleanSyms }
     if (import.meta.env.DEV) console.debug('[MarketStream] 发送订阅:', JSON.stringify(payload))
     _ws.send(JSON.stringify(payload))
   } catch (e) {
     logger.warn('[MarketStream] subscribe failed:', e)
+  }
+}
+
+function _flushPendingSubscriptions() {
+  if (_pendingSubscriptions.size === 0) return
+  const syms = [..._pendingSubscriptions]
+  _pendingSubscriptions.clear()
+  if (syms.length > 0 && _ws && _ws.readyState === WebSocket.OPEN) {
+    logger.log(`[MarketStream] 刷新待处理订阅: ${syms.length} 个`)
+    _doSubscribe(syms)
   }
 }
 
@@ -432,11 +499,16 @@ function _scheduleRetry() {
   clearTimeout(_retryTimer)
   _retryCount++
 
-  // jitter: 实际延迟 = base * (0.75 + random * 0.5)，即 ±25%
-  const jitter = _retryDelay * (0.75 + Math.random() * 0.5)
-  logger.log(`[MarketStream] ${(jitter / 1000).toFixed(1)}s后第${_retryCount}次重连（jitter ±25%）...`)
+  // jitter: 实际延迟 = base * (0.5 + random)，即 ±50%
+  const jitter = _retryDelay * (0.5 + Math.random())
+  logger.log(`[MarketStream] ${(jitter / 1000).toFixed(1)}s后第${_retryCount}次重连（jitter ±50%）...`)
 
   _retryTimer = setTimeout(() => {
+    if (!globalNetworkOnline.value) {
+      logger.warn('[MarketStream] 网络离线，跳过重连')
+      _tryTransitionTo(ConnectionState.IDLE)
+      return
+    }
     if (subscribedSymRefCount.size > 0 && !_ws && _connectionState === ConnectionState.RECONNECTING) {
       _newConnection()
     }
@@ -666,6 +738,7 @@ export function useMarketStream(initialSymbol = '') {
           _ws.onerror = null
           _ws.close(1000, 'all_disconnected')
           _ws = null
+          _unregisterNetworkListeners()
           
           // Transition to IDLE
           _transitionState(ConnectionState.DISCONNECTING, ConnectionState.IDLE)

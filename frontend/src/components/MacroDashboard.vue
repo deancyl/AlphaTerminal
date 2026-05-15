@@ -704,7 +704,10 @@ let socialFinancingChartInstance = null
 let industrialProductionChartInstance = null
 let unemploymentChartInstance = null
 
+let fetchRequestId = 0
+
 async function fetchAllData() {
+  const currentRequestId = ++fetchRequestId
   loading.value = true
   errorSummary.value = null
 
@@ -722,6 +725,8 @@ async function fetchAllData() {
   ]
 
   const { results, successCount, failCount, allFailed } = await fetchAll(requests)
+
+  if (currentRequestId !== fetchRequestId) return
 
   const [
     overviewRes,

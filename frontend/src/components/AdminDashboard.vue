@@ -195,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, reactive, shallowReactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
@@ -301,7 +301,7 @@ const cacheStatus = reactive({ market: 5497, sectors: 20, news: 150, db: 22 })
 const dbStatus = reactive({ size: '12.5', realtime: 22, daily: 12500, stocks: 5497 })
 
 // ── 系统监控 ──────────────────────────────────────────────────────────
-const systemMetrics = reactive({
+const systemMetrics = shallowReactive({
   cpu_percent: 5.4,
   memory: { percent: 56.2, used_gb: 4.3, total_gb: 7.65 },
   disk: { percent: 29.0, used_gb: 17.22, total_gb: 62.6 },

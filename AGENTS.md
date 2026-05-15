@@ -1229,3 +1229,75 @@ See `docs/PORTFOLIO_OPTIMIZATION_SUMMARY.md` for detailed wave-by-wave documenta
 | Attribution Panel | `frontend/src/components/AttributionPanel.vue` |
 | Open Lots Panel | `frontend/src/components/OpenLotsPanel.vue` |
 | Tests | `backend/tests/unit/test_routers/test_portfolio_optimization.py` |
+
+---
+
+## Forex Module Optimization Summary (30 Iterations)
+
+### Overview
+
+A comprehensive 30-iteration optimization cycle was completed to address the Top 10 QA/UX issues in the Forex module.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Frontend race conditions | P0 | Request versioning + onWatcherCleanup | ✅ Fixed |
+| Backend cache without lock | P0 | asyncio.Lock protection | ✅ Fixed |
+| ECharts memory leak | P0 | isDisposed checks + chart.off | ✅ Fixed |
+| Generic error messages | P1 | ForexError enum + classifyForexError | ✅ Fixed |
+| Inconsistent loading states | P1 | Unified skeleton loading | ✅ Fixed |
+| No keyboard navigation | P1 | tabindex + @keydown handlers | ✅ Fixed |
+| Circuit breaker silent | P1 | circuit_breaker status in API | ✅ Fixed |
+| No debounce on symbol switch | P1 | useDebounceFn(300ms) | ✅ Fixed |
+| Missing aria-live | P2 | aria-live="polite" on dynamic regions | ✅ Fixed |
+| No amount max validation | P2 | Field(le=1000000000) | ✅ Fixed |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/utils/forexErrors.js` | Error classification utility |
+| `backend/tests/unit/test_routers/test_forex.py` | Forex test suite |
+
+### API Changes
+
+- `/api/v1/forex/spot` now returns `circuit_breaker` status object
+- `/api/v1/forex/convert` validates `amount <= 1000000000`
+
+### Verification Commands
+
+```bash
+# P0-1: Race conditions
+grep -c "requestId" frontend/src/components/ForexDashboard.vue  # Expected: 6+
+
+# P0-2: Cache lock
+grep -c "asyncio.Lock" backend/app/routers/forex.py  # Expected: 1
+
+# P0-3: ECharts memory
+grep -c "isDisposed" frontend/src/components/BaseKLineChart.vue  # Expected: 4+
+
+# P1-4: Error classification
+ls frontend/src/utils/forexErrors.js
+
+# P1-5: Loading states
+grep -c "animate-pulse" frontend/src/components/CrossRateMatrix.vue  # Expected: 2+
+
+# P1-6: Keyboard navigation
+grep -c "@keydown" frontend/src/components/ForexQuotePanel.vue  # Expected: 4+
+
+# P1-7: Circuit breaker
+curl http://localhost:60100/api/v1/forex/spot | jq '.circuit_breaker'
+
+# P1-8: Debounce
+grep -c "debouncedFetchKline" frontend/src/components/ForexDashboard.vue  # Expected: 2+
+
+# P2-9: ARIA
+grep -c "aria-live" frontend/src/components/ForexDashboard.vue  # Expected: 2+
+
+# P2-10: Validation
+grep -c "le=1000000000" backend/app/forex_schemas/schemas.py  # Expected: 1
+
+# Tests
+pytest backend/tests/unit/test_routers/test_forex.py -v
+```

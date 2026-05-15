@@ -236,10 +236,15 @@ function changeSymbol() {
 const emit = defineEmits(['update:symbol', 'price-selected'])
 
 // ── 数据获取 ──────────────────────────────────────────────────
+let fetchOrderBookRequestId = 0
+
 async function fetchOrderBook() {
   const sym = localSymbol.value.trim() || props.symbol
+  const currentRequestId = ++fetchOrderBookRequestId
   try {
     const json = await apiFetch(`/api/v1/market/order_book/${sym}`, { timeoutMs: 8000 })
+    // Ignore stale responses
+    if (currentRequestId !== fetchOrderBookRequestId) return
     if (json?.code !== 0) {
       error.value = json?.message || '获取失败'
       data.value = null
@@ -262,10 +267,13 @@ async function fetchOrderBook() {
     }
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   } catch (e) {
+    if (currentRequestId !== fetchOrderBookRequestId) return
     error.value = e.message
     data.value = null
   } finally {
-    loading.value = false
+    if (currentRequestId === fetchOrderBookRequestId) {
+      loading.value = false
+    }
   }
 }
 

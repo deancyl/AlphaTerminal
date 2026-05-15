@@ -62,14 +62,17 @@ def _safe_strftime(val, fmt='%Y年%m月份'):
     except (AttributeError, TypeError):
         return str(val) if val else None
 
-# ── 简单内存缓存（带过期清理）────────────────────────────────────────
+# ── 线程安全内存缓存（带过期清理）────────────────────────────────────────
+import asyncio
+
 _cache = {}
 _cache_ttl = {}
+_cache_lock = asyncio.Lock()
 CACHE_DURATION = 300  # 5分钟缓存
 MAX_CACHE_SIZE = 50   # 最大缓存条目数
 
-def _cleanup_expired():
-    """清理过期缓存"""
+async def _cleanup_expired():
+    """清理过期缓存（需在锁内调用）"""
     now = datetime.now()
     expired = [k for k, v in _cache_ttl.items() if now >= v]
     for k in expired:
@@ -78,30 +81,30 @@ def _cleanup_expired():
     if expired:
         logger.info(f"[Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
 
-def get_cached(key, allow_stale=False):
-    _cleanup_expired()
-    if key in _cache and key in _cache_ttl:
-        if allow_stale:
-            return _cache[key]
-        if datetime.now() < _cache_ttl[key]:
-            logger.info(f"[Cache HIT] {key}")
-            return _cache[key]
+async def get_cached(key, allow_stale=False):
+    async with _cache_lock:
+        await _cleanup_expired()
+        if key in _cache and key in _cache_ttl:
+            if allow_stale:
+                return _cache[key]
+            if datetime.now() < _cache_ttl[key]:
+                logger.info(f"[Cache HIT] {key}")
+                return _cache[key]
     logger.info(f"[Cache MISS] {key}")
     return None
 
-def set_cached(key, value):
-    """设置缓存数据（带大小限制）"""
-    _cleanup_expired()
-    # 如果缓存已满，删除最旧的条目
-    if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
-        oldest_key = min(_cache_ttl, key=_cache_ttl.get)
-        _cache.pop(oldest_key, None)
-        _cache_ttl.pop(oldest_key, None)
-        logger.info(f"[Cache EVICT] 移除最旧缓存: {oldest_key}")
-    
-    _cache[key] = value
-    _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
-    logger.info(f"[Cache SET] {key}, expires at {_cache_ttl[key]}")
+async def set_cached(key, value):
+    async with _cache_lock:
+        await _cleanup_expired()
+        if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
+            oldest_key = min(_cache_ttl, key=_cache_ttl.get)
+            _cache.pop(oldest_key, None)
+            _cache_ttl.pop(oldest_key, None)
+            logger.info(f"[Cache EVICT] 移除最旧缓存: {oldest_key}")
+        
+        _cache[key] = value
+        _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
+        logger.info(f"[Cache SET] {key}, expires at {_cache_ttl[key]}")
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
@@ -114,7 +117,7 @@ async def get_gdp_data(
     - **limit**: 返回最近N个季度（默认20，即5年）
     """
     cache_key = f"macro_gdp_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -149,11 +152,11 @@ async def get_gdp_data(
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("GDP数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -170,7 +173,7 @@ async def get_cpi_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_cpi_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -204,11 +207,11 @@ async def get_cpi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("CPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -225,7 +228,7 @@ async def get_ppi_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_ppi_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -257,11 +260,11 @@ async def get_ppi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("PPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -278,7 +281,7 @@ async def get_pmi_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_pmi_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -311,11 +314,11 @@ async def get_pmi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("PMI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -330,7 +333,7 @@ async def get_macro_overview():
     获取宏观经济综合概览（最新一期各指标）
     优化：使用线程池并行获取8个指标，将串行耗时降至并行耗时
     """
-    cached = get_cached("macro_overview")
+    cached = await get_cached("macro_overview")
     if cached:
         return cached
     
@@ -471,7 +474,7 @@ async def get_macro_overview():
         })
         
         # 缓存结果
-        set_cached("macro_overview", result)
+        await set_cached("macro_overview", result)
         return result
     except Exception as e:
         logger.error(f"[Macro] Overview fetch error: {e}")
@@ -484,7 +487,7 @@ async def get_economic_calendar():
     获取中国宏观经济数据发布日历（近期重要数据预告）
     """
     cache_key = "macro_calendar"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -553,11 +556,11 @@ async def get_economic_calendar():
             "calendar": calendar_items,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("经济日历获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -574,7 +577,7 @@ async def get_m2_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_m2_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -606,11 +609,11 @@ async def get_m2_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("M2数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -627,7 +630,7 @@ async def get_social_financing_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_social_financing_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -659,11 +662,11 @@ async def get_social_financing_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("社融数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -680,7 +683,7 @@ async def get_industrial_production_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_industrial_production_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -708,11 +711,11 @@ async def get_industrial_production_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("工业增加值数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
@@ -729,7 +732,7 @@ async def get_unemployment_data(limit: int = 24):
     - **limit**: 返回最近N个月（默认24，即2年）
     """
     cache_key = f"macro_unemployment_{limit}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         return cached
     
@@ -761,11 +764,11 @@ async def get_unemployment_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = get_cached(cache_key, allow_stale=True)
+        stale_cached = await get_cached(cache_key, allow_stale=True)
         if stale_cached:
             return stale_cached
         return error_response("失业率数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)

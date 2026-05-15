@@ -940,44 +940,58 @@ const macroRetryCount = ref(0)
 const MAX_RETRIES = 5
 const RETRY_DELAYS = [1000, 2000, 4000, 8000, 16000] // Exponential backoff
 
+let fetchLowFreqRequestId = 0
+
 async function fetchLowFreq() {
   // Abort any pending request before starting a new one
   _fetchController?.abort()
   _fetchController = new AbortController()
+  const currentRequestId = ++fetchLowFreqRequestId
 
   // Fetch macro data
   try {
     const d = await apiFetch('/api/v1/market/macro', { signal: _fetchController.signal })
+    // Ignore stale responses
+    if (currentRequestId !== fetchLowFreqRequestId) return
     macroData.value = d?.macro || d?.data?.macro || d || []
     macroError.value = null
   } catch (e) {
     // Ignore abort errors silently
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
+    if (currentRequestId !== fetchLowFreqRequestId) return
     macroError.value = e?.message || 'Failed to fetch macro data'
   }
   
   // Fetch rates data
   try {
     const d = await apiFetch('/api/v1/market/rates', { signal: _fetchController.signal })
+    // Ignore stale responses
+    if (currentRequestId !== fetchLowFreqRequestId) return
     ratesData.value = d?.rates || d?.data?.rates || d || []
     ratesError.value = null
   } catch (e) {
     // Ignore abort errors silently
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
+    if (currentRequestId !== fetchLowFreqRequestId) return
     ratesError.value = e?.message || 'Failed to fetch rates data'
   }
   
   // Fetch global data
   try {
     const d = await apiFetch('/api/v1/market/global', { signal: _fetchController.signal })
+    // Ignore stale responses
+    if (currentRequestId !== fetchLowFreqRequestId) return
     globalData.value = d?.global || d?.data?.global || d || []
     globalError.value = null
   } catch (e) {
     // Ignore abort errors silently
     if (e.name === 'AbortError' || e.message?.includes('aborted')) return
+    if (currentRequestId !== fetchLowFreqRequestId) return
     globalError.value = e?.message || 'Failed to fetch global data'
   } finally {
-    _fetchController = null
+    if (currentRequestId === fetchLowFreqRequestId) {
+      _fetchController = null
+    }
   }
 }
 

@@ -181,7 +181,10 @@ function openCommodity(item) {
   emit('open-futures', { symbol: item.symbol })
 }
 
+let fetchRequestId = 0
+
 async function fetchFuturesData() {
+  const currentRequestId = ++fetchRequestId
   isLoading.value = true
   hasError.value = false
   errorMessage.value = ''
@@ -192,13 +195,13 @@ async function fetchFuturesData() {
       apiFetch('/api/v1/futures/commodities'),
     ])
 
+    if (currentRequestId !== fetchRequestId) return
+
     if (mi) {
       const indexFutures = mi.index_futures || []
       
-      // Fetch historical data for each index future
       const historyPromises = indexFutures.map(fut => {
         const symbol = fut.symbol || ''
-        // Extract base symbol (IF, IC, IM) from full symbol like "IF2501"
         const baseSymbol = symbol.replace(/\d+$/, '')
         return apiFetch(`/api/v1/futures/index_history?symbol=${baseSymbol}&limit=20`)
           .then(res => ({ symbol: fut.symbol, history: res?.history || [] }))
@@ -206,9 +209,11 @@ async function fetchFuturesData() {
       })
       
       const historyResults = await Promise.all(historyPromises)
+      
+      if (currentRequestId !== fetchRequestId) return
+      
       const historyMap = Object.fromEntries(historyResults.map(r => [r.symbol, r.history]))
       
-      // Merge history into futuresCards
       futuresCards.value = indexFutures.map(fut => ({
         ...fut,
         history: historyMap[fut.symbol] || []
@@ -221,11 +226,14 @@ async function fetchFuturesData() {
       commodityUpdateTime.value = mc.update_time || ''
     }
   } catch (e) {
+    if (currentRequestId !== fetchRequestId) return
     logger.warn('[FuturesDashboard] fetch failed:', e)
     hasError.value = true
     errorMessage.value = '加载失败，请点击重试'
   } finally {
-    isLoading.value = false
+    if (currentRequestId === fetchRequestId) {
+      isLoading.value = false
+    }
   }
 }
 

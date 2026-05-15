@@ -264,6 +264,7 @@ import { getUnifiedPrice, getSourceStyle, getPriceConsistency } from '../utils/p
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { useTheme } from '../composables/useTheme.js'
 import { debounce } from '../utils/debounce.js'
+import { useThrottleFn } from '@vueuse/core'
 
 const { getChartColors, onThemeChange } = useTheme()
 
@@ -283,6 +284,13 @@ const props = defineProps({
 
 // Connect to WebSocket for this symbol
 const { tick: wsTick } = useMarketStream(props.symbol)
+
+// Throttle WebSocket tick updates to prevent reactivity avalanche
+const debouncedWsTick = ref(null)
+const throttledTickUpdate = useThrottleFn((t) => {
+  debouncedWsTick.value = t
+}, 100)
+watch(wsTick, throttledTickUpdate)
 
 // snapshotData 优先，否则用 realtimeData + latestCandle 合并
 const data = computed(() => {
@@ -318,7 +326,7 @@ const panelName = computed(() => data.value.name || props.name || props.symbol)
 // ── 统一价格源（优先级：WS tick > K线 > API > 快照）───────────────────────
 const unifiedPriceSource = computed(() => {
   return getUnifiedPrice({
-    wsTick: wsTick.value,  // NOW CONNECTED! (was null before)
+    wsTick: debouncedWsTick.value,  // Throttled WS tick
     latestCandle: props.latestCandle,
     realtimeData: props.realtimeData,
     snapshotData: props.snapshotData
@@ -329,7 +337,7 @@ const priceSourceStyle = computed(() => getSourceStyle(unifiedPriceSource.value.
 
 const priceConsistency = computed(() => {
   return getPriceConsistency({
-    wsTick: wsTick.value,  // NOW CONNECTED!
+    wsTick: debouncedWsTick.value,  // Throttled WS tick
     latestCandle: props.latestCandle,
     realtimeData: props.realtimeData
   })

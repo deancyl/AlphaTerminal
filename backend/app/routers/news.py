@@ -9,6 +9,7 @@ Phase B: 统一 API 响应格式
 import asyncio
 import logging
 import time
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from app.utils.response import success_response, error_response, ErrorCode
 
@@ -122,7 +123,6 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
             if host in BLOCKED_HOSTS or host.endswith(".local") or host.endswith(".internal"):
                 return error_response(1, "禁止访问内网地址", {"url": url})
 
-        import requests
         from bs4 import BeautifulSoup
 
         headers = {
@@ -135,10 +135,9 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
             "Accept-Language": "zh-CN,zh;q=0.9",
             "Accept-Encoding": "gzip, deflate",
         }
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        r.encoding = r.apparent_encoding or "utf-8"
-        text_content = r.text[:100 * 1024]  # 最多读取 100KB
-        r.close()
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+            text_content = r.text[:100 * 1024]  # 最多读取 100KB
 
         soup = BeautifulSoup(text_content, "html.parser")
 

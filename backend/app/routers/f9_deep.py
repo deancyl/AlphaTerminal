@@ -25,8 +25,11 @@ router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
 
 _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="f9_")
 
+import asyncio
+
 _cache: Dict[str, Any] = {}
 _cache_ttl: Dict[str, float] = {}
+_cache_lock = asyncio.Lock()
 CACHE_DURATION = 300
 
 
@@ -58,27 +61,26 @@ def normalize_f9_symbol(symbol: str) -> str:
     return symbol
 
 
-def get_cached(key: str) -> Optional[Any]:
-    """获取缓存数据，如果过期则返回 None"""
-    if key not in _cache:
-        return None
-    
-    if key not in _cache_ttl:
-        return None
-    
-    if time.time() - _cache_ttl[key] > CACHE_DURATION:
-        # 缓存过期，删除
-        del _cache[key]
-        del _cache_ttl[key]
-        return None
-    
-    return _cache[key]
+async def get_cached(key: str) -> Optional[Any]:
+    async with _cache_lock:
+        if key not in _cache:
+            return None
+        
+        if key not in _cache_ttl:
+            return None
+        
+        if time.time() - _cache_ttl[key] > CACHE_DURATION:
+            del _cache[key]
+            del _cache_ttl[key]
+            return None
+        
+        return _cache[key]
 
 
-def set_cached(key: str, value: Any) -> None:
-    """设置缓存数据"""
-    _cache[key] = value
-    _cache_ttl[key] = time.time()
+async def set_cached(key: str, value: Any) -> None:
+    async with _cache_lock:
+        _cache[key] = value
+        _cache_ttl[key] = time.time()
 
 
 def check_akshare_circuit() -> bool:
@@ -124,7 +126,7 @@ async def get_shareholder_data(symbol: str):
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"shareholder_{symbol}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[shareholder] Cache hit for {symbol}")
         return success_response(cached)
@@ -241,7 +243,7 @@ async def get_shareholder_data(symbol: str):
             'holderChanges': holder_changes
         }
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         logger.info(f"[shareholder] Successfully fetched data for {symbol}")
         return success_response(result)
         
@@ -269,7 +271,7 @@ async def get_margin_data(symbol: str):
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"margin_{symbol}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Margin] Cache hit for {symbol}")
         return success_response(cached)
@@ -364,7 +366,7 @@ async def get_margin_data(symbol: str):
             "trend": trend_data
         }
 
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
 
         logger.info(f"[Margin] Successfully fetched {len(trend_data)} days data for {symbol}")
         return success_response(result)
@@ -395,7 +397,7 @@ async def get_financial_data(symbol: str):
     cache_key = f"financial_{symbol}"
 
     # 检查缓存
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[F9] Cache hit for financial: {symbol}")
         return success_response(cached)
@@ -466,7 +468,7 @@ async def get_financial_data(symbol: str):
         if not result:
             return error_response("未找到财务数据")
 
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
 
         logger.info(f"[F9] Fetched financial data for {symbol}, quarters: {len(result['indicators'])}")
         return success_response(result)
@@ -508,7 +510,7 @@ async def get_profit_forecast(symbol: str):
     cache_key = f"forecast_{symbol}"
     
     # 检查缓存
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[F9] Cache hit for forecast: {symbol}")
         return success_response(cached)
@@ -550,7 +552,7 @@ async def get_profit_forecast(symbol: str):
             "institutions": institutions
         }
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         logger.info(f"[F9] Fetched forecast data for {symbol}: {len(eps_forecast)} EPS records, {len(institutions)} institution records")
         
         return success_response(result)
@@ -593,7 +595,7 @@ async def get_institution_holdings(symbol: str):
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"institution_{symbol}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Institution] Cache hit for {symbol}")
         return success_response(cached)
@@ -702,7 +704,7 @@ async def get_institution_holdings(symbol: str):
             "quarter": actual_quarter
         }
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         logger.info(f"[Institution] Successfully fetched data for {symbol}")
         return success_response(result)
         
@@ -754,7 +756,7 @@ async def get_peer_comparison(symbol: str):
     symbol = normalized
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"peers_{symbol}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Peers] Cache hit for {symbol}")
         return success_response(cached)
@@ -920,7 +922,7 @@ async def get_peer_comparison(symbol: str):
                 'peers': demo_peers
             }
             
-            set_cached(cache_key, result)
+            await set_cached(cache_key, result)
             return success_response(result)
         
         logger.info(f"[Peers] Fetching industry peers for {symbol}")
@@ -981,7 +983,7 @@ async def get_peer_comparison(symbol: str):
             'peers': peers
         }
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         
         logger.info(f"[Peers] Successfully fetched {len(peers)} peer stocks for {symbol}")
         return success_response(result)
@@ -1018,7 +1020,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     
     symbol = normalize_f9_symbol(symbol)
     cache_key = f"announcements_{symbol}_{page}"
-    cached = get_cached(cache_key)
+    cached = await get_cached(cache_key)
     if cached:
         logger.info(f"[Announcements] Cache hit for {symbol} page {page}")
         return success_response(cached)
@@ -1079,7 +1081,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
             "page_size": page_size
         }
         
-        set_cached(cache_key, result)
+        await set_cached(cache_key, result)
         
         logger.info(f"[Announcements] Successfully fetched {total} announcements for {symbol}, returning page {page}")
         return success_response(result)

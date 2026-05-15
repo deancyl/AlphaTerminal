@@ -90,9 +90,8 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
       3. 返回平仓明细和总已实现盈亏
     """
     async def _inner():
-        # ── 事务包装：确保 execute_sell + 现金更新 + 流水记录 原子性 ──
         with get_conn() as conn:
-            conn.execute("BEGIN TRANSACTION")
+            conn.execute("BEGIN IMMEDIATE TRANSACTION")
             try:
                 result = execute_sell(
                     portfolio_id=portfolio_id,
@@ -100,9 +99,9 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                     shares=body.shares,
                     sell_price=body.sell_price,
                     order_id=body.order_id,
+                    conn=conn,
                 )
 
-                # 查询并更新现金余额
                 rows = conn.execute(
                     "SELECT cash_balance FROM portfolios WHERE id=?",
                     (portfolio_id,),
@@ -114,7 +113,6 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                     (new_cash, portfolio_id),
                 )
 
-                # 写入交易流水
                 _insert_transaction(
                     conn,
                     portfolio_id,
@@ -125,6 +123,8 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                     note=f"卖出{body.symbol} × {body.shares}手",
                     operator="user",
                 )
+
+                upsert_position_summary(portfolio_id, body.symbol, conn=conn)
 
                 conn.commit()
             except Exception:

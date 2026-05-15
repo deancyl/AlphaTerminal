@@ -23,6 +23,7 @@ ENDPOINT_LIMITS = {
     "news": EndpointLimit(requests=30, period=60),
     "futures": EndpointLimit(requests=60, period=60),
     "macro": EndpointLimit(requests=30, period=60),
+    "forex": EndpointLimit(requests=60, period=60),
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -30,6 +31,7 @@ EXEMPT_PATHS = [
     "/health",
     "/api/v1/health",
     "/api/v1/f9/health",
+    "/api/v1/forex/health",
     "/api/agent/v1/health",
     "/api/v1/macro/health",
 ]
@@ -64,6 +66,8 @@ def get_endpoint_category(path: str) -> str:
         return "backtest"
     if "/agent/" in path:
         return "agent"
+    if "/forex/" in path:
+        return "forex"
     if "/futures/" in path:
         return "futures"
     if "/macro/" in path:

@@ -4,7 +4,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
+import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
@@ -293,6 +293,7 @@ function buildOption(cData) {
 // ── Tick 增量更新（patch 最后根 K 线） ───────────────────────────
 function applyTickFast(cData, tick) {
   if (!chart || !tick || !tick.price) return
+  if (chart.isDisposed()) return
   const last = cData.klineData[cData.klineData.length - 1]
   if (!last) return
   const [o, , l, h] = last
@@ -346,6 +347,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (chart && !chart.isDisposed()) {
+    chart.off('datazoom')
+  }
   _ro?.disconnect()
   _unsubscribeTheme?.()
   _isInitialized = false
@@ -370,6 +374,7 @@ _unsubscribeTheme = onThemeChange(() => {
 // 核心 watcher：chartData 或 subCharts 变化时合并更新（节流 200ms）
 const debouncedUpdateChart = useDebounceFn(() => {
   if (!chart || !props.chartData || props.chartData.isEmpty) return
+  if (chart.isDisposed()) return
   _lastChartData = props.chartData
   chart.setOption(buildOption(props.chartData), { notMerge: false })
 }, 200)
@@ -377,9 +382,13 @@ const debouncedUpdateChart = useDebounceFn(() => {
 watch([() => props.chartData, () => props.subCharts], () => { debouncedUpdateChart() })
 
 // tick watcher：增量 patch 最后根 K 线
+const throttledApplyTick = useThrottleFn((data, tick) => {
+  if (!chart || !data || data.isEmpty) return
+  applyTickFast(data, tick)
+}, 100)
+
 watch(() => props.tick, (t) => {
-  if (!chart || !_lastChartData || _lastChartData.isEmpty) return
-  applyTickFast(_lastChartData, t)
+  throttledApplyTick(_lastChartData, t)
 })
 
 defineExpose({ 

@@ -245,6 +245,7 @@ const { initChart: initPieChart, setOption: setPieOption, dispose: disposePieCha
 
 // WebSocket
 let ws = null
+let reconnectTimer = null
 
 function connectWebSocket() {
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
@@ -279,7 +280,7 @@ function connectWebSocket() {
     ws.onclose = () => {
       wsConnected.value = false
       // Reconnect after 5 seconds
-      setTimeout(connectWebSocket, 5000)
+      reconnectTimer = setTimeout(connectWebSocket, 5000)
     }
   } catch {
     wsConnected.value = false
@@ -287,6 +288,10 @@ function connectWebSocket() {
 }
 
 function disconnectWebSocket() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
   if (ws) {
     ws.close()
     ws = null

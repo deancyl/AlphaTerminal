@@ -735,16 +735,21 @@ function _cancelLeaveTimer() {
 // ─────────────────────────────────────────────────────────────────
 // 渲染循环
 // ─────────────────────────────────────────────────────────────────
+let fetchAndRenderRequestId = 0
+
 async function fetchAndRender() {
   // 取消上一个 pending 请求
   _fetchController?.abort()
   _fetchController = new AbortController()
+  const currentRequestId = ++fetchAndRenderRequestId
   chartError.value = ''; isLoading.value = true
   try {
     // Guard: if symbol prop is undefined/null, use a fallback URL
     const safeSymbol = (props.symbol && props.symbol !== 'undefined') ? props.symbol : 'sh000001'
     const fullUrl = `/api/v1/market/history/${safeSymbol}?period=${props.period || 'daily'}&_t=${Date.now()}`
     const d = await apiFetch(fullUrl, { timeoutMs: 15000, signal: _fetchController.signal })
+    // Ignore stale responses
+    if (currentRequestId !== fetchAndRenderRequestId) return
     const type = d?.chart_type || 'candlestick'
     chartType.value = type
 
@@ -823,10 +828,13 @@ async function fetchAndRender() {
     lastHistRaw = d?.data?.history || d?.history || d || []
     fillHoverBarLatest(_sanitize(lastHistRaw, isMinute))
   } catch (e) {
+    if (currentRequestId !== fetchAndRenderRequestId) return
     chartError.value = `加载失败: ${e.message}`
     logger.error('[KLine]', e)
   } finally {
-    isLoading.value = false
+    if (currentRequestId === fetchAndRenderRequestId) {
+      isLoading.value = false
+    }
   }
 }
 const debouncedFetch = useDebounceFn(fetchAndRender, 300)

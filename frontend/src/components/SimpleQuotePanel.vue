@@ -113,14 +113,20 @@ function changeSymbol() {
   }
 }
 
+let fetchQuoteRequestId = 0
+
 async function fetchQuote() {
   if (!props.symbol) return
   
+  const currentRequestId = ++fetchQuoteRequestId
   loading.value = true
   error.value = null
   
   try {
     const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`)
+    
+    // Ignore stale responses
+    if (currentRequestId !== fetchQuoteRequestId) return
     
     if (json) {
       const oldPrice = data.value?.price || 0
@@ -139,10 +145,13 @@ async function fetchQuote() {
       triggerFlash(json.price, oldPrice)
     }
   } catch (e) {
+    if (currentRequestId !== fetchQuoteRequestId) return
     logger.error('[SimpleQuote] fetch error:', e)
     error.value = e.message || '获取数据失败'
   } finally {
-    loading.value = false
+    if (currentRequestId === fetchQuoteRequestId) {
+      loading.value = false
+    }
   }
 }
 
