@@ -1174,3 +1174,58 @@ model = session_manager.get_bound_model("abc123", "openai")
 | Service | `backend/app/services/session_manager.py` |
 | DB Helpers | `backend/app/db/session_db.py` |
 | Tests | `backend/tests/unit/test_services/test_session_manager.py` |
+
+---
+
+## Portfolio Module Optimization Summary (v0.7.0)
+
+### Overview
+
+A comprehensive 50-iteration optimization cycle was completed to address the Top 10 QA/UX issues in the Portfolio module.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| No timeout protection | P0 | Add `asyncio.wait_for()` with 30s timeout | ✅ Fixed |
+| Missing input validation | P0 | Add `ge=0` to TransactionIn/CashOpIn | ✅ Fixed |
+| N+1 query pattern | P0 | Replace recursive build_node with CTE | ✅ Fixed |
+| No pagination | P1 | Add limit/offset to positions/lots | ✅ Fixed |
+| Error not displayed | P1 | Fix AttributionPanel error state | ✅ Fixed |
+| Missing ARIA tabs | P1 | Implement WAI-ARIA tab pattern | ✅ Fixed |
+| Double API call | P1 | Combine /lots + /lots/summary | ✅ Fixed |
+| Undebounced watchers | P2 | Add 300ms debounce to 6 watchers | ✅ Fixed |
+| No virtual scrolling | P2 | VirtualizedTable already in use | ✅ Verified |
+| Missing dialog ARIA | P2 | Add dialog accessibility to Transfer modal | ✅ Fixed |
+
+### Performance Improvements
+
+| Metric | Before | After |
+|--------|--------|-------|
+| API Timeout | None | 30s |
+| Query Count (Tree) | 3N | 2 |
+| API Calls (OpenLotsPanel) | 2 | 1 |
+| Form Re-renders | Every keystroke | 300ms debounced |
+
+### Test Coverage
+
+- **51 new tests** in `test_portfolio_optimization.py`
+- **44 tests passing** (7 integration tests need DB)
+- Enabled skipped tests in `test_portfolio.py`
+
+### Documentation
+
+See `docs/PORTFOLIO_OPTIMIZATION_SUMMARY.md` for detailed wave-by-wave documentation.
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Positions Router | `backend/app/routers/portfolio/positions.py` |
+| Lots Router | `backend/app/routers/portfolio/lots.py` |
+| Schemas | `backend/app/routers/portfolio/schemas.py` |
+| Trading Service | `backend/app/services/trading.py` |
+| Portfolio Dashboard | `frontend/src/components/PortfolioDashboard.vue` |
+| Attribution Panel | `frontend/src/components/AttributionPanel.vue` |
+| Open Lots Panel | `frontend/src/components/OpenLotsPanel.vue` |
+| Tests | `backend/tests/unit/test_routers/test_portfolio_optimization.py` |
