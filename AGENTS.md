@@ -877,3 +877,115 @@ function autoResize() {
 | Input | `frontend/src/components/copilot/CopilotInput.vue` |
 | Markdown CSS | `frontend/src/styles/copilot-markdown.css` |
 | Markdown Renderer | `frontend/src/composables/useCopilotMarkdown.js` |
+
+---
+
+## Theme System (v0.6.37)
+
+### Overview
+
+AlphaTerminal implements a semantic CSS variable-based theme system supporting 4 themes: dark, black, wind, light.
+
+### Architecture
+
+```
+index.html (FOUC prevention script)
+    ↓
+style.css ([data-theme] selectors)
+    ↓
+tailwind.config.js (CSS variable mapping)
+    ↓
+useTheme.js (theme state management)
+    ↓
+echartsTheme.js (dynamic chart colors)
+    ↓
+BaseKLineChart.vue (incremental update)
+```
+
+### Semantic CSS Variables
+
+| Category | Variables | Description |
+|----------|-----------|-------------|
+| **Background** | `--bg-base`, `--bg-surface`, `--bg-surface-hover` | Base, panel, hover states |
+| **Border** | `--border-base`, `--border-light` | Primary and secondary borders |
+| **Text** | `--text-primary`, `--text-secondary`, `--text-muted` | Text hierarchy |
+| **Brand** | `--color-primary`, `--color-primary-hover` | Brand accent colors |
+| **Financial** | `--color-bull`, `--color-bear` | Rise/fall semantic colors |
+
+### Theme Switching
+
+```javascript
+import { useTheme } from '@/composables/useTheme'
+
+const { activeTheme, setTheme, onThemeChange } = useTheme()
+
+// Switch theme
+setTheme('dark')  // or 'black', 'wind', 'light'
+
+// Subscribe to theme changes (for ECharts)
+onThemeChange((theme) => {
+  chart.setOption(buildOption(data), { notMerge: false })
+})
+```
+
+### Tailwind Usage
+
+```vue
+<template>
+  <!-- Background -->
+  <div class="bg-base">Page background</div>
+  <div class="bg-surface">Panel background</div>
+  
+  <!-- Text -->
+  <p class="text-primary">Primary text</p>
+  <p class="text-secondary">Secondary text</p>
+  
+  <!-- Financial colors -->
+  <span class="text-bull">+2.35%</span>
+  <span class="text-bear">-1.28%</span>
+</template>
+```
+
+### FOUC Prevention
+
+Blocking script in `index.html` sets `data-theme` before Vue renders:
+
+```html
+<script>
+(function() {
+  var saved = localStorage.getItem('alphaterminal-theme');
+  var theme = saved || 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+})();
+</script>
+```
+
+### ECharts Integration
+
+```javascript
+import { getDynamicThemeColors, getDynamicMarketColors } from '@/utils/echartsTheme'
+
+// Get colors from CSS variables
+const colors = getDynamicThemeColors()
+const marketColors = getDynamicMarketColors()
+
+// Use in chart option
+series.push({
+  type: 'candlestick',
+  itemStyle: {
+    color: marketColors.UP,        // Bull color
+    color0: marketColors.DOWN,     // Bear color
+  }
+})
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| CSS Variables | `frontend/src/style.css` |
+| Tailwind Config | `frontend/tailwind.config.js` |
+| Theme Manager | `frontend/src/composables/useTheme.js` |
+| ECharts Theme | `frontend/src/utils/echartsTheme.js` |
+| K-Line Chart | `frontend/src/components/BaseKLineChart.vue` |
+| FOUC Script | `frontend/index.html` |
