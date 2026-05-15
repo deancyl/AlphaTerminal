@@ -1,7 +1,7 @@
 # AlphaTerminal 文档目录
 
 > 最后更新: 2026-05-15  
-> 当前版本: v0.6.38  
+> 当前版本: v0.6.39  
 > 开发计划: [todo0429.md](../todo0429.md) - v0.6.x路线图
 
 ## 📁 文档结构
@@ -12,6 +12,7 @@ docs/
 ├── API_GUIDE.md                 # API 文档
 ├── DEV_SETUP.md                 # 开发环境搭建指南
 ├── TESTING_GUIDE.md             # 测试编写指南
+├── AUTO_DIAGNOSIS_WORKFLOW.md   # 自动化诊断工作流 ⭐
 ├── KNOWN_ISSUES_TODO.md         # 已知问题和待办
 ├── todo0429.md                  # v0.6.x 开发计划 ⭐
 ├── guides/                      # 使用指南
@@ -51,6 +52,10 @@ docs/
 ### 部署运维
 1. [deployment_guide.md](guides/deployment_guide.md) - 生产部署
 2. [PERFORMANCE_REPORT.md](reports/PERFORMANCE_REPORT.md) - 性能优化
+
+### 运维工具
+1. [AUTO_DIAGNOSIS_WORKFLOW.md](AUTO_DIAGNOSIS_WORKFLOW.md) - 自动化诊断工作流 ⭐
+2. [../auto_diagnosis.sh](../auto_diagnosis.sh) - 自动化诊断脚本
 
 ## 🗂️ 归档说明
 
