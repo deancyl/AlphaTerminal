@@ -154,6 +154,45 @@ class ForexFetcher(BaseMarketFetcher):
         self._cache[key] = value
         self._cache_ttl[key] = datetime.now() + timedelta(seconds=ttl_seconds)
         logger.debug(f"[Forex] Cache SET: {key} (TTL={ttl_seconds}s)")
+
+    def _get_fallback_quotes(self) -> List[Dict[str, Any]]:
+        """
+        返回静态回退数据（当电路熔断器打开时）
+
+        Returns:
+            静态外汇报价列表 - 包含完整的 bid/ask/spread 字段
+        """
+        from datetime import datetime
+        ts = int(datetime.now().timestamp())
+        return [
+            {"symbol": "USDCNY", "name": "美元/人民币", "latest": 7.2456, "bid": 7.2420, "ask": 7.2492, "spread": 0.0072, "change": 0.0087, "change_pct": 0.12, "open": 7.2369, "high": 7.2521, "low": 7.2312, "prev_close": 7.2369, "source": "fallback", "timestamp": ts},
+            {"symbol": "EURCNY", "name": "欧元/人民币", "latest": 7.8923, "bid": 7.8880, "ask": 7.8966, "spread": 0.0086, "change": -0.0063, "change_pct": -0.08, "open": 7.8986, "high": 7.9012, "low": 7.8856, "prev_close": 7.8986, "source": "fallback", "timestamp": ts},
+            {"symbol": "GBPCNY", "name": "英镑/人民币", "latest": 9.1234, "bid": 9.1180, "ask": 9.1288, "spread": 0.0108, "change": 0.0210, "change_pct": 0.23, "open": 9.1024, "high": 9.1345, "low": 9.0912, "prev_close": 9.1024, "source": "fallback", "timestamp": ts},
+            {"symbol": "JPYCNY", "name": "日元/人民币", "latest": 0.0486, "bid": 0.0484, "ask": 0.0488, "spread": 0.0004, "change": -0.00007, "change_pct": -0.15, "open": 0.04867, "high": 0.04889, "low": 0.04845, "prev_close": 0.04867, "source": "fallback", "timestamp": ts},
+            {"symbol": "HKDCNY", "name": "港币/人民币", "latest": 0.9287, "bid": 0.9265, "ask": 0.9309, "spread": 0.0044, "change": 0.0005, "change_pct": 0.05, "open": 0.9282, "high": 0.9301, "low": 0.9275, "prev_close": 0.9282, "source": "fallback", "timestamp": ts},
+            {"symbol": "AUDCNY", "name": "澳元/人民币", "latest": 4.7234, "bid": 4.7180, "ask": 4.7288, "spread": 0.0108, "change": 0.0085, "change_pct": 0.18, "open": 4.7149, "high": 4.7356, "low": 4.7098, "prev_close": 4.7149, "source": "fallback", "timestamp": ts},
+            {"symbol": "EURUSD", "name": "欧元/美元", "latest": 1.0892, "bid": 1.0888, "ask": 1.0896, "spread": 0.0008, "change": 0.0012, "change_pct": 0.11, "open": 1.0880, "high": 1.0905, "low": 1.0875, "prev_close": 1.0880, "source": "fallback", "timestamp": ts},
+            {"symbol": "GBPUSD", "name": "英镑/美元", "latest": 1.2634, "bid": 1.2628, "ask": 1.2640, "spread": 0.0012, "change": 0.0025, "change_pct": 0.20, "open": 1.2609, "high": 1.2655, "low": 1.2600, "prev_close": 1.2609, "source": "fallback", "timestamp": ts},
+            {"symbol": "USDJPY", "name": "美元/日元", "latest": 149.85, "bid": 149.80, "ask": 149.90, "spread": 0.10, "change": 0.25, "change_pct": 0.17, "open": 149.60, "high": 150.05, "low": 149.50, "prev_close": 149.60, "source": "fallback", "timestamp": ts},
+            {"symbol": "AUDUSD", "name": "澳元/美元", "latest": 0.6520, "bid": 0.6515, "ask": 0.6525, "spread": 0.0010, "change": 0.0015, "change_pct": 0.23, "open": 0.6505, "high": 0.6535, "low": 0.6500, "prev_close": 0.6505, "source": "fallback", "timestamp": ts},
+        ]
+
+    async def reset_circuit_breaker(self) -> dict:
+        """
+        手动重置熔断器
+
+        Returns:
+            dict: {"success": bool, "state": str}
+        """
+        from app.services.circuit_breaker import CircuitState
+        async with self._cache_lock:
+            old_state = self.cb.state.value
+            self.cb._stats._consecutive_failures = 0
+            self.cb._stats._consecutive_successes = 0
+            self.cb._stats._last_failure_time = None
+            self.cb._state = CircuitState.CLOSED
+            logger.info(f"[Forex] 熔断器手动重置: {old_state} -> closed")
+            return {"success": True, "state": "closed"}
     
     async def get_spot_quotes(self) -> List[Dict[str, Any]]:
         """
@@ -179,8 +218,8 @@ class ForexFetcher(BaseMarketFetcher):
             return cached
         
         if not self.cb.is_available():
-            logger.warning("[Forex] 熔断器打开，跳过获取")
-            return []
+            logger.warning("[Forex] 熔断器打开，返回回退数据")
+            return self._get_fallback_quotes()
         
         try:
             loop = asyncio.get_running_loop()
@@ -191,7 +230,8 @@ class ForexFetcher(BaseMarketFetcher):
             
             if df is None or df.empty:
                 self.cb.record_failure()
-                return []
+                logger.warning("[Forex] forex_spot_em 返回空数据，返回回退数据")
+                return self._get_fallback_quotes()
             
             quotes = []
             for _, row in df.iterrows():
@@ -217,12 +257,12 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning("[Forex] 获取实时报价超时")
-            return []
+            logger.warning("[Forex] 获取实时报价超时，返回回退数据")
+            return self._get_fallback_quotes()
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取实时报价失败: {e}")
-            return []
+            logger.error(f"[Forex] 获取实时报价失败: {e}，返回回退数据")
+            return self._get_fallback_quotes()
     
     async def get_history(
         self,

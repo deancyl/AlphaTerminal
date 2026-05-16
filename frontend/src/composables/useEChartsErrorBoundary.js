@@ -63,14 +63,34 @@ export function useEChartsErrorBoundary() {
    * Display empty state message in chart container
    * @param {HTMLElement} container - Chart container element
    * @param {string} message - Message to display
+   * @param {Function} retryFn - Optional retry function to call
    */
-  function showChartEmptyState(container, message) {
+  function showChartEmptyState(container, message, retryFn) {
     if (!container) return
+    
+    const retryButton = retryFn ? `
+      <button 
+        class="mt-2 px-3 py-1 bg-terminal-accent/20 text-terminal-accent rounded text-xs hover:bg-terminal-accent/30 transition"
+        id="chart-empty-retry-${Date.now()}"
+      >
+        刷新数据
+      </button>
+    ` : ''
+    
     container.innerHTML = `
-      <div class="flex items-center justify-center h-full text-terminal-dim text-sm">
-        ${message}
+      <div class="flex flex-col items-center justify-center h-full">
+        <span class="text-terminal-dim text-sm">${message}</span>
+        ${retryButton}
       </div>
     `
+    
+    // Attach retry handler
+    if (retryFn) {
+      const retryBtn = container.querySelector('[id^="chart-empty-retry"]')
+      if (retryBtn) {
+        retryBtn.addEventListener('click', retryFn)
+      }
+    }
   }
 
   /**

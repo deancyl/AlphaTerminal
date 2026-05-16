@@ -493,7 +493,8 @@ async def search_symbols(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -593,7 +594,8 @@ async def get_klines(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -686,7 +688,8 @@ async def get_price(
             
             return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -868,7 +871,8 @@ async def list_strategies(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -956,7 +960,8 @@ async def get_strategy(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -1064,7 +1069,8 @@ async def create_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except ValueError as e:
         duration = time.time() - start_time
@@ -1207,7 +1213,8 @@ async def update_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -1305,7 +1312,8 @@ async def delete_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time

@@ -198,6 +198,7 @@ async def get_spot_quotes():
             "quotes": quotes,
             "total": len(quotes),
             "source": source,
+            "data_source": "live" if source == "akshare" else "fallback",
             "update_time": datetime.now().isoformat(),
             "circuit_breaker": get_circuit_breaker_status()
         })
@@ -205,6 +206,24 @@ async def get_spot_quotes():
     except Exception as e:
         logger.error(f"[Forex] 获取实时报价失败: {e}")
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取实时报价失败: {str(e)}")
+
+
+@router.post("/circuit_breaker/reset")
+async def reset_circuit_breaker():
+    """
+    手动重置熔断器
+    
+    当网络恢复后，用户可以手动重置熔断器以重新尝试获取实时数据。
+    
+    Returns:
+        dict: {"success": true, "state": "closed"}
+    """
+    try:
+        result = await forex_fetcher.reset_circuit_breaker()
+        return success_response(result)
+    except Exception as e:
+        logger.error(f"[Forex] 重置熔断器失败: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")
 
 
 @router.get("/cfets")

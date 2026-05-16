@@ -167,6 +167,7 @@ async def list_positions(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] list_positions timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "List positions timeout")
 
 
@@ -212,6 +213,7 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] upsert_position timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Upsert position timeout")
 
 
@@ -243,6 +245,7 @@ async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(requ
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] delete_position timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Delete position timeout")
 
 
@@ -518,6 +521,7 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] portfolio_pnl timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Portfolio PnL calculation timeout")
 
 
@@ -571,6 +575,7 @@ async def get_snapshots(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] get_snapshots timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Get snapshots timeout")
 
 
@@ -583,6 +588,7 @@ async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] save_snapshot timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Save snapshot timeout")
 
 
@@ -693,4 +699,5 @@ async def daily_pnl_only(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[positions] daily_pnl timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Daily PnL timeout")

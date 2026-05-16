@@ -26,7 +26,12 @@
       </div>
     </div>
 
-    <div v-if="errorSummary" class="mx-3 md:mx-4 mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+    <div 
+      v-if="errorSummary" 
+      class="mx-3 md:mx-4 mt-3 p-3 bg-warning/10 border border-warning/30 rounded-lg"
+      role="alert"
+      aria-live="polite"
+    >
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-start gap-2">
           <span class="text-warning text-lg">⚠️</span>
@@ -50,7 +55,12 @@
     <!-- 主内容区域 - 可滚动 -->
     <div class="flex-1 overflow-y-auto">
       <!-- 骨架加载器 -->
-      <div v-if="loading && !overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
+      <div 
+        v-if="loading && !overview" 
+        class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4"
+        aria-busy="true"
+        aria-label="正在加载宏观经济数据"
+      >
         <div v-for="i in 8" :key="i" class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 animate-pulse">
           <div class="flex items-center justify-between mb-2">
             <div class="h-3 w-10 bg-terminal-bg/50 rounded"></div>
@@ -62,7 +72,12 @@
       </div>
       
       <!-- 核心指标卡片 - 响应式网格 -->
-      <div v-else-if="overview" class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4">
+      <div 
+        v-else-if="overview" 
+        class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4"
+        :aria-busy="loading ? 'true' : 'false'"
+        aria-live="polite"
+      >
         <!-- GDP卡片 -->
         <div 
           class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 hover:border-terminal-accent/50 transition-colors"
@@ -276,7 +291,11 @@
       </div>
 
       <!-- 图表区域 - PC端3列，平板2列，移动端1列 -->
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 px-3 md:px-4 pb-3">
+      <div 
+        class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4 px-3 md:px-4 pb-3"
+        aria-live="polite"
+        aria-label="宏观经济图表区域"
+      >
         <!-- GDP趋势图 -->
         <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 flex flex-col min-h-[280px] md:min-h-[320px]">
           <div class="flex items-center justify-between mb-3">
@@ -548,7 +567,7 @@
       </div>
 
       <!-- 经济日历 -->
-      <div class="px-3 md:px-4 pb-4">
+      <div class="px-3 md:px-4 pb-4" aria-live="polite" aria-label="经济日历区域">
         <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4">
           <div class="flex items-center justify-between mb-3">
             <h3 class="text-sm font-bold text-terminal-accent">📅 近期数据发布</h3>
@@ -583,13 +602,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick, computed, onWatcherCleanup } from 'vue'
 import { apiFetchValidated } from '../utils/api.js'
 import { useGracefulDegradation } from '../composables/useGracefulDegradation.js'
 import { useApiError } from '../composables/useApiError.js'
 import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
 import { useEChartsErrorBoundary } from '../composables/useEChartsErrorBoundary.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
+import { getECharts, initChart } from '../utils/lazyEcharts.js'
 import {
   MacroOverviewSchema,
   MacroCalendarResponseSchema,
@@ -603,7 +623,6 @@ import {
   UnemploymentResponseSchema,
 } from '../schemas/macro.js'
 
-const echarts = window.echarts
 const { handleError, getErrorCategory } = useApiError({ showToast: true })
 const { safeSetOption, validateChartData, showChartEmptyState, showChartErrorState } = useEChartsErrorBoundary()
 
@@ -705,28 +724,38 @@ let industrialProductionChartInstance = null
 let unemploymentChartInstance = null
 
 let fetchRequestId = 0
+let abortController = null
 
 async function fetchAllData() {
+  // Cancel previous request
+  if (abortController) {
+    abortController.abort()
+  }
+  
+  abortController = new AbortController()
+  const signal = abortController.signal
+  
   const currentRequestId = ++fetchRequestId
   loading.value = true
   errorSummary.value = null
 
   const requests = [
-    { key: 'overview', fetchFn: () => apiFetchValidated('/api/v1/macro/overview', MacroOverviewSchema, { timeoutMs: 30000 }), context: { context: '宏观概览' } },
-    { key: 'calendar', fetchFn: () => apiFetchValidated('/api/v1/macro/calendar', MacroCalendarResponseSchema, { timeoutMs: 30000 }), context: { context: '经济日历' } },
-    { key: 'gdp', fetchFn: () => apiFetchValidated('/api/v1/macro/gdp?limit=20', GdpResponseSchema, { timeoutMs: 30000 }), context: { context: 'GDP数据' } },
-    { key: 'cpi', fetchFn: () => apiFetchValidated('/api/v1/macro/cpi?limit=24', CpiResponseSchema, { timeoutMs: 30000 }), context: { context: 'CPI数据' } },
-    { key: 'pmi', fetchFn: () => apiFetchValidated('/api/v1/macro/pmi?limit=24', PmiResponseSchema, { timeoutMs: 30000 }), context: { context: 'PMI数据' } },
-    { key: 'ppi', fetchFn: () => apiFetchValidated('/api/v1/macro/ppi?limit=24', PpiResponseSchema, { timeoutMs: 30000 }), context: { context: 'PPI数据' } },
-    { key: 'm2', fetchFn: () => apiFetchValidated('/api/v1/macro/m2?limit=24', M2ResponseSchema, { timeoutMs: 30000 }), context: { context: 'M2数据' } },
-    { key: 'socialFinancing', fetchFn: () => apiFetchValidated('/api/v1/macro/social_financing?limit=24', SocialFinancingResponseSchema, { timeoutMs: 30000 }), context: { context: '社融数据' } },
-    { key: 'industrial', fetchFn: () => apiFetchValidated('/api/v1/macro/industrial_production?limit=24', IndustrialProductionResponseSchema, { timeoutMs: 30000 }), context: { context: '工业增加值数据' } },
-    { key: 'unemployment', fetchFn: () => apiFetchValidated('/api/v1/macro/unemployment?limit=24', UnemploymentResponseSchema, { timeoutMs: 30000 }), context: { context: '失业率数据' } },
+    { key: 'overview', fetchFn: () => apiFetchValidated('/api/v1/macro/overview', MacroOverviewSchema, { timeoutMs: 30000, signal }), context: { context: '宏观概览' } },
+    { key: 'calendar', fetchFn: () => apiFetchValidated('/api/v1/macro/calendar', MacroCalendarResponseSchema, { timeoutMs: 30000, signal }), context: { context: '经济日历' } },
+    { key: 'gdp', fetchFn: () => apiFetchValidated('/api/v1/macro/gdp?limit=20', GdpResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'GDP数据' } },
+    { key: 'cpi', fetchFn: () => apiFetchValidated('/api/v1/macro/cpi?limit=24', CpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'CPI数据' } },
+    { key: 'pmi', fetchFn: () => apiFetchValidated('/api/v1/macro/pmi?limit=24', PmiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PMI数据' } },
+    { key: 'ppi', fetchFn: () => apiFetchValidated('/api/v1/macro/ppi?limit=24', PpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PPI数据' } },
+    { key: 'm2', fetchFn: () => apiFetchValidated('/api/v1/macro/m2?limit=24', M2ResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'M2数据' } },
+    { key: 'socialFinancing', fetchFn: () => apiFetchValidated('/api/v1/macro/social_financing?limit=24', SocialFinancingResponseSchema, { timeoutMs: 30000, signal }), context: { context: '社融数据' } },
+    { key: 'industrial', fetchFn: () => apiFetchValidated('/api/v1/macro/industrial_production?limit=24', IndustrialProductionResponseSchema, { timeoutMs: 30000, signal }), context: { context: '工业增加值数据' } },
+    { key: 'unemployment', fetchFn: () => apiFetchValidated('/api/v1/macro/unemployment?limit=24', UnemploymentResponseSchema, { timeoutMs: 30000, signal }), context: { context: '失业率数据' } },
   ]
 
-  const { results, successCount, failCount, allFailed } = await fetchAll(requests)
+  try {
+    const { results, successCount, failCount, allFailed } = await fetchAll(requests)
 
-  if (currentRequestId !== fetchRequestId) return
+    if (currentRequestId !== fetchRequestId) return
 
   const [
     overviewRes,
@@ -784,6 +813,17 @@ async function fetchAllData() {
   }
 
   loading.value = false
+  } catch (e) {
+    // Handle abort errors gracefully - don't show error for intentional abort
+    if (e.name === 'AbortError') {
+      console.log('[Macro] Request aborted')
+      return
+    }
+    // Re-throw other errors to be handled by useGracefulDegradation
+    throw e
+  } finally {
+    loading.value = false
+  }
 }
 
 const {
@@ -808,55 +848,74 @@ async function retryFailed() {
   const failedKeys = getFailedKeys()
   if (failedKeys.length === 0) return
 
+  // Cancel previous request
+  if (abortController) {
+    abortController.abort()
+  }
+  
+  abortController = new AbortController()
+  const signal = abortController.signal
+
   loading.value = true
   errorSummary.value = null
 
   const retryRequests = failedKeys.map(key => {
     const requestMap = {
-      overview: { fetchFn: () => apiFetchValidated('/api/v1/macro/overview', MacroOverviewSchema, { timeoutMs: 30000 }), context: { context: '宏观概览' } },
-      calendar: { fetchFn: () => apiFetchValidated('/api/v1/macro/calendar', MacroCalendarResponseSchema, { timeoutMs: 30000 }), context: { context: '经济日历' } },
-      gdp: { fetchFn: () => apiFetchValidated('/api/v1/macro/gdp?limit=20', GdpResponseSchema, { timeoutMs: 30000 }), context: { context: 'GDP数据' } },
-      cpi: { fetchFn: () => apiFetchValidated('/api/v1/macro/cpi?limit=24', CpiResponseSchema, { timeoutMs: 30000 }), context: { context: 'CPI数据' } },
-      pmi: { fetchFn: () => apiFetchValidated('/api/v1/macro/pmi?limit=24', PmiResponseSchema, { timeoutMs: 30000 }), context: { context: 'PMI数据' } },
-      ppi: { fetchFn: () => apiFetchValidated('/api/v1/macro/ppi?limit=24', PpiResponseSchema, { timeoutMs: 30000 }), context: { context: 'PPI数据' } },
-      m2: { fetchFn: () => apiFetchValidated('/api/v1/macro/m2?limit=24', M2ResponseSchema, { timeoutMs: 30000 }), context: { context: 'M2数据' } },
-      socialFinancing: { fetchFn: () => apiFetchValidated('/api/v1/macro/social_financing?limit=24', SocialFinancingResponseSchema, { timeoutMs: 30000 }), context: { context: '社融数据' } },
-      industrial: { fetchFn: () => apiFetchValidated('/api/v1/macro/industrial_production?limit=24', IndustrialProductionResponseSchema, { timeoutMs: 30000 }), context: { context: '工业增加值数据' } },
-      unemployment: { fetchFn: () => apiFetchValidated('/api/v1/macro/unemployment?limit=24', UnemploymentResponseSchema, { timeoutMs: 30000 }), context: { context: '失业率数据' } },
+      overview: { fetchFn: () => apiFetchValidated('/api/v1/macro/overview', MacroOverviewSchema, { timeoutMs: 30000, signal }), context: { context: '宏观概览' } },
+      calendar: { fetchFn: () => apiFetchValidated('/api/v1/macro/calendar', MacroCalendarResponseSchema, { timeoutMs: 30000, signal }), context: { context: '经济日历' } },
+      gdp: { fetchFn: () => apiFetchValidated('/api/v1/macro/gdp?limit=20', GdpResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'GDP数据' } },
+      cpi: { fetchFn: () => apiFetchValidated('/api/v1/macro/cpi?limit=24', CpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'CPI数据' } },
+      pmi: { fetchFn: () => apiFetchValidated('/api/v1/macro/pmi?limit=24', PmiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PMI数据' } },
+      ppi: { fetchFn: () => apiFetchValidated('/api/v1/macro/ppi?limit=24', PpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PPI数据' } },
+      m2: { fetchFn: () => apiFetchValidated('/api/v1/macro/m2?limit=24', M2ResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'M2数据' } },
+      socialFinancing: { fetchFn: () => apiFetchValidated('/api/v1/macro/social_financing?limit=24', SocialFinancingResponseSchema, { timeoutMs: 30000, signal }), context: { context: '社融数据' } },
+      industrial: { fetchFn: () => apiFetchValidated('/api/v1/macro/industrial_production?limit=24', IndustrialProductionResponseSchema, { timeoutMs: 30000, signal }), context: { context: '工业增加值数据' } },
+      unemployment: { fetchFn: () => apiFetchValidated('/api/v1/macro/unemployment?limit=24', UnemploymentResponseSchema, { timeoutMs: 30000, signal }), context: { context: '失业率数据' } },
     }
     return { key, ...requestMap[key] }
   })
 
-  const { results, failCount } = await fetchAll(retryRequests)
+  try {
+    const { results, failCount } = await fetchAll(retryRequests)
 
-  results.forEach((result, index) => {
-    if (result.success && result.data) {
-      const key = retryRequests[index].key
-      if (key === 'overview' && result.data.overview) {
-        overview.value = result.data.overview
-        lastUpdate.value = result.data.last_update
-      } else if (key === 'calendar' && result.data.calendar) {
-        calendar.value = result.data.calendar
-      } else if (result.data?.data) {
-        const drawFunctions = {
-          gdp: drawGDPChart,
-          cpi: drawCPIChart,
-          pmi: drawPMIChart,
-          ppi: drawPPIChart,
-          m2: drawM2Chart,
-          socialFinancing: drawSocialFinancingChart,
-          industrial: drawIndustrialProductionChart,
-          unemployment: drawUnemploymentChart,
-        }
-        if (drawFunctions[key]) {
-          drawFunctions[key](result.data.data)
+    results.forEach((result, index) => {
+      if (result.success && result.data) {
+        const key = retryRequests[index].key
+        if (key === 'overview' && result.data.overview) {
+          overview.value = result.data.overview
+          lastUpdate.value = result.data.last_update
+        } else if (key === 'calendar' && result.data.calendar) {
+          calendar.value = result.data.calendar
+        } else if (result.data?.data) {
+          const drawFunctions = {
+            gdp: drawGDPChart,
+            cpi: drawCPIChart,
+            pmi: drawPMIChart,
+            ppi: drawPPIChart,
+            m2: drawM2Chart,
+            socialFinancing: drawSocialFinancingChart,
+            industrial: drawIndustrialProductionChart,
+            unemployment: drawUnemploymentChart,
+          }
+          if (drawFunctions[key]) {
+            drawFunctions[key](result.data.data)
+          }
         }
       }
-    }
-  })
+    })
 
-  errorSummary.value = failCount > 0 ? getErrorSummary() : null
-  loading.value = false
+    errorSummary.value = failCount > 0 ? getErrorSummary() : null
+  } catch (e) {
+    // Handle abort errors gracefully - don't show error for intentional abort
+    if (e.name === 'AbortError') {
+      console.log('[Macro] Retry request aborted')
+      return
+    }
+    // Re-throw other errors
+    throw e
+  } finally {
+    loading.value = false
+  }
 }
 
 function getChartColors() {
@@ -875,7 +934,7 @@ function drawGDPChart(data) {
 
   const validation = validateChartData(data, ['quarter', 'gdp_yoy'])
   if (!validation.valid) {
-    showChartEmptyState(gdpChart.value, '暂无GDP数据')
+    showChartEmptyState(gdpChart.value, '暂无GDP数据', () => fetchAllData())
     return
   }
 
@@ -935,7 +994,7 @@ function drawCPIChart(data) {
 
   const validation = validateChartData(data, ['month', 'nation_yoy'])
   if (!validation.valid) {
-    showChartEmptyState(cpiChart.value, '暂无CPI数据')
+    showChartEmptyState(cpiChart.value, '暂无CPI数据', () => fetchAllData())
     return
   }
 
@@ -1004,7 +1063,7 @@ function drawPMIChart(data) {
 
   const validation = validateChartData(data, ['month', 'manufacturing_index'])
   if (!validation.valid) {
-    showChartEmptyState(pmiChart.value, '暂无PMI数据')
+    showChartEmptyState(pmiChart.value, '暂无PMI数据', () => fetchAllData())
     return
   }
 
@@ -1079,7 +1138,7 @@ function drawPPIChart(data) {
 
   const validation = validateChartData(data, ['month', 'yoy'])
   if (!validation.valid) {
-    showChartEmptyState(ppiChart.value, '暂无PPI数据')
+    showChartEmptyState(ppiChart.value, '暂无PPI数据', () => fetchAllData())
     return
   }
 
@@ -1139,7 +1198,7 @@ function drawM2Chart(data) {
 
   const validation = validateChartData(data, ['month', 'm2_yoy'])
   if (!validation.valid) {
-    showChartEmptyState(m2Chart.value, '暂无M2数据')
+    showChartEmptyState(m2Chart.value, '暂无M2数据', () => fetchAllData())
     return
   }
 
@@ -1199,7 +1258,7 @@ function drawSocialFinancingChart(data) {
 
   const validation = validateChartData(data, ['month', 'total'])
   if (!validation.valid) {
-    showChartEmptyState(socialFinancingChart.value, '暂无社融数据')
+    showChartEmptyState(socialFinancingChart.value, '暂无社融数据', () => fetchAllData())
     return
   }
 
@@ -1256,7 +1315,7 @@ function drawIndustrialProductionChart(data) {
 
   const validation = validateChartData(data, ['month', 'yoy'])
   if (!validation.valid) {
-    showChartEmptyState(industrialProductionChart.value, '暂无工业增加值数据')
+    showChartEmptyState(industrialProductionChart.value, '暂无工业增加值数据', () => fetchAllData())
     return
   }
 
@@ -1316,7 +1375,7 @@ function drawUnemploymentChart(data) {
 
   const validation = validateChartData(data, ['month', 'rate'])
   if (!validation.valid) {
-    showChartEmptyState(unemploymentChart.value, '暂无失业率数据')
+    showChartEmptyState(unemploymentChart.value, '暂无失业率数据', () => fetchAllData())
     return
   }
 
@@ -1426,6 +1485,9 @@ function handleResize() {
 onMounted(async () => {
   await nextTick()
 
+  // Preload ECharts before initializing charts
+  const echarts = await getECharts()
+
   const chartConfigs = [
     { ref: gdpChart.value, id: 'gdpChart', setter: (v) => gdpChartInstance = v },
     { ref: cpiChart.value, id: 'cpiChart', setter: (v) => cpiChartInstance = v },
@@ -1459,6 +1521,12 @@ onUnmounted(() => {
   stopPolling()
   window.removeEventListener('resize', handleResize)
 
+  // Abort any pending requests
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+
   chartManager.disposeAll()
 
   gdpChartInstance = null
@@ -1469,6 +1537,13 @@ onUnmounted(() => {
   socialFinancingChartInstance = null
   industrialProductionChartInstance = null
   unemploymentChartInstance = null
+})
+
+// Abort requests on watcher cleanup (handles async watcher cancellation)
+onWatcherCleanup(() => {
+  if (abortController) {
+    abortController.abort()
+  }
 })
 </script>
 

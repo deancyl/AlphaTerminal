@@ -129,6 +129,76 @@ fi
 
 ---
 
+#### Phase 1.5: 基础设施健康检查 (5分钟)
+
+**目标**: 验证关键基础设施组件状态
+
+**检查项**:
+
+| 检查项 | 端点 | 预期结果 | 超时 |
+|--------|------|----------|------|
+| WebSocket 状态机 | `GET /api/v1/admin/ws/metrics` | `state != "connecting"` | 5s |
+| 订阅队列 | `GET /api/v1/admin/ws/metrics` | `pending_subscriptions < 500` | 5s |
+| 熔断器状态 | `GET /api/v1/admin/circuit_breaker/status` | `OPEN count == 0` | 5s |
+| 缓存命中率 | `GET /api/v1/admin/cache/stats` | `hit_rate >= 0.5` | 5s |
+| 会话管理 | `GET /api/v1/admin/session/stats` | `expired_count < 100` | 5s |
+| Token 聚合线程 | `GET /api/v1/admin/tokens/stats` | `aggregation_thread_running == true` | 5s |
+
+**WebSocket 状态机关键值**:
+- `HEARTBEAT_INTERVAL`: 25s
+- `PONG_TIMEOUT`: 10s
+- `MAX_MISSED_PONGS`: 3
+- `POLLING_INTERVAL`: 5s (HTTP Fallback)
+
+**执行脚本**:
+```bash
+#!/bin/bash
+# phase1_5_infrastructure.sh
+
+FRONTEND="http://192.168.1.50:60100"
+
+echo "=== Phase 1.5: 基础设施健康检查 ==="
+
+# 1. WebSocket 状态机
+ws_metrics=$(curl -sf --max-time 5 "${FRONTEND}/api/v1/admin/ws/metrics")
+ws_state=$(echo "$ws_metrics" | jq -r '.data.state')
+ws_pending=$(echo "$ws_metrics" | jq -r '.data.pending_subscriptions')
+
+if [[ "$ws_state" == "connecting" ]]; then
+  echo "❌ WebSocket 状态死锁: CONNECTING 状态停留"
+fi
+
+if (( ws_pending > 500 )); then
+  echo "❌ 订阅队列溢出: ${ws_pending}/500"
+fi
+
+# 2. Circuit Breaker 状态
+cb_status=$(curl -sf --max-time 5 "${FRONTEND}/api/v1/admin/circuit_breaker/status")
+open_count=$(echo "$cb_status" | jq '[.data.sources[] | select(.state == "OPEN")] | length')
+
+if (( open_count > 0 )); then
+  echo "⚠️ ${open_count} 个数据源熔断器处于 OPEN 状态"
+fi
+
+# 3. 缓存命中率
+cache_stats=$(curl -sf --max-time 5 "${FRONTEND}/api/v1/admin/cache/stats")
+hit_rate=$(echo "$cache_stats" | jq -r '.data.hit_rate')
+
+if (( $(echo "$hit_rate < 0.5" | bc -l) )); then
+  echo "⚠️ 缓存命中率过低: ${hit_rate}"
+fi
+
+echo "✅ 基础设施检查完成"
+```
+
+**失败处理**:
+- WebSocket 死锁 → 重启后端服务
+- 熔断器 OPEN → 检查数据源连接
+- 缓存命中率低 → 检查缓存配置
+- Token 聚合线程停止 → 检查后台线程
+
+---
+
 #### Phase 2: API 端点批量验证 (10分钟)
 
 **目标**: 遍历所有关键 API 端点，验证响应格式
@@ -151,6 +221,11 @@ GET /api/v1/macro/gdp?limit=5
 GET /api/v1/macro/cpi?limit=5
 GET /api/v1/f9/600519/financial
 GET /api/v1/f9/600519/institution
+GET /api/v1/f9/600519/margin
+GET /api/v1/f9/600519/forecast
+GET /api/v1/f9/600519/shareholder
+GET /api/v1/f9/600519/announcements
+GET /api/v1/f9/600519/peers
 GET /api/v1/futures/index_history?symbol=IF
 GET /api/v1/forex/convert?from=USD&to=CNY&amount=100
 ```
@@ -160,7 +235,18 @@ GET /api/v1/forex/convert?from=USD&to=CNY&amount=100
 GET /api/v1/admin/system/metrics
 GET /api/v1/admin/ws/metrics
 GET /api/v1/admin/tokens/stats
+GET /api/v1/admin/cache/stats
+GET /api/v1/admin/session/stats
+GET /api/v1/admin/circuit_breaker/status
 GET /api/agent/v1/health
+```
+
+**P3 - Portfolio端点** (≥60% 通过):
+```
+GET /api/v1/portfolio/
+GET /api/v1/portfolio/positions
+GET /api/v1/backtest/strategies
+POST /api/v1/strategy/validate
 ```
 
 **执行脚本**:
@@ -305,6 +391,106 @@ npx playwright test tests/e2e/diagnosis.spec.js --project=chromium
 
 ---
 
+#### Phase 3.5: 前端内存泄漏检测 (5分钟)
+
+**目标**: 检测 ECharts 实例和 DOM 节点泄漏
+
+**检查项**:
+
+| 检查项 | 描述 | 阈值 |
+|--------|------|------|
+| ECharts 实例数 | 路由切换后实例数增长 | < 2 |
+| DOM 节点数 | 10 次导航后节点增长 | < 10% |
+| 事件监听器 | 路由切换后监听器增长 | < 5 |
+
+**Playwright 测试脚本**:
+```javascript
+// tests/e2e/memory-leak.spec.js
+import { test, expect } from '@playwright/test';
+
+const FRONTEND = 'http://192.168.1.50:60100';
+
+test.describe('内存泄漏检测', () => {
+  
+  test('ECharts 实例释放验证', async ({ page }) => {
+    await page.goto(FRONTEND);
+    await page.waitForLoadState('networkidle');
+    
+    const initialCount = await page.evaluate(() => {
+      return window.__ECHARTS_INSTANCES__?.size || 0;
+    });
+    
+    for (let i = 0; i < 10; i++) {
+      await page.click('[data-route="macro"]');
+      await page.waitForTimeout(300);
+      await page.click('[data-route="market"]');
+      await page.waitForTimeout(300);
+    }
+    
+    const finalCount = await page.evaluate(() => {
+      return window.__ECHARTS_INSTANCES__?.size || 0;
+    });
+    
+    expect(finalCount - initialCount).toBeLessThan(2);
+  });
+  
+  test('DOM 节点泄漏检测', async ({ page }) => {
+    await page.goto(FRONTEND);
+    
+    const initialNodes = await page.evaluate(() => 
+      document.querySelectorAll('*').length
+    );
+    
+    for (let i = 0; i < 10; i++) {
+      await page.click('[data-route="macro"]');
+      await page.waitForTimeout(500);
+      await page.click('[data-route="futures"]');
+      await page.waitForTimeout(500);
+    }
+    
+    const finalNodes = await page.evaluate(() => 
+      document.querySelectorAll('*').length
+    );
+    
+    expect(finalNodes).toBeLessThan(initialNodes * 1.1);
+  });
+  
+  test('事件监听器泄漏检测', async ({ page }) => {
+    await page.goto(FRONTEND);
+    
+    const initialListeners = await page.evaluate(() => {
+      return window.__EVENT_LISTENERS__?.size || 0;
+    });
+    
+    for (let i = 0; i < 10; i++) {
+      await page.click('[data-route="portfolio"]');
+      await page.waitForTimeout(500);
+      await page.click('[data-route="backtest"]');
+      await page.waitForTimeout(500);
+    }
+    
+    const finalListeners = await page.evaluate(() => {
+      return window.__EVENT_LISTENERS__?.size || 0;
+    });
+    
+    expect(finalListeners - initialListeners).toBeLessThan(5);
+  });
+});
+```
+
+**执行命令**:
+```bash
+cd frontend
+npx playwright test tests/e2e/memory-leak.spec.js --project=chromium
+```
+
+**失败处理**:
+- ECharts 实例泄漏 → 检查 `useECharts.js` 的 `dispose()` 调用
+- DOM 节点泄漏 → 检查 ResizeObserver 清理
+- 事件监听器泄漏 → 检查 `chart.off()` 调用
+
+---
+
 #### Phase 4: 错误模式扫描 (5分钟)
 
 **目标**: 检测代码中的错误处理缺陷
@@ -317,8 +503,9 @@ npx playwright test tests/e2e/diagnosis.spec.js --project=chromium
 | UNLOGGED_EXCEPTION | 未记录的异常 | P1 |
 | HARDCODED_ERROR | 硬编码错误消息 | P2 |
 | UNHANDLED_PROMISE | 未处理的 Promise | P1 |
+| MISSING_TIMEOUT | 缺少超时保护 | P1 |
 
-**执行脚本**:
+**方式一: 传统 grep 扫描**:
 ```bash
 #!/bin/bash
 # phase4_error_scan.sh
@@ -353,6 +540,68 @@ else
   echo "⚠️ 发现 ${total} 个潜在问题"
 fi
 ```
+
+**方式二: Explore Agent 增强 (推荐)**:
+
+使用 OpenCode Explore Agent 进行语义分析，获得更精确的结果：
+
+```yaml
+# Explore Agent 任务配置
+agent: explore
+task: "扫描 backend/app/routers/ 和 frontend/src/ 的错误处理模式"
+
+# 输出格式
+output_format:
+  empty_catch_blocks:
+    - file: "backend/app/routers/market.py"
+      line: 42
+      context: "except Exception: pass"
+  unlogged_exceptions:
+    - file: "backend/app/routers/news.py"
+      line: 87
+      exception_type: "Exception"
+      suggestion: "添加 logger.error() 记录异常"
+  hardcoded_errors:
+    - file: "backend/app/routers/portfolio.py"
+      line: 123
+      error_message: "Internal server error"
+      suggestion: "使用 app.utils.errors 定义错误码"
+  missing_timeout:
+    - file: "backend/app/routers/forex.py"
+      function: "get_spot_rates"
+      async_signature: true
+      suggestion: "添加 asyncio.wait_for() 超时保护"
+```
+
+**Explore Agent 调用示例**:
+```bash
+# 使用 opencode CLI 调用 Explore Agent
+opencode task --agent explore --prompt "
+扫描以下目录的错误处理模式：
+- backend/app/routers/
+- backend/app/services/
+- frontend/src/components/
+
+检测以下问题：
+1. 空 catch 块 (except: pass)
+2. 未记录的异常 (except Exception without logger)
+3. 硬编码错误消息 (HTTPException with literal string)
+4. 缺少超时保护 (async function without asyncio.wait_for)
+5. 前端未处理 Promise (.catch() without error handling)
+
+输出格式：JSON，包含 file, line, issue_type, suggestion
+"
+```
+
+**Explore Agent 优势**:
+
+| 维度 | grep | Explore Agent |
+|------|------|---------------|
+| 语义理解 | ❌ 仅文本匹配 | ✅ AST 分析 |
+| 上下文感知 | ❌ 无 | ✅ 理解代码结构 |
+| 误报率 | 高 | 低 |
+| 建议生成 | ❌ 无 | ✅ 自动生成修复建议 |
+| 跨文件分析 | ❌ 困难 | ✅ 支持 |
 
 ---
 

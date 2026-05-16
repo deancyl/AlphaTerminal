@@ -19,6 +19,27 @@
       </div>
     </div>
 
+    <!-- Offline Mode Banner -->
+    <div
+      v-if="isOfflineMode"
+      class="mx-3 md:mx-4 mt-3 bg-yellow-500/20 border border-yellow-500/50 rounded-lg p-3 flex items-center justify-between"
+      role="alert"
+      aria-live="polite"
+    >
+      <div class="flex items-center gap-2">
+        <span class="text-yellow-400 text-sm">⚠️ 离线模式 - 数据可能不是最新</span>
+        <span class="text-xs text-yellow-400/70">(网络连接异常)</span>
+      </div>
+      <button
+        @click="resetCircuitBreaker"
+        class="px-3 py-1.5 text-xs bg-yellow-600 hover:bg-yellow-500 text-white rounded transition"
+        :disabled="converting"
+        type="button"
+      >
+        {{ converting ? '重置中...' : '重置连接' }}
+      </button>
+    </div>
+
     <div class="flex-1 overflow-y-auto p-3 md:p-4 space-y-4">
       <ForexQuotePanel 
         :quotes="quotes"
@@ -30,7 +51,7 @@
         @retry="fetchQuotes"
       />
       
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[400px]">
         <CrossRateMatrix 
           :currencies="currencies"
           :matrix="matrix"
@@ -100,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, onWatcherCleanup } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed, onWatcherCleanup } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
@@ -142,6 +163,11 @@ const convertResult = ref(null)
 const convertError = ref(null)
 const converting = ref(false)
 
+const circuitBreakerStatus = ref(null)
+const isOfflineMode = computed(() =>
+  circuitBreakerStatus.value?.is_open === true && quotes.value.length === 0
+)
+
 const FOREX_TIMEOUT = 30000
 
 // 请求版本跟踪 - 防止竞态条件
@@ -167,6 +193,7 @@ async function fetchQuotes() {
     if (requestId !== quotesRequestId) return
     
     if (res?.quotes) {
+      circuitBreakerStatus.value = res.circuit_breaker
       cachedQuotes.value = res.quotes
       quotes.value = res.quotes
       lastQuotesUpdate.value = formatTimeNow()
@@ -311,6 +338,19 @@ async function convert() {
     const classified = classifyForexError(e)
     convertError.value = classified.message
     convertResult.value = null
+  } finally {
+    converting.value = false
+  }
+}
+
+async function resetCircuitBreaker() {
+  converting.value = true  // reuse existing loading state
+  try {
+    await apiFetch('/api/v1/forex/circuit_breaker/reset', { method: 'POST' })
+    await fetchQuotes()
+    await fetchMatrix()
+  } catch (e) {
+    quotesError.value = "重置连接失败，请稍后重试"
   } finally {
     converting.value = false
   }

@@ -1,4 +1,12 @@
 <template>
+  <!-- Skip Link for Accessibility (WCAG 2.4.1) -->
+  <a
+    href="#main-content"
+    class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[99999] focus:px-4 focus:py-2 focus:bg-agent-blue focus:text-white focus:rounded focus:outline-none"
+  >
+    跳转到主内容
+  </a>
+  
   <!-- ━━━ 离线提示横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <OfflineBanner />
   
@@ -127,7 +135,7 @@
       </header>
 
       <!-- Main Area (内部滚动) -->
-      <main class="flex-1 overflow-hidden flex flex-col">
+      <main id="main-content" class="flex-1 overflow-hidden flex flex-col" role="main">
 
         <!-- 主视图区域 -->
         <div class="flex-1 overflow-auto p-4 relative">

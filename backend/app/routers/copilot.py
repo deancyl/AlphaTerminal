@@ -1144,11 +1144,19 @@ async def copilot_chat(request: Request):
     tracking_svc = get_token_tracking_service()
     prompt_tokens = sum(count_tokens(m.get("content", ""), model_id) for m in messages)
     completion_tokens = 0
+    settings = get_settings()
+    max_duration_seconds = settings.COPILOT_STREAM_TIMEOUT_SECONDS
 
     async def tracked_stream():
         nonlocal completion_tokens
         try:
+            start_stream_time = time.time()
             async for chunk in _llm_stream(provider, messages, model_override):
+                if time.time() - start_stream_time > max_duration_seconds:
+                    logger.warning(f"[Copilot] Stream timeout after {max_duration_seconds}s")
+                    yield _sse({"error": "请求超时，请稍后重试", "done": True})
+                    return
+                
                 data = chunk.replace("data: ", "").strip()
                 if data:
                     try:
@@ -1180,7 +1188,7 @@ async def copilot_chat(request: Request):
             )
             
             logger.debug(
-                f"[Copilot] Tracked: {record.total_tokens} tokens, $${record.cost_usd:.6f}, "
+                f"[Copilot] Tracked: {record.total_tokens} tokens, ${record.cost_usd:.6f}, "
                 f"{duration_ms}ms"
             )
 

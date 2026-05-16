@@ -69,12 +69,16 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[cash] transfer_direct timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Transfer direct timeout")
     except ValueError as e:
+        logger.warning("[cash] transfer_direct value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
+        logger.error("[cash] transfer_direct integrity error: %s", e)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
+        logger.error("[cash] transfer_direct operational error: %s", e)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.exception("Unexpected error in transfer_direct")
@@ -100,6 +104,7 @@ async def get_cash(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[cash] get_cash timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Get cash timeout")
 
 
@@ -135,6 +140,7 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[cash] cash_deposit timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Cash deposit timeout")
 
 
@@ -173,6 +179,7 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(req
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[cash] cash_withdraw timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Cash withdraw timeout")
 
 
@@ -204,4 +211,5 @@ async def list_transactions(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[cash] list_transactions timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "List transactions timeout")

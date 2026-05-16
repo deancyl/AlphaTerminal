@@ -45,6 +45,7 @@ async def list_portfolios():
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[accounts] list_portfolios timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "List portfolios timeout")
 
 
@@ -83,10 +84,13 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
             except HTTPException:
                 raise
             except sqlite3.IntegrityError as e:
+                logger.warning("[accounts] create_portfolio integrity error: %s", e)
                 raise HTTPException(400, f"数据完整性错误: {e}")
             except sqlite3.OperationalError as e:
+                logger.error("[accounts] create_portfolio operational error: %s", e)
                 raise HTTPException(500, f"数据库操作错误: {e}")
             except ValueError as e:
+                logger.warning("[accounts] create_portfolio value error: %s", e)
                 raise HTTPException(400, f"参数错误: {e}")
             except Exception as e:
                 logger.exception("Unexpected error in create_portfolio")
@@ -102,6 +106,7 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[accounts] create_portfolio timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Create portfolio timeout")
 
 
@@ -122,4 +127,5 @@ async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[accounts] delete_portfolio timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Delete portfolio timeout")

@@ -331,8 +331,10 @@ def db_writer_loop():
         logger.error(f"[DBWriter] fatal error: {e}", exc_info=True)
     finally:
         if conn:
-            try: conn.close()
-            except Exception: pass
+            try:
+                conn.close()
+            except Exception as e:
+                logger.debug(f"[DBWriter] connection close error (ignored): {e}")
         logger.info("[DBWriter] 🔴 stopped")
 
 

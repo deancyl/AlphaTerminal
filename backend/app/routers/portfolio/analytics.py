@@ -318,6 +318,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[analytics] get_attribution timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Attribution analysis timeout")
 
 
@@ -486,6 +487,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[analytics] get_performance_metrics timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Performance metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Performance] 数据库操作错误: {e}", exc_info=True)
@@ -631,6 +633,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[analytics] get_risk_metrics timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Risk metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Risk] 数据库操作错误: {e}", exc_info=True)
@@ -799,6 +802,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[analytics] get_benchmark_comparison timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Benchmark comparison timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Benchmark] 数据库操作错误: {e}", exc_info=True)

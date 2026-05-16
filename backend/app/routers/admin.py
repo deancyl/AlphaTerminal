@@ -1414,3 +1414,57 @@ async def reset_rate_limit(ip: Optional[str] = None):
             "message": "已重置所有速率限制",
             "data": {"reset_count": stats.get("total_keys", 0) if (stats := get_limiter().get_stats()) else 0}
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# Web Vitals Collection (Performance Metrics)
+# ═══════════════════════════════════════════════════════════════
+
+_web_vitals_buffer: List[Dict[str, Any]] = []
+WEB_VITALS_MAX_BUFFER = 100
+
+class WebVitalsMetric(BaseModel):
+    name: str
+    value: float
+    rating: str
+    timestamp: int
+    page: str
+
+@router.post("/web-vitals")
+async def collect_web_vitals(metric: WebVitalsMetric):
+    _web_vitals_buffer.append(metric.dict())
+    if len(_web_vitals_buffer) > WEB_VITALS_MAX_BUFFER:
+        _web_vitals_buffer.pop(0)
+    
+    if metric.rating == "poor":
+        logger.warning(f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}")
+    
+    return {"code": 0, "message": "Metric recorded"}
+
+@router.get("/web-vitals")
+async def get_web_vitals_stats():
+    if not _web_vitals_buffer:
+        return {"code": 0, "data": {"metrics": [], "summary": "No metrics collected"}}
+    
+    summary = {}
+    for m in _web_vitals_buffer:
+        name = m["name"]
+        if name not in summary:
+            summary[name] = {"count": 0, "avg": 0, "poor_count": 0, "values": []}
+        summary[name]["count"] += 1
+        summary[name]["values"].append(m["value"])
+        if m["rating"] == "poor":
+            summary[name]["poor_count"] += 1
+    
+    for name, stats in summary.items():
+        stats["avg"] = sum(stats["values"]) / len(stats["values"])
+        stats["values"] = stats["values"][-10:]
+    
+    return {
+        "code": 0,
+        "data": {
+            "metrics": _web_vitals_buffer[-20:],
+            "summary": summary,
+            "total_collected": len(_web_vitals_buffer)
+        }
+    }

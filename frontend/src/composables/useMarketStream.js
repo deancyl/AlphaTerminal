@@ -116,30 +116,33 @@ function _unregisterNetworkListeners() {
 }
 
 // ── Connection State Machine (Race Condition Fix) ────────────────────────────────
-// States: IDLE, CONNECTING, CONNECTED, DISCONNECTING, RECONNECTING
+// States: IDLE, CONNECTING, CONNECTED, DISCONNECTING, RECONNECTING, POLLING (HTTP fallback)
 const ConnectionState = {
   IDLE: 'idle',
   CONNECTING: 'connecting',
   CONNECTED: 'connected',
   DISCONNECTING: 'disconnecting',
-  RECONNECTING: 'reconnecting'
+  RECONNECTING: 'reconnecting',
+  POLLING: 'polling'
 }
 
 // Valid state transitions map
+// POLLING is a fallback state when WS fails repeatedly (retry >= 2)
 const VALID_TRANSITIONS = {
   [ConnectionState.IDLE]: [ConnectionState.CONNECTING, ConnectionState.RECONNECTING],
-  [ConnectionState.CONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING],
+  [ConnectionState.CONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING, ConnectionState.POLLING],
   [ConnectionState.CONNECTED]: [ConnectionState.DISCONNECTING, ConnectionState.RECONNECTING],
-  [ConnectionState.DISCONNECTING]: [ConnectionState.IDLE, ConnectionState.CONNECTED],
-  [ConnectionState.RECONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING]
+  [ConnectionState.DISCONNECTING]: [ConnectionState.IDLE, ConnectionState.CONNECTED, ConnectionState.POLLING],
+  [ConnectionState.RECONNECTING]: [ConnectionState.CONNECTED, ConnectionState.IDLE, ConnectionState.DISCONNECTING, ConnectionState.POLLING],
+  [ConnectionState.POLLING]: [ConnectionState.CONNECTING, ConnectionState.CONNECTED, ConnectionState.IDLE]
 }
 
 // Single source of truth for connection state
 let _connectionState = ConnectionState.IDLE
 
-// Operation lock to prevent concurrent connect/disconnect
-let _operationLock = false
-let _operationPromise = null
+// Note: Operation locking is handled by connectionLock.js (acquireLock/releaseLock)
+// The previous _operationLock/_withLock implementation was never used and has been removed
+// to avoid confusion and potential deadlocks from dual lock systems.
 
 /**
  * Atomic state transition with validation
@@ -181,58 +184,6 @@ function _tryTransitionTo(to) {
   globalWsStatus.value = to
   logger.log(`[MarketStream] State transition: ${from} → ${to}`)
   return true
-}
-
-/**
- * Acquire operation lock
- * @returns {Promise<boolean>} - Whether lock was acquired
- */
-async function _acquireOperationLock() {
-  if (_operationLock) {
-    // Wait for existing operation to complete
-    if (_operationPromise) {
-      try {
-        await _operationPromise
-      } catch (e) {
-        // Ignore errors from previous operation
-      }
-    }
-    // Check again after waiting
-    if (_operationLock) {
-      logger.warn('[MarketStream] Failed to acquire operation lock after waiting')
-      return false
-    }
-  }
-  _operationLock = true
-  return true
-}
-
-/**
- * Release operation lock
- */
-function _releaseOperationLock() {
-  _operationLock = false
-  _operationPromise = null
-}
-
-/**
- * Execute operation with lock
- * @param {Function} operation - Async operation to execute
- * @returns {Promise<any>} - Operation result
- */
-async function _withLock(operation) {
-  const acquired = await _acquireOperationLock()
-  if (!acquired) {
-    logger.warn('[MarketStream] Operation rejected: lock not acquired')
-    return null
-  }
-  
-  try {
-    _operationPromise = operation()
-    return await _operationPromise
-  } finally {
-    _releaseOperationLock()
-  }
 }
 
 // ── Race Condition Prevention (Wave 2 Fix) ────────────────────────────────
@@ -595,8 +546,13 @@ function _stopHealthCheck() {
 
 function _startPolling(symbols) {
   if (globalPollingStatus.value) return
+  
+  if (!_tryTransitionTo(ConnectionState.POLLING)) {
+    logger.warn('[MarketStream] Cannot transition to POLLING state')
+    return
+  }
+  
   globalPollingStatus.value = true
-  globalWsStatus.value = 'polling'
 
   _pollingTimer = setInterval(async () => {
     try {
@@ -610,7 +566,6 @@ function _startPolling(symbols) {
           if (existing && existing._priority >= WS_PRIORITY) {
             continue
           }
-          // Use Object.assign for better memory performance
           globalTicks.value[item.symbol] = Object.assign({}, {
               symbol: item.symbol,
               price: item.price,

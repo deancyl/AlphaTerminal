@@ -112,6 +112,12 @@ class ScriptStrategy:
         self.timeout = timeout
         self.validate_security = validate_security
         self._namespace: Dict[str, Any] = {}
+        
+        if not validate_security:
+            logger.warning(
+                "[ScriptStrategy] Security validation DISABLED - this should only be used in tests!"
+            )
+        
         self._compile()
 
     def _compile(self):

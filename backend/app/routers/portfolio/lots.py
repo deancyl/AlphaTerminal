@@ -67,12 +67,16 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] buy_lot timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Buy lot timeout")
     except ValueError as e:
+        logger.warning("[lots] buy_lot value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
+        logger.error("[lots] buy_lot integrity error: %s", e)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
+        logger.error("[lots] buy_lot operational error: %s", e)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Buy] error: {e}", exc_info=True)
@@ -152,12 +156,16 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] sell_lot timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Sell lot timeout")
     except ValueError as e:
+        logger.warning("[lots] sell_lot value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
+        logger.error("[lots] sell_lot integrity error: %s", e)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
+        logger.error("[lots] sell_lot operational error: %s", e)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Sell] error: {e}", exc_info=True)
@@ -210,6 +218,7 @@ async def list_lots(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] list_lots timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "List lots timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Lots] 数据库操作错误: {e}", exc_info=True)
@@ -238,6 +247,7 @@ async def unrealized_pnl(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] unrealized_pnl timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Unrealized PnL timeout")
     except ValueError as e:
         logger.error(f"[UnrealizedPnl] 参数错误: {e}", exc_info=True)
@@ -375,6 +385,7 @@ async def check_conservation(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] check_conservation timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Check conservation timeout")
 
 
@@ -487,6 +498,7 @@ async def get_portfolio_tree(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] get_portfolio_tree timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Get portfolio tree timeout")
 
 
@@ -544,6 +556,7 @@ async def list_lots_with_summary(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] list_lots_with_summary timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "List lots with summary timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_with_summary] 数据库操作错误: {e}", exc_info=True)
@@ -572,6 +585,7 @@ async def lots_summary(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] lots_summary timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Lots summary timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_summary] 数据库操作错误: {e}", exc_info=True)
@@ -602,6 +616,7 @@ async def refresh_market_value(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] refresh_market_value timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Refresh market value timeout")
     except ValueError as e:
         logger.error(f"[refresh_market_value] 参数错误: {e}", exc_info=True)
@@ -647,6 +662,7 @@ async def lots_echarts_data(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
+        logger.warning("[lots] lots_echarts_data timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Lots echarts data timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[lots_echarts_data] 数据库操作错误: {e}", exc_info=True)
