@@ -135,7 +135,7 @@
       </header>
 
       <!-- Main Area (内部滚动) -->
-      <main id="main-content" class="flex-1 overflow-hidden flex flex-col" role="main">
+      <main id="main-content" class="flex-1 overflow-hidden flex flex-col" style="min-height: 600px;" role="main">
 
         <!-- 主视图区域 -->
         <div class="flex-1 overflow-auto p-4 relative">

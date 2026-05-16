@@ -113,12 +113,16 @@ export function calcRSI(closes, period = 14) {
   return rsi
 }
 
-/** 计算威廉指标 WR */
+/** 计算威廉指标 WR（优化版：避免 spread 操作符） */
 export function calcWR(closes, highs, lows, n = 14) {
   return closes.map((_, i) => {
     if (i < n - 1) return null
-    const rh = Math.max(...highs.slice(i - n + 1, i + 1))
-    const rl = Math.min(...lows.slice(i - n + 1, i + 1))
+    // 优化：使用循环代替 Math.max(...arr) / Math.min(...arr)
+    let rh = highs[i - n + 1], rl = lows[i - n + 1]
+    for (let j = i - n + 2; j <= i; j++) {
+      if (highs[j] > rh) rh = highs[j]
+      if (lows[j] < rl) rl = lows[j]
+    }
     return +(safeDivide(rh - closes[i], rh - rl, 0) * -100).toFixed(2)
   })
 }

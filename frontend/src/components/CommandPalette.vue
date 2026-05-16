@@ -178,6 +178,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 
 const props = defineProps({
@@ -188,11 +189,22 @@ const emit = defineEmits(['close', 'select-stock', 'change-view', 'open-f9'])
 
 // ── 状态 ──
 const query = ref('')
+const debouncedQuery = ref('') // 防抖后的查询值
 const inputRef = ref(null)
 const selectedIndex = ref(0)
 const recentSearches = ref([])
 const stockData = ref([]) // 从API加载的股票数据
 const isLoadingStocks = ref(false)
+
+// ── 防抖搜索（300ms）──
+const debouncedSearch = useDebounceFn((value) => {
+  debouncedQuery.value = value
+}, 300)
+
+// 监听原始query变化，触发防抖搜索
+watch(query, (newQuery) => {
+  debouncedSearch(newQuery)
+})
 
 // ── 加载股票列表 ──
 async function loadStockList() {
@@ -281,16 +293,16 @@ const VIEWS = [
   { id: 'mcp', name: 'AI工具配置', icon: '🤖', shortcut: 'Ctrl+Shift+M' },
 ]
 
-// ── 计算属性 ──
+// ── 计算属性（使用防抖后的查询值）──
 const stockResults = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toLowerCase().trim()
+  if (!debouncedQuery.value) return []
+  const q = debouncedQuery.value.toLowerCase().trim()
   const dataSource = stockData.value.length > 0 ? stockData.value : STOCK_DATA
   
   return dataSource.filter(s => {
     // 支持代码、名称、拼音首字母搜索
     const symbolMatch = s.symbol.toLowerCase().includes(q)
-    const nameMatch = s.name.includes(query.value)
+    const nameMatch = s.name.includes(debouncedQuery.value)
     const pinyinMatch = s.pinyin && s.pinyin.toLowerCase().includes(q)
     
     return symbolMatch || nameMatch || pinyinMatch
@@ -298,20 +310,20 @@ const stockResults = computed(() => {
 })
 
 const commandResults = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toLowerCase()
+  if (!debouncedQuery.value) return []
+  const q = debouncedQuery.value.toLowerCase()
   if (!q.startsWith(':')) return []
   return COMMANDS.filter(c =>
     c.cmd.toLowerCase().includes(q) ||
-    c.name.includes(query.value)
+    c.name.includes(debouncedQuery.value)
   )
 })
 
 const viewResults = computed(() => {
-  if (!query.value || query.value.startsWith(':')) return []
-  const q = query.value.toLowerCase()
+  if (!debouncedQuery.value || debouncedQuery.value.startsWith(':')) return []
+  const q = debouncedQuery.value.toLowerCase()
   return VIEWS.filter(v =>
-    v.name.includes(query.value) ||
+    v.name.includes(debouncedQuery.value) ||
     v.id.includes(q)
   )
 })
