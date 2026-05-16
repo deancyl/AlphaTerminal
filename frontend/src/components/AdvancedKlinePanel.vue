@@ -50,6 +50,7 @@
         :chart-data="processedChartData"
         :tick="liveTick"
         :symbol="currentSymbol"
+        :news-events="newsEvents"
         @datazoom="onDataZoom"
       />
 
@@ -184,6 +185,7 @@ const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? n
 const histData  = shallowRef([])          // 完整历史 ASC
 const overlayData = shallowRef([])        // 叠加标的 {date, close}[]
 const liveTick   = shallowRef(null)       // 实时 tick
+const newsEvents = shallowRef([])         // 新闻事件标记点 [{ date, headline, type, price }]
 
 // chartData 专用 shallowRef，避免每次 histData 变化触发父级深度 diff
 const processedChartData = shallowRef({ isEmpty: true })
@@ -407,8 +409,10 @@ function onSymbolSelect(item) {
   overlayData.value = []
   overlaySymbol.value = ''
   overlayName.value = ''
+  newsEvents.value = []
   processedChartData.value = { isEmpty: true }
   fetchHistory()
+  fetchNewsEvents()
 }
 
 function onPeriodChange(p) {
@@ -442,6 +446,29 @@ async function fetchOverlayHistory(sym) {
   } catch (e) {
     logger.error('[AdvancedKlinePanel] fetchOverlayHistory error:', e.message)
     overlayData.value = []
+  }
+}
+
+async function fetchNewsEvents() {
+  const sym = currentSymbol.value
+  if (!sym) { newsEvents.value = []; return }
+  try {
+    const data = await apiFetch(`/api/v1/news/events/${sym}?limit=20`)
+    const events = data?.data?.events || []
+    
+    // Match news dates to K-line prices
+    const matchedEvents = events.map(e => {
+      const klinePoint = histData.value.find(h => h.date === e.date)
+      return {
+        ...e,
+        price: klinePoint?.high || klinePoint?.close || null
+      }
+    }).filter(e => e.price != null)
+    
+    newsEvents.value = matchedEvents
+  } catch (e) {
+    logger.error('[AdvancedKlinePanel] fetchNewsEvents error:', e.message)
+    newsEvents.value = []
   }
 }
 
@@ -595,7 +622,17 @@ watch([period, yAxisType, subChartTab, indicatorParams], () => {
 
 watch(currentSymbol, () => {
   fetchHistory()
-  // ⚡ WS 状态由独立的 wsStatus watch 控制，symbol 切换本身不需要重启轮询
+  fetchNewsEvents()
+})
+
+watch(histData, () => {
+  if (newsEvents.value.length > 0 && histData.value.length > 0) {
+    const matchedEvents = newsEvents.value.map(e => {
+      const klinePoint = histData.value.find(h => h.date === e.date)
+      return { ...e, price: klinePoint?.high || klinePoint?.close || e.price }
+    })
+    newsEvents.value = matchedEvents
+  }
 })
 
 // ── 生命周期 ────────────────────────────────────────────────────

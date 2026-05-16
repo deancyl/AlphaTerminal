@@ -105,6 +105,7 @@ class ConnectionManager:
         self._latencies: list[float] = []
         self._batch_queue: dict[str, dict] = {}
         self._batch_lock = asyncio.Lock()
+        self._streaming_manager = None
 
     async def start(self):
         """启动心跳、清理和批量任务"""
@@ -301,7 +302,8 @@ class ConnectionManager:
             latencies = [c.latency for c in self._conns if c.latency is not None]
         async with self._batch_lock:
             batch_queue_size = len(self._batch_queue)
-        return {
+        
+        metrics = {
             "active_connections": len(self._conns),
             "latency_avg": sum(latencies) / len(latencies) if latencies else None,
             "latency_min": min(latencies) if latencies else None,
@@ -311,6 +313,22 @@ class ConnectionManager:
             "max_subscriptions": MAX_SUBSCRIPTIONS,
             "max_msg_per_second": MAX_MSG_PER_SECOND,
         }
+        
+        if self._streaming_manager:
+            metrics["streaming"] = self._streaming_manager.get_status()
+        
+        return metrics
+    
+    def register_streaming_manager(self, streaming_manager):
+        """注册流式数据管理器，实现实时 tick 推送"""
+        self._streaming_manager = streaming_manager
+        streaming_manager.set_ws_manager(self)
+        logger.info("[WS] Streaming manager registered")
+    
+    async def get_subscribed_symbols(self) -> set[str]:
+        """获取所有已订阅的 symbols（供 streaming manager 使用）"""
+        async with self._map_lock:
+            return set(self._symbol_map.keys())
 
 
 ws_manager = ConnectionManager()

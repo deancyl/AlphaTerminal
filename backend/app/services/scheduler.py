@@ -232,6 +232,34 @@ def start_scheduler():
         logger.info("[Scheduler] 启动初始化完成")
     threading.Thread(target=initial_backfill, daemon=True).start()
 
+    # 启动 WebSocket 流式数据推送（后台线程）
+    def _start_streaming():
+        import time; time.sleep(2)
+        try:
+            import asyncio
+            from app.services.streaming import get_streaming_manager
+            from app.services.ws_manager import ws_manager
+            from app.services.fetchers.sina import SinaFetcher
+            
+            streaming_manager = get_streaming_manager()
+            ws_manager.register_streaming_manager(streaming_manager)
+            
+            sina_fetcher = SinaFetcher()
+            streaming_manager.set_http_fetcher(sina_fetcher)
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(streaming_manager.start())
+                logger.info("[Scheduler] WebSocket streaming started")
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.error(f"[Scheduler] Streaming startup failed: {e}", exc_info=True)
+    
+    threading.Thread(target=_start_streaming, daemon=True).start()
+    logger.info("[Scheduler] WebSocket streaming task triggered (background)")
+
     # 每 30 秒拉取一次实时数据（akshare 有频率限制）
     from app.services.data_fetcher import fetch_all_and_buffer
     scheduler.add_job(

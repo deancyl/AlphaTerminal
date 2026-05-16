@@ -14,16 +14,17 @@ from datetime import datetime
 from fastapi import APIRouter
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── 缓存 ────────────────────────────────────────────────────────
-_FUTURES_CACHE    = {}
-_CACHE_TTL        = 180   # 3 分钟
-_CACHE_LOCK       = threading.RLock()
-_LAST_FETCH_TIME  = 0
-_REFRESH_SEM      = threading.Semaphore(1)
+_cache = get_cache()
+NAMESPACE = "futures:"
+TTL = 180  # 3 minutes
+_CACHE_LOCK = threading.RLock()
+_LAST_FETCH_TIME = 0
+_REFRESH_SEM = threading.Semaphore(1)
 
 # 重点监控的国内商品期货合约
 WATCHED_COMMODITIES = {
@@ -148,7 +149,7 @@ async def _fetch_index_futures_realtime():
 
 def _fetch_futures_data():
     """后台抓取期货数据（腾讯 qt.gtimg.cn + akshare，5秒超时兜底Mock）"""
-    global _FUTURES_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
     spot_data = {}
     fetch_success = False
@@ -229,21 +230,22 @@ def _fetch_futures_data():
         index_futures = _MOCK_INDEX_FUTURES
         index_source = "mock"
 
+    cache_data = {
+        "index_futures": index_futures,
+        "commodities":   commodities,
+        "update_time":   now_str,
+        "index_source":  index_source,
+    }
+    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
     with _CACHE_LOCK:
-        _FUTURES_CACHE = {
-            "index_futures": index_futures,
-            "commodities":   commodities,
-            "update_time":   now_str,
-            "index_source":  index_source,
-        }
         _LAST_FETCH_TIME = time.time()
     logger.info(f"[Futures] cached {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
 
 
 def _get_futures_cache() -> dict:
     """TTL 3分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _FUTURES_CACHE, _LAST_FETCH_TIME
-    stale = (time.time() - _LAST_FETCH_TIME) > _CACHE_TTL
+    global _LAST_FETCH_TIME
+    stale = (time.time() - _LAST_FETCH_TIME) > TTL
 
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
@@ -254,8 +256,8 @@ def _get_futures_cache() -> dict:
         t = threading.Thread(target=bg, daemon=True, name="futures-refresh")
         t.start()
 
-    with _CACHE_LOCK:
-        return dict(_FUTURES_CACHE) if _FUTURES_CACHE else {}
+    cached = _cache.get(f"{NAMESPACE}main")
+    return cached if cached else {}
 
 
 @router.get("/futures/index_history")
@@ -544,15 +546,16 @@ def _init_mock_cache():
     注意：此函数在模块加载时立即执行，确保 API 启动后立即可用。
     Mock 数据仅作为降级方案，真实数据由 _fetch_futures_data() 获取。
     """
-    global _FUTURES_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
+    cache_data = {
+        "index_futures": _MOCK_INDEX_FUTURES,
+        "commodities":   _MOCK_COMMODITIES,
+        "update_time":   now_str,
+        "index_source":  "mock",
+    }
+    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
     with _CACHE_LOCK:
-        _FUTURES_CACHE = {
-            "index_futures": _MOCK_INDEX_FUTURES,
-            "commodities":   _MOCK_COMMODITIES,
-            "update_time":   now_str,
-            "index_source":  "mock",
-        }
         _LAST_FETCH_TIME = time.time()
     logger.info("[Futures] Mock cache initialized")
 

@@ -16,17 +16,14 @@ from fastapi import APIRouter
 import akshare as ak
 from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import BOND_REFRESH_TIMEOUT
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-_COV_LIST_CACHE = {}
-_COV_LIST_CACHE_TIME = 0
-_COV_SPOT_CACHE = {}
-_COV_SPOT_CACHE_TIME = 0
-_COV_COMPARE_CACHE = {}
-_COV_COMPARE_CACHE_TIME = 0
-_CACHE_TTL = 300
+_cache = get_cache()
+NAMESPACE = "cb:"
+TTL = 300
 _CACHE_LOCK = threading.RLock()
 _REFRESH_SEM = threading.Semaphore(1)
 
@@ -114,7 +111,6 @@ _MOCK_COV_COMPARE = [
 
 async def _fetch_cov_list_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
-    global _COV_LIST_CACHE, _COV_LIST_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     try:
@@ -150,14 +146,13 @@ async def _fetch_cov_list_async():
                     logger.debug(f"[ConvertibleBond] parse row error: {e}")
                     continue
             
-            with _CACHE_LOCK:
-                _COV_LIST_CACHE = {
-                    "bonds": bonds,
-                    "total": len(bonds),
-                    "update_time": now_str,
-                    "source": "akshare",
-                }
-                _COV_LIST_CACHE_TIME = time.time()
+            cache_data = {
+                "bonds": bonds,
+                "total": len(bonds),
+                "update_time": now_str,
+                "source": "akshare",
+            }
+            _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
             logger.info(f"[ConvertibleBond] list fetched, total: {len(bonds)}")
             return
     except asyncio.TimeoutError:
@@ -165,20 +160,18 @@ async def _fetch_cov_list_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}")
     
-    with _CACHE_LOCK:
-        _COV_LIST_CACHE = {
-            "bonds": _MOCK_COV_LIST,
-            "total": len(_MOCK_COV_LIST),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_LIST_CACHE_TIME = time.time()
+    cache_data = {
+        "bonds": _MOCK_COV_LIST,
+        "total": len(_MOCK_COV_LIST),
+        "update_time": now_str,
+        "source": "mock",
+    }
+    _cache.set(f"{NAMESPACE}list", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock list fallback")
 
 
 async def _fetch_cov_spot_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
-    global _COV_SPOT_CACHE, _COV_SPOT_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     try:
@@ -210,14 +203,13 @@ async def _fetch_cov_spot_async():
                     logger.debug(f"[ConvertibleBond] parse spot row error: {e}")
                     continue
             
-            with _CACHE_LOCK:
-                _COV_SPOT_CACHE = {
-                    "spots": spots,
-                    "total": len(spots),
-                    "update_time": now_str,
-                    "source": "akshare",
-                }
-                _COV_SPOT_CACHE_TIME = time.time()
+            cache_data = {
+                "spots": spots,
+                "total": len(spots),
+                "update_time": now_str,
+                "source": "akshare",
+            }
+            _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
             logger.info(f"[ConvertibleBond] spot fetched, total: {len(spots)}")
             return
     except asyncio.TimeoutError:
@@ -225,20 +217,18 @@ async def _fetch_cov_spot_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}")
     
-    with _CACHE_LOCK:
-        _COV_SPOT_CACHE = {
-            "spots": _MOCK_COV_SPOT,
-            "total": len(_MOCK_COV_SPOT),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_SPOT_CACHE_TIME = time.time()
+    cache_data = {
+        "spots": _MOCK_COV_SPOT,
+        "total": len(_MOCK_COV_SPOT),
+        "update_time": now_str,
+        "source": "mock",
+    }
+    _cache.set(f"{NAMESPACE}spot", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock spot fallback")
 
 
 async def _fetch_cov_compare_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
-    global _COV_COMPARE_CACHE, _COV_COMPARE_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
     try:
@@ -272,14 +262,13 @@ async def _fetch_cov_compare_async():
                     logger.debug(f"[ConvertibleBond] parse compare row error: {e}")
                     continue
             
-            with _CACHE_LOCK:
-                _COV_COMPARE_CACHE = {
-                    "compares": compares,
-                    "total": len(compares),
-                    "update_time": now_str,
-                    "source": "akshare",
-                }
-                _COV_COMPARE_CACHE_TIME = time.time()
+            cache_data = {
+                "compares": compares,
+                "total": len(compares),
+                "update_time": now_str,
+                "source": "akshare",
+            }
+            _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
             logger.info(f"[ConvertibleBond] compare fetched, total: {len(compares)}")
             return
     except asyncio.TimeoutError:
@@ -287,14 +276,13 @@ async def _fetch_cov_compare_async():
     except Exception as e:
         logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}")
     
-    with _CACHE_LOCK:
-        _COV_COMPARE_CACHE = {
-            "compares": _MOCK_COV_COMPARE,
-            "total": len(_MOCK_COV_COMPARE),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_COMPARE_CACHE_TIME = time.time()
+    cache_data = {
+        "compares": _MOCK_COV_COMPARE,
+        "total": len(_MOCK_COV_COMPARE),
+        "update_time": now_str,
+        "source": "mock",
+    }
+    _cache.set(f"{NAMESPACE}compare", cache_data, ttl=TTL)
     logger.info("[ConvertibleBond] Using mock compare fallback")
 
 
@@ -316,56 +304,47 @@ def _safe_float(val):
 
 def _get_cov_list_cache() -> dict:
     """TTL 5分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _COV_LIST_CACHE, _COV_LIST_CACHE_TIME
-    stale = (time.time() - _COV_LIST_CACHE_TIME) > _CACHE_TTL
-    
-    if stale and _REFRESH_SEM.acquire(blocking=False):
-        def bg():
-            try:
-                asyncio.run(_fetch_cov_list_async())
-            finally:
-                _REFRESH_SEM.release()
-        t = threading.Thread(target=bg, daemon=True, name="cov-list-refresh")
-        t.start()
-    
-    with _CACHE_LOCK:
-        return dict(_COV_LIST_CACHE) if _COV_LIST_CACHE else {}
+    cached = _cache.get(f"{NAMESPACE}list")
+    if cached is None:
+        if _REFRESH_SEM.acquire(blocking=False):
+            def bg():
+                try:
+                    asyncio.run(_fetch_cov_list_async())
+                finally:
+                    _REFRESH_SEM.release()
+            t = threading.Thread(target=bg, daemon=True, name="cov-list-refresh")
+            t.start()
+    return cached if cached else {}
 
 
 def _get_cov_spot_cache() -> dict:
     """TTL 5分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _COV_SPOT_CACHE, _COV_SPOT_CACHE_TIME
-    stale = (time.time() - _COV_SPOT_CACHE_TIME) > _CACHE_TTL
-    
-    if stale and _REFRESH_SEM.acquire(blocking=False):
-        def bg():
-            try:
-                asyncio.run(_fetch_cov_spot_async())
-            finally:
-                _REFRESH_SEM.release()
-        t = threading.Thread(target=bg, daemon=True, name="cov-spot-refresh")
-        t.start()
-    
-    with _CACHE_LOCK:
-        return dict(_COV_SPOT_CACHE) if _COV_SPOT_CACHE else {}
+    cached = _cache.get(f"{NAMESPACE}spot")
+    if cached is None:
+        if _REFRESH_SEM.acquire(blocking=False):
+            def bg():
+                try:
+                    asyncio.run(_fetch_cov_spot_async())
+                finally:
+                    _REFRESH_SEM.release()
+            t = threading.Thread(target=bg, daemon=True, name="cov-spot-refresh")
+            t.start()
+    return cached if cached else {}
 
 
 def _get_cov_compare_cache() -> dict:
     """TTL 5分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _COV_COMPARE_CACHE, _COV_COMPARE_CACHE_TIME
-    stale = (time.time() - _COV_COMPARE_CACHE_TIME) > _CACHE_TTL
-    
-    if stale and _REFRESH_SEM.acquire(blocking=False):
-        def bg():
-            try:
-                asyncio.run(_fetch_cov_compare_async())
-            finally:
-                _REFRESH_SEM.release()
-        t = threading.Thread(target=bg, daemon=True, name="cov-compare-refresh")
-        t.start()
-    
-    with _CACHE_LOCK:
-        return dict(_COV_COMPARE_CACHE) if _COV_COMPARE_CACHE else {}
+    cached = _cache.get(f"{NAMESPACE}compare")
+    if cached is None:
+        if _REFRESH_SEM.acquire(blocking=False):
+            def bg():
+                try:
+                    asyncio.run(_fetch_cov_compare_async())
+                finally:
+                    _REFRESH_SEM.release()
+            t = threading.Thread(target=bg, daemon=True, name="cov-compare-refresh")
+            t.start()
+    return cached if cached else {}
 
 
 @router.get("/bond/convertible/list")
@@ -516,33 +495,28 @@ async def convertible_bond_value(symbol: str):
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
 def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""
-    global _COV_LIST_CACHE, _COV_LIST_CACHE_TIME, _COV_SPOT_CACHE, _COV_SPOT_CACHE_TIME, _COV_COMPARE_CACHE, _COV_COMPARE_CACHE_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    with _CACHE_LOCK:
-        _COV_LIST_CACHE = {
-            "bonds": _MOCK_COV_LIST,
-            "total": len(_MOCK_COV_LIST),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_LIST_CACHE_TIME = time.time()
-        
-        _COV_SPOT_CACHE = {
-            "spots": _MOCK_COV_SPOT,
-            "total": len(_MOCK_COV_SPOT),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_SPOT_CACHE_TIME = time.time()
-        
-        _COV_COMPARE_CACHE = {
-            "compares": _MOCK_COV_COMPARE,
-            "total": len(_MOCK_COV_COMPARE),
-            "update_time": now_str,
-            "source": "mock",
-        }
-        _COV_COMPARE_CACHE_TIME = time.time()
+    _cache.set(f"{NAMESPACE}list", {
+        "bonds": _MOCK_COV_LIST,
+        "total": len(_MOCK_COV_LIST),
+        "update_time": now_str,
+        "source": "mock",
+    }, ttl=TTL)
+    
+    _cache.set(f"{NAMESPACE}spot", {
+        "spots": _MOCK_COV_SPOT,
+        "total": len(_MOCK_COV_SPOT),
+        "update_time": now_str,
+        "source": "mock",
+    }, ttl=TTL)
+    
+    _cache.set(f"{NAMESPACE}compare", {
+        "compares": _MOCK_COV_COMPARE,
+        "total": len(_MOCK_COV_COMPARE),
+        "update_time": now_str,
+        "source": "mock",
+    }, ttl=TTL)
     
     logger.info("[ConvertibleBond] Mock data initialized")
 

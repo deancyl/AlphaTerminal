@@ -19,13 +19,8 @@ Total: 30+ endpoints
 from fastapi import APIRouter
 
 from .dependencies import (
-    _MACRO_CACHE,
-    _MACRO_CACHE_TTL,
-    _MACRO_CACHE_LOCK,
     _LAST_FETCH_TIME,
     _REFRESH_SEMAPHORE,
-    _REALTIME_CACHE,
-    _CACHE_TTL,
     _ALL_STOCK_NAMES,
     _STOCK_NAMES_LOADED,
     _STOCK_LOAD_LOCK,
@@ -82,13 +77,8 @@ router.include_router(system_router)
 
 __all__ = [
     "router",
-    "_MACRO_CACHE",
-    "_MACRO_CACHE_TTL",
-    "_MACRO_CACHE_LOCK",
     "_LAST_FETCH_TIME",
     "_REFRESH_SEMAPHORE",
-    "_REALTIME_CACHE",
-    "_CACHE_TTL",
     "_ALL_STOCK_NAMES",
     "_STOCK_NAMES_LOADED",
     "_STOCK_LOAD_LOCK",

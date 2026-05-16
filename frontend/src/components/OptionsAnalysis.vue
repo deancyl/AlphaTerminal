@@ -1,386 +1,462 @@
 <template>
-  <div class="h-full flex flex-col bg-terminal-bg overflow-hidden">
-    <!-- 顶部标题栏 -->
-    <div class="flex items-center justify-between px-4 py-2 border-b border-theme-secondary shrink-0">
+  <div class="flex flex-col h-full overflow-auto gap-3 p-4" role="region" aria-label="期权分析面板">
+    <!-- Header -->
+    <div class="flex-shrink-0 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <span class="text-lg font-bold text-terminal-accent">⚡ 期权分析</span>
-        <span class="text-xs text-terminal-dim cursor-help" title="Black-Scholes模型：1973年由Fischer Black和Myron Scholes提出的期权定价模型，是现代金融理论的基石之一。该模型假设股票价格服从对数正态分布，通过五个参数（标的资产价格、行权价、到期时间、波动率、无风险利率）计算欧式期权的理论价格">Black-Scholes 希腊值计算</span>
+        <span class="text-lg font-bold text-terminal-accent">📊 期权分析</span>
+        <span class="text-xs text-terminal-dim hidden sm:inline">T型报价 · Greeks</span>
+      </div>
+      <div class="flex items-center gap-2">
+        <select
+          v-model="selectedSymbol"
+          class="px-3 py-1.5 bg-terminal-bg border border-theme-secondary rounded-sm text-terminal-primary text-xs focus:outline-none focus:border-terminal-accent"
+          @change="handleSymbolChange"
+          aria-label="选择期权品种"
+        >
+          <option v-for="contract in contracts" :key="contract.code" :value="contract.code">
+            {{ contract.name }}
+          </option>
+        </select>
+        <button
+          class="px-3 py-1.5 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition disabled:opacity-50"
+          @click="fetchChainData"
+          :disabled="loading"
+          type="button"
+        >
+          {{ loading ? '...' : '刷新' }}
+        </button>
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-4 space-y-4">
-      <!-- 输入参数 -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">标的资产价格 S</label>
-          <input
-            v-model.number="params.S"
-            type="number"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="100.00"
-          />
+    <!-- Loading State -->
+    <Transition name="fade" mode="out-in">
+      <div v-if="loading && !chainData" class="flex items-center justify-center py-8">
+        <div class="text-sm text-terminal-dim">加载期权链数据...</div>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="error && !chainData" class="flex-1 flex flex-col items-center justify-center py-8">
+        <div class="text-3xl mb-3">⚠️</div>
+        <div class="text-sm text-terminal-dim mb-3">{{ error }}</div>
+        <button
+          @click="fetchChainData"
+          class="px-3 py-1 text-xs rounded-sm bg-terminal-accent hover:opacity-80"
+          type="button"
+        >
+          重试
+        </button>
+      </div>
+
+      <!-- Content -->
+      <div v-else-if="chainData" class="flex flex-col gap-3 flex-1 min-h-0">
+        <!-- Greeks Panel (shown when contract selected) -->
+        <div v-if="selectedContract" class="terminal-panel border border-theme-secondary rounded-sm p-4">
+          <div class="flex items-center justify-between mb-3">
+            <span class="text-sm font-bold text-terminal-accent">
+              {{ selectedContract.name || selectedContract.code }}
+            </span>
+            <button
+              @click="selectedContract = null"
+              class="text-xs text-terminal-dim hover:text-terminal-primary"
+              type="button"
+              aria-label="关闭Greeks面板"
+            >
+              ✕
+            </button>
+          </div>
+          <div class="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-4">
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">Delta</div>
+              <div class="text-sm font-mono" :class="(selectedContract.delta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ formatValue(selectedContract.delta) }}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">Gamma</div>
+              <div class="text-sm font-mono text-terminal-primary">
+                {{ formatValue(selectedContract.gamma) }}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">Theta</div>
+              <div class="text-sm font-mono" :class="(selectedContract.theta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ formatValue(selectedContract.theta) }}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">Vega</div>
+              <div class="text-sm font-mono text-terminal-primary">
+                {{ formatValue(selectedContract.vega) }}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">IV</div>
+              <div class="text-sm font-mono text-terminal-primary">
+                {{ formatPercent(selectedContract.iv) }}
+              </div>
+            </div>
+            <div class="text-center">
+              <div class="text-[10px] text-terminal-dim mb-1">最新价</div>
+              <div class="text-sm font-mono" :class="(selectedContract.change || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ formatValue(selectedContract.latest) }}
+              </div>
+            </div>
+          </div>
+          <div class="mt-3 pt-3 border-t border-theme-secondary grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            <div>
+              <span class="text-terminal-dim">行权价: </span>
+              <span class="text-terminal-primary font-mono">{{ selectedContract.strike }}</span>
+            </div>
+            <div>
+              <span class="text-terminal-dim">涨跌: </span>
+              <span :class="(selectedContract.change || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ formatChange(selectedContract.change) }}
+              </span>
+            </div>
+            <div>
+              <span class="text-terminal-dim">涨跌幅: </span>
+              <span :class="(selectedContract.change_pct || 0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ formatPercent(selectedContract.change_pct) }}
+              </span>
+            </div>
+            <div>
+              <span class="text-terminal-dim">持仓量: </span>
+              <span class="text-terminal-primary font-mono">{{ formatVolume(selectedContract.open_interest) }}</span>
+            </div>
+          </div>
         </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">行权价 K</label>
-          <input
-            v-model.number="params.K"
-            type="number"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="100.00"
-          />
+
+        <!-- T型报价表 -->
+        <div class="terminal-panel border border-theme-secondary rounded-sm flex-1 overflow-hidden flex flex-col">
+          <div class="flex items-center justify-between px-4 py-2 border-b border-theme-secondary shrink-0">
+            <span class="text-xs text-terminal-dim">{{ chainData.name }} - 期权链</span>
+            <span class="text-[10px] text-terminal-dim">更新时间: {{ chainData.update_time || '--' }}</span>
+          </div>
+
+          <!-- Table Header -->
+          <div class="grid grid-cols-[1fr_80px_1fr] text-[10px] text-terminal-dim border-b border-theme-secondary shrink-0">
+            <div class="px-2 py-2 text-center bg-terminal-accent/5">
+              <span class="text-bullish font-bold">Call 看涨</span>
+            </div>
+            <div class="px-2 py-2 text-center border-x border-theme-secondary bg-terminal-accent/10">
+              <span class="text-terminal-accent font-bold">行权价</span>
+            </div>
+            <div class="px-2 py-2 text-center bg-terminal-accent/5">
+              <span class="text-bearish font-bold">Put 看跌</span>
+            </div>
+          </div>
+
+          <!-- Table Body - Scrollable -->
+          <div class="flex-1 overflow-y-auto">
+            <div
+              v-for="(row, index) in tStyleData"
+              :key="index"
+              class="grid grid-cols-[1fr_80px_1fr] text-[11px] border-b border-theme-secondary/50 hover:bg-terminal-bg/50 cursor-pointer transition"
+              :class="{
+                'bg-bullish/10': selectedContract?.code === row.call?.code,
+                'bg-bearish/10': selectedContract?.code === row.put?.code,
+              }"
+              @click="handleRowClick(row)"
+            >
+              <!-- Call Side -->
+              <div class="px-2 py-1.5 flex flex-col justify-center">
+                <div v-if="row.call" class="flex justify-between items-center">
+                  <span class="font-mono text-terminal-primary">{{ formatValue(row.call.latest) }}</span>
+                  <span
+                    class="text-[10px] font-mono"
+                    :class="(row.call.change || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+                  >
+                    {{ formatChange(row.call.change) }}
+                  </span>
+                </div>
+                <div v-else class="text-terminal-dim text-center">--</div>
+              </div>
+
+              <!-- Strike Price (Center) -->
+              <div class="px-2 py-1.5 text-center border-x border-theme-secondary flex flex-col justify-center bg-terminal-bg/30">
+                <span class="font-mono text-terminal-accent font-bold">{{ row.strike }}</span>
+              </div>
+
+              <!-- Put Side -->
+              <div class="px-2 py-1.5 flex flex-col justify-center">
+                <div v-if="row.put" class="flex justify-between items-center">
+                  <span class="font-mono text-terminal-primary">{{ formatValue(row.put.latest) }}</span>
+                  <span
+                    class="text-[10px] font-mono"
+                    :class="(row.put.change || 0) >= 0 ? 'text-bullish' : 'text-bearish'"
+                  >
+                    {{ formatChange(row.put.change) }}
+                  </span>
+                </div>
+                <div v-else class="text-terminal-dim text-center">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Greeks Header Row -->
+          <div class="border-t border-theme-secondary text-[10px] text-terminal-dim grid grid-cols-[1fr_80px_1fr] shrink-0">
+            <div class="px-2 py-1.5 grid grid-cols-5 gap-1">
+              <span class="text-center">Delta</span>
+              <span class="text-center">Gamma</span>
+              <span class="text-center">Theta</span>
+              <span class="text-center">Vega</span>
+              <span class="text-center">IV</span>
+            </div>
+            <div class="px-2 py-1.5 border-x border-theme-secondary text-center">-</div>
+            <div class="px-2 py-1.5 grid grid-cols-5 gap-1">
+              <span class="text-center">Delta</span>
+              <span class="text-center">Gamma</span>
+              <span class="text-center">Theta</span>
+              <span class="text-center">Vega</span>
+              <span class="text-center">IV</span>
+            </div>
+          </div>
         </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">到期时间 T(年)</label>
-          <input
-            v-model.number="params.T"
-            type="number"
-            step="0.01"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="0.25"
-          />
-        </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">波动率 σ(%)</label>
-          <input
-            v-model.number="params.sigma"
-            type="number"
-            step="0.1"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="20.0"
-          />
-        </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">无风险利率 r(%)</label>
-          <input
-            v-model.number="params.r"
-            type="number"
-            step="0.1"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="3.0"
-          />
-        </div>
-        
-        <div class="space-y-1">
-          <label class="text-xs text-terminal-dim">股息率 q(%)</label>
-          <input
-            v-model.number="params.q"
-            type="number"
-            step="0.1"
-            class="w-full min-h-[44px] bg-terminal-panel border border-theme-secondary rounded-sm px-3 py-2 text-sm text-terminal-primary"
-            placeholder="0.0"
-          />
+
+        <!-- Greeks Data Rows -->
+        <div class="terminal-panel border border-theme-secondary rounded-sm overflow-hidden">
+          <div class="max-h-[150px] overflow-y-auto">
+            <div
+              v-for="(row, index) in tStyleData"
+              :key="index"
+              class="grid grid-cols-[1fr_80px_1fr] text-[10px] border-b border-theme-secondary/50 hover:bg-terminal-bg/50 cursor-pointer transition"
+              :class="{
+                'bg-bullish/10': selectedContract?.code === row.call?.code,
+                'bg-bearish/10': selectedContract?.code === row.put?.code,
+              }"
+              @click="handleRowClick(row)"
+            >
+              <!-- Call Greeks -->
+              <div v-if="row.call" class="px-2 py-1 grid grid-cols-5 gap-1 text-center">
+                <span :class="(row.call.delta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">{{ formatValue(row.call.delta) }}</span>
+                <span class="text-terminal-primary">{{ formatValue(row.call.gamma) }}</span>
+                <span :class="(row.call.theta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">{{ formatValue(row.call.theta) }}</span>
+                <span class="text-terminal-primary">{{ formatValue(row.call.vega) }}</span>
+                <span class="text-terminal-primary">{{ formatPercent(row.call.iv) }}</span>
+              </div>
+              <div v-else class="px-2 py-1 text-center text-terminal-dim">--</div>
+
+              <!-- Strike (empty for greeks row) -->
+              <div class="px-2 py-1 border-x border-theme-secondary text-center bg-terminal-bg/30 text-terminal-dim">
+                {{ row.strike }}
+              </div>
+
+              <!-- Put Greeks -->
+              <div v-if="row.put" class="px-2 py-1 grid grid-cols-5 gap-1 text-center">
+                <span :class="(row.put.delta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">{{ formatValue(row.put.delta) }}</span>
+                <span class="text-terminal-primary">{{ formatValue(row.put.gamma) }}</span>
+                <span :class="(row.put.theta || 0) >= 0 ? 'text-bullish' : 'text-bearish'">{{ formatValue(row.put.theta) }}</span>
+                <span class="text-terminal-primary">{{ formatValue(row.put.vega) }}</span>
+                <span class="text-terminal-primary">{{ formatPercent(row.put.iv) }}</span>
+              </div>
+              <div v-else class="px-2 py-1 text-center text-terminal-dim">--</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- 计算结果 -->
-      <div v-if="results" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        <!-- 期权价格 -->
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1">看涨期权价格</div>
-          <div class="text-xl font-mono font-bold text-bullish">{{ results.callPrice.toFixed(4) }}</div>
-          <div class="text-[10px] text-theme-muted mt-1">看跌期权价格</div>
-          <div class="text-xl font-mono font-bold text-bearish">{{ results.putPrice.toFixed(4) }}</div>
-        </div>
-
-        <!-- Delta -->
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Delta (Δ)：期权价格对标的资产价格的敏感度。看涨期权Delta范围0-1，看跌期权Delta范围-1到0。Delta=0.5表示标的资产每变动1元，期权价格变动0.5元">Delta (Δ)</div>
-          <div class="text-lg font-mono font-bold">{{ results.callDelta.toFixed(4) }}</div>
-          <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putDelta.toFixed(4) }}</div>
-          <div class="text-[10px] text-terminal-dim mt-1">价格对标的敏感度</div>
-        </div>
-
-        <!-- Gamma -->
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Gamma (Γ)：Delta对标的资产价格的二阶导数，衡量Delta的变化速度。Gamma越大，Delta变化越快，期权价格对标的资产价格变动越敏感。平值期权Gamma最大">Gamma (Γ)</div>
-          <div class="text-lg font-mono font-bold text-terminal-accent">{{ results.gamma.toFixed(4) }}</div>
-          <div class="text-[10px] text-terminal-dim mt-1">Delta对标的二阶敏感度</div>
-        </div>
-
-        <!-- Theta -->
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Theta (Θ)：期权价格对时间流逝的敏感度，表示每过一天期权价值的损耗。通常为负值，因为随着到期日临近，期权时间价值逐渐减少。平值期权Theta绝对值最大">Theta (Θ)</div>
-          <div class="text-lg font-mono font-bold">{{ results.callTheta.toFixed(4) }}</div>
-          <div class="text-[10px] text-theme-muted">看涨 | 看跌: {{ results.putTheta.toFixed(4) }}</div>
-          <div class="text-[10px] text-terminal-dim mt-1">时间衰减（每日）</div>
-        </div>
-
-        <!-- Vega -->
-        <div class="rounded-sm border border-theme bg-terminal-panel/60 p-3">
-          <div class="text-[10px] text-theme-muted mb-1 cursor-help" title="Vega (V)：期权价格对波动率的敏感度，表示波动率每变动1%，期权价格的变动量。Vega始终为正，因为波动率上升会增加期权价值。平值期权Vega最大">Vega (V)</div>
-          <div class="text-lg font-mono font-bold text-[var(--color-warning)]">{{ results.vega.toFixed(4) }}</div>
-          <div class="text-[10px] text-terminal-dim mt-1">对波动率的敏感度</div>
-        </div>
+      <!-- Empty State -->
+      <div v-else class="flex-1 flex flex-col items-center justify-center py-8">
+        <div class="text-3xl mb-3">📊</div>
+        <div class="text-sm text-terminal-dim">暂无期权数据</div>
       </div>
-
-      <!-- 策略盈亏图 -->
-      <div v-if="results" class="rounded-sm border border-theme bg-terminal-panel/40 p-3">
-        <div class="text-[10px] text-theme-muted font-bold mb-2">📈 策略盈亏分析</div>
-        <div class="flex flex-wrap gap-2 mb-3">
-          <button
-            v-for="s in strategies"
-            :key="s.id"
-            class="text-[10px] px-3 py-2 min-h-[44px] rounded-sm border transition"
-            :class="activeStrategy === s.id
-              ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
-              : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:text-theme-primary'"
-            @click="activeStrategy = s.id"
-          >
-            {{ s.name }}
-          </button>
-        </div>
-        <div ref="strategyChart" class="w-full h-[250px] sm:h-[300px]"></div>
-      </div>
-
-      <!-- 希腊值说明 -->
-      <div class="rounded-sm border border-theme bg-terminal-panel/40 px-3 py-2 space-y-1">
-        <div class="text-[10px] text-theme-muted font-bold mb-1">📊 希腊值说明</div>
-        <div class="text-[10px] text-theme-muted leading-relaxed">
-          <span class="text-theme-primary">Delta</span>: 标的价格变动1元，期权价格变动Δ元 |
-          <span class="text-theme-primary">Gamma</span>: 标的价格变动1元，Delta变动Γ |
-          <span class="text-theme-primary">Theta</span>: 每过1天，期权价格衰减Θ |
-          <span class="text-theme-primary">Vega</span>: 波动率变动1%，期权价格变动V
-        </div>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted } from 'vue'
+import { apiFetch } from '../utils/api.js'
 
-// ── Black-Scholes 参数 ──
-const params = ref({
-  S: 100,      // 标的资产价格
-  K: 100,      // 行权价
-  T: 0.25,     // 到期时间（年）
-  sigma: 20,   // 波动率（%）
-  r: 3,        // 无风险利率（%）
-  q: 0,        // 股息率（%）
+const loading = ref(false)
+const error = ref(null)
+const chainData = ref(null)
+const contracts = ref([])
+const selectedSymbol = ref('io2506')
+const selectedContract = ref(null)
+
+const tStyleData = computed(() => {
+  if (!chainData.value) return []
+
+  const calls = chainData.value.calls || []
+  const puts = chainData.value.puts || []
+
+  // Create a map of strike prices to options
+  const strikeMap = new Map()
+
+  calls.forEach(call => {
+    const strike = call.strike
+    if (strike !== null && strike !== undefined) {
+      if (!strikeMap.has(strike)) {
+        strikeMap.set(strike, { strike, call: null, put: null })
+      }
+      strikeMap.get(strike).call = call
+    }
+  })
+
+  puts.forEach(put => {
+    const strike = put.strike
+    if (strike !== null && strike !== undefined) {
+      if (!strikeMap.has(strike)) {
+        strikeMap.set(strike, { strike, call: null, put: null })
+      }
+      strikeMap.get(strike).put = put
+    }
+  })
+
+  // Sort by strike price
+  return Array.from(strikeMap.values()).sort((a, b) => a.strike - b.strike)
 })
 
-// ── 策略列表 ──
-const strategies = [
-  { id: 'long_call', name: '买入看涨' },
-  { id: 'long_put', name: '买入看跌' },
-  { id: 'covered_call', name: '备兑看涨' },
-  { id: 'protective_put', name: '保护性看跌' },
-  { id: 'straddle', name: '跨式组合' },
-  { id: 'strangle', name: '勒式组合' },
-]
-
-const activeStrategy = ref('long_call')
-
-const strategyChart = ref(null)
-let chart = null
-
-// ── Black-Scholes 计算 ──
-const results = computed(() => {
-  const { S, K, T, sigma, r, q } = params.value
-  
-  if (S <= 0 || K <= 0 || T <= 0 || sigma <= 0) return null
-  
-  const sigmaDecimal = sigma / 100
-  const rDecimal = r / 100
-  const qDecimal = q / 100
-  
-  const d1 = (Math.log(S / K) + (rDecimal - qDecimal + 0.5 * sigmaDecimal ** 2) * T) / (sigmaDecimal * Math.sqrt(T))
-  const d2 = d1 - sigmaDecimal * Math.sqrt(T)
-  
-  // 标准正态分布 CDF
-  function cdf(x) {
-    return 0.5 * (1 + erf(x / Math.sqrt(2)))
-  }
-  
-  // 误差函数
-  function erf(x) {
-    const a1 =  0.254829592
-    const a2 = -0.284496736
-    const a3 =  1.421413741
-    const a4 = -1.453152027
-    const a5 =  1.061405429
-    const p  =  0.3275911
-    
-    const sign = x >= 0 ? 1 : -1
-    x = Math.abs(x)
-    
-    const t = 1.0 / (1.0 + p * x)
-    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x)
-    
-    return sign * y
-  }
-  
-  // 标准正态分布 PDF
-  function pdf(x) {
-    return Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI)
-  }
-  
-  const Nd1 = cdf(d1)
-  const Nd2 = cdf(d2)
-  const NNegD1 = cdf(-d1)
-  const NNegD2 = cdf(-d2)
-  
-  const callPrice = S * Math.exp(-qDecimal * T) * Nd1 - K * Math.exp(-rDecimal * T) * Nd2
-  const putPrice = K * Math.exp(-rDecimal * T) * NNegD2 - S * Math.exp(-qDecimal * T) * NNegD1
-  
-  const callDelta = Math.exp(-qDecimal * T) * Nd1
-  const putDelta = Math.exp(-qDecimal * T) * (Nd1 - 1)
-  
-  const gamma = Math.exp(-qDecimal * T) * pdf(d1) / (S * sigmaDecimal * Math.sqrt(T))
-  
-  const callTheta = (-S * Math.exp(-qDecimal * T) * pdf(d1) * sigmaDecimal / (2 * Math.sqrt(T))
-    - rDecimal * K * Math.exp(-rDecimal * T) * Nd2
-    + qDecimal * S * Math.exp(-qDecimal * T) * Nd1) / 365
-  
-  const putTheta = (-S * Math.exp(-qDecimal * T) * pdf(d1) * sigmaDecimal / (2 * Math.sqrt(T))
-    + rDecimal * K * Math.exp(-rDecimal * T) * NNegD2
-    - qDecimal * S * Math.exp(-qDecimal * T) * NNegD1) / 365
-  
-  const vega = S * Math.exp(-qDecimal * T) * pdf(d1) * Math.sqrt(T) / 100
-  
-  return {
-    callPrice,
-    putPrice,
-    callDelta,
-    putDelta,
-    gamma,
-    callTheta,
-    putTheta,
-    vega,
-    d1,
-    d2,
-  }
-})
-
-// ── 策略盈亏计算 ──
-function calculateStrategyPnl(spotPrices) {
-  if (!results.value) return []
-  
-  const { callPrice, putPrice } = results.value
-  const { S, K } = params.value
-  
-  return spotPrices.map(spot => {
-    let pnl = 0
-    
-    switch (activeStrategy.value) {
-      case 'long_call':
-        pnl = Math.max(spot - K, 0) - callPrice
-        break
-      case 'long_put':
-        pnl = Math.max(K - spot, 0) - putPrice
-        break
-      case 'covered_call':
-        pnl = (spot - S) + (Math.min(K - spot, 0) + callPrice)
-        break
-      case 'protective_put':
-        pnl = (spot - S) + (Math.max(K - spot, 0) - putPrice)
-        break
-      case 'straddle':
-        pnl = Math.max(spot - K, 0) + Math.max(K - spot, 0) - callPrice - putPrice
-        break
-      case 'strangle': {
-        const lowerK = K * 0.95
-        const upperK = K * 1.05
-        // 简化：使用相同的期权价格
-        pnl = Math.max(spot - upperK, 0) + Math.max(lowerK - spot, 0) - callPrice - putPrice
-        break
+async function fetchContracts() {
+  try {
+    const res = await apiFetch('/api/v1/options/contracts?exchange=CFFEX', { timeoutMs: 15000 })
+    if (res?.data?.contracts) {
+      contracts.value = res.data.contracts
+      if (contracts.value.length > 0 && !contracts.value.find(c => c.code === selectedSymbol.value)) {
+        selectedSymbol.value = contracts.value[0].code
       }
     }
-    
-    return { spot, pnl }
-  })
-}
-
-// ── 渲染策略盈亏图 ──
-function renderStrategyChart() {
-  if (!strategyChart.value || !results.value) return
-  
-  if (chart) { chart.dispose(); chart = null }
-  
-  const { S, K } = params.value
-  const minSpot = Math.max(K * 0.7, 1)
-  const maxSpot = K * 1.3
-  const step = (maxSpot - minSpot) / 50
-  
-  const spotPrices = []
-  for (let s = minSpot; s <= maxSpot; s += step) {
-    spotPrices.push(s)
+  } catch (e) {
+    console.error('[Options] Failed to fetch contracts:', e)
   }
-  
-  const pnlData = calculateStrategyPnl(spotPrices)
-  
-  const chartTextColor = getComputedStyle(document.documentElement).getPropertyValue('--chart-text').trim() || '#8B949E'
-  const upColor = getComputedStyle(document.documentElement).getPropertyValue('--color-up').trim() || '#FF6B6B'
-  const downColor = getComputedStyle(document.documentElement).getPropertyValue('--color-down').trim() || '#51CF66'
-  
-  chart = window.echarts.init(strategyChart.value, 'dark')
-  chart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'axis',
-      formatter: (items) => {
-        const item = items[0]
-        return `标的价: ${item.axisValue}<br/>盈亏: ${item.value >= 0 ? '+' : ''}${item.value.toFixed(2)}`
-      }
-    },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
-    xAxis: {
-      type: 'category',
-      data: spotPrices.map(s => s.toFixed(1)),
-      axisLabel: { color: chartTextColor, fontSize: 9 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { color: chartTextColor, fontSize: 10 }
-    },
-    series: [{
-      type: 'line',
-      data: pnlData.map(d => d.pnl.toFixed(2)),
-      smooth: true,
-      lineStyle: { color: upColor, width: 2 },
-      itemStyle: { color: upColor },
-      areaStyle: {
-        color: {
-          type: 'linear',
-          x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: upColor + '4D' },
-            { offset: 0.5, color: upColor + '0D' },
-            { offset: 1, color: downColor + '4D' }
-          ]
-        }
-      },
-      markLine: {
-        data: [
-          { yAxis: 0, lineStyle: { color: '#666', type: 'dashed' } }
-        ],
-        silent: true
-      }
-    }]
-  })
 }
 
-watch([results, activeStrategy], () => {
-  nextTick(() => renderStrategyChart())
-})
+async function fetchChainData() {
+  loading.value = true
+  error.value = null
 
-onMounted(() => {
-  window.addEventListener('resize', handleResize)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', handleResize)
-  if (chart) {
-    chart.dispose()
-    chart = null
+  try {
+    const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { timeoutMs: 30000 })
+    if (res?.data) {
+      chainData.value = res.data
+    } else {
+      error.value = '数据格式错误'
+    }
+  } catch (e) {
+    error.value = e.message || '获取期权链失败'
+    chainData.value = null
+  } finally {
+    loading.value = false
   }
-})
-
-function handleResize() {
-  chart?.resize()
 }
+
+function handleSymbolChange() {
+  selectedContract.value = null
+  fetchChainData()
+}
+
+function handleRowClick(row) {
+  // Prefer selecting the side that was clicked, or the call side if both exist
+  const contract = row.call || row.put
+  if (contract) {
+    selectedContract.value = selectedContract.value?.code === contract.code ? null : contract
+  }
+}
+
+function formatValue(val) {
+  if (val === null || val === undefined) return '--'
+  if (typeof val !== 'number') return val
+  return val.toFixed(4)
+}
+
+function formatPercent(val) {
+  if (val === null || val === undefined) return '--'
+  if (typeof val !== 'number') return val
+  return (val * 100).toFixed(2) + '%'
+}
+
+function formatChange(val) {
+  if (val === null || val === undefined) return '--'
+  if (typeof val !== 'number') return val
+  return (val >= 0 ? '+' : '') + val.toFixed(4)
+}
+
+function formatVolume(val) {
+  if (val === null || val === undefined) return '--'
+  if (typeof val !== 'number') return val
+  return val.toLocaleString()
+}
+
+onMounted(async () => {
+  await fetchContracts()
+  await fetchChainData()
+})
 </script>
+
+<style scoped>
+.bg-terminal-bg {
+  background: var(--bg-base, #121212);
+}
+
+.bg-surface {
+  background: var(--bg-surface, #1e1e1e);
+}
+
+.text-terminal-accent {
+  color: var(--color-primary, #0F52BA);
+}
+
+.text-terminal-primary {
+  color: var(--text-primary, #F0F6FC);
+}
+
+.text-terminal-dim {
+  color: var(--text-secondary, #C9D1D9);
+}
+
+.text-bullish {
+  color: var(--color-bull, #E63946);
+}
+
+.text-bearish {
+  color: var(--color-bear, #1A936F);
+}
+
+.border-theme-secondary {
+  border-color: var(--border-base, #30363D);
+}
+
+.bg-terminal-accent\/5 {
+  background: rgba(15, 82, 186, 0.05);
+}
+
+.bg-terminal-accent\/10 {
+  background: rgba(15, 82, 186, 0.1);
+}
+
+.bg-bullish\/10 {
+  background: rgba(230, 57, 70, 0.1);
+}
+
+.bg-bearish\/10 {
+  background: rgba(26, 147, 111, 0.1);
+}
+
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.terminal-panel {
+  background: var(--bg-surface, #1e1e1e);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+</style>

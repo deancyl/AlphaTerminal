@@ -1482,3 +1482,98 @@ async def get_web_vitals_stats():
             "total_collected": len(_web_vitals_buffer)
         }
     }
+
+
+# ═══════════════════════════════════════════════════════════════
+# WebSocket Streaming Management
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/streaming/status")
+async def get_streaming_status():
+    """获取 WebSocket 流式数据推送状态"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    status = manager.get_status()
+    
+    return {
+        "code": 0,
+        "data": status
+    }
+
+
+@router.post("/streaming/failover")
+async def trigger_streaming_failover():
+    """手动触发流式数据切换到 HTTP 轮询模式"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    await manager.force_failover()
+    
+    return {
+        "code": 0,
+        "message": "已切换到 HTTP 轮询模式",
+        "data": {"mode": manager.mode.value}
+    }
+
+
+@router.post("/streaming/reset")
+async def reset_streaming_circuit_breaker():
+    """重置流式数据熔断器并尝试恢复 WebSocket 连接"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    await manager.reset_circuit_breaker()
+    
+    return {
+        "code": 0,
+        "message": "熔断器已重置，正在尝试恢复 WebSocket 连接",
+        "data": {"mode": manager.mode.value}
+    }
+
+
+@router.get("/streaming/symbols")
+async def get_streaming_symbols():
+    """获取当前订阅的流式数据 symbols"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    stats = manager.stats
+    
+    return {
+        "code": 0,
+        "data": {
+            "total_symbols": stats.total_symbols,
+            "mode": stats.mode.value
+        }
+    }
+
+
+@router.post("/streaming/symbols/add")
+async def add_streaming_symbols(symbols: List[str] = Body(...)):
+    """添加流式数据订阅 symbols"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    await manager.add_symbols(symbols)
+    
+    return {
+        "code": 0,
+        "message": f"已添加 {len(symbols)} 个订阅",
+        "data": {"symbols": symbols}
+    }
+
+
+@router.post("/streaming/symbols/remove")
+async def remove_streaming_symbols(symbols: List[str] = Body(...)):
+    """移除流式数据订阅 symbols"""
+    from app.services.streaming import get_streaming_manager
+    
+    manager = get_streaming_manager()
+    await manager.remove_symbols(symbols)
+    
+    return {
+        "code": 0,
+        "message": f"已移除 {len(symbols)} 个订阅",
+        "data": {"symbols": symbols}
+    }

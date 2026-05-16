@@ -206,16 +206,24 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            macro_news = asyncio.run(fetch_news_parallel(_MACRO_SYMBOLS))
+            # 并行获取宏观快讯和个股新闻，减少总延迟
+            macro_news, stock_news = asyncio.run(asyncio.gather(
+                asyncio.wait_for(fetch_news_parallel(_MACRO_SYMBOLS), timeout=30),
+                asyncio.wait_for(fetch_news_parallel(NEWS_SYMBOLS), timeout=30)
+            ))
+            
             all_news.extend(macro_news)
             sources_used.append(f"parallel:{len(_MACRO_SYMBOLS)}")
             logger.info(f"[SCHEDULER] 宏观快讯并行获取: {len(macro_news)} 条")
 
-            stock_news = asyncio.run(fetch_news_parallel(NEWS_SYMBOLS))
             all_news.extend(stock_news)
             sources_used.append(f"parallel:{len(NEWS_SYMBOLS)}")
             logger.info(f"[SCHEDULER] 个股新闻并行获取: {len(stock_news)} 条")
 
+        except asyncio.TimeoutError as e:
+            logger.error(f"[SCHEDULER] News fetch timeout: {e}", exc_info=True)
+            logger.info(f"[HEARTBEAT] News fetch timeout at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            return
         except Exception as e:
             logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
             logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")

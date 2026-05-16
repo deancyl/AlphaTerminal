@@ -11,14 +11,15 @@ import httpx
 import akshare as ak
 from functools import lru_cache
 import json
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/research", tags=["research"])
 
-# 内存缓存
-_research_cache: Dict[str, Dict[str, Any]] = {}
-CACHE_TTL = 300  # 5分钟缓存
+_cache = get_cache()
+NAMESPACE = "research:"
+TTL = 300  # 5分钟缓存
 
 # Fallback 数据（当数据源不可用时返回）
 FALLBACK_RESEARCH_DATA = [
@@ -152,37 +153,29 @@ async def get_reports(
     institution: str = Query("", description="机构筛选"),
 ):
     """获取研报列表"""
-    cache_key = f"{symbol}_{keyword}_{institution}"
+    cache_key = f"{NAMESPACE}{symbol}_{keyword}_{institution}"
     
-    # 检查缓存
-    if cache_key in _research_cache:
-        cached = _research_cache[cache_key]
-        if (datetime.now() - cached["timestamp"]).total_seconds() < CACHE_TTL:
-            data = cached["data"]
-            total = data["total"]
-            start = (page - 1) * page_size
-            end = start + page_size
-            return {
-                "code": 0,
-                "message": "success",
-                "data": {
-                    "total": total,
-                    "items": data["items"][start:end],
-                    "is_fallback": data.get("is_fallback", False),
-                }
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        data = cached
+        total = data["total"]
+        start = (page - 1) * page_size
+        end = start + page_size
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "total": total,
+                "items": data["items"][start:end],
+                "is_fallback": data.get("is_fallback", False),
             }
+        }
     
-    # 获取数据
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, _fetch_reports_sync, symbol, 1, 1000, keyword, institution)
     
-    # 缓存结果
-    _research_cache[cache_key] = {
-        "data": data,
-        "timestamp": datetime.now(),
-    }
+    _cache.set(cache_key, data, ttl=TTL)
     
-    # 分页返回
     total = data["total"]
     start = (page - 1) * page_size
     end = start + page_size
@@ -244,13 +237,13 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
 @router.get("/status")
 async def get_status():
     """获取研报缓存状态"""
+    stats = _cache.get_stats()
     return {
         "code": 0,
         "message": "success",
         "data": {
-            "cache_ready": len(_research_cache) > 0,
-            "cached_symbols": list(set(k.split("_")[0] for k in _research_cache.keys())),
-            "cache_size": len(_research_cache),
+            "cache_ready": stats["entry_count"] > 0,
+            "cache_stats": stats,
         }
     }
 

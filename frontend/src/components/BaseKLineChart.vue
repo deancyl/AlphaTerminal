@@ -33,6 +33,10 @@ const props = defineProps({
   // 增量 tick (用于闪烁最新现价)
   tick: { type: Object, default: null },
   symbol: { type: String, default: '' },
+
+  // 新闻事件标记点 [{ date, headline, type, price }]
+  // type: 'bullish' | 'bearish' | 'neutral'
+  newsEvents: { type: Array, default: () => [] },
 })
 
 const chartEl = ref(null)
@@ -119,6 +123,30 @@ function buildOption(cData) {
       borderColor0: MARKET_COLORS.DOWN,
     },
     barMaxWidth: 8,
+    // 新闻事件标记点
+    markPoint: props.newsEvents.length > 0 ? {
+      symbol: 'diamond',
+      symbolSize: 10,
+      data: props.newsEvents.map(e => ({
+        coord: [e.date, e.price],
+        value: e.headline,
+        itemStyle: {
+          color: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
+          borderColor: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
+          borderWidth: 1,
+        },
+        label: {
+          show: false, // 不在图表上显示标签，hover tooltip 显示
+        },
+      })),
+      label: { show: false },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowColor: 'rgba(0, 0, 0, 0.5)',
+        },
+      },
+    } : undefined,
   })
 
   // 主图：均线
@@ -279,7 +307,7 @@ function buildOption(cData) {
         fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
       },
       extraCssText: 'backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 6px;',
-      formatter: (params) => buildTooltipFormatter(params, { showVolume: true, showOverlay: true }),
+      formatter: (params) => buildTooltipFormatter(params, { showVolume: true, showOverlay: true, newsEvents: props.newsEvents }),
     },
     legend: { show: false },
     grid: grids,

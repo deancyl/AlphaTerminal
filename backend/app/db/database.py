@@ -400,6 +400,18 @@ def init_all_stocks_table():
                 updated_at   REAL
             )
         """)
+        # Performance indexes for StockScreener queries
+        # Note: For existing databases, run these SQL commands manually during off-peak hours:
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name);
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name)")
         conn.commit()
         conn.close()
 
@@ -412,6 +424,41 @@ def init_persistence_tables():
     init_strategy_table()
     init_token_table()
     init_audit_table()
+    init_orders_table()
+
+
+def init_orders_table():
+    """初始化订单管理表"""
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                order_type TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                price REAL,
+                status TEXT NOT NULL DEFAULT 'staged',
+                filled_quantity INTEGER DEFAULT 0,
+                avg_fill_price REAL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                submitted_at TEXT,
+                filled_at TEXT,
+                cancelled_at TEXT,
+                reject_reason TEXT,
+                broker_order_id TEXT,
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_portfolio ON orders(portfolio_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_symbol ON orders(symbol)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)")
+        conn.commit()
+    finally:
+        conn.close()
 
 def upsert_all_stocks(rows):
     """批量写入全市场个股数据（生产者：立即入队，不持有锁）"""

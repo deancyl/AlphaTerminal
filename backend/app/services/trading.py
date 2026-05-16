@@ -11,6 +11,7 @@ import logging
 from datetime import datetime
 from typing import Optional, NamedTuple
 from app.utils.safe_math import safe_divide, safe_percent, safe_round, precise_pnl
+from app.services.audit_chain import log_buy, log_sell
 
 logger = logging.getLogger(__name__)
 
@@ -165,6 +166,20 @@ def execute_sell(
         if manage_transaction:
             conn.commit()
             upsert_position_summary(portfolio_id, symbol, conn=conn)
+            
+            # Log audit event with hash chain
+            try:
+                log_sell(
+                    portfolio_id=portfolio_id,
+                    symbol=symbol,
+                    shares=shares,
+                    price=sell_price,
+                    realized_pnl=total_realized_pnl,
+                    actor_id="system",
+                    order_id=order_id,
+                )
+            except Exception as audit_err:
+                logger.warning(f"[Trading] Audit log failed for sell: {audit_err}")
     finally:
         # 仅关闭本函数创建的连接
         if not external_conn:
@@ -211,6 +226,19 @@ def execute_buy(
         new_id = cur.lastrowid
         conn.commit()
         upsert_position_summary(portfolio_id, symbol)   # Phase 3: sync summary
+        
+        # Log audit event with hash chain
+        try:
+            log_buy(
+                portfolio_id=portfolio_id,
+                symbol=symbol,
+                shares=shares,
+                price=buy_price,
+                actor_id="system",
+                order_id=order_id,
+            )
+        except Exception as audit_err:
+            logger.warning(f"[Trading] Audit log failed for buy: {audit_err}")
     finally:
         conn.close()
 

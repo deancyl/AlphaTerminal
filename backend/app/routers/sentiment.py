@@ -19,6 +19,7 @@ from app.services.sentiment_engine import (
     get_news_sentiment,
 )
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -34,29 +35,15 @@ def _get_ak():
         _akshare_module = ak
     return _akshare_module
 
-_cache = {}
-_cache_ttl = {}
-CACHE_DURATION = 300
-MAX_CACHE_SIZE = 20
+_cache = get_cache()
+NAMESPACE = "sentiment:"
+TTL = 300
 
 def _get_cached(key):
-    now = datetime.now()
-    expired = [k for k, v in _cache_ttl.items() if now >= v]
-    for k in expired:
-        _cache.pop(k, None)
-        _cache_ttl.pop(k, None)
-    if key in _cache and key in _cache_ttl:
-        if datetime.now() < _cache_ttl[key]:
-            return _cache[key]
-    return None
+    return _cache.get(f"{NAMESPACE}{key}")
 
 def _set_cached(key, value):
-    if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
-        oldest_key = min(_cache_ttl, key=_cache_ttl.get)
-        _cache.pop(oldest_key, None)
-        _cache_ttl.pop(oldest_key, None)
-    _cache[key] = value
-    _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
+    _cache.set(f"{NAMESPACE}{key}", value, ttl=TTL)
 
 # ── 日内多空历史（每15秒追加一点，最多480个点=2小时轮询）────────
 _INTRADAY_MAX_POINTS = 480

@@ -316,8 +316,65 @@
     @keydown.escape="showTransferModal = false"
   >
     <div class="bg-[var(--bg-primary)] border border-[var(--border-primary)] rounded-sm p-6 w-80">
-      <h3 id="transfer-modal-title" class="text-theme-primary font-bold mb-4">资金划转</h3>
-      <div class="space-y-3">
+      <h3 id="transfer-modal-title" class="text-theme-primary font-bold mb-4">💰 资金划转</h3>
+      
+      <!-- 确认面板（第二步） -->
+      <div v-if="showTransferConfirmation" class="space-y-3">
+        <div class="bg-[var(--bg-secondary)] rounded-sm p-4">
+          <h4 class="text-theme-primary font-bold text-sm mb-3">📋 划转确认</h4>
+          
+          <!-- 划转摘要 -->
+          <div class="space-y-2 text-xs">
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">从账户：</span>
+              <span class="text-theme-primary">{{ getPortfolioName(transfer.from) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">到账户：</span>
+              <span class="text-theme-primary">{{ getPortfolioName(transfer.to) }}</span>
+            </div>
+            <div class="flex justify-between border-t border-[var(--border-light)] pt-2 mt-2">
+              <span class="text-[var(--text-secondary)] font-medium">划转金额：</span>
+              <span class="text-theme-primary font-bold">¥{{ (transfer.amount || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">操作时间：</span>
+              <span class="text-theme-primary">{{ new Date().toLocaleString() }}</span>
+            </div>
+          </div>
+          
+          <!-- 警告提示 -->
+          <div class="mt-3 text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)]/10 border border-[var(--color-warning-border)]/20 rounded-sm px-3 py-2">
+            ⚠️ 此操作不可撤销，请确认划转信息无误
+          </div>
+        </div>
+        
+        <!-- 确认复选框 -->
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="transferConfirmed"
+            class="w-4 h-4 rounded border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+            aria-label="确认划转信息"
+          />
+          <span class="text-xs text-theme-primary">我已确认以上划转信息</span>
+        </label>
+        
+        <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
+        
+        <div class="flex gap-2 justify-end">
+          <button @click="cancelTransferConfirmation" aria-label="返回修改" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">返回修改</button>
+          <button
+            @click="executeTransfer"
+            :disabled="!transferConfirmed"
+            aria-label="确认划转"
+            class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >确认划转 ¥{{ (transfer.amount || 0).toLocaleString() }}</button>
+        </div>
+      </div>
+      
+      <!-- 表单面板（第一步） -->
+      <div v-else class="space-y-3">
         <div>
           <label class="text-[var(--text-secondary)] text-xs">从账户</label>
           <select
@@ -372,15 +429,15 @@
           </div>
         </div>
         <div v-if="transferError" class="text-[var(--color-danger)] text-xs">{{ transferError }}</div>
-      </div>
-      <div class="flex gap-2 mt-4 justify-end">
-        <button @click="showTransferModal = false" aria-label="取消资金划转" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
-        <button
-          @click="handleTransfer"
-          :disabled="!isTransferValid"
-          aria-label="确认资金划转"
-          class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >确认划转</button>
+        <div class="flex gap-2 mt-4 justify-end">
+          <button @click="showTransferModal = false" aria-label="取消资金划转" class="px-4 py-2 text-[var(--text-secondary)] hover:text-theme-primary">取消</button>
+          <button
+            @click="proceedToTransferConfirmation"
+            :disabled="!isTransferValid"
+            aria-label="下一步"
+            class="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >下一步</button>
+        </div>
       </div>
     </div>
   </div>
@@ -447,6 +504,8 @@ const newAccount = ref({ name: '', type: 'main', initialCapital: 0, parentId: nu
 const transfer  = ref({ from: null, to: null, amount: 0 });
 const createError   = ref('');
 const transferError = ref('');
+const showTransferConfirmation = ref(false);
+const transferConfirmed = ref(false);
 
 // ── Debounce Utility ─────────────────────────────────────────────
 function debounce(fn, delay) {
@@ -667,6 +726,60 @@ function pnlClass(v) {
   return v > 0 ? 'pnl-pos' : 'pnl-neg';
 }
 
+function getPortfolioName(id) {
+  const p = portfolioList.value.find(p => p.id === id);
+  return p ? `${p.name} (${p.type})` : '—';
+}
+
+function proceedToTransferConfirmation() {
+  transferError.value = '';
+  // 验证所有字段
+  const isValid = validateTransferAll()
+  // 检查两个账户是否相同
+  if (isSameAccount.value) {
+    transferFields.to.error = '转出账户和转入账户不能相同'
+    return
+  }
+  if (!isValid) {
+    transferError.value = '请修正表单中的错误'
+    return
+  }
+  // 显示确认面板
+  showTransferConfirmation.value = true;
+  transferConfirmed.value = false;
+}
+
+function cancelTransferConfirmation() {
+  showTransferConfirmation.value = false;
+  transferConfirmed.value = false;
+}
+
+async function executeTransfer() {
+  if (!transferConfirmed.value) return;
+  
+  transferError.value = '';
+  try {
+    const res = await apiFetch('/api/v1/portfolio/transfer/direct', {
+      method: 'POST',
+      body: JSON.stringify({
+        from_portfolio_id: transfer.value.from,
+        to_portfolio_id:   transfer.value.to,
+        amount:            transfer.value.amount,
+      }),
+    });
+    if (res.code === 0) {
+      showTransferModal.value = false;
+      showTransferConfirmation.value = false;
+      transferConfirmed.value = false;
+      transfer.value = { from: null, to: null, amount: 0 };
+      resetTransfer()
+      loadPortfolioData();
+    } else {
+      transferError.value = res.message || '划转失败';
+    }
+  } catch (e) { transferError.value = e.message; }
+}
+
 // ── Tab 键盘导航 ────────────────────────────────────────────────
 function handleTabKeydown(e) {
   const currentIndex = tabs.findIndex(t => t.id === activeTab.value);
@@ -794,38 +907,6 @@ async function createAccount() {
       createError.value = res.message || '创建失败';
     }
   } catch (e) { createError.value = e.message; }
-}
-
-async function handleTransfer() {
-  transferError.value = '';
-  // 验证所有字段
-  const isValid = await validateTransferAll()
-  // 检查两个账户是否相同
-  if (isSameAccount.value) {
-    transferFields.to.error = '转出账户和转入账户不能相同'
-    return
-  }
-  if (!isValid) {
-    transferError.value = '请修正表单中的错误'
-    return
-  }
-  try {
-    const res = await apiFetch('/api/v1/portfolio/transfer/direct', {
-      method: 'POST',
-      body: JSON.stringify({
-        from_portfolio_id: transfer.value.from,
-        to_portfolio_id:   transfer.value.to,
-        amount:            transfer.value.amount,
-      }),
-    });
-    if (res.code === 0) {
-      showTransferModal.value = false;
-      transfer.value = { from: null, to: null, amount: 0 };
-      resetTransfer()
-    } else {
-      transferError.value = res.message || '划转失败';
-    }
-  } catch (e) { transferError.value = e.message; }
 }
 
 function handleTransferOk() {

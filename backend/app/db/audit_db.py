@@ -30,13 +30,31 @@ def init_audit_table():
                     resource TEXT,
                     details TEXT,
                     ip_address TEXT,
-                    user_agent TEXT
+                    user_agent TEXT,
+                    prev_hash TEXT NOT NULL DEFAULT '',
+                    record_hash TEXT NOT NULL DEFAULT '',
+                    chain_index INTEGER NOT NULL DEFAULT 0
                 )
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_agent ON audit_logs(agent_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_resource ON audit_logs(resource)")
+            
+            # Add hash chain columns to existing tables (safe migration)
+            for col, dtype, default in [
+                ("prev_hash", "TEXT", "NOT NULL DEFAULT ''"),
+                ("record_hash", "TEXT", "NOT NULL DEFAULT ''"),
+                ("chain_index", "INTEGER", "NOT NULL DEFAULT 0"),
+            ]:
+                try:
+                    conn.execute(f"ALTER TABLE audit_logs ADD COLUMN {col} {dtype} {default}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+            
+            # Create index after migration (in case column was just added)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_audit_chain_index ON audit_logs(chain_index)")
+            
             conn.commit()
         finally:
             conn.close()
@@ -186,8 +204,8 @@ def count_audit_logs(
         conn.close()
 
 
-def delete_old_logs(days: int = 90) -> int:
-    """Delete audit logs older than N days"""
+def delete_old_logs(days: int = 2555) -> int:
+    """Delete audit logs older than N days (SEC Rule 17a-4: 7-year retention = 2555 days)"""
     with _lock:
         conn = _get_conn()
         try:

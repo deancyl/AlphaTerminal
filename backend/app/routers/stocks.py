@@ -18,6 +18,7 @@ import httpx
 import pandas as pd
 from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import SEARCH_TIMEOUT, QUOTE_TIMEOUT
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,51 +26,26 @@ router = APIRouter()
 CPU_COUNT = os.cpu_count() or 4
 _executor = ThreadPoolExecutor(max_workers=min(8, CPU_COUNT * 2), thread_name_prefix="stocks_api_")
 
-_CACHE = {}
-_CACHE_TTL = 300
-_MAX_CACHE_SIZE = 30
+# Use DataCache singleton
+_cache = get_cache()
+NAMESPACE = "stocks:"
+TTL = 300  # 5 minutes
 
 
-def _cleanup_expired():
-    """清理过期缓存"""
-    now = time.time()
-    expired = [k for k, v in _CACHE.items() if (now - v['time']) >= _CACHE_TTL]
-    for k in expired:
-        del _CACHE[k]
-    if expired:
-        logger.info(f"[Stocks Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
-
-
-def _evict_oldest():
-    """淘汰最旧的缓存"""
-    if len(_CACHE) >= _MAX_CACHE_SIZE:
-        oldest_key = min(_CACHE, key=lambda k: _CACHE[k]['time'])
-        del _CACHE[oldest_key]
-        logger.info(f"[Stocks Cache EVICT] 移除缓存: {oldest_key}")
-
-
-def _cache_or_fetch(key, fetch_fn, ttl=_CACHE_TTL):
-    """缓存装饰器（带过期清理和大小限制）"""
-    now = time.time()
-    
-    # 定期清理（每10次访问清理一次）
-    if len(_CACHE) > 0 and now % 10 < 1:
-        _cleanup_expired()
-    
-    if key in _CACHE and (now - _CACHE[key]['time']) < ttl:
-        return _CACHE[key]['data']
+def _cache_or_fetch(key, fetch_fn, ttl=TTL):
+    """Cache helper using DataCache singleton"""
+    cache_key = f"{NAMESPACE}{key}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
     try:
         data = fetch_fn()
-        # 不缓存空结果，只缓存有效数据
         if data:
-            _evict_oldest()
-            _CACHE[key] = {'data': data, 'time': now}
+            _cache.set(cache_key, data, ttl=ttl)
         return data
     except Exception as e:
         logger.warning(f"[Stocks API] {key} fetch failed: {e}")
-        if key in _CACHE:
-            return _CACHE[key]['data']
-        return []
+        return cached or []
 
 
 @router.get("/limit_up")

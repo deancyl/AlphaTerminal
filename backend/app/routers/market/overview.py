@@ -14,11 +14,19 @@ import re
 from app.db import get_latest_prices
 from app.utils.market_status import is_market_open
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["market"])
 
-# ── 常量定义 ─────────────────────────────────────────────────────────────
+_cache = get_cache()
+NAMESPACE = "overview:"
+_MACRO_CACHE_KEY = f"{NAMESPACE}macro"
+_MACRO_TTL = 60  # 1 minute
+_MACRO_CACHE_LOCK = threading.RLock()
+_LAST_FETCH_TIME = 0
+_REFRESH_SEMAPHORE = threading.Semaphore(1)
+
 WIND_SYMBOLS = ["000001", "000300", "399001", "399006", "HSI", "IXIC"]
 INDEX_SYMBOLS = ["000001", "000300", "399001", "399006"]
 CHINA_ALL_SYMBOLS = [
@@ -29,17 +37,6 @@ CHINA_ALL_SYMBOLS = [
 RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
 GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
 DERIVATIVE_SYMBOLS = ["GC", "CL"]
-
-# ── Phase 7: 宏观大宗商品缓存 ─────────────────────────────────────────────
-# Macro cache TTL: 60 seconds
-# Rationale: Commodities spot prices update every 15-30 seconds during market hours.
-# 60s TTL provides reasonable freshness while reducing external API calls.
-# For real-time updates, consider WebSocket subscription.
-_MACRO_CACHE = {}   # {symbol: {price, change_pct, name, unit, timestamp}}
-_MACRO_CACHE_TTL = 60  # 1 minute (was 600s/10min)
-_MACRO_CACHE_LOCK = threading.RLock()  # RLock 可重入
-_LAST_FETCH_TIME = 0   # 0 = immediately refresh on first call
-_REFRESH_SEMAPHORE = threading.Semaphore(1)  # 防止并发刷新
 
 SINA_HEADERS = {
     "Referer": "https://finance.sina.com.cn",
@@ -196,10 +193,9 @@ def _fetch_macro_data():
     - WTI原油: Sina hf_CL → USD/桶
     - VHSI: 恒指波幅指数（腾讯 qt hkVHSI）
     """
-    global _MACRO_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
 
-    # 初始化默认值（静态兜底，网络失败时使用）
     usdcny_price = 6.8871; usdcny_pct = 0.0
     gold_price = 3318.40; gold_pct = 0.0
     wti_price = 68.92; wti_pct = 0.0
@@ -240,26 +236,25 @@ def _fetch_macro_data():
             "VHSI":    {"name": "恒指波幅(VHSI)",   "price": round(vhsi_price, 2),    "unit": "",     "change_pct": round(vhsi_pct, 2),  "timestamp": now_str},
         }
 
+        _cache.set(_MACRO_CACHE_KEY, results, ttl=_MACRO_TTL)
         with _MACRO_CACHE_LOCK:
-            _MACRO_CACHE = results
             _LAST_FETCH_TIME = time.time()
         logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
 
     except Exception as e:
         logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")
-        # 保持旧缓存不变，不抛异常
 
 
 def _get_macro_data() -> dict:
     """
-    返回宏观缓存（TTL 10 分钟）。
+    返回宏观缓存（TTL 1 分钟）。
     缓存空或过期时：立即返回旧缓存，同时后台触发一次异步刷新（绝不阻塞 API）。
     """
-    global _MACRO_CACHE, _LAST_FETCH_TIME
-    stale = not _MACRO_CACHE or (time.time() - _LAST_FETCH_TIME) > _MACRO_CACHE_TTL
+    global _LAST_FETCH_TIME
+    cached = _cache.get(_MACRO_CACHE_KEY)
+    stale = cached is None or (time.time() - _LAST_FETCH_TIME) > _MACRO_TTL
 
     if stale and _REFRESH_SEMAPHORE.acquire(blocking=False):
-        # 立即返回旧缓存（避免阻塞），后台刷新
         def bg():
             try:
                 _fetch_macro_data()
@@ -268,8 +263,7 @@ def _get_macro_data() -> dict:
         t = threading.Thread(target=bg, daemon=True, name="macro-refresh")
         t.start()
 
-    with _MACRO_CACHE_LOCK:
-        return dict(_MACRO_CACHE) if _MACRO_CACHE else {}
+    return cached if cached else {}
 
 
 # ── 辅助函数 ─────────────────────────────────────────────────────────────

@@ -25,18 +25,19 @@ from typing import Any
 
 import httpx
 
-# 日志器（供其他模块导入）
+from app.services.data_cache import get_cache
+
 logger = logging.getLogger(__name__)
 
-# ── Phase 7: 宏观大宗商品缓存（10 分钟 TTL）─────────────────────────────
-# 代理由 proxy_config.py 统一管理，从环境变量读取
-# 用户需在启动前设置 HTTP_PROXY/HTTPS_PROXY 环境变量
+_cache = get_cache()
+NAMESPACE = "realtime:"
+TTL = 10
 
-_MACRO_CACHE       = {}   # {symbol: {price, change_pct, name, unit, timestamp}}
-_MACRO_CACHE_TTL  = 600  # 10 分钟（Phase 7 延长 TTL）
-_MACRO_CACHE_LOCK  = threading.RLock()  # RLock 可重入
-_LAST_FETCH_TIME   = 0   # 0 = immediately refresh on first call
-_REFRESH_SEMAPHORE = threading.Semaphore(1)  # 防止并发刷新
+_MACRO_CACHE_KEY = f"{NAMESPACE}macro"
+_MACRO_TTL = 600  # 10 minutes
+_MACRO_CACHE_LOCK = threading.RLock()
+_LAST_FETCH_TIME = 0
+_REFRESH_SEMAPHORE = threading.Semaphore(1)
 
 SINA_HEADERS = {
     "Referer": "https://finance.sina.com.cn",
@@ -226,7 +227,7 @@ def _fetch_macro_data():
     - WTI原油: Sina hf_CL → USD/桶
     - VHSI: 恒指波幅指数（腾讯 qt hkVHSI）
     """
-    global _MACRO_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%H:%M")
 
     # 初始化默认值（静态兜底，网络失败时使用）
@@ -270,14 +271,13 @@ def _fetch_macro_data():
             "VHSI":    {"name": "恒指波幅(VHSI)",   "price": round(vhsi_price, 2),    "unit": "",     "change_pct": round(vhsi_pct, 2),  "timestamp": now_str},
         }
 
+        _cache.set(_MACRO_CACHE_KEY, results, ttl=_MACRO_TTL)
         with _MACRO_CACHE_LOCK:
-            _MACRO_CACHE = results
             _LAST_FETCH_TIME = time.time()
         logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
 
     except Exception as e:
         logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")
-        # 保持旧缓存不变，不抛异常
 
 
 def _get_macro_data() -> dict:
@@ -285,8 +285,9 @@ def _get_macro_data() -> dict:
     返回宏观缓存（TTL 10 分钟）。
     缓存空或过期时：立即返回旧缓存，同时后台触发一次异步刷新（绝不阻塞 API）。
     """
-    global _MACRO_CACHE, _LAST_FETCH_TIME
-    stale = not _MACRO_CACHE or (time.time() - _LAST_FETCH_TIME) > _MACRO_CACHE_TTL
+    global _LAST_FETCH_TIME
+    cached = _cache.get(_MACRO_CACHE_KEY)
+    stale = cached is None or (time.time() - _LAST_FETCH_TIME) > _MACRO_TTL
 
     if stale and _REFRESH_SEMAPHORE.acquire(blocking=False):
         # 立即返回旧缓存（避免阻塞），后台刷新
@@ -298,8 +299,7 @@ def _get_macro_data() -> dict:
         t = threading.Thread(target=bg, daemon=True, name="macro-refresh")
         t.start()
 
-    with _MACRO_CACHE_LOCK:
-        return dict(_MACRO_CACHE) if _MACRO_CACHE else {}
+    return cached if cached else {}
 
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -425,16 +425,15 @@ RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
 GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
 DERIVATIVE_SYMBOLS = ["GC", "CL"]
 
-# ── 实时行情缓存（10秒 TTL，避免频繁调 Sina）─────────────────────────
-_REALTIME_CACHE = {"wind": None, "china_all": None, "_ts": 0}
-_CACHE_TTL = 10  # 秒
+_REALTIME_CACHE_KEY = f"{NAMESPACE}wind"
 
 
 def _get_cached_wind(force=False):
     """获取风向标实时数据，10秒内复用缓存"""
-    now = time.time()
-    if not force and _REALTIME_CACHE["wind"] and (now - _REALTIME_CACHE["_ts"]) < _CACHE_TTL:
-        return _REALTIME_CACHE["wind"]
+    if not force:
+        cached = _cache.get(_REALTIME_CACHE_KEY)
+        if cached is not None:
+            return cached
     try:
         from app.services.data_fetcher import fetch_china_indices, fetch_global_indices
         # A股4大指数（实时）+ 全球指数（港美）
@@ -451,12 +450,12 @@ def _get_cached_wind(force=False):
                 "volume":     r.get("volume", 0),
                 "market":     r.get("market", ""),
             }
-        _REALTIME_CACHE["wind"] = wind_data
-        _REALTIME_CACHE["_ts"]  = now
+        _cache.set(_REALTIME_CACHE_KEY, wind_data, ttl=TTL)
         return wind_data
     except Exception as e:
         logger.warning(f"[market_overview] 实时拉取失败，回退缓存: {e}")
-        return _REALTIME_CACHE["wind"] or {}
+        cached = _cache.get(_REALTIME_CACHE_KEY)
+        return cached if cached else {}
 
 
 # ══════════════════════════════════════════════════════════════════════════

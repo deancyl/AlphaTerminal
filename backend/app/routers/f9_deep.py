@@ -19,18 +19,16 @@ from app.utils.input_validation import validate_stock_symbol, validate_paginatio
 from app.services.circuit_breaker import CircuitBreakerOpen
 from app.services.data_fetcher import akshare_breaker
 from app.config.timeout import AKSHARE_TIMEOUT
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
 
 _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="f9_")
 
-import asyncio
-
-_cache: Dict[str, Any] = {}
-_cache_ttl: Dict[str, float] = {}
-_cache_lock = asyncio.Lock()
-CACHE_DURATION = 300
+_cache = get_cache()
+NAMESPACE = "f9:"
+TTL = 300
 
 
 def normalize_f9_symbol(symbol: str) -> str:
@@ -62,25 +60,11 @@ def normalize_f9_symbol(symbol: str) -> str:
 
 
 async def get_cached(key: str) -> Optional[Any]:
-    async with _cache_lock:
-        if key not in _cache:
-            return None
-        
-        if key not in _cache_ttl:
-            return None
-        
-        if time.time() - _cache_ttl[key] > CACHE_DURATION:
-            del _cache[key]
-            del _cache_ttl[key]
-            return None
-        
-        return _cache[key]
+    return _cache.get(f"{NAMESPACE}{key}")
 
 
 async def set_cached(key: str, value: Any) -> None:
-    async with _cache_lock:
-        _cache[key] = value
-        _cache_ttl[key] = time.time()
+    _cache.set(f"{NAMESPACE}{key}", value, ttl=TTL)
 
 
 def check_akshare_circuit() -> bool:

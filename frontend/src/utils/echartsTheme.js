@@ -195,10 +195,29 @@ export function getDynamicChartColors() {
 }
 
 export function buildTooltipFormatter(params, options = {}) {
-  const { showVolume = true, showOverlay = true } = options
+  const { showVolume = true, showOverlay = true, newsEvents = [] } = options
   const colors = getDynamicThemeColors()
   
   if (!Array.isArray(params) || !params.length) return ''
+  
+  // Handle markPoint (news events) hover
+  const markPointParam = params.find(p => p.seriesType === 'candlestick' && p.componentType === 'markPoint')
+  if (markPointParam) {
+    const headline = markPointParam.value
+    const coord = markPointParam.data?.coord || []
+    const date = coord[0] || markPointParam.name || ''
+    const type = markPointParam.data?.itemStyle?.color === '#22c55e' ? '利好' : 
+                 markPointParam.data?.itemStyle?.color === '#ef4444' ? '利空' : '中性'
+    const typeColor = markPointParam.data?.itemStyle?.color === '#22c55e' ? colors.bull : 
+                      markPointParam.data?.itemStyle?.color === '#ef4444' ? colors.bear : '#fbbf24'
+    
+    let html = `<div style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px;">`
+    html += `<div style="color: ${colors.axisLabel}; font-size: 10px; margin-bottom: 6px;">📅 ${date}</div>`
+    html += `<div style="color: ${typeColor}; font-size: 12px; font-weight: 500; margin-bottom: 4px;">[${type}]</div>`
+    html += `<div style="color: ${colors.tooltipText}; font-size: 11px; line-height: 1.4;">${headline}</div>`
+    html += `</div>`
+    return html
+  }
   
   const kp = params.find(p => p.seriesType === 'candlestick')
   if (!kp || !kp.data) return ''
