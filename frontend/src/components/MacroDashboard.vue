@@ -289,6 +289,27 @@
           </div>
         </div>
       </div>
+      
+      <!-- 错误状态兜底 UI -->
+      <div 
+        v-else
+        class="flex flex-col items-center justify-center h-64 p-4"
+        role="alert"
+        aria-live="polite"
+      >
+        <div class="text-4xl mb-4">📊</div>
+        <div class="text-terminal-dim text-center">
+          <p class="text-sm font-medium mb-2">暂无数据或数据加载失败</p>
+          <p class="text-xs text-terminal-dim/70 mb-4">请检查网络连接或稍后重试</p>
+          <button 
+            class="px-4 py-2 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+            @click="refreshNow"
+            :disabled="loading"
+          >
+            {{ loading ? '加载中...' : '重新加载' }}
+          </button>
+        </div>
+      </div>
 
       <!-- 图表区域 - PC端3列，平板2列，移动端1列 -->
       <div 

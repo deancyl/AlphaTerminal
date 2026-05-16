@@ -374,10 +374,10 @@ async def get_macro_overview():
         m2_latest = m2_df.iloc[0] if len(m2_df) > 0 else None
         sf_latest = sf_df.iloc[-1] if len(sf_df) > 0 else None
         
-        ind_df_valid = ind_df[_get_pd().notna(ind_df['今值'])] if len(ind_df) > 0 else None
+        ind_df_valid = ind_df[_get_pd().notna(ind_df.get('今值', ind_df.get('今值(%)', _get_pd().Series([None]*len(ind_df)))))] if len(ind_df) > 0 and ('今值' in ind_df.columns or '今值(%)' in ind_df.columns) else None
         ind_latest = ind_df_valid.iloc[-1] if ind_df_valid is not None and len(ind_df_valid) > 0 else None
         
-        unemp_df_filtered = unemp_df[unemp_df['item'].str.strip() == '全国城镇调查失业率'] if len(unemp_df) > 0 else None
+        unemp_df_filtered = unemp_df[unemp_df.get('item', _get_pd().Series(['']*len(unemp_df))).str.strip() == '全国城镇调查失业率'] if len(unemp_df) > 0 and 'item' in unemp_df.columns else None
         unemp_latest = unemp_df_filtered.iloc[-1] if unemp_df_filtered is not None and len(unemp_df_filtered) > 0 else None
         
         overview = {
@@ -416,13 +416,13 @@ async def get_macro_overview():
                 "unit": "亿元"
             },
             "industrial_production": {
-                "period": ind_latest["日期"].strftime('%Y年%m月份') if ind_latest is not None and not _get_pd().isna(ind_latest["日期"]) else None,
-                "yoy": float(ind_latest["今值"]) if ind_latest is not None and not _get_pd().isna(ind_latest["今值"]) else None,
+                "period": ind_latest.get("日期", ind_latest.get("月份", "")).strftime('%Y年%m月份') if ind_latest is not None and hasattr(ind_latest.get("日期", ind_latest.get("月份")), 'strftime') else (str(ind_latest.get("日期", ind_latest.get("月份", ""))) if ind_latest is not None else None),
+                "yoy": float(ind_latest.get("今值", ind_latest.get("今值(%)"))) if ind_latest is not None and not _get_pd().isna(ind_latest.get("今值", ind_latest.get("今值(%)"))) else None,
                 "unit": "%"
             },
             "unemployment": {
-                "period": unemp_latest["date"] if unemp_latest is not None else None,
-                "rate": float(unemp_latest["value"]) if unemp_latest is not None and not _get_pd().isna(unemp_latest["value"]) else None,
+                "period": unemp_latest.get("date", unemp_latest.get("月份")) if unemp_latest is not None else None,
+                "rate": float(unemp_latest.get("value", unemp_latest.get("失业率"))) if unemp_latest is not None and not _get_pd().isna(unemp_latest.get("value", unemp_latest.get("失业率"))) else None,
                 "unit": "%"
             }
         }
@@ -646,14 +646,19 @@ async def get_industrial_production_data(limit: int = Query(24, ge=1, le=100)):
             loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
             timeout=MACRO_TIMEOUT
         )
-        df = df[_get_pd().notna(df['今值'])]
+        pd = _get_pd()
+        value_col = '今值' if '今值' in df.columns else ('今值(%)' if '今值(%)' in df.columns else None)
+        if value_col:
+            df = df[pd.notna(df[value_col])]
         df = df.tail(limit) if len(df) > limit else df
         
-        df_work = df[['日期', '今值', '前值']].copy()
-        df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
-        df_work['yoy'] = df_work['今值'].apply(_safe_float)
-        df_work['previous'] = df_work['前值'].apply(_safe_float)
-        data = df_work[['month', 'yoy', 'previous']].to_dict('records')
+        if value_col and '日期' in df.columns:
+            df_work = df[['日期', value_col]].copy()
+            df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
+            df_work['yoy'] = df_work[value_col].apply(_safe_float)
+            data = df_work[['month', 'yoy']].to_dict('records')
+        else:
+            data = []
         
         result = success_response({
             "indicator": "IndustrialProduction",
@@ -693,18 +698,26 @@ async def get_unemployment_data(limit: int = Query(24, ge=1, le=100)):
             loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
             timeout=MACRO_TIMEOUT
         )
-        df = df[df['item'].str.strip() == '全国城镇调查失业率']
+        pd = _get_pd()
+        if 'item' in df.columns:
+            df = df[df['item'].str.strip() == '全国城镇调查失业率']
         df = df.tail(limit) if len(df) > limit else df
         
-        data = (
-            df[['date', 'value']]
-            .assign(
-                month=lambda x: x['date'],
-                rate=lambda x: x['value'].apply(_safe_float),
+        date_col = 'date' if 'date' in df.columns else ('月份' if '月份' in df.columns else None)
+        value_col = 'value' if 'value' in df.columns else ('失业率' if '失业率' in df.columns else None)
+        
+        if date_col and value_col:
+            data = (
+                df[[date_col, value_col]]
+                .assign(
+                    month=lambda x: x[date_col],
+                    rate=lambda x: x[value_col].apply(_safe_float),
+                )
+                [['month', 'rate']]
+                .to_dict('records')
             )
-            [['month', 'rate']]
-            .to_dict('records')
-        )
+        else:
+            data = []
         
         result = success_response({
             "indicator": "Unemployment",
@@ -977,13 +990,230 @@ async def get_macro_batch(
 @router.get("/dashboard")
 async def get_macro_dashboard():
     """
-    BFF endpoint: Returns all macro data from cache.
-    Returns loading status on cache miss (non-blocking).
+    BFF endpoint: Returns all macro data aggregated.
+    Fetches all indicators in parallel and returns a single response.
     """
     cache = get_cache()
+    cache_key = "macro:dashboard:v2"
     
-    cached = cache.get("macro:dashboard")
+    cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
     
-    return error_response("宏观数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+    try:
+        loop = asyncio.get_running_loop()
+        
+        async def fetch_with_timeout(coro, name):
+            try:
+                return await asyncio.wait_for(coro, timeout=MACRO_TIMEOUT)
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Dashboard] {name} fetch timeout")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] {name} fetch error: {e}")
+                return None
+        
+        async def fetch_gdp():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                "GDP"
+            )
+        
+        async def fetch_cpi():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                "CPI"
+            )
+        
+        async def fetch_ppi():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+                "PPI"
+            )
+        
+        async def fetch_pmi():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                "PMI"
+            )
+        
+        async def fetch_m2():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money()),
+                "M2"
+            )
+        
+        async def fetch_sf():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+                "SocialFinancing"
+            )
+        
+        async def fetch_ind():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
+                "IndustrialProduction"
+            )
+        
+        async def fetch_unemp():
+            return await fetch_with_timeout(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
+                "Unemployment"
+            )
+        
+        gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = await asyncio.gather(
+            fetch_gdp(), fetch_cpi(), fetch_ppi(), fetch_pmi(), fetch_m2(), fetch_sf(), fetch_ind(), fetch_unemp()
+        )
+        
+        pd = _get_pd()
+        result = {}
+        
+        if gdp_df is not None and len(gdp_df) > 0:
+            df_work = gdp_df[['季度', '国内生产总值-同比增长']].head(20).copy()
+            df_work['quarter'] = df_work['季度']
+            df_work['gdp_yoy'] = df_work['国内生产总值-同比增长'].apply(_safe_float)
+            result['gdp'] = {'data': df_work[['quarter', 'gdp_yoy']].to_dict('records')}
+        
+        if cpi_df is not None and len(cpi_df) > 0:
+            df_work = cpi_df[['月份', '全国-同比增长', '全国-环比增长']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['nation_yoy'] = df_work['全国-同比增长'].apply(_safe_float)
+            df_work['nation_mom'] = df_work['全国-环比增长'].apply(_safe_float)
+            result['cpi'] = {'data': df_work[['month', 'nation_yoy', 'nation_mom']].to_dict('records')}
+        
+        if ppi_df is not None and len(ppi_df) > 0:
+            df_work = ppi_df[['月份', '当月同比增长']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['当月同比增长'].apply(_safe_float)
+            result['ppi'] = {'data': df_work[['month', 'yoy']].to_dict('records')}
+        
+        if pmi_df is not None and len(pmi_df) > 0:
+            df_work = pmi_df[['月份', '制造业-指数', '非制造业-指数']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['manufacturing_index'] = df_work['制造业-指数'].apply(_safe_float)
+            df_work['non_manufacturing_index'] = df_work['非制造业-指数'].apply(_safe_float)
+            result['pmi'] = {'data': df_work[['month', 'manufacturing_index', 'non_manufacturing_index']].to_dict('records')}
+        
+        if m2_df is not None and len(m2_df) > 0:
+            df_work = m2_df[['统计时间', '货币和准货币（广义货币M2）同比增长']].head(24).copy()
+            df_work['month'] = df_work['统计时间']
+            df_work['m2_yoy'] = df_work['货币和准货币（广义货币M2）同比增长'].apply(_safe_float)
+            result['m2'] = {'data': df_work[['month', 'm2_yoy']].to_dict('records')}
+        
+        if sf_df is not None and len(sf_df) > 0:
+            df_work = sf_df[['月份', '社会融资规模增量']].tail(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['total'] = df_work['社会融资规模增量'].apply(_safe_float)
+            result['social_financing'] = {'data': df_work[['month', 'total']].to_dict('records')}
+        
+        if ind_df is not None and len(ind_df) > 0:
+            value_col = '今值' if '今值' in ind_df.columns else ('今值(%)' if '今值(%)' in ind_df.columns else None)
+            if value_col and '日期' in ind_df.columns:
+                df_work = ind_df[['日期', value_col]].copy()
+                df_work = df_work[pd.notna(df_work[value_col])].tail(24)
+                df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
+                df_work['yoy'] = df_work[value_col].apply(_safe_float)
+                result['industrial_production'] = {'data': df_work[['month', 'yoy']].to_dict('records')}
+        
+        if unemp_df is not None and len(unemp_df) > 0:
+            if 'item' in unemp_df.columns:
+                unemp_df = unemp_df[unemp_df['item'].str.strip() == '全国城镇调查失业率']
+            date_col = 'date' if 'date' in unemp_df.columns else ('月份' if '月份' in unemp_df.columns else None)
+            value_col = 'value' if 'value' in unemp_df.columns else ('失业率' if '失业率' in unemp_df.columns else None)
+            if date_col and value_col:
+                df_work = unemp_df[[date_col, value_col]].tail(24).copy()
+                df_work['month'] = df_work[date_col]
+                df_work['rate'] = df_work[value_col].apply(_safe_float)
+                result['unemployment'] = {'data': df_work[['month', 'rate']].to_dict('records')}
+        
+        gdp_latest = gdp_df.iloc[0] if gdp_df is not None and len(gdp_df) > 0 else None
+        cpi_latest = cpi_df.iloc[0] if cpi_df is not None and len(cpi_df) > 0 else None
+        ppi_latest = ppi_df.iloc[0] if ppi_df is not None and len(ppi_df) > 0 else None
+        pmi_latest = pmi_df.iloc[0] if pmi_df is not None and len(pmi_df) > 0 else None
+        m2_latest = m2_df.iloc[0] if m2_df is not None and len(m2_df) > 0 else None
+        sf_latest = sf_df.iloc[-1] if sf_df is not None and len(sf_df) > 0 else None
+        
+        ind_df_valid = ind_df[pd.notna(ind_df.get('今值', ind_df.get('今值(%)', pd.Series([None]*len(ind_df)))))] if ind_df is not None and len(ind_df) > 0 and ('今值' in ind_df.columns or '今值(%)' in ind_df.columns) else None
+        ind_latest = ind_df_valid.iloc[-1] if ind_df_valid is not None and len(ind_df_valid) > 0 else None
+        
+        unemp_df_filtered = unemp_df[unemp_df.get('item', pd.Series(['']*len(unemp_df))).str.strip() == '全国城镇调查失业率'] if unemp_df is not None and len(unemp_df) > 0 and 'item' in unemp_df.columns else None
+        unemp_latest = unemp_df_filtered.iloc[-1] if unemp_df_filtered is not None and len(unemp_df_filtered) > 0 else None
+        
+        result['overview'] = {
+            "gdp": {
+                "period": gdp_latest["季度"] if gdp_latest is not None else None,
+                "value": float(gdp_latest["国内生产总值-绝对值"]) if gdp_latest is not None and not pd.isna(gdp_latest.get("国内生产总值-绝对值")) else None,
+                "yoy": float(gdp_latest["国内生产总值-同比增长"]) if gdp_latest is not None and not pd.isna(gdp_latest.get("国内生产总值-同比增长")) else None,
+            },
+            "cpi": {
+                "period": cpi_latest["月份"] if cpi_latest is not None else None,
+                "value": float(cpi_latest["全国-当月"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-当月")) else None,
+                "yoy": float(cpi_latest["全国-同比增长"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-同比增长")) else None,
+                "mom": float(cpi_latest["全国-环比增长"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-环比增长")) else None,
+            },
+            "ppi": {
+                "period": ppi_latest["月份"] if ppi_latest is not None else None,
+                "value": float(ppi_latest["当月"]) if ppi_latest is not None and not pd.isna(ppi_latest.get("当月")) else None,
+                "yoy": float(ppi_latest["当月同比增长"]) if ppi_latest is not None and not pd.isna(ppi_latest.get("当月同比增长")) else None,
+            },
+            "pmi": {
+                "period": pmi_latest["月份"] if pmi_latest is not None else None,
+                "manufacturing": float(pmi_latest["制造业-指数"]) if pmi_latest is not None and not pd.isna(pmi_latest.get("制造业-指数")) else None,
+                "non_manufacturing": float(pmi_latest["非制造业-指数"]) if pmi_latest is not None and not pd.isna(pmi_latest.get("非制造业-指数")) else None,
+            },
+            "m2": {
+                "period": m2_latest["统计时间"] if m2_latest is not None else None,
+                "value": float(m2_latest["货币和准货币（广义货币M2）"]) if m2_latest is not None and not pd.isna(m2_latest.get("货币和准货币（广义货币M2）")) else None,
+                "yoy": float(m2_latest["货币和准货币（广义货币M2）同比增长"]) if m2_latest is not None and not pd.isna(m2_latest.get("货币和准货币（广义货币M2）同比增长")) else None,
+            },
+            "social_financing": {
+                "period": sf_latest["月份"] if sf_latest is not None else None,
+                "total": float(sf_latest["社会融资规模增量"]) if sf_latest is not None and not pd.isna(sf_latest.get("社会融资规模增量")) else None,
+            },
+            "industrial_production": {
+                "period": ind_latest.get("日期", ind_latest.get("月份", "")).strftime('%Y年%m月份') if ind_latest is not None and hasattr(ind_latest.get("日期", ind_latest.get("月份")), 'strftime') else (str(ind_latest.get("日期", ind_latest.get("月份", ""))) if ind_latest is not None else None),
+                "yoy": float(ind_latest.get("今值", ind_latest.get("今值(%)"))) if ind_latest is not None and not pd.isna(ind_latest.get("今值", ind_latest.get("今值(%)"))) else None,
+            },
+            "unemployment": {
+                "period": unemp_latest.get("date", unemp_latest.get("月份")) if unemp_latest is not None else None,
+                "rate": float(unemp_latest.get("value", unemp_latest.get("失业率"))) if unemp_latest is not None and not pd.isna(unemp_latest.get("value", unemp_latest.get("失业率"))) else None,
+            }
+        }
+        
+        result['calendar'] = []
+        if gdp_latest is not None:
+            result['calendar'].append({
+                "date": gdp_latest.get("季度", ""),
+                "indicator": "GDP",
+                "name": "国内生产总值",
+                "status": "released",
+                "value": _safe_float(gdp_latest.get("国内生产总值-同比增长")),
+                "unit": "%"
+            })
+        if cpi_latest is not None:
+            result['calendar'].append({
+                "date": cpi_latest.get("月份", ""),
+                "indicator": "CPI",
+                "name": "居民消费价格指数",
+                "status": "released",
+                "value": _safe_float(cpi_latest.get("全国-同比增长")),
+                "unit": "%"
+            })
+        if pmi_latest is not None:
+            result['calendar'].append({
+                "date": pmi_latest.get("月份", ""),
+                "indicator": "PMI",
+                "name": "采购经理指数",
+                "status": "released",
+                "value": _safe_float(pmi_latest.get("制造业-指数")),
+                "unit": ""
+            })
+        
+        result['last_update'] = datetime.now().isoformat()
+        
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
+        
+        return success_response(result)
+    except Exception as e:
+        logger.error(f"[Macro Dashboard] Fetch error: {e}")
+        return error_response("宏观数据获取失败，请稍后重试")
