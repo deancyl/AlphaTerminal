@@ -17,8 +17,7 @@ from contextlib import asynccontextmanager
 logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex
-from app.routers.macro import start_cache_cleanup, stop_cache_cleanup
-from app.services.scheduler import start_scheduler, stop_scheduler
+from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
@@ -31,11 +30,14 @@ from app.services.executor_manager import executor_manager, ExecutorStatus
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭时执行"""
-    # 启动时
-    start_writer()         # DB 异步写入线程
+    start_writer()
+    init_watchdog()
+    
+    logger.info("[Lifespan] Starting blocking data pre-warming...")
+    await run_initial_data_fetch()
+    logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
+    
     start_scheduler()
-    init_watchdog()        # 进程保活监控（从配置加载开关状态）
-    start_cache_cleanup()  # Macro 缓存周期性清理
     
     # 注册核心服务到 ExecutorManager
     executor_manager.register("scheduler", type('SchedulerProxy', (), {
@@ -48,10 +50,6 @@ async def lifespan(app: FastAPI):
     
     executor_manager.register("watchdog", type('WatchdogProxy', (), {
         'shutdown': lambda: stop_watchdog()
-    })(), shutdown_method="shutdown")
-    
-    executor_manager.register("macro_cache_cleanup", type('MacroCacheProxy', (), {
-        'shutdown': lambda: stop_cache_cleanup()
     })(), shutdown_method="shutdown")
 
     yield

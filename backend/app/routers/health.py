@@ -70,3 +70,17 @@ async def health_detailed():
         "memory": _get_memory_status(),
         "backend_version": "0.6.39"
     })
+
+
+@router.get("/cache")
+async def health_cache():
+    """Cache health check with DataCache statistics"""
+    from app.services.data_cache import get_cache
+    cache = get_cache()
+    stats = cache.get_stats()
+    return success_response({
+        "cache": stats,
+        "forex_keys": ["forex:spot_quotes", "forex:matrix"],
+        "macro_keys": ["macro:dashboard"],
+        "status": "ok" if stats["entry_count"] > 0 else "empty"
+    })

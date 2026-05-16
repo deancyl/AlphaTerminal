@@ -29,6 +29,7 @@ from concurrent.futures import ThreadPoolExecutor
 from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import AKSHARE_TIMEOUT
 from app.services.fetchers.forex_fetcher import ForexFetcher, clean_value, forex_fetcher, get_circuit_breaker_status
+from app.services.data_cache import get_cache
 from app.routers.forex_schemas import (
     ForexSpotQuote,
     ForexSpotQuoteList,
@@ -63,29 +64,6 @@ def _get_ak():
         import akshare as ak
         _akshare_module = ak
     return _akshare_module
-
-_cache = {}
-_cache_ttl = {}
-_cache_lock = asyncio.Lock()
-CACHE_DURATION = 3600
-
-async def _get_cache(key):
-    async with _cache_lock:
-        if key in _cache and key in _cache_ttl:
-            if datetime.now() < _cache_ttl[key]:
-                return _cache[key]
-    return None
-
-async def _set_cache(key, value):
-    async with _cache_lock:
-        MAX_CACHE_SIZE = 50
-        if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
-            oldest_key = min(_cache_ttl.keys(), key=lambda k: _cache_ttl.get(k, datetime.max))
-            _cache.pop(oldest_key, None)
-            _cache_ttl.pop(oldest_key, None)
-        
-        _cache[key] = value
-        _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
 
 CURRENCY_PAIRS = {
     "USD/CNY": {"name": "美元/人民币", "ak_code": "美元"},
@@ -130,12 +108,27 @@ async def get_spot_quotes():
     1. AKShare forex_spot_em() - 东方财富实时报价 (190+ 货币对)
     2. CFETS fx_spot_quote() - 银行间人民币报价 (fallback)
     
-    缓存: 5分钟
+    缓存: 2分钟 (使用全局 DataCache)
     超时: 30秒
     
     Returns:
         List[ForexSpotQuote]: 所有货币对的实时报价
     """
+    cache = get_cache()
+    
+    # Try to get from cache first
+    cached = cache.get("forex:spot_quotes")
+    if cached:
+        return success_response(cached)
+    
+    # Cache miss - trigger background fetch and return error
+    asyncio.create_task(_fetch_forex_spot_background())
+    
+    return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+
+
+async def _fetch_forex_spot_background():
+    """Background fetch for forex spot quotes"""
     try:
         quotes = await forex_fetcher.get_spot_quotes()
         source = "akshare"
@@ -194,18 +187,23 @@ async def get_spot_quotes():
             
             source = "cfets"
         
-        return success_response({
+        # Cache the result
+        cache = get_cache()
+        cache.set("forex:spot_quotes", {
             "quotes": quotes,
             "total": len(quotes),
             "source": source,
             "data_source": "live" if source == "akshare" else "fallback",
+            "status": "ready",
+            "last_update_time": datetime.now().isoformat(),
             "update_time": datetime.now().isoformat(),
             "circuit_breaker": get_circuit_breaker_status()
-        })
+        }, ttl=120)  # 2 minutes
+        
+        logger.info(f"[Forex] Background fetch completed: {len(quotes)} quotes")
         
     except Exception as e:
-        logger.error(f"[Forex] 获取实时报价失败: {e}")
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取实时报价失败: {str(e)}")
+        logger.error(f"[Forex] Background fetch failed: {e}")
 
 
 @router.post("/circuit_breaker/reset")
@@ -312,15 +310,15 @@ async def get_official_rates(
 @router.get("/history/{symbol}")
 async def get_forex_history_new(
     symbol: str,
-    start_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="开始日期 YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$", description="结束日期 YYYY-MM-DD"),
+    start_date: Optional[str] = Query(None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="开始日期 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="结束日期 YYYY-MM-DD"),
     limit: int = Query(100, ge=1, le=1000, description="返回条数限制")
 ):
     """
     获取历史K线数据
     
     数据源: AKShare forex_hist_em()
-    缓存: 30分钟
+    缓存: 5分钟 (使用全局 DataCache)
     
     Args:
         symbol: 货币对代码，如 USDCNH, EURUSD, USDCNY (自动转换为USDCNH)
@@ -331,22 +329,40 @@ async def get_forex_history_new(
     Returns:
         ForexHistoryResponse: K线数据列表
     """
+    cache = get_cache()
+    cache_key = f"forex:history:{symbol}:{start_date}:{end_date}:{limit}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        return success_response(cached)
+    
+    asyncio.create_task(_fetch_forex_history_background(symbol, start_date, end_date, limit))
+    
+    return error_response("外汇历史数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+
+
+async def _fetch_forex_history_background(symbol: str, start_date: Optional[str], end_date: Optional[str], limit: int):
+    """Background fetch for forex history"""
     try:
         ak_symbol = symbol.upper().replace("CNY", "CNH")
         
         history = await forex_fetcher.get_history(ak_symbol, start_date, end_date, limit)
         
         if history:
-            return success_response({
+            cache = get_cache()
+            cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
                 "symbol": symbol,
                 "name": symbol,
                 "period": "daily",
                 "data": history,
                 "total": len(history),
-                "source": "akshare"
-            })
+                "source": "akshare",
+                "status": "ready",
+                "last_update_time": datetime.now().isoformat()
+            }, ttl=300)
+            logger.info(f"[Forex] History background fetch completed: {symbol}, {len(history)} bars")
+            return
         
-        # Fallback: generate mock historical data based on current rate
         logger.info(f"[Forex] forex_hist_em 返回空数据，使用模拟数据 fallback: {symbol}")
         
         cfets_quotes = await forex_fetcher.get_cfets_spot()
@@ -361,9 +377,6 @@ async def get_forex_history_new(
         
         if base_rate is None:
             base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
-        
-        import random
-        from datetime import timedelta
         
         mock_history = []
         current_rate = base_rate
@@ -397,18 +410,22 @@ async def get_forex_history_new(
             
             current_rate = close_rate
         
-        return success_response({
+        cache = get_cache()
+        cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {
             "symbol": symbol,
             "name": symbol,
             "period": "daily",
             "data": mock_history,
             "total": len(mock_history),
-            "source": "mock"
-        })
+            "source": "mock",
+            "status": "ready",
+            "last_update_time": datetime.now().isoformat()
+        }, ttl=300)
+        
+        logger.info(f"[Forex] History background fetch completed (mock): {symbol}, {len(mock_history)} bars")
         
     except Exception as e:
-        logger.error(f"[Forex] 获取历史K线失败: {symbol} - {e}")
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取历史K线失败: {str(e)}")
+        logger.error(f"[Forex] History background fetch failed: {symbol} - {e}")
 
 
 @router.get("/matrix")
@@ -434,11 +451,25 @@ async def get_cross_rate_matrix(
     Returns:
         CrossRateMatrix: N×N 交叉汇率矩阵
     """
+    cache = get_cache()
+    cache_key = f"forex:matrix:{currencies}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        return success_response(cached)
+    
+    asyncio.create_task(_fetch_forex_matrix_background(currencies))
+    
+    return error_response("交叉汇率矩阵暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+
+
+async def _fetch_forex_matrix_background(currencies: str):
+    """Background fetch for cross-rate matrix"""
     try:
         currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
         
         if len(currency_list) < 2:
-            return error_response(ErrorCode.BAD_REQUEST, "至少需要2种货币")
+            return
         
         spot_quotes = await forex_fetcher.get_spot_quotes()
         cfets_rmb = await forex_fetcher.get_cfets_spot()
@@ -501,16 +532,19 @@ async def get_cross_rate_matrix(
                 rates=row_rates
             ))
         
-        return success_response({
+        cache = get_cache()
+        cache.set(f"forex:matrix:{currencies}", {
             "currencies": currency_list,
             "matrix": [row.model_dump() for row in matrix],
             "last_update": datetime.now().isoformat(),
-            "source": "akshare"
-        })
+            "source": "akshare",
+            "status": "ready"
+        }, ttl=120)
+        
+        logger.info(f"[Forex] Matrix background fetch completed: {len(currency_list)} currencies")
         
     except Exception as e:
-        logger.error(f"[Forex] 获取交叉汇率矩阵失败: {e}")
-        return error_response(ErrorCode.INTERNAL_ERROR, f"获取交叉汇率矩阵失败: {str(e)}")
+        logger.error(f"[Forex] Matrix background fetch failed: {e}")
 
 
 @router.post("/cross-rate")
@@ -618,8 +652,10 @@ async def get_forex_quotes():
     
     数据来源: 中国银行外汇牌价 (AkShare currency_boc_safe)
     """
-    cache_key = "forex_quotes"
-    cached = await _get_cache(cache_key)
+    cache = get_cache()
+    cache_key = "forex:quotes_legacy"
+    
+    cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
     
@@ -633,7 +669,8 @@ async def get_forex_quotes():
                     timeout=30
                 )
                 if df is not None:
-                    await _set_cache(cache_key, {"quotes": df, "total": len(df), "is_fallback": False})
+                    cache = get_cache()
+                    cache.set(cache_key, {"quotes": df, "total": len(df), "is_fallback": False}, ttl=3600)
                     logger.info(f"[Forex] 后台获取成功，{len(df)} 条数据")
         except Exception as e:
             logger.warning(f"[Forex] 后台获取失败: {e}")
@@ -721,8 +758,10 @@ async def get_forex_history(
         elif pair.startswith("CNY"):
             pair = "CNY/" + pair[3:]
     
-    cache_key = f"forex_history_{pair}_{days}"
-    cached = await _get_cache(cache_key)
+    cache = get_cache()
+    cache_key = f"forex:history_legacy:{pair}:{days}"
+    
+    cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
     
@@ -749,7 +788,7 @@ async def get_forex_history(
             "base_rate": base_rate,
             "note": "历史数据为模拟生成，包含逼真的趋势和波动模式。实际项目应接入真实数据源。"
         }
-        await _set_cache(cache_key, result)
+        cache.set(cache_key, result, ttl=3600)
         return success_response(result)
         
     except Exception as e:
@@ -760,10 +799,14 @@ async def get_forex_history(
 @router.get("/health")
 async def health_check():
     """健康检查"""
+    cache = get_cache()
+    stats = cache.get_stats()
     return success_response({
         "status": "ok",
         "service": "forex",
-        "cache_size": len(_cache),
+        "cache_size": stats["entry_count"],
+        "cache_hit_rate": stats["hit_rate"],
+        "cache_memory_mb": stats["memory_usage_mb"],
         "supported_pairs": list(CURRENCY_PAIRS.keys()),
         "supported_currencies": SUPPORTED_CURRENCIES,
         "circuit_breaker": {
@@ -816,7 +859,8 @@ async def convert_currency(
     result = round(amount * rate, 2)
     
     rate_source = "cached_real"
-    cached_quotes = await _get_cache("forex_quotes")
+    cache = get_cache()
+    cached_quotes = cache.get("forex:quotes_legacy")
     if cached_quotes and cached_quotes.get("is_fallback", True):
         rate_source = "fallback"
     
@@ -915,17 +959,12 @@ def _get_current_rate(currency: str) -> Optional[float]:
     
     pair = f"{currency}/CNY"
     
-    # 注意：这是同步函数，直接访问缓存字典
-    # 在多线程环境下可能存在竞态条件，但仅在内部计算中使用
-    # 主要的缓存访问应使用 async _get_cache
-    cache_key = "forex_quotes"
-    if cache_key in _cache and cache_key in _cache_ttl:
-        if datetime.now() < _cache_ttl[cache_key]:
-            cached = _cache[cache_key]
-            if cached and not cached.get("is_fallback", True):
-                for q in cached.get("quotes", []):
-                    if q.get("symbol") == pair:
-                        return q.get("middle_rate") or q.get("buy_rate")
+    cache = get_cache()
+    cached = cache.get("forex:quotes_legacy")
+    if cached and not cached.get("is_fallback", True):
+        for q in cached.get("quotes", []):
+            if q.get("symbol") == pair:
+                return q.get("middle_rate") or q.get("buy_rate")
     
     return DEFAULT_RATES.get(pair)
 

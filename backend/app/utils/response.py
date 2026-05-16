@@ -34,6 +34,7 @@ class ErrorCode:
     THIRD_PARTY_ERROR = 302
     TIMEOUT_ERROR = 310
     CALCULATION_ERROR = 320
+    SERVICE_UNAVAILABLE = 503
 
 
 def generate_trace_id() -> str:

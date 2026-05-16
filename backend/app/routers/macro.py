@@ -69,81 +69,8 @@ def _safe_strftime(val, fmt='%Y年%m月份'):
     except (AttributeError, TypeError):
         return str(val) if val else None
 
-# ── 线程安全内存缓存（带过期清理）────────────────────────────────────────
-import asyncio
-
-_cache = {}
-_cache_ttl = {}
-_cache_lock = asyncio.Lock()
-CACHE_DURATION = MACRO_CACHE_DURATION  # 5分钟缓存
-MAX_CACHE_SIZE = MACRO_MAX_CACHE_SIZE   # 最大缓存条目数
-
-# ── 后台清理任务 ────────────────────────────────────────────────────────
-_cleanup_task = None
-
-async def _periodic_cache_cleanup():
-    """后台周期性缓存清理任务"""
-    while True:
-        try:
-            await asyncio.sleep(MACRO_CLEANUP_INTERVAL)
-            async with _cache_lock:
-                await _cleanup_expired()
-                logger.debug(f"[Cache] Periodic cleanup complete. Cache size: {len(_cache)}")
-        except asyncio.CancelledError:
-            logger.info("[Cache] Cleanup task cancelled")
-            break
-        except Exception as e:
-            logger.error(f"[Cache] Cleanup error: {e}")
-
-def start_cache_cleanup():
-    """启动周期性清理任务"""
-    global _cleanup_task
-    if _cleanup_task is None:
-        _cleanup_task = asyncio.create_task(_periodic_cache_cleanup())
-        logger.info(f"[Cache] Started periodic cleanup (interval: {MACRO_CLEANUP_INTERVAL}s)")
-
-def stop_cache_cleanup():
-    """停止周期性清理任务"""
-    global _cleanup_task
-    if _cleanup_task:
-        _cleanup_task.cancel()
-        _cleanup_task = None
-        logger.info("[Cache] Cleanup task stopped")
-
-async def _cleanup_expired():
-    """清理过期缓存（需在锁内调用）"""
-    now = datetime.now()
-    expired = [k for k, v in _cache_ttl.items() if now >= v]
-    for k in expired:
-        _cache.pop(k, None)
-        _cache_ttl.pop(k, None)
-    if expired:
-        logger.info(f"[Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
-
-async def get_cached(key, allow_stale=False):
-    async with _cache_lock:
-        await _cleanup_expired()
-        if key in _cache and key in _cache_ttl:
-            if allow_stale:
-                return _cache[key]
-            if datetime.now() < _cache_ttl[key]:
-                logger.info(f"[Cache HIT] {key}")
-                return _cache[key]
-    logger.info(f"[Cache MISS] {key}")
-    return None
-
-async def set_cached(key, value):
-    async with _cache_lock:
-        await _cleanup_expired()
-        if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
-            oldest_key = min(_cache_ttl, key=_cache_ttl.get)
-            _cache.pop(oldest_key, None)
-            _cache_ttl.pop(oldest_key, None)
-            logger.info(f"[Cache EVICT] 移除最旧缓存: {oldest_key}")
-        
-        _cache[key] = value
-        _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
-        logger.info(f"[Cache SET] {key}, expires at {_cache_ttl[key]}")
+# ── 全局缓存导入 ─────────────────────────────────────────────────────
+from app.services.data_cache import get_cache
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
@@ -155,8 +82,9 @@ async def get_gdp_data(
     
     - **limit**: 返回最近N个季度（默认20，即5年）
     """
-    cache_key = f"macro_gdp_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:gdp:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -191,13 +119,10 @@ async def get_gdp_data(
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("GDP数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] GDP fetch error: {e}")
@@ -211,8 +136,9 @@ async def get_cpi_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_cpi_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:cpi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -246,13 +172,10 @@ async def get_cpi_data(limit: int = Query(24, ge=1, le=100)):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("CPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] CPI fetch error: {e}")
@@ -266,8 +189,9 @@ async def get_ppi_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_ppi_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:ppi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -299,13 +223,10 @@ async def get_ppi_data(limit: int = Query(24, ge=1, le=100)):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("PPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PPI fetch error: {e}")
@@ -319,8 +240,9 @@ async def get_pmi_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_pmi_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:pmi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -353,13 +275,10 @@ async def get_pmi_data(limit: int = Query(24, ge=1, le=100)):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("PMI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PMI fetch error: {e}")
@@ -372,11 +291,12 @@ async def get_macro_overview():
     获取宏观经济综合概览（最新一期各指标）
     优化：使用线程池并行获取8个指标，将串行耗时降至并行耗时
     """
-    cached = await get_cached("macro_overview")
+    cache = get_cache()
+    cached = cache.get("macro:overview")
     if cached:
         return cached
     
-    FETCH_TIMEOUT = MACRO_FETCH_TIMEOUT  # 30秒超时
+    FETCH_TIMEOUT = MACRO_FETCH_TIMEOUT
     
     try:
         loop = asyncio.get_event_loop()
@@ -492,7 +412,7 @@ async def get_macro_overview():
             "social_financing": {
                 "period": sf_latest["月份"] if sf_latest is not None else None,
                 "total": float(sf_latest["社会融资规模增量"]) if sf_latest is not None and not _get_pd().isna(sf_latest["社会融资规模增量"]) else None,
-                "yoy": None,  # akshare数据中没有同比增长
+                "yoy": None,
                 "unit": "亿元"
             },
             "industrial_production": {
@@ -512,25 +432,10 @@ async def get_macro_overview():
             "last_update": datetime.now().isoformat()
         })
         
-        # 缓存结果
-        await set_cached("macro_overview", result)
+        cache.set("macro:overview", result, ttl=MACRO_CACHE_DURATION)
         return result
     except Exception as e:
         logger.error(f"[Macro] Overview fetch error: {e}")
-        
-        # Try to return stale cached data as fallback
-        stale_cached = await get_cached("macro_overview", allow_stale=True)
-        if stale_cached:
-            logger.info("[Macro] Returning stale overview data due to fetch error")
-            return {
-                **stale_cached,
-                "data": {
-                    **stale_cached["data"],
-                    "stale": True,
-                    "stale_reason": "fetch_error"
-                }
-            }
-        
         return error_response("宏观概览获取失败，请稍后重试")
 
 # ── 经济日历 ────────────────────────────────────────────────────────
@@ -539,8 +444,9 @@ async def get_economic_calendar():
     """
     获取中国宏观经济数据发布日历（近期重要数据预告）
     """
-    cache_key = "macro_calendar"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = "macro:calendar"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -609,13 +515,10 @@ async def get_economic_calendar():
             "calendar": calendar_items,
             "last_update": datetime.now().isoformat()
         })
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("经济日历获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Calendar fetch error: {e}")
@@ -629,8 +532,9 @@ async def get_m2_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_m2_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:m2:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -662,13 +566,10 @@ async def get_m2_data(limit: int = Query(24, ge=1, le=100)):
             "last_update": datetime.now().isoformat()
         })
         
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("M2数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] M2 fetch error: {e}")
@@ -682,8 +583,9 @@ async def get_social_financing_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_social_financing_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:social_financing:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -715,13 +617,10 @@ async def get_social_financing_data(limit: int = Query(24, ge=1, le=100)):
             "last_update": datetime.now().isoformat()
         })
         
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("社融数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Social financing fetch error: {e}")
@@ -735,8 +634,9 @@ async def get_industrial_production_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_industrial_production_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:industrial_production:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -764,13 +664,10 @@ async def get_industrial_production_data(limit: int = Query(24, ge=1, le=100)):
             "last_update": datetime.now().isoformat()
         })
         
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("工业增加值数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Industrial production fetch error: {e}")
@@ -784,8 +681,9 @@ async def get_unemployment_data(limit: int = Query(24, ge=1, le=100)):
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_unemployment_{limit}"
-    cached = await get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:unemployment:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
@@ -817,13 +715,10 @@ async def get_unemployment_data(limit: int = Query(24, ge=1, le=100)):
             "last_update": datetime.now().isoformat()
         })
         
-        await set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
         logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
         return error_response("失业率数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Unemployment fetch error: {e}")
@@ -843,20 +738,15 @@ async def get_macro_batch(
     - **indicators**: 逗号分隔的指标代码（gdp,cpi,ppi,pmi,m2,social_financing,industrial_production,unemployment）
     - **limit**: 每个指标返回最近N期数据
     """
-    # Normalize indicators for cache key (sorted to ensure consistent keys)
+    cache = get_cache()
     indicator_list = sorted([i.strip().lower() for i in indicators.split(",")])
-    cache_key = f"macro_batch_{','.join(indicator_list)}_{limit}"
+    cache_key = f"macro:batch:{','.join(indicator_list)}:{limit}"
     
-    # Check cache
-    cached = await get_cached(cache_key)
+    cached = cache.get(cache_key)
     if cached:
-        logger.info(f"[Cache HIT] {cache_key}")
         return cached
     
-    logger.info(f"[Cache MISS] {cache_key}")
-    
     try:
-        # Validate indicators
         invalid = set(indicator_list) - VALID_INDICATORS
         if invalid:
             return error_response(
@@ -867,7 +757,6 @@ async def get_macro_batch(
         result = {}
         loop = asyncio.get_running_loop()
         
-        # Define async fetch functions with timeout protection
         async def fetch_gdp():
             try:
                 df = await asyncio.wait_for(
@@ -1044,7 +933,6 @@ async def get_macro_batch(
                 logger.error(f"[Macro Batch] Unemployment fetch error: {e}")
                 return None
         
-        # Execute all requested indicators in parallel
         tasks = []
         indicator_map = {
             "gdp": fetch_gdp,
@@ -1061,15 +949,12 @@ async def get_macro_batch(
             if indicator in indicator_map:
                 tasks.append((indicator, indicator_map[indicator]()))
         
-        # Run all fetches concurrently
         results = await asyncio.gather(*[task[1] for task in tasks])
         
-        # Build result dict (only include successful fetches)
         for i, (indicator, _) in enumerate(tasks):
             if results[i] is not None:
                 result[indicator] = results[i]
         
-        # Log if some indicators failed
         failed = [tasks[i][0] for i in range(len(tasks)) if results[i] is None]
         if failed:
             logger.warning(f"[Macro Batch] Failed to fetch: {', '.join(failed)}")
@@ -1092,220 +977,13 @@ async def get_macro_batch(
 @router.get("/dashboard")
 async def get_macro_dashboard():
     """
-    BFF endpoint: Returns all macro data needed for the dashboard in a single request.
-    Reduces 10 separate API calls to 1, avoiding browser connection limits.
+    BFF endpoint: Returns all macro data from cache.
+    Returns loading status on cache miss (non-blocking).
     """
-    cache_key = "macro_dashboard"
-    cached = await get_cached(cache_key)
-    if cached:
-        return cached
+    cache = get_cache()
     
-    try:
-        loop = asyncio.get_running_loop()
-        
-        async def fetch_overview():
-            try:
-                ak = _get_ak()
-                pd = _get_pd()
-                
-                gdp_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_gdp),
-                    timeout=MACRO_TIMEOUT
-                )
-                latest_gdp = gdp_df.iloc[0] if len(gdp_df) > 0 else None
-                
-                cpi_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_cpi),
-                    timeout=MACRO_TIMEOUT
-                )
-                latest_cpi = cpi_df.iloc[0] if len(cpi_df) > 0 else None
-                
-                ppi_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_ppi),
-                    timeout=MACRO_TIMEOUT
-                )
-                latest_ppi = ppi_df.iloc[0] if len(ppi_df) > 0 else None
-                
-                pmi_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_pmi_yearly),
-                    timeout=MACRO_TIMEOUT
-                )
-                latest_pmi = pmi_df.iloc[0] if len(pmi_df) > 0 else None
-                
-                m2_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_m2_yearly),
-                    timeout=MACRO_TIMEOUT
-                )
-                latest_m2 = m2_df.iloc[0] if len(m2_df) > 0 else None
-                
-                overview = {
-                    "gdp": {
-                        "quarter": _safe_strftime(latest_gdp['季度']) if latest_gdp is not None else None,
-                        "value": _safe_float(latest_gdp['国内生产总值-绝对值']) if latest_gdp is not None else None,
-                        "yoy": _safe_float(latest_gdp['国内生产总值-同比增长']) if latest_gdp is not None else None,
-                    },
-                    "cpi": {
-                        "month": _safe_strftime(latest_cpi['月份'], '%Y年%m月') if latest_cpi is not None else None,
-                        "yoy": _safe_float(latest_cpi['全国-同比增长']) if latest_cpi is not None else None,
-                        "mom": _safe_float(latest_cpi['全国-环比增长']) if latest_cpi is not None else None,
-                    },
-                    "ppi": {
-                        "month": _safe_strftime(latest_ppi['月份'], '%Y年%m月') if latest_ppi is not None else None,
-                        "yoy": _safe_float(latest_ppi['当月同比增长']) if latest_ppi is not None else None,
-                    },
-                    "pmi": {
-                        "month": _safe_strftime(latest_pmi['月份'], '%Y年%m月') if latest_pmi is not None else None,
-                        "value": _safe_float(latest_pmi['制造业-指数']) if latest_pmi is not None else None,
-                    },
-                    "m2": {
-                        "month": _safe_strftime(latest_m2['月份'], '%Y年%m月') if latest_m2 is not None else None,
-                        "yoy": _safe_float(latest_m2['同比增长']) if latest_m2 is not None else None,
-                    },
-                }
-                return {"overview": overview, "last_update": datetime.now().isoformat()}
-            except Exception as e:
-                logger.error(f"[Macro Dashboard] Overview fetch error: {e}")
-                return None
-        
-        async def fetch_calendar():
-            try:
-                ak = _get_ak()
-                calendar_df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, ak.macro_china_event_report),
-                    timeout=MACRO_TIMEOUT
-                )
-                calendar_items = []
-                for _, row in calendar_df.head(20).iterrows():
-                    calendar_items.append({
-                        "date": str(row.get('日期', '')),
-                        "event": str(row.get('事件', '')),
-                        "importance": "high" if "重要" in str(row.get('重要性', '')) else "normal"
-                    })
-                return {"calendar": calendar_items}
-            except Exception as e:
-                logger.error(f"[Macro Dashboard] Calendar fetch error: {e}")
-                return None
-        
-        async def fetch_indicator_data(fetch_fn, indicator_name):
-            try:
-                df = await asyncio.wait_for(
-                    loop.run_in_executor(_executor, fetch_fn),
-                    timeout=MACRO_TIMEOUT
-                )
-                return df
-            except Exception as e:
-                logger.error(f"[Macro Dashboard] {indicator_name} fetch error: {e}")
-                return None
-        
-        ak = _get_ak()
-        
-        overview_task = fetch_overview()
-        calendar_task = fetch_calendar()
-        gdp_task = fetch_indicator_data(ak.macro_china_gdp, "GDP")
-        cpi_task = fetch_indicator_data(ak.macro_china_cpi, "CPI")
-        ppi_task = fetch_indicator_data(ak.macro_china_ppi, "PPI")
-        pmi_task = fetch_indicator_data(ak.macro_china_pmi_yearly, "PMI")
-        m2_task = fetch_indicator_data(ak.macro_china_m2_yearly, "M2")
-        social_task = fetch_indicator_data(ak.macro_china_shrzgm, "Social Financing")
-        industrial_task = fetch_indicator_data(ak.macro_china_gyzjz, "Industrial Production")
-        unemployment_task = fetch_indicator_data(ak.macro_china_urban_unemployment, "Unemployment")
-        
-        results = await asyncio.gather(
-            overview_task, calendar_task, gdp_task, cpi_task, ppi_task,
-            pmi_task, m2_task, social_task, industrial_task, unemployment_task,
-            return_exceptions=True
-        )
-        
-        dashboard = {}
-        
-        if not isinstance(results[0], Exception) and results[0]:
-            dashboard["overview"] = results[0]["overview"]
-            dashboard["last_update"] = results[0]["last_update"]
-        
-        if not isinstance(results[1], Exception) and results[1]:
-            dashboard["calendar"] = results[1]["calendar"]
-        
-        def process_df(df, limit, columns, rename_map):
-            if df is None or isinstance(df, Exception) or len(df) == 0:
-                return None
-            df = df.head(limit)
-            df_work = df[columns].copy()
-            for old_col, new_col in rename_map.items():
-                if old_col in df_work.columns:
-                    df_work[new_col] = df_work[old_col].apply(_safe_float)
-            return df_work.to_dict('records')
-        
-        if not isinstance(results[2], Exception) and results[2] is not None:
-            df = results[2].head(20)
-            dashboard["gdp"] = {
-                "data": process_df(df, 20, ['季度', '国内生产总值-绝对值', '国内生产总值-同比增长'],
-                                   {'国内生产总值-绝对值': 'gdp_absolute', '国内生产总值-同比增长': 'gdp_yoy'}),
-                "unit": "亿元", "frequency": "季度"
-            }
-        
-        if not isinstance(results[3], Exception) and results[3] is not None:
-            df = results[3].head(24)
-            dashboard["cpi"] = {
-                "data": process_df(df, 24, ['月份', '全国-当月', '全国-同比增长', '全国-环比增长'],
-                                   {'全国-当月': 'nation_current', '全国-同比增长': 'nation_yoy', '全国-环比增长': 'nation_mom'}),
-                "unit": "", "frequency": "月度"
-            }
-        
-        if not isinstance(results[4], Exception) and results[4] is not None:
-            df = results[4].head(24)
-            dashboard["ppi"] = {
-                "data": process_df(df, 24, ['月份', '当月', '当月同比增长'],
-                                   {'当月': 'current', '当月同比增长': 'yoy'}),
-                "unit": "", "frequency": "月度"
-            }
-        
-        if not isinstance(results[5], Exception) and results[5] is not None:
-            df = results[5].head(24)
-            dashboard["pmi"] = {
-                "data": process_df(df, 24, ['月份', '制造业-指数'],
-                                   {'制造业-指数': 'manufacturing'}),
-                "unit": "", "frequency": "月度"
-            }
-        
-        if not isinstance(results[6], Exception) and results[6] is not None:
-            df = results[6].head(24)
-            dashboard["m2"] = {
-                "data": process_df(df, 24, ['月份', '货币和准货币(M2)'],
-                                   {'货币和准货币(M2)': 'm2'}),
-                "unit": "亿元", "frequency": "月度"
-            }
-        
-        if not isinstance(results[7], Exception) and results[7] is not None:
-            df = results[7].head(24)
-            dashboard["social_financing"] = {
-                "data": process_df(df, 24, ['月份', '社会融资规模增量'],
-                                   {'社会融资规模增量': 'amount'}),
-                "unit": "亿元", "frequency": "月度"
-            }
-        
-        if not isinstance(results[8], Exception) and results[8] is not None:
-            df = results[8].head(24)
-            dashboard["industrial_production"] = {
-                "data": process_df(df, 24, ['月份', '同比增长'],
-                                   {'同比增长': 'yoy'}),
-                "unit": "%", "frequency": "月度"
-            }
-        
-        if not isinstance(results[9], Exception) and results[9] is not None:
-            df = results[9].head(24)
-            dashboard["unemployment"] = {
-                "data": process_df(df, 24, ['月份', '失业率'],
-                                   {'失业率': 'rate'}),
-                "unit": "%", "frequency": "月度"
-            }
-        
-        result = success_response(dashboard)
-        await set_cached(cache_key, result)
-        return result
-        
-    except Exception as e:
-        logger.error(f"[Macro Dashboard] Fetch error: {e}")
-        stale_cached = await get_cached(cache_key, allow_stale=True)
-        if stale_cached:
-            return stale_cached
-        return error_response("宏观数据获取失败，请稍后重试")
+    cached = cache.get("macro:dashboard")
+    if cached:
+        return success_response(cached)
+    
+    return error_response("宏观数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)

@@ -15,7 +15,7 @@ import jwt
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Header, Body, Query, Request
 from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 
@@ -1431,15 +1431,29 @@ class WebVitalsMetric(BaseModel):
     page: str
 
 @router.post("/web-vitals")
-async def collect_web_vitals(metric: WebVitalsMetric):
-    _web_vitals_buffer.append(metric.dict())
-    if len(_web_vitals_buffer) > WEB_VITALS_MAX_BUFFER:
-        _web_vitals_buffer.pop(0)
-    
-    if metric.rating == "poor":
-        logger.warning(f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}")
-    
-    return {"code": 0, "message": "Metric recorded"}
+async def collect_web_vitals(request: Request):
+    """Collect web vitals metrics from frontend. Handles both JSON and text/plain (sendBeacon)."""
+    try:
+        body = await request.body()
+        body_str = body.decode('utf-8') if isinstance(body, bytes) else body
+        
+        if request.headers.get('content-type', '').startswith('application/json') or body_str.startswith('{'):
+            data = json.loads(body_str)
+        else:
+            data = json.loads(body_str)
+        
+        metric = WebVitalsMetric(**data)
+        _web_vitals_buffer.append(metric.dict())
+        if len(_web_vitals_buffer) > WEB_VITALS_MAX_BUFFER:
+            _web_vitals_buffer.pop(0)
+        
+        if metric.rating == "poor":
+            logger.warning(f"[WebVitals] Poor metric: {metric.name}={metric.value}ms on {metric.page}")
+        
+        return {"code": 0, "message": "Metric recorded"}
+    except Exception as e:
+        logger.error(f"[WebVitals] Failed to parse metric: {e}")
+        return {"code": 0, "message": "Metric ignored"}
 
 @router.get("/web-vitals")
 async def get_web_vitals_stats():

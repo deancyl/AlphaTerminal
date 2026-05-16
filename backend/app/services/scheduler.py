@@ -2,10 +2,45 @@
 APScheduler 调度器 - Phase 3 真实缓冲写入
 """
 import logging
+import fcntl
+import os
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.db import flush_buffer_to_realtime
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
+
+# ── File-based Process Lock (prevents multi-worker conflicts) ────────────────
+LOCK_FILE_PATH = "/tmp/alphaterminal_scheduler.lock"
+_lock_file = None
+
+def acquire_scheduler_lock():
+    """Acquire exclusive lock for scheduler (prevents multi-worker conflicts)"""
+    global _lock_file
+    try:
+        _lock_file = open(LOCK_FILE_PATH, 'w')
+        fcntl.flock(_lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        logger.info("[Scheduler] Acquired exclusive lock - this worker will run polling jobs")
+        return True
+    except (IOError, OSError):
+        logger.info("[Scheduler] Another worker holds the lock - this worker will skip polling jobs")
+        if _lock_file:
+            _lock_file.close()
+            _lock_file = None
+        return False
+
+def release_scheduler_lock():
+    """Release scheduler lock"""
+    global _lock_file
+    if _lock_file:
+        try:
+            fcntl.flock(_lock_file.fileno(), fcntl.LOCK_UN)
+            _lock_file.close()
+            os.remove(LOCK_FILE_PATH)
+        except:
+            pass
+        _lock_file = None
 
 scheduler = BackgroundScheduler()
 
@@ -15,6 +50,55 @@ HISTORY_SYMBOLS = ["000001", "000300", "399001", "399006", "000688"]
 # 内存监控配置
 MEMORY_CHECK_INTERVAL = 300  # 每5分钟检查一次
 MEMORY_THRESHOLD_MB = 512    # 内存阈值（MB），超过则强制gc
+
+# ── 延迟导入工具（复用 macro.py 的模式）────────────────────────────
+_akshare_module = None
+_pandas_module = None
+_macro_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="macro_poll_")
+
+
+def _get_ak():
+    """延迟加载akshare"""
+    global _akshare_module
+    if _akshare_module is None:
+        import akshare as ak
+        _akshare_module = ak
+    return _akshare_module
+
+
+def _get_pd():
+    """延迟加载pandas"""
+    global _pandas_module
+    if _pandas_module is None:
+        import pandas as pd
+        _pandas_module = pd
+    return _pandas_module
+
+
+def _safe_float(val):
+    """安全地将值转为float，处理None/NaN"""
+    if val is None:
+        return None
+    pd = _get_pd()
+    try:
+        if pd.isna(val):
+            return None
+        return float(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _safe_strftime(val, fmt='%Y年%m月份'):
+    """安全地格式化日期"""
+    if val is None:
+        return None
+    pd = _get_pd()
+    try:
+        if pd.isna(val):
+            return None
+        return val.strftime(fmt)
+    except (AttributeError, TypeError):
+        return str(val) if val else None
 
 
 def flush_write_buffer():
@@ -116,9 +200,14 @@ def prefetch_news():
 def start_scheduler():
     """启动 APScheduler"""
     from app.db import init_tables
-    init_tables()  # 保证表已创建
+    init_tables()
 
-    # 启动时：先从 SQLite 加载历史缓存 + 新闻预热 + 直接灌 china_all 备用数据
+    is_primary_worker = acquire_scheduler_lock()
+    
+    if not is_primary_worker:
+        logger.info("[Scheduler] Skipping job registration (secondary worker)")
+        return
+
     import threading
     def initial_backfill():
         import time; time.sleep(1)
@@ -276,6 +365,125 @@ def start_scheduler():
         logger.info("[Scheduler] 启动时行业板块缓存已触发")
     threading.Thread(target=_startup_sectors, daemon=True).start()
 
+    # Task: 每 60 秒轮询外汇数据并写入全局缓存
+    def _forex_polling_job():
+        """后台轮询外汇数据并写入全局缓存"""
+        from app.services.fetchers.forex_fetcher import forex_fetcher
+        from app.services.data_cache import get_cache
+        from datetime import datetime
+        import asyncio
+        
+        try:
+            cache = get_cache()
+            
+            # Fetch spot quotes (sync wrapper for async)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                quotes = loop.run_until_complete(forex_fetcher.get_spot_quotes())
+                
+                # Build cross-rate matrix data
+                currency_list = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
+                cfets_rmb = loop.run_until_complete(forex_fetcher.get_cfets_spot())
+                cfets_cross = loop.run_until_complete(forex_fetcher.get_cfets_crosses())
+                
+                from decimal import Decimal
+                rates_dict = {}
+                for q in quotes:
+                    symbol = q.get("symbol", "")
+                    latest = q.get("latest")
+                    if latest and len(symbol) == 6:
+                        from_curr = symbol[:3]
+                        to_curr = symbol[3:]
+                        rates_dict[f"{from_curr}/{to_curr}"] = Decimal(str(latest))
+                
+                for q in cfets_rmb:
+                    pair = q.get("pair", "")
+                    mid = q.get("mid")
+                    if mid and "/" in pair:
+                        rates_dict[pair] = Decimal(str(mid))
+                
+                for q in cfets_cross:
+                    pair = q.get("pair", "")
+                    mid = q.get("mid")
+                    if mid and "/" in pair:
+                        rates_dict[pair] = Decimal(str(mid))
+                
+                # Build matrix
+                matrix = []
+                for base_curr in currency_list:
+                    row_rates = []
+                    for quote_curr in currency_list:
+                        if base_curr == quote_curr:
+                            row_rates.append({"rate": 1.0, "is_base": True})
+                        else:
+                            rate = forex_fetcher.calculate_cross_rate(base_curr, quote_curr, rates_dict)
+                            direct_key = f"{base_curr}/{quote_curr}"
+                            row_rates.append({
+                                "rate": float(rate) if rate else None,
+                                "is_base": False,
+                                "is_calculated": direct_key not in rates_dict if rate else False
+                            })
+                    matrix.append({"base": base_curr, "rates": row_rates})
+            finally:
+                loop.close()
+            
+            # Cache spot quotes
+            if quotes:
+                cache.set("forex:spot_quotes", {
+                    "quotes": quotes,
+                    "last_update_time": datetime.now().isoformat(),
+                    "status": "ready"
+                }, ttl=120)
+            
+            # Cache matrix
+            if matrix:
+                cache.set("forex:matrix", {
+                    "matrix": matrix,
+                    "currencies": currency_list,
+                    "last_update_time": datetime.now().isoformat(),
+                    "status": "ready"
+                }, ttl=120)
+            
+            logger.info(f"[Scheduler] Forex polling complete: {len(quotes) if quotes else 0} quotes, matrix {len(matrix)}x{len(matrix[0]['rates']) if matrix else 0}")
+        except Exception as e:
+            logger.error(f"[Scheduler] Forex polling failed: {e}", exc_info=True)
+
+    scheduler.add_job(
+        _forex_polling_job,
+        "interval",
+        seconds=60,
+        id="forex_polling",
+        name="ForexPolling",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 外汇轮询任务已注册（每60秒）")
+
+    # 启动时立即触发一次外汇数据预热（不阻塞主线程）
+    def _startup_forex():
+        import time; time.sleep(2)
+        _forex_polling_job()
+        logger.info("[Scheduler] 启动时外汇数据预热已触发")
+    threading.Thread(target=_startup_forex, daemon=True).start()
+
+    # Task: 每 3600 秒轮询宏观数据并写入全局缓存
+    scheduler.add_job(
+        _macro_polling_job,
+        "interval",
+        seconds=3600,
+        id="macro_polling",
+        name="MacroPolling",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 宏观轮询任务已注册（每3600秒）")
+
+    # 启动时立即触发一次宏观数据预热（不阻塞主线程）
+    def _startup_macro():
+        import time; time.sleep(3)
+        _macro_polling_job()
+        logger.info("[Scheduler] 启动时宏观数据预热已触发")
+    threading.Thread(target=_startup_macro, daemon=True).start()
+
     # ── P3: 每日收盘快照（15:30 执行）────────────────────────────
     def _record_portfolio_snapshots():
         """遍历所有账户，计算当日 total_asset，写入 portfolio_snapshots"""
@@ -329,11 +537,56 @@ def start_scheduler():
         replace_existing=True,
     )
     
+    scheduler.add_job(
+        _cache_cleanup_job,
+        "interval",
+        seconds=300,
+        id="cache_cleanup",
+        name="CacheCleanup",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] Cache cleanup job registered (every 5 minutes)")
+    
     scheduler.start()
     logger.info("[Scheduler] APScheduler 已启动")
 
     # 启动时立即预热新闻缓存（非阻塞后台运行，20分钟后再由 NewsRefresh 任务接管）
     prefetch_news()
+
+
+def _cache_cleanup_job():
+    """Periodic cache cleanup to prevent memory leaks"""
+    from app.services.data_cache import get_cache
+    try:
+        cache = get_cache()
+        removed = cache.cleanup_expired()
+        if removed > 0:
+            logger.info(f"[Scheduler] Cache cleanup: removed {removed} expired entries")
+    except Exception as e:
+        logger.error(f"[Scheduler] Cache cleanup failed: {e}")
+
+
+async def run_initial_data_fetch():
+    """Blocking startup: Fetch core data before accepting HTTP requests"""
+    import asyncio
+    
+    logger.info("[Startup] Starting blocking data fetch...")
+    
+    loop = asyncio.get_running_loop()
+    
+    try:
+        await loop.run_in_executor(None, _forex_polling_job)
+        logger.info("[Startup] Forex data fetched")
+    except Exception as e:
+        logger.error(f"[Startup] Forex fetch failed: {e}")
+    
+    try:
+        await loop.run_in_executor(None, _macro_polling_job)
+        logger.info("[Startup] Macro data fetched")
+    except Exception as e:
+        logger.error(f"[Startup] Macro fetch failed: {e}")
+    
+    logger.info("[Startup] Blocking data fetch complete")
 
 
 def _memory_monitor():
@@ -356,8 +609,168 @@ def _memory_monitor():
         logger.warning(f"[MemoryMonitor] 监控异常: {e}")
 
 
+def _macro_polling_job():
+    """后台轮询宏观数据并写入全局缓存"""
+    import asyncio
+    from app.services.data_cache import get_cache
+    
+    try:
+        cache = get_cache()
+        ak = _get_ak()
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        def fetch_sync():
+            try:
+                pd = _get_pd()
+                
+                gdp_df = ak.macro_china_gdp()
+                cpi_df = ak.macro_china_cpi()
+                ppi_df = ak.macro_china_ppi()
+                pmi_df = ak.macro_china_pmi_yearly()
+                m2_df = ak.macro_china_m2_yearly()
+                social_df = ak.macro_china_shrzgm()
+                industrial_df = ak.macro_china_gyzjz()
+                unemployment_df = ak.macro_china_urban_unemployment()
+                # calendar_df = ak.macro_china_event_report()  # Function removed from akshare
+                
+                return {
+                    'gdp': gdp_df, 'cpi': cpi_df, 'ppi': ppi_df,
+                    'pmi': pmi_df, 'm2': m2_df, 'social': social_df,
+                    'industrial': industrial_df, 'unemployment': unemployment_df,
+                    'calendar': None  # No calendar data available
+                }
+            except Exception as e:
+                logger.error(f"[MacroPolling] Fetch error: {e}")
+                return None
+        
+        data = loop.run_in_executor(_macro_executor, fetch_sync)
+        results = loop.run_until_complete(data)
+        loop.close()
+        
+        if results is None:
+            logger.error("[MacroPolling] No data fetched")
+            return
+        
+        dashboard = {}
+        
+        def process_df(df, limit, columns, rename_map):
+            if df is None or len(df) == 0:
+                return None
+            df = df.head(limit)
+            df_work = df[columns].copy()
+            for old_col, new_col in rename_map.items():
+                if old_col in df_work.columns:
+                    if new_col in ('month', 'quarter'):
+                        df_work[new_col] = df_work[old_col].apply(lambda x: str(x) if x is not None else None)
+                    else:
+                        df_work[new_col] = df_work[old_col].apply(_safe_float)
+            df_work = df_work.drop(columns=[c for c in columns if c not in rename_map.values()])
+            return df_work.to_dict('records')
+        
+        latest_gdp = results['gdp'].iloc[0] if len(results['gdp']) > 0 else None
+        latest_cpi = results['cpi'].iloc[0] if len(results['cpi']) > 0 else None
+        latest_ppi = results['ppi'].iloc[0] if len(results['ppi']) > 0 else None
+        latest_pmi = results['pmi'].iloc[0] if len(results['pmi']) > 0 else None
+        latest_m2 = results['m2'].iloc[0] if len(results['m2']) > 0 else None
+        
+        dashboard["overview"] = {
+            "gdp": {
+                "quarter": _safe_strftime(latest_gdp['季度']) if latest_gdp is not None else None,
+                "value": _safe_float(latest_gdp['国内生产总值-绝对值']) if latest_gdp is not None else None,
+                "yoy": _safe_float(latest_gdp['国内生产总值-同比增长']) if latest_gdp is not None else None,
+            },
+            "cpi": {
+                "month": _safe_strftime(latest_cpi['月份'], '%Y年%m月') if latest_cpi is not None else None,
+                "yoy": _safe_float(latest_cpi['全国-同比增长']) if latest_cpi is not None else None,
+                "mom": _safe_float(latest_cpi['全国-环比增长']) if latest_cpi is not None else None,
+            },
+            "ppi": {
+                "month": _safe_strftime(latest_ppi['月份'], '%Y年%m月') if latest_ppi is not None else None,
+                "yoy": _safe_float(latest_ppi['当月同比增长']) if latest_ppi is not None else None,
+            },
+            "pmi": {
+                "month": str(latest_pmi['日期']) if latest_pmi is not None else None,
+                "value": _safe_float(latest_pmi['今值']) if latest_pmi is not None else None,
+            },
+            "m2": {
+                "month": str(latest_m2['日期']) if latest_m2 is not None else None,
+                "yoy": _safe_float(latest_m2['今值']) if latest_m2 is not None else None,
+            },
+        }
+        
+        calendar_items = []
+        if results['calendar'] is not None and len(results['calendar']) > 0:
+            for _, row in results['calendar'].head(20).iterrows():
+                calendar_items.append({
+                    "date": str(row.get('日期', '')),
+                    "event": str(row.get('事件', '')),
+                    "importance": "high" if "重要" in str(row.get('重要性', '')) else "normal"
+                })
+        dashboard["calendar"] = calendar_items
+        
+        dashboard["gdp"] = {
+            "data": process_df(results['gdp'], 20, ['季度', '国内生产总值-绝对值', '国内生产总值-同比增长'],
+                               {'季度': 'quarter', '国内生产总值-绝对值': 'gdp_absolute', '国内生产总值-同比增长': 'gdp_yoy'}),
+            "unit": "亿元", "frequency": "季度"
+        }
+        
+        dashboard["cpi"] = {
+            "data": process_df(results['cpi'], 24, ['月份', '全国-当月', '全国-同比增长', '全国-环比增长'],
+                               {'月份': 'month', '全国-当月': 'nation_current', '全国-同比增长': 'nation_yoy', '全国-环比增长': 'nation_mom'}),
+            "unit": "", "frequency": "月度"
+        }
+        
+        dashboard["ppi"] = {
+            "data": process_df(results['ppi'], 24, ['月份', '当月', '当月同比增长'],
+                               {'月份': 'month', '当月': 'current', '当月同比增长': 'yoy'}),
+            "unit": "", "frequency": "月度"
+        }
+        
+        dashboard["pmi"] = {
+            "data": process_df(results['pmi'], 24, ['日期', '今值'],
+                               {'日期': 'month', '今值': 'manufacturing_index'}),
+            "unit": "", "frequency": "月度"
+        }
+        
+        dashboard["m2"] = {
+            "data": process_df(results['m2'], 24, ['日期', '今值'],
+                               {'日期': 'month', '今值': 'm2_yoy'}),
+            "unit": "%", "frequency": "月度"
+        }
+        
+        dashboard["social_financing"] = {
+            "data": process_df(results['social'], 24, ['月份', '社会融资规模增量'],
+                               {'月份': 'month', '社会融资规模增量': 'total'}),
+            "unit": "亿元", "frequency": "月度"
+        }
+        
+        dashboard["industrial_production"] = {
+            "data": process_df(results['industrial'], 24, ['月份', '同比增长'],
+                               {'月份': 'month', '同比增长': 'yoy'}),
+            "unit": "%", "frequency": "月度"
+        }
+        
+        dashboard["unemployment"] = {
+            "data": process_df(results['unemployment'], 24, ['date', 'value'],
+                               {'date': 'month', 'value': 'rate'}),
+            "unit": "%", "frequency": "月度"
+        }
+        
+        dashboard["last_update"] = datetime.now().isoformat()
+        dashboard["status"] = "ready"
+        
+        cache.set("macro:dashboard", dashboard, ttl=3600)
+        logger.info(f"[MacroPolling] Complete, cached macro:dashboard with {len(dashboard)} indicators")
+        
+    except Exception as e:
+        logger.error(f"[MacroPolling] Failed: {e}", exc_info=True)
+
+
 def stop_scheduler():
     """停止 APScheduler"""
     if scheduler.running:
         scheduler.shutdown(wait=False)
-        logger.info("[Scheduler] APScheduler 已关闭")
+    release_scheduler_lock()
+    logger.info("[Scheduler] APScheduler stopped and lock released")
