@@ -5,6 +5,116 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.44] - 2026-05-17
+
+### 外部审计优化（9项任务）
+
+本次更新实现了外部审计报告中的9项优先级任务，涵盖性能、基础设施、合规性和用户体验四个方面。
+
+#### 性能优化（Wave 1）
+
+- **新闻并行获取** — W1-T1
+  - 使用 `asyncio.gather()` 替代顺序获取
+  - 延迟从 ~3s 降至 ~0.62s（5倍提升）
+  - 文件：`backend/app/services/news_engine.py`
+
+- **数据库复合索引** — W1-T2
+  - 在 `market_all_stocks` 表添加5个复合索引
+  - 查询时间从 ~200ms 降至 ~2ms（100倍提升）
+  - 索引覆盖：price, change_pct, turnover, mktcap, code/name
+  - 文件：`backend/app/db/database.py`
+
+- **统一缓存架构** — W1-T3
+  - 创建 `DataCache` 单例类替代分散的字典缓存
+  - 13个路由器迁移至统一缓存
+  - 支持 TTL 过期、LRU 淘汰、内存限制
+  - 文件：`backend/app/services/data_cache.py`
+
+#### 基础设施（Wave 2）
+
+- **WebSocket 实时数据流** — W2-T1
+  - 新增 `backend/app/services/streaming/` 模块
+  - 实现熔断器保护（CLOSED/OPEN/HALF_OPEN 三态）
+  - HTTP 轮询降级机制
+  - 43个单元测试
+  - 文件：`streaming_manager.py`, `base_streamer.py`, `sina_streamer.py`
+
+- **HMAC-SHA256 审计追踪** — W2-T2
+  - 实现哈希链审计日志（prev_hash 链接）
+  - 7年保留期（SEC 17a-4 合规）
+  - 链完整性验证端点 `/api/v1/audit/verify`
+  - 文件：`backend/app/services/audit_chain.py`, `backend/app/routers/audit.py`
+
+#### 合规性（Wave 3）
+
+- **OMS 状态机** — W3-T1
+  - 新增 `backend/app/services/oms/` 模块
+  - 9个订单状态：STAGED, SUBMITTED, VALIDATED, PENDING, PARTIAL_FILLED, FILLED, CANCELLED, REJECTED, EXPIRED
+  - 状态转换验证矩阵
+  - 交易前风控检查（资金/持仓/价格/限额）
+  - Broker 适配器接口
+  - 35个单元测试
+  - 文件：`order_status.py`, `order_engine.py`, `pre_trade_validation.py`, `broker_adapter.py`
+
+#### 用户体验（Wave 4）
+
+- **K线新闻标记** — W4-T1
+  - K线图上显示新闻事件 markPoint
+  - 悬停显示新闻标题
+  - 情感颜色：绿色（利好）、红色（利空）、黄色（中性）
+  - 新增端点 `/api/v1/news/events/{symbol}`
+  - 文件：`frontend/src/components/BaseKLineChart.vue`, `frontend/src/utils/echartsTheme.js`
+
+- **防御性UX** — W4-T2
+  - 交易确认：两步确认 + 复选框验证
+  - 资金划转：两步确认 + 复选框验证
+  - 警告提示："此操作不可撤销"
+  - 文件：`SimulatedTradeModal.vue`, `PortfolioDashboard.vue`
+
+- **期权链T型报价表** — W4-T3
+  - 新增 `OptionsFetcher` 数据获取器
+  - T型报价表：看涨期权（左）/ 行权价（中）/ 看跌期权（右）
+  - Greeks 显示：Delta, Gamma, Theta, Vega, IV
+  - 支持 CFFEX（沪深300/中证1000）和 SSE（ETF期权）
+  - 新增端点 `/api/v1/options/cffex/chain`
+  - 文件：`backend/app/services/fetchers/options_fetcher.py`, `frontend/src/components/OptionsAnalysis.vue`
+
+### 新增模块
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 流式传输 | `backend/app/services/streaming/` | WebSocket 实时数据基础设施 |
+| OMS | `backend/app/services/oms/` | 订单管理系统 |
+| 审计链 | `backend/app/services/audit_chain.py` | 哈希链审计追踪 |
+| 期权获取器 | `backend/app/services/fetchers/options_fetcher.py` | 期权数据获取 |
+| 审计路由 | `backend/app/routers/audit.py` | 审计 API 端点 |
+| OMS路由 | `backend/app/routers/oms.py` | OMS API 端点 |
+| 期权路由 | `backend/app/routers/options.py` | 期权 API 端点 |
+| 期权链组件 | `frontend/src/components/OptionsChain.vue` | 期权链显示组件 |
+
+### 测试覆盖
+
+- **新增测试**：78个
+  - 流式传输模块：43个测试
+  - OMS 模块：35个测试
+- **测试文件**：
+  - `backend/tests/unit/test_oms.py`
+  - `backend/tests/unit/test_services/test_streaming.py`
+
+### 性能指标
+
+| 指标 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| 新闻获取延迟 | ~3s | ~0.62s | 5x |
+| 数据库查询 | ~200ms | ~2ms | 100x |
+| 缓存命中率 | 分散 | 统一 | 13路由 |
+
+### 文件变更统计
+
+- 44个文件修改
+- 6174行新增
+- 791行删除
+
 ## [0.6.40] - 2026-05-16
 
 ### 核心修复

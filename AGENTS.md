@@ -1760,3 +1760,505 @@ grep -c "\.get(" backend/app/routers/macro.py  # Expected: 10+
 # Check v-else fallback in MacroDashboard
 grep -c "v-else" frontend/src/components/MacroDashboard.vue  # Expected: 1+
 ```
+
+---
+
+## WebSocket Streaming Module (v0.6.44)
+
+### Overview
+
+Real-time market data streaming infrastructure with circuit breaker protection and HTTP fallback.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  StreamingManager                                            │
+│  - Connection lifecycle (start/stop/reconnect)              │
+│  - Health monitoring (30s interval)                         │
+│  - Message broadcasting to ws_manager                        │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ├── WebSocket Mode (Primary)
+       │   └── SinaStreamer → Real-time quotes
+       │
+       └── HTTP Fallback Mode (Degraded)
+           └── HTTP polling every 10s
+```
+
+### Circuit Breaker States
+
+| State | Description | Transition |
+|-------|-------------|------------|
+| CLOSED | Normal operation | Opens after 5 consecutive failures |
+| OPEN | Traffic blocked | Transitions to HALF_OPEN after 30s |
+| HALF_OPEN | Testing recovery | Closes after 2 successes, opens on failure |
+
+### API Endpoints
+
+```bash
+# Start streaming
+POST /api/v1/streaming/start
+{"symbols": ["sh600519", "sz000001"]}
+
+# Stop streaming
+POST /api/v1/streaming/stop
+
+# Get streaming status
+GET /api/v1/streaming/status
+
+# Force failover to HTTP
+POST /api/v1/streaming/failover
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Streaming Manager | `backend/app/services/streaming/streaming_manager.py` |
+| Base Streamer | `backend/app/services/streaming/base_streamer.py` |
+| Sina Streamer | `backend/app/services/streaming/sina_streamer.py` |
+| Circuit Breaker | `backend/app/services/circuit_breaker.py` |
+| Tests | `backend/tests/unit/test_services/test_streaming.py` |
+
+### Verification Commands
+
+```bash
+# Check streaming module exists
+ls backend/app/services/streaming/
+
+# Run streaming tests
+pytest backend/tests/unit/test_services/test_streaming.py -v
+
+# Check circuit breaker
+grep -c "CircuitState" backend/app/services/circuit_breaker.py  # Expected: 3
+```
+
+---
+
+## OMS State Machine (v0.6.44)
+
+### Overview
+
+Order Management System with 9-state machine, pre-trade validation, and broker adapter interface.
+
+### State Diagram
+
+```
+STAGED ──► SUBMITTED ──► VALIDATED ──► PENDING ──► FILLED
+   │           │             │           │
+   ▼           ▼             ▼           ├──► PARTIAL_FILLED ──► FILLED
+CANCELLED   REJECTED      REJECTED       │
+                                        ├──► CANCELLED
+                                        ├──► EXPIRED
+                                        └──► REJECTED
+```
+
+### Order Status Enum
+
+| Status | Type | Description |
+|--------|------|-------------|
+| STAGED | Initial | Order created, not submitted |
+| SUBMITTED | Processing | Sent to validation |
+| VALIDATED | Processing | Pre-trade checks passed |
+| PENDING | Active | Waiting for execution |
+| PARTIAL_FILLED | Active | Partially executed |
+| FILLED | Terminal | Fully executed |
+| CANCELLED | Terminal | Cancelled by user |
+| REJECTED | Terminal | Rejected by system |
+| EXPIRED | Terminal | Order expired |
+
+### Pre-Trade Validation
+
+| Check | Description |
+|-------|-------------|
+| Cash Availability | Buy: estimated_cost ≤ cash_balance |
+| Position Availability | Sell: quantity ≤ total_shares |
+| Price Sanity | Limit price within 10% of market |
+| Position Limit | New position ≤ 30% of portfolio |
+
+### API Endpoints
+
+```bash
+# Create order
+POST /api/v1/oms/orders
+{
+  "portfolio_id": 1,
+  "symbol": "sh600519",
+  "direction": "buy",
+  "order_type": "limit",
+  "quantity": 100,
+  "price": 1800.00
+}
+
+# Get order status
+GET /api/v1/oms/orders/{order_id}
+
+# Cancel order
+POST /api/v1/oms/orders/{order_id}/cancel
+
+# Get open orders
+GET /api/v1/oms/portfolios/{portfolio_id}/orders
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Order Status | `backend/app/services/oms/order_status.py` |
+| Order Engine | `backend/app/services/oms/order_engine.py` |
+| Pre-Trade Validation | `backend/app/services/oms/pre_trade_validation.py` |
+| Broker Adapter | `backend/app/services/oms/broker_adapter.py` |
+| OMS Router | `backend/app/routers/oms.py` |
+| Tests | `backend/tests/unit/test_oms.py` |
+
+### Verification Commands
+
+```bash
+# Check OMS module exists
+ls backend/app/services/oms/
+
+# Run OMS tests
+pytest backend/tests/unit/test_oms.py -v
+
+# Check state count
+grep -c "class OrderStatus" backend/app/services/oms/order_status.py
+```
+
+---
+
+## Audit Trail HMAC-SHA256 (v0.6.44)
+
+### Overview
+
+Hash chain audit trail for SEC 17a-4 compliance with 7-year retention.
+
+### Hash Chain Structure
+
+```
+Genesis Hash (64 zeros)
+       │
+       ▼
+Record 1: hash = HMAC-SHA256(prev_hash + data)
+       │
+       ▼
+Record 2: hash = HMAC-SHA256(Record1.hash + data)
+       │
+       ▼
+Record N: hash = HMAC-SHA256(RecordN-1.hash + data)
+```
+
+### Audit Record Schema
+
+```python
+@dataclass
+class AuditChainRecord:
+    id: str
+    timestamp: datetime
+    actor_id: str
+    action: str
+    resource_type: str
+    resource_id: str
+    outcome: str
+    before_state: Optional[dict]
+    after_state: Optional[dict]
+    prev_hash: str
+    record_hash: str
+    chain_index: int
+    ip_address: Optional[str]
+    user_agent: Optional[str]
+```
+
+### Retention Policy
+
+- **Retention Period**: 7 years (2555 days)
+- **Genesis Hash**: `"0" * 64`
+- **Algorithm**: HMAC-SHA256
+
+### API Endpoints
+
+```bash
+# Verify chain integrity
+GET /api/v1/audit/verify
+
+# Get audit statistics
+GET /api/v1/audit/stats
+
+# Query audit logs
+GET /api/v1/audit/logs?actor_id=xxx&action=trade
+
+# Health check
+GET /api/v1/audit/health
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Audit Chain | `backend/app/services/audit_chain.py` |
+| Audit DB | `backend/app/db/audit_db.py` |
+| Audit Router | `backend/app/routers/audit.py` |
+
+### Verification Commands
+
+```bash
+# Check audit chain exists
+ls backend/app/services/audit_chain.py
+
+# Test verify endpoint
+curl http://localhost:60100/api/v1/audit/verify
+
+# Check retention days
+grep "SEC_RETENTION_DAYS" backend/app/services/audit_chain.py
+```
+
+---
+
+## Options Chain Module (v0.6.44)
+
+### Overview
+
+Options chain data fetcher and T-quote table display for CFFEX and SSE options.
+
+### Supported Exchanges
+
+| Exchange | Products | API |
+|----------|----------|-----|
+| CFFEX | 沪深300, 中证1000 | `option_cffex_hs300_spot_sina` |
+| SSE | ETF Options | `option_sse_greeks_sina` |
+
+### T-Quote Table Layout
+
+```
+┌─────────────────┬──────────────┬─────────────────┐
+│   Call Options   │ Strike Price │   Put Options   │
+│    (看涨期权)    │   (行权价)   │    (看跌期权)   │
+├─────────────────┼──────────────┼─────────────────┤
+│ Bid/Ask/Vol/IV  │    1800      │ Bid/Ask/Vol/IV  │
+│ Delta/Gamma     │    1850      │ Delta/Gamma     │
+│ Theta/Vega      │    1900      │ Theta/Vega      │
+└─────────────────┴──────────────┴─────────────────┘
+```
+
+### API Endpoints
+
+```bash
+# Get CFFEX options chain
+GET /api/v1/options/cffex/chain?symbol=io2506
+
+# Get Greeks for specific contract
+GET /api/v1/options/greeks?code=io2506C1800
+
+# List available contracts
+GET /api/v1/options/contracts?exchange=CFFEX
+
+# Health check
+GET /api/v1/options/health
+```
+
+### Greeks Display
+
+| Greek | Description |
+|-------|-------------|
+| Delta | Price sensitivity |
+| Gamma | Delta sensitivity |
+| Theta | Time decay |
+| Vega | Volatility sensitivity |
+| IV | Implied volatility |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Options Fetcher | `backend/app/services/fetchers/options_fetcher.py` |
+| Options Router | `backend/app/routers/options.py` |
+| Options Analysis | `frontend/src/components/OptionsAnalysis.vue` |
+| Options Chain | `frontend/src/components/OptionsChain.vue` |
+
+### Verification Commands
+
+```bash
+# Check options fetcher exists
+ls backend/app/services/fetchers/options_fetcher.py
+
+# Test options endpoint
+curl http://localhost:60100/api/v1/options/health
+
+# Check frontend component
+ls frontend/src/components/OptionsChain.vue
+```
+
+---
+
+## K-Line News Markers (v0.6.44)
+
+### Overview
+
+Display news events as markers on K-line charts with sentiment coloring.
+
+### Marker Types
+
+| Type | Color | Description |
+|------|-------|-------------|
+| Bullish | Green (#22c55e) | Positive news (利好) |
+| Bearish | Red (#ef4444) | Negative news (利空) |
+| Neutral | Yellow (#fbbf24) | Neutral news (中性) |
+
+### Sentiment Keywords
+
+```python
+bullish_keywords = ["利好", "上涨", "突破", "新高", "增长", "盈利", "增持", "回购", "中标", "签约"]
+bearish_keywords = ["利空", "下跌", "暴跌", "亏损", "减持", "质押", "违约", "诉讼", "调查", "处罚"]
+```
+
+### API Endpoint
+
+```bash
+# Get news events for symbol
+GET /api/v1/news/events/{symbol}?limit=20
+
+# Response
+{
+  "events": [
+    {
+      "date": "2024-01-15",
+      "headline": "贵州茅台发布业绩预告",
+      "type": "bullish",
+      "url": "...",
+      "source": "eastmoney"
+    }
+  ],
+  "symbol": "600519",
+  "total": 5
+}
+```
+
+### Integration Flow
+
+```
+User selects symbol
+       │
+       ▼
+AdvancedKlinePanel.fetchNewsEvents()
+       │
+       ▼
+GET /api/v1/news/events/{symbol}
+       │
+       ▼
+Match dates to K-line prices
+       │
+       ▼
+Pass to BaseKLineChart as :news-events prop
+       │
+       ▼
+markPoint renders diamond markers
+       │
+       ▼
+Hover shows headline in tooltip
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| K-Line Chart | `frontend/src/components/BaseKLineChart.vue` |
+| Advanced Panel | `frontend/src/components/AdvancedKlinePanel.vue` |
+| Tooltip Formatter | `frontend/src/utils/echartsTheme.js` |
+| News Router | `backend/app/routers/news.py` |
+
+### Verification Commands
+
+```bash
+# Test news events endpoint
+curl http://localhost:60100/api/v1/news/events/600519
+
+# Check markPoint in BaseKLineChart
+grep -c "markPoint" frontend/src/components/BaseKLineChart.vue  # Expected: 2+
+
+# Check news events prop
+grep "newsEvents" frontend/src/components/BaseKLineChart.vue
+```
+
+---
+
+## Defensive UX (v0.6.44)
+
+### Overview
+
+Two-step confirmation for critical operations (trades and transfers) to prevent accidental actions.
+
+### Trade Confirmation Flow
+
+```
+Step 1: Fill trade form
+    │
+    ▼
+Step 2: Click "确认买入/卖出"
+    │
+    ▼
+Step 3: Review confirmation panel
+    │  - Account, Direction, Symbol
+    │  - Price, Shares, Total
+    │  - Date, Time
+    │
+    ▼
+Step 4: Check "我已确认以上交易信息"
+    │
+    ▼
+Step 5: Click "✓ 确认提交"
+    │
+    ▼
+Execute trade
+```
+
+### Transfer Confirmation Flow
+
+```
+Step 1: Fill transfer form
+    │
+    ▼
+Step 2: Click "下一步"
+    │
+    ▼
+Step 3: Review confirmation panel
+    │  - From Account, To Account
+    │  - Amount, Time
+    │
+    ▼
+Step 4: Check "我已确认以上划转信息"
+    │
+    ▼
+Step 5: Click "确认划转"
+    │
+    ▼
+Execute transfer
+```
+
+### UI Elements
+
+| Element | Purpose |
+|---------|---------|
+| Warning Message | "⚠️ 此操作不可撤销，请确认信息无误" |
+| Checkbox | Must be checked before submit |
+| Cancel Button | "返回修改" - returns to form |
+| Confirm Button | "✓ 确认提交" / "确认划转" |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Trade Modal | `frontend/src/components/SimulatedTradeModal.vue` |
+| Portfolio Dashboard | `frontend/src/components/PortfolioDashboard.vue` |
+
+### Verification Commands
+
+```bash
+# Check confirmation in trade modal
+grep -c "showConfirmation" frontend/src/components/SimulatedTradeModal.vue  # Expected: 5+
+
+# Check confirmation in portfolio
+grep -c "showTransferConfirmation" frontend/src/components/PortfolioDashboard.vue  # Expected: 3+
+
+# Check checkbox requirement
+grep "confirmedCheckbox" frontend/src/components/SimulatedTradeModal.vue
+```
