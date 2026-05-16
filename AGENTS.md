@@ -1647,3 +1647,116 @@ grep -c "useDebounceFn" frontend/src/components/CommandPalette.vue  # Expected: 
 # Check loop optimization in indicators.js
 grep -c "for (let j = i - n + 2" frontend/src/utils/indicators.js  # Expected: 2
 ```
+
+---
+
+## Macro Module Bug Fixes (v0.6.43)
+
+### Overview
+
+Fixed critical Pandas KeyError issues causing white screen in macro dashboard, and implemented proper BFF aggregation endpoint.
+
+### Key Improvements
+
+| Issue | Category | Solution | Impact |
+|-------|----------|----------|--------|
+| Pandas KeyError | Backend | Use .get() for column access | No more crashes |
+| White screen on error | Frontend | Add v-else fallback UI | User-friendly error display |
+| BFF not implemented | Backend | True aggregation endpoint | Single API call for all data |
+
+### Backend Pandas KeyError Fixes
+
+#### 1. Safe Column Access
+
+```python
+# Before - Direct access causes KeyError
+ind_df_valid = ind_df[pd.notna(ind_df['今值'])]
+
+# After - Safe access with fallback
+value_col = '今值' if '今值' in ind_df.columns else '今值(%)'
+if value_col:
+    ind_df_valid = ind_df[pd.notna(ind_df[value_col])]
+```
+
+#### 2. Dynamic Column Detection
+
+| Original Column | Fallback Column | Endpoint |
+|-----------------|-----------------|----------|
+| `今值` | `今值(%)` | industrial_production |
+| `item` | Check existence first | unemployment |
+| `date` | `月份` | unemployment |
+| `value` | `失业率` | unemployment |
+
+#### 3. BFF Endpoint Implementation
+
+```python
+@router.get("/dashboard")
+async def get_macro_dashboard():
+    # Fetch all 8 indicators in parallel
+    gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = await asyncio.gather(
+        fetch_gdp(), fetch_cpi(), fetch_ppi(), fetch_pmi(),
+        fetch_m2(), fetch_sf(), fetch_ind(), fetch_unemp()
+    )
+    
+    # Return aggregated data
+    return success_response({
+        'overview': {...},
+        'gdp': {'data': [...]},
+        'cpi': {'data': [...]},
+        # ... all 8 indicators
+        'calendar': [...],
+        'last_update': datetime.now().isoformat()
+    })
+```
+
+### Frontend White Screen Fix
+
+```vue
+<!-- Before - No fallback, white screen on error -->
+<div v-if="loading && !overview">Loading...</div>
+<div v-else-if="overview">Cards...</div>
+<!-- Nothing rendered if overview is null! -->
+
+<!-- After - Fallback UI for error state -->
+<div v-if="loading && !overview">Loading...</div>
+<div v-else-if="overview">Cards...</div>
+<div v-else>
+  <div class="error-state">
+    <p>暂无数据或数据加载失败</p>
+    <button @click="refreshNow">重新加载</button>
+  </div>
+</div>
+```
+
+### Error Handling Flow
+
+```
+API Request → KeyError (before) → 500 Error → Frontend receives null → White Screen
+
+API Request → Safe .get() (after) → Graceful handling → Frontend receives data or empty → Shows UI
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Macro Router | `backend/app/routers/macro.py` |
+| MacroDashboard | `frontend/src/components/MacroDashboard.vue` |
+
+### Verification Commands
+
+```bash
+# Test BFF endpoint
+curl http://localhost:60100/api/v1/macro/dashboard | jq '.data | keys'
+
+# Test individual endpoints
+curl http://localhost:60100/api/v1/macro/overview
+curl http://localhost:60100/api/v1/macro/industrial_production?limit=24
+curl http://localhost:60100/api/v1/macro/unemployment?limit=24
+
+# Check safe column access in macro.py
+grep -c "\.get(" backend/app/routers/macro.py  # Expected: 10+
+
+# Check v-else fallback in MacroDashboard
+grep -c "v-else" frontend/src/components/MacroDashboard.vue  # Expected: 1+
+```
