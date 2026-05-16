@@ -59,6 +59,7 @@ import { logger } from '../utils/logger.js'
 import { getECharts } from '../utils/lazyEcharts.js'
 import { MARKET_COLORS, CHART_COLORS } from '../utils/echartsTheme.js'
 import { useUiStore } from '../composables/useUiStore.js'
+import { useIndicatorWorker } from '../composables/useIndicatorWorker.js'
 
 const props = defineProps({
   symbol:     { type: String, default: '000001' },
@@ -80,6 +81,9 @@ const currentName  = ref('指标图表')
 const retryCount   = ref(0)       // 空数据重试计数器
 const maxRetries   = 3            // 最大重试次数
 const retrying     = ref(false)   // 正在重试中
+
+// Initialize Web Worker for indicator calculations
+const { calculate, isReady } = useIndicatorWorker()
 
 // 全屏按钮处理：统一跳转到 FullscreenKline 面板
 function handleFullscreen() {
@@ -251,7 +255,7 @@ function calcDMI(highs, lows, closes, period = 14) {
 // ─────────────────────────────────────────────────────────────────
 // K线图（Task 2: 60%主图 / 20%成交量 比例）
 // ─────────────────────────────────────────────────────────────────
-function buildKLineOption(hist) {
+async function buildKLineOption(hist) {
   const { UP, DOWN } = getUpDown()
   // 日K: YYYY-MM-DD / 分钟K: YYYY-MM-DD HH:mm（全局统一完整日期格式）
   const times   = hist.map(h => {
@@ -286,7 +290,7 @@ function buildKLineOption(hist) {
 
   // ── series[0]: K线烛台
   const kSeries = {
-    name: 'K线', type: 'candlestick',
+    name: 'K线', type: 'candlestick', sampling: 'lttb',
     data: hist.map(h => [Number(h.open), Number(h.close), Number(h.low), Number(h.high)]),
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: { color: UP, color0: DOWN, borderColor: UP, borderColor0: DOWN },
@@ -297,26 +301,30 @@ function buildKLineOption(hist) {
     },
   }
 
-  // ── MA 均线
+  // ── MA 均线 (using Web Worker)
+  const ma5 = await calculate('MA', { closes }, { period: 5 })
+  const ma10 = await calculate('MA', { closes }, { period: 10 })
+  const ma20 = await calculate('MA', { closes }, { period: 20 })
+  
   const maSeries = [
-    { name: 'MA5',  data: calcMA(closes, 5),  color: MARKET_COLORS.MA5, width: 1 },
-    { name: 'MA10', data: calcMA(closes, 10), color: MARKET_COLORS.MA10, width: 1 },
-    { name: 'MA20', data: calcMA(closes, 20), color: MARKET_COLORS.MA20, width: 1 },
+    { name: 'MA5',  data: ma5,  color: MARKET_COLORS.MA5, width: 1 },
+    { name: 'MA10', data: ma10, color: MARKET_COLORS.MA10, width: 1 },
+    { name: 'MA20', data: ma20, color: MARKET_COLORS.MA20, width: 1 },
   ].map(cfg => ({
-    ...cfg, type: 'line', xAxisIndex: 0, yAxisIndex: 0,
+    ...cfg, type: 'line', sampling: 'lttb', xAxisIndex: 0, yAxisIndex: 0,
     smooth: true, symbol: 'none',
     lineStyle: { color: cfg.color, width: cfg.width }, tooltip: { show: true },
   }))
 
-  // ── BOLL
-  const bollSeries = showBOLL ? (() => {
-    const { mid, upper, lower } = calcBOLL(closes)
+  // ── BOLL (using Web Worker)
+  const bollSeries = showBOLL ? await (async () => {
+    const { mid, upper, lower } = await calculate('BOLL', { closes }, { period: 20, stdDev: 2 })
     return [
-      { name: 'BOLL-M', data: mid,   color: MARKET_COLORS.MA20, width: 1.2, type: 'line', smooth: true, symbol: 'none',
+      { name: 'BOLL-M', data: mid,   color: MARKET_COLORS.MA20, width: 1.2, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
         xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1.2 } },
-      { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
+      { name: 'BOLL-U', data: upper, color: '#a78bfa', width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
         xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1, type: 'dashed' } },
-      { name: 'BOLL-L', data: lower, color: '#a78bfa', width: 1, type: 'line', smooth: true, symbol: 'none',
+      { name: 'BOLL-L', data: lower, color: '#a78bfa', width: 1, type: 'line', sampling: 'lttb', smooth: true, symbol: 'none',
         xAxisIndex: 0, yAxisIndex: 0, lineStyle: { color: MARKET_COLORS.MA20, width: 1, type: 'dashed' } },
     ]
   })() : []
@@ -337,15 +345,15 @@ function buildKLineOption(hist) {
 
   const series = [kSeries, ...maSeries, ...bollSeries, volSeries]
 
-  // ── 副图指标
+  // ── 副图指标 (using Web Worker)
   if (subInd) {
     const xIdx = 2, yIdx = 2
     if (subInd === 'MACD') {
-      const { dif, dea, macd } = calcMACD(closes)
+      const { dif, dea, macd } = await calculate('MACD', { closes }, { fast: 12, slow: 26, signal: 9 })
       series.push(
-        { name: 'DIF', type: 'line', data: dif, xAxisIndex: xIdx, yAxisIndex: yIdx,
+        { name: 'DIF', type: 'line', sampling: 'lttb', data: dif, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: MARKET_COLORS.DIF, width: 1.2 } },
-        { name: 'DEA', type: 'line', data: dea, xAxisIndex: xIdx, yAxisIndex: yIdx,
+        { name: 'DEA', type: 'line', sampling: 'lttb', data: dea, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: MARKET_COLORS.DEA, width: 1.2 } },
         { name: 'MACD', type: 'bar',
           data: macd.map(v => ({ value: Math.abs(v), itemStyle: { color: v >= 0 ? MARKET_COLORS.MACD_UP : MARKET_COLORS.MACD_DOWN } })),
@@ -353,20 +361,20 @@ function buildKLineOption(hist) {
       )
     }
     if (subInd === 'KDJ') {
-      const { k, d, j } = calcKDJ(closes, highs, lows)
+      const { k, d, j } = await calculate('KDJ', { closes, highs, lows }, { n: 9 })
       series.push(
-        { name: 'K', type: 'line', data: k, xAxisIndex: xIdx, yAxisIndex: yIdx,
+        { name: 'K', type: 'line', sampling: 'lttb', data: k, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: MARKET_COLORS.MA5, width: 1.2 } },
-        { name: 'D', type: 'line', data: d, xAxisIndex: xIdx, yAxisIndex: yIdx,
+        { name: 'D', type: 'line', sampling: 'lttb', data: d, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: MARKET_COLORS.MA10, width: 1.2 } },
-        { name: 'J', type: 'line', data: j, xAxisIndex: xIdx, yAxisIndex: yIdx,
+        { name: 'J', type: 'line', sampling: 'lttb', data: j, xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none', lineStyle: { color: '#fbbf24', width: 1.2 } },
       )
     }
     if (subInd === 'WR') {
-      const wr = calcWR(closes, highs, lows)
+      const wr = await calculate('WR', { closes, highs, lows }, { n: 10 })
       series.push(
-        { name: 'W&R', type: 'line',
+        { name: 'W&R', type: 'line', sampling: 'lttb',
           data: wr.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -377,9 +385,9 @@ function buildKLineOption(hist) {
       )
     }
     if (subInd === 'RSI') {
-      const rsi = calcRSI(closes)
+      const rsi = await calculate('RSI', { closes }, { period: 14 })
       series.push(
-        { name: 'RSI', type: 'line',
+        { name: 'RSI', type: 'line', sampling: 'lttb',
           data: rsi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -390,9 +398,9 @@ function buildKLineOption(hist) {
       )
     }
     if (subInd === 'OBV') {
-      const obv = calcOBV(closes, volumes)
+      const obv = await calculate('OBV', { closes, volumes }, {})
       series.push(
-        { name: 'OBV', type: 'line',
+        { name: 'OBV', type: 'line', sampling: 'lttb',
           data: obv.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -402,10 +410,10 @@ function buildKLineOption(hist) {
       )
     }
     if (subInd === 'DMI') {
-      const { pdi, mdi, adx } = calcDMI(highs, lows, closes)
+      const { pdi, mdi, adx } = await calculate('DMI', { highs, lows, closes }, { period: 14 })
       // PDI (+DI)
       series.push(
-        { name: 'DMI+', type: 'line',
+        { name: 'DMI+', type: 'line', sampling: 'lttb',
           data: pdi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -413,7 +421,7 @@ function buildKLineOption(hist) {
       )
       // MDI (-DI)
       series.push(
-        { name: 'DMI-', type: 'line',
+        { name: 'DMI-', type: 'line', sampling: 'lttb',
           data: mdi.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -421,7 +429,7 @@ function buildKLineOption(hist) {
       )
       // ADX
       series.push(
-        { name: 'ADX', type: 'line',
+        { name: 'ADX', type: 'line', sampling: 'lttb',
           data: adx.map(v => v == null ? '-' : v),
           xAxisIndex: xIdx, yAxisIndex: yIdx,
           smooth: true, symbol: 'none',
@@ -539,7 +547,7 @@ function buildLineOption(hist) {
 
   // Task 2: 分时图也用相同的比例
   const series = [
-    { name: '价格', type: 'line', data: prices, smooth: 0.3, symbol: 'none',
+    { name: '价格', type: 'line', sampling: 'lttb', data: prices, smooth: 0.3, symbol: 'none',
       lineStyle: { color: lineColor, width: 1.5 },
       areaStyle: {
         color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
@@ -549,7 +557,7 @@ function buildLineOption(hist) {
           ],
         },
       } },
-    { name: '均价', type: 'line', data: avg, smooth: 0.3, symbol: 'none',
+    { name: '均价', type: 'line', sampling: 'lttb', data: avg, smooth: 0.3, symbol: 'none',
       lineStyle: { color: MARKET_COLORS.MA5, width: 1, type: 'dashed' } },
   ]
 
@@ -617,11 +625,11 @@ function buildLineOption(hist) {
 // ─────────────────────────────────────────────────────────────────
 // 统一入口
 // ─────────────────────────────────────────────────────────────────
-function buildOption(raw, type) {
+async function buildOption(raw, type) {
   const hist = _sanitize(raw)
   if (!hist || !hist.length) return null
   if (type === 'line') return buildLineOption(hist)
-  return buildKLineOption(hist)
+  return await buildKLineOption(hist)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -782,7 +790,7 @@ async function fetchAndRender() {
     // API 返回 ASC（从旧到新），直接使用；如 API 返回 DESC 则需要 reverse()
     const isDesc = hist.length >= 2 && new Date(hist[0].date) > new Date(hist[hist.length - 1].date)
     const sortedHist = isDesc ? [...hist].reverse() : hist
-    const opt = buildOption(sortedHist, type)
+    const opt = await buildOption(sortedHist, type)
 
     // 空数据：设置错误提示，不渲染空图表
     if (!opt) {

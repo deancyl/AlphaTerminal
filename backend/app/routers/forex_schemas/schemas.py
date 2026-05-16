@@ -23,8 +23,6 @@ class ForexSpotQuote(BaseModel):
     high: Optional[float] = Field(None, description="最高")
     low: Optional[float] = Field(None, description="最低")
     prev_close: Optional[float] = Field(None, description="昨收")
-    source: str = Field("akshare", description="数据来源")
-    timestamp: int = Field(default_factory=lambda: int(datetime.now().timestamp()), description="时间戳")
 
     @field_validator('change_pct')
     @classmethod
@@ -38,7 +36,7 @@ class ForexSpotQuoteList(BaseModel):
     quotes: List[ForexSpotQuote]
     total: int
     source: str = "akshare"
-    update_time: str
+    timestamp: int = Field(default_factory=lambda: int(datetime.now().timestamp()))
 
 
 class ForexCFETSQuote(BaseModel):
@@ -48,8 +46,6 @@ class ForexCFETSQuote(BaseModel):
     ask: Optional[float] = Field(None, description="卖出报价")
     spread: Optional[float] = Field(None, description="点差")
     mid: Optional[float] = Field(None, description="中间价")
-    source: str = Field("cfets", description="数据来源")
-    timestamp: int = Field(default_factory=lambda: int(datetime.now().timestamp()))
 
 
 class ForexCFETSQuoteList(BaseModel):

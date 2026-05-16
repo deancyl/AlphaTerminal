@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, watch, computed, onWatcherCleanup } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
@@ -148,13 +148,13 @@ const selectedSymbol = ref('USDCNH')
 
 const currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'AUD', 'CAD', 'CHF']
 
-const quotes = ref([])
-const matrix = ref([])
-const klineData = ref([])
+const quotes = shallowRef([])
+const matrix = shallowRef([])
+const klineData = shallowRef([])
 
-const cachedQuotes = ref([])
-const cachedMatrix = ref([])
-const cachedKlineData = ref([])
+const cachedQuotes = shallowRef([])
+const cachedMatrix = shallowRef([])
+const cachedKlineData = shallowRef([])
 
 const convertAmount = ref(100)
 const fromCurrency = ref('USD')

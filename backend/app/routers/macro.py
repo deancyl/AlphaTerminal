@@ -1087,3 +1087,225 @@ async def get_macro_batch(
     except Exception as e:
         logger.error(f"[Macro] Batch fetch error: {e}")
         return error_response("批量获取失败，请稍后重试")
+
+
+@router.get("/dashboard")
+async def get_macro_dashboard():
+    """
+    BFF endpoint: Returns all macro data needed for the dashboard in a single request.
+    Reduces 10 separate API calls to 1, avoiding browser connection limits.
+    """
+    cache_key = "macro_dashboard"
+    cached = await get_cached(cache_key)
+    if cached:
+        return cached
+    
+    try:
+        loop = asyncio.get_running_loop()
+        
+        async def fetch_overview():
+            try:
+                ak = _get_ak()
+                pd = _get_pd()
+                
+                gdp_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_gdp),
+                    timeout=MACRO_TIMEOUT
+                )
+                latest_gdp = gdp_df.iloc[0] if len(gdp_df) > 0 else None
+                
+                cpi_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_cpi),
+                    timeout=MACRO_TIMEOUT
+                )
+                latest_cpi = cpi_df.iloc[0] if len(cpi_df) > 0 else None
+                
+                ppi_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_ppi),
+                    timeout=MACRO_TIMEOUT
+                )
+                latest_ppi = ppi_df.iloc[0] if len(ppi_df) > 0 else None
+                
+                pmi_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_pmi_yearly),
+                    timeout=MACRO_TIMEOUT
+                )
+                latest_pmi = pmi_df.iloc[0] if len(pmi_df) > 0 else None
+                
+                m2_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_m2_yearly),
+                    timeout=MACRO_TIMEOUT
+                )
+                latest_m2 = m2_df.iloc[0] if len(m2_df) > 0 else None
+                
+                overview = {
+                    "gdp": {
+                        "quarter": _safe_strftime(latest_gdp['季度']) if latest_gdp is not None else None,
+                        "value": _safe_float(latest_gdp['国内生产总值-绝对值']) if latest_gdp is not None else None,
+                        "yoy": _safe_float(latest_gdp['国内生产总值-同比增长']) if latest_gdp is not None else None,
+                    },
+                    "cpi": {
+                        "month": _safe_strftime(latest_cpi['月份'], '%Y年%m月') if latest_cpi is not None else None,
+                        "yoy": _safe_float(latest_cpi['全国-同比增长']) if latest_cpi is not None else None,
+                        "mom": _safe_float(latest_cpi['全国-环比增长']) if latest_cpi is not None else None,
+                    },
+                    "ppi": {
+                        "month": _safe_strftime(latest_ppi['月份'], '%Y年%m月') if latest_ppi is not None else None,
+                        "yoy": _safe_float(latest_ppi['当月同比增长']) if latest_ppi is not None else None,
+                    },
+                    "pmi": {
+                        "month": _safe_strftime(latest_pmi['月份'], '%Y年%m月') if latest_pmi is not None else None,
+                        "value": _safe_float(latest_pmi['制造业-指数']) if latest_pmi is not None else None,
+                    },
+                    "m2": {
+                        "month": _safe_strftime(latest_m2['月份'], '%Y年%m月') if latest_m2 is not None else None,
+                        "yoy": _safe_float(latest_m2['同比增长']) if latest_m2 is not None else None,
+                    },
+                }
+                return {"overview": overview, "last_update": datetime.now().isoformat()}
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] Overview fetch error: {e}")
+                return None
+        
+        async def fetch_calendar():
+            try:
+                ak = _get_ak()
+                calendar_df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, ak.macro_china_event_report),
+                    timeout=MACRO_TIMEOUT
+                )
+                calendar_items = []
+                for _, row in calendar_df.head(20).iterrows():
+                    calendar_items.append({
+                        "date": str(row.get('日期', '')),
+                        "event": str(row.get('事件', '')),
+                        "importance": "high" if "重要" in str(row.get('重要性', '')) else "normal"
+                    })
+                return {"calendar": calendar_items}
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] Calendar fetch error: {e}")
+                return None
+        
+        async def fetch_indicator_data(fetch_fn, indicator_name):
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, fetch_fn),
+                    timeout=MACRO_TIMEOUT
+                )
+                return df
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] {indicator_name} fetch error: {e}")
+                return None
+        
+        ak = _get_ak()
+        
+        overview_task = fetch_overview()
+        calendar_task = fetch_calendar()
+        gdp_task = fetch_indicator_data(ak.macro_china_gdp, "GDP")
+        cpi_task = fetch_indicator_data(ak.macro_china_cpi, "CPI")
+        ppi_task = fetch_indicator_data(ak.macro_china_ppi, "PPI")
+        pmi_task = fetch_indicator_data(ak.macro_china_pmi_yearly, "PMI")
+        m2_task = fetch_indicator_data(ak.macro_china_m2_yearly, "M2")
+        social_task = fetch_indicator_data(ak.macro_china_shrzgm, "Social Financing")
+        industrial_task = fetch_indicator_data(ak.macro_china_gyzjz, "Industrial Production")
+        unemployment_task = fetch_indicator_data(ak.macro_china_urban_unemployment, "Unemployment")
+        
+        results = await asyncio.gather(
+            overview_task, calendar_task, gdp_task, cpi_task, ppi_task,
+            pmi_task, m2_task, social_task, industrial_task, unemployment_task,
+            return_exceptions=True
+        )
+        
+        dashboard = {}
+        
+        if not isinstance(results[0], Exception) and results[0]:
+            dashboard["overview"] = results[0]["overview"]
+            dashboard["last_update"] = results[0]["last_update"]
+        
+        if not isinstance(results[1], Exception) and results[1]:
+            dashboard["calendar"] = results[1]["calendar"]
+        
+        def process_df(df, limit, columns, rename_map):
+            if df is None or isinstance(df, Exception) or len(df) == 0:
+                return None
+            df = df.head(limit)
+            df_work = df[columns].copy()
+            for old_col, new_col in rename_map.items():
+                if old_col in df_work.columns:
+                    df_work[new_col] = df_work[old_col].apply(_safe_float)
+            return df_work.to_dict('records')
+        
+        if not isinstance(results[2], Exception) and results[2] is not None:
+            df = results[2].head(20)
+            dashboard["gdp"] = {
+                "data": process_df(df, 20, ['季度', '国内生产总值-绝对值', '国内生产总值-同比增长'],
+                                   {'国内生产总值-绝对值': 'gdp_absolute', '国内生产总值-同比增长': 'gdp_yoy'}),
+                "unit": "亿元", "frequency": "季度"
+            }
+        
+        if not isinstance(results[3], Exception) and results[3] is not None:
+            df = results[3].head(24)
+            dashboard["cpi"] = {
+                "data": process_df(df, 24, ['月份', '全国-当月', '全国-同比增长', '全国-环比增长'],
+                                   {'全国-当月': 'nation_current', '全国-同比增长': 'nation_yoy', '全国-环比增长': 'nation_mom'}),
+                "unit": "", "frequency": "月度"
+            }
+        
+        if not isinstance(results[4], Exception) and results[4] is not None:
+            df = results[4].head(24)
+            dashboard["ppi"] = {
+                "data": process_df(df, 24, ['月份', '当月', '当月同比增长'],
+                                   {'当月': 'current', '当月同比增长': 'yoy'}),
+                "unit": "", "frequency": "月度"
+            }
+        
+        if not isinstance(results[5], Exception) and results[5] is not None:
+            df = results[5].head(24)
+            dashboard["pmi"] = {
+                "data": process_df(df, 24, ['月份', '制造业-指数'],
+                                   {'制造业-指数': 'manufacturing'}),
+                "unit": "", "frequency": "月度"
+            }
+        
+        if not isinstance(results[6], Exception) and results[6] is not None:
+            df = results[6].head(24)
+            dashboard["m2"] = {
+                "data": process_df(df, 24, ['月份', '货币和准货币(M2)'],
+                                   {'货币和准货币(M2)': 'm2'}),
+                "unit": "亿元", "frequency": "月度"
+            }
+        
+        if not isinstance(results[7], Exception) and results[7] is not None:
+            df = results[7].head(24)
+            dashboard["social_financing"] = {
+                "data": process_df(df, 24, ['月份', '社会融资规模增量'],
+                                   {'社会融资规模增量': 'amount'}),
+                "unit": "亿元", "frequency": "月度"
+            }
+        
+        if not isinstance(results[8], Exception) and results[8] is not None:
+            df = results[8].head(24)
+            dashboard["industrial_production"] = {
+                "data": process_df(df, 24, ['月份', '同比增长'],
+                                   {'同比增长': 'yoy'}),
+                "unit": "%", "frequency": "月度"
+            }
+        
+        if not isinstance(results[9], Exception) and results[9] is not None:
+            df = results[9].head(24)
+            dashboard["unemployment"] = {
+                "data": process_df(df, 24, ['月份', '失业率'],
+                                   {'失业率': 'rate'}),
+                "unit": "%", "frequency": "月度"
+            }
+        
+        result = success_response(dashboard)
+        await set_cached(cache_key, result)
+        return result
+        
+    except Exception as e:
+        logger.error(f"[Macro Dashboard] Fetch error: {e}")
+        stale_cached = await get_cached(cache_key, allow_stale=True)
+        if stale_cached:
+            return stale_cached
+        return error_response("宏观数据获取失败，请稍后重试")

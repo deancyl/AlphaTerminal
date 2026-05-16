@@ -15,11 +15,18 @@ import asyncio
 import logging
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
+from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
+
+# ── 超时配置 ─────────────────────────────────────────────────────────────
+AKSHARE_TIMEOUT = 30.0  # AkShare 调用超时（秒）
+
+# 专用线程池（隔离 AkShare 同步调用）
+_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="akshare_")
 
 # 延迟导入 AkShare（避免启动时加载）
 _akshare = None
@@ -104,7 +111,7 @@ class AkShareFetcher(BaseMarketFetcher):
             # 转换代码格式：sh600519 -> 600519
             code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
             
-            # 在线程池中执行同步调用
+            # 在线程池中执行同步调用，添加超时保护
             def _fetch():
                 df = self.ak.stock_zh_a_spot_em()
                 row = df[df['代码'] == code]
@@ -126,7 +133,11 @@ class AkShareFetcher(BaseMarketFetcher):
                     "prev_close": float(r.get('昨收', 0) or 0),
                 }
             
-            result = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+            # 使用 asyncio.wait_for 添加超时保护
+            result = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(_executor, _fetch),
+                timeout=AKSHARE_TIMEOUT
+            )
             
             if result:
                 self.cb.record_success()
@@ -216,7 +227,11 @@ class AkShareFetcher(BaseMarketFetcher):
                     })
                 return result
             
-            result = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+            # 添加超时保护
+            result = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(_executor, _fetch),
+                timeout=AKSHARE_TIMEOUT
+            )
             
             if result:
                 self.cb.record_success()
@@ -273,7 +288,11 @@ class AkShareFetcher(BaseMarketFetcher):
                     })
                 return result
             
-            result = await asyncio.get_event_loop().run_in_executor(None, _fetch)
+            # 添加超时保护
+            result = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(_executor, _fetch),
+                timeout=AKSHARE_TIMEOUT
+            )
             
             if result:
                 self.cb.record_success()

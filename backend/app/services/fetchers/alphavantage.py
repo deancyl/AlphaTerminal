@@ -16,6 +16,7 @@ API Key: 从环境变量 ALPHA_VANTAGE_API_KEY 读取
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -101,12 +102,12 @@ class AlphavantageFetcher(BaseMarketFetcher):
             )
         return self._http
 
-    def _rate_limit(self):
-        """简单时间窗口限速（5 req/min）"""
+    async def _rate_limit(self):
+        """异步时间窗口限速（5 req/min）- 不阻塞事件循环"""
         now = time.time()
         elapsed = now - self._last_request_time
         if elapsed < self._rate_limit_delay:
-            time.sleep(self._rate_limit_delay - elapsed)
+            await asyncio.sleep(self._rate_limit_delay - elapsed)
         self._last_request_time = time.time()
 
     # ── Quote ────────────────────────────────────────────────────────────

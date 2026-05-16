@@ -1,11 +1,16 @@
 import { ref, reactive, computed } from 'vue'
 import { useApiError, getErrorCategory } from './useApiError.js'
+import { getFromCache, setCache } from '../utils/cache.js'
+
+const MACRO_CACHE_TTL = 5 * 60 * 1000 // 5 minutes for macro data
 
 export function useGracefulDegradation(options = {}) {
   const {
     onPartialSuccess = null,
     onAllFailed = null,
     showPartialErrors = true,
+    cacheTTL = MACRO_CACHE_TTL,
+    enableCache = true,
   } = options
 
   const { handleError } = useApiError({ showToast: false })
@@ -25,6 +30,17 @@ export function useGracefulDegradation(options = {}) {
       createRequest(key)
     }
 
+    const cacheKey = context.cacheKey || key
+    
+    if (enableCache) {
+      const cached = getFromCache(cacheKey, { ttl: cacheTTL })
+      if (cached !== null) {
+        data[key] = cached
+        requestStates[key] = 'success'
+        return { success: true, data: cached, error: null, fromCache: true }
+      }
+    }
+
     requestStates[key] = 'loading'
     errors[key] = null
 
@@ -32,7 +48,12 @@ export function useGracefulDegradation(options = {}) {
       const result = await fetchFn()
       data[key] = result
       requestStates[key] = 'success'
-      return { success: true, data: result, error: null }
+      
+      if (enableCache) {
+        setCache(cacheKey, result, { ttl: cacheTTL }, cacheTTL)
+      }
+      
+      return { success: true, data: result, error: null, fromCache: false }
     } catch (error) {
       const errorInfo = handleError(error, { ...context, silent: true })
       errors[key] = {
@@ -41,7 +62,7 @@ export function useGracefulDegradation(options = {}) {
         context: context.context || key,
       }
       requestStates[key] = 'error'
-      return { success: false, data: null, error: errorInfo }
+      return { success: false, data: null, error: errorInfo, fromCache: false }
     }
   }
 

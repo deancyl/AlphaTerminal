@@ -4,11 +4,13 @@ Market History Endpoints
 Price history and futures data endpoints extracted from market.py.
 """
 
+import asyncio
 import threading
 from datetime import datetime
 from fastapi import APIRouter
 
 from app.utils.response import success_response
+from app.config.timeout import AKSHARE_TIMEOUT
 from .dependencies import (
     _clean_symbol,
     _inject_change_pct,
@@ -85,12 +87,18 @@ async def market_history(
 
             try:
                 from app.services.data_fetcher import fetch_us_stock_history
-                sync_rows = fetch_us_stock_history(clean_sym, period=period, limit=5000)
+                # 添加超时保护，防止 AkShare 挂起
+                sync_rows = await asyncio.wait_for(
+                    asyncio.to_thread(fetch_us_stock_history, clean_sym, period, 5000),
+                    timeout=AKSHARE_TIMEOUT
+                )
                 if sync_rows:
                     raw_rows = sync_rows
                     total = len(sync_rows)
                     fetching = False
                     logger.info(f"[Market History] 同步返回 {clean_sym}: {len(sync_rows)} 条")
+            except asyncio.TimeoutError:
+                logger.warning(f"[Market History] 同步拉取超时 {clean_sym}，回退DB")
             except Exception as e:
                 logger.warning(f"[Market History] 同步拉取失败，回退DB: {e}")
 

@@ -167,7 +167,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useThrottleFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -243,7 +243,7 @@ const drawingStore = useDrawingStore()
 const period = ref('daily')
 const loading = ref(false)
 const chartError = ref('')
-const histData = ref([])
+const histData = shallowRef([])
 const quoteData = ref({})
 const latestPrice = ref(null)
 const latestChange = ref(0)
@@ -578,11 +578,11 @@ async function renderChart() {
       },
     ],
     series: [
-      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, itemStyle: { color: tc.bullish, color0: tc.bearish, borderColor: tc.bullish, borderColor0: tc.bearish } },
-      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
-      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
+      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, sampling: 'lttb', itemStyle: { color: tc.bullish, color0: tc.bearish, borderColor: tc.bullish, borderColor0: tc.bearish } },
+      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
+      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
       ...subChartData.series,
     ],
   }
@@ -612,8 +612,8 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['DIF', 'DEA', 'MACD'], scale: true,
         series: [
-          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
           { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? tc.bullish : tc.bearish } },
         ]
       }
@@ -622,18 +622,18 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['K', 'D', 'J'], scale: true,
         series: [
-          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
+          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, sampling: 'lttb', lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
         ]
       }
     case 'RSI':
       return {
         legend: ['RSI6', 'RSI12', 'RSI24'], scale: true,
         series: [
-          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
+          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), sampling: 'lttb', lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
         ]
       }
     case 'BOLL':
@@ -641,9 +641,9 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['MID', 'UP', 'LOW'], scale: true,
         series: [
-          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
-          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.upper, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
-          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.lower, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
+          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.upper, sampling: 'lttb', lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.lower, sampling: 'lttb', lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
         ]
       }
     case 'OBV':
@@ -651,8 +651,8 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['OBV', 'MA30'], scale: true,
         series: [
-          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv.map(v => v / 1e6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => v / 1e6), 30), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv.map(v => v / 1e6), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => v / 1e6), 30), sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'DMI':
@@ -660,15 +660,15 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['PDI', 'MDI', 'ADX'], scale: true,
         series: [
-          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
-          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
-          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, sampling: 'lttb', lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, sampling: 'lttb', lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'CCI':
       return {
         legend: ['CCI'], scale: true,
-        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(closes, highs, lows), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
+        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(closes, highs, lows), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
       }
     default:
       return { legend: [], scale: false, series: [] }

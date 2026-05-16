@@ -110,7 +110,7 @@ function buildOption(cData) {
 
   // 主图：K线 (TradingView-style colors)
   series.push({
-    name: 'K线', type: 'candlestick', data: klineData,
+    name: 'K线', type: 'candlestick', data: klineData, sampling: 'lttb',
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: {
       color: MARKET_COLORS.UP,
@@ -125,17 +125,17 @@ function buildOption(cData) {
   if (maData?.ma5) {
     series.push(
       {
-        name: 'MA5', type: 'line', data: maData.ma5,
+        name: 'MA5', type: 'line', data: maData.ma5, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
         lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
       },
       {
-        name: 'MA10', type: 'line', data: maData.ma10,
+        name: 'MA10', type: 'line', data: maData.ma10, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
         lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
       },
       {
-        name: 'MA20', type: 'line', data: maData.ma20,
+        name: 'MA20', type: 'line', data: maData.ma20, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
         lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
       }
@@ -172,7 +172,7 @@ function buildOption(cData) {
       const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: MARKET_COLORS.OI } }))
       if (oiData.some(v => v.value != null)) {
         series.push({
-          name: 'OI', type: 'line', data: oiData,
+          name: 'OI', type: 'line', data: oiData, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx,
           smooth: false, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.OI, width: 1.5 },
@@ -208,12 +208,12 @@ function buildOption(cData) {
       const m = subChartData.MACD
       series.push(
         {
-          name: 'DIF', type: 'line', data: m.dif,
+          name: 'DIF', type: 'line', data: m.dif, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
         },
         {
-          name: 'DEA', type: 'line', data: m.dea,
+          name: 'DEA', type: 'line', data: m.dea, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.DEA, width: 1 },
         },
@@ -231,17 +231,17 @@ function buildOption(cData) {
       const k = subChartData.KDJ
       series.push(
         {
-          name: 'K', type: 'line', data: k.k,
+          name: 'K', type: 'line', data: k.k, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
         },
         {
-          name: 'D', type: 'line', data: k.d,
+          name: 'D', type: 'line', data: k.d, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
         },
         {
-          name: 'J', type: 'line', data: k.j,
+          name: 'J', type: 'line', data: k.j, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
           lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
         }
@@ -249,7 +249,7 @@ function buildOption(cData) {
 
     } else if (subName === 'RSI' && subChartData?.RSI) {
       series.push({
-        name: 'RSI', type: 'line', data: subChartData.RSI,
+        name: 'RSI', type: 'line', data: subChartData.RSI, sampling: 'lttb',
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
         lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
       })

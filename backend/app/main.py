@@ -7,6 +7,7 @@ import signal
 import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
@@ -73,6 +74,11 @@ app = FastAPI(
     version="0.6.40",
     lifespan=lifespan,
 )
+
+# ── GZip 压缩中间件 ───────────────────────────────────────────────────────
+# Enable GZip compression for responses > 1KB
+# Reduces JSON payload sizes by 70-80%, critical for large K-line datasets
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # 初始化日志队列（WebSocket 实时日志流）
 init_logging_queue()

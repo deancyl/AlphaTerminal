@@ -609,19 +609,9 @@ import { useApiError } from '../composables/useApiError.js'
 import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
 import { useEChartsErrorBoundary } from '../composables/useEChartsErrorBoundary.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
+import { useDataCache } from '../composables/useDataCache.js'
 import { getECharts, initChart } from '../utils/lazyEcharts.js'
-import {
-  MacroOverviewSchema,
-  MacroCalendarResponseSchema,
-  GdpResponseSchema,
-  CpiResponseSchema,
-  PpiResponseSchema,
-  PmiResponseSchema,
-  M2ResponseSchema,
-  SocialFinancingResponseSchema,
-  IndustrialProductionResponseSchema,
-  UnemploymentResponseSchema,
-} from '../schemas/macro.js'
+import { MacroDashboardResponseSchema } from '../schemas/macro.js'
 
 const { handleError, getErrorCategory } = useApiError({ showToast: true })
 const { safeSetOption, validateChartData, showChartEmptyState, showChartErrorState } = useEChartsErrorBoundary()
@@ -651,6 +641,8 @@ const {
   getErrorSummary,
   retryAll,
 } = useGracefulDegradation({
+  enableCache: true,
+  cacheTTL: 5 * 60 * 1000,
   onPartialSuccess: ({ successCount, failCount, total, errors }) => {
     const failedContexts = Object.values(errors).map(e => e.context).filter(Boolean)
     const message = failCount > 0 
@@ -727,7 +719,6 @@ let fetchRequestId = 0
 let abortController = null
 
 async function fetchAllData() {
-  // Cancel previous request
   if (abortController) {
     abortController.abort()
   }
@@ -739,87 +730,67 @@ async function fetchAllData() {
   loading.value = true
   errorSummary.value = null
 
-  const requests = [
-    { key: 'overview', fetchFn: () => apiFetchValidated('/api/v1/macro/overview', MacroOverviewSchema, { timeoutMs: 30000, signal }), context: { context: '宏观概览' } },
-    { key: 'calendar', fetchFn: () => apiFetchValidated('/api/v1/macro/calendar', MacroCalendarResponseSchema, { timeoutMs: 30000, signal }), context: { context: '经济日历' } },
-    { key: 'gdp', fetchFn: () => apiFetchValidated('/api/v1/macro/gdp?limit=20', GdpResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'GDP数据' } },
-    { key: 'cpi', fetchFn: () => apiFetchValidated('/api/v1/macro/cpi?limit=24', CpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'CPI数据' } },
-    { key: 'pmi', fetchFn: () => apiFetchValidated('/api/v1/macro/pmi?limit=24', PmiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PMI数据' } },
-    { key: 'ppi', fetchFn: () => apiFetchValidated('/api/v1/macro/ppi?limit=24', PpiResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'PPI数据' } },
-    { key: 'm2', fetchFn: () => apiFetchValidated('/api/v1/macro/m2?limit=24', M2ResponseSchema, { timeoutMs: 30000, signal }), context: { context: 'M2数据' } },
-    { key: 'socialFinancing', fetchFn: () => apiFetchValidated('/api/v1/macro/social_financing?limit=24', SocialFinancingResponseSchema, { timeoutMs: 30000, signal }), context: { context: '社融数据' } },
-    { key: 'industrial', fetchFn: () => apiFetchValidated('/api/v1/macro/industrial_production?limit=24', IndustrialProductionResponseSchema, { timeoutMs: 30000, signal }), context: { context: '工业增加值数据' } },
-    { key: 'unemployment', fetchFn: () => apiFetchValidated('/api/v1/macro/unemployment?limit=24', UnemploymentResponseSchema, { timeoutMs: 30000, signal }), context: { context: '失业率数据' } },
-  ]
-
   try {
-    const { results, successCount, failCount, allFailed } = await fetchAll(requests)
+    const response = await apiFetchValidated(
+      '/api/v1/macro/dashboard',
+      MacroDashboardResponseSchema,
+      { timeoutMs: 30000, signal }
+    )
 
     if (currentRequestId !== fetchRequestId) return
 
-  const [
-    overviewRes,
-    calendarRes,
-    gdpRes,
-    cpiRes,
-    pmiRes,
-    ppiRes,
-    m2Res,
-    socialRes,
-    industrialRes,
-    unemploymentRes,
-  ] = results.map(r => r.data)
+    const data = response
 
-  if (overviewRes?.overview) {
-    overview.value = overviewRes.overview
-    lastUpdate.value = overviewRes.last_update
-  }
-  if (calendarRes?.calendar) calendar.value = calendarRes.calendar
-  if (gdpRes?.data) {
-    gdpData.value = gdpRes.data
-    drawGDPChart(gdpRes.data)
-  }
-  if (cpiRes?.data) {
-    cpiData.value = cpiRes.data
-    drawCPIChart(cpiRes.data)
-  }
-  if (pmiRes?.data) {
-    pmiData.value = pmiRes.data
-    drawPMIChart(pmiRes.data)
-  }
-  if (ppiRes?.data) {
-    ppiData.value = ppiRes.data
-    drawPPIChart(ppiRes.data)
-  }
-  if (m2Res?.data) {
-    m2Data.value = m2Res.data
-    drawM2Chart(m2Res.data)
-  }
-  if (socialRes?.data) {
-    socialFinancingData.value = socialRes.data
-    drawSocialFinancingChart(socialRes.data)
-  }
-  if (industrialRes?.data) {
-    industrialProductionData.value = industrialRes.data
-    drawIndustrialProductionChart(industrialRes.data)
-  }
-  if (unemploymentRes?.data) {
-    unemploymentData.value = unemploymentRes.data
-    drawUnemploymentChart(unemploymentRes.data)
-  }
+    if (data.overview) {
+      overview.value = data.overview
+    }
+    if (data.last_update) {
+      lastUpdate.value = data.last_update
+    }
+    if (data.calendar) {
+      calendar.value = data.calendar
+    }
+    if (data.gdp?.data) {
+      gdpData.value = data.gdp.data
+      drawGDPChart(data.gdp.data)
+    }
+    if (data.cpi?.data) {
+      cpiData.value = data.cpi.data
+      drawCPIChart(data.cpi.data)
+    }
+    if (data.pmi?.data) {
+      pmiData.value = data.pmi.data
+      drawPMIChart(data.pmi.data)
+    }
+    if (data.ppi?.data) {
+      ppiData.value = data.ppi.data
+      drawPPIChart(data.ppi.data)
+    }
+    if (data.m2?.data) {
+      m2Data.value = data.m2.data
+      drawM2Chart(data.m2.data)
+    }
+    if (data.social_financing?.data) {
+      socialFinancingData.value = data.social_financing.data
+      drawSocialFinancingChart(data.social_financing.data)
+    }
+    if (data.industrial_production?.data) {
+      industrialProductionData.value = data.industrial_production.data
+      drawIndustrialProductionChart(data.industrial_production.data)
+    }
+    if (data.unemployment?.data) {
+      unemploymentData.value = data.unemployment.data
+      drawUnemploymentChart(data.unemployment.data)
+    }
 
-  if (failCount > 0) {
-    errorSummary.value = getErrorSummary()
-  }
-
-  loading.value = false
+    loading.value = false
   } catch (e) {
-    // Handle abort errors gracefully - don't show error for intentional abort
     if (e.name === 'AbortError') {
       console.log('[Macro] Request aborted')
       return
     }
-    // Re-throw other errors to be handled by useGracefulDegradation
+    handleError(e, { context: '宏观数据' })
+    errorSummary.value = { count: 1, keys: ['dashboard'] }
     throw e
   } finally {
     loading.value = false
@@ -964,7 +935,7 @@ function drawGDPChart(data) {
     },
     series: [{
       name: 'GDP同比',
-      type: 'line',
+      type: 'line', sampling: 'lttb',
       data: yoyData,
       smooth: true,
       symbol: 'circle',
@@ -1032,7 +1003,7 @@ function drawCPIChart(data) {
     series: [
       {
         name: '同比',
-        type: 'line',
+        type: 'line', sampling: 'lttb',
         data: yoyData,
         smooth: true,
         symbol: 'circle',
@@ -1042,7 +1013,7 @@ function drawCPIChart(data) {
       },
       {
         name: '环比',
-        type: 'line',
+        type: 'line', sampling: 'lttb',
         data: momData,
         smooth: true,
         symbol: 'circle',
@@ -1103,7 +1074,7 @@ function drawPMIChart(data) {
     series: [
       {
         name: '制造业',
-        type: 'line',
+        type: 'line', sampling: 'lttb',
         data: manufacturingData,
         smooth: true,
         symbol: 'circle',
@@ -1117,7 +1088,7 @@ function drawPMIChart(data) {
       },
       {
         name: '非制造业',
-        type: 'line',
+        type: 'line', sampling: 'lttb',
         data: nonManufacturingData,
         smooth: true,
         symbol: 'circle',
@@ -1168,7 +1139,7 @@ function drawPPIChart(data) {
     },
     series: [{
       name: 'PPI同比',
-      type: 'line',
+      type: 'line', sampling: 'lttb',
       data: yoyData,
       smooth: true,
       symbol: 'circle',
@@ -1228,7 +1199,7 @@ function drawM2Chart(data) {
     },
     series: [{
       name: 'M2同比',
-      type: 'line',
+      type: 'line', sampling: 'lttb',
       data: yoyData,
       smooth: true,
       symbol: 'circle',
@@ -1345,7 +1316,7 @@ function drawIndustrialProductionChart(data) {
     },
     series: [{
       name: '工业增加值同比',
-      type: 'line',
+      type: 'line', sampling: 'lttb',
       data: yoyData,
       smooth: true,
       symbol: 'circle',
@@ -1405,7 +1376,7 @@ function drawUnemploymentChart(data) {
     },
     series: [{
       name: '失业率',
-      type: 'line',
+      type: 'line', sampling: 'lttb',
       data: rateData,
       smooth: true,
       symbol: 'circle',

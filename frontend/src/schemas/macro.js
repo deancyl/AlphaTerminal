@@ -176,3 +176,78 @@ export const MacroCalendarResponseSchema = z.object({
   calendar: z.array(MacroCalendarEventSchema),
   last_update: z.string().optional(),
 })
+
+// ── BFF Dashboard Response Schema ─────────────────────────────────────
+
+export const MacroDashboardResponseSchema = z.object({
+  overview: z.object({
+    gdp: z.object({
+      quarter: z.string().nullable(),
+      value: z.number().nullable(),
+      yoy: z.number().nullable(),
+    }).nullable(),
+    cpi: z.object({
+      month: z.string().nullable(),
+      yoy: z.number().nullable(),
+      mom: z.number().nullable(),
+    }).nullable(),
+    ppi: z.object({
+      month: z.string().nullable(),
+      yoy: z.number().nullable(),
+    }).nullable(),
+    pmi: z.object({
+      month: z.string().nullable(),
+      value: z.number().nullable(),
+    }).nullable(),
+    m2: z.object({
+      month: z.string().nullable(),
+      yoy: z.number().nullable(),
+    }).nullable(),
+  }).nullable(),
+  last_update: z.string().nullable(),
+  calendar: z.array(z.object({
+    date: z.string(),
+    event: z.string(),
+    importance: z.string(),
+  })).nullable(),
+  gdp: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  cpi: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  ppi: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  pmi: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  m2: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  social_financing: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  industrial_production: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+  unemployment: z.object({
+    data: z.array(z.any()),
+    unit: z.string(),
+    frequency: z.string(),
+  }).nullable(),
+})
