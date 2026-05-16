@@ -5,6 +5,54 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.40] - 2026-05-16
+
+### 核心修复
+
+- **外汇模块显示问题修复**
+  - 修复实时报价面板只显示6个数据的问题 → 现在显示10个货币对
+  - 修复交叉汇率矩阵大量N/A数据 → 添加EURUSD/GBPUSD/USDJPY/AUDUSD实现三角套利计算
+  - 修复K线走势图不显示的问题 → 添加`min-h-[400px]`确保图表容器有足够高度
+  - 新增熔断器重置端点 `POST /forex/circuit_breaker/reset`
+  - 优化离线模式提示（仅在无数据时显示）
+
+- **后端熔断器机制增强**
+  - 新增 `_get_fallback_quotes()` 返回10个货币对的备用数据
+  - 熔断器打开时自动使用备用数据而非空数组
+  - 添加 `reset_circuit_breaker()` 方法支持手动重置
+
+### 新增功能
+
+- **宏观模块配置中心化**
+  - 新增 `backend/app/config/macro_config.py` 配置模块
+  - 新增 `frontend/src/utils/macroErrors.js` 错误分类工具
+  - 新增 `frontend/src/utils/webVitals.js` 性能监控工具
+
+- **ECharts 错误边界**
+  - 新增 `useEChartsErrorBoundary.js` composable
+  - 图表错误自动捕获和恢复
+
+### 测试增强
+
+- **熔断器单元测试**
+  - 新增 `test_circuit_breaker.py` 熔断器测试套件
+
+- **内存泄漏E2E测试**
+  - 新增 `memory-leak.spec.js` 端到端内存泄漏检测
+
+### 文档更新
+
+- **诊断工作流文档**
+  - 新增 `DIAGNOSIS_WORKFLOW_REVIEW.md` 诊断流程审查
+  - 更新 `AUTO_DIAGNOSIS_WORKFLOW.md` 自动诊断工作流
+  - 新增 `MACRO_OPTIMIZATION_SUMMARY_50.md` 宏观模块优化总结
+
+### 其他改进
+
+- **路由器超时保护**
+  - macro, forex, portfolio 端点添加 `asyncio.wait_for()` 超时保护
+  - 统一错误处理和输入验证
+
 ## [0.6.33] - 2026-05-14
 
 ### 核心修复

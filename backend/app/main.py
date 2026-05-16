@@ -70,7 +70,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AlphaTerminal API",
-    version="0.6.35",
+    version="0.6.40",
     lifespan=lifespan,
 )
 

@@ -1301,3 +1301,106 @@ grep -c "le=1000000000" backend/app/forex_schemas/schemas.py  # Expected: 1
 # Tests
 pytest backend/tests/unit/test_routers/test_forex.py -v
 ```
+
+---
+
+## Forex Module Display Fix (v0.6.40)
+
+### Overview
+
+Fixed critical display issues in the Forex module: real-time quotes, cross-rate matrix, and K-line chart rendering.
+
+### Issues Fixed
+
+| Issue | Root Cause | Solution |
+|-------|------------|----------|
+| Real-time quotes only showing 6 items | Circuit breaker returning empty array | Added `_get_fallback_quotes()` with 10 pairs |
+| Cross-rate matrix showing N/A | Missing USD-based pairs for triangular arbitrage | Added EURUSD, GBPUSD, USDJPY, AUDUSD |
+| K-line chart not rendering | Grid container had no minimum height | Added `min-h-[400px]` to grid container |
+
+### Fallback Quotes Data
+
+When circuit breaker is open (network blocked), the system returns 10 currency pairs:
+
+| Symbol | Name | Type |
+|--------|------|------|
+| USDCNY | 美元/人民币 | CNY-based |
+| EURCNY | 欧元/人民币 | CNY-based |
+| GBPCNY | 英镑/人民币 | CNY-based |
+| JPYCNY | 日元/人民币 | CNY-based |
+| HKDCNY | 港币/人民币 | CNY-based |
+| AUDCNY | 澳元/人民币 | CNY-based |
+| EURUSD | 欧元/美元 | USD-based (triangular) |
+| GBPUSD | 英镑/美元 | USD-based (triangular) |
+| USDJPY | 美元/日元 | USD-based (triangular) |
+| AUDUSD | 澳元/美元 | USD-based (triangular) |
+
+### Triangular Arbitrage for Cross-Rates
+
+With USD-based pairs, the matrix can calculate cross-rates:
+
+```
+EUR/GBP = EURUSD ÷ GBPUSD
+EUR/JPY = EURUSD × USDJPY
+GBP/JPY = GBPUSD × USDJPY
+AUD/JPY = AUDUSD × USDJPY
+```
+
+### K-Line Chart Height Fix
+
+The `BaseKLineChart` component requires minimum 100x100 pixels via `waitForDimensions()`. The grid container needed explicit height:
+
+```vue
+<!-- Before -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+<!-- After -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[400px]">
+```
+
+### Circuit Breaker Reset Endpoint
+
+```bash
+# Reset circuit breaker manually
+POST /api/v1/forex/circuit_breaker/reset
+
+# Response
+{
+  "success": true,
+  "state": "closed",
+  "message": "Circuit breaker reset successfully"
+}
+```
+
+### Offline Mode Banner
+
+The offline mode banner now only shows when:
+- Circuit breaker is open **AND**
+- No data is available
+
+Previously it showed whenever circuit breaker was open, even with fallback data.
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Fallback Quotes | `backend/app/services/fetchers/forex_fetcher.py` |
+| Forex Router | `backend/app/routers/forex.py` |
+| Forex Dashboard | `frontend/src/components/ForexDashboard.vue` |
+| Circuit Breaker Tests | `backend/tests/unit/test_services/test_circuit_breaker.py` |
+
+### Verification Commands
+
+```bash
+# Check spot quotes (should return 10 items)
+curl http://localhost:60100/api/v1/forex/spot | jq '.data.quotes | length'
+
+# Check matrix (USD row should have calculated rates)
+curl http://localhost:60100/api/v1/forex/matrix | jq '.data.matrix[0]'
+
+# Check K-line history
+curl http://localhost:60100/api/v1/forex/history/USDCNH | jq '.data | length'
+
+# Reset circuit breaker
+curl -X POST http://localhost:60100/api/v1/forex/circuit_breaker/reset
+```
