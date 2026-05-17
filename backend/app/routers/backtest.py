@@ -155,7 +155,7 @@ def _calc_bollinger(closes, period=20, multiplier=2):
     return mid, upper, lower
 
 
-def _generate_signals(strategy_type: str, closes: list, raw_params: dict) -> list:
+def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: dict) -> list:
     """根据策略类型生成交易信号"""
     signals = [0] * len(closes)
     
@@ -198,64 +198,143 @@ def _generate_signals(strategy_type: str, closes: list, raw_params: dict) -> lis
             elif closes[i-1] >= upper[i-1] and closes[i] < upper[i]:
                 signals[i] = -1
     
+    elif strategy_type.startswith("ml_"):
+        # ML-based signal generation
+        from app.services.strategy.ml_strategy import create_ml_strategy
+
+        ml_type = strategy_type.replace("ml_", "")
+        model_id = raw_params.get("model_id", "default_model")
+        feature_set = raw_params.get("feature_set", "Alpha158")
+
+        try:
+            strategy = create_ml_strategy(
+                model_id=model_id,
+                strategy_type="lightgbm" if ml_type == "lightgbm" else "qlib",
+                feature_set=feature_set,
+            )
+
+            # Create DataFrame for prediction using closes and rows
+            import pandas as pd
+            df = pd.DataFrame({
+                'open': [float(r[1]) for r in rows],
+                'high': [float(r[2]) for r in rows],
+                'low': [float(r[3]) for r in rows],
+                'close': [float(r[4]) for r in rows],
+                'volume': [float(r[5]) for r in rows],
+            })
+
+            result = strategy.run_prediction(df)
+
+            if result and hasattr(result, 'signals'):
+                signals = result.signals
+
+        except Exception as e:
+            logger.warning(f"[Backtest] ML strategy error: {e}")
+            # Return zeros if ML fails
+    
     return signals
 
 
-def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: float) -> tuple:
-    """模拟交易，返回 (trades, wins, losses, final_capital)"""
+def _simulate_trades(signals: list, closes: list, rows: list, initial_capital: float, 
+                      commission: float = 0.0003, slippage: float = 0.0001) -> tuple:
+    """
+    模拟交易，返回 (trades, wins, losses, final_capital)
+    
+    Args:
+        signals: 交易信号列表 (1=买入, -1=卖出, 0=持有)
+        closes: 收盘价列表
+        rows: 原始数据行列表
+        initial_capital: 初始资金
+        commission: 手续费率 (默认0.03%)
+        slippage: 滑点率 (默认0.01%)
+    """
     capital = float(initial_capital)
     position = 0
     entry_price = 0.0
     trades = []
     wins = 0
     losses = 0
+    total_commission = 0.0
+    total_slippage_cost = 0.0
     
     for i in range(1, len(closes)):
         if signals[i] == 1 and position == 0 and capital > 0:
-            shares = int(capital * 0.9 / closes[i])
+            # 买入：应用滑点（买入价格更高）
+            exec_price = closes[i] * (1 + slippage)
+            shares = int(capital * 0.9 / exec_price)
             if shares > 0:
-                position = shares
-                entry_price = closes[i]
-                capital -= shares * entry_price
-                trades.append({
-                    "entry_date": rows[i][0],
-                    "entry_price": round(entry_price, 2),
-                    "shares": shares,
-                    "type": "long"
-                })
+                # 计算手续费
+                trade_value = shares * exec_price
+                commission_cost = trade_value * commission
+                total_cost = trade_value + commission_cost
+                
+                if total_cost <= capital:
+                    position = shares
+                    entry_price = exec_price
+                    capital -= total_cost
+                    total_commission += commission_cost
+                    total_slippage_cost += (exec_price - closes[i]) * shares
+                    
+                    trades.append({
+                        "entry_date": rows[i][0],
+                        "entry_price": round(exec_price, 2),
+                        "shares": shares,
+                        "type": "long",
+                        "commission": round(commission_cost, 2),
+                        "slippage_cost": round((exec_price - closes[i]) * shares, 2)
+                    })
         elif signals[i] == -1 and position > 0:
-            exit_price = closes[i]
-            pnl = (exit_price - entry_price) * position
+            # 卖出：应用滑点（卖出价格更低）
+            exec_price = closes[i] * (1 - slippage)
+            
+            # 计算手续费
+            trade_value = position * exec_price
+            commission_cost = trade_value * commission
+            
+            pnl = (exec_price - entry_price) * position - commission_cost
             if pnl > 0:
                 wins += 1
             else:
                 losses += 1
-            capital += position * exit_price
+            
+            capital += trade_value - commission_cost
+            total_commission += commission_cost
+            total_slippage_cost += (closes[i] - exec_price) * position
+            
             trades[-1].update({
                 "exit_date": rows[i][0],
-                "exit_price": round(exit_price, 2),
+                "exit_price": round(exec_price, 2),
                 "pnl": round(pnl, 2),
-                "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
+                "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
+                "exit_commission": round(commission_cost, 2),
+                "exit_slippage_cost": round((closes[i] - exec_price) * position, 2)
             })
             position = 0
     
     # 平仓剩余持仓
     if position > 0:
-        exit_price = closes[-1]
-        pnl = (exit_price - entry_price) * position
+        exec_price = closes[-1] * (1 - slippage)
+        trade_value = position * exec_price
+        commission_cost = trade_value * commission
+        
+        pnl = (exec_price - entry_price) * position - commission_cost
         if pnl > 0:
             wins += 1
         else:
             losses += 1
-        capital += position * exit_price
+        
+        capital += trade_value - commission_cost
+        total_commission += commission_cost
+        
         trades[-1].update({
             "exit_date": rows[-1][0],
-            "exit_price": round(exit_price, 2),
+            "exit_price": round(exec_price, 2),
             "pnl": round(pnl, 2),
-            "pnl_pct": round((exit_price - entry_price) / entry_price * 100, 2)
+            "pnl_pct": round((exec_price - entry_price) / entry_price * 100, 2),
+            "exit_commission": round(commission_cost, 2)
         })
     
-    return trades, wins, losses, capital
+    return trades, wins, losses, capital, total_commission, total_slippage_cost
 
 
 def _calculate_metrics(trades: list, wins: int, losses: int, final_capital: float, 
@@ -326,8 +405,10 @@ class BacktestRequest(BaseModel):
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
     initial_capital: float = Field(default=100000, ge=100, le=1e9, description="初始资金")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
     params: Optional[Dict[str, Any]] = Field(default=None)
+    commission: float = Field(default=0.0003, ge=0, le=0.1, description="手续费率 (默认0.03%)")
+    slippage: float = Field(default=0.0001, ge=0, le=0.1, description="滑点率 (默认0.01%)")
 
     @field_validator('symbol')
     @classmethod
@@ -353,7 +434,7 @@ class BacktestRequest(BaseModel):
 class StrategyCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="策略名称")
     description: str = Field(default="", max_length=500)
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
     params: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -471,11 +552,11 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
         closes = [float(r[4]) for r in rows]
         
         # ── 策略信号生成 ──────────────────────────────────────────
-        signals = _generate_signals(strategy_type, closes, raw_params)
+        signals = _generate_signals(strategy_type, closes, rows, raw_params)
         
         # ── 模拟交易 ──────────────────────────────────────────────
-        trades, wins, losses, final_capital = _simulate_trades(
-            signals, closes, rows, initial_capital
+        trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
+            signals, closes, rows, initial_capital, req.commission, req.slippage
         )
         
         # ── 统计指标 ──────────────────────────────────────────────
@@ -539,6 +620,10 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
             "strategy_type": strategy_type,
             "trades": trades,
             "equity_curve": metrics["equity_curve"],
+            "commission": req.commission,
+            "slippage": req.slippage,
+            "total_commission": round(total_commission, 2),
+            "total_slippage_cost": round(total_slippage_cost, 2),
         })
     finally:
         conn.close()
@@ -586,7 +671,7 @@ class WalkForwardRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
     start_date: str = Field(..., description="开始日期 YYYY-MM-DD")
     end_date: str = Field(..., description="结束日期 YYYY-MM-DD")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
     initial_capital: float = Field(default=100000, ge=100, le=1e9)
     train_window_days: int = Field(default=252, ge=30, le=1260)
     test_window_days: int = Field(default=63, ge=10, le=252)
@@ -711,7 +796,7 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
 
 class SmartParamsRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=20, description="股票代码")
-    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands)$")
+    strategy_type: str = Field(default="ma_crossover", pattern="^(ma_crossover|rsi_oversold|bollinger_bands|ml_lightgbm|ml_qlib_hist|ml_ensemble)$")
 
 
 class SmartParamsResponse(BaseModel):

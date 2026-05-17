@@ -52,9 +52,16 @@
             <span class="text-[10px] text-theme-muted w-8">策略</span>
             <select v-model="strategyType"
               class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
-              <option value="ma_crossover">双均线</option>
-              <option value="rsi_oversold">RSI超卖</option>
-              <option value="bollinger_bands">布林带</option>
+              <optgroup label="传统策略">
+                <option value="ma_crossover">双均线</option>
+                <option value="rsi_oversold">RSI超卖</option>
+                <option value="bollinger_bands">布林带</option>
+              </optgroup>
+              <optgroup label="ML策略">
+                <option value="ml_lightgbm">ML-LightGBM</option>
+                <option value="ml_qlib_hist">ML-HIST (Qlib)</option>
+                <option value="ml_ensemble">ML-Ensemble</option>
+              </optgroup>
             </select>
           </div>
 
@@ -118,6 +125,34 @@
             <div class="hidden md:block text-[10px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
           </template>
 
+          <!-- ML策略参数 -->
+          <template v-if="strategyType.startsWith('ml_')">
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">模型ID</span>
+                <input v-model="mlModelId" type="text"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60"
+                  placeholder="my_model_id" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">特征集</span>
+                <select v-model="mlFeatureSet"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
+                  <option value="Alpha158">Alpha158</option>
+                  <option value="Alpha360">Alpha360</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">阈值</span>
+                <input v-model.number="mlThreshold" type="number" step="0.1" min="0" max="1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">预测阈值（默认0.5）</div>
+          </template>
+
           <!-- 窗口 -->
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-theme-muted w-8">窗口</span>
@@ -153,6 +188,12 @@
               💡 <span class="text-[var(--color-info-light)] font-medium">布林带回归策略：</span>
               <span class="text-[var(--color-info-light)]/70">价格触下轨时<span class="text-[var(--color-success)]">买入</span>；</span>
               <span class="text-[var(--color-info-light)]/70">价格触上轨时<span class="text-[var(--color-danger)]">卖出</span>。</span>
+            </template>
+            <template v-else-if="strategyType.startsWith('ml_')">
+              💡 <span class="text-[var(--color-info-light)] font-medium">ML策略：</span>
+              <span class="text-[var(--color-info-light)]/70">机器学习模型预测涨跌概率，</span>
+              <span class="text-[var(--color-info-light)]/70">预测值 &gt; {{ mlThreshold }} 时<span class="text-[var(--color-success)]">买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">预测值 &lt; {{ 1 - mlThreshold }} 时<span class="text-[var(--color-danger)]">卖出</span>。</span>
             </template>
           </div>
         </div>
@@ -701,6 +742,11 @@ const bbStd         = ref(2)
 const windowPreset  = ref('1y')
 const initialCapital = 100000
 
+// ML策略参数
+const mlModelId     = ref('')
+const mlFeatureSet  = ref('Alpha158')
+const mlThreshold   = ref(0.5)
+
 // ── 标的格式校验（8位 = 市场前缀 + 6位代码）─────────────────────
 const symbolValid = computed(() => /^(sh|sz)[0-9]{6}$/.test(symbol.value.trim()))
 const symbolMatchedName = computed(() => {
@@ -827,24 +873,31 @@ async function runBacktest() {
     histData.value = rawHist
 
     statusMsg.value = '⚙️ 运行回测引擎...'
+    const params = {
+      symbol:         sym,
+      period:         'daily',
+      start_date,
+      end_date,
+      initial_capital: initialCapital,
+      strategy_type:  strategyType.value,
+      params: (() => {
+        switch (strategyType.value) {
+          case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
+          case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
+          case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
+          default:                return {}
+        }
+      })(),
+    }
+    // Add ML params if strategy is ML-based
+    if (strategyType.value.startsWith('ml_')) {
+      params.ml_model_id = mlModelId.value
+      params.ml_feature_set = mlFeatureSet.value
+      params.ml_threshold = mlThreshold.value
+    }
     const btResp = await apiFetch('/api/v1/backtest/run', {
       method: 'POST',
-      body: {
-        symbol:         sym,
-        period:         'daily',
-        start_date,
-        end_date,
-        initial_capital: initialCapital,
-        strategy_type:  strategyType.value,
-        params: (() => {
-          switch (strategyType.value) {
-            case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
-            case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
-            case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
-            default:                return {}
-          }
-        })(),
-      },
+      body: params,
       signal: _fetchController.signal,
     })
 

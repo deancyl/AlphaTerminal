@@ -18,6 +18,7 @@
         <div class="ml-auto text-xs text-theme-muted">
           <span v-if="activeTab === 'quick'">快速回测：预设策略一键测试</span>
           <span v-else-if="activeTab === 'advanced'">策略开发：自定义策略代码</span>
+          <span v-else-if="activeTab === 'ml'">ML策略：使用机器学习模型进行预测和组合优化</span>
         </div>
       </div>
 
@@ -28,6 +29,9 @@
         
         <!-- 策略开发 -->
         <StrategyLab v-else-if="activeTab === 'advanced'" />
+        
+        <!-- ML策略 -->
+        <MLStrategyPanel v-else-if="activeTab === 'ml'" />
       </div>
     </div>
   </ErrorBoundary>
@@ -38,10 +42,12 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import ErrorBoundary from './ErrorBoundary.vue'
 import BacktestDashboard from './BacktestDashboard.vue'
 import StrategyLab from './StrategyLab.vue'
+import MLStrategyPanel from './MLStrategyPanel.vue'
 
 const tabs = [
   { id: 'quick', label: '快速回测', icon: '🔬' },
   { id: 'advanced', label: '策略开发', icon: '🧪' },
+  { id: 'ml', label: 'ML策略', icon: '🤖' },
 ]
 
 const activeTab = ref('quick')
