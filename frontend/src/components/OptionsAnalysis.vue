@@ -311,8 +311,9 @@ const tStyleData = computed(() => {
 async function fetchContracts() {
   try {
     const res = await apiFetch('/api/v1/options/contracts?exchange=CFFEX', { timeoutMs: 15000 })
-    if (res?.data?.contracts) {
-      contracts.value = res.data.contracts
+    // apiFetch already extracts data, so res IS the data object
+    if (res?.contracts) {
+      contracts.value = res.contracts
       if (contracts.value.length > 0 && !contracts.value.find(c => c.code === selectedSymbol.value)) {
         selectedSymbol.value = contracts.value[0].code
       }
@@ -328,8 +329,9 @@ async function fetchChainData() {
 
   try {
     const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { timeoutMs: 30000 })
-    if (res?.data) {
-      chainData.value = res.data
+    // apiFetch already extracts data, so res IS the data object
+    if (res && (res.calls || res.puts)) {
+      chainData.value = res
     } else {
       error.value = '数据格式错误'
     }
