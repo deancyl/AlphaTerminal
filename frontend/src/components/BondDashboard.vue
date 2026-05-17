@@ -407,11 +407,11 @@ async function fetchSpreadHistory() {
   spreadError.value   = ''
   try {
     const [data10y, data3y] = await Promise.all([
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(e => {
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, { timeoutMs: 25000, retries: 0 }).catch(e => {
         logger.warn('[BondDashboard] 10Y history fetch failed:', e)
         return null
       }),
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('3年')}&period=1Y`, 10000).catch(e => {
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('3年')}&period=1Y`, { timeoutMs: 25000, retries: 0 }).catch(e => {
         logger.warn('[BondDashboard] 3Y history fetch failed:', e)
         return null
       }),
