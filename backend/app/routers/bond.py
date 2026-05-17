@@ -28,6 +28,9 @@ _REFRESH_SEM = threading.Semaphore(1)
 _HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
 _HISTORY_TTL = 3600  # 1 hour
 
+# 异步锁防止缓存雪崩（Thundering Herd）
+_HISTORY_LOCK = asyncio.Lock()
+
 # ── Mock 活跃债券数据（无可靠免费接口时的兜底）────────────────────
 _MOCK_BONDS = [
     {"code": "019736", "name": "23附息国债05",  "rate": "1.721%", "ytm": 1.721, "change_bps": +1.3,  "type": "国债"},
@@ -237,16 +240,22 @@ async def bond_active():
 
 
 async def _get_bond_history_df():
-    """带 1 小时 TTL 的内存缓存，避免每次请求都爬 akshare"""
+    """带 1 小时 TTL 的内存缓存，增加异步锁防止雪崩(Thundering Herd)"""
+    global _HISTORY_CACHE, _HISTORY_CACHE_TIME
     cached = _cache.get(_HISTORY_CACHE_KEY)
     if cached is not None:
         return cached
-    import akshare as ak, warnings
-    warnings.filterwarnings("ignore")
-    logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
-    df = await asyncio.to_thread(ak.bond_china_yield)
-    _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
-    return df
+    async with _HISTORY_LOCK:
+        # 获取锁后进行双重检查 (Double-check)
+        cached = _cache.get(_HISTORY_CACHE_KEY)
+        if cached is not None:
+            return cached
+        import akshare as ak, warnings
+        warnings.filterwarnings("ignore")
+        logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
+        df = await asyncio.to_thread(ak.bond_china_yield)
+        _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
+        return df
 
 
 @router.get("/bond/history")
@@ -261,17 +270,35 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         df = await _get_bond_history_df()
         if df is None or df.empty:
             raise ValueError("empty df")
-        tenor_col = next((c for c in df.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
+        
+        # 必须过滤出"国债"曲线，否则历史图表数据点会发生严重错乱
+        curve_name_col = df.columns[0]
+        if "曲线名称" in df.columns or curve_name_col in df.columns:
+            col_to_use = "曲线名称" if "曲线名称" in df.columns else curve_name_col
+            df_gov = df[df[col_to_use].astype(str).str.contains("国债")].copy()
+        else:
+            df_gov = df.copy()
+        
+        if df_gov.empty:
+            df_gov = df
+        
+        # 按日期排序
+        date_col = "日期" if "日期" in df_gov.columns else (df_gov.columns[1] if len(df_gov.columns) > 1 else df_gov.columns[0])
+        if date_col in df_gov.columns:
+            df_gov = df_gov.sort_values(date_col)
+        
+        tenor_col = next((c for c in df_gov.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
-        # 安全转换：过滤非数字值（纯Python实现）
+        
+        # 安全转换：过滤非数字值
         numeric = []
-        for val in df[tenor_col]:
+        for val in df_gov[tenor_col]:
             if val is not None:
                 try:
                     numeric.append(float(val))
-                except (ValueError, TypeError) as e:
-                    logger.debug(f"[BOND] Failed to parse yield value: {type(e).__name__}: {e}")
+                except (ValueError, TypeError):
+                    pass
         if not numeric:
             raise ValueError(f"no numeric data in column: {tenor_col}")
         current_yield = numeric[-1] if numeric else None
@@ -281,15 +308,19 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             percentile = None
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
-        date_col = df.columns[1] if len(df.columns) > 1 else df.columns[0]
-        curve_name_col = df.columns[0]
-        gov_bond_df = df[df[curve_name_col] == '中债国债收益率曲线']
-        if gov_bond_df.empty:
-            gov_bond_df = df
-        history = [
-            {"date": str(r[0]), "yield": float(r[1])}
-            for r in gov_bond_df[[date_col, tenor_col]].dropna().tail(n_rows).values
-        ]
+        
+        # 使用过滤后的国债数据
+        history = []
+        tail_df = df_gov[[date_col, tenor_col]].dropna().tail(n_rows)
+        for _, r in tail_df.iterrows():
+            try:
+                d_val = r[date_col]
+                date_str = d_val.strftime("%Y-%m-%d") if hasattr(d_val, "strftime") else str(d_val)
+                y_val = float(r[tenor_col])
+                history.append({"date": date_str, "yield": y_val})
+            except (ValueError, TypeError):
+                pass
+        
         return success_response({
             "tenor": tenor,
             "current": round(current_yield, 6) if current_yield else None,
