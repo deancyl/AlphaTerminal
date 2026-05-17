@@ -72,6 +72,9 @@ def _safe_strftime(val, fmt='%Y年%m月份'):
 # ── 全局缓存导入 ─────────────────────────────────────────────────────
 from app.services.data_cache import get_cache
 
+_cache = get_cache()
+_cache_ttl = {}
+
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
 async def get_gdp_data(

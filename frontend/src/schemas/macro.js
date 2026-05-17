@@ -90,18 +90,23 @@ export const CpiDataPointSchema = z.object({
 
 export const PpiDataPointSchema = z.object({
   month: z.string(),
+  current: z.number().nullable().optional(),
   yoy: z.number().nullable(),
+  cumulative: z.number().nullable().optional(),
 })
 
 export const PmiDataPointSchema = z.object({
   month: z.string(),
   manufacturing_index: z.number().nullable(),
+  manufacturing_yoy: z.number().nullable().optional(),
   non_manufacturing_index: z.number().nullable(),
+  non_manufacturing_yoy: z.number().nullable().optional(),
 })
 
 export const M2DataPointSchema = z.object({
   month: z.string(),
   m2_yoy: z.number().nullable(),
+  m2_amount: z.number().nullable().optional(),
 })
 
 export const SocialFinancingDataPointSchema = z.object({
@@ -182,72 +187,75 @@ export const MacroCalendarResponseSchema = z.object({
 export const MacroDashboardResponseSchema = z.object({
   overview: z.object({
     gdp: z.object({
-      quarter: z.string().nullable(),
+      period: z.string().nullable(),
       value: z.number().nullable(),
       yoy: z.number().nullable(),
     }).nullable(),
     cpi: z.object({
-      month: z.string().nullable(),
+      period: z.string().nullable(),
+      value: z.number().nullable(),
       yoy: z.number().nullable(),
       mom: z.number().nullable(),
     }).nullable(),
     ppi: z.object({
-      month: z.string().nullable(),
+      period: z.string().nullable(),
+      value: z.number().nullable(),
       yoy: z.number().nullable(),
     }).nullable(),
     pmi: z.object({
-      month: z.string().nullable(),
-      value: z.number().nullable(),
+      period: z.string().nullable(),
+      manufacturing: z.number().nullable(),
+      non_manufacturing: z.number().nullable(),
     }).nullable(),
     m2: z.object({
-      month: z.string().nullable(),
+      period: z.string().nullable(),
+      value: z.number().nullable(),
       yoy: z.number().nullable(),
+    }).nullable(),
+    social_financing: z.object({
+      period: z.string().nullable(),
+      total: z.number().nullable(),
+    }).nullable(),
+    industrial_production: z.object({
+      period: z.string().nullable(),
+      yoy: z.number().nullable(),
+    }).nullable(),
+    unemployment: z.object({
+      period: z.string().nullable(),
+      rate: z.number().nullable(),
     }).nullable(),
   }).nullable(),
   last_update: z.string().nullable(),
   calendar: z.array(z.object({
     date: z.string(),
-    event: z.string(),
-    importance: z.string(),
+    indicator: z.string(),
+    name: z.string(),
+    status: z.string(),
+    value: z.number().nullable().optional(),
+    unit: z.string().optional(),
   })).nullable(),
   gdp: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   cpi: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   ppi: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   pmi: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   m2: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   social_financing: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   industrial_production: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
   unemployment: z.object({
     data: z.array(z.any()),
-    unit: z.string(),
-    frequency: z.string(),
   }).nullable(),
 })

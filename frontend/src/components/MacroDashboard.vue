@@ -828,7 +828,7 @@ const {
   refreshNow,
 } = useSmartPolling(fetchAllData, {
   interval: 5 * 60 * 1000,
-  immediate: false,
+  immediate: true,
   pauseWhenHidden: true,
 })
 
