@@ -25,6 +25,7 @@ from app.services.model_config_service import get_model_config_service
 from app.services.session_manager import get_session_manager
 from app.services.token_tracking_service import get_token_tracking_service
 from app.services.concurrency_limiter import get_concurrency_limiter
+from app.services.copilot.context_assembler import get_context_assembler
 from app.utils.error_sanitizer import sanitize_error
 from app.utils.token_counter import count_tokens
 from app.config.settings import get_settings
@@ -57,7 +58,7 @@ def _mask_key(key: str) -> str:
 # LLM 配置 — 优先级：数据库 > 环境变量 > 默认值
 # ═══════════════════════════════════════════════════════════════
 
-def _get_llm_config(provider: str, model_id: str = None) -> dict:
+def _get_llm_config(provider: str, model_id: Optional[str] = None) -> dict:
     """
     获取指定 Provider 的完整配置（使用 ModelConfigService hot-reload）。
     """
@@ -265,7 +266,7 @@ def _format_news(news_items: list) -> List[str]:
 
 
 def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list, valuation_data: dict, 
-                         portfolio_data: dict = None, historical_data: dict = None) -> str:
+                         portfolio_data: Optional[dict] = None, historical_data: Optional[dict] = None) -> str:
     """构建注入给 LLM 的上下文数据块"""
     parts = []
     
@@ -1090,27 +1091,45 @@ async def copilot_chat(request: Request):
 
     frontend_context = (body.get("context") or "").strip()
     
-    price_info = _fetch_price_context(symbol)
-    news_items = _fetch_latest_news(limit=5)
-    valuation_data = _fetch_valuation_data(symbol)
-    
-    portfolio_data = None
-    historical_data = None
-    
-    portfolio_id = body.get("portfolio_id")
-    if portfolio_id:
-        portfolio_data = _fetch_portfolio_data(int(portfolio_id))
-    
-    hist_symbol = body.get("hist_symbol") or symbol
-    hist_period = body.get("hist_period", "daily")
-    hist_limit = body.get("hist_limit", 60)
-    if hist_symbol and body.get("include_historical"):
-        historical_data = _fetch_historical_data(hist_symbol, hist_period, hist_limit)
-    
-    context_block = _build_context_block(
-        symbol, price_info, news_items, valuation_data, 
-        portfolio_data, historical_data
-    )
+    # Use ContextAssembler for intelligent context injection
+    context_assembler = get_context_assembler()
+    try:
+        assembly_result = await context_assembler.assemble(
+            query=prompt,
+            symbol=symbol,
+            portfolio_id=body.get("portfolio_id"),
+            timeout=20.0
+        )
+        context_block = assembly_result.context_text
+        logger.info(
+            f"[Copilot] Query classified as {assembly_result.query_type.value} "
+            f"(confidence: {assembly_result.classification.confidence:.2f}, "
+            f"symbols: {assembly_result.symbols}, tokens: {assembly_result.tokens_used})"
+        )
+    except Exception as e:
+        logger.warning(f"[Copilot] ContextAssembler failed, falling back to basic context: {e}")
+        # Fallback to original context assembly
+        price_info = _fetch_price_context(symbol)
+        news_items = _fetch_latest_news(limit=5)
+        valuation_data = _fetch_valuation_data(symbol)
+        
+        portfolio_data = None
+        historical_data = None
+        
+        portfolio_id = body.get("portfolio_id")
+        if portfolio_id:
+            portfolio_data = _fetch_portfolio_data(int(portfolio_id))
+        
+        hist_symbol = body.get("hist_symbol") or symbol
+        hist_period = body.get("hist_period", "daily")
+        hist_limit = body.get("hist_limit", 60)
+        if hist_symbol and body.get("include_historical"):
+            historical_data = _fetch_historical_data(hist_symbol, hist_period, hist_limit)
+        
+        context_block = _build_context_block(
+            symbol, price_info, news_items, valuation_data, 
+            portfolio_data, historical_data
+        )
     
     if frontend_context:
         context_block = f"{frontend_context}\n{context_block}"

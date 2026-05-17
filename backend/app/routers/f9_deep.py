@@ -1082,3 +1082,41 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     except Exception as e:
         logger.error(f"[Announcements] Error fetching data for {symbol}: {e}")
         return error_response(f"获取公司公告数据失败: {str(e)}")
+
+
+# ═══════════════════════════════════════════════════════════════
+# 熔断器管理端点
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/circuit_breaker/status")
+async def get_circuit_breaker_status():
+    """获取 akshare 熔断器状态"""
+    from app.services.circuit_breaker import CircuitState
+    
+    stats = akshare_breaker.get_stats()
+    return success_response({
+        "name": "akshare",
+        "state": stats.get("state", "unknown"),
+        "total_calls": stats.get("total_calls", 0),
+        "successful_calls": stats.get("successful_calls", 0),
+        "failed_calls": stats.get("failed_calls", 0),
+        "consecutive_failures": stats.get("consecutive_failures", 0),
+        "last_failure_time": stats.get("last_failure_time"),
+        "is_available": akshare_breaker.is_available()
+    })
+
+
+@router.post("/circuit_breaker/reset")
+async def reset_circuit_breaker():
+    """重置 akshare 熔断器"""
+    try:
+        akshare_breaker.reset()
+        logger.info("[F9] Akshare circuit breaker reset successfully")
+        return success_response({
+            "name": "akshare",
+            "state": "closed",
+            "message": "熔断器已重置"
+        })
+    except Exception as e:
+        logger.error(f"[F9] Failed to reset circuit breaker: {e}")
+        return error_response(f"重置熔断器失败: {str(e)}")

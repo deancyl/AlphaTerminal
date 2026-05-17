@@ -320,43 +320,10 @@ function stopQuotePolling() {
 
 let fetchHistoryRequestId = 0
 
-// Initialize kline cache
-const { get: getKlineCache, set: setKlineCache } = useKlineCache()
-
 async function fetchHistory(append = false) {
   const currentRequestId = ++fetchHistoryRequestId
   const sym = currentSymbol.value
   if (!sym) return
-  
-  // Check cache for non-append requests
-  if (!append && !drillDownDate.value) {
-    const cached = getKlineCache(sym, period.value, adjustment.value)
-    if (cached) {
-      histData.value = cached.history
-      hasMore.value = cached.has_more
-      loadOffset.value = cached.history.length
-      isLoading.value = false
-      
-      // Update quote from cached data
-      if (cached.history.length > 0) {
-        const last = cached.history[cached.history.length - 1]
-        const prev = cached.history[cached.history.length - 2]
-        currentQuote.value = {
-          price: last.close,
-          change: last.close - (prev?.close || last.close),
-          change_pct: last.change_pct ?? ((last.close - (prev?.close || last.close)) / (prev?.close || 1) * 100),
-          volume: last.volume,
-          amount: last.amount || (last.close * last.volume),
-          amplitude: last.amplitude,
-          turnover_rate: last.turnover_rate,
-        }
-      }
-      
-      rebuildChartData()
-      return
-    }
-  }
-  
   isLoading.value = true
 
   try {
@@ -389,14 +356,6 @@ async function fetchHistory(append = false) {
     } else {
       histData.value = sortedItems
       loadOffset.value = sortedItems.length
-      
-      // Cache the result for non-append requests
-      if (!drillDownDate.value && sortedItems.length > 0) {
-        setKlineCache(sym, period.value, adjustment.value, {
-          history: sortedItems,
-          has_more: payload?.has_more ?? items.length >= 300
-        })
-      }
     }
 
     hasMore.value = payload?.has_more ?? items.length >= 300
@@ -425,7 +384,6 @@ async function fetchHistory(append = false) {
     }
   }
 }
-
 
 function sanitizeItem(r) {
   return {

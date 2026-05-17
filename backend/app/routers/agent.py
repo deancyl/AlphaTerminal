@@ -85,7 +85,7 @@ class WhoamiResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    timestamp: int
+    timestamp: str
     version: str = "0.6.12"
 
 

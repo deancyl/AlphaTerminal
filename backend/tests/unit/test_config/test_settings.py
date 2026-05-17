@@ -19,7 +19,9 @@ from app.config.settings import Settings, get_settings, reload_settings
 class TestSettingsDefaults:
     """Test default values when no environment variables are set."""
     
-    def test_default_http_proxy_is_empty(self):
+    def test_default_http_proxy_is_empty(self, monkeypatch):
+        monkeypatch.delenv("HTTP_PROXY", raising=False)
+        monkeypatch.delenv("http_proxy", raising=False)
         settings = Settings()
         assert settings.HTTP_PROXY == ""
     

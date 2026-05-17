@@ -1,6 +1,8 @@
 import httpx
 from typing import Optional, Dict, Any, List
 from .base import BaseMarketFetcher
+from ..http_client import get_shared_client
+
 
 class TencentFetcher(BaseMarketFetcher):
     """
@@ -8,6 +10,8 @@ class TencentFetcher(BaseMarketFetcher):
     
     Supports: A-shares, indices, HK stocks, US stocks.
     Does NOT support: Order book (Level 2), futures.
+    
+    Uses shared HTTP client for connection pooling.
     """
     
     name = "tencent"
@@ -24,22 +28,10 @@ class TencentFetcher(BaseMarketFetcher):
     KLINE_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
     
     def __init__(self, proxy: Optional[str] = None):
-        self.proxy = proxy
-        self._client: Optional[httpx.AsyncClient] = None
+        pass
     
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client with proxy support."""
-        if self._client is None:
-            proxies = {"all://": self.proxy} if self.proxy else None
-            self._client = httpx.AsyncClient(
-                proxies=proxies,
-                timeout=10.0,
-                headers={
-                    "Referer": "https://finance.qq.com",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-            )
-        return self._client
+        return await get_shared_client()
     
     def _normalize_symbol(self, symbol: str) -> str:
         """Convert symbol to Tencent format (sh600519, sz000001, hk00700)."""
@@ -156,9 +148,3 @@ class TencentFetcher(BaseMarketFetcher):
             
         except Exception:
             return None
-    
-    async def close(self):
-        """Close HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None

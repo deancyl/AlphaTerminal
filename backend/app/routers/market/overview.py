@@ -23,6 +23,7 @@ _cache = get_cache()
 NAMESPACE = "overview:"
 _MACRO_CACHE_KEY = f"{NAMESPACE}macro"
 _MACRO_TTL = 60  # 1 minute
+_MACRO_CACHE_TTL = _MACRO_TTL  # Alias for test compatibility
 _MACRO_CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
 _REFRESH_SEMAPHORE = threading.Semaphore(1)

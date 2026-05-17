@@ -35,6 +35,20 @@ _NEWS_CACHE: list[dict] = []
 _NEWS_CACHE_READY: bool = False
 _CACHE_LOCK = threading.Lock()
 
+# ── 缓存去重说明 ─────────────────────────────────────────────────────────
+# 【重要】新闻快讯是时效性内容，不应使用持久化去重！
+# 
+# 原因：
+# 1. 新闻有时效性，用户需要看到最新的新闻列表
+# 2. 持久化去重会阻止所有已见过的新闻再次显示
+# 3. 服务重启后，所有新闻都会被过滤掉，导致快讯无数据
+# 
+# 正确做法：使用局部 seen 集合，仅在当前刷新周期内去重
+# 错误做法：使用全局持久化集合，跨会话去重
+#
+# 【警告】请勿修改此逻辑！任何持久化去重都会导致快讯无数据！
+# ────────────────────────────────────────────────────────────────────────
+
 # ── 轮询标的（20 只 A 股核心，覆盖主要行业）─────────────────────────
 NEWS_SYMBOLS = [
     "000001", "399001", "399006", "000300",              # 核心指数
@@ -206,11 +220,17 @@ def refresh_news_cache(background: bool = True):
         sources_used = []
 
         try:
-            # 并行获取宏观快讯和个股新闻，减少总延迟
-            macro_news, stock_news = asyncio.run(asyncio.gather(
-                asyncio.wait_for(fetch_news_parallel(_MACRO_SYMBOLS), timeout=30),
-                asyncio.wait_for(fetch_news_parallel(NEWS_SYMBOLS), timeout=30)
-            ))
+            # 在线程中创建新的 event loop 来运行异步代码
+            # 注意：asyncio.run() 在线程环境中可能有问题，使用显式的 loop 管理
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                macro_news, stock_news = loop.run_until_complete(asyncio.gather(
+                    asyncio.wait_for(fetch_news_parallel(_MACRO_SYMBOLS), timeout=30),
+                    asyncio.wait_for(fetch_news_parallel(NEWS_SYMBOLS), timeout=30)
+                ))
+            finally:
+                loop.close()
             
             all_news.extend(macro_news)
             sources_used.append(f"parallel:{len(_MACRO_SYMBOLS)}")
@@ -233,7 +253,8 @@ def refresh_news_cache(background: bool = True):
             logger.warning("[SCHEDULER] All sources returned empty, skipping cache update.")
             return
 
-        # 合并去重（MD5 URL）
+        # 合并去重（MD5 URL）- 使用局部 seen 集合，仅在当前刷新周期内去重
+        # 【重要】不要使用全局持久化集合！详见文件开头的说明
         seen = set()
         unique_news = []
         for item in all_news:

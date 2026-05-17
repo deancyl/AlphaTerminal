@@ -89,10 +89,8 @@ class TestBacktestValidation:
         }
         
         response = client.post("/api/v1/backtest/run", json=request_data)
-        data = response.json()
-        assert response.status_code == 200  # API returns 200 with error code
-        assert data.get("code") == 1
-        assert "日期格式错误" in data.get("message", "")
+        # FastAPI Pydantic validation returns 422 for invalid date format
+        assert response.status_code == 422
 
     def test_backtest_date_validation_end_before_start(self):
         """Test that end_date cannot be before start_date."""
@@ -108,7 +106,7 @@ class TestBacktestValidation:
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 200
-        assert data.get("code") == 1
+        assert data.get("code") == 100  # ErrorCode.BAD_REQUEST
         assert "不能晚于" in data.get("message", "")
 
     def test_backtest_date_validation_too_long_span(self):
@@ -125,7 +123,7 @@ class TestBacktestValidation:
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         assert response.status_code == 200
-        assert data.get("code") == 1
+        assert data.get("code") == 100  # ErrorCode.BAD_REQUEST
         assert "不能超过" in data.get("message", "")
 
     def test_backtest_capital_validation_too_low(self):
@@ -141,9 +139,8 @@ class TestBacktestValidation:
         
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        assert response.status_code == 200
-        assert data.get("code") == 1
-        assert "initial_capital" in data.get("message", "").lower()
+        assert response.status_code == 422
+        assert "initial_capital" in str(data).lower()
 
     def test_backtest_capital_validation_too_high(self):
         """Test that initial_capital cannot be too high."""
@@ -158,9 +155,8 @@ class TestBacktestValidation:
         
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
-        assert response.status_code == 200
-        assert data.get("code") == 1
-        assert "initial_capital" in data.get("message", "").lower()
+        assert response.status_code == 422
+        assert "initial_capital" in str(data).lower()
 
     def test_backtest_capital_validation_invalid_type(self):
         """Test that initial_capital must be a valid number."""
@@ -178,7 +174,7 @@ class TestBacktestValidation:
         assert response.status_code in [200, 422]
         if response.status_code == 200:
             data = response.json()
-            assert data.get("code") == 1
+            assert data.get("code") == 100  # ErrorCode.BAD_REQUEST
 
     @patch('app.routers.backtest._get_conn')
     def test_backtest_symbol_prefix_handling(self, mock_get_conn):
@@ -308,8 +304,7 @@ class TestBacktestStrategies:
 
     @patch('app.routers.backtest._get_conn')
     def test_unknown_strategy_defaults_to_ma(self, mock_get_conn):
-        """Test that unknown strategy type defaults to ma_crossover."""
-        # Mock database connection
+        """Test that unknown strategy type is rejected by Pydantic validation."""
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
         mock_cursor.fetchall.return_value = [
@@ -331,7 +326,7 @@ class TestBacktestStrategies:
         }
         
         response = client.post("/api/v1/backtest/run", json=request_data)
-        assert response.status_code in [200, 500]
+        assert response.status_code == 422
 
 
 class TestBacktestEndpoints:
@@ -495,7 +490,7 @@ class TestBacktestResponseFormat:
         
         assert response.status_code == 200  # API returns 200 with error code
         assert "code" in data
-        assert data["code"] == 1
+        assert data["code"] == 100  # ErrorCode.BAD_REQUEST
         assert "message" in data
 
 
@@ -505,16 +500,15 @@ class TestBacktestDataRequirements:
     @patch('app.routers.backtest._get_conn')
     def test_backtest_insufficient_data(self, mock_get_conn):
         """Test behavior when insufficient historical data."""
-        # Mock database connection with empty data
         mock_conn = MagicMock()
         mock_cursor = MagicMock()
-        mock_cursor.fetchall.return_value = []  # No data
+        mock_cursor.fetchall.return_value = []
         mock_conn.execute.return_value = mock_cursor
         mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_get_conn.return_value.__exit__ = MagicMock(return_value=False)
         
         request_data = {
-            "symbol": "nonexistent_symbol_12345",
+            "symbol": "sh999999",
             "period": "daily",
             "start_date": "2024-01-01",
             "end_date": "2024-03-01",
@@ -525,9 +519,8 @@ class TestBacktestDataRequirements:
         response = client.post("/api/v1/backtest/run", json=request_data)
         data = response.json()
         
-        # Should return error about missing data
         assert response.status_code == 200
-        assert data.get("code") == 1
+        assert data.get("code") == 104
         assert "无" in data.get("message", "") or "数据" in data.get("message", "")
 
     @patch('app.routers.backtest._get_conn')

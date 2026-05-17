@@ -1,4 +1,5 @@
 """
+from app.services.kline_gap_detector import gap_detector
 Market History Endpoints
 
 Price history and futures data endpoints extracted from market.py.
@@ -184,15 +185,27 @@ async def market_history(
         history    = get_price_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
+    # Detect K-line gaps
+    gaps = []
+    gap_summary = {}
+    try:
+        if history and len(history) > 1:
+            gaps = gap_detector.detect_gaps(history, period)
+            gap_summary = gap_detector.get_gap_summary(gaps)
+    except Exception as e:
+        logger.warning(f"[K-line Gap] Detection failed: {e}")
+
     result = {
-        "symbol":     clean_sym,
-        "period":     period,
-        "chart_type": chart_type,
-        "has_more":   has_more,
-        "offset":     offset,
-        "fetching":   fetching,
-        "timestamp":  datetime.now().isoformat(),
-        "history":    history,
+        "symbol":       clean_sym,
+        "period":       period,
+        "chart_type":   chart_type,
+        "has_more":     has_more,
+        "offset":       offset,
+        "fetching":     fetching,
+        "timestamp":    datetime.now().isoformat(),
+        "history":      history,
+        "gaps":         gaps,
+        "gap_summary":  gap_summary,
     }
     return success_response(result)
 

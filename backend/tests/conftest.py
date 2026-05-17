@@ -10,6 +10,9 @@ import os
 import tempfile
 import sqlite3
 
+# Disable rate limiting for all tests
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -123,3 +126,51 @@ def client():
 
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def sample_agent_token():
+    """Create sample agent token for testing."""
+    from datetime import datetime, timedelta
+    from app.services.agent.token_service import AgentToken, TokenScope
+    
+    return AgentToken(
+        id="test-token-id",
+        name="test-agent",
+        token_prefix="AGT1_abc123",
+        token_hash="test-hash-123",
+        scopes=[TokenScope.READ, TokenScope.WRITE],
+        markets=["*"],
+        instruments=["*"],
+        paper_only=True,
+        rate_limit=120,
+        expires_at=datetime.now() + timedelta(days=30),
+        created_at=datetime.now(),
+        last_used_at=datetime.now(),
+        is_active=True,
+        access_count=5,
+    )
+
+
+@pytest.fixture
+def restricted_agent_token():
+    """Create token with restricted markets."""
+    from datetime import datetime, timedelta
+    from app.services.agent.token_service import AgentToken, TokenScope
+    
+    return AgentToken(
+        id="restricted-token-id",
+        name="restricted-agent",
+        token_prefix="AGT1_xyz789",
+        token_hash="restricted-hash-789",
+        scopes=[TokenScope.READ],
+        markets=["ASTOCK"],
+        instruments=["000001", "600519"],
+        paper_only=True,
+        rate_limit=60,
+        expires_at=datetime.now() + timedelta(days=7),
+        created_at=datetime.now(),
+        last_used_at=datetime.now(),
+        is_active=True,
+        access_count=2,
+    )

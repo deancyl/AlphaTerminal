@@ -1,12 +1,15 @@
 import httpx
 from typing import Optional, Dict, Any, List
 from .base import BaseMarketFetcher
+from ..http_client import get_shared_client
+
 
 class EastmoneyFetcher(BaseMarketFetcher):
     """
     Eastmoney (东方财富) data fetcher.
     
     Supports: A-shares, indices, futures, HK stocks, US stocks.
+    Uses shared HTTP client for connection pooling.
     """
     
     name = "eastmoney"
@@ -23,22 +26,10 @@ class EastmoneyFetcher(BaseMarketFetcher):
     KLINE_URL = "https://push2his.eastmoney.com"
     
     def __init__(self, proxy: Optional[str] = None):
-        self.proxy = proxy
-        self._client: Optional[httpx.AsyncClient] = None
+        pass
     
     async def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client with proxy support."""
-        if self._client is None:
-            proxies = {"all://": self.proxy} if self.proxy else None
-            self._client = httpx.AsyncClient(
-                proxies=proxies,
-                timeout=10.0,
-                headers={
-                    "Referer": "https://www.eastmoney.com",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-                }
-            )
-        return self._client
+        return await get_shared_client()
     
     def _normalize_symbol(self, symbol: str) -> str:
         """Convert symbol to Eastmoney format."""
@@ -160,9 +151,3 @@ class EastmoneyFetcher(BaseMarketFetcher):
         elif symbol.startswith("us"):
             return f"105.{symbol[2:]}"
         return symbol
-    
-    async def close(self):
-        """Close HTTP client."""
-        if self._client:
-            await self._client.aclose()
-            self._client = None

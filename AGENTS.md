@@ -2262,3 +2262,345 @@ grep -c "showTransferConfirmation" frontend/src/components/PortfolioDashboard.vu
 # Check checkbox requirement
 grep "confirmedCheckbox" frontend/src/components/SimulatedTradeModal.vue
 ```
+
+---
+
+## ML Strategy Module (v0.6.45)
+
+### Overview
+
+The ML Strategy Module provides machine learning-based trading strategies integrated with Microsoft Qlib framework. It includes model management, training, prediction, portfolio optimization, and factor analysis.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend: StrategyCenter.vue                               │
+│  ├── Tab 1: 快速回测 → BacktestDashboard.vue                │
+│  ├── Tab 2: 策略开发 → StrategyLab.vue                      │
+│  └── Tab 3: ML策略 → MLStrategyPanel.vue                    │
+│       ├── MLModelManager.vue                                │
+│       ├── MLTrainingPanel.vue                               │
+│       ├── MLPredictionPanel.vue                             │
+│       ├── MLPortfolioOptimizer.vue                          │
+│       └── MLFactorAnalysis.vue                              │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Backend: /api/v1/ml/*                                      │
+│  ├── GET/POST /models - Model CRUD                          │
+│  ├── POST /train - Train ML model                           │
+│  ├── POST /predict - Generate predictions                   │
+│  ├── POST /optimize - Portfolio optimization                │
+│  ├── POST /factors - Factor analysis                        │
+│  └── GET /health - Health check                             │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Qlib Integration Layer                                     │
+│  ├── qlib_init.py - Qlib initialization                    │
+│  ├── model_loader.py - Model management                     │
+│  ├── feature_pipeline.py - Alpha158/Alpha360 features       │
+│  └── data_adapter.py - Data format conversion               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Supported ML Models
+
+| Model | Type | Description |
+|-------|------|-------------|
+| LightGBM | Gradient Boosting | Fast, accurate for tabular data |
+| HIST | Transformer | Graph-based stock prediction |
+| GATE | Transformer | Attention-based model |
+| GRU | RNN | Sequential pattern recognition |
+| LSTM | RNN | Long-term dependencies |
+| MLP | Neural Network | Simple feedforward network |
+| XGBoost | Gradient Boosting | Alternative boosting model |
+| CatBoost | Gradient Boosting | Categorical feature support |
+
+### Feature Sets
+
+| Feature Set | Count | Description |
+|-------------|-------|-------------|
+| Alpha158 | 158 | Standard Qlib features (MA, MACD, RSI, BOLL, etc.) |
+| Alpha360 | 360 | Extended features with longer time windows |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/ml/models` | List all ML models |
+| POST | `/api/v1/ml/models` | Register new model |
+| GET | `/api/v1/ml/models/{id}` | Get model details |
+| DELETE | `/api/v1/ml/models/{id}` | Delete model |
+| POST | `/api/v1/ml/train` | Train model on historical data |
+| POST | `/api/v1/ml/predict` | Generate predictions |
+| POST | `/api/v1/ml/optimize` | Portfolio optimization |
+| POST | `/api/v1/ml/factors` | Factor analysis |
+| GET | `/api/v1/ml/health` | Health check |
+
+### Portfolio Optimization Methods
+
+| Method | Description |
+|--------|-------------|
+| `mvo` | Mean-Variance Optimization |
+| `gmv` | Global Minimum Variance |
+| `rp` | Risk Parity |
+| `inv` | Inverse Volatility (Equal Weight) |
+
+### ML Strategy Integration with Backtest
+
+The backtest module supports ML strategies:
+
+```python
+# Strategy types
+strategy_type: "ml_lightgbm" | "ml_qlib_hist" | "ml_ensemble"
+
+# ML-specific parameters
+params: {
+    "model_id": "my_model",
+    "feature_set": "Alpha158",
+    "threshold": 0.5
+}
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| MLStrategyPanel | `frontend/src/components/MLStrategyPanel.vue` |
+| ML Sub-components | `frontend/src/components/ml/*.vue` |
+| ML Schemas | `frontend/src/schemas/ml.js` |
+| ML Router | `backend/app/routers/ml.py` |
+| Qlib Services | `backend/app/services/qlib/*.py` |
+| ML Strategy Classes | `backend/app/services/strategy/ml_strategy.py` |
+| Integration Tests | `backend/tests/unit/test_routers/test_ml.py` |
+
+### Verification Commands
+
+```bash
+# Check ML endpoints
+curl http://localhost:60100/api/v1/ml/health
+
+# Check ML components
+ls frontend/src/components/ml/
+
+# Check ML tab in StrategyCenter
+grep -c "ML策略" frontend/src/components/StrategyCenter.vue  # Expected: 3
+
+# Check ML strategies in backtest
+grep -c "ml_lightgbm" backend/app/routers/backtest.py  # Expected: 4
+
+# Run ML tests
+pytest backend/tests/unit/test_routers/test_ml.py -v
+```
+
+### Usage Example
+
+```bash
+# Train a LightGBM model
+curl -X POST http://localhost:60100/api/v1/ml/train \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "my_lightgbm",
+    "symbol": "sh600519",
+    "start_date": "2022-01-01",
+    "end_date": "2024-01-01",
+    "feature_set": "Alpha158"
+  }'
+
+# Generate predictions
+curl -X POST http://localhost:60100/api/v1/ml/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "my_lightgbm",
+    "symbol": "sh600519",
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31"
+  }'
+
+# Optimize portfolio
+curl -X POST http://localhost:60100/api/v1/ml/optimize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "mvo",
+    "symbols": ["sh600519", "sh600036", "sh601318"],
+    "start_date": "2023-01-01",
+    "end_date": "2024-01-01"
+  }'
+```
+
+---
+
+## ML Strategy Module (v0.6.45)
+
+### Overview
+
+The ML Strategy Module provides machine learning-based trading strategies integrated with Microsoft Qlib framework. It includes model management, training, prediction, portfolio optimization, and factor analysis.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Frontend: StrategyCenter.vue                               │
+│  ├── Tab 1: 快速回测 → BacktestDashboard.vue                │
+│  ├── Tab 2: 策略开发 → StrategyLab.vue                      │
+│  └── Tab 3: ML策略 → MLStrategyPanel.vue                    │
+│       ├── MLModelManager.vue                                │
+│       ├── MLTrainingPanel.vue                               │
+│       ├── MLPredictionPanel.vue                             │
+│       ├── MLPortfolioOptimizer.vue                          │
+│       └── MLFactorAnalysis.vue                              │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Backend: /api/v1/ml/*                                      │
+│  ├── GET/POST /models - Model CRUD                          │
+│  ├── POST /train - Train ML model                           │
+│  ├── POST /predict - Generate predictions                   │
+│  ├── POST /optimize - Portfolio optimization                │
+│  ├── POST /factors - Factor analysis                        │
+│  ├── POST /risk-metrics - Risk metrics calculation          │
+│  ├── GET /methods - List available methods                  │
+│  └── GET /health - Health check                             │
+└─────────────────────────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Qlib Integration Layer                                     │
+│  ├── qlib_init.py - Qlib initialization                    │
+│  ├── model_loader.py - Model management                     │
+│  ├── feature_pipeline.py - Alpha158/Alpha360 features       │
+│  └── data_adapter.py - Data format conversion               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Supported ML Models
+
+| Model | Type | Description |
+|-------|------|-------------|
+| LightGBM | Gradient Boosting | Fast, accurate for tabular data |
+| HIST | Transformer | Graph-based stock prediction |
+| GATE | Transformer | Attention-based model |
+| GRU | RNN | Sequential pattern recognition |
+| LSTM | RNN | Long-term dependencies |
+| MLP | Neural Network | Simple feedforward network |
+| XGBoost | Gradient Boosting | Alternative boosting model |
+| CatBoost | Gradient Boosting | Categorical feature support |
+
+### Feature Sets
+
+| Feature Set | Count | Description |
+|-------------|-------|-------------|
+| Alpha158 | 158 | Standard Qlib features (MA, MACD, RSI, BOLL, etc.) |
+| Alpha360 | 360 | Extended features with longer time windows |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/ml/models` | List all ML models |
+| POST | `/api/v1/ml/models` | Register new model |
+| GET | `/api/v1/ml/models/{id}` | Get model details |
+| DELETE | `/api/v1/ml/models/{id}` | Delete model |
+| POST | `/api/v1/ml/train` | Train model on historical data |
+| POST | `/api/v1/ml/predict` | Generate predictions |
+| POST | `/api/v1/ml/optimize` | Portfolio optimization |
+| POST | `/api/v1/ml/factors` | Factor analysis |
+| POST | `/api/v1/ml/risk-metrics` | Risk metrics calculation |
+| GET | `/api/v1/ml/methods` | List available optimization methods |
+| GET | `/api/v1/ml/health` | Health check |
+
+### Portfolio Optimization Methods
+
+| Method | Description |
+|--------|-------------|
+| `mvo` | Mean-Variance Optimization |
+| `gmv` | Global Minimum Variance |
+| `rp` | Risk Parity |
+| `inv` | Inverse Volatility (Equal Weight) |
+
+### ML Strategy Integration with Backtest
+
+The backtest module supports ML strategies:
+
+```python
+# Strategy types
+strategy_type: "ml_lightgbm" | "ml_qlib_hist" | "ml_ensemble"
+
+# ML-specific parameters
+params: {
+    "model_id": "my_model",
+    "feature_set": "Alpha158",
+    "threshold": 0.5
+}
+```
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| MLStrategyPanel | `frontend/src/components/MLStrategyPanel.vue` |
+| ML Sub-components | `frontend/src/components/ml/*.vue` |
+| ML Schemas | `frontend/src/schemas/ml.js` |
+| ML Router | `backend/app/routers/ml.py` |
+| Qlib Services | `backend/app/services/qlib/*.py` |
+| ML Strategy Classes | `backend/app/services/strategy/ml_strategy.py` |
+| Integration Tests | `backend/tests/unit/test_routers/test_ml.py` |
+
+### Verification Commands
+
+```bash
+# Check ML endpoints
+curl http://localhost:60100/api/v1/ml/health
+
+# Check ML components
+ls frontend/src/components/ml/
+
+# Check ML tab in StrategyCenter
+grep -c "ML策略" frontend/src/components/StrategyCenter.vue  # Expected: 3
+
+# Check ML strategies in backtest
+grep -c "ml_lightgbm" backend/app/routers/backtest.py  # Expected: 4
+
+# Run ML tests
+pytest backend/tests/unit/test_routers/test_ml.py -v
+```
+
+### Usage Example
+
+```bash
+# Train a LightGBM model
+curl -X POST http://localhost:60100/api/v1/ml/train \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "my_lightgbm",
+    "symbol": "sh600519",
+    "start_date": "2022-01-01",
+    "end_date": "2024-01-01",
+    "feature_set": "Alpha158"
+  }'
+
+# Generate predictions
+curl -X POST http://localhost:60100/api/v1/ml/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_id": "my_lightgbm",
+    "symbol": "sh600519",
+    "start_date": "2024-01-01",
+    "end_date": "2024-12-31"
+  }'
+
+# Optimize portfolio
+curl -X POST http://localhost:60100/api/v1/ml/optimize \
+  -H "Content-Type: application/json" \
+  -d '{
+    "method": "mvo",
+    "symbols": ["sh600519", "sh600036", "sh601318"],
+    "start_date": "2023-01-01",
+    "end_date": "2024-01-01"
+  }'
+```

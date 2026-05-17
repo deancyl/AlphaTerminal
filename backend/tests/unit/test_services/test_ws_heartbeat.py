@@ -124,6 +124,13 @@ class TestConnectionManager:
             "price": 1800.0
         })
 
+        # Manually trigger batch send (normally done by _batch_loop)
+        async with manager._batch_lock:
+            batch = manager._batch_queue.copy()
+            manager._batch_queue.clear()
+        if batch:
+            await manager._send_batch(batch)
+
         # Verify send was called
         conn.ws.send_text.assert_called_once()
         call_args = conn.ws.send_text.call_args[0][0]
@@ -161,6 +168,13 @@ class TestConnectionManager:
             "price": 1800.0
         })
 
+        # Manually trigger batch send (normally done by _batch_loop)
+        async with manager._batch_lock:
+            batch = manager._batch_queue.copy()
+            manager._batch_queue.clear()
+        if batch:
+            await manager._send_batch(batch)
+
         ws1.send_text.assert_called_once()
         ws2.send_text.assert_called_once()
 
@@ -186,6 +200,13 @@ class TestConnectionManager:
             "symbol": "600519",
             "price": 1800.0
         })
+
+        # Manually trigger batch send (normally done by _batch_loop)
+        async with manager._batch_lock:
+            batch = manager._batch_queue.copy()
+            manager._batch_queue.clear()
+        if batch:
+            await manager._send_batch(batch)
 
         # ws1 should be removed
         assert manager.total() == 1
@@ -340,6 +361,13 @@ class TestHeartbeatIntegration:
             "price": 1800.0
         })
 
+        # Manually trigger batch send (normally done by _batch_loop)
+        async with manager._batch_lock:
+            batch = manager._batch_queue.copy()
+            manager._batch_queue.clear()
+        if batch:
+            await manager._send_batch(batch)
+
         # Verify tick was sent
         assert len(sent) == 1
 
@@ -375,6 +403,13 @@ class TestHeartbeatIntegration:
             "symbol": "600519",
             "price": 1800.0
         })
+
+        # Manually trigger batch send (normally done by _batch_loop)
+        async with manager._batch_lock:
+            batch = manager._batch_queue.copy()
+            manager._batch_queue.clear()
+        if batch:
+            await manager._send_batch(batch)
 
         # All should receive
         for ws in connections:

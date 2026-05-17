@@ -184,33 +184,51 @@ class OptionsFetcher(BaseMarketFetcher):
                 logger.warning(f"[Options] option_cffex_hs300_spot_sina 返回空数据: {symbol}")
                 return self._get_empty_chain(symbol)
             
-            # 解析期权链数据
+            # akshare返回的格式：每行包含看涨和看跌合约信息在同一行
+            # 列名格式：看涨合约-买量, 看涨合约-最新价, 行权价, 看跌合约-最新价, 等
             calls = []
             puts = []
             
             for _, row in df.iterrows():
-                option_type = str(row.get('类型', '')).strip()
-                
-                option_data = {
-                    "code": str(row.get('代码', '')),
-                    "name": str(row.get('名称', '')),
+                # 看涨期权数据
+                call_data = {
+                    "code": str(row.get('看涨合约-标识', '')),
+                    "name": str(row.get('看涨合约-标识', '')),
                     "strike": clean_value(row.get('行权价')),
-                    "latest": clean_value(row.get('最新价')),
-                    "change": clean_value(row.get('涨跌')),
-                    "change_pct": clean_value(row.get('涨跌幅')),
-                    "volume": clean_value(row.get('成交量')),
-                    "open_interest": clean_value(row.get('持仓量')),
-                    "delta": clean_value(row.get('Delta')),
-                    "gamma": clean_value(row.get('Gamma')),
-                    "theta": clean_value(row.get('Theta')),
-                    "vega": clean_value(row.get('Vega')),
-                    "iv": clean_value(row.get('隐含波动率')),
+                    "latest": clean_value(row.get('看涨合约-最新价')),
+                    "change": clean_value(row.get('看涨合约-涨跌')),
+                    "change_pct": None,
+                    "volume": clean_value(row.get('看涨合约-买量')),
+                    "open_interest": clean_value(row.get('看涨合约-持仓量')),
+                    "delta": None,
+                    "gamma": None,
+                    "theta": None,
+                    "vega": None,
+                    "iv": None,
                 }
                 
-                if '看涨' in option_type or 'C' in option_type.upper():
-                    calls.append(option_data)
-                elif '看跌' in option_type or 'P' in option_type.upper():
-                    puts.append(option_data)
+                # 看跌期权数据
+                put_data = {
+                    "code": str(row.get('看跌合约-标识', '')),
+                    "name": str(row.get('看跌合约-标识', '')),
+                    "strike": clean_value(row.get('行权价')),
+                    "latest": clean_value(row.get('看跌合约-最新价')),
+                    "change": clean_value(row.get('看跌合约-涨跌')),
+                    "change_pct": None,
+                    "volume": clean_value(row.get('看跌合约-买量')),
+                    "open_interest": clean_value(row.get('看跌合约-持仓量')),
+                    "delta": None,
+                    "gamma": None,
+                    "theta": None,
+                    "vega": None,
+                    "iv": None,
+                }
+                
+                # 只添加有有效数据的期权
+                if call_data.get('code') and call_data.get('strike'):
+                    calls.append(call_data)
+                if put_data.get('code') and put_data.get('strike'):
+                    puts.append(put_data)
             
             # 按行权价排序
             calls.sort(key=lambda x: x.get('strike', 0) or 0)
