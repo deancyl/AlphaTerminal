@@ -64,6 +64,7 @@ const globalError = ref(null)
 const globalLastConnectedAt = ref(null)
 const globalConnectionAttempts = ref(0)
 const globalLatency = ref(null) // WebSocket latency in ms
+const globalLastSeq = shallowRef({})  // {symbol: last_seq} for recovery
 
 // HTTP polling fallback state
 const globalPollingStatus = ref(false)
@@ -285,6 +286,23 @@ function _newConnection() {
     const activeSyms = [...subscribedSymRefCount.keys()]
     if (activeSyms.length) _doSubscribe(activeSyms)
     _flushPendingSubscriptions()
+    
+    // P0-4: Request missed ticks on reconnect
+    if (activeSyms.length > 0) {
+      const recoveryPayload = {
+        action: 'recover',
+        symbols: activeSyms.map(s => ({
+          symbol: s,
+          last_seq: globalLastSeq.value[s] || 0
+        }))
+      }
+      try {
+        _ws.send(JSON.stringify(recoveryPayload))
+        logger.log('[MarketStream] Sent recovery request for', activeSyms.length, 'symbols')
+      } catch (e) {
+        logger.warn('[MarketStream] Recovery request failed:', e)
+      }
+    }
   }
 
   _ws.onmessage = (event) => {
@@ -318,6 +336,8 @@ function _newConnection() {
       tickHistory[sym].push({ ...data, _version: currentVersion, _priority: WS_PRIORITY })
 
       // Use Object.assign for better memory performance (avoid spread operator creating new objects)
+      // Track sequence number for recovery
+      if (data.seq) globalLastSeq.value[sym] = data.seq
       globalTicks.value[sym] = Object.assign({}, data, { _version: currentVersion, _priority: WS_PRIORITY })
       _tickDirty = true
 
@@ -771,6 +791,7 @@ export function useMarketStream(initialSymbol = '') {
     lastConnectedAt: globalLastConnectedAt,
     connectionAttempts: globalConnectionAttempts,
     latency: globalLatency,
+    lastSeq: globalLastSeq,
     isPolling: globalPollingStatus,
     connectionState: computed(() => _connectionState),
     getStats: () => ({
