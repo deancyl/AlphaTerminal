@@ -63,7 +63,7 @@ const renderChart = async (dataList) => {
       name: '主力净额(亿)',
       type: 'bar',
       data: values,
-      itemStyle: { color: (p) => p.value > 0 ? colors.bullish : colors.bearish }
+      itemStyle: { color: (p) => p.value > 0 ? colors.colorBull : colors.colorBear }
     }]
   }
   chartInstance.value.setOption(option)
@@ -121,7 +121,7 @@ onThemeChange(() => {
       xAxis: { axisLabel: { color: colors.chartText } },
       yAxis: { axisLabel: { color: colors.chartText }, splitLine: { lineStyle: { color: colors.chartGrid } } },
       series: [{
-        itemStyle: { color: (p) => p.value > 0 ? colors.bullish : colors.bearish }
+      itemStyle: { color: (p) => p.value > 0 ? colors.colorBull : colors.colorBear }
       }],
     })
   }

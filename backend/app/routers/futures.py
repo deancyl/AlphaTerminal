@@ -26,6 +26,9 @@ _CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
 _REFRESH_SEM = threading.Semaphore(1)
 
+# Module-level cache for test compatibility (initialized by _init_mock_cache)
+_FUTURES_CACHE = {}
+
 # 重点监控的国内商品期货合约
 WATCHED_COMMODITIES = {
     # (symbol, name, unit)
@@ -540,13 +543,7 @@ _MOCK_INDEX_FUTURES = [
 
 
 def _init_mock_cache():
-    """
-    初始化 Mock 缓存（Fallback 策略）
-    
-    注意：此函数在模块加载时立即执行，确保 API 启动后立即可用。
-    Mock 数据仅作为降级方案，真实数据由 _fetch_futures_data() 获取。
-    """
-    global _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME, _FUTURES_CACHE
     now_str = datetime.now().strftime("%H:%M")
     cache_data = {
         "index_futures": _MOCK_INDEX_FUTURES,
@@ -555,6 +552,7 @@ def _init_mock_cache():
         "index_source":  "mock",
     }
     _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
+    _FUTURES_CACHE = cache_data
     with _CACHE_LOCK:
         _LAST_FETCH_TIME = time.time()
     logger.info("[Futures] Mock cache initialized")
