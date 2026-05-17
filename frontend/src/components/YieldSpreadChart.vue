@@ -2,7 +2,7 @@
   <div class="w-full h-full relative flex flex-col" style="min-height: 120px">
     <!-- 顶部标签 -->
     <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
-      <span class="text-[10px] font-mono text-terminal-dim">📐 期限利差 (10Y-2Y)</span>
+      <span class="text-[10px] font-mono text-terminal-dim">📐 期限利差 (10Y-3Y)</span>
       <span
         class="text-[10px] font-mono font-medium"
         :class="spread >= 0 ? 'text-[var(--color-info)]' : 'text-bullish'"
@@ -41,7 +41,7 @@ import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   tenors10y: { type: Object, default: null },   // {date, yield}[]
-  tenors2y:  { type: Object, default: null },   // {date, yield}[]
+  tenors3y:  { type: Object, default: null },   // {date, yield}[]
   updateTime: { type: String, default: '' },
   isLoading:  { type: Boolean, default: false },
   hasError:   { type: Boolean, default: false },
@@ -52,17 +52,17 @@ const chartRef  = ref(null)
 const chartInst = ref(null)
 let ro = null
 
-// 计算 10Y-2Y 差值序列
+// 计算 10Y-3Y 差值序列
 const spreadData = computed(() => {
   const s10 = props.tenors10y || []
-  const s2  = props.tenors2y  || []
-  const map2 = {}
-  for (const d of s2) map2[d.date] = d.yield
+  const s3  = props.tenors3y  || []
+  const map3 = {}
+  for (const d of s3) map3[d.date] = d.yield
   return s10
-    .filter(d => map2[d.date] != null)
+    .filter(d => map3[d.date] != null)
     .map(d => ({
       date:   d.date,
-      spread: (d.yield - map2[d.date]) * 10000, // 转换为 bp
+      spread: (d.yield - map3[d.date]) * 10000, // 转换为 bp
     }))
 })
 
@@ -178,5 +178,5 @@ onUnmounted(() => {
   }
 })
 
-watch([() => props.tenors10y, () => props.tenors2y], () => { initChart() }, { deep: true })
+watch([() => props.tenors10y, () => props.tenors3y], () => { initChart() }, { deep: true })
 </script>

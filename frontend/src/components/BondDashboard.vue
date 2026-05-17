@@ -210,7 +210,7 @@
         <div class="terminal-panel border border-theme-secondary rounded-sm p-2 md:p-3 flex flex-col" style="flex: 1; min-height: 100px;">
           <YieldSpreadChart
             :tenors10y="spreadHistory10y"
-            :tenors2y="spreadHistory2y"
+            :tenors3y="spreadHistory3y"
             :update-time="spreadUpdateTime"
             :isLoading="spreadLoading"
             :hasError="!!spreadError"
@@ -277,7 +277,6 @@ import { apiFetch } from '../utils/api.js'
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [
   { key: '1Y',  label: '1年' },
-  { key: '2Y',  label: '2年' },
   { key: '3Y',  label: '3年' },
   { key: '5Y',  label: '5年' },
   { key: '7Y',  label: '7年' },
@@ -308,7 +307,7 @@ const historyModalTenor  = ref('10年')  // 中文期限
 
 // 10Y-2Y 期限利差
 const spreadHistory10y   = ref([])
-const spreadHistory2y    = ref([])
+const spreadHistory3y    = ref([])
 const spreadUpdateTime  = ref('')
 const spreadLoading     = ref(false)
 const spreadError       = ref('')
@@ -402,31 +401,31 @@ async function fetchBondData() {
   }
 }
 
-// 10Y-2Y 利差历史（取最近 252 个交易日，即 1 年）
+// 10Y-3Y 利差历史（取最近 252 个交易日，即 1 年）
 async function fetchSpreadHistory() {
   spreadLoading.value = true
   spreadError.value   = ''
   try {
-    const [data10y, data2y] = await Promise.all([
+    const [data10y, data3y] = await Promise.all([
       apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, 10000).catch(e => {
         logger.warn('[BondDashboard] 10Y history fetch failed:', e)
         return null
       }),
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('2年')}&period=1Y`, 10000).catch(e => {
-        logger.warn('[BondDashboard] 2Y history fetch failed:', e)
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('3年')}&period=1Y`, 10000).catch(e => {
+        logger.warn('[BondDashboard] 3Y history fetch failed:', e)
         return null
       }),
     ])
     
     // Check for timeout/network errors
-    if (data10y === null && data2y === null) {
+    if (data10y === null && data3y === null) {
       spreadError.value = '请求超时，请检查网络连接'
-    } else if (data10y === null || data2y === null) {
+    } else if (data10y === null || data3y === null) {
       spreadError.value = '部分数据加载失败，利差图可能不完整'
     }
     
     spreadHistory10y.value  = (data10y?.data?.history || data10y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
-    spreadHistory2y.value   = (data2y?.data?.history || data2y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
+    spreadHistory3y.value   = (data3y?.data?.history || data3y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
   } catch (e) {
     spreadError.value = e.message || '加载利差数据失败'
