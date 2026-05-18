@@ -1021,6 +1021,8 @@ async def _save_message(session_id: str, role: str, content: str):
         try:
             from app.db.database import _get_conn
             conn = _get_conn()
+            # BEGIN IMMEDIATE 防止并发写入冲突（v0.6.49）
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "INSERT INTO copilot_conversations (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
                 (session_id, role, content, datetime.now().isoformat())
@@ -1032,20 +1034,45 @@ async def _save_message(session_id: str, role: str, content: str):
     
     await loop.run_in_executor(_executor, _sync_save)
 
-async def _load_conversation(session_id: str, limit: int = 20) -> List[dict]:
-    """加载对话历史，返回消息列表"""
+async def _load_conversation(session_id: str, limit: int = 20, context_length: int = 4096) -> List[dict]:
+    """加载对话历史，基于 token 数限制滑动窗口
+    
+    Args:
+        session_id: 会话ID
+        limit: 最大消息数量限制
+        context_length: token 预算上限（默认 4096）
+    
+    Returns:
+        消息列表，token 总数不超过 context_length
+    """
     loop = asyncio.get_event_loop()
     
     def _sync_load():
         try:
             from app.db.database import _get_conn
+            from app.utils.token_counter import count_messages_tokens
+            
             conn = _get_conn()
+            # 加载更多消息用于滑动窗口裁剪
             rows = conn.execute(
                 "SELECT role, content FROM copilot_conversations WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-                (session_id, limit)
+                (session_id, limit * 2)  # 加载 2 倍数量用于 token 裁剪
             ).fetchall()
             conn.close()
-            return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+            
+            # 反转顺序（从旧到新）
+            messages = [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+            
+            # Token 滑动窗口：从最新消息开始保留
+            if messages:
+                total_tokens = count_messages_tokens(messages)
+                if total_tokens > context_length:
+                    # 从最旧的消息开始移除，直到满足 token 预算
+                    while messages and count_messages_tokens(messages) > context_length:
+                        messages.pop(0)  # 移除最旧的消息
+                    logger.info(f"[Copilot] Sliding window: {len(messages)} messages, {count_messages_tokens(messages)} tokens")
+            
+            return messages
         except Exception as e:
             logger.warning(f"[Copilot] load conversation error: {e}")
         return []

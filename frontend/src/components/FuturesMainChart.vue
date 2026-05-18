@@ -14,6 +14,7 @@ import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
+import { getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   futuresData: { type: Array, default: () => [] },
@@ -37,6 +38,10 @@ function buildChart() {
   hasData.value = data.length > 0
   if (!hasData.value) return
 
+  const marketColors = getDynamicMarketColors()
+  const UP = marketColors.UP
+  const DOWN = marketColors.DOWN
+
   chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
 
   const symbols = data.map(d => d.symbol)
@@ -49,7 +54,7 @@ function buildChart() {
   const series = data.map(fut => {
     const base = fut.price || 0
     const chg  = fut.change_pct || 0
-    const color = chg >= 0 ? '#f87171' : '#4ade80'
+    const color = chg >= 0 ? UP : DOWN
     
     // Use real history if available, fallback to flat line
     let history = []

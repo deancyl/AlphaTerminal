@@ -25,6 +25,7 @@ import { acquireLock, releaseLock } from '../utils/connectionLock.js'
 import { TIMEOUTS } from '../utils/constants.js'
 import { CircularBuffer } from '../utils/circularBuffer.js'
 import { useNetworkStatus, isNetworkOnline } from './useNetworkStatus.js'
+import { usePageVisibility } from './usePageVisibility.js'
 
 // WebSocket 基础 URL 配置
 // 开发环境：如果 VITE_WS_BASE 为空，使用相对路径（Vite proxy 处理）
@@ -70,6 +71,14 @@ const globalLastSeq = shallowRef({})  // {symbol: last_seq} for recovery
 const globalPollingStatus = ref(false)
 const POLLING_INTERVAL = 5000  // 5 seconds
 let _pollingTimer = null
+
+// Page visibility state (skip UI updates when tab is hidden)
+const { isVisible: _pageVisible } = usePageVisibility()
+
+// ── Background Batch Buffer (v0.6.49) ────────────────────────────────
+// When page is hidden, accumulate messages in buffer instead of processing
+const _batchBuffer = []
+const MAX_BATCH_SIZE = 100  // Limit buffer size to prevent memory leak
 
 // ── P0-2: Subscription Queue (防止 WS 未就绪时订阅丢失) ────────────────────────────────
 // 当 WS 未连接时，订阅请求存入队列，连接就绪后批量发送
@@ -221,6 +230,29 @@ function _notifyTick() {
   }
 }
 
+function flushBatchBuffer() {
+  if (_batchBuffer.length === 0) return
+  
+  const latestBySymbol = new Map()
+  for (const msg of _batchBuffer) {
+    latestBySymbol.set(msg.symbol, msg)
+  }
+  
+  _dataVersion++
+  const currentVersion = _dataVersion
+  
+  for (const [sym, data] of latestBySymbol) {
+    if (!tickHistory[sym]) tickHistory[sym] = new CircularBuffer(MAX_TICK_HISTORY)
+    tickHistory[sym].push({ ...data, _version: currentVersion, _priority: WS_PRIORITY })
+    if (data.seq) globalLastSeq.value[sym] = data.seq
+    globalTicks.value[sym] = Object.assign({}, data, { _version: currentVersion, _priority: WS_PRIORITY })
+  }
+  
+  _tickDirty = true
+  _batchBuffer.length = 0
+  triggerRef(globalTicks)
+}
+
 function _setStatusDebounced(newStatus) {
   if (_statusDebounceTimer) {
     clearTimeout(_statusDebounceTimer)
@@ -303,6 +335,13 @@ function _newConnection() {
         logger.warn('[MarketStream] Recovery request failed:', e)
       }
     }
+    
+    // When page becomes visible, refresh UI with latest snapshot
+    watch(_pageVisible, (visible) => {
+      if (visible && _connectionState === ConnectionState.CONNECTED) {
+        flushBatchBuffer()
+      }
+    })
   }
 
   _ws.onmessage = (event) => {
@@ -340,6 +379,14 @@ function _newConnection() {
       if (data.seq) globalLastSeq.value[sym] = data.seq
       globalTicks.value[sym] = Object.assign({}, data, { _version: currentVersion, _priority: WS_PRIORITY })
       _tickDirty = true
+
+      if (!_pageVisible.value) {
+        if (_batchBuffer.length >= MAX_BATCH_SIZE) {
+          _batchBuffer.shift()
+        }
+        _batchBuffer.push(data)
+        return
+      }
 
       const now = Date.now()
       if (now - _lastTickTime >= TICK_THROTTLE_MS) {

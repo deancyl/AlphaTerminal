@@ -40,15 +40,27 @@ import { formatHelp, formatTopSectors, formatNorthFlowRanking } from '../service
 import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { apiFetch } from '../utils/api.js'
+import { CircularBuffer } from '../utils/circularBuffer.js'
 import CopilotHeader from './copilot/CopilotHeader.vue'
 import CopilotQuickCommands from './copilot/CopilotQuickCommands.vue'
 import CopilotContextSelector from './copilot/CopilotContextSelector.vue'
 import CopilotMessageList from './copilot/CopilotMessageList.vue'
 import CopilotInput from './copilot/CopilotInput.vue'
 
-// State
+// State - 使用 CircularBuffer 限制消息数量
+const messagesBuffer = new CircularBuffer(50)
 const messages = ref([])
 const inputText = ref('')
+
+function addMessage(msg) {
+  messagesBuffer.push(msg)
+  messages.value = messagesBuffer.toArray()
+}
+
+function clearMessages() {
+  messagesBuffer.clear()
+  messages.value = []
+}
 const isLoading = ref(false)
 const isLoadingPortfolio = ref(false)
 const messageListRef = ref(null)
@@ -132,7 +144,7 @@ onMounted(() => loadPortfolioList())
 function startNewConversation() {
   clearSessionId()
   currentSessionId.value = getSessionId()
-  messages.value = []
+  clearMessages()
 }
 
 function scrollToBottom() {
@@ -144,17 +156,17 @@ function scrollToBottom() {
 }
 
 function addUserMessage(content) {
-  messages.value.push({ role: 'user', content, displayedContent: content, streaming: false })
+  addMessage({ role: 'user', content, displayedContent: content, streaming: false })
   scrollToBottom()
 }
 
 function addAssistantMessage(content) {
-  messages.value.push({ role: 'assistant', content, displayedContent: content, renderedContent: mdRender(content), streaming: false })
+  addMessage({ role: 'assistant', content, displayedContent: content, renderedContent: mdRender(content), streaming: false })
   scrollToBottom()
 }
 
 function addErrorMessage(content, errorType = 'generic') {
-  messages.value.push({ role: 'assistant', content, displayedContent: content, streaming: false, isError: true, errorType })
+  addMessage({ role: 'assistant', content, displayedContent: content, streaming: false, isError: true, errorType })
   scrollToBottom()
 }
 
@@ -294,7 +306,7 @@ async function executeCommand(cmd, originalText) {
 async function handleLLMChat(text) {
   addUserMessage(text)
   const aiMsgIndex = messages.value.length
-  messages.value.push({ role: 'assistant', content: '', displayedContent: '🧠 正在思考...', streaming: true, fromCache: false })
+  addMessage({ role: 'assistant', content: '', displayedContent: '🧠 正在思考...', streaming: true, fromCache: false })
   
   // Reset progress and start timeout warning timer
   streamingProgress.value = 0

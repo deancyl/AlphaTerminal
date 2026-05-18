@@ -105,8 +105,8 @@ export function useKeyboardShortcuts(options = {}) {
     // 忽略输入框中的快捷键
     const target = event.target
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-      // 但允许 Escape 和 Ctrl+K
-      if (event.key !== 'Escape' && !(event.ctrlKey && event.key === 'k')) {
+      // 但允许 Escape, F5, F9, F11 和 Ctrl+K
+      if (!['Escape', 'F5', 'F9', 'F11'].includes(event.key) && !(event.ctrlKey && event.key === 'k')) {
         return
       }
     }

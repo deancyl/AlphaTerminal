@@ -308,7 +308,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, onErrorCaptured, watch, computed, defineAsyncComponent } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, onErrorCaptured, watch, computed, defineAsyncComponent } from 'vue'
 import { useDocumentVisibility, useIntervalFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import LoadingFallback from './components/LoadingFallback.vue'
 
@@ -605,11 +605,10 @@ function showUnusual() {
 }
 
 const marketOverview  = ref(null)
-const chinaAllData    = ref([])
-const sectorsData     = ref([])
-const derivativesData = ref([])
-const currentTime     = ref('')
-const watchList       = ref([])   // 自选股列表
+const chinaAllData    = shallowRef([])
+const sectorsData     = shallowRef([])
+const derivativesData = shallowRef([])
+const watchList       = shallowRef([])   // 自选股列表
 const preFetchedKlineData = ref(null) // 预取的K线数据
 
 // Market status computed from current time

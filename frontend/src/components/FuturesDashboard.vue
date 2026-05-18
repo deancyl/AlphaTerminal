@@ -65,7 +65,7 @@
 
             <!-- Skeleton while loading -->
             <div v-if="commoditySectors.length === 0" class="grid grid-cols-3 md:grid-cols-5 gap-2">
-              <div v-for="i in 15" :key="i" class="skeleton h-10 rounded-sm"></div>
+              <Skeleton v-for="i in 15" :key="i" height="40px" />
             </div>
 
             <!-- 按板块分组渲染 -->
@@ -142,16 +142,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import FuturesMainChart from './FuturesMainChart.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
+import Skeleton from './Skeleton.vue'
 import { apiFetch } from '../utils/api.js'
 
 const emit = defineEmits(['open-futures'])
 
-const futuresCards     = ref([])
-const commodityBlocks  = ref([])
+const futuresCards     = shallowRef([])
+const commodityBlocks  = shallowRef([])
 const commodityUpdateTime = ref('')
 const isLoading = ref(false)
 const hasError = ref(false)

@@ -79,17 +79,20 @@ export function getChartColors() {
 export function getMarketColors(marketType = 'ashare') {
   const colors = getDynamicThemeColors()
   if (marketType === 'ashare') {
+    // A股惯例：红涨绿跌
+    // colors.bull = 绿色(#10b981), colors.bear = 红色(#ef4444)
+    // up(上涨) = 红色 = colors.bear, down(下跌) = 绿色 = colors.bull
     return { up: colors.bear, down: colors.bull }
   }
+  // 国际惯例：绿涨红跌
   return { up: colors.bull, down: colors.bear }
 }
-
-function applyTheme(theme) {
+  function applyTheme(theme) {
   const root = document.documentElement
   
-  if (!Object.values(THEMES).includes(theme)) {
-    console.warn(`[Theme] Unknown theme: ${theme}`)
-    return
+    if (!Object.values(THEMES).includes(theme)) {
+      console.warn(`[Theme] Unknown theme: ${theme}`)
+      return
   }
   
   root.setAttribute('data-theme', theme)

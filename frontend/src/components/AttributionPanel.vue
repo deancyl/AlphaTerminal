@@ -143,6 +143,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { getDynamicMarketColors } from '../utils/echartsTheme.js'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
 const props = defineProps({
@@ -246,7 +247,8 @@ function renderBar() {
   if (barChart) { barChart.dispose(); barChart = null }
 
   const attr = data.value.attribution
-  const COLORS = attr.map(a => (a.pnl || 0) >= 0 ? '#14b143' : '#ef232a')
+  const marketColors = getDynamicMarketColors()
+  const COLORS = attr.map(a => (a.pnl || 0) >= 0 ? marketColors.UP : marketColors.DOWN)
 
   barChart = window.echarts.init(barEl.value, 'dark')
   barChart.setOption({
@@ -280,7 +282,7 @@ function renderBar() {
       type: 'bar',
       data: attr.map(a => ({
         value: a.pnl || 0,
-        itemStyle: { color: (a.pnl || 0) >= 0 ? '#14b143' : '#ef232a' },
+        itemStyle: { color: (a.pnl || 0) >= 0 ? marketColors.UP : marketColors.DOWN },
       })),
       barMaxWidth: 32,
       label: {

@@ -131,8 +131,8 @@ function buildOption(cData) {
         coord: [e.date, e.price],
         value: e.headline,
         itemStyle: {
-          color: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
-          borderColor: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
+          color: e.type === 'bullish' ? MARKET_COLORS.UP : e.type === 'bearish' ? MARKET_COLORS.DOWN : '#fbbf24',
+          borderColor: e.type === 'bullish' ? MARKET_COLORS.UP : e.type === 'bearish' ? MARKET_COLORS.DOWN : '#fbbf24',
           borderWidth: 1,
         },
         label: {

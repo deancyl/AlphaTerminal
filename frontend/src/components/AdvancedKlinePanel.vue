@@ -294,6 +294,8 @@ async function fetchLatestQuote() {
       amount:      quote.amount,
       amplitude:    quote.amplitude,
       turnover_rate: quote.turnover_rate,
+      source:       quote.source || data.source || 'unknown',
+      timestamp:    quote.timestamp || data.timestamp || Date.now(),
     }
     liveTick.value = {
       price:  quote.price,
@@ -349,6 +351,8 @@ async function fetchHistory(append = false) {
           amount: last.amount || (last.close * last.volume),
           amplitude: last.amplitude,
           turnover_rate: last.turnover_rate,
+          source: 'cached',
+          timestamp: Date.now(),
         }
       }
       
@@ -412,6 +416,8 @@ async function fetchHistory(append = false) {
         amount:       last.amount || (last.close * last.volume),
         amplitude:    last.amplitude,
         turnover_rate: last.turnover_rate,
+        source:       payload?.source || 'api',
+        timestamp:    Date.now(),
       }
     }
 
@@ -689,6 +695,8 @@ const throttledTick = useThrottleFn((t) => {
     currentQuote.value = {
       price: t.price, change: t.chg, change_pct: t.chg_pct,
       volume: t.volume, amount: t.amount,
+      source: 'ws',
+      timestamp: t.time || Date.now(),
     }
   }
 }, 100)

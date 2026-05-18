@@ -177,7 +177,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, shallowRef, computed, watch, nextTick, onMounted } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 
@@ -193,7 +193,7 @@ const debouncedQuery = ref('') // 防抖后的查询值
 const inputRef = ref(null)
 const selectedIndex = ref(0)
 const recentSearches = ref([])
-const stockData = ref([]) // 从API加载的股票数据
+const stockData = shallowRef([]) // 从API加载的股票数据
 const isLoadingStocks = ref(false)
 
 // ── 防抖搜索（300ms）──

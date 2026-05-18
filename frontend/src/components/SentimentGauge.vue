@@ -117,6 +117,7 @@ import { formatPrice } from '../utils/formatters.js'
 import { getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { usePollingManager } from '../composables/usePollingManager.js'
 import { safeDispose } from '../utils/chartManager.js'
+import { getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   marketData: { type: Object, default: null },
@@ -142,9 +143,6 @@ const { register } = usePollingManager()
 // 上涨家数全天走势数据（每15秒轮询追加一个点，最多240个点=1小时）
 const intradayData = ref([])   // [{time: '09:31', advance: 1234}, ...]
 const intradayUpdateTime = ref('')
-
-const UP   = '#ef232a'
-const DOWN = '#14b143'
 
 const data = ref({
   buckets: [], total: 0,
@@ -182,8 +180,20 @@ const downPct = computed(() => {
 })
 
 // ── ECharts 折线图：上涨家数全天走势 ─────────────────────────────
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 function buildIntradayOption(series) {
   if (!series || !series.length) return {}
+  
+  const marketColors = getDynamicMarketColors()
+  const UP = marketColors.UP
+  const DOWN = marketColors.DOWN
+  
   const times   = series.map(d => d.time)
   const advance = series.map(d => d.advance)
   const decline = series.map(d => d.decline)
@@ -232,13 +242,13 @@ function buildIntradayOption(series) {
         type: 'line',
         data: advance,
         smooth: true,
-        lineStyle: { color: '#ef232a', width: 1.5 },
+        lineStyle: { color: UP, width: 1.5 },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(239,35,42,0.20)' },
-              { offset: 1, color: 'rgba(239,35,42,0.01)' },
+              { offset: 0, color: hexToRgba(UP, 0.20) },
+              { offset: 1, color: hexToRgba(UP, 0.01) },
             ],
           },
         },
@@ -249,13 +259,13 @@ function buildIntradayOption(series) {
         type: 'line',
         data: decline,
         smooth: true,
-        lineStyle: { color: '#14b143', width: 1.5 },
+        lineStyle: { color: DOWN, width: 1.5 },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(20,177,67,0.20)' },
-              { offset: 1, color: 'rgba(20,177,67,0.01)' },
+              { offset: 0, color: hexToRgba(DOWN, 0.20) },
+              { offset: 1, color: hexToRgba(DOWN, 0.01) },
             ],
           },
         },
@@ -300,6 +310,11 @@ async function fetchIntraday() {
 // ── ECharts 直方图 ────────────────────────────────────────────────
 function buildHistogramOption(buckets) {
   if (!buckets || !buckets.length) return {}
+  
+  const marketColors = getDynamicMarketColors()
+  const UP = marketColors.UP
+  const DOWN = marketColors.DOWN
+  
   const labels  = buckets.map(b => b.label)
   const counts  = buckets.map(b => b.count)
   const colors  = buckets.map(b => {

@@ -173,10 +173,10 @@
       <!-- 无数据骨架屏 -->
       <div v-if="!hasData" class="py-3 space-y-2">
         <div class="flex gap-2" v-for="n in 4" :key="n">
-          <div class="skeleton h-6 flex-1 rounded-sm"></div>
-          <div class="skeleton h-6 w-12 rounded-sm"></div>
-          <div class="skeleton h-6 w-12 rounded-sm"></div>
-          <div class="skeleton h-6 w-12 rounded-sm"></div>
+          <Skeleton height="24px" class="flex-1" />
+          <Skeleton width="48px" height="24px" />
+          <Skeleton width="48px" height="24px" />
+          <Skeleton width="48px" height="24px" />
         </div>
       </div>
     </div>
@@ -203,12 +203,12 @@
               :update-time="yieldUpdateTime"
             />
             <div v-else class="w-full h-full flex flex-col p-3 gap-2">
-              <div class="skeleton h-3 w-24 rounded-sm"></div>
-              <div class="flex-1 skeleton rounded-sm"></div>
+              <Skeleton width="96px" height="12px" />
+              <Skeleton class="flex-1" />
               <div class="flex gap-2">
-                <div class="skeleton h-2 w-12 rounded-sm"></div>
-                <div class="skeleton h-2 w-12 rounded-sm"></div>
-                <div class="skeleton h-2 w-12 rounded-sm"></div>
+                <Skeleton width="48px" height="8px" />
+                <Skeleton width="48px" height="8px" />
+                <Skeleton width="48px" height="8px" />
               </div>
             </div>
           </div>
@@ -274,12 +274,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue'
 import { logger } from '../utils/logger.js'
 import { safeDivide } from '../utils/safeMath.js'
 import YieldCurveChart from './YieldCurveChart.vue'
 import YieldSpreadChart from './YieldSpreadChart.vue'
 import BondHistoryModal from './BondHistoryModal.vue'
+import Skeleton from './Skeleton.vue'
 import { apiFetch } from '../utils/api.js'
 
 // ── 常量 ──────────────────────────────────────────────────────────
@@ -307,7 +308,7 @@ const yieldCurve    = ref({})
 const yieldCurve1m  = ref({})
 const yieldCurve1y  = ref({})
 const yieldUpdateTime = ref('')
-const bondList      = ref([])
+const bondList      = shallowRef([])
 const activeSource  = ref('gov')
 
 // 历史分位弹窗
@@ -315,8 +316,8 @@ const historyModalVisible = ref(false)
 const historyModalTenor  = ref('10年')  // 中文期限
 
 // 10Y-2Y 期限利差
-const spreadHistory10y   = ref([])
-const spreadHistory3y    = ref([])
+const spreadHistory10y   = shallowRef([])
+const spreadHistory3y    = shallowRef([])
 const spreadUpdateTime  = ref('')
 const spreadLoading     = ref(false)
 const spreadError       = ref('')

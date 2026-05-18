@@ -267,6 +267,7 @@
 <script setup>
 import { ref, shallowRef, computed, onMounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const loading = ref(false)
 const error = ref(null)
@@ -274,6 +275,8 @@ const chainData = ref(null)
 const contracts = ref([])
 const selectedSymbol = ref('io2506')
 const selectedContract = ref(null)
+
+const { createSignal, complete, abort } = useAbortableRequest()
 
 const tStyleData = computed(() => {
   if (!chainData.value) return []
@@ -327,15 +330,22 @@ async function fetchChainData() {
   loading.value = true
   error.value = null
 
+  const signal = createSignal()
+
   try {
-    const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { timeoutMs: 30000 })
+    const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { 
+      timeoutMs: 30000,
+      signal 
+    })
     // apiFetch already extracts data, so res IS the data object
     if (res && (res.calls || res.puts)) {
       chainData.value = res
     } else {
       error.value = '数据格式错误'
     }
+    complete()
   } catch (e) {
+    if (e.name === 'AbortError') return // Ignore abort errors
     error.value = e.message || '获取期权链失败'
     chainData.value = null
   } finally {
@@ -345,6 +355,7 @@ async function fetchChainData() {
 
 function handleSymbolChange() {
   selectedContract.value = null
+  abort('Symbol changed')
   fetchChainData()
 }
 

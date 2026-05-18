@@ -8,6 +8,18 @@
       <div class="flex items-center gap-1 shrink-0">
         <span class="font-bold text-theme-primary whitespace-nowrap">{{ name }}</span>
         <span class="text-theme-tertiary font-mono">{{ code }}</span>
+        <!-- 数据源状态指示器 -->
+        <span class="flex items-center gap-1 ml-1" :title="dataSourceTooltip">
+          <span class="text-[10px]" :class="currentDataSourceStatus === 'ok' ? 'text-bullish' : currentDataSourceStatus === 'degraded' ? 'text-yellow-500' : 'text-bearish'">●</span>
+          <!-- 数据源名称 -->
+          <span class="text-[10px] text-theme-muted font-mono">
+            {{ dataSourceLabel }}
+          </span>
+          <!-- 数据新鲜度 -->
+          <span v-if="quoteFreshness.ageMs > 0" class="text-[10px] text-theme-tertiary">
+            {{ quoteFreshness.ageText }}
+          </span>
+        </span>
       </div>
 
       <span class="text-theme-tertiary shrink-0">|</span>
@@ -213,8 +225,10 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { exportCSV as utilExportCSV } from '../utils/symbols.js'
+import { useDataSourceStatus, onDataSourceStatusChange } from '../composables/useDataSourceStatus.js'
+import { getFreshness, formatAge } from '../utils/freshness.js'
 
 const props = defineProps({
   name:          { type: String,  default: '' },
@@ -331,5 +345,57 @@ onUnmounted(() => {
     clearTimeout(clickOutsideTimer)
     clickOutsideTimer = null
   }
+  if (dataSourceUnsubscribe) {
+    dataSourceUnsubscribe()
+  }
+})
+
+// Data source status indicator
+const { status: dataSourceStatus } = useDataSourceStatus()
+const currentDataSourceStatus = ref('ok')
+let dataSourceUnsubscribe = null
+
+// 数据源名称映射
+const SOURCE_LABELS = {
+  tencent: '腾讯',
+  sina: '新浪',
+  eastmoney: '东财',
+  sina_kline: '新浪',
+  tencent_hk: '腾讯港股',
+  alpha_vantage: 'AlphaV',
+  none: '无数据',
+  unknown: '未知',
+  cached: '缓存',
+}
+
+// 数据源显示标签
+const dataSourceLabel = computed(() => {
+  const src = props.quote?.source
+  if (!src) return SOURCE_LABELS.unknown
+  return SOURCE_LABELS[src] || src
+})
+
+// 数据新鲜度
+const quoteFreshness = computed(() => {
+  const ts = props.quote?.timestamp
+  return getFreshness(ts)
+})
+
+// Tooltip 提示
+const dataSourceTooltip = computed(() => {
+  const status = currentDataSourceStatus.value
+  const label = dataSourceLabel.value
+  const age = quoteFreshness.value.ageText
+  
+  if (status === 'ok') return `数据源: ${label} (${age})`
+  if (status === 'degraded') return `数据源降级: ${label} (${age})`
+  return `数据源熔断: ${label} (${age})`
+})
+
+onMounted(() => {
+  currentDataSourceStatus.value = dataSourceStatus.value
+  dataSourceUnsubscribe = onDataSourceStatusChange((newStatus) => {
+    currentDataSourceStatus.value = newStatus
+  })
 })
 </script>

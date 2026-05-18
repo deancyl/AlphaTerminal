@@ -64,7 +64,9 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import { logger } from '../utils/logger.js'
+const { createSignal, complete, abort } = useAbortableRequest()
 import { usePriceFlash } from '../composables/usePriceFlash.js'
 import { usePollingManager } from '../composables/usePollingManager.js'
 import { formatPrice, formatVol } from '../utils/formatters.js'
@@ -122,8 +124,10 @@ async function fetchQuote() {
   loading.value = true
   error.value = null
   
+  const signal = createSignal()
+  
   try {
-    const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`)
+    const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`, { signal })
     
     // Ignore stale responses
     if (currentRequestId !== fetchQuoteRequestId) return
@@ -144,7 +148,9 @@ async function fetchQuote() {
       
       triggerFlash(json.price, oldPrice)
     }
+    complete()
   } catch (e) {
+    if (e.name === 'AbortError') return // Ignore abort errors
     if (currentRequestId !== fetchQuoteRequestId) return
     logger.error('[SimpleQuote] fetch error:', e)
     error.value = e.message || '获取数据失败'
@@ -169,6 +175,7 @@ function setupPolling() {
 
 watch(() => props.symbol, (newSymbol) => {
   localSymbol.value = newSymbol
+  abort('Symbol changed')
   setupPolling()
 })
 

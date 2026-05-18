@@ -520,7 +520,7 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted, onUnmounted, onErrorCaptured } from 'vue'
+import { ref, shallowRef, computed, reactive, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
 import { safeDivide } from '../utils/safeMath.js'
@@ -806,7 +806,7 @@ const symbolNoData = computed(() =>
 const running        = ref(false)
 const statusMsg     = ref('')
 const backtestResult = ref(null)
-const histData      = ref([])
+const histData      = shallowRef([])
 const chartKey      = ref(0)
 const showTrades    = ref(false)
 const chartWrapRef  = ref(null)

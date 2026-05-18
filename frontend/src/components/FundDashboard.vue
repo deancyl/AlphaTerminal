@@ -832,7 +832,7 @@ const navPeriods = [
 ]
 const navPeriod = ref('6m')
 
-const klineHistory = ref([])
+const klineHistory = shallowRef([])
 
 const klineChartRef = ref(null)
 const navChartRef = ref(null)

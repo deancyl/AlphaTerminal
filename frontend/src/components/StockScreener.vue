@@ -246,7 +246,7 @@ onUnmounted(() => {
 })
 
 // ── 服务端分页数据状态 ─────────────────────────────────────────────
-const stocks       = ref([])
+const stocks       = shallowRef([])
 const total        = ref(0)
 const currentPage  = ref(1)
 const pageSize     = ref(50)

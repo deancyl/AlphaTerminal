@@ -500,6 +500,8 @@ async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_
         conn = _get_conn()
         try:
             now = datetime.now().isoformat()
+            # BEGIN IMMEDIATE 防止并发写入冲突（v0.6.49）
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute("""
                 INSERT INTO backtest_strategies (name, description, type, params, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -582,6 +584,8 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
     def _sync_save_result():
         conn = _get_conn()
         try:
+            # BEGIN IMMEDIATE 防止并发写入冲突（v0.6.49）
+            conn.execute("BEGIN IMMEDIATE")
             conn.execute("""
                 INSERT INTO backtest_results 
                 (strategy_id, portfolio_id, start_date, end_date, 

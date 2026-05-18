@@ -533,7 +533,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
 import { safeDispose } from '../utils/chartManager.js'
@@ -556,17 +556,17 @@ const lastUpdate = ref(null)
 // ESG评级查询
 const symbolInput = ref('')
 const hasSearched = ref(false)
-const ratings = ref([])
+const ratings = shallowRef([])
 const ratingError = ref(null)
 const radarChartRef = ref(null)
 let radarChartInstance = null
 
 // 碳排放数据
-const carbonData = ref([])
+const carbonData = shallowRef([])
 const carbonError = ref(null)
 
 // ESG排名 - 分页和排序
-const rankItems = ref([])
+const rankItems = shallowRef([])
 const rankError = ref(null)
 const page = ref(1)
 const pageSize = ref(20)
@@ -576,14 +576,14 @@ const sortOrder = ref('desc')
 
 // 历史趋势
 const historySymbol = ref('')
-const historyData = ref([])
+const historyData = shallowRef([])
 const historyError = ref(null)
 const historyChartRef = ref(null)
 let historyChartInstance = null
 
 // 对比分析
 const compareSymbols = ref('')
-const compareData = ref([])
+const compareData = shallowRef([])
 const compareError = ref(null)
 
 let _fetchController = null  // AbortController：组件卸载时取消 pending 请求

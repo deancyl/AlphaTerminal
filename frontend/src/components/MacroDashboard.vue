@@ -55,19 +55,19 @@
     <!-- 主内容区域 - 可滚动 -->
     <div class="flex-1 overflow-y-auto">
       <!-- 骨架加载器 -->
-      <div 
-        v-if="loading && !overview" 
+      <div
+        v-if="loading && !overview"
         class="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 p-3 md:p-4"
         aria-busy="true"
         aria-label="正在加载宏观经济数据"
       >
-        <div v-for="i in 8" :key="i" class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4 animate-pulse">
+        <div v-for="i in 8" :key="i" class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4">
           <div class="flex items-center justify-between mb-2">
-            <div class="h-3 w-10 bg-terminal-bg/50 rounded"></div>
-            <div class="h-2 w-16 bg-terminal-bg/50 rounded"></div>
+            <Skeleton width="40px" height="12px" />
+            <Skeleton width="64px" height="8px" />
           </div>
-          <div class="h-6 w-20 bg-terminal-bg/50 rounded mt-2"></div>
-          <div class="h-2 w-12 bg-terminal-bg/50 rounded mt-2"></div>
+          <Skeleton width="80px" height="24px" class="mt-2" />
+          <Skeleton width="48px" height="8px" class="mt-2" />
         </div>
       </div>
       
@@ -623,7 +623,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, nextTick, computed, onWatcherCleanup } from 'vue'
 import { apiFetchValidated } from '../utils/api.js'
 import { useGracefulDegradation } from '../composables/useGracefulDegradation.js'
 import { useApiError } from '../composables/useApiError.js'
@@ -633,6 +633,7 @@ import { useSmartPolling } from '../composables/useSmartPolling.js'
 import { useDataCache } from '../composables/useDataCache.js'
 import { getECharts, initChart } from '../utils/lazyEcharts.js'
 import { MacroDashboardResponseSchema } from '../schemas/macro.js'
+import Skeleton from './Skeleton.vue'
 
 const { handleError, getErrorCategory } = useApiError({ showToast: true })
 const { safeSetOption, validateChartData, showChartEmptyState, showChartErrorState } = useEChartsErrorBoundary()
@@ -644,14 +645,14 @@ const lastUpdate = ref(null)
 const errorSummary = ref(null)
 
 // Chart data for screen reader tables
-const gdpData = ref([])
-const cpiData = ref([])
-const pmiData = ref([])
-const ppiData = ref([])
-const m2Data = ref([])
-const socialFinancingData = ref([])
-const industrialProductionData = ref([])
-const unemploymentData = ref([])
+const gdpData = shallowRef([])
+const cpiData = shallowRef([])
+const pmiData = shallowRef([])
+const ppiData = shallowRef([])
+const m2Data = shallowRef([])
+const socialFinancingData = shallowRef([])
+const industrialProductionData = shallowRef([])
+const unemploymentData = shallowRef([])
 
 const {
   requestStates,

@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 _db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'database.db')
 _lock = threading.RLock()
 
+# ── 环境变量强制启用 WAL 模式 ────────────────────────────────────────
+_FORCE_WAL = os.environ.get('ALPHATERMINAL_FORCE_WAL', '').lower() in ('1', 'true', 'yes')
+
 # ── 线程级连接池（SQLite连接非线程安全，每个线程复用自己的连接）────────────────
 _thread_local = threading.local()
 _WAL_MODE_CHECKED = False
@@ -26,15 +29,14 @@ def _get_thread_conn():
         
         # WAL模式检测（仅首次）
         if not _WAL_MODE_CHECKED:
-            if "/vol3/" in _db_path or "/tmp/" in _db_path or "/nas/" in _db_path:
-                _USE_WAL = False
+            # 强制启用 WAL 模式（优先级最高）
+            if _FORCE_WAL:
+                _USE_WAL = True
+                logger.info("[DB] WAL mode forced via ALPHATERMINAL_FORCE_WAL=1")
             else:
-                try:
-                    cur = conn.execute("PRAGMA journal_mode=WAL")
-                    if cur.fetchone()[0] != "wal":
-                        _USE_WAL = False
-                except sqlite3.OperationalError:
-                    _USE_WAL = False
+                # 默认启用 WAL，不再检测路径（v0.6.49 修复并发锁死）
+                _USE_WAL = True
+                logger.info(f"[DB] WAL mode enabled (default) for: {_db_path}")
             _WAL_MODE_CHECKED = True
         
         if _USE_WAL:

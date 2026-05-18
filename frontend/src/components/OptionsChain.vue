@@ -157,6 +157,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const loading = ref(false)
 const error = ref(null)
@@ -164,6 +165,8 @@ const currentTime = ref('')
 const selectedSymbol = ref('io2506')
 const selectedStrike = ref(null)
 const selectedOption = ref(null)
+
+const { createSignal, complete, abort } = useAbortableRequest()
 
 const contracts = ref([
   { code: 'io2506', name: '沪深300股指期权2506' },
@@ -212,15 +215,22 @@ async function fetchChain() {
   loading.value = true
   error.value = null
 
+  const signal = createSignal()
+
   try {
-    const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { timeoutMs: 30000 })
+    const res = await apiFetch(`/api/v1/options/cffex/chain?symbol=${selectedSymbol.value}`, { 
+      timeoutMs: 30000,
+      signal 
+    })
     
     if (res?.data) {
       calls.value = res.data.calls || []
       puts.value = res.data.puts || []
       chainName.value = res.data.name || ''
     }
+    complete()
   } catch (e) {
+    if (e.name === 'AbortError') return // Ignore abort errors
     error.value = e.message || '获取期权链失败'
   } finally {
     loading.value = false
@@ -308,6 +318,7 @@ onUnmounted(() => {
 watch(selectedSymbol, () => {
   selectedStrike.value = null
   selectedOption.value = null
+  abort('Symbol changed')
   fetchChain()
 })
 </script>

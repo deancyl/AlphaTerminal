@@ -97,6 +97,7 @@ start_backend() {
     # 启动后端（使用 screen）
     cd "$WORKSPACE/backend"
     screen -dmS "$BACKEND_SCREEN" bash -c "
+        export ALPHATERMINAL_FORCE_WAL=1
         python3 -m uvicorn app.main:app --host 0.0.0.0 --port $BACKEND_PORT >> $BACKEND_LOG 2>&1
     "
 

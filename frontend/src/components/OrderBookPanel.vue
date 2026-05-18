@@ -162,6 +162,7 @@ import { apiFetch } from '../utils/api.js'
 import { formatPrice, formatVol } from '../utils/formatters.js'
 import { safeDivide, safePercent } from '../utils/safeMath.js'
 import { usePollingManager } from '../composables/usePollingManager.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 
 const props = defineProps({
   symbol: { type: String, default: 'sh600519' },
@@ -178,6 +179,7 @@ let prevPrice      = 0
 let unregisterPolling = null
 
 const { register } = usePollingManager()
+const { createSignal, complete, abort } = useAbortableRequest()
 
 // ── 键盘导航状态 ───────────────────────────────────────────────────
 const containerRef = ref(null)
@@ -241,8 +243,12 @@ let fetchOrderBookRequestId = 0
 async function fetchOrderBook() {
   const sym = localSymbol.value.trim() || props.symbol
   const currentRequestId = ++fetchOrderBookRequestId
+  const signal = createSignal()
   try {
-    const json = await apiFetch(`/api/v1/market/order_book/${sym}`, { timeoutMs: 8000 })
+    const json = await apiFetch(`/api/v1/market/order_book/${sym}`, { 
+      timeoutMs: 8000,
+      signal 
+    })
     // Ignore stale responses
     if (currentRequestId !== fetchOrderBookRequestId) return
     if (json?.code !== 0) {
@@ -266,7 +272,9 @@ async function fetchOrderBook() {
       midPrice.value = mp
     }
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    complete()
   } catch (e) {
+    if (e.name === 'AbortError') return // Ignore abort errors
     if (currentRequestId !== fetchOrderBookRequestId) return
     error.value = e.message
     data.value = null
@@ -370,6 +378,7 @@ watch(() => props.symbol, (s) => {
   localSymbol.value = s
   prevPrice = 0
   priceDir.value = ''
+  abort('Symbol changed')
   fetchOrderBook()
   setupPolling()
 }, { immediate: false })

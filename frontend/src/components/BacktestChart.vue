@@ -4,6 +4,7 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
+import { getDynamicMarketColors } from '../utils/echartsTheme.js'
 
 const props = defineProps({
   // 格式: [{ date, open, high, low, close, volume }, ...]
@@ -21,6 +22,10 @@ let ro = null
 function buildOption() {
   const hist = props.hist
   if (!hist || hist.length === 0) return {}
+  
+  const marketColors = getDynamicMarketColors()
+  const UP = marketColors.UP
+  const DOWN = marketColors.DOWN
 
   const times = hist.map(h => h.date || h.time || '')
   const klineData = hist.map(h => [h.open, h.close, h.low, h.high])
@@ -45,14 +50,14 @@ function buildOption() {
         value: hist[entryIdx].close,
         symbol: 'arrowUp',
         symbolSize: [12, 12],
-        itemStyle: { color: '#ef232a', borderColor: '#ef232a' },
+        itemStyle: { color: UP, borderColor: UP },
       })
     }
 
     // 卖出信号：exit_date 位置
     const exitIdx = dateIdx[trade.exit_date]
     if (exitIdx != null) {
-      const pnlColor = (trade.pnl || 0) >= 0 ? '#14b143' : '#ef232a'
+      const pnlColor = (trade.pnl || 0) >= 0 ? UP : DOWN
       sellPoints.push({
         coord: [exitIdx, hist[exitIdx].high],
         value: hist[exitIdx].close,
@@ -133,8 +138,8 @@ function buildOption() {
         name: 'K线', type: 'candlestick', data: klineData, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0,
         itemStyle: {
-          color: '#ef232a', color0: '#14b143',
-          borderColor: '#ef232a', borderColor0: '#14b143',
+          color: UP, color0: DOWN,
+          borderColor: UP, borderColor0: DOWN,
         },
         barMaxWidth: 8,
         markPoint: {

@@ -19,6 +19,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
+_FORCE_WAL = os.environ.get('ALPHATERMINAL_FORCE_WAL', '').lower() in ('1', 'true', 'yes')
+
 # ── 全局队列（模块级单例）───────────────────────────────────────
 _write_queue: queue.Queue = queue.Queue()
 _shutdown_flag = threading.Event()
@@ -59,27 +61,27 @@ def _get_conn():
     conn = sqlite3.connect(_db_path, timeout=30)
     conn.row_factory = sqlite3.Row
     
-    # WAL 模式检测：仅在首次启动时执行，后续直接复用结果
-    import os
-    _db_dir = os.path.dirname(_db_path) or os.getcwd()
-    
     if not _WAL_MODE_CHECKED:
-        # 检测是否为网络文件系统或特殊路径
         _use_delete_mode = False
-        network_path_prefixes = ['/vol3/', '/nas/', '/mnt/nfs', '/mnt/smb', '/net/']
-        if any(_db_path.startswith(p) for p in network_path_prefixes):
-            _use_delete_mode = True
         
-        if not _use_delete_mode:
-            try:
-                cur = conn.execute("PRAGMA journal_mode=WAL")
-                result = cur.fetchone()
-                if result and result[0] == "wal":
-                    _WAL_MODE_OK = True
-                else:
-                    _use_delete_mode = True
-            except (sqlite3.OperationalError, OSError, IOError):
+        if _FORCE_WAL:
+            _WAL_MODE_OK = True
+            logger.info("[DBWriter] WAL mode forced via ALPHATERMINAL_FORCE_WAL=1")
+        else:
+            network_path_prefixes = ['/vol3/', '/nas/', '/mnt/nfs', '/mnt/smb', '/net/']
+            if any(_db_path.startswith(p) for p in network_path_prefixes):
                 _use_delete_mode = True
+            
+            if not _use_delete_mode:
+                try:
+                    cur = conn.execute("PRAGMA journal_mode=WAL")
+                    result = cur.fetchone()
+                    if result and result[0] == "wal":
+                        _WAL_MODE_OK = True
+                    else:
+                        _use_delete_mode = True
+                except (sqlite3.OperationalError, OSError, IOError):
+                    _use_delete_mode = True
         
         if _use_delete_mode:
             conn.execute("PRAGMA journal_mode=DELETE")
@@ -89,7 +91,6 @@ def _get_conn():
         
         _WAL_MODE_CHECKED = True
     else:
-        # 后续连接：直接使用已检测的模式
         if _WAL_MODE_OK:
             conn.execute("PRAGMA journal_mode=WAL")
         else:

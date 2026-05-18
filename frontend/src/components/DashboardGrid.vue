@@ -60,16 +60,16 @@
         <!-- Visually hidden loading text for screen readers -->
         <span class="sr-only">正在加载市场风向标数据...</span>
         <div v-for="i in 8" :key="`skeleton-${i}`"
-             class="bg-theme-secondary/50 rounded p-2 flex flex-col items-center justify-center animate-pulse">
+             class="bg-theme-secondary/50 rounded p-2 flex flex-col items-center justify-center">
           <!-- Category badge skeleton -->
           <div class="flex items-center gap-0.5 mb-0.5">
-            <div class="w-4 h-3 bg-theme-tertiary/30 rounded"></div>
-            <div class="w-12 h-3 bg-theme-tertiary/30 rounded"></div>
+            <Skeleton width="16px" height="12px" />
+            <Skeleton width="48px" height="12px" />
           </div>
           <!-- Price skeleton -->
-          <div class="w-16 h-4 bg-theme-tertiary/30 rounded mb-0.5"></div>
+          <Skeleton width="64px" height="16px" class="mb-0.5" />
           <!-- Change % skeleton -->
-          <div class="w-10 h-3 bg-theme-tertiary/30 rounded"></div>
+          <Skeleton width="40px" height="12px" />
         </div>
       </div>
       <!-- 2-column grid -->
@@ -423,7 +423,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick, watch, onErrorCaptured } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch, onErrorCaptured } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
@@ -440,6 +440,7 @@ import FundFlowPanel     from './FundFlowPanel.vue'
 import StockScreener     from './StockScreener.vue'
 import WidgetErrorBoundary from './WidgetErrorBoundary.vue'
 import FreshnessIndicator from './FreshnessIndicator.vue'
+import Skeleton           from './Skeleton.vue'
 
 // ── Layout Persistence Constants ─────────────────────────────────────
 const LAYOUT_STORAGE_KEY = 'alphaterminal_grid_layout'
@@ -925,9 +926,9 @@ function scrollToMobileSection(id) {
 //      c) Broadcast macro ticks via `_broadcast_realtime_ticks()`
 //    - Current HTTP polling approach is simpler and sufficient for macro data
 //
-const macroData  = ref([])
-const ratesData  = ref([])
-const globalData = ref([])
+const macroData  = shallowRef([])
+const ratesData  = shallowRef([])
+const globalData = shallowRef([])
 
 // Error states for each data source
 const macroError  = ref(null)
