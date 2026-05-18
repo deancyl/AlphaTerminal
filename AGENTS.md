@@ -3033,3 +3033,198 @@ grep "_CIRCUIT_THRESHOLD" frontend/src/utils/api.js  # Expected: 5
 | `frontend/src/utils/constants.js` | Timeout constants (TIMEOUTS) |
 | `frontend/src/composables/useDataSourceStatus.js` | Status broadcasting |
 
+---
+
+## Top 10 QA/UX Critical Fixes (v0.6.49)
+
+### Overview
+
+A comprehensive optimization cycle addressing the Top 10 system fragility issues identified by QA audit.
+
+### Wave 1 - P0 Critical Fixes
+
+#### 1. Vue3 Reactive Memory Leak
+
+**Problem**: Large data arrays wrapped in `ref()` cause deep reactivity overhead and memory bloat.
+
+**Solution**: Convert to `shallowRef()` for large datasets.
+
+**Files Modified**:
+| File | Changes |
+|------|---------|
+| `App.vue` | 4 refs → shallowRef |
+| `DashboardGrid.vue` | 3 refs → shallowRef |
+| `FuturesDashboard.vue` | 2 refs → shallowRef |
+| `BondDashboard.vue` | 3 refs → shallowRef |
+| `FundDashboard.vue` | 1 ref → shallowRef |
+| `EsgDashboard.vue` | 5 refs → shallowRef |
+
+**Verification**:
+```bash
+grep -c "shallowRef" frontend/src/App.vue  # Expected: 5+
+```
+
+#### 2. SQLite Concurrent Write Lock
+
+**Problem**: WAL mode disabled on `/vol3/` paths, causing "database is locked" errors.
+
+**Solution**:
+1. Force WAL mode regardless of path
+2. Add `BEGIN IMMEDIATE` to critical writes
+
+**Files Modified**:
+- `backend/app/db/database.py` - Force WAL mode
+- `backend/app/routers/copilot.py` - BEGIN IMMEDIATE for INSERT
+- `backend/app/routers/backtest.py` - BEGIN IMMEDIATE for INSERT
+
+**Verification**:
+```bash
+grep -c "journal_mode=WAL" backend/app/db/database.py  # Expected: 2+
+grep -c "BEGIN IMMEDIATE" backend/app/routers/copilot.py  # Expected: 2+
+```
+
+#### 3. WebSocket Background Throttle
+
+**Problem**: Messages accumulate when tab is hidden, causing UI freeze on tab switch.
+
+**Solution**: Batch buffer for background messages, flush on visibility change.
+
+**Files Modified**:
+- `frontend/src/composables/useMarketStream.js` - Batch buffer + flushBatchBuffer()
+
+**Verification**:
+```bash
+grep -c "_batchBuffer" frontend/src/composables/useMarketStream.js  # Expected: 7+
+grep -c "flushBatchBuffer" frontend/src/composables/useMarketStream.js  # Expected: 2+
+```
+
+### Wave 2 - P1 High Priority
+
+#### 4. Degradation UI Enhancement
+
+**Problem**: Users don't know which data source is being used.
+
+**Solution**: QuoteHeader shows data source name + freshness time.
+
+**Files Modified**:
+- `frontend/src/components/QuoteHeader.vue` - Data source indicator
+- `frontend/src/components/AdvancedKlinePanel.vue` - Pass source/timestamp
+
+**Verification**:
+```bash
+grep -c "dataSource" frontend/src/components/QuoteHeader.vue  # Expected: 11+
+```
+
+#### 5. Race Condition Fix
+
+**Problem**: Rapid symbol switching causes data contamination.
+
+**Solution**: Add AbortController to 4 components.
+
+**Files Modified**:
+| Component | Changes |
+|-----------|---------|
+| `OptionsChain.vue` | useAbortableRequest |
+| `OptionsAnalysis.vue` | useAbortableRequest |
+| `OrderBookPanel.vue` | useAbortableRequest |
+| `SimpleQuotePanel.vue` | useAbortableRequest |
+
+**Verification**:
+```bash
+grep -c "useAbortableRequest" frontend/src/components/OptionsChain.vue  # Expected: 2+
+```
+
+#### 6. Color System Documentation
+
+**Problem**: `getMarketColors()` logic was confusing.
+
+**Solution**: Add documentation explaining A-share red=up, green=down convention.
+
+**Files Modified**:
+- `frontend/src/composables/useTheme.js` - Documentation comments
+
+### Wave 3 - P1 Polish
+
+#### 7. Skeleton Loading Component
+
+**Problem**: Traditional loading spinners cause layout shift.
+
+**Solution**: Create Skeleton component with pulse animation.
+
+**Files Modified**:
+- `frontend/src/components/Skeleton.vue` (NEW) - Skeleton component
+- `DashboardGrid.vue`, `MacroDashboard.vue`, `FuturesDashboard.vue`, `BondDashboard.vue` - Apply Skeleton
+
+**Verification**:
+```bash
+ls frontend/src/components/Skeleton.vue  # Should exist
+grep -c "Skeleton" frontend/src/components/DashboardGrid.vue  # Expected: 5+
+```
+
+#### 8. Copilot Context Sliding Window
+
+**Problem**: Conversation history grows unbounded, causing token overflow.
+
+**Solution**:
+1. Backend: Token-based history trimming
+2. Frontend: CircularBuffer for messages (max 50)
+
+**Files Modified**:
+- `backend/app/routers/copilot.py` - Sliding window in `_load_conversation()`
+- `frontend/src/components/CopilotSidebar.vue` - CircularBuffer
+
+**Verification**:
+```bash
+grep -c "CircularBuffer" frontend/src/components/CopilotSidebar.vue  # Expected: 3+
+grep -c "context_length" backend/app/routers/copilot.py  # Expected: 5+
+```
+
+#### 9. Keyboard Navigation Enhancement
+
+**Problem**: F5, F9, F11 blocked when focus is in input field.
+
+**Solution**: Add F5/F9/F11 to exemption list.
+
+**Files Modified**:
+- `frontend/src/composables/useKeyboardShortcuts.js` - Exemption list
+
+**Verification**:
+```bash
+grep -c "'F5', 'F9', 'F11'" frontend/src/composables/useKeyboardShortcuts.js  # Expected: 1+
+```
+
+### P2 - Verified No Fix Needed
+
+#### 10. Virtual List
+
+**Status**: Already correctly implemented using `vue-virtual-scroller`.
+
+**Components using virtualization**:
+- `OpenLotsPanel.vue` - VirtualizedTable
+- `StockScreener.vue` - RecycleScroller
+- `NewsFeed.vue` - RecycleScroller
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 1 (P0) | 3 | ✅ Complete |
+| Wave 2 (P1) | 3 | ✅ Complete |
+| Wave 3 (P1) | 3 | ✅ Complete |
+| P2 | 1 | ✅ Verified |
+| **Total** | **10** | **100% Complete** |
+
+### File Locations
+
+| Category | Files |
+|----------|-------|
+| Vue3 Reactive | `App.vue`, `DashboardGrid.vue`, `FuturesDashboard.vue`, `BondDashboard.vue`, `FundDashboard.vue`, `EsgDashboard.vue` |
+| SQLite | `database.py`, `copilot.py`, `backtest.py` |
+| WebSocket | `useMarketStream.js` |
+| Degradation UI | `QuoteHeader.vue`, `AdvancedKlinePanel.vue` |
+| Race Condition | `OptionsChain.vue`, `OptionsAnalysis.vue`, `OrderBookPanel.vue`, `SimpleQuotePanel.vue` |
+| Color System | `useTheme.js` |
+| Skeleton | `Skeleton.vue`, `DashboardGrid.vue`, `MacroDashboard.vue`, `FuturesDashboard.vue`, `BondDashboard.vue` |
+| Copilot Context | `copilot.py`, `CopilotSidebar.vue` |
+| Keyboard | `useKeyboardShortcuts.js` |
+
