@@ -106,16 +106,16 @@
     --color-primary-bg: rgba(15, 82, 186, 0.10);
     --color-primary-border: rgba(15, 82, 186, 0.30);
 
-    /* ── 金融语义色（严格统一）── */
-    --color-bull: #E63946;
-    --color-bull-light: #FF6B6B;
-    --color-bull-bg: rgba(230, 57, 70, 0.15);
-    --color-bull-border: rgba(230, 57, 70, 0.30);
+    /* ── 金融语义色（中国惯例：绿涨红跌）── */
+    --color-bull: #10b981;
+    --color-bull-light: #34d399;
+    --color-bull-bg: rgba(16, 185, 129, 0.15);
+    --color-bull-border: rgba(16, 185, 129, 0.30);
 
-    --color-bear: #1A936F;
-    --color-bear-light: #5CD899;
-    --color-bear-bg: rgba(26, 147, 111, 0.15);
-    --color-bear-border: rgba(26, 147, 111, 0.30);
+    --color-bear: #ef4444;
+    --color-bear-light: #f87171;
+    --color-bear-bg: rgba(239, 68, 68, 0.15);
+    --color-bear-border: rgba(239, 68, 68, 0.30);
 
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.10);
@@ -200,15 +200,15 @@
     --color-primary-border: rgba(15, 82, 186, 0.35);
 
     /* ── 金融语义色（严格统一）── */
-    --color-bull: #FF4D4F;
-    --color-bull-light: #FF7875;
-    --color-bull-bg: rgba(255, 77, 79, 0.20);
-    --color-bull-border: rgba(255, 77, 79, 0.40);
+    --color-bull: #10b981;
+    --color-bull-light: #34d399;
+    --color-bull-bg: rgba(16, 185, 129, 0.20);
+    --color-bull-border: rgba(16, 185, 129, 0.40);
 
-    --color-bear: #52C41A;
-    --color-bear-light: #73D13D;
-    --color-bear-bg: rgba(82, 196, 26, 0.20);
-    --color-bear-border: rgba(82, 196, 26, 0.40);
+    --color-bear: #ef4444;
+    --color-bear-light: #f87171;
+    --color-bear-bg: rgba(239, 68, 68, 0.20);
+    --color-bear-border: rgba(239, 68, 68, 0.40);
 
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.12);
@@ -293,15 +293,15 @@
     --color-primary-border: rgba(24, 144, 255, 0.30);
 
     /* ── 金融语义色（严格统一）── */
-    --color-bull: #FF4D4F;
-    --color-bull-light: #FF7875;
-    --color-bull-bg: rgba(255, 77, 79, 0.15);
-    --color-bull-border: rgba(255, 77, 79, 0.35);
+    --color-bull: #10b981;
+    --color-bull-light: #34d399;
+    --color-bull-bg: rgba(16, 185, 129, 0.15);
+    --color-bull-border: rgba(16, 185, 129, 0.35);
 
-    --color-bear: #52C41A;
-    --color-bear-light: #73D13D;
-    --color-bear-bg: rgba(82, 196, 26, 0.15);
-    --color-bear-border: rgba(82, 196, 26, 0.35);
+    --color-bear: #ef4444;
+    --color-bear-light: #f87171;
+    --color-bear-bg: rgba(239, 68, 68, 0.15);
+    --color-bear-border: rgba(239, 68, 68, 0.35);
 
     --color-neutral: #B0B8CC;
     --color-neutral-bg: rgba(176, 184, 204, 0.10);
@@ -386,15 +386,15 @@
     --color-primary-border: rgba(15, 82, 186, 0.25);
 
     /* ── 金融语义色（严格统一）── */
-    --color-bull: #CF1322;
-    --color-bull-light: #FF4D4F;
-    --color-bull-bg: rgba(207, 19, 34, 0.08);
-    --color-bull-border: rgba(207, 19, 34, 0.25);
+    --color-bull: #10b981;
+    --color-bull-light: #34d399;
+    --color-bull-bg: rgba(16, 185, 129, 0.08);
+    --color-bull-border: rgba(16, 185, 129, 0.25);
 
-    --color-bear: #389E0D;
-    --color-bear-light: #52C41A;
-    --color-bear-bg: rgba(56, 158, 13, 0.08);
-    --color-bear-border: rgba(56, 158, 13, 0.25);
+    --color-bear: #ef4444;
+    --color-bear-light: #f87171;
+    --color-bear-bg: rgba(239, 68, 68, 0.08);
+    --color-bear-border: rgba(239, 68, 68, 0.25);
 
     --color-neutral: #868E96;
     --color-neutral-bg: rgba(134, 142, 150, 0.08);

@@ -25,36 +25,43 @@ mdParser.renderer.rules.fence = function(tokens, idx, options, env, self) {
 /** 解析 Markdown + 折叠 thinking 思考链（DeepSeek R1 推理内容） */
 export function renderMarkdown(raw) {
   if (!raw) return ''
-  // 提取 thinking 块（DeepSeek R1 推理过程）
-  const thinkRegex = /<think>([\s\S]*?)<\/think>/g
-  const parts = []
-  let lastIdx = 0
-  let match
+  try {
+    // 提取 thinking 块（DeepSeek R1 推理过程）
+    const thinkRegex = /<think>([\s\S]*?)<\/think>/g
+    const parts = []
+    let lastIdx = 0
+    let match
 
-  while ((match = thinkRegex.exec(raw)) !== null) {
-    // 思考前的普通内容
-    if (match.index > lastIdx) {
-      parts.push({ type: 'content', text: raw.slice(lastIdx, match.index) })
+    while ((match = thinkRegex.exec(raw)) !== null) {
+      // 思考前的普通内容
+      if (match.index > lastIdx) {
+        parts.push({ type: 'content', text: raw.slice(lastIdx, match.index) })
+      }
+      // 推理内容
+      parts.push({ type: 'thinking', text: match[1].trim() })
+      lastIdx = match.index + match[0].length
     }
-    // 推理内容
-    parts.push({ type: 'thinking', text: match[1].trim() })
-    lastIdx = match.index + match[0].length
-  }
-  // 剩余普通内容
-  if (lastIdx < raw.length) {
-    parts.push({ type: 'content', text: raw.slice(lastIdx) })
-  }
-
-  if (parts.length === 0) return DOMPurify.sanitize(mdParser.render(raw))
-
-  return parts.map(p => {
-    if (p.type === 'thinking') {
-      // 折叠式推理
-      const safeHtml = p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      return `<details class="copilot-thinking"><summary>🧠 深度推理（${p.text.length}字）</summary><div class="copilot-thinking-content">${safeHtml}</div></details>`
+    // 剩余普通内容
+    if (lastIdx < raw.length) {
+      parts.push({ type: 'content', text: raw.slice(lastIdx) })
     }
-    return DOMPurify.sanitize(mdParser.render(p.text))
-  }).join('')
+
+    if (parts.length === 0) return DOMPurify.sanitize(mdParser.render(raw))
+
+    return parts.map(p => {
+      if (p.type === 'thinking') {
+        // 折叠式推理
+        const safeHtml = p.text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        return `<details class="copilot-thinking"><summary>🧠 深度推理（${p.text.length}字）</summary><div class="copilot-thinking-content">${safeHtml}</div></details>`
+      }
+      return DOMPurify.sanitize(mdParser.render(p.text))
+    }).join('')
+  } catch (e) {
+    console.error('[Copilot] Markdown render error:', e)
+    // 降级显示：纯文本
+    const escapeHtml = (str) => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    return `<pre class="text-bearish">${escapeHtml(raw)}</pre>`
+  }
 }
 
 /** 简单渲染（用于缓存消息回显） */

@@ -348,8 +348,17 @@ function goPage(p) {
   debouncedFetch()
 }
 
-// ── 搜索/过滤变化 → 重置到第1页，深度监听所有筛框 ─────────────────────
-watch(flt, () => { currentPage.value = 1; debouncedFetch() }, { deep: true })
+// ── 搜索/过滤变化 → 重置到第1页，精确监听筛选项 ─────────────────────
+watch(
+  () => [
+    flt.value.change_pct.min, flt.value.change_pct.max,
+    flt.value.turnover.min, flt.value.turnover.max,
+    flt.value.pe.max, flt.value.pb.max,
+    flt.value.price.min, flt.value.price.max,
+    flt.value.mktcap.min, flt.value.mktcap.max
+  ],
+  () => { currentPage.value = 1; debouncedFetch() }
+)
 
 // ── 数据变化时重置键盘导航焦点和行 refs ────────────────────────────────
 watch(stocks, (newStocks) => {

@@ -207,8 +207,15 @@ def execute_buy(
     buy_price:    float,
     buy_date:     Optional[str] = None,
     order_id:    Optional[str] = None,
+    conn:        Optional[sqlite3.Connection] = None,  # 外部传入连接（原子事务）
 ) -> LotRecord:
-    """买入时新增一个批次（lot）。"""
+    """
+    买入时新增一个批次（lot）。
+    
+    并发安全：
+      - 使用 BEGIN IMMEDIATE TRANSACTION 在写入前获取写锁
+      - 支持外部传入连接，确保与现金更新在同一事务内
+    """
     if shares <= 0:
         raise ValueError(f"买入股数必须 > 0，实际值: {shares}")
     if buy_price <= 0:
@@ -217,35 +224,55 @@ def execute_buy(
     now_str = datetime.now().isoformat()
     buy_date_str = buy_date or now_str[:10]
 
-    conn = _get_lots_conn()
+    # 使用外部连接或创建新连接
+    external_conn = conn is not None
+    if conn is None:
+        conn = _get_lots_conn()
+    
+    # 标记是否由本函数管理事务（外部连接时由调用方管理）
+    manage_transaction = not external_conn
+    
     try:
+        # ── 并发安全：BEGIN IMMEDIATE 在写入前获取写锁 ──
+        if manage_transaction:
+            conn.execute("BEGIN IMMEDIATE TRANSACTION")
+        
         cur = conn.execute(
             """
             INSERT INTO position_lots
                 (portfolio_id, symbol, shares, avg_cost, buy_date, buy_order_id,
                  status, realized_pnl, created_at)
-            VALUES (?,?,?,?,?,?,'open',0,?)
+            VALUES (?,?,?,?,?,?,\'open\',0,?)
             """,
             (portfolio_id, symbol, shares, buy_price, buy_date_str, order_id, now_str),
         )
         new_id = cur.lastrowid
-        conn.commit()
-        upsert_position_summary(portfolio_id, symbol)   # Phase 3: sync summary
         
-        # Log audit event with hash chain
-        try:
-            log_buy(
-                portfolio_id=portfolio_id,
-                symbol=symbol,
-                shares=shares,
-                price=buy_price,
-                actor_id="system",
-                order_id=order_id,
-            )
-        except Exception as audit_err:
-            logger.warning(f"[Trading] Audit log failed for buy: {audit_err}")
+        if manage_transaction:
+            conn.commit()
+            upsert_position_summary(portfolio_id, symbol, conn=conn)
+            
+            # Log audit event with hash chain
+            try:
+                log_buy(
+                    portfolio_id=portfolio_id,
+                    symbol=symbol,
+                    shares=shares,
+                    price=buy_price,
+                    actor_id="system",
+                    order_id=order_id,
+                )
+            except Exception as audit_err:
+                logger.warning(f"[Trading] Audit log failed for buy: {audit_err}")
+    except Exception as e:
+        if manage_transaction:
+            conn.rollback()
+        logger.error(f"[Trading] execute_buy rollback due to error: {e}")
+        raise
     finally:
-        conn.close()
+        # 仅关闭本函数创建的连接
+        if not external_conn:
+            conn.close()
 
     return LotRecord(
         id=new_id or 0,
@@ -608,11 +635,12 @@ async def async_execute_buy(
     buy_price: float,
     buy_date: Optional[str] = None,
     order_id: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
 ) -> LotRecord:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         _trading_executor,
-        lambda: execute_buy(portfolio_id, symbol, shares, buy_price, buy_date, order_id),
+        lambda: execute_buy(portfolio_id, symbol, shares, buy_price, buy_date, order_id, conn),
     )
 
 

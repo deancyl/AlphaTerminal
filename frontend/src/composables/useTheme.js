@@ -1,4 +1,5 @@
 import { ref, watch, onMounted, readonly, computed } from 'vue'
+import { getDynamicThemeColors } from '../utils/echartsTheme.js'
 
 export const THEMES = {
   DARK: 'dark',
@@ -73,6 +74,14 @@ export function getChartColors() {
     ma20: '#A855F7',
     ma60: '#EC4899',
   }
+}
+
+export function getMarketColors(marketType = 'ashare') {
+  const colors = getDynamicThemeColors()
+  if (marketType === 'ashare') {
+    return { up: colors.bear, down: colors.bull }
+  }
+  return { up: colors.bull, down: colors.bear }
 }
 
 function applyTheme(theme) {

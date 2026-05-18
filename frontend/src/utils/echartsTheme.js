@@ -125,8 +125,8 @@ export function buildDynamicEChartsTheme() {
 }
 
 export const MARKET_COLORS = {
-  UP: '#ef4444',
-  DOWN: '#10b981',
+  UP: '#10b981',    // 绿色（涨）- 中国惯例默认
+  DOWN: '#ef4444',  // 红色（跌）- 中国惯例默认
   FLAT: '#71717a',
   MA5: '#ffffff',
   MA10: '#fbbf24',
@@ -134,22 +134,25 @@ export const MARKET_COLORS = {
   MA60: '#22d3ee',
   DIF: '#60a5fa',
   DEA: '#f87171',
-  MACD_UP: '#ef4444',
-  MACD_DOWN: '#10b981',
-  VOL_UP: '#ef4444',
-  VOL_DOWN: '#10b981',
+  MACD_UP: '#10b981',
+  MACD_DOWN: '#ef4444',
+  VOL_UP: '#10b981',
+  VOL_DOWN: '#ef4444',
   OVERLAY: '#f97316',
   OI: '#f59e0b',
-  DELTA_OI_UP: '#ef4444',
-  DELTA_OI_DOWN: '#10b981',
+  DELTA_OI_UP: '#10b981',
+  DELTA_OI_DOWN: '#ef4444',
   DELTA_OI_FLAT: '#6b7280'
 }
 
+import { getMarketColors } from '../composables/useTheme.js'
+
 export function getDynamicMarketColors() {
   const colors = getDynamicThemeColors()
+  const marketColors = getMarketColors()
   return {
-    UP: colors.bull,
-    DOWN: colors.bear,
+    UP: marketColors.up,
+    DOWN: marketColors.down,
     FLAT: '#71717a',
     MA5: colors.ma5,
     MA10: colors.ma10,

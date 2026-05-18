@@ -10,9 +10,44 @@ import time
 import logging
 import traceback
 import httpx
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig, CircuitBreakerOpen
 
 logger = logging.getLogger(__name__)
+
+# ── ThreadPoolExecutor for async I/O ───────────────────────────────────────
+_fetcher_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="data_fetcher_")
+
+def _sync_fetch(url, params=None, headers=None, timeout=10):
+    """同步 HTTP 请求（在 executor 中运行）"""
+    import requests
+    return requests.get(url, params=params, headers=headers, timeout=timeout)
+
+async def async_fetch(url, params=None, headers=None, timeout=10):
+    """异步 HTTP 请求包装"""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _fetcher_executor,
+        lambda: _sync_fetch(url, params, headers, timeout)
+    )
+
+def _run_async_or_sync(coro):
+    """
+    在同步上下文中运行异步协程
+    如果已有事件循环运行中，创建新线程运行
+    否则直接 asyncio.run()
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        # 已有事件循环运行，在新线程中运行
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()
+    except RuntimeError:
+        # 没有事件循环运行，直接运行
+        return asyncio.run(coro)
 
 # ── AkShare 熔断器（全局单例）─────────────────────────────────────────────
 # 配置：3次连续失败触发熔断，60秒恢复超时
@@ -350,8 +385,8 @@ def fetch_industry_sectors() -> list[dict]:
     格式: hangye_XX,行业名,股票数,点位,涨跌额,涨跌幅%
     """
     try:
-        import requests, re, json
-        r = requests.get(
+        import re, json
+        r = _run_async_or_sync(async_fetch(
             "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php",
             params={"param": "class=hy", "type": "1"},
             headers={
@@ -360,7 +395,7 @@ def fetch_industry_sectors() -> list[dict]:
                 "Accept-Encoding": "gzip, deflate",
             },
             timeout=10,
-        )
+        ))
         r.encoding = "gbk"
         text = r.text
 
@@ -1458,7 +1493,6 @@ def fetch_all_china_stocks(max_pages=60):
     从 Sina 分页抓取全市场 A 股基础信息（含 P/E、P/B、市值、换手率等）
     返回: [{symbol, code, name, trade, changepercent, per, pb, mktcap, turnoverratio, ...}]
     """
-    import requests
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
         'Referer': 'https://finance.sina.com.cn',
@@ -1473,7 +1507,7 @@ def fetch_all_china_stocks(max_pages=60):
                 f"Market_Center.getHQNodeData"
                 f"?page={page}&num={page_size}&sort=symbol&asc=1&node=hs_a&_s_r_a=page"
             )
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = _run_async_or_sync(async_fetch(url, headers=headers, timeout=10))
             resp.encoding = 'gbk'
             items = resp.json()
 

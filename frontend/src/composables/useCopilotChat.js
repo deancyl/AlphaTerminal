@@ -200,13 +200,17 @@ ${positionLines}
     const decoder = new TextDecoder()
     let fullContent = ''
     let fullReasoning = ''
+    let lineBuffer = ''  // 行缓冲区：处理跨 chunk 的不完整行
     
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
       
       const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n')
+      lineBuffer += chunk  // 累积到缓冲区
+      
+      const lines = lineBuffer.split('\n')
+      lineBuffer = lines.pop() || ''  // 保留不完整的行
       
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue

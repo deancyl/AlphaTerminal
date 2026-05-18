@@ -86,7 +86,7 @@ export function createDebouncedResize(chartInstance, delay = 150) {
  * 
  * @param {echarts.ECharts} chartInstance - The ECharts instance to resize
  * @param {number} delay - Debounce delay in ms (default: 150ms)
- * @returns {ResizeObserver} ResizeObserver with debounced callback
+ * @returns {{ observer: ResizeObserver, cleanup: Function }} ResizeObserver with cleanup function
  */
 export function createResizeObserver(chartInstance, delay = 150) {
   let timer = null
@@ -97,5 +97,12 @@ export function createResizeObserver(chartInstance, delay = 150) {
       timer = null
     }, delay)
   })
-  return observer
+  
+  // Return cleanup function to clear timer and disconnect observer
+  const cleanup = () => {
+    if (timer) clearTimeout(timer)
+    observer.disconnect()
+  }
+  
+  return { observer, cleanup }
 }

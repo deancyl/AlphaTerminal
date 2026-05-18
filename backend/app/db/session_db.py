@@ -6,6 +6,7 @@ CRUD operations for copilot session management.
 import json
 import sqlite3
 import logging
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import uuid
@@ -13,6 +14,9 @@ import uuid
 logger = logging.getLogger(__name__)
 
 DEFAULT_SESSION_TTL_HOURS = 24
+
+# Thread lock for concurrent write operations
+_session_lock = threading.Lock()
 
 
 def _get_conn():
@@ -41,33 +45,34 @@ def create_session(
     now = datetime.now()
     expires_at = now + timedelta(hours=ttl_hours)
     
-    conn = _get_conn()
-    try:
-        conn.execute("""
-            INSERT INTO copilot_sessions 
-            (session_id, user_id, config_version, bound_models, created_at, last_active_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            session_id, user_id, config_version,
-            json.dumps(bound_models) if bound_models else None,
-            now.isoformat(), now.isoformat(), expires_at.isoformat()
-        ))
-        conn.commit()
-        
-        return {
-            "session_id": session_id,
-            "user_id": user_id,
-            "config_version": config_version,
-            "bound_models": bound_models or [],
-            "created_at": now.isoformat(),
-            "last_active_at": now.isoformat(),
-            "expires_at": expires_at.isoformat(),
-            "message_count": 0,
-            "total_tokens": 0,
-            "total_cost_usd": 0.0
-        }
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            conn.execute("""
+                INSERT INTO copilot_sessions 
+                (session_id, user_id, config_version, bound_models, created_at, last_active_at, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                session_id, user_id, config_version,
+                json.dumps(bound_models) if bound_models else None,
+                now.isoformat(), now.isoformat(), expires_at.isoformat()
+            ))
+            conn.commit()
+            
+            return {
+                "session_id": session_id,
+                "user_id": user_id,
+                "config_version": config_version,
+                "bound_models": bound_models or [],
+                "created_at": now.isoformat(),
+                "last_active_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "message_count": 0,
+                "total_tokens": 0,
+                "total_cost_usd": 0.0
+            }
+        finally:
+            conn.close()
 
 
 def get_session(session_id: str) -> Optional[Dict[str, Any]]:
@@ -97,17 +102,18 @@ def get_session(session_id: str) -> Optional[Dict[str, Any]]:
 
 
 def update_session_activity(session_id: str) -> bool:
-    conn = _get_conn()
-    try:
-        result = conn.execute("""
-            UPDATE copilot_sessions 
-            SET last_active_at = ? 
-            WHERE session_id = ?
-        """, (datetime.now().isoformat(), session_id))
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute("""
+                UPDATE copilot_sessions 
+                SET last_active_at = ? 
+                WHERE session_id = ?
+            """, (datetime.now().isoformat(), session_id))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def update_session_stats(
@@ -116,75 +122,79 @@ def update_session_stats(
     cost_added: float = 0.0,
     message_added: int = 1
 ) -> bool:
-    conn = _get_conn()
-    try:
-        result = conn.execute("""
-            UPDATE copilot_sessions 
-            SET last_active_at = ?,
-                message_count = message_count + ?,
-                total_tokens = total_tokens + ?,
-                total_cost_usd = total_cost_usd + ?
-            WHERE session_id = ?
-        """, (
-            datetime.now().isoformat(),
-            message_added, tokens_added, cost_added, session_id
-        ))
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute("""
+                UPDATE copilot_sessions 
+                SET last_active_at = ?,
+                    message_count = message_count + ?,
+                    total_tokens = total_tokens + ?,
+                    total_cost_usd = total_cost_usd + ?
+                WHERE session_id = ?
+            """, (
+                datetime.now().isoformat(),
+                message_added, tokens_added, cost_added, session_id
+            ))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def update_session_models(session_id: str, bound_models: List[str]) -> bool:
-    conn = _get_conn()
-    try:
-        result = conn.execute("""
-            UPDATE copilot_sessions 
-            SET bound_models = ?, last_active_at = ? 
-            WHERE session_id = ?
-        """, (json.dumps(bound_models), datetime.now().isoformat(), session_id))
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute("""
+                UPDATE copilot_sessions 
+                SET bound_models = ?, last_active_at = ? 
+                WHERE session_id = ?
+            """, (json.dumps(bound_models), datetime.now().isoformat(), session_id))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def update_session_config_version(session_id: str, config_version: int) -> bool:
-    conn = _get_conn()
-    try:
-        result = conn.execute("""
-            UPDATE copilot_sessions 
-            SET config_version = ?, last_active_at = ? 
-            WHERE session_id = ?
-        """, (config_version, datetime.now().isoformat(), session_id))
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute("""
+                UPDATE copilot_sessions 
+                SET config_version = ?, last_active_at = ? 
+                WHERE session_id = ?
+            """, (config_version, datetime.now().isoformat(), session_id))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def extend_session(session_id: str, additional_hours: int = 24) -> bool:
-    conn = _get_conn()
-    try:
-        row = conn.execute(
-            "SELECT expires_at FROM copilot_sessions WHERE session_id = ?", (session_id,)
-        ).fetchone()
-        
-        if not row:
-            return False
-        
-        current_expires = datetime.fromisoformat(row['expires_at'])
-        new_expires = max(datetime.now(), current_expires) + timedelta(hours=additional_hours)
-        
-        result = conn.execute("""
-            UPDATE copilot_sessions 
-            SET expires_at = ?, last_active_at = ? 
-            WHERE session_id = ?
-        """, (new_expires.isoformat(), datetime.now().isoformat(), session_id))
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            row = conn.execute(
+                "SELECT expires_at FROM copilot_sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            
+            if not row:
+                return False
+            
+            current_expires = datetime.fromisoformat(row['expires_at'])
+            new_expires = max(datetime.now(), current_expires) + timedelta(hours=additional_hours)
+            
+            result = conn.execute("""
+                UPDATE copilot_sessions 
+                SET expires_at = ?, last_active_at = ? 
+                WHERE session_id = ?
+            """, (new_expires.isoformat(), datetime.now().isoformat(), session_id))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def is_session_expired(session_id: str) -> Optional[bool]:
@@ -204,15 +214,16 @@ def is_session_expired(session_id: str) -> Optional[bool]:
 
 
 def delete_session(session_id: str) -> bool:
-    conn = _get_conn()
-    try:
-        result = conn.execute(
-            "DELETE FROM copilot_sessions WHERE session_id = ?", (session_id,)
-        )
-        conn.commit()
-        return result.rowcount > 0
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute(
+                "DELETE FROM copilot_sessions WHERE session_id = ?", (session_id,)
+            )
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
 
 
 def get_sessions_by_user(user_id: str, include_expired: bool = False) -> List[Dict[str, Any]]:
@@ -280,19 +291,20 @@ def get_active_sessions(limit: int = 100) -> List[Dict[str, Any]]:
 
 
 def cleanup_expired_sessions() -> int:
-    conn = _get_conn()
-    try:
-        result = conn.execute(
-            "DELETE FROM copilot_sessions WHERE expires_at < ?",
-            (datetime.now().isoformat(),)
-        )
-        conn.commit()
-        deleted_count = result.rowcount
-        if deleted_count > 0:
-            logger.info(f"[Session] Cleaned up {deleted_count} expired sessions")
-        return deleted_count
-    finally:
-        conn.close()
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute(
+                "DELETE FROM copilot_sessions WHERE expires_at < ?",
+                (datetime.now().isoformat(),)
+            )
+            conn.commit()
+            deleted_count = result.rowcount
+            if deleted_count > 0:
+                logger.info(f"[Session] Cleaned up {deleted_count} expired sessions")
+            return deleted_count
+        finally:
+            conn.close()
 
 
 def get_session_stats() -> Dict[str, Any]:

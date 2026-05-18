@@ -195,6 +195,8 @@ async def bond_curve():
       spreads_bps:      商业债-国债利差 {期限: bps数}（正数=信用溢价）
       update_time:     数据时间
       source:           数据来源
+      last_update:      数据最后更新日期（akshare数据源停更于2021-01-22）
+      warning:           数据过期警告（仅当数据过期时返回）
 
     利差含义：
       bp > 0：信用债收益率高于国债（正常）
@@ -202,6 +204,13 @@ async def bond_curve():
     """
     try:
         cache = _get_bond_cache()
+        source = cache.get("source", "unknown")
+        
+        # akshare bond_china_yield 数据源已于 2021-01-22 停止更新
+        # 当使用 mock 兜底数据时，说明数据已过期
+        last_update = "2021-01-22" if source == "mock" else datetime.now().strftime("%Y-%m-%d")
+        warning = "数据已过期，建议使用其他数据源" if source == "mock" else None
+        
         return success_response({
             "yield_curve":     cache.get("yield_curve", {}),
             "yield_curve_1m":  cache.get("yield_curve_1m", {}),
@@ -209,7 +218,9 @@ async def bond_curve():
             "comm_yield":      cache.get("comm_yield", {}),
             "spreads_bps":     cache.get("spreads_bps", {}),
             "update_time":     cache.get("update_time", ""),
-            "source":          cache.get("source", "unknown"),
+            "source":          source,
+            "last_update":     last_update,
+            "warning":         warning,
         })
     except Exception as e:
         logger.error(f"[bond_curve] 错误: {e}")

@@ -1,6 +1,14 @@
 <template>
   <div class="flex flex-col h-full overflow-auto gap-2 p-3">
 
+    <!-- 数据过期警告 -->
+    <div v-if="bondDataInfo.warning" class="mb-2 p-2 bg-warning/10 border border-warning/30 rounded">
+      <span class="text-warning text-xs">⚠️ 数据截止日期：{{ bondDataInfo.last_update }}</span>
+      <span class="text-theme-muted text-xs ml-2">
+        （{{ bondDataSource === 'mock' ? '模拟数据' : bondDataSource }}）
+      </span>
+    </div>
+
     <!-- ── 顶部：收益率矩阵（利率估值表）────────────────────────── -->
     <div class="terminal-panel border border-theme-secondary rounded-sm p-3 shrink-0">
       <div class="flex items-center justify-between mb-2">
@@ -294,6 +302,7 @@ const SOURCES = [
 const yieldMatrix     = ref({})
 const matrixUpdateTime = ref('')
 const bondDataSource  = ref('')  // 'akshare' | 'mock'
+const bondDataInfo    = ref({ last_update: '', warning: null })  // 数据源元信息
 const yieldCurve    = ref({})
 const yieldCurve1m  = ref({})
 const yieldCurve1y  = ref({})
@@ -359,6 +368,10 @@ async function fetchBondData() {
       const spreadsBps = data.spreads_bps || {}
       const updateTime = data.update_time  || ''
       bondDataSource.value   = data.source   || ''
+      bondDataInfo.value     = {
+        last_update: data.last_update || '',
+        warning: data.warning || null
+      }
 
       yieldCurve.value       = govCurve
       yieldCurve1m.value    = data.yield_curve_1m || {}

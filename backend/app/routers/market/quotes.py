@@ -613,3 +613,106 @@ async def cache_stats():
     cache = _get_cache()
     stats = cache.get_stats()
     return success_response(stats)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Endpoint: Stock Fund Flow (Individual)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/market/fund_flow/{symbol}")
+async def get_stock_fund_flow(symbol: str):
+    """
+    个股资金流向（近30日）
+    
+    返回: 主力/超大单/大单/中单/小单净流入数据
+    数据源: akshare.stock_individual_fund_flow (东方财富)
+    """
+    import asyncio
+    import akshare as ak
+    
+    norm = _validate_symbol(symbol)
+    
+    # 检查熔断器状态
+    if not akshare_breaker.is_available():
+        logger.warning(f"[StockFundFlow] Circuit breaker OPEN, skipping for {norm}")
+        return success_response({
+            "items": [],
+            "total": 0,
+            "source": "circuit_breaker_open"
+        })
+    
+    # 转换为 akshare 格式 (去掉 sh/sz 前缀)
+    ak_symbol = _unprefix(norm)
+    
+    try:
+        # 使用线程池执行 + 10秒超时保护
+        with akshare_breaker:
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.stock_individual_fund_flow, stock=ak_symbol),
+                timeout=10.0
+            )
+        
+        if df is None or df.empty:
+            logger.warning(f"[StockFundFlow] Empty data for {ak_symbol}")
+            return success_response({
+                "items": [],
+                "total": 0,
+                "source": "akshare"
+            })
+        
+        # 取最近30条数据
+        df = df.tail(30)
+        
+        # 向量化处理
+        df_work = df.copy()
+        
+        # 列名映射 (东方财富格式)
+        df_work['date'] = df_work['日期'].astype(str)
+        df_work['close'] = df_work['收盘价'].apply(lambda x: float(x) if x else 0)
+        df_work['change_pct'] = df_work['涨跌幅'].apply(lambda x: float(x) if x else 0)
+        
+        # 主力资金
+        df_work['main_net_in'] = df_work['主力净流入-净额'].apply(lambda x: float(x) if x else 0)
+        df_work['main_net_out'] = df_work['主力净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        
+        # 超大单
+        df_work['huge_net_in'] = df_work['超大单净流入-净额'].apply(lambda x: float(x) if x else 0)
+        df_work['huge_net_out'] = df_work['超大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        
+        # 大单
+        df_work['big_net_in'] = df_work['大单净流入-净额'].apply(lambda x: float(x) if x else 0)
+        df_work['big_net_out'] = df_work['大单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        
+        # 中单
+        df_work['medium_net_in'] = df_work['中单净流入-净额'].apply(lambda x: float(x) if x else 0)
+        df_work['medium_net_out'] = df_work['中单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        
+        # 小单
+        df_work['small_net_in'] = df_work['小单净流入-净额'].apply(lambda x: float(x) if x else 0)
+        df_work['small_net_out'] = df_work['小单净流入-净占比'].apply(lambda x: float(x) if x else 0)
+        
+        # 选择输出列
+        result = df_work[[
+            'date', 'close', 'change_pct',
+            'main_net_in', 'main_net_out',
+            'huge_net_in', 'huge_net_out',
+            'big_net_in', 'big_net_out',
+            'medium_net_in', 'medium_net_out',
+            'small_net_in', 'small_net_out'
+        ]].to_dict('records')
+        
+        logger.info(f"[StockFundFlow] Fetched {len(result)} records for {ak_symbol}")
+        
+        return success_response({
+            "items": result,
+            "total": len(result),
+            "symbol": norm,
+            "source": "akshare"
+        })
+        
+    except asyncio.TimeoutError:
+        logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}")
+        return error_response(504, "数据获取超时，请稍后重试")
+    except Exception as e:
+        logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}")
+        return error_response(500, f"数据获取失败: {str(e)}")

@@ -704,9 +704,15 @@ watch(currentSymbol, (sym) => {
 
 // ⚡ WS 断开时自动启用 HTTP 轮询降级；WS 恢复时静默停止
 // 防止双重数据总线：WS 工作时 HTTP 轮询不运行
-watch(wsStatus, (status) => {
+// 重连时刷新 K 线数据补齐断线期间缺失的数据
+watch(wsStatus, (status, prevStatus) => {
   if (status === 'connected') {
     stopQuotePolling()
+    // 重连时刷新数据（prevStatus 非空表示非首次连接）
+    if (prevStatus && prevStatus !== 'connected') {
+      fetchHistory()
+      fetchNewsEvents()
+    }
   } else if (status === 'disconnected' || status === 'failed') {
     if (!quotePollingTimer) {
       startQuotePolling(30_000)

@@ -10,6 +10,9 @@
   <!-- ━━━ 离线提示横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <OfflineBanner />
   
+  <!-- ━━━ 熔断状态横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <CircuitBreakerBanner />
+  
   <!-- ━━━ 版本更新检测 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
   <VersionChecker />
   
@@ -319,6 +322,7 @@ import CommandCenter from './components/CommandCenter.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
 import OfflineBanner from './components/OfflineBanner.vue'
+import CircuitBreakerBanner from './components/CircuitBreakerBanner.vue'
 import StatusBar from './components/StatusBar.vue'
 import VersionChecker from './components/VersionChecker.vue'
 
@@ -387,10 +391,7 @@ onErrorCaptured((err, instance, info) => {
 
 // Phase 5: 侧边栏与视图切换状态
 const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动端）
-
-// 从 localStorage 恢复上次视图，实现跨会话持久化（不污染 URL）
-const savedView = typeof window !== 'undefined' ? localStorage.getItem('alphaterminal-view') : null
-const currentView   = ref(savedView || 'stock') // 默认视图：stock / bond / futures
+const currentView   = ref('stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
 const f9Symbol = ref('') // F9深度资料当前股票代码
@@ -408,9 +409,7 @@ watch(currentView, (newView, oldView) => {
     if (viewHistory.value.length > 20) {
       viewHistory.value.shift()
     }
-    // 持久化到 localStorage（跨会话保存）
-    localStorage.setItem('alphaterminal-view', newView)
-    // 更新浏览器历史（仅当用户主动导航时才设置 hash）
+    // 更新浏览器历史
     if (window.history && window.history.pushState) {
       window.history.pushState({ view: newView }, '', `#view=${newView}`)
     }
@@ -723,36 +722,22 @@ onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
 
-  // 性能优化：首屏仅加载关键数据（market overview）
-  // ECharts 和非关键数据延迟加载，目标 < 3s 首屏渲染
+  // 预加载 ECharts（降低首屏体积约 800KB，异步加载不阻塞渲染）
+  preloadECharts()
+
+  // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）
   fetchHighFreq()
     .then(_checkInitDone)
     .catch(e => {
       console.error('[App] fetchHighFreq failed:', e.message)
-      _checkInitDone()
+      _checkInitDone() // Continue even on error
     })
-
-  // 延迟加载非关键数据（板块、期货、情绪）- 不阻塞首屏渲染
-  if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(() => {
-      fetchMedFreq()
-        .then(_checkInitDone)
-        .catch(e => {
-          console.error('[App] fetchMedFreq failed:', e.message)
-          _checkInitDone()
-        })
-    }, { timeout: 2000 })
-  } else {
-    // Fallback for browsers without requestIdleCallback
-    setTimeout(() => {
-      fetchMedFreq()
-        .then(_checkInitDone)
-        .catch(e => {
-          console.error('[App] fetchMedFreq failed:', e.message)
-          _checkInitDone()
-        })
-    }, 1000)
-  }
+  fetchMedFreq()
+    .then(_checkInitDone)
+    .catch(e => {
+      console.error('[App] fetchMedFreq failed:', e.message)
+      _checkInitDone() // Continue even on error
+    })
 
   // 预取K线数据（等待后端就绪后执行）
   waitForBackendAndPrefetchKline()
@@ -764,8 +749,8 @@ onMounted(() => {
   
   // ── Android 硬件返回键支持（popstate 事件监听）──────────────────────
   if (window.history && window.addEventListener) {
-    // 不再在初始加载时设置 hash，保持 URL 干净
-    // 视图持久化已通过 localStorage 实现
+    // 初始化历史状态
+    window.history.replaceState({ view: currentView.value }, '', `#view=${currentView.value}`)
     
     // 监听浏览器历史变化（Android 返回键触发）
     window.addEventListener('popstate', handlePopState)

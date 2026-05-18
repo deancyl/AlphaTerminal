@@ -7,7 +7,7 @@ split across multiple domain modules for maintainability.
 Modules:
 - dependencies.py: Shared utilities, caches, constants
 - overview.py: Market overview, macro data (5 endpoints)
-- quotes.py: Quote, quote_detail, order_book (4 endpoints)
+- quotes.py: Quote, quote_detail, order_book, fund_flow (5 endpoints)
 - history.py: Price history, futures (2 endpoints)
 - symbols.py: Symbol registry, search (5 endpoints)
 - sectors.py: Sector data (2 endpoints)
