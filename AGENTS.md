@@ -2853,3 +2853,183 @@ grep "_CIRCUIT_THRESHOLD" frontend/src/utils/api.js  # Expected: 5
 1. `market/overview.py` still uses synchronous database calls (not wrapped to avoid performance regression)
 2. `export.py` has 6 `regex` parameter deprecation warnings (non-blocking)
 
+
+---
+
+## Frontend Network Layer Core Standards (v0.6.48+)
+
+### Overview
+
+The frontend network layer implements a **defense-in-depth** architecture to prevent request avalanches (雪崩效应). All future development MUST follow these standards to maintain system stability.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Business Components (Macro, Futures, Options, etc.)            │
+│       │                                                         │
+│       │ MUST USE                                                │
+│       ▼                                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  apiFetchDeduped(key, url, options)                      │   │
+│  │  - Request coalescing (same URL → same Promise)          │   │
+│  │  - Debounce (100ms default)                              │   │
+│  │  - AbortController cancellation                          │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│       │                                                         │
+│       │ OR (for unique requests)                                │
+│       ▼                                                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  apiFetch(url, { timeoutMs: 15000, retries: 2 })         │   │
+│  │  - Timeout protection                                    │   │
+│  │  - Retry with jitter                                     │   │
+│  │  - Circuit breaker (5 failures → degraded)               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│       │                                                         │
+│       ⚠️ NEVER BYPASS - Direct fetch() calls are FORBIDDEN      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Three Core Standards
+
+#### 1. Use apiFetchDeduped for Repeated GET Requests
+
+**When to use**: Any GET request that may be triggered multiple times (e.g., user typing, tab switching, auto-refresh).
+
+```javascript
+// ✅ CORRECT: Use apiFetchDeduped
+import { apiFetchDeduped } from '@/utils/api.js'
+
+// For quote data (user may rapidly change symbols)
+const quote = await apiFetchDeduped(
+  `quote:${symbol}`,
+  `/api/v1/market/quote/${symbol}`,
+  { timeoutMs: 5000, debounce: 100 }
+)
+
+// For macro dashboard (multiple panels may request same data)
+const macroData = await apiFetchDeduped(
+  'macro:overview',
+  '/api/v1/macro/overview',
+  { timeoutMs: 30000 }
+)
+```
+
+**Why**: Prevents request avalanche when user rapidly changes inputs or multiple components request the same resource.
+
+#### 2. Use Object Format for Timeout Control
+
+**Always use object format**: `{ timeoutMs: <value> }` NOT bare number.
+
+```javascript
+// ✅ CORRECT: Object format
+apiFetch('/api/v1/bond/history', { timeoutMs: 25000, retries: 0 })
+
+// ❌ WRONG: Bare number (will be ignored, defaults to 15000ms)
+apiFetch('/api/v1/bond/history', 25000)
+```
+
+**Timeout Guidelines**:
+
+| Endpoint Type | Recommended Timeout |
+|---------------|---------------------|
+| Quote (real-time) | 5000ms (TIMEOUTS.API_QUOTE) |
+| Quote Detail | 10000ms (TIMEOUTS.API_QUOTE_DETAIL) |
+| Macro (akshare) | 30000ms (TIMEOUTS.API_MACRO) |
+| Bond History | 25000ms |
+| Default | 15000ms (TIMEOUTS.API_DEFAULT) |
+
+#### 3. Trust Existing Circuit Breaker Mechanism
+
+**Do NOT implement custom retry logic**: The `api.js` already has:
+- Retry with exponential backoff + jitter
+- Circuit breaker (5 consecutive failures → degraded mode)
+- Toast notifications for user feedback
+
+```javascript
+// ✅ CORRECT: Let api.js handle retries
+apiFetch('/api/v1/macro/overview', { retries: 2 })
+
+// ❌ WRONG: Custom retry loop bypasses circuit breaker
+for (let i = 0; i < 3; i++) {
+  try {
+    await fetch('/api/v1/macro/overview')
+    break
+  } catch (e) {
+    await sleep(1000)
+  }
+}
+```
+
+### Anti-Patterns (MUST AVOID)
+
+#### 1. Bypassing apiFetchDeduped
+
+```javascript
+// ❌ WRONG: Direct fetch bypasses dedup protection
+const res = await fetch('/api/v1/market/quote/sh600519')
+
+// ❌ WRONG: Using apiFetch for repeated requests
+// (no dedup, will create multiple concurrent requests)
+const quote = await apiFetch('/api/v1/market/quote/sh600519')
+```
+
+#### 2. Bare Number Timeout
+
+```javascript
+// ❌ WRONG: Number is ignored, uses default timeout
+apiFetch(url, 10000)
+
+// ✅ CORRECT: Object format
+apiFetch(url, { timeoutMs: 10000 })
+```
+
+#### 3. Custom Retry Logic
+
+```javascript
+// ❌ WRONG: Bypasses circuit breaker and toast notifications
+async function customFetch(url) {
+  for (let i = 0; i < 5; i++) {
+    try {
+      return await fetch(url)
+    } catch (e) {
+      if (i < 4) await sleep(1000 * i)
+    }
+  }
+}
+```
+
+### Code Review Checklist
+
+When reviewing new frontend code, check:
+
+1. **GET requests for same resource**: Must use `apiFetchDeduped`
+2. **Timeout parameter**: Must be object format `{ timeoutMs: ... }`
+3. **No direct fetch()**: All network calls must go through `api.js`
+4. **No custom retry**: Trust existing circuit breaker
+
+### Verification Commands
+
+```bash
+# Check for direct fetch() calls (should be minimal)
+grep -r "await fetch(" frontend/src/components/ | grep -v "api.js"
+
+# Check for apiFetchDeduped usage
+grep -c "apiFetchDeduped" frontend/src/components/*.vue
+
+# Check for object timeout format
+grep -c "timeoutMs:" frontend/src/components/BondDashboard.vue  # Expected: 2+
+
+# Check circuit breaker threshold
+grep "_CIRCUIT_THRESHOLD" frontend/src/utils/api.js  # Expected: 5
+```
+
+### File Locations
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/utils/api.js` | Main API tool (retry, circuit breaker, timeout) |
+| `frontend/src/utils/requestDedup.js` | Request deduplication (Map + AbortController) |
+| `frontend/src/utils/constants.js` | Timeout constants (TIMEOUTS) |
+| `frontend/src/composables/useDataSourceStatus.js` | Status broadcasting |
+
