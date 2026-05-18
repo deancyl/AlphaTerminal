@@ -2740,3 +2740,116 @@ grep -c "warmup_macro_cache" backend/app/routers/macro.py  # Expected: 2+
 cd frontend && npm test -- tests/composables/useMarketStream --run
 ```
 
+
+---
+
+## Async Performance Optimization (v0.6.48)
+
+### Overview
+
+This release addresses critical performance bottlenecks caused by synchronous blocking operations in FastAPI event loops.
+
+### Problem Statement
+
+External audit identified:
+1. **Event Loop Blocking**: AkShare and SQLite operations blocking FastAPI event loop
+2. **Retry Storms**: Frontend retrying AbortError, causing request amplification
+3. **SQLite Concurrency**: Concurrent writes causing "database is locked" errors
+
+### Solution Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  FastAPI Event Loop (async)                                 │
+│  ├── API Handlers (async)                                   │
+│  └── ThreadPoolExecutor (blocking operations)               │
+│      ├── AkShare data fetching                              │
+│      ├── SQLite read/write operations                       │
+│      └── Heavy computations                                 │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `backend/app/db/async_db.py` | 14 async database wrapper functions |
+| `backend/app/db/connection_pool.py` | SQLite connection pool implementation |
+
+### Async Wrapper Pattern
+
+```python
+from concurrent.futures import ThreadPoolExecutor
+import asyncio
+
+_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="module_name_")
+
+async def async_operation(*args):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_executor, sync_operation, *args)
+```
+
+### Thread Pool Configuration
+
+| Module | Max Workers | Prefix |
+|--------|-------------|--------|
+| portfolio/accounts | 20 | portfolio_accounts_ |
+| portfolio/analytics | 20 | portfolio_analytics_ |
+| portfolio/cash | 20 | portfolio_cash_ |
+| portfolio/lots | 20 | portfolio_lots_ |
+| portfolio/positions | 20 | portfolio_positions_ |
+| backtest | 20 | backtest_ |
+| ml | 20 | ml_ |
+| copilot | 20 | copilot_ |
+| admin | 20 | admin_ |
+| export | 20 | export_ |
+| market/history | 10 | market_history_ |
+| bond | 10 | bond_ |
+| trading | 20 | trading_ |
+
+### Frontend Improvements
+
+| Setting | Before | After |
+|---------|--------|-------|
+| API_DEFAULT timeout | 8000ms | 15000ms |
+| Circuit breaker threshold | 10 | 5 |
+| AbortError retry | Yes | No |
+
+### Files Modified
+
+- `backend/app/routers/admin.py` - 5 async wrappers
+- `backend/app/routers/backtest.py` - 7 async wrappers
+- `backend/app/routers/bond.py` - 2 async wrappers
+- `backend/app/routers/copilot.py` - 7 async wrappers
+- `backend/app/routers/export.py` - 3 async wrappers
+- `backend/app/routers/market/history.py` - 3 async wrappers
+- `backend/app/routers/ml.py` - 4 async wrappers
+- `backend/app/routers/portfolio/*.py` - 29 async wrappers
+- `backend/app/services/trading.py` - 3 async wrappers
+- `frontend/src/utils/api.js` - Retry logic fix
+- `frontend/src/utils/constants.js` - Timeout increase
+
+### Verification Commands
+
+```bash
+# Check async_db.py exists
+ls backend/app/db/async_db.py
+
+# Check connection_pool.py exists
+ls backend/app/db/connection_pool.py
+
+# Count async wrappers in portfolio
+grep -c "run_in_executor" backend/app/routers/portfolio/positions.py  # Expected: 5+
+
+# Check frontend timeout
+grep "API_DEFAULT" frontend/src/utils/constants.js  # Expected: 15000
+
+# Check circuit breaker threshold
+grep "_CIRCUIT_THRESHOLD" frontend/src/utils/api.js  # Expected: 5
+```
+
+### Known Issues
+
+1. `market/overview.py` still uses synchronous database calls (not wrapped to avoid performance regression)
+2. `export.py` has 6 `regex` parameter deprecation warnings (non-blocking)
+
