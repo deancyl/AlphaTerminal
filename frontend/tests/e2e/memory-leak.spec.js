@@ -9,7 +9,7 @@ test.describe('内存泄漏检测', () => {
     await page.waitForLoadState('networkidle');
     
     const initialCount = await page.evaluate(() => {
-      return (window as any).__ECHARTS_INSTANCES__?.size || 0;
+      return window.__ECHARTS_INSTANCES__?.size || 0;
     });
     
     for (let i = 0; i < 10; i++) {
@@ -28,7 +28,7 @@ test.describe('内存泄漏检测', () => {
     }
     
     const finalCount = await page.evaluate(() => {
-      return (window as any).__ECHARTS_INSTANCES__?.size || 0;
+      return window.__ECHARTS_INSTANCES__?.size || 0;
     });
     
     expect(finalCount - initialCount).toBeLessThan(2);
@@ -69,7 +69,7 @@ test.describe('内存泄漏检测', () => {
     await page.waitForLoadState('networkidle');
     
     const initialListeners = await page.evaluate(() => {
-      return (window as any).__EVENT_LISTENERS__?.size || 0;
+      return window.__EVENT_LISTENERS__?.size || 0;
     });
     
     for (let i = 0; i < 10; i++) {
@@ -88,14 +88,14 @@ test.describe('内存泄漏检测', () => {
     }
     
     const finalListeners = await page.evaluate(() => {
-      return (window as any).__EVENT_LISTENERS__?.size || 0;
+      return window.__EVENT_LISTENERS__?.size || 0;
     });
     
     expect(finalListeners - initialListeners).toBeLessThan(5);
   });
   
   test('控制台错误检测', async ({ page }) => {
-    const errors: string[] = [];
+    const errors = [];
     
     page.on('console', msg => {
       if (msg.type() === 'error') {

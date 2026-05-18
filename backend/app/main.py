@@ -17,6 +17,7 @@ from contextlib import asynccontextmanager
 logger = logging.getLogger(__name__)
 
 from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics
+from app.routers.macro import warmup_macro_cache
 from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
@@ -49,6 +50,10 @@ async def lifespan(app: FastAPI):
     logger.info("[Lifespan] Starting blocking data pre-warming...")
     await run_initial_data_fetch()
     logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
+    
+    # Warmup macro cache in background
+    asyncio.create_task(warmup_macro_cache())
+    logger.info("[Lifespan] Macro cache warmup started in background")
     
     start_scheduler()
     

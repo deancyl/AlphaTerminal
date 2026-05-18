@@ -157,25 +157,171 @@ class ForexFetcher(BaseMarketFetcher):
 
     def _get_fallback_quotes(self) -> List[Dict[str, Any]]:
         """
-        返回静态回退数据（当电路熔断器打开时）
-
-        Returns:
-            静态外汇报价列表 - 包含完整的 bid/ask/spread 字段
+        返回回退数据（当电路熔断器打开时）
+        
+        改进：优先尝试CFETS官方数据，最后才使用静态数据
         """
-        from datetime import datetime
+        ts = int(datetime.now().timestamp())
+        
+        # 尝试CFETS银行间报价（更权威）
+        try:
+            ak = _get_akshare()
+            df = ak.fx_spot_quote()
+            if df is not None and not df.empty:
+                quotes = self._parse_cfets_to_quotes(df, ts)
+                if quotes:
+                    logger.info(f"[Forex] 使用CFETS报价作为回退数据: {len(quotes)} 条")
+                    return quotes
+        except Exception as e:
+            logger.warning(f"[Forex] CFETS银行间报价获取失败: {e}")
+        
+        # 尝试CFETS交叉汇率
+        try:
+            ak = _get_akshare()
+            df = ak.fx_pair_quote()
+            if df is not None and not df.empty:
+                quotes = self._parse_cfets_pair_to_quotes(df, ts)
+                if quotes:
+                    logger.info(f"[Forex] 使用CFETS交叉汇率作为回退数据: {len(quotes)} 条")
+                    return quotes
+        except Exception as e:
+            logger.warning(f"[Forex] CFETS交叉汇率获取失败: {e}")
+        
+        # 尝试BOC官方中间价
+        try:
+            ak = _get_akshare()
+            df = ak.currency_boc_safe()
+            if df is not None and not df.empty:
+                quotes = self._parse_boc_to_quotes(df, ts)
+                if quotes:
+                    logger.info(f"[Forex] 使用BOC官方中间价作为回退数据: {len(quotes)} 条")
+                    return quotes
+        except Exception as e:
+            logger.warning(f"[Forex] BOC官方中间价获取失败: {e}")
+        
+        # 最后才使用最小静态数据
+        logger.warning("[Forex] 所有数据源失败，使用最小静态回退数据")
+        return self._get_minimal_static_fallback()
+    
+    def _parse_cfets_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
+        """解析CFETS银行间报价为标准格式"""
+        quotes = []
+        cfets_to_standard = {
+            "USD/CNY": "USDCNY", "EUR/CNY": "EURCNY", "GBP/CNY": "GBPCNY",
+            "JPY/CNY": "JPYCNY", "HKD/CNY": "HKDCNY", "AUD/CNY": "AUDCNY",
+            "CAD/CNY": "CADCNY", "CHF/CNY": "CHFCNY", "SGD/CNY": "SGDCNY",
+            "NZD/CNY": "NZDCNY",
+        }
+        
+        for _, row in df.iterrows():
+            pair = str(row.get('货币对', ''))
+            symbol = cfets_to_standard.get(pair)
+            if not symbol:
+                continue
+            
+            bid = clean_value(row.get('买报价'))
+            ask = clean_value(row.get('卖报价'))
+            mid = clean_value(row.get('中间价'))
+            
+            if bid is None or ask is None:
+                continue
+            
+            latest = mid if mid else (bid + ask) / 2
+            
+            quotes.append({
+                "symbol": symbol, "name": self._get_currency_name(symbol),
+                "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
+                "spread": round(ask - bid, 6), "change": 0.0, "change_pct": 0.0,
+                "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
+                "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
+            })
+        
+        return quotes
+    
+    def _parse_cfets_pair_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
+        """解析CFETS交叉汇率为标准格式"""
+        quotes = []
+        pair_to_standard = {
+            "EUR/USD": "EURUSD", "GBP/USD": "GBPUSD", "USD/JPY": "USDJPY",
+            "AUD/USD": "AUDUSD", "USD/CAD": "USDCAD", "USD/CHF": "USDCHF",
+        }
+        
+        for _, row in df.iterrows():
+            pair = str(row.get('货币对', ''))
+            symbol = pair_to_standard.get(pair)
+            if not symbol:
+                continue
+            
+            bid = clean_value(row.get('买报价'))
+            ask = clean_value(row.get('卖报价'))
+            
+            if bid is None or ask is None:
+                continue
+            
+            latest = (bid + ask) / 2
+            
+            quotes.append({
+                "symbol": symbol, "name": self._get_currency_name(symbol),
+                "latest": round(latest, 6), "bid": round(bid, 6), "ask": round(ask, 6),
+                "spread": round(ask - bid, 6), "change": 0.0, "change_pct": 0.0,
+                "open": round(latest, 6), "high": round(latest, 6), "low": round(latest, 6),
+                "prev_close": round(latest, 6), "source": "cfets", "is_demo": False, "timestamp": ts,
+            })
+        
+        return quotes
+    
+    def _parse_boc_to_quotes(self, df, ts: int) -> List[Dict[str, Any]]:
+        """解析BOC官方中间价为标准格式"""
+        quotes = []
+        if df is None or df.empty:
+            return quotes
+        
+        latest_row = df.iloc[-1]
+        boc_to_standard = {
+            '美元': 'USDCNY', '欧元': 'EURCNY', '日元': 'JPYCNY',
+            '英镑': 'GBPCNY', '港币': 'HKDCNY', '澳大利亚元': 'AUDCNY',
+            '加拿大元': 'CADCNY', '瑞士法郎': 'CHFCNY',
+        }
+        
+        for cn_name, symbol in boc_to_standard.items():
+            rate = clean_value(latest_row.get(cn_name))
+            if rate is None:
+                continue
+            
+            quotes.append({
+                "symbol": symbol, "name": self._get_currency_name(symbol),
+                "latest": round(rate, 6), "bid": round(rate, 6), "ask": round(rate, 6),
+                "spread": 0.0, "change": 0.0, "change_pct": 0.0,
+                "open": round(rate, 6), "high": round(rate, 6), "low": round(rate, 6),
+                "prev_close": round(rate, 6), "source": "boc", "is_demo": False, "timestamp": ts,
+            })
+        
+        return quotes
+    
+    def _get_currency_name(self, symbol: str) -> str:
+        """获取货币对中文名称"""
+        names = {
+            "USDCNY": "美元/人民币", "EURCNY": "欧元/人民币", "GBPCNY": "英镑/人民币",
+            "JPYCNY": "日元/人民币", "HKDCNY": "港币/人民币", "AUDCNY": "澳元/人民币",
+            "CADCNY": "加元/人民币", "CHFCNY": "瑞郎/人民币", "SGDCNY": "新元/人民币",
+            "NZDCNY": "纽元/人民币", "EURUSD": "欧元/美元", "GBPUSD": "英镑/美元",
+            "USDJPY": "美元/日元", "AUDUSD": "澳元/美元", "USDCAD": "美元/加元",
+            "USDCHF": "美元/瑞郎",
+        }
+        return names.get(symbol, symbol)
+    
+    def _get_minimal_static_fallback(self) -> List[Dict[str, Any]]:
+        """最小静态回退数据（仅6个主要货币对）"""
         ts = int(datetime.now().timestamp())
         return [
-            {"symbol": "USDCNY", "name": "美元/人民币", "latest": 7.2456, "bid": 7.2420, "ask": 7.2492, "spread": 0.0072, "change": 0.0087, "change_pct": 0.12, "open": 7.2369, "high": 7.2521, "low": 7.2312, "prev_close": 7.2369, "source": "fallback", "timestamp": ts},
-            {"symbol": "EURCNY", "name": "欧元/人民币", "latest": 7.8923, "bid": 7.8880, "ask": 7.8966, "spread": 0.0086, "change": -0.0063, "change_pct": -0.08, "open": 7.8986, "high": 7.9012, "low": 7.8856, "prev_close": 7.8986, "source": "fallback", "timestamp": ts},
-            {"symbol": "GBPCNY", "name": "英镑/人民币", "latest": 9.1234, "bid": 9.1180, "ask": 9.1288, "spread": 0.0108, "change": 0.0210, "change_pct": 0.23, "open": 9.1024, "high": 9.1345, "low": 9.0912, "prev_close": 9.1024, "source": "fallback", "timestamp": ts},
-            {"symbol": "JPYCNY", "name": "日元/人民币", "latest": 0.0486, "bid": 0.0484, "ask": 0.0488, "spread": 0.0004, "change": -0.00007, "change_pct": -0.15, "open": 0.04867, "high": 0.04889, "low": 0.04845, "prev_close": 0.04867, "source": "fallback", "timestamp": ts},
-            {"symbol": "HKDCNY", "name": "港币/人民币", "latest": 0.9287, "bid": 0.9265, "ask": 0.9309, "spread": 0.0044, "change": 0.0005, "change_pct": 0.05, "open": 0.9282, "high": 0.9301, "low": 0.9275, "prev_close": 0.9282, "source": "fallback", "timestamp": ts},
-            {"symbol": "AUDCNY", "name": "澳元/人民币", "latest": 4.7234, "bid": 4.7180, "ask": 4.7288, "spread": 0.0108, "change": 0.0085, "change_pct": 0.18, "open": 4.7149, "high": 4.7356, "low": 4.7098, "prev_close": 4.7149, "source": "fallback", "timestamp": ts},
-            {"symbol": "EURUSD", "name": "欧元/美元", "latest": 1.0892, "bid": 1.0888, "ask": 1.0896, "spread": 0.0008, "change": 0.0012, "change_pct": 0.11, "open": 1.0880, "high": 1.0905, "low": 1.0875, "prev_close": 1.0880, "source": "fallback", "timestamp": ts},
-            {"symbol": "GBPUSD", "name": "英镑/美元", "latest": 1.2634, "bid": 1.2628, "ask": 1.2640, "spread": 0.0012, "change": 0.0025, "change_pct": 0.20, "open": 1.2609, "high": 1.2655, "low": 1.2600, "prev_close": 1.2609, "source": "fallback", "timestamp": ts},
-            {"symbol": "USDJPY", "name": "美元/日元", "latest": 149.85, "bid": 149.80, "ask": 149.90, "spread": 0.10, "change": 0.25, "change_pct": 0.17, "open": 149.60, "high": 150.05, "low": 149.50, "prev_close": 149.60, "source": "fallback", "timestamp": ts},
-            {"symbol": "AUDUSD", "name": "澳元/美元", "latest": 0.6520, "bid": 0.6515, "ask": 0.6525, "spread": 0.0010, "change": 0.0015, "change_pct": 0.23, "open": 0.6505, "high": 0.6535, "low": 0.6500, "prev_close": 0.6505, "source": "fallback", "timestamp": ts},
+            {"symbol": "USDCNY", "name": "美元/人民币", "latest": 7.25, "bid": 7.248, "ask": 7.252, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.25, "high": 7.25, "low": 7.25, "prev_close": 7.25, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "EURCNY", "name": "欧元/人民币", "latest": 7.89, "bid": 7.888, "ask": 7.892, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.89, "high": 7.89, "low": 7.89, "prev_close": 7.89, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "GBPCNY", "name": "英镑/人民币", "latest": 9.12, "bid": 9.118, "ask": 9.122, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 9.12, "high": 9.12, "low": 9.12, "prev_close": 9.12, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "JPYCNY", "name": "日元/人民币", "latest": 0.0486, "bid": 0.0485, "ask": 0.0487, "spread": 0.0002, "change": 0.0, "change_pct": 0.0, "open": 0.0486, "high": 0.0486, "low": 0.0486, "prev_close": 0.0486, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "HKDCNY", "name": "港币/人民币", "latest": 0.929, "bid": 0.928, "ask": 0.930, "spread": 0.002, "change": 0.0, "change_pct": 0.0, "open": 0.929, "high": 0.929, "low": 0.929, "prev_close": 0.929, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "AUDCNY", "name": "澳元/人民币", "latest": 4.72, "bid": 4.718, "ask": 4.722, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 4.72, "high": 4.72, "low": 4.72, "prev_close": 4.72, "source": "static", "is_demo": True, "timestamp": ts},
         ]
+    
 
     async def reset_circuit_breaker(self) -> dict:
         """

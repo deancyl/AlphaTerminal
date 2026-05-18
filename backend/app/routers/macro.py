@@ -994,83 +994,101 @@ async def get_macro_batch(
 async def get_macro_dashboard():
     """
     BFF endpoint: Returns all macro data aggregated.
-    Fetches all indicators in parallel and returns a single response.
+    
+    Optimized with:
+    - Per-indicator caching (each indicator cached separately)
+    - Staggered fetching with graceful degradation
+    - Background warmup on startup
     """
     cache = get_cache()
-    cache_key = "macro:dashboard:v2"
+    cache_key = "macro:dashboard:v3"
     
+    # Check dashboard cache first (fast path)
     cached = cache.get(cache_key)
     if cached:
         return success_response(cached)
     
+    # Per-indicator cache keys
+    INDICATOR_CACHE_KEYS = {
+        "gdp": "macro:gdp:v1",
+        "cpi": "macro:cpi:v1",
+        "ppi": "macro:ppi:v1",
+        "pmi": "macro:pmi:v1",
+        "m2": "macro:m2:v1",
+        "sf": "macro:sf:v1",
+        "ind": "macro:ind:v1",
+        "unemp": "macro:unemp:v1",
+    }
+    
     try:
         loop = asyncio.get_running_loop()
-        
-        async def fetch_with_timeout(coro, name):
-            try:
-                return await asyncio.wait_for(coro, timeout=MACRO_TIMEOUT)
-            except asyncio.TimeoutError:
-                logger.warning(f"[Macro Dashboard] {name} fetch timeout")
-                return None
-            except Exception as e:
-                logger.error(f"[Macro Dashboard] {name} fetch error: {e}")
-                return None
-        
-        async def fetch_gdp():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
-                "GDP"
-            )
-        
-        async def fetch_cpi():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
-                "CPI"
-            )
-        
-        async def fetch_ppi():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
-                "PPI"
-            )
-        
-        async def fetch_pmi():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
-                "PMI"
-            )
-        
-        async def fetch_m2():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money()),
-                "M2"
-            )
-        
-        async def fetch_sf():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
-                "SocialFinancing"
-            )
-        
-        async def fetch_ind():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
-                "IndustrialProduction"
-            )
-        
-        async def fetch_unemp():
-            return await fetch_with_timeout(
-                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
-                "Unemployment"
-            )
-        
-        gdp_df, cpi_df, ppi_df, pmi_df, m2_df, sf_df, ind_df, unemp_df = await asyncio.gather(
-            fetch_gdp(), fetch_cpi(), fetch_ppi(), fetch_pmi(), fetch_m2(), fetch_sf(), fetch_ind(), fetch_unemp()
-        )
-        
         pd = _get_pd()
         result = {}
+        raw_data = {}
         
+        # Fetch each indicator from cache or fetch fresh
+        async def fetch_indicator(name, cache_key, fetch_func):
+            """Fetch indicator from cache or fetch fresh"""
+            cached_indicator = cache.get(cache_key)
+            if cached_indicator is not None:
+                logger.debug(f"[Macro Dashboard] Cache HIT: {name}")
+                return cached_indicator, True
+            
+            try:
+                data = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, fetch_func),
+                    timeout=MACRO_TIMEOUT
+                )
+                if data is not None:
+                    cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
+                    logger.debug(f"[Macro Dashboard] Fetched fresh: {name}")
+                return data, False
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Dashboard] {name} fetch timeout")
+                return None, False
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] {name} fetch error: {e}")
+                return None, False
+        
+        # Define fetch functions
+        fetch_funcs = {
+            "gdp": lambda: _get_ak().macro_china_gdp(),
+            "cpi": lambda: _get_ak().macro_china_cpi(),
+            "ppi": lambda: _get_ak().macro_china_ppi(),
+            "pmi": lambda: _get_ak().macro_china_pmi(),
+            "m2": lambda: _get_ak().macro_china_supply_of_money(),
+            "sf": lambda: _get_ak().macro_china_shrzgm(),
+            "ind": lambda: _get_ak().macro_china_industrial_production_yoy(),
+            "unemp": lambda: _get_ak().macro_china_urban_unemployment(),
+        }
+        
+        # Fetch all indicators in parallel (with per-indicator caching)
+        fetch_tasks = [
+            fetch_indicator(name, INDICATOR_CACHE_KEYS[name], fetch_funcs[name])
+            for name in fetch_funcs.keys()
+        ]
+        
+        fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+        
+        # Map results to names
+        indicator_names = list(fetch_funcs.keys())
+        for i, (data, from_cache) in enumerate(fetch_results):
+            if isinstance(data, Exception):
+                logger.warning(f"[Macro Dashboard] {indicator_names[i]} fetch exception: {data}")
+                raw_data[indicator_names[i]] = None
+            else:
+                raw_data[indicator_names[i]] = data
+        
+        gdp_df = raw_data.get("gdp")
+        cpi_df = raw_data.get("cpi")
+        ppi_df = raw_data.get("ppi")
+        pmi_df = raw_data.get("pmi")
+        m2_df = raw_data.get("m2")
+        sf_df = raw_data.get("sf")
+        ind_df = raw_data.get("ind")
+        unemp_df = raw_data.get("unemp")
+        
+        # Process data (same as before)
         if gdp_df is not None and len(gdp_df) > 0:
             df_work = gdp_df[['季度', '国内生产总值-同比增长']].head(20).copy()
             df_work['quarter'] = df_work['季度']
@@ -1129,6 +1147,7 @@ async def get_macro_dashboard():
                 df_work['rate'] = df_work[value_col].apply(_safe_float)
                 result['unemployment'] = {'data': df_work[['month', 'rate']].to_dict('records')}
         
+        # Build overview
         gdp_latest = gdp_df.iloc[0] if gdp_df is not None and len(gdp_df) > 0 else None
         cpi_latest = cpi_df.iloc[0] if cpi_df is not None and len(cpi_df) > 0 else None
         ppi_latest = ppi_df.iloc[0] if ppi_df is not None and len(ppi_df) > 0 else None
@@ -1213,6 +1232,7 @@ async def get_macro_dashboard():
             })
         
         result['last_update'] = datetime.now().isoformat()
+        result['partial'] = any(v is None for v in raw_data.values())
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         
@@ -1220,3 +1240,59 @@ async def get_macro_dashboard():
     except Exception as e:
         logger.error(f"[Macro Dashboard] Fetch error: {e}")
         return error_response("宏观数据获取失败，请稍后重试")
+
+
+async def warmup_macro_cache():
+    """Pre-populate macro cache on server startup"""
+    logger.info("[Macro] Starting cache warmup...")
+    cache = get_cache()
+    
+    INDICATOR_CACHE_KEYS = {
+        "gdp": "macro:gdp:v1",
+        "cpi": "macro:cpi:v1",
+        "ppi": "macro:ppi:v1",
+        "pmi": "macro:pmi:v1",
+        "m2": "macro:m2:v1",
+        "sf": "macro:sf:v1",
+        "ind": "macro:ind:v1",
+        "unemp": "macro:unemp:v1",
+    }
+    
+    fetch_funcs = {
+        "gdp": lambda: _get_ak().macro_china_gdp(),
+        "cpi": lambda: _get_ak().macro_china_cpi(),
+        "ppi": lambda: _get_ak().macro_china_ppi(),
+        "pmi": lambda: _get_ak().macro_china_pmi(),
+        "m2": lambda: _get_ak().macro_china_supply_of_money(),
+        "sf": lambda: _get_ak().macro_china_shrzgm(),
+        "ind": lambda: _get_ak().macro_china_industrial_production_yoy(),
+        "unemp": lambda: _get_ak().macro_china_urban_unemployment(),
+    }
+    
+    loop = asyncio.get_running_loop()
+    
+    async def warmup_indicator(name, cache_key, fetch_func):
+        try:
+            data = await asyncio.wait_for(
+                loop.run_in_executor(_executor, fetch_func),
+                timeout=MACRO_TIMEOUT
+            )
+            if data is not None:
+                cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
+                logger.info(f"[Macro] Warmed up: {name}")
+        except Exception as e:
+            logger.warning(f"[Macro] Warmup failed for {name}: {e}")
+    
+    tasks = [
+        warmup_indicator(name, INDICATOR_CACHE_KEYS[name], fetch_funcs[name])
+        for name in fetch_funcs.keys()
+    ]
+    
+    try:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("[Macro] Cache warmup completed")
+    except Exception as e:
+        logger.warning(f"[Macro] Cache warmup failed: {e}")
+
+
+

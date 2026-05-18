@@ -52,6 +52,99 @@ from app.routers.forex_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float = 0.003) -> list:
+    """
+    Generate a bounded random walk for forex mock history.
+    
+    Uses a mean-reverting random walk with:
+    - Bounded volatility (prevents unrealistic extremes)
+    - Mean reversion (tends back toward base rate)
+    - Realistic OHLC constraints
+    
+    Args:
+        base_rate: Starting exchange rate
+        days: Number of days to generate
+        volatility: Daily volatility (default 0.3% for major pairs)
+    
+    Returns:
+        List of OHLC dictionaries
+    """
+    import math
+    
+    mock_history = []
+    current_rate = base_rate
+    
+    # Mean reversion strength (0.05 = 5% pull toward base each day)
+    mean_reversion = 0.05
+    
+    # Maximum deviation from base rate (10%)
+    max_deviation = base_rate * 0.10
+    
+    # Historical volatility bounds (use realistic forex volatility)
+    # Major pairs: 0.3-0.7% daily, Minor pairs: 0.5-1.5% daily
+    if base_rate > 100:  # JPY pairs
+        daily_vol = volatility * 1.5
+        decimals = 2
+    elif base_rate >= 1:  # Major pairs
+        daily_vol = volatility
+        decimals = 4
+    else:  # Minor pairs (rates < 1)
+        daily_vol = volatility * 2
+        decimals = 6
+    
+    for i in range(days):
+        date = datetime.now() - timedelta(days=days - i - 1)
+        
+        # Mean reversion: pull toward base rate
+        deviation = current_rate - base_rate
+        reversion_trend = -deviation * mean_reversion
+        
+        # Random component with bounded volatility
+        # Use triangular distribution for more realistic tails
+        random_trend = random.gauss(0, daily_vol * current_rate)
+        
+        # Combine mean reversion and random trend
+        trend = reversion_trend + random_trend
+        
+        # Bound the trend to prevent unrealistic moves
+        max_daily_move = current_rate * 0.02  # Max 2% daily move
+        trend = max(-max_daily_move, min(max_daily_move, trend))
+        
+        open_rate = current_rate + trend
+        
+        # Bound open_rate to max deviation from base
+        open_rate = max(base_rate - max_deviation, min(base_rate + max_deviation, open_rate))
+        
+        # Generate realistic high/low with intraday volatility
+        intraday_vol = daily_vol * current_rate * 0.5
+        high_offset = abs(random.gauss(0, intraday_vol))
+        low_offset = abs(random.gauss(0, intraday_vol))
+        
+        high_rate = open_rate + high_offset
+        low_rate = open_rate - low_offset
+        
+        # Close rate with slight mean reversion
+        close_trend = (base_rate - open_rate) * 0.1 + random.gauss(0, intraday_vol * 0.6)
+        close_rate = open_rate + close_trend
+        
+        # Ensure OHLC constraints
+        high_rate = max(open_rate, high_rate, close_rate)
+        low_rate = min(open_rate, low_rate, close_rate)
+        
+        mock_history.append({
+            "date": date.strftime("%Y-%m-%d"),
+            "open": round(open_rate, decimals),
+            "close": round(close_rate, decimals),
+            "high": round(high_rate, decimals),
+            "low": round(low_rate, decimals),
+            "amplitude": round((high_rate - low_rate) / open_rate * 100, 2) if open_rate > 0 else 0,
+        })
+        
+        current_rate = close_rate
+    
+    return mock_history
+
 router = APIRouter(prefix="/forex", tags=["forex"])
 
 _executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="forex_")
@@ -383,37 +476,10 @@ async def get_forex_history_new(
     if base_rate is None:
         base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
     
-    mock_history = []
-    current_rate = base_rate
+    # Use bounded random walk for more realistic mock data
     volatility = 0.003 if base_rate > 1 else 0.01
-    
     days = min(limit, 100)
-    for i in range(days):
-        date = datetime.now() - timedelta(days=days - i - 1)
-        
-        trend = random.gauss(0, volatility * current_rate)
-        open_rate = current_rate + trend
-        high_rate = open_rate + abs(random.gauss(0, volatility * current_rate * 0.5))
-        low_rate = open_rate - abs(random.gauss(0, volatility * current_rate * 0.5))
-        close_rate = open_rate + random.gauss(0, volatility * current_rate * 0.3)
-        
-        if base_rate >= 100:
-            decimals = 2
-        elif base_rate >= 1:
-            decimals = 4
-        else:
-            decimals = 6
-        
-        mock_history.append({
-            "date": date.strftime("%Y-%m-%d"),
-            "open": round(open_rate, decimals),
-            "close": round(close_rate, decimals),
-            "high": round(max(open_rate, high_rate, close_rate), decimals),
-            "low": round(min(open_rate, low_rate, close_rate), decimals),
-            "amplitude": round(abs(high_rate - low_rate) / open_rate * 100, 2),
-        })
-        
-        current_rate = close_rate
+    mock_history = _generate_bounded_random_walk(base_rate, days, volatility)
     
     result = {
         "symbol": symbol,
@@ -467,37 +533,10 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
         if base_rate is None:
             base_rate = 7.25 if "CNY" in symbol.upper() or "CNH" in symbol.upper() else 1.0
         
-        mock_history = []
-        current_rate = base_rate
+        # Use bounded random walk for more realistic mock data
         volatility = 0.003 if base_rate > 1 else 0.01
-        
         days = min(limit, 100)
-        for i in range(days):
-            date = datetime.now() - timedelta(days=days - i - 1)
-            
-            trend = random.gauss(0, volatility * current_rate)
-            open_rate = current_rate + trend
-            high_rate = open_rate + abs(random.gauss(0, volatility * current_rate * 0.5))
-            low_rate = open_rate - abs(random.gauss(0, volatility * current_rate * 0.5))
-            close_rate = open_rate + random.gauss(0, volatility * current_rate * 0.3)
-            
-            if base_rate >= 100:
-                decimals = 2
-            elif base_rate >= 1:
-                decimals = 4
-            else:
-                decimals = 6
-            
-            mock_history.append({
-                "date": date.strftime("%Y-%m-%d"),
-                "open": round(open_rate, decimals),
-                "close": round(close_rate, decimals),
-                "high": round(max(open_rate, high_rate, close_rate), decimals),
-                "low": round(min(open_rate, low_rate, close_rate), decimals),
-                "amplitude": round(abs(high_rate - low_rate) / open_rate * 100, 2),
-            })
-            
-            current_rate = close_rate
+        mock_history = _generate_bounded_random_walk(base_rate, days, volatility)
         
         cache = get_cache()
         cache.set(f"forex:history:{symbol}:{start_date}:{end_date}:{limit}", {

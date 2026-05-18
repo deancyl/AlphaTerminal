@@ -2604,3 +2604,139 @@ curl -X POST http://localhost:60100/api/v1/ml/optimize \
     "end_date": "2024-01-01"
   }'
 ```
+
+---
+
+## Data Fallback Patterns (v0.6.45)
+
+### Overview
+
+All data modules now implement multi-source fallback with circuit breaker protection to ensure graceful degradation when primary data sources fail.
+
+### Forex Module Fallback Chain
+
+**File**: `backend/app/services/fetchers/forex_fetcher.py`
+
+```
+Primary: EastMoney forex_spot_em (190+ pairs)
+    │
+    ├── Fallback 1: CFETS fx_spot_quote (24 RMB pairs)
+    │
+    ├── Fallback 2: CFETS fx_pair_quote (11 cross pairs)
+    │
+    ├── Fallback 3: BOC currency_boc_safe (official mid rates)
+    │
+    └── Last Resort: Minimal static fallback (6 major pairs)
+```
+
+**Circuit Breaker Config**:
+- `failure_threshold`: 5 consecutive failures
+- `timeout`: 60 seconds before retry
+
+**API Endpoints**:
+```bash
+# Reset circuit breaker manually
+POST /api/v1/forex/circuit_breaker/reset
+
+# Get circuit breaker status
+GET /api/v1/forex/circuit_breaker/status
+```
+
+### Futures Module Fallback Chain
+
+**File**: `backend/app/routers/futures.py`
+
+```
+Primary: akshare futures_zh_realtime (index futures)
+    │
+    ├── Fallback 1: Tencent qt.gtimg.cn (commodities)
+    │
+    └── Last Resort: Mock data with is_demo=True label
+```
+
+**Circuit Breaker Config**:
+- `failure_threshold`: 5 consecutive failures
+- `timeout`: 60 seconds before retry
+
+**Key Features**:
+- All mock data includes `is_demo: true` flag
+- Partial fallback: Real data + demo data for missing symbols
+- 5-second timeout protection on all API calls
+
+### Macro Module Optimization
+
+**File**: `backend/app/routers/macro.py`
+
+**Improvements**:
+1. **Per-indicator caching**: Each of 8 indicators cached separately
+2. **Background warmup**: Cache pre-populated on server startup
+3. **Staggered fetching**: `asyncio.gather(return_exceptions=True)` for graceful degradation
+4. **Partial data indicator**: `result.partial` flag when some indicators failed
+
+**Cache Keys**:
+```
+macro:gdp:v1
+macro:cpi:v1
+macro:ppi:v1
+macro:pmi:v1
+macro:m2:v1
+macro:sf:v1
+macro:ind:v1
+macro:unemp:v1
+macro:dashboard:v3  (aggregated)
+```
+
+### Frontend Test Mock Patterns
+
+**File**: `frontend/tests/composables/useMarketStream.*.spec.js`
+
+**Correct Pattern** (module-scoped mocks):
+```javascript
+// ✅ CORRECT: Mocks at module scope
+const mockAcquireLock = vi.fn(() => true)
+const mockReleaseLock = vi.fn()
+
+vi.mock('../../src/utils/connectionLock.js', () => ({
+  acquireLock: mockAcquireLock,
+  releaseLock: mockReleaseLock
+}))
+
+vi.stubGlobal('WebSocket', MockWebSocket)
+
+describe('tests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()  // Only reset state, don't redefine mocks
+  })
+})
+```
+
+**Incorrect Pattern** (causes hoisting issues):
+```javascript
+// ❌ WRONG: Mocks inside beforeEach
+beforeEach(async () => {
+  vi.resetModules()  // Breaks mock hoisting
+  vi.mock('../../src/utils/connectionLock.js', () => ({
+    acquireLock: mockAcquireLock  // undefined at hoist time!
+  }))
+})
+```
+
+### Verification Commands
+
+```bash
+# Check forex fallback implementation
+grep -c "_parse_cfets_to_quotes" backend/app/services/fetchers/forex_fetcher.py  # Expected: 1+
+
+# Check futures circuit breaker
+grep -c "_futures_cb" backend/app/routers/futures.py  # Expected: 5+
+
+# Check macro per-indicator caching
+grep -c "INDICATOR_CACHE_KEYS" backend/app/routers/macro.py  # Expected: 2+
+
+# Check macro warmup function
+grep -c "warmup_macro_cache" backend/app/routers/macro.py  # Expected: 2+
+
+# Run frontend tests
+cd frontend && npm test -- tests/composables/useMarketStream --run
+```
+

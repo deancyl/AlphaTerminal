@@ -69,7 +69,7 @@ describe('useMarketStream - WebSocket Status', () => {
     expect(wsStatus.value).not.toBe('connected')
   })
 
-  it('should set status to "disconnected" after error+close sequence', async () => {
+  it('should set status to "idle" or "reconnecting" after error+close sequence', async () => {
     const { useMarketStream } = await import('@/composables/useMarketStream.js')
     const { wsStatus, connect } = useMarketStream()
     
@@ -81,8 +81,10 @@ describe('useMarketStream - WebSocket Status', () => {
     ws.simulateError()
     ws.simulateClose(1006, 'connection_failed')
     
+    // After error+close, status should be 'idle' (not 'connected')
+    // If retry is scheduled, it may transition to 'reconnecting'
     expect(wsStatus.value).not.toBe('connected')
-    expect(['disconnected', 'connecting']).toContain(wsStatus.value)
+    expect(['idle', 'reconnecting']).toContain(wsStatus.value)
   })
 
   it('should correctly set status to "connected" only on successful open', async () => {

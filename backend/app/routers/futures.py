@@ -15,6 +15,7 @@ from fastapi import APIRouter
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,6 +24,15 @@ _cache = get_cache()
 NAMESPACE = "futures:"
 TTL = 180  # 3 minutes
 _CACHE_LOCK = threading.RLock()
+
+# Circuit breaker for futures data fetching
+_futures_cb = CircuitBreaker(
+    "futures",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout=60.0,
+    )
+)
 _LAST_FETCH_TIME = 0
 _REFRESH_SEM = threading.Semaphore(1)
 
@@ -76,12 +86,17 @@ SINA_HEADERS = {
 
 async def _fetch_index_futures_realtime():
     """
-    Fetch real-time index futures data from akshare.
+    Fetch real-time index futures data from akshare with circuit breaker protection.
     Returns tuple: (index_futures_list, source_str)
     """
     import akshare as ak
     import warnings
     warnings.filterwarnings("ignore")
+    
+    # Check circuit breaker
+    if not _futures_cb.is_available():
+        logger.warning("[Futures] Circuit breaker open, using cached/mock data")
+        return _MOCK_INDEX_FUTURES, "circuit_breaker"
     
     index_futures = []
     source = "mock"
@@ -128,24 +143,28 @@ async def _fetch_index_futures_realtime():
                     "note": f"IM{symbol}",
                 })
                 source = "real"
+                _futures_cb.record_success()
                 logger.info(f"[Futures] Fetched real data for {symbol}: price={price}")
         except asyncio.TimeoutError:
+            _futures_cb.record_failure()
             logger.warning(f"[Futures] Timeout fetching {symbol}")
         except Exception as e:
+            _futures_cb.record_failure()
             logger.warning(f"[Futures] Failed to fetch {symbol}: {e}")
     
     # Fallback to mock if all failed
     if not index_futures:
-        logger.warning("[Futures] All index futures fetch failed, using mock data")
-        index_futures = _MOCK_INDEX_FUTURES
+        logger.warning("[Futures] All index futures fetch failed, using mock data with DEMO label")
+        # Add DEMO label to mock data so users know it's not real
+        index_futures = [{**mock, "is_demo": True} for mock in _MOCK_INDEX_FUTURES]
         source = "mock"
     elif len(index_futures) < 3:
-        # If we got some but not all, add mock data for missing ones
-        logger.warning(f"[Futures] Only fetched {len(index_futures)} futures, adding mock for missing")
+        # If we got some but not all, add mock data for missing ones with DEMO label
+        logger.warning(f"[Futures] Only fetched {len(index_futures)} futures, adding demo data for missing")
         fetched_symbols = [f["symbol"] for f in index_futures]
         for mock in _MOCK_INDEX_FUTURES:
             if mock["symbol"] not in fetched_symbols:
-                index_futures.append(mock)
+                index_futures.append({**mock, "is_demo": True})
     
     return index_futures, source
 
@@ -545,9 +564,12 @@ _MOCK_INDEX_FUTURES = [
 def _init_mock_cache():
     global _LAST_FETCH_TIME, _FUTURES_CACHE
     now_str = datetime.now().strftime("%H:%M")
+    # Add is_demo label to mock data for transparency
+    mock_index_with_demo = [{**mock, "is_demo": True} for mock in _MOCK_INDEX_FUTURES]
+    mock_commodities_with_demo = [{**mock, "is_demo": True} for mock in _MOCK_COMMODITIES]
     cache_data = {
-        "index_futures": _MOCK_INDEX_FUTURES,
-        "commodities":   _MOCK_COMMODITIES,
+        "index_futures": mock_index_with_demo,
+        "commodities":   mock_commodities_with_demo,
         "update_time":   now_str,
         "index_source":  "mock",
     }
@@ -555,6 +577,6 @@ def _init_mock_cache():
     _FUTURES_CACHE = cache_data
     with _CACHE_LOCK:
         _LAST_FETCH_TIME = time.time()
-    logger.info("[Futures] Mock cache initialized")
+    logger.info("[Futures] Mock cache initialized with DEMO labels")
 
 _init_mock_cache()

@@ -1,7 +1,7 @@
 # AlphaTerminal 文档目录
 
-> 最后更新: 2026-05-15  
-> 当前版本: v0.6.39  
+> 最后更新: 2026-05-18  
+> 当前版本: v0.6.44  
 > 开发计划: [todo0429.md](../todo0429.md) - v0.6.x路线图
 
 ## 📁 文档结构
@@ -12,6 +12,8 @@ docs/
 ├── API_GUIDE.md                 # API 文档
 ├── DEV_SETUP.md                 # 开发环境搭建指南
 ├── TESTING_GUIDE.md             # 测试编写指南
+├── E2E_TEST_PLAN.md             # E2E 测试计划 ⭐ NEW
+├── E2E_DEPENDENCIES.md          # E2E 依赖环境指南 ⭐ NEW
 ├── AUTO_DIAGNOSIS_WORKFLOW.md   # 自动化诊断工作流 ⭐
 ├── KNOWN_ISSUES_TODO.md         # 已知问题和待办
 ├── todo0429.md                  # v0.6.x 开发计划 ⭐
@@ -46,8 +48,10 @@ docs/
 
 ### 开发指南
 1. [TESTING_GUIDE.md](TESTING_GUIDE.md) - 如何编写测试
-2. [WIKI_ARCHITECTURE.md](guides/WIKI_ARCHITECTURE.md) - 系统架构
-3. [DATA_SOURCE_ABSTRACTION.md](guides/DATA_SOURCE_ABSTRACTION.md) - 数据源设计
+2. [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md) - E2E 测试计划 ⭐ NEW
+3. [E2E_DEPENDENCIES.md](E2E_DEPENDENCIES.md) - E2E 依赖环境指南 ⭐ NEW
+4. [WIKI_ARCHITECTURE.md](guides/WIKI_ARCHITECTURE.md) - 系统架构
+5. [DATA_SOURCE_ABSTRACTION.md](guides/DATA_SOURCE_ABSTRACTION.md) - 数据源设计
 
 ### 部署运维
 1. [deployment_guide.md](guides/deployment_guide.md) - 生产部署
@@ -56,6 +60,12 @@ docs/
 ### 运维工具
 1. [AUTO_DIAGNOSIS_WORKFLOW.md](AUTO_DIAGNOSIS_WORKFLOW.md) - 自动化诊断工作流 ⭐
 2. [../auto_diagnosis.sh](../auto_diagnosis.sh) - 自动化诊断脚本
+
+### E2E 测试
+1. [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md) - 完整测试架构设计 (260+ 测试用例)
+2. [E2E_DEPENDENCIES.md](E2E_DEPENDENCIES.md) - 依赖环境安装指南
+3. [../scripts/setup-e2e.sh](../scripts/setup-e2e.sh) - 一键安装脚本
+4. [../scripts/verify-e2e-env.sh](../scripts/verify-e2e-env.sh) - 环境验证脚本
 
 ## 🗂️ 归档说明
 

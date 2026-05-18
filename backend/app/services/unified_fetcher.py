@@ -37,7 +37,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from app.services.data_cache import get_cache
-from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerOpen, CircuitBreakerConfig
 from app.services.cache_metrics import get_cache_metrics
 
 logger = logging.getLogger(__name__)
@@ -99,8 +99,10 @@ class UnifiedFetcher:
         if source.value not in self.breakers:
             self.breakers[source.value] = CircuitBreaker(
                 name=source.value,
-                failure_threshold=5,
-                timeout=30.0
+                config=CircuitBreakerConfig(
+                    failure_threshold=5,
+                    timeout=30.0
+                )
             )
         return self.breakers[source.value]
     
