@@ -85,7 +85,7 @@ class WhoamiResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-    timestamp: int
+    timestamp: str
     version: str = "0.6.12"
 
 
@@ -161,6 +161,14 @@ def _verify_admin(admin_auth: Optional[str], x_admin_auth: Optional[str] = None)
     auth_value = x_admin_auth or admin_auth
     if auth_value is None:
         return False
+    
+    # Check if it's a session token (64 char hex)
+    if len(auth_value) == 64 and all(c in '0123456789abcdef' for c in auth_value.lower()):
+        from app.routers.admin import _validate_admin_session, _cleanup_expired_sessions
+        _cleanup_expired_sessions()
+        return _validate_admin_session(auth_value)
+    
+    # Legacy support for admin_ prefixed tokens (deprecated)
     return auth_value.startswith("admin_") or auth_value == "admin_ui"
 
 
@@ -485,7 +493,8 @@ async def search_symbols(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -585,7 +594,8 @@ async def get_klines(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -678,7 +688,8 @@ async def get_price(
             
             return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -860,7 +871,8 @@ async def list_strategies(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -948,7 +960,8 @@ async def get_strategy(
         
         return response_data
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -1056,7 +1069,8 @@ async def create_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except ValueError as e:
         duration = time.time() - start_time
@@ -1199,7 +1213,8 @@ async def update_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time
@@ -1297,7 +1312,8 @@ async def delete_strategy(
             }
         }
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.debug(f"[AGENT_SYMBOLS] HTTPException re-raised: {e.detail}")
         raise
     except Exception as e:
         duration = time.time() - start_time

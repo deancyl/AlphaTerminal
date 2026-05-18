@@ -3,7 +3,7 @@
 > Created: 2026-05-08
 > Based on: QUANTDINGER_INTEGRATION_REPORT.md
 > Target Version: v0.8.0
-> Prerequisite: v0.7.0-alpha (Phase 1 complete)
+> Prerequisite: v0.6.38 (Phase 1 complete)
 > Status: Planning
 
 ---

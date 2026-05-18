@@ -12,7 +12,7 @@ from app.main import app
 client = TestClient(app)
 
 
-@pytest.mark.skip(reason="Portfolio tests require database setup - skipping for now")
+@pytest.mark.skip(reason="Requires database setup - integration test")
 class TestPortfolioCRUD:
     """Test cases for portfolio CRUD operations."""
 
@@ -85,7 +85,7 @@ class TestPortfolioCRUD:
         assert response.status_code in [200, 400, 404, 405, 500]
 
 
-@pytest.mark.skip(reason="Portfolio tests require database setup - skipping for now")
+@pytest.mark.skip(reason="Requires database setup - integration test")
 class TestPortfolioPositions:
     """Test cases for portfolio positions."""
 
@@ -113,7 +113,7 @@ class TestPortfolioPositions:
         assert response.status_code in [200, 201, 400, 404, 405, 422, 500]
 
 
-@pytest.mark.skip(reason="Portfolio tests require database setup - skipping for now")
+@pytest.mark.skip(reason="Requires database setup - integration test")
 class TestPortfolioPnL:
     """Test cases for portfolio P&L."""
 
@@ -129,7 +129,7 @@ class TestPortfolioPnL:
                 assert any(key in data for key in ['total_pnl', 'pnl', 'daily_pnl'])
 
 
-@pytest.mark.skip(reason="Portfolio tests require database setup - skipping for now")
+@pytest.mark.skip(reason="Requires database setup - integration test")
 class TestPortfolioAuth:
     """Test cases for portfolio authentication."""
 

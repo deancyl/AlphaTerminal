@@ -20,6 +20,8 @@ export const SYMBOL_OPTIONS = [
   { symbol: 'jpN225',  code: 'N225',   name: '日经225',   color: '#f472b6', market: 'JP'     },
 ]
 
+let _quoteCacheLock = Promise.resolve()
+
 export const useMarketStore = defineStore('market', () => {
   // ── 状态 ────────────────────────────────────────────────────
   const currentSymbol     = ref('sh000001')
@@ -61,14 +63,17 @@ export const useMarketStore = defineStore('market', () => {
       symbolRegistry.value = data.symbols || []
       registryLoaded.value = true
     } catch {
-      // 网络失败时使用本地兜底
       symbolRegistry.value = SYMBOL_OPTIONS
       registryLoaded.value = true
     }
   }
 
-  function cacheQuote(symbol, quote) {
-    quoteCache.value[symbol] = { ...quote, _ts: Date.now() }
+  async function cacheQuote(symbol, quote) {
+    await _quoteCacheLock
+    _quoteCacheLock = _quoteCacheLock.then(() => {
+      quoteCache.value[symbol] = { ...quote, _ts: Date.now() }
+    })
+    await _quoteCacheLock
   }
 
   function getCachedQuote(symbol) {

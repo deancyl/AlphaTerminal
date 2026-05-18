@@ -8,6 +8,8 @@ http_client.py — 统一 HTTP 客户端（带 retry + Circuit Breaker + Pydanti
 2. 可选嵌入 CircuitBreaker（失败自动 record_failure，成功 record_success）
 3. 代理支持（从 proxy_config.py 读取）
 4. 统一的错误分类（网络错误 / 超时 / HTTP 错误 / 校验错误）
+5. 共享 AsyncClient 实例（连接池复用，减少资源消耗）
+6. 信号量并发限制（防止过多并发请求压垮数据源）
 """
 from __future__ import annotations
 
@@ -19,18 +21,87 @@ from typing import Optional, Callable, Any, Type
 import httpx
 
 from app.services.circuit_breaker import CircuitBreaker, CircuitState
+from app.config.timeout import (
+    CONNECT_TIMEOUT,
+    READ_TIMEOUT,
+    WRITE_TIMEOUT,
+    POOL_TIMEOUT,
+    MAX_CONNECTIONS,
+    MAX_KEEPALIVE_CONNECTIONS,
+    KEEPALIVE_EXPIRY,
+)
 
 logger = logging.getLogger(__name__)
 
-# 可重试的 HTTP 状态码
 RETRYABLE_STATUS_CODES = {429, 502, 503, 504, 520, 521, 522, 523, 524}
 
-# 不触发 circuit breaker 的网络错误（可能是客户端网络问题）
 NON_CB_NETWORK_ERRORS = (
     httpx.ConnectError,
     httpx.RemoteProtocolError,
     httpx.ConnectTimeout,
 )
+
+# 全局并发限制信号量（最多同时 20 个请求）
+MAX_CONCURRENT_REQUESTS = 20
+_concurrent_semaphore: Optional[asyncio.Semaphore] = None
+
+
+def get_concurrent_semaphore() -> asyncio.Semaphore:
+    """获取全局并发信号量"""
+    global _concurrent_semaphore
+    if _concurrent_semaphore is None:
+        _concurrent_semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+    return _concurrent_semaphore
+
+
+_shared_client: Optional[httpx.AsyncClient] = None
+_client_lock = asyncio.Lock()
+
+
+async def get_shared_client() -> httpx.AsyncClient:
+    """
+    Get or create the shared AsyncClient instance.
+    
+    Uses connection pooling for efficiency.
+    Thread-safe via asyncio.Lock.
+    """
+    global _shared_client
+    
+    if _shared_client is None or _shared_client.is_closed:
+        async with _client_lock:
+            if _shared_client is None or _shared_client.is_closed:
+                _shared_client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(
+                        connect=CONNECT_TIMEOUT,
+                        read=READ_TIMEOUT,
+                        write=WRITE_TIMEOUT,
+                        pool=POOL_TIMEOUT,
+                    ),
+                    limits=httpx.Limits(
+                        max_connections=MAX_CONNECTIONS,
+                        max_keepalive_connections=MAX_KEEPALIVE_CONNECTIONS,
+                        keepalive_expiry=KEEPALIVE_EXPIRY,
+                    ),
+                    follow_redirects=True,
+                )
+                logger.info(
+                    f"[HTTPClient] Created shared client "
+                    f"(max_conn={MAX_CONNECTIONS}, keepalive={MAX_KEEPALIVE_CONNECTIONS})"
+                )
+    
+    return _shared_client
+
+
+async def close_shared_client():
+    """Close the shared AsyncClient instance."""
+    global _shared_client
+    
+    if _shared_client is not None:
+        async with _client_lock:
+            if _shared_client is not None:
+                await _shared_client.aclose()
+                _shared_client = None
+                logger.info("[HTTPClient] Closed shared client")
 
 
 class HTTPClientError(Exception):
@@ -165,6 +236,7 @@ class ValidatedHTTPClient:
         - HTTP 429/502/503/504/520~524：触发 retry，触发 circuit breaker
         - HTTP 200：检查响应体，异常时触发 retry
         - 校验失败（ValidationError）：不重试，不触发 circuit breaker
+        - 信号量限制：最多同时 MAX_CONCURRENT_REQUESTS 个请求
         """
         retries = extra_retries if extra_retries is not None else self.max_retries
         delay = self.base_delay
@@ -174,98 +246,101 @@ class ValidatedHTTPClient:
         if not self._check_circuit():
             raise CircuitOpenError(f"CircuitBreaker OPEN for {url}", url)
 
-        for attempt in range(retries + 1):
-            self._total_requests += 1
-            try:
-                client = await self._get_client()
-                resp = await client.get(url, headers=headers or {})
+        # 使用信号量限制并发
+        semaphore = get_concurrent_semaphore()
+        async with semaphore:
+            for attempt in range(retries + 1):
+                self._total_requests += 1
+                try:
+                    client = await self._get_client()
+                    resp = await client.get(url, headers=headers or {})
 
-                if resp.status_code in RETRYABLE_STATUS_CODES:
-                    # 可重试的 HTTP 错误
+                    if resp.status_code in RETRYABLE_STATUS_CODES:
+                        # 可重试的 HTTP 错误
+                        if attempt < retries:
+                            self._total_retries += 1
+                            logger.warning(
+                                f"[HTTPClient] {url} HTTP {resp.status_code}，"
+                                f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})"
+                            )
+                            await asyncio.sleep(delay)
+                            delay = min(delay * 2, self.max_delay)
+                            self._record_failure()
+                            continue
+                        else:
+                            raise RetryableError(
+                                f"HTTP {resp.status_code} after {retries + 1} attempts",
+                                url
+                            )
+
+                    resp.raise_for_status()
+
+                    # 检查响应体是否为空
+                    if not resp.content:
+                        if attempt < retries:
+                            self._total_retries += 1
+                            logger.warning(f"[HTTPClient] {url} 响应体为空，{delay:.1f}s 后重试")
+                            await asyncio.sleep(delay)
+                            delay = min(delay * 2, self.max_delay)
+                            continue
+                        raise RetryableError("响应体为空", url)
+
+                    # 成功 — 记录 circuit breaker
+                    self._record_success()
+                    return resp
+
+                except NON_CB_NETWORK_ERRORS as e:
+                    # 网络错误，但可能是瞬时的 — 记录 failure 并 retry
+                    last_error = e
                     if attempt < retries:
                         self._total_retries += 1
+                        self._record_failure()
                         logger.warning(
-                            f"[HTTPClient] {url} HTTP {resp.status_code}，"
+                            f"[HTTPClient] {url} 网络错误: {type(e).__name__}，"
                             f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})"
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
-                        self._record_failure()
-                        continue
                     else:
-                        raise RetryableError(
-                            f"HTTP {resp.status_code} after {retries + 1} attempts",
-                            url
-                        )
+                        self._record_failure()
+                        logger.error(f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}")
 
-                resp.raise_for_status()
-
-                # 检查响应体是否为空
-                if not resp.content:
+                except httpx.TimeoutException as e:
+                    last_error = e
                     if attempt < retries:
                         self._total_retries += 1
-                        logger.warning(f"[HTTPClient] {url} 响应体为空，{delay:.1f}s 后重试")
+                        self._record_failure()
+                        logger.warning(
+                            f"[HTTPClient] {url} 超时，{delay:.1f}s 后重试 "
+                            f"(attempt {attempt + 1}/{retries + 1})"
+                        )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
-                        continue
-                    raise RetryableError("响应体为空", url)
+                    else:
+                        self._record_failure()
+                        logger.error(f"[HTTPClient] {url} 超时，全部尝试失败: {e}")
 
-                # 成功 — 记录 circuit breaker
-                self._record_success()
-                return resp
+                except httpx.HTTPStatusError as e:
+                    # 4xx 错误（不含429）— 不重试，直接失败
+                    last_error = e
+                    self._record_failure()
+                    logger.error(f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}")
+                    break
 
-            except NON_CB_NETWORK_ERRORS as e:
-                # 网络错误，但可能是瞬时的 — 记录 failure 并 retry
-                last_error = e
-                if attempt < retries:
-                    self._total_retries += 1
-                    self._record_failure()
-                    logger.warning(
-                        f"[HTTPClient] {url} 网络错误: {type(e).__name__}，"
-                        f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})"
-                    )
-                    await asyncio.sleep(delay)
-                    delay = min(delay * 2, self.max_delay)
-                else:
-                    self._record_failure()
-                    logger.error(f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}")
-
-            except httpx.TimeoutException as e:
-                last_error = e
-                if attempt < retries:
-                    self._total_retries += 1
-                    self._record_failure()
-                    logger.warning(
-                        f"[HTTPClient] {url} 超时，{delay:.1f}s 后重试 "
-                        f"(attempt {attempt + 1}/{retries + 1})"
-                    )
-                    await asyncio.sleep(delay)
-                    delay = min(delay * 2, self.max_delay)
-                else:
-                    self._record_failure()
-                    logger.error(f"[HTTPClient] {url} 超时，全部尝试失败: {e}")
-
-            except httpx.HTTPStatusError as e:
-                # 4xx 错误（不含429）— 不重试，直接失败
-                last_error = e
-                self._record_failure()
-                logger.error(f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}")
-                break
-
-            except Exception as e:
-                last_error = e
-                if attempt < retries:
-                    self._total_retries += 1
-                    self._record_failure()
-                    logger.warning(
-                        f"[HTTPClient] {url} 未知错误: {type(e).__name__}: {e}，"
-                        f"{delay:.1f}s 后重试"
-                    )
-                    await asyncio.sleep(delay)
-                    delay = min(delay * 2, self.max_delay)
-                else:
-                    self._record_failure()
-                    logger.error(f"[HTTPClient] {url} 未知错误，最终失败: {e}")
+                except Exception as e:
+                    last_error = e
+                    if attempt < retries:
+                        self._total_retries += 1
+                        self._record_failure()
+                        logger.warning(
+                            f"[HTTPClient] {url} 未知错误: {type(e).__name__}: {e}，"
+                            f"{delay:.1f}s 后重试"
+                        )
+                        await asyncio.sleep(delay)
+                        delay = min(delay * 2, self.max_delay)
+                    else:
+                        self._record_failure()
+                        logger.error(f"[HTTPClient] {url} 未知错误，最终失败: {e}")
 
         raise last_error or RetryableError(f"HTTP GET failed after {retries + 1} attempts", url)
 

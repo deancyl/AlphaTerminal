@@ -13,21 +13,23 @@ from datetime import datetime
 from fastapi import APIRouter
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ── 缓存 ────────────────────────────────────────────────────────
-_BOND_CACHE      = {}
-_CACHE_TTL       = 300   # 5 分钟
-_CACHE_LOCK      = threading.RLock()
+_cache = get_cache()
+NAMESPACE = "bond:"
+TTL = 300  # 5 minutes
+_CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
-_REFRESH_SEM     = threading.Semaphore(1)
+_REFRESH_SEM = threading.Semaphore(1)
 
-# ── 历史数据缓存（1小时，避免每次请求都爬 akshare）─────────────────
-_HISTORY_CACHE      = None   # DataFrame 或 None
-_HISTORY_CACHE_TIME = 0
-_HISTORY_TTL        = 3600  # 1 小时（秒）
+_HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
+_HISTORY_TTL = 3600  # 1 hour
+
+# 异步锁防止缓存雪崩（Thundering Herd）
+_HISTORY_LOCK = asyncio.Lock()
 
 # ── Mock 活跃债券数据（无可靠免费接口时的兜底）────────────────────
 _MOCK_BONDS = [
@@ -44,10 +46,10 @@ _MOCK_BONDS = [
 ]
 
 
-def _fetch_bond_data():
-    """后台抓取国债收益率曲线（akshare bond_china_yield，5秒超时兜底Mock）
+async def _fetch_bond_data_async():
+    """后台抓取国债收益率曲线（akshare bond_china_yield，30秒超时兜底Mock）
     同时提取商业银行普通债(AAA)曲线，用于计算真实信用利差"""
-    global _BOND_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     def parse_row(row):
@@ -56,8 +58,8 @@ def _fetch_bond_data():
             if col in row and row[col] is not None:
                 try:
                     tenors[col] = round(float(row[col]), 4)
-                except (ValueError, TypeError):
-                    pass
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"[BOND] Failed to parse tenor value '{col}': {type(e).__name__}: {e}")
         return tenors
 
     def calc_spreads(gov_row, other_row):
@@ -74,7 +76,10 @@ def _fetch_bond_data():
         import warnings
         warnings.filterwarnings("ignore")
 
-        df = ak.bond_china_yield()
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_china_yield),
+            timeout=30.0
+        )
         if df is not None and not df.empty:
             # 按日期升序排列，按唯一日期索引历史截面
             df = df.sort_values("日期").reset_index(drop=True)
@@ -107,69 +112,74 @@ def _fetch_bond_data():
 
             spreads = calc_spreads(gov_row, comm_row) if gov_row and comm_row else {}
 
+            cache_data = {
+                "yield_curve":      gov_row or {},
+                "yield_curve_1m":  gov_row_1m or {},
+                "yield_curve_1y":  gov_row_1y or {},
+                "comm_yield":      comm_row or {},
+                "spreads_bps":     spreads,
+                "update_time":     now_str,
+                "source":          "akshare",
+            }
+            _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
             with _CACHE_LOCK:
-                _BOND_CACHE = {
-                    "yield_curve":      gov_row or {},
-                    "yield_curve_1m":  gov_row_1m or {},
-                    "yield_curve_1y":  gov_row_1y or {},
-                    "comm_yield":      comm_row or {},
-                    "spreads_bps":     spreads,
-                    "update_time":     now_str,
-                    "source":          "akshare",
-                }
                 _LAST_FETCH_TIME = time.time()
             logger.info(f"[Bond] yield curve + spreads + history fetched")
             return
+    except asyncio.TimeoutError:
+        logger.warning("[Bond] bond_china_yield timeout after 30s")
     except Exception as e:
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
     # 降级兜底：静态 Mock（含历史截面）
+    cache_data = {
+        "yield_curve": {
+            "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
+            "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
+            "10年": 3.1185, "30年": 3.7156,
+        },
+        "yield_curve_1m": {
+            "3月": 2.0816, "6月": 2.1955, "1年": 2.5225,
+            "3年": 2.8345, "5年": 3.0273, "7年": 3.2012,
+            "10年": 3.1985, "30年": 3.7956,
+        },
+        "yield_curve_1y": {
+            "3月": 2.2316, "6月": 2.3355, "1年": 2.6525,
+            "3年": 2.9645, "5年": 3.1373, "7年": 3.3112,
+            "10年": 3.2185, "30年": 3.9156,
+        },
+        "comm_yield": {
+            "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
+            "3年": 3.3284, "5年": 3.5453, "7年": 3.6985,
+            "10年": 3.8367, "30年": 4.4626,
+        },
+        "spreads_bps": {},
+        "update_time": now_str,
+        "source": "mock",
+    }
+    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
     with _CACHE_LOCK:
-        _BOND_CACHE = {
-            "yield_curve": {
-                "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
-                "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
-                "10年": 3.1185, "30年": 3.7156,
-            },
-            "yield_curve_1m": {
-                "3月": 2.0816, "6月": 2.1955, "1年": 2.5225,
-                "3年": 2.8345, "5年": 3.0273, "7年": 3.2012,
-                "10年": 3.1985, "30年": 3.7956,
-            },
-            "yield_curve_1y": {
-                "3月": 2.2316, "6月": 2.3355, "1年": 2.6525,
-                "3年": 2.9645, "5年": 3.1373, "7年": 3.3112,
-                "10年": 3.2185, "30年": 3.9156,
-            },
-            "comm_yield": {
-                "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
-                "3年": 3.3284, "5年": 3.5453, "7年": 3.6985,
-                "10年": 3.8367, "30年": 4.4626,
-            },
-            "spreads_bps": {},
-            "update_time": now_str,
-            "source": "mock",
-        }
         _LAST_FETCH_TIME = time.time()
     logger.info("[Bond] Using mock yield curve fallback")
 
 
 def _get_bond_cache() -> dict:
     """TTL 5分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _BOND_CACHE, _LAST_FETCH_TIME
-    stale = (time.time() - _LAST_FETCH_TIME) > _CACHE_TTL
+    global _LAST_FETCH_TIME
+    stale = (time.time() - _LAST_FETCH_TIME) > TTL
 
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
             try:
-                _fetch_bond_data()
+                # Run async function in new event loop for thread
+                asyncio.run(_fetch_bond_data_async())
             finally:
                 _REFRESH_SEM.release()
         t = threading.Thread(target=bg, daemon=True, name="bond-refresh")
         t.start()
 
-    with _CACHE_LOCK:
-        return dict(_BOND_CACHE) if _BOND_CACHE else {}
+    cached = _cache.get(f"{NAMESPACE}main")
+    return cached if cached else {}
 
 
 @router.get("/bond/curve")
@@ -236,17 +246,28 @@ async def bond_active():
 
 
 async def _get_bond_history_df():
-    """带 1 小时 TTL 的内存缓存，避免每次请求都爬 akshare"""
+    """带 1 小时 TTL 的内存缓存，增加异步锁防止雪崩(Thundering Herd)"""
     global _HISTORY_CACHE, _HISTORY_CACHE_TIME
-    now = time.time()
-    if _HISTORY_CACHE is None or (now - _HISTORY_CACHE_TIME) > _HISTORY_TTL:
+    cached = _cache.get(_HISTORY_CACHE_KEY)
+    if cached is not None:
+        return cached
+    async with _HISTORY_LOCK:
+        cached = _cache.get(_HISTORY_CACHE_KEY)
+        if cached is not None:
+            return cached
         import akshare as ak, warnings
         warnings.filterwarnings("ignore")
         logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
-        df = await asyncio.to_thread(ak.bond_china_yield)
-        _HISTORY_CACHE = df
-        _HISTORY_CACHE_TIME = now
-    return _HISTORY_CACHE
+        try:
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.bond_china_yield),
+                timeout=30.0
+            )
+            _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
+            return df
+        except asyncio.TimeoutError:
+            logger.warning("[Bond] _get_bond_history_df timeout after 30s")
+            return None
 
 
 @router.get("/bond/history")
@@ -261,12 +282,30 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         df = await _get_bond_history_df()
         if df is None or df.empty:
             raise ValueError("empty df")
-        tenor_col = next((c for c in df.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
+        
+        # 必须过滤出"国债"曲线，否则历史图表数据点会发生严重错乱
+        curve_name_col = df.columns[0]
+        if "曲线名称" in df.columns or curve_name_col in df.columns:
+            col_to_use = "曲线名称" if "曲线名称" in df.columns else curve_name_col
+            df_gov = df[df[col_to_use].astype(str).str.contains("国债")].copy()
+        else:
+            df_gov = df.copy()
+        
+        if df_gov.empty:
+            df_gov = df
+        
+        # 按日期排序
+        date_col = "日期" if "日期" in df_gov.columns else (df_gov.columns[1] if len(df_gov.columns) > 1 else df_gov.columns[0])
+        if date_col in df_gov.columns:
+            df_gov = df_gov.sort_values(date_col)
+        
+        tenor_col = next((c for c in df_gov.columns if c == tenor or c.startswith(tenor + '(') or c.startswith(tenor + '（')), None)
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
-        # 安全转换：过滤非数字值（纯Python实现）
+        
+        # 安全转换：过滤非数字值
         numeric = []
-        for val in df[tenor_col]:
+        for val in df_gov[tenor_col]:
             if val is not None:
                 try:
                     numeric.append(float(val))
@@ -281,10 +320,19 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             percentile = None
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
-        history = [
-            {"date": str(r[0]), "yield": float(r[1])}
-            for r in df[[df.columns[0], tenor_col]].dropna().tail(n_rows).values
-        ]
+        
+        # 使用过滤后的国债数据
+        history = []
+        tail_df = df_gov[[date_col, tenor_col]].dropna().tail(n_rows)
+        for _, r in tail_df.iterrows():
+            try:
+                d_val = r[date_col]
+                date_str = d_val.strftime("%Y-%m-%d") if hasattr(d_val, "strftime") else str(d_val)
+                y_val = float(r[tenor_col])
+                history.append({"date": date_str, "yield": y_val})
+            except (ValueError, TypeError):
+                pass
+        
         return success_response({
             "tenor": tenor,
             "current": round(current_yield, 6) if current_yield else None,
@@ -294,9 +342,10 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         })
     except Exception as e:
         logger.warning(f"[Bond] history endpoint error: {e}")
+        cached = _cache.get(f"{NAMESPACE}main") or {}
         return success_response({
             "tenor": tenor,
-            "current": _BOND_CACHE.get("yield_curve", {}).get(tenor, 0),
+            "current": cached.get("yield_curve", {}).get(tenor, 0),
             "percentile": None,
             "history": [],
             "source": "error",
@@ -306,18 +355,19 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
 # ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
 def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""
-    global _BOND_CACHE, _LAST_FETCH_TIME
+    global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+    cache_data = {
+        "yield_curve": {
+            "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
+            "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
+            "10年": 3.1185, "30年": 3.7156,
+        },
+        "update_time": now_str,
+        "source": "mock",
+    }
+    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
     with _CACHE_LOCK:
-        _BOND_CACHE = {
-            "yield_curve": {
-                "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
-                "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
-                "10年": 3.1185, "30年": 3.7156,
-            },
-            "update_time": now_str,
-            "source": "mock",
-        }
         _LAST_FETCH_TIME = time.time()
     logger.info("[Bond] Mock yield curve initialized")
 

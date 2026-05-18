@@ -20,13 +20,19 @@
 
       <!-- 参数设置按钮 -->
       <button
+        ref="paramsButtonRef"
         class="ml-2 px-1.5 py-0.5 text-[10px] text-theme-tertiary hover:text-theme-primary border border-transparent hover:border-theme-secondary rounded-sm transition"
         @click="showParams = !showParams"
         title="指标参数设置"
       >⚙️ 设置</button>
 
       <!-- 参数设置浮窗 -->
-      <div v-if="showParams" class="absolute top-full left-0 mt-1 p-3 rounded-sm border border-theme-secondary bg-terminal-panel shadow-sm z-20 w-52">
+      <div 
+        v-if="showParams" 
+        ref="paramsPopupRef"
+        class="absolute mt-1 p-3 rounded-sm border border-theme-secondary bg-terminal-panel shadow-sm z-20 w-52"
+        :style="popupPos"
+      >
         <div class="text-[10px] text-theme-secondary mb-2 uppercase tracking-wider">指标参数</div>
         <!-- MACD -->
         <template v-if="activeTab === 'MACD'">
@@ -99,11 +105,13 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
-// echarts 从 CDN 加载 via window.echarts
+import { useDebounceFn, onClickOutside } from '@vueuse/core'
+
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { buildXAxisLabels } from '../utils/symbols.js'
 import { UP, DOWN } from '../utils/indicators.js'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 
 
@@ -118,12 +126,33 @@ const emit = defineEmits(['tab-change', 'params-change'])
 const tabs = ['VOL', 'MACD', 'KDJ', 'RSI', 'BOLL']
 const showParams = ref(false)
 const chartRef = ref(null)
+const paramsButtonRef = ref(null)
+const paramsPopupRef = ref(null)
 const params = computed(() => ({
   MACD:  { fast: 12, slow: 26, signal: 9, ...(props.indicatorParams?.MACD || {}) },
   KDJ:   { n: 9,    ...(props.indicatorParams?.KDJ  || {}) },
   RSI:   { period: 14, ...(props.indicatorParams?.RSI || {}) },
   BOLL:  { period: 20, stdDev: 2, ...(props.indicatorParams?.BOLL || {}) },
 }))
+
+// Dynamic popup position based on viewport boundaries
+const popupPos = computed(() => {
+  if (!showParams.value || !paramsButtonRef.value) {
+    return { top: '100%', left: '0' }
+  }
+  
+  const rect = paramsButtonRef.value.getBoundingClientRect()
+  const popupWidth = 208 // w-52 = 13rem = 208px
+  const isRightOverflow = rect.left + popupWidth > window.innerWidth
+  const isBottomOverflow = rect.bottom + 200 > window.innerHeight // approximate popup height
+  
+  return {
+    top: isBottomOverflow ? 'auto' : '100%',
+    bottom: isBottomOverflow ? '100%' : 'auto',
+    left: isRightOverflow ? 'auto' : '0',
+    right: isRightOverflow ? '0' : 'auto'
+  }
+})
 
 let chartInstance = null
 let resizeObserver = null
@@ -229,23 +258,46 @@ function buildOption() {
 
 function render() {
   if (!chartInstance) return
+  chartInstance.clear()
   chartInstance.setOption(buildOption(), true)
 }
 
 onMounted(() => {
   if (!chartRef.value || !window.echarts) return
   chartInstance = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  resizeObserver = new ResizeObserver(() => chartInstance?.resize())
+  resizeObserver = createResizeObserver(chartInstance)
   resizeObserver.observe(chartRef.value)
   render()
 })
 
+// Click-away handler - set up when popup becomes visible
+watch(showParams, (visible) => {
+  if (visible) {
+    nextTick(() => {
+      if (paramsPopupRef.value) {
+        onClickOutside(paramsPopupRef, () => {
+          showParams.value = false
+        })
+      }
+    })
+  }
+})
+
 onUnmounted(() => {
   resizeObserver?.disconnect()
-  chartInstance?.dispose()
+  safeDispose(chartInstance)
 })
 
 const debouncedRender = useDebounceFn(() => nextTick(render), 150)
 
-watch(() => [props.hist, props.activeTab, props.indicatorParams], () => { debouncedRender() }, { deep: true })
+// Watch for indicator tab changes - clear chart before switching
+watch(() => props.activeTab, (newTab, oldTab) => {
+  if (chartInstance && newTab !== oldTab) {
+    chartInstance.clear()
+  }
+  debouncedRender()
+})
+
+// Watch for data and params changes
+watch(() => [props.hist, props.indicatorParams], () => { debouncedRender() }, { deep: true })
 </script>

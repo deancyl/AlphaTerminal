@@ -1,18 +1,25 @@
 <template>
-  <div class="w-full h-full" style="min-height:120px">
+  <div ref="lazyRef" class="w-full h-full" style="min-height:120px">
     <div class="topbar">期货主力合约</div>
-    <div ref="chartRef" class="chart-area"></div>
+    <div v-if="!isVisible" class="chart-area flex flex-col p-3 gap-2">
+      <div class="skeleton h-3 w-24 rounded-sm"></div>
+      <div class="flex-1 skeleton rounded-sm"></div>
+    </div>
+    <div v-else ref="chartRef" class="chart-area"></div>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { useLazyLoad } from '../composables/useLazyLoad.js'
+import { createResizeObserver } from '../utils/lazyEcharts.js'
 
 const props = defineProps({
   futuresData: { type: Array, default: () => [] },
 })
 
+const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootMargin: '50px' })
 const chartRef    = ref(null)
 const hasData     = ref(false)
 let chartInstance = null
@@ -43,12 +50,16 @@ function buildChart() {
     const base = fut.price || 0
     const chg  = fut.change_pct || 0
     const color = chg >= 0 ? '#f87171' : '#4ade80'
-    const history = categories.map((_, i) => {
-      const noise = (Math.random() - 0.5) * base * 0.01
-      const trend = (i / 19) * base * chg * -0.005
-      return parseFloat((base * (1 + trend / base + noise / base)).toFixed(2))
-    })
-    history[history.length - 1] = base
+    
+    // Use real history if available, fallback to flat line
+    let history = []
+    if (fut.history && fut.history.length > 0) {
+      history = fut.history.slice(-20).map(bar => bar.close)
+    } else {
+      // Fallback: flat line at current price
+      history = Array(20).fill(base)
+    }
+    
     return {
       name: fut.name || fut.symbol,
       type: 'line',
@@ -92,12 +103,11 @@ function buildChart() {
 
 async function init() { await nextTick(); buildChart() }
 
-const debouncedInit = useDebounceFn(init, 100)
+const debouncedInit = useDebounceFn(init, 300)
 
 let ro = null
 onMounted(() => {
-  init()
-  if (chartRef.value) { ro = new ResizeObserver(() => chartInstance && chartInstance.resize()); ro.observe(chartRef.value) }
+  if (chartRef.value) { ro = createResizeObserver(chartInstance); ro.observe(chartRef.value) }
 })
 onUnmounted(() => {
   ro && ro.disconnect()
@@ -106,7 +116,9 @@ onUnmounted(() => {
     chartInstance = null
   }
 })
-watch(() => props.futuresData, () => { debouncedInit() }, { deep: true })
+watch([() => props.futuresData, isVisible], () => { 
+  if (isVisible.value) debouncedInit() 
+}, { deep: true })
 </script>
 
 <style scoped>

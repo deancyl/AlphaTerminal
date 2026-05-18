@@ -56,14 +56,16 @@
     <div class="flex items-center gap-1 px-2 py-0.5 border-t border-theme/20">
 
       <!-- 周期切换（紧凑 icon + tooltip） -->
-      <div class="flex items-center gap-0.5 shrink-0">
+      <div class="flex items-center gap-0.5 shrink-0" role="group" aria-label="周期选择">
         <button
           v-for="p in periods" :key="p.key"
-          class="w-5 h-5 flex items-center justify-center rounded-sm text-[10px] font-mono transition-colors"
+          class="w-5 h-5 flex items-center justify-center rounded-sm text-[10px] font-mono transition-colors focus:outline-none focus:ring-1 focus:ring-cyan-400"
           :class="period === p.key
             ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]'
             : 'text-theme-muted hover:text-theme-primary'"
           :title="p.label"
+          :aria-label="`切换到${p.label}`"
+          :aria-pressed="period === p.key"
           @click="emit('period-change', p.key)"
         >{{ p.label }}</button>
       </div>
@@ -81,6 +83,8 @@
               ? 'text-[var(--color-warning)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="复权"
+            aria-label="切换复权模式"
+            :aria-pressed="adjustment === 'qfq'"
             @click="emit('adjustment-change', adjustment === 'qfq' ? 'none' : 'qfq')"
           >
             <!-- Wave icon -->
@@ -103,6 +107,8 @@
               ? 'text-[var(--color-primary)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="Y轴坐标系"
+            aria-label="切换Y轴坐标系"
+            :aria-pressed="yAxisType === 'log'"
             @click="emit('yaxis-change', yAxisType === 'linear' ? 'log' : 'linear')"
           >
             <!-- Axis icon -->
@@ -124,6 +130,8 @@
               ? 'text-[var(--color-info)]'
               : 'text-theme-muted hover:text-theme-primary'"
             title="叠加标的"
+            aria-label="叠加其他标的"
+            :aria-expanded="showOverlayPanel"
             @click.stop="showOverlayPanel = !showOverlayPanel"
           >
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -148,7 +156,11 @@
                 @keydown.esc="showOverlayPanel = false; overlaySearchQuery = ''"
               />
             </div>
-            <div v-if="overlaySearchResults.length > 0" class="max-h-40 overflow-y-auto">
+            <!-- Loading indicator for cache -->
+            <div v-if="isLoadingOverlayCache" class="px-3 py-2 text-[10px] text-theme-muted flex items-center gap-1">
+              <span class="animate-spin">⟳</span> 加载市场数据...
+            </div>
+            <div v-else-if="overlaySearchResults.length > 0" class="max-h-40 overflow-y-auto">
               <button
                 v-for="item in overlaySearchResults"
                 :key="item.symbol"
@@ -162,12 +174,16 @@
             <div v-else-if="overlaySearchQuery.length > 0" class="px-3 py-2 text-[10px] text-theme-muted">
               无结果，请尝试输入如 sh000300
             </div>
+          </div>
+        </div>
 
         <!-- 导出 -->
         <div class="relative" v-click-outside="() => showExport = false">
           <button
             class="w-5 h-5 flex items-center justify-center rounded-sm text-theme-muted hover:text-theme-primary transition-colors"
             title="导出"
+            aria-label="导出数据"
+            :aria-expanded="showExport"
             @click="showExport = !showExport"
           >
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -197,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { exportCSV as utilExportCSV } from '../utils/symbols.js'
 
 const props = defineProps({
@@ -226,6 +242,7 @@ const showOverlayPanel = ref(false)
 const overlaySearchQuery = ref('')
 const overlaySearchResults = ref([])
 const overlaySearchCache = ref({})
+const isLoadingOverlayCache = ref(false)
 
 const periods = [
   { key: 'minutely', label: 'T' },
@@ -277,41 +294,6 @@ async function applyOverlaySearch() {
   overlaySearchResults.value = [{ symbol: q, name: q }]
 }
 
-// 点击外部关闭面板
-const vClickOutsideOverlay = {
-  mounted(el, binding) {
-    el._ovClickOutside = (e) => {
-      if (!el.closest('.relative')?.contains(e.target) && !el.querySelector('.absolute')?.contains(e.target)) {
-        binding.value(e)
-      }
-    }
-    setTimeout(() => document.addEventListener('click', el._ovClickOutside), 0)
-  },
-  unmounted(el) { document.removeEventListener('click', el._ovClickOutside) },
-}
-
-// 加载全市场A股符号缓存（搜索用）
-async function loadOverlaySymbolCache() {
-  if (overlaySearchCache.value._symbols) return
-  try {
-    const resp = await fetch('/api/v1/market/symbols')
-    const json = await resp.json()
-    if (json?.data?.symbols) {
-      overlaySearchCache.value._symbols = json.data.symbols
-    }
-  } catch { /* silent */ }
-}
-
-// 面板打开时加载缓存
-watch(showOverlayPanel, (v) => {
-  if (v) loadOverlaySymbolCache()
-})
-
-function doExport(mode) {
-  const hist = mode === 'visible' ? props.visibleHist : props.fullHist
-  utilExportCSV(hist, props.indicators, `${props.name || props.symbol}_${props.period}.csv`)
-}
-
 // Click outside directive
 const vClickOutside = {
   mounted(el, binding) {
@@ -320,4 +302,34 @@ const vClickOutside = {
   },
   unmounted(el) { document.removeEventListener('click', el._clickOutsideHandler) },
 }
+
+// Timer reference for cleanup
+let clickOutsideTimer = null
+
+// Click outside directive for overlay
+const vClickOutsideOverlay = {
+  mounted(el, binding) {
+    el._ovClickOutside = (e) => {
+      if (!el.closest('.relative')?.contains(e.target) && !el.querySelector('.absolute')?.contains(e.target)) {
+        binding.value(e)
+      }
+    }
+    clickOutsideTimer = setTimeout(() => document.addEventListener('click', el._ovClickOutside), 0)
+  },
+  unmounted(el) {
+    if (clickOutsideTimer) {
+      clearTimeout(clickOutsideTimer)
+      clickOutsideTimer = null
+    }
+    document.removeEventListener('click', el._ovClickOutside)
+  },
+}
+
+// Cleanup on unmount
+onUnmounted(() => {
+  if (clickOutsideTimer) {
+    clearTimeout(clickOutsideTimer)
+    clickOutsideTimer = null
+  }
+})
 </script>

@@ -26,39 +26,42 @@
       <div class="empty-hint">买入标的后将显示在这里</div>
     </div>
 
-    <!-- 批次表格 -->
-    <table v-else class="lots-table">
-      <thead>
-        <tr>
-          <th>标的</th>
-          <th class="num">剩余股数</th>
-          <th class="num">成本价(元)</th>
-          <th class="num">浮动盈亏</th>
-          <th class="num">浮动收益率</th>
-          <th>买入日期</th>
-          <th>状态</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="lot in lots" :key="lot.id" class="lot-row">
-          <td class="symbol">{{ lot.symbol }}</td>
-          <td class="num">{{ lot.shares.toLocaleString() }}</td>
-          <td class="num">¥{{ lot.avg_cost.toFixed(3) }}</td>
-          <td class="num" :class="getPnlClass(lot.unrealized_pnl)">
-            {{ lot.unrealized_pnl > 0 ? '+' : '' }}{{ lot.unrealized_pnl.toFixed(2) }}
-          </td>
-          <td class="num" :class="getPnlClass(lot.unrealized_pnl)">
-            {{ getPnlPct(lot) }}
-          </td>
-          <td>{{ lot.buy_date }}</td>
-          <td>
-            <span class="badge" :class="lot.status === 'open' ? 'badge-open' : 'badge-closed'">
-              {{ lot.status === 'open' ? '● 持仓中' : '✗ 已平' }}
-            </span>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- 批次表格（虚拟化） -->
+    <VirtualizedTable
+      v-else
+      :items="lots"
+      :columns="tableColumns"
+      :item-size="36"
+      :buffer="200"
+      :loading="loading"
+      empty-text="暂无持仓批次"
+      class="lots-table-virtualized"
+    >
+      <template #cell-symbol="{ item }">
+        <span class="symbol">{{ item.symbol }}</span>
+      </template>
+      <template #cell-shares="{ item }">
+        <span class="num">{{ item.shares.toLocaleString() }}</span>
+      </template>
+      <template #cell-avg_cost="{ item }">
+        <span class="num">¥{{ item.avg_cost.toFixed(3) }}</span>
+      </template>
+      <template #cell-unrealized_pnl="{ item }">
+        <span class="num" :class="getPnlClass(item.unrealized_pnl)">
+          {{ item.unrealized_pnl > 0 ? '+' : '' }}{{ item.unrealized_pnl.toFixed(2) }}
+        </span>
+      </template>
+      <template #cell-unrealized_pnl_pct="{ item }">
+        <span class="num" :class="getPnlClass(item.unrealized_pnl)">
+          {{ getPnlPct(item) }}
+        </span>
+      </template>
+      <template #cell-status="{ item }">
+        <span class="badge" :class="item.status === 'open' ? 'badge-open' : 'badge-closed'">
+          {{ item.status === 'open' ? '● 持仓中' : '✗ 已平' }}
+        </span>
+      </template>
+    </VirtualizedTable>
 
     <!-- 底部汇总 -->
     <div v-if="!loading && lots.length > 0" class="panel-footer">
@@ -76,9 +79,11 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { apiFetch } from '../utils/api.js';
+import VirtualizedTable from './VirtualizedTable.vue';
 
 export default {
   name: 'OpenLotsPanel',
+  components: { VirtualizedTable },
   props: {
     portfolioId: { type: Number, required: true },
     includeChildren: { type: Boolean, default: false },
@@ -88,43 +93,26 @@ export default {
     const lots = ref([]);
     const error = ref(null);
 
+    // 表格列配置
+    const tableColumns = [
+      { key: 'symbol', label: '标的', width: '80px' },
+      { key: 'shares', label: '剩余股数', width: '100px', align: 'right' },
+      { key: 'avg_cost', label: '成本价(元)', width: '100px', align: 'right' },
+      { key: 'unrealized_pnl', label: '浮动盈亏', width: '100px', align: 'right' },
+      { key: 'unrealized_pnl_pct', label: '浮动收益率', width: '100px', align: 'right' },
+      { key: 'buy_date', label: '买入日期', width: '100px' },
+      { key: 'status', label: '状态', width: '80px' },
+    ];
+
     // 当前价格映射（简单用最后成交价，未知则用成本价）
     async function loadLots() {
       loading.value = true;
       error.value = null;
       const agg = props.includeChildren ? '?include_children=true' : '';
       try {
-        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots${agg}`);
+        const res = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/with_summary${agg}`);
         const data = res.data || res;
-        const rawLots = data.lots || [];
-
-        // 对每个 lot 估算浮动盈亏（用 avg_cost 作为参考价）
-        // 实际项目中应从 position_summary 取 market_value
-        lots.value = rawLots.map(l => ({
-          ...l,
-          unrealized_pnl: 0,   // 由 position_summary 提供
-        }));
-
-        // 补充 position_summary
-        try {
-          const summRes = await apiFetch(`/api/v1/portfolio/${props.portfolioId}/lots/summary${agg}`);
-          const summData = summRes.data || summRes;
-          const summaryMap = {};
-          (summData.summary || []).forEach(s => {
-            summaryMap[s.symbol] = s;
-          });
-          lots.value = rawLots.map(l => {
-            const s = summaryMap[l.symbol] || {};
-            return {
-              ...l,
-              unrealized_pnl: s.unrealized_pnl || 0,
-              market_value: s.market_value || 0,
-            };
-          });
-        } catch (parseError) {
-          console.warn('[OpenLotsPanel] Failed to parse summary data:', parseError.message);
-          // Continue with empty summary map
-        }
+        lots.value = data.lots || [];
       } catch (e) {
         error.value = e.message;
         console.warn('[OpenLotsPanel] load error:', e.message);
@@ -152,36 +140,36 @@ export default {
 
     onMounted(loadLots);
 
-    return { loading, lots, error, loadLots, totalShares, totalUnrealizedPnl, getPnlClass, getPnlPct };
+    return { loading, lots, error, loadLots, totalShares, totalUnrealizedPnl, getPnlClass, getPnlPct, tableColumns };
   },
 };
 </script>
 
 <style scoped>
-.open-lots-panel { background: #0f1419; border-radius: 8px; overflow: hidden; }
-.panel-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; background: #1a2030; border-bottom: 1px solid #2a3444; }
-.panel-title { color: #c8d4e8; font-size: 13px; font-weight: 600; }
-.btn-refresh { background: none; border: 1px solid #2a3444; color: #7a8ba8; padding: 3px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; }
-.btn-refresh:hover { border-color: #4a6fa5; color: #c8d4e8; }
-.loading-state { padding: 12px 16px; }
-.skeleton-row { display: flex; gap: 8px; margin-bottom: 8px; }
-.skeleton-cell { flex: 1; height: 20px; background: #1e2535; border-radius: 3px; animation: pulse 1.4s infinite; }
+.open-lots-panel { background: var(--bg-surface); border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column; height: 100%; }
+.panel-toolbar { display: flex; justify-content: space-between; align-items: center; padding: var(--space-sm) var(--space-md); background: var(--bg-elevated); border-bottom: 1px solid var(--border-base); }
+.panel-title { color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.btn-refresh { background: none; border: 1px solid var(--border-base); color: var(--text-muted); padding: 3px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; transition: all var(--duration-fast) var(--easing-default); }
+.btn-refresh:hover { border-color: var(--color-primary); color: var(--text-secondary); }
+.btn-refresh:disabled { opacity: 0.5; cursor: not-allowed; }
+.loading-state { padding: var(--space-sm) var(--space-md); }
+.skeleton-row { display: flex; gap: var(--space-xs); margin-bottom: var(--space-xs); }
+.skeleton-cell { flex: 1; height: 20px; background: var(--bg-elevated); border-radius: 3px; animation: pulse 1.4s infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-.empty-state { text-align: center; padding: 40px 0; color: #4a5a6a; }
-.empty-icon { font-size: 32px; margin-bottom: 8px; }
+.empty-state { text-align: center; padding: var(--space-xl) 0; color: var(--text-muted); }
+.empty-icon { font-size: 32px; margin-bottom: var(--space-xs); }
 .empty-text { font-size: 14px; font-weight: 600; }
-.empty-hint { font-size: 12px; margin-top: 4px; color: #3a4a5a; }
-.lots-table { width: 100%; min-height: 60px; border-collapse: collapse; font-size: 12px; }
-.lots-table th { padding: 8px 12px; text-align: left; color: #4a5a6a; font-weight: 500; font-size: 11px; border-bottom: 1px solid #1e2535; }
-.lots-table td { padding: 8px 12px; border-bottom: 1px solid #1a2030; color: #c8d4e8; }
-.lots-table tr:hover td { background: #131a28; }
-.num { text-align: right; }
-.symbol { color: #7dd3fc; font-weight: 600; }
-.pnl-pos { color: #34d399; }
-.pnl-neg { color: #f87171; }
-.pnl-zero { color: #4a5a6a; }
-.badge { padding: 2px 6px; border-radius: 3px; font-size: 11px; }
-.badge-open { background: #0d2820; color: #34d399; }
-.badge-closed { background: #1e2535; color: #4a5a6a; }
-.panel-footer { padding: 8px 16px; font-size: 11px; color: #4a5a6a; border-top: 1px solid #1e2535; text-align: right; }
+.empty-hint { font-size: 12px; margin-top: 4px; color: var(--text-disabled); }
+.lots-table-virtualized { flex: 1; min-height: 0; }
+.lots-table-virtualized :deep(.symbol) { color: var(--color-primary); font-weight: 600; }
+.lots-table-virtualized :deep(.num) { font-family: var(--font-number); }
+.lots-table-virtualized :deep(.pnl-pos) { color: var(--color-bull); }
+.lots-table-virtualized :deep(.pnl-neg) { color: var(--color-bear); }
+.lots-table-virtualized :deep(.pnl-zero) { color: var(--text-muted); }
+.lots-table-virtualized :deep(.badge) { padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+.lots-table-virtualized :deep(.badge-open) { background: rgba(52, 211, 153, 0.1); color: var(--color-bull); }
+.lots-table-virtualized :deep(.badge-closed) { background: var(--bg-elevated); color: var(--text-muted); }
+.panel-footer { padding: var(--space-xs) var(--space-md); font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-light); text-align: right; }
+.panel-footer b.pnl-pos { color: var(--color-bull); }
+.panel-footer b.pnl-neg { color: var(--color-bear); }
 </style>

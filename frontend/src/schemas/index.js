@@ -1,3 +1,6 @@
 export * from './stock.js'
 export * from './portfolio.js'
 export * from './macro.js'
+export * from './forex.js'
+export * from './futures.js'
+export * from './bond.js'

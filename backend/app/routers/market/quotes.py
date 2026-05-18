@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Path, Query
 import httpx
 
 from app.db import get_latest_prices, get_price_history, get_daily_history
@@ -13,13 +13,153 @@ from app.services.fetchers import FetcherFactory
 from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback_async
 from app.utils.response import success_response, error_response, ErrorCode
+from app.services.data_fetcher import akshare_breaker
+from app.services.data_cache import get_cache
 
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+# Cache TTL constants
+CACHE_TTL_QUOTE = 5          # 5 seconds for real-time quote
+CACHE_TTL_QUOTE_DETAIL = 30  # 30 seconds for detailed quote
+
+# Cache helper
+_cache = None
+
+def _get_cache():
+    global _cache
+    if _cache is None:
+        _cache = get_cache()
+    return _cache
+
+
+# ── Symbol Validation ─────────────────────────────────────────────────────────
+
+SYMBOL_PATTERN = re.compile(r'^(sh|sz|hk|us|jp)?[0-9A-Za-z]{1,10}$')
+
+
+def _validate_symbol(symbol: str) -> str:
+    """
+    Validate and normalize symbol format.
+    
+    Valid formats:
+    - 6-digit codes: '000001', '600519'
+    - With prefix: 'sh000001', 'sz399001'
+    - US indices: 'NDX', 'SPX', 'DJI'
+    - HK indices: 'HSI'
+    """
+    if not symbol:
+        raise HTTPException(status_code=400, detail="Symbol is required")
+    
+    s = symbol.strip()
+    
+    if len(s) > 20:
+        raise HTTPException(status_code=400, detail=f"Symbol too long: {len(s)} chars (max 20)")
+    
+    if not SYMBOL_PATTERN.match(s):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid symbol format: '{symbol}'. Expected format: [sh|sz|hk|us|jp][0-9A-Z]{{1,10}}"
+        )
+    
+    return _normalize_symbol(s)
+
 
 # ── Helper functions (copied from market.py) ─────────────────────────────────
+
+def _safe_divide(numerator: float, denominator: float, default: float = 0.0) -> float:
+    """Safe division with zero-division protection."""
+    if denominator is None or denominator == 0:
+        return default
+    if numerator is None:
+        return default
+    return numerator / denominator
+
+
+def _calc_amplitude(latest: dict, prev_close: float) -> float:
+    """Calculate amplitude with zero-division protection."""
+    if not prev_close or prev_close == 0:
+        return 0.0
+    high = float(latest.get('high') or 0)
+    low = float(latest.get('low') or 0)
+    if high == 0 or low == 0:
+        return 0.0
+    return round((high - low) / prev_close * 100, 2)
+
+
+def _calculate_freshness_seconds(timestamp_str: str) -> int:
+    """Calculate seconds since data was captured."""
+    if not timestamp_str:
+        return -1  # Unknown
+    
+    try:
+        for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%Y-%m-%dT%H:%M:%S']:
+            try:
+                dt = datetime.strptime(str(timestamp_str)[:19], fmt)
+                return int((datetime.now() - dt).total_seconds())
+            except ValueError:
+                continue
+        return -1
+    except Exception:
+        return -1
+
+
+async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
+    """
+    Fallback: Fetch historical daily data from AkShare when database is empty.
+    Returns list of dicts with 'date', 'open', 'high', 'low', 'close', 'volume'.
+    Sorted DESC (newest first).
+    """
+    if not akshare_breaker.is_available():
+        logger.warning(f"[AkShare] Circuit breaker OPEN, skipping fallback for {symbol}")
+        return []
+    
+    # Map symbol to AkShare format
+    ak_symbol_map = {
+        "000001": "sh000001", "000300": "sh000300", "399001": "sz399001",
+        "399006": "sz399006", "000688": "sh000688",
+        "600519": "sh600519",  # 个股示例
+    }
+    ak_sym = ak_symbol_map.get(symbol)
+    if not ak_sym:
+        # Try to construct AkShare symbol from prefix
+        if symbol.startswith('6'):
+            ak_sym = f"sh{symbol}"
+        elif symbol.startswith(('0', '3')):
+            ak_sym = f"sz{symbol}"
+        else:
+            logger.warning(f"[AkShare] No mapping for symbol: {symbol}")
+            return []
+    
+    try:
+        import akshare as ak
+        with akshare_breaker:
+            df = ak.stock_zh_index_daily(symbol=ak_sym) if symbol in ak_symbol_map else ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+        
+        if df is None or df.empty:
+            return []
+        
+        # AkShare returns columns: ['date', 'open', 'high', 'low', 'close', 'volume']
+        date_col = df.columns[0]
+        rows = []
+        for i in range(len(df) - 1, max(-1, len(df) - limit - 1), -1):  # DESC order
+            try:
+                rows.append({
+                    'date': str(df.iloc[i][date_col])[:10],
+                    'open': float(df.iloc[i]['open']),
+                    'high': float(df.iloc[i]['high']),
+                    'low': float(df.iloc[i]['low']),
+                    'close': float(df.iloc[i]['close']),
+                    'volume': int(df.iloc[i]['volume']) if 'volume' in df.columns else 0,
+                })
+            except Exception:
+                continue
+        logger.info(f"[AkShare] Fetched {len(rows)} historical bars for {symbol}")
+        return rows
+    except Exception as e:
+        logger.error(f"[AkShare] Failed to fetch history for {symbol}: {e}")
+        return []
 
 def _normalize_symbol(raw: str) -> str:
     """
@@ -84,27 +224,43 @@ async def market_quote(symbol: str):
     轻量实时行情（专用于高频轮询，不含历史数据）
     返回：最新价、涨跌额、涨跌幅、成交量、成交额、振幅、换手率
     """
-    norm = _normalize_symbol(symbol)
-    rows = get_price_history(_unprefix(norm), limit=2)  # 最新+昨日（realtime表存无前缀）
+    norm = _validate_symbol(symbol)
+    cache = _get_cache()
+    cache_key = f"quote:{norm}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[Cache] Hit: {cache_key}")
+        return success_response(cached)
+    
+    rows = get_price_history(_unprefix(norm), limit=2)
     if not rows:
         return success_response(None, 'no data')
-    latest = rows[0]  # DESC，最新在前
+    latest = rows[0]
     prev   = rows[1] if len(rows) > 1 else latest
     close  = float(latest.get('close') or 0)
     prev_c = float(prev.get('close') or close)
     chg    = close - prev_c
-    chg_pct = (chg / prev_c * 100) if prev_c else 0
-    return success_response({
-        'symbol':       norm,
-        'price':        close,
-        'change':       round(chg, 3),
-        'change_pct':   round(chg_pct, 2),
-        'volume':       float(latest.get('volume') or 0),
-        'amount':       float(latest.get('amount') or 0),
-        'amplitude':    round((float(latest.get('high') or 0) - float(latest.get('low') or 0)) / prev_c * 100, 2) if latest.get('high') and latest.get('low') and prev_c and prev_c != 0 else 0,
+    chg_pct = _safe_divide(chg, prev_c) * 100 if prev_c else 0.0
+    
+    data_timestamp = latest.get('timestamp') or latest.get('updated_at') or latest.get('date')
+    
+    result = {
+        'symbol': norm,
+        'price': close,
+        'change': round(chg, 3),
+        'change_pct': round(chg_pct, 2),
+        'volume': float(latest.get('volume') or 0),
+        'amount': float(latest.get('amount') or 0),
+        'amplitude': _calc_amplitude(latest, prev_c),
         'turnover_rate': float(latest.get('turnover_rate') or 0),
-        'timestamp':     datetime.now().isoformat(),
-    })
+        'timestamp': data_timestamp,
+        'response_time': datetime.now().isoformat(),
+    }
+    
+    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE)
+    
+    return success_response(result)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -142,7 +298,14 @@ async def market_quote_detail(symbol: str):
       industry, industry_change_pct,
       concepts: [{name, change_pct}, ...]
     """
-    norm = _normalize_symbol(symbol)
+    norm = _validate_symbol(symbol)
+    cache = _get_cache()
+    cache_key = f"quote_detail:{norm}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        logger.debug(f"[Cache] Hit: {cache_key}")
+        return success_response(cached)
 
     # ── 基础实时行情（market_data_realtime 存无前缀 symbol，用 _unprefix 查）──
     db_sym = _unprefix(norm)   # 'sh000001' → '000001'
@@ -158,11 +321,11 @@ async def market_quote_detail(symbol: str):
     market     = w.get('market') or 'AShare'
 
     # ── 历史 K 线（单次查询，复用于 OHLC/振幅/收益率/52周高低）──────────────────
-    # 优化：将原来的3次查询（get_price_history limit=2 + get_daily_history limit=250 + limit=9999）
-    # 合并为1次查询（limit=400），足够覆盖所有需求
-    # market_data_daily 存无前缀代码，用 db_sym 查询
-    _HIST_LIMIT = 400  # 252(52周) + 60 + 20 + 5 + buffer
+    _HIST_LIMIT = 400
     hist_all = get_daily_history(db_sym, limit=_HIST_LIMIT, offset=0) if callable(get_daily_history) else []
+    
+    if not hist_all:
+        hist_all = await _fetch_history_fallback(db_sym, limit=_HIST_LIMIT)
 
     # 实时快照：从 hist_all 前2条获取（最新 + 前一日）
     latest_row = hist_all[0] if hist_all else {}
@@ -178,9 +341,9 @@ async def market_quote_detail(symbol: str):
     # 振幅 = (最高-最低)/昨收 × 100；当日仅一价时用 (现价-昨收)/昨收
     prev_close = float(prev_row.get('close') or 0.0)
     if low_ and low_ > 0 and high_ != low_:
-        amplitude = round((high_ - low_) / prev_close * 100, 2) if prev_close else None
+        amplitude = round(_safe_divide(high_ - low_, prev_close) * 100, 2) if prev_close else None
     else:
-        amplitude = round(abs(price - prev_close) / prev_close * 100, 2) if prev_close and prev_close > 0 else None
+        amplitude = round(_safe_divide(abs(price - prev_close), prev_close) * 100, 2) if prev_close and prev_close > 0 else None
 
     def _period_return(hist, n):
         """最近 n 日收益率（DESC 排序：最新在前）"""
@@ -289,7 +452,14 @@ async def market_quote_detail(symbol: str):
         "industry":               industry,
         "industry_change_pct":   industry_change_pct,
         "concepts":              concepts,
+        # ── Timestamps ──
+        "timestamp": latest_row.get('date') or latest_row.get('timestamp'),
+        "response_time": datetime.now().isoformat(),
+        "data_freshness_seconds": _calculate_freshness_seconds(latest_row.get('date') or ''),
     }
+    
+    cache.set(cache_key, result, ttl=CACHE_TTL_QUOTE_DETAIL)
+    
     return success_response(result)
 
 
@@ -305,15 +475,16 @@ async def market_quote_v2(symbol: str):
     直接从数据源获取实时报价，不依赖本地数据库。
     支持熔断器自动降级（失败3次自动切换到备用数据源）。
     """
+    validated = _validate_symbol(symbol)
     try:
         fetcher = FetcherFactory.get_fetcher()
         if not fetcher:
             return error_response(404, "无可用数据源")
 
-        data = await fetcher.get_quote(symbol)
+        data = await fetcher.get_quote(validated)
 
         if not data:
-            return error_response(404, f"获取 {symbol} 数据失败")
+            return error_response(404, f"获取 {validated} 数据失败")
 
         return success_response({
             "symbol": data.get("symbol", symbol),
@@ -341,7 +512,7 @@ async def market_quote_v2(symbol: str):
 @router.get("/market/order_book/{symbol}")
 async def get_order_book(symbol: str):
     """Level 2 10档买卖盘口数据（实时）"""
-    norm = _normalize_symbol(symbol)
+    norm = _validate_symbol(symbol)
 
     # 转换为新浪格式
     # 判断是否为指数（上证sh000001, 深证sz399001等）
@@ -430,3 +601,15 @@ async def get_order_book(symbol: str):
     except Exception as e:
         logger.error(f"order_book error: {e}")
         return error_response(500, str(e))
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Cache Stats Endpoint
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/market/cache/stats")
+async def cache_stats():
+    """Get cache statistics for quote endpoints."""
+    cache = _get_cache()
+    stats = cache.get_stats()
+    return success_response(stats)

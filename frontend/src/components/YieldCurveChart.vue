@@ -1,13 +1,17 @@
 <template>
-  <div class="w-full h-full relative flex flex-col" style="min-height:120px">
+  <div ref="lazyRef" class="w-full h-full relative flex flex-col" style="min-height:120px">
     <div class="shrink-0 flex items-center gap-3 px-1 py-1 border-b border-theme bg-terminal-bg/60">
       <span class="text-[10px] font-mono text-terminal-dim">国债收益率曲线</span>
       <span class="text-[10px] font-mono text-theme-tertiary">|</span>
       <span class="text-[10px] font-mono text-terminal-dim">{{ updateTime || '...' }}</span>
     </div>
     <div class="flex-1 relative min-h-0">
-      <div ref="chartRef" class="absolute inset-0"></div>
-      <div v-if="!hasData" class="absolute inset-0 z-10 flex items-center justify-center">
+      <div v-if="!isVisible" class="absolute inset-0 flex flex-col p-3 gap-2 z-10">
+        <div class="skeleton h-3 w-24 rounded-sm"></div>
+        <div class="flex-1 skeleton rounded-sm"></div>
+      </div>
+      <div v-else ref="chartRef" class="absolute inset-0"></div>
+      <div v-if="isVisible && !hasData" class="absolute inset-0 z-10 flex items-center justify-center">
         <span class="text-terminal-dim text-xs">暂无数据</span>
       </div>
     </div>
@@ -15,25 +19,29 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useLazyLoad } from '../composables/useLazyLoad.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
-  yieldCurve: { type: Object, default: null },  // 当前曲线
-  curve1m:    { type: Object, default: null },  // 1个月前
-  curve1y:    { type: Object, default: null },  // 1年前
+  yieldCurve: { type: Object, default: null },
+  curve1m:    { type: Object, default: null },
+  curve1y:    { type: Object, default: null },
   updateTime: { type: String, default: '' },
 })
 
+const { isVisible, containerRef: lazyRef } = useLazyLoad({ threshold: 0.1, rootMargin: '50px' })
 const chartRef = ref(null)
 const hasData  = ref(false)
 let chartInstance = null
+let resizeObserver = null
 
 const TENOR_ORDER  = ['3月','6月','1年','3年','5年','7年','10年','30年']
 const TENOR_LABELS = ['3M','6M','1Y','3Y','5Y','7Y','10Y','30Y']
 
 function buildChart() {
   if (!chartRef.value || !window.echarts) return
-  if (chartInstance) { chartInstance.dispose(); chartInstance = null }
+  if (chartInstance) { safeDispose(chartInstance); chartInstance = null }
 
   const tenors = props.yieldCurve || {}
   const xData = []
@@ -127,34 +135,54 @@ function buildChart() {
     series,
   }
   chartInstance.setOption(option, true)
+  
+  // Setup resize observer after chart is created
+  setupResizeObserver()
+}
+
+function setupResizeObserver() {
+  if (!chartRef.value || !window.ResizeObserver) return
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  
+  resizeObserver = new ResizeObserver(() => {
+    if (chartInstance && !chartInstance.isDisposed?.()) {
+      chartInstance.resize()
+    }
+  })
+  resizeObserver.observe(chartRef.value)
 }
 
 async function initChart() {
   await nextTick()
   if (!chartRef.value || !window.echarts) return
   if (chartInstance) {
-    chartInstance.clear()
-    chartInstance.dispose()
+    safeDispose(chartInstance)
     chartInstance = null
   }
   buildChart()
 }
 
-let resizeObserver = null
 onMounted(() => {
-  initChart()
-  if (chartRef.value) {
-    resizeObserver = new ResizeObserver(() => chartInstance?.resize())
-    resizeObserver.observe(chartRef.value)
+  if (isVisible.value) {
+    initChart()
   }
 })
+
 onUnmounted(() => {
-  resizeObserver?.disconnect()
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
   if (chartInstance) {
-    chartInstance.clear()
-    chartInstance.dispose()
+    safeDispose(chartInstance)
     chartInstance = null
   }
 })
-watch([() => props.yieldCurve, () => props.curve1m, () => props.curve1y], () => { initChart() }, { deep: true })
+
+watch([() => props.yieldCurve, () => props.curve1m, () => props.curve1y, isVisible], () => { 
+  if (isVisible.value) initChart() 
+}, { deep: true })
 </script>

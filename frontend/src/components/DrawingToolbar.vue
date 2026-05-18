@@ -7,6 +7,8 @@
           class="tool-btn"
           :class="{ active: activeTool === tool.key }"
           :title="tool.label + ' (' + tool.shortcut + ')'"
+          :aria-label="tool.label"
+          :aria-pressed="activeTool === tool.key"
           @click="emit('tool-change', activeTool === tool.key ? '' : tool.key)"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" v-html="tool.sanitizedSvg"></svg>
@@ -29,6 +31,8 @@
           class="tool-btn color-btn"
           :class="{ active: showColorPicker }"
           title="画线颜色"
+          aria-label="选择画线颜色"
+          :aria-expanded="showColorPicker"
           @click="showColorPicker = !showColorPicker"
         >
           <span class="color-dot" :style="{ backgroundColor: activeColor }"></span>
@@ -40,11 +44,13 @@
               class="color-option"
               :class="{ active: activeColor === c }"
               :style="{ backgroundColor: c }"
+              :aria-label="`选择颜色 ${c}`"
+              :aria-pressed="activeColor === c"
               @click="selectColor(c)"
             ></button>
           </div>
           <div class="custom-color">
-            <input type="color" :value="activeColor" @change="e => selectColor(e.target.value)">
+            <input type="color" :value="activeColor" @change="e => selectColor(e.target.value)" aria-label="自定义画线颜色">
             <span>自定义</span>
           </div>
         </div>
@@ -61,6 +67,8 @@
           class="tool-btn"
           :class="{ active: magnetMode }"
           title="磁吸模式 (M)"
+          aria-label="磁吸模式"
+          :aria-pressed="magnetMode"
           @click="emit('magnet-toggle')"
         >
           <svg width="13" height="13" viewBox="0 0 12 12" fill="none">
@@ -76,6 +84,8 @@
           class="tool-btn"
           :class="{ inactive: !visible }"
           title="显示/隐藏 (V)"
+          aria-label="显示或隐藏画线"
+          :aria-pressed="visible"
           @click="emit('visibility-toggle')"
         >
           <svg v-if="visible" width="13" height="13" viewBox="0 0 12 12" fill="none">
@@ -96,6 +106,8 @@
           class="tool-btn"
           :class="{ active: locked }"
           title="锁定画线"
+          aria-label="锁定画线"
+          :aria-pressed="locked"
           @click="emit('lock-toggle')"
         >
           <svg v-if="locked" width="13" height="13" viewBox="0 0 12 12" fill="none">
@@ -119,6 +131,7 @@
         <button
           class="tool-btn delete-btn"
           title="清除全部"
+          aria-label="清除全部画线"
           @click="confirmClear"
         >
           <svg width="13" height="13" viewBox="0 0 12 12" fill="none">

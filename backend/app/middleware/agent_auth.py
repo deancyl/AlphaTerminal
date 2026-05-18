@@ -33,7 +33,7 @@ from ..services.agent.token_service import AgentToken, AgentTokenService, TokenS
 logger = logging.getLogger(__name__)
 
 # Set DEBUG level for detailed logging during development
-DEBUG_MODE = os.getenv("AGENT_AUTH_DEBUG", "true").lower() == "true"
+DEBUG_MODE = os.getenv("AGENT_AUTH_DEBUG", "false").lower() == "true"
 
 if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)

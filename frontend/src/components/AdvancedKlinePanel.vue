@@ -50,6 +50,7 @@
         :chart-data="processedChartData"
         :tick="liveTick"
         :symbol="currentSymbol"
+        :news-events="newsEvents"
         @datazoom="onDataZoom"
       />
 
@@ -152,6 +153,7 @@ import { logger } from '../utils/logger.js'
 import { useMarketStore } from '../stores/market.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
 import { apiFetch } from '../utils/api.js'
+import { useKlineCache } from '../composables/useKlineCache.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
 import { calcMA } from '../utils/indicators.js'
 
@@ -184,6 +186,7 @@ const chartInstance = computed(() => baseChartRef.value?.getChartInstance() ?? n
 const histData  = shallowRef([])          // 完整历史 ASC
 const overlayData = shallowRef([])        // 叠加标的 {date, close}[]
 const liveTick   = shallowRef(null)       // 实时 tick
+const newsEvents = shallowRef([])         // 新闻事件标记点 [{ date, headline, type, price }]
 
 // chartData 专用 shallowRef，避免每次 histData 变化触发父级深度 diff
 const processedChartData = shallowRef({ isEmpty: true })
@@ -202,10 +205,19 @@ function _etfCode(sym) {
   return sym.replace(/^(sh|sz|hk|us)/i, '')
 }
 
-function rebuildChartData() {
-  processedChartData.value = histData.value.length
-    ? buildChartData(histData.value, period.value, indicatorParams.value, overlayData.value)
-    : { isEmpty: true }
+async function rebuildChartData() {
+  if (!histData.value.length) {
+    processedChartData.value = { isEmpty: true }
+    return
+  }
+  // Use Web Worker for heavy indicator calculations (off-main-thread)
+  processedChartData.value = await buildChartData(
+    histData.value,
+    period.value,
+    indicatorParams.value,
+    overlayData.value,
+    { useWorker: true, timeout: 10000 }
+  )
 }
 
 // visibleHist：视图窗口数据（由 datazoom 决定）
@@ -306,10 +318,45 @@ function stopQuotePolling() {
   }
 }
 
-// ── 数据获取 ────────────────────────────────────────────────────
+let fetchHistoryRequestId = 0
+
+// Initialize kline cache
+const { get: getKlineCache, set: setKlineCache } = useKlineCache()
+
 async function fetchHistory(append = false) {
+  const currentRequestId = ++fetchHistoryRequestId
   const sym = currentSymbol.value
   if (!sym) return
+  
+  // Check cache for non-append requests
+  if (!append && !drillDownDate.value) {
+    const cached = getKlineCache(sym, period.value, adjustment.value)
+    if (cached) {
+      histData.value = cached.history
+      hasMore.value = cached.has_more
+      loadOffset.value = cached.history.length
+      isLoading.value = false
+      
+      // Update quote from cached data
+      if (cached.history.length > 0) {
+        const last = cached.history[cached.history.length - 1]
+        const prev = cached.history[cached.history.length - 2]
+        currentQuote.value = {
+          price: last.close,
+          change: last.close - (prev?.close || last.close),
+          change_pct: last.change_pct ?? ((last.close - (prev?.close || last.close)) / (prev?.close || 1) * 100),
+          volume: last.volume,
+          amount: last.amount || (last.close * last.volume),
+          amplitude: last.amplitude,
+          turnover_rate: last.turnover_rate,
+        }
+      }
+      
+      rebuildChartData()
+      return
+    }
+  }
+  
   isLoading.value = true
 
   try {
@@ -321,13 +368,13 @@ async function fetchHistory(append = false) {
     })
     if (drillDownDate.value) params.set('trade_date', drillDownDate.value)
 
-    // ETF 代码路由：场内ETF（51/15/16/56开头）走专用基金API
     const url = _isEtfCode(sym)
       ? `/api/v1/fund/etf/history?code=${_etfCode(sym)}&${params}`
       : `/api/v1/market/history/${sym}?${params}`
     const data = await apiFetch(url)
 
-    // 统一解包: data.history
+    if (currentRequestId !== fetchHistoryRequestId) return
+
     const payload = data?.data || data
     isFetching.value = payload?.fetching ?? data?.fetching ?? false
 
@@ -342,6 +389,14 @@ async function fetchHistory(append = false) {
     } else {
       histData.value = sortedItems
       loadOffset.value = sortedItems.length
+      
+      // Cache the result for non-append requests
+      if (!drillDownDate.value && sortedItems.length > 0) {
+        setKlineCache(sym, period.value, adjustment.value, {
+          history: sortedItems,
+          has_more: payload?.has_more ?? items.length >= 300
+        })
+      }
     }
 
     hasMore.value = payload?.has_more ?? items.length >= 300
@@ -362,11 +417,15 @@ async function fetchHistory(append = false) {
 
     rebuildChartData()
   } catch (e) {
+    if (currentRequestId !== fetchHistoryRequestId) return
     logger.warn('[AdvancedKlinePanel] fetchHistory failed:', e)
   } finally {
-    isLoading.value = false
+    if (currentRequestId === fetchHistoryRequestId) {
+      isLoading.value = false
+    }
   }
 }
+
 
 function sanitizeItem(r) {
   return {
@@ -393,8 +452,10 @@ function onSymbolSelect(item) {
   overlayData.value = []
   overlaySymbol.value = ''
   overlayName.value = ''
+  newsEvents.value = []
   processedChartData.value = { isEmpty: true }
   fetchHistory()
+  fetchNewsEvents()
 }
 
 function onPeriodChange(p) {
@@ -431,6 +492,29 @@ async function fetchOverlayHistory(sym) {
   }
 }
 
+async function fetchNewsEvents() {
+  const sym = currentSymbol.value
+  if (!sym) { newsEvents.value = []; return }
+  try {
+    const data = await apiFetch(`/api/v1/news/events/${sym}?limit=20`)
+    const events = data?.data?.events || []
+    
+    // Match news dates to K-line prices
+    const matchedEvents = events.map(e => {
+      const klinePoint = histData.value.find(h => h.date === e.date)
+      return {
+        ...e,
+        price: klinePoint?.high || klinePoint?.close || null
+      }
+    }).filter(e => e.price != null)
+    
+    newsEvents.value = matchedEvents
+  } catch (e) {
+    logger.error('[AdvancedKlinePanel] fetchNewsEvents error:', e.message)
+    newsEvents.value = []
+  }
+}
+
 // DataZoom 事件（BaseKLineChart 向上传递缩放范围）
 function onDataZoom({ start, end }) {
   // 懒加载：当左侧边缘 < 5% 时预加载更早数据
@@ -442,8 +526,29 @@ function onDataZoom({ start, end }) {
 // ── 导出 PNG ────────────────────────────────────────────────────
 async function exportPNG() {
   const inst = chartInstance.value
-  if (!inst) return
+  if (!inst || !chartContainerRef.value) return
+  
   try {
+    // Wait for chart to finish rendering with timeout fallback
+    await new Promise(resolve => {
+      const timeout = setTimeout(() => {
+        inst.off('finished')
+        resolve()
+      }, 200) // Timeout fallback in case 'finished' doesn't fire
+      
+      inst.on('finished', () => {
+        clearTimeout(timeout)
+        inst.off('finished')
+        resolve()
+      })
+      
+      // If chart is disposed, resolve immediately
+      if (inst.isDisposed()) {
+        clearTimeout(timeout)
+        resolve()
+      }
+    })
+    
     const chartUrl = inst.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#0f172a' })
     const container = chartContainerRef.value
     const w = container.clientWidth  * 2
@@ -451,18 +556,36 @@ async function exportPNG() {
     const canvas = document.createElement('canvas')
     canvas.width = w; canvas.height = h
     const ctx = canvas.getContext('2d')
+    
+    // Draw chart image
     const chartImg = new Image()
-    await new Promise((resolve, reject) => { chartImg.onload = resolve; chartImg.onerror = reject; chartImg.src = chartUrl })
+    await new Promise((resolve, reject) => { 
+      chartImg.onload = resolve; 
+      chartImg.onerror = reject; 
+      chartImg.src = chartUrl 
+    })
     ctx.drawImage(chartImg, 0, 0, w, h)
+    
+    // Merge DrawingCanvas overlay if visible
     if (drawingVisible.value && drawingCanvasRef.value?.$el) {
       const dc = drawingCanvasRef.value.$el.querySelector('canvas')
-      if (dc) ctx.drawImage(dc, 0, 0, w, h)
+      if (dc) {
+        // Ensure dimensions match
+        const dcW = dc.width
+        const dcH = dc.height
+        // Scale drawing canvas to match chart dimensions
+        ctx.drawImage(dc, 0, 0, dcW, dcH, 0, 0, w, h)
+      }
     }
+    
     const a = document.createElement('a')
     a.href = canvas.toDataURL('image/png')
     a.download = `${symbolName.value}_${period.value}_${Date.now()}.png`
     a.click()
-  } catch (e) { logger.error('PNG导出失败:', e) }
+  } catch (e) { 
+    logger.error('PNG导出失败:', e)
+    alert('图表导出失败: ' + e.message)
+  }
 }
 
 // ── 区间统计 ────────────────────────────────────────────────────
@@ -537,12 +660,22 @@ function onShapesCleared() {}
 // ── 监听响应 ────────────────────────────────────────────────────
 // 指标/周期变化 → 重建图表数据
 watch([period, yAxisType, subChartTab, indicatorParams], () => {
-  rebuildChartData()
+  rebuildChartData() // async, fire-and-forget
 })
 
 watch(currentSymbol, () => {
   fetchHistory()
-  // ⚡ WS 状态由独立的 wsStatus watch 控制，symbol 切换本身不需要重启轮询
+  fetchNewsEvents()
+})
+
+watch(histData, () => {
+  if (newsEvents.value.length > 0 && histData.value.length > 0) {
+    const matchedEvents = newsEvents.value.map(e => {
+      const klinePoint = histData.value.find(h => h.date === e.date)
+      return { ...e, price: klinePoint?.high || klinePoint?.close || e.price }
+    })
+    newsEvents.value = matchedEvents
+  }
 })
 
 // ── 生命周期 ────────────────────────────────────────────────────

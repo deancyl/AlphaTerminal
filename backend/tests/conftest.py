@@ -10,6 +10,9 @@ import os
 import tempfile
 import sqlite3
 
+# Disable rate limiting for all tests
+os.environ["RATE_LIMIT_ENABLED"] = "false"
+
 # Add app directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
@@ -110,6 +113,166 @@ def test_client():
     """Create a test client for the FastAPI app."""
     from fastapi.testclient import TestClient
     from app.main import app
-    
+
     client = TestClient(app)
     return client
+
+
+@pytest.fixture(scope="function")
+def client():
+    """Create a function-scoped test client for the FastAPI app."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as client:
+        yield client
+
+
+@pytest.fixture
+def sample_agent_token():
+    """Create sample agent token for testing."""
+    from datetime import datetime, timedelta
+    from app.services.agent.token_service import AgentToken, TokenScope
+    
+    return AgentToken(
+        id="test-token-id",
+        name="test-agent",
+        token_prefix="AGT1_abc123",
+        token_hash="test-hash-123",
+        scopes=[TokenScope.READ, TokenScope.WRITE],
+        markets=["*"],
+        instruments=["*"],
+        paper_only=True,
+        rate_limit=120,
+        expires_at=datetime.now() + timedelta(days=30),
+        created_at=datetime.now(),
+        last_used_at=datetime.now(),
+        is_active=True,
+        access_count=5,
+    )
+
+
+@pytest.fixture
+def restricted_agent_token():
+    """Create token with restricted markets."""
+    from datetime import datetime, timedelta
+    from app.services.agent.token_service import AgentToken, TokenScope
+    
+    return AgentToken(
+        id="restricted-token-id",
+        name="restricted-agent",
+        token_prefix="AGT1_xyz789",
+        token_hash="restricted-hash-789",
+        scopes=[TokenScope.READ],
+        markets=["ASTOCK"],
+        instruments=["000001", "600519"],
+        paper_only=True,
+        rate_limit=60,
+        expires_at=datetime.now() + timedelta(days=7),
+        created_at=datetime.now(),
+        last_used_at=datetime.now(),
+        is_active=True,
+        access_count=2,
+    )
+
+
+@pytest.fixture
+def mock_llm_config():
+    """Mock LLM configuration for testing."""
+    return {
+        "provider": "openai",
+        "model_id": "gpt-4",
+        "api_key": "test-api-key",
+        "base_url": "https://api.openai.com/v1",
+        "max_concurrent": 5,
+        "context_length": 8192,
+    }
+
+
+@pytest.fixture
+def mock_model_config_service():
+    """Mock ModelConfigService for testing."""
+    service = Mock()
+    service.get_model = Mock(return_value=Mock(
+        provider="openai",
+        model_id="gpt-4",
+        api_key="test-api-key",
+        base_url="https://api.openai.com/v1",
+        enabled=True,
+        is_default=True,
+        max_concurrent=5,
+        context_length=8192,
+        metadata={},
+    ))
+    service.get_all_providers = Mock(return_value=["openai", "deepseek", "qianwen"])
+    service.get_models_for_provider = Mock(return_value=["gpt-4", "gpt-3.5-turbo"])
+    return service
+
+
+@pytest.fixture
+def mock_circuit_breaker():
+    """Mock circuit breaker for testing."""
+    cb = Mock()
+    cb.is_available = Mock(return_value=True)
+    cb.__enter__ = Mock(return_value=None)
+    cb.__exit__ = Mock(return_value=False)
+    cb.state = "closed"
+    cb.failure_count = 0
+    cb.reset = Mock()
+    return cb
+
+
+@pytest.fixture
+def mock_news_data():
+    """Mock news data for testing."""
+    return [
+        {
+            "title": "测试新闻标题1",
+            "content": "测试新闻内容1",
+            "source": "eastmoney",
+            "publish_time": "2024-01-15 10:30:00",
+            "url": "http://example.com/news/1",
+        },
+        {
+            "title": "测试新闻标题2",
+            "content": "测试新闻内容2",
+            "source": "sina",
+            "publish_time": "2024-01-15 09:00:00",
+            "url": "http://example.com/news/2",
+        },
+    ]
+
+
+@pytest.fixture
+def mock_forex_quote():
+    """Mock forex quote for testing."""
+    return {
+        "symbol": "USDCNY",
+        "name": "美元/人民币",
+        "bid": 7.2450,
+        "ask": 7.2460,
+        "last": 7.2455,
+        "change": 0.0050,
+        "change_pct": 0.069,
+        "high": 7.2500,
+        "low": 7.2400,
+        "timestamp": "2024-01-15T10:30:00",
+    }
+
+
+@pytest.fixture
+def mock_options_chain():
+    """Mock options chain data for testing."""
+    return {
+        "symbol": "IO2501",
+        "calls": [
+            {"strike": 3800, "bid": 120.5, "ask": 121.0, "iv": 0.18, "delta": 0.65},
+            {"strike": 3850, "bid": 95.2, "ask": 95.8, "iv": 0.17, "delta": 0.55},
+        ],
+        "puts": [
+            {"strike": 3800, "bid": 45.3, "ask": 45.8, "iv": 0.19, "delta": -0.35},
+            {"strike": 3850, "bid": 68.5, "ask": 69.0, "iv": 0.18, "delta": -0.45},
+        ],
+        "underlying_price": 3825.5,
+        "expiry": "2025-01-17",
+    }

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>网络诊断</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }
+        .ok { color: #4ade80; }
+        .error { color: #f87171; }
+        .warn { color: #fbbf24; }
+        .card { background: #16213e; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        h1 { color: #00ff88; }
+        pre { background: #0f0f23; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>AlphaTerminal 网络诊断</h1>
+    
+    <div class="card">
+        <h2>1. 浏览器网络状态</h2>
+        <p>navigator.onLine: <span id="navOnline" class="warn">检测中...</span></p>
+        <p>用户代理: <span id="userAgent"></span></p>
+    </div>
+    
+    <div class="card">
+        <h2>2. API 连接测试</h2>
+        <pre id="apiTest">测试中...</pre>
+    </div>
+    
+    <div class="card">
+        <h2>3. 解决方案</h2>
+        <ul>
+            <li>如果 navigator.onLine 显示 false，请：
+                <ol>
+                    <li>检查浏览器 DevTools → Network 面板，确保 "Offline" 未勾选</li>
+                    <li>刷新页面 (F5 或 Ctrl+R)</li>
+                    <li>清除浏览器缓存后重试</li>
+                    <li>尝试其他浏览器</li>
+                </ol>
+            </li>
+            <li>如果 API 测试失败，请检查后端服务是否运行</li>
+        </ul>
+    </div>
+
+    <script>
+        function updateOnlineStatus() {
+            const el = document.getElementById('navOnline');
+            if (navigator.onLine) {
+                el.textContent = 'true (在线)';
+                el.className = 'ok';
+            } else {
+                el.textContent = 'false (离线) - 这是问题所在！';
+                el.className = 'error';
+            }
+        }
+        
+        document.getElementById('userAgent').textContent = navigator.userAgent;
+        updateOnlineStatus();
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        async function testAPI() {
+            const el = document.getElementById('apiTest');
+            const tests = [
+                { name: '健康检查', url: '/health' },
+                { name: '市场概览', url: '/api/v1/market/overview' },
+                { name: '新闻快讯', url: '/api/v1/news/flash' },
+            ];
+            
+            let results = '';
+            for (const test of tests) {
+                try {
+                    const start = Date.now();
+                    const res = await fetch(test.url);
+                    const time = Date.now() - start;
+                    results += test.name + ': OK (' + time + 'ms)\n';
+                } catch (e) {
+                    results += test.name + ': 失败 - ' + e.message + '\n';
+                }
+            }
+            el.textContent = results;
+        }
+        
+        testAPI();
+    </script>
+</body>
+</html>

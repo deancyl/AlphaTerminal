@@ -2,7 +2,7 @@
 
 > Created: 2026-05-08
 > Based on: QUANTDINGER_INTEGRATION_REPORT.md
-> Target Version: v0.7.0
+> Target Version: v0.6.38
 > Status: Planning Phase
 
 ---

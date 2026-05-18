@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'database.db')
 
 # Alpha Vantage API 配置
-AV_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '4M3YTMFEMBOPM1W2')
+AV_API_KEY = os.environ.get('ALPHA_VANTAGE_API_KEY', '')
 AV_BASE_URL = 'https://www.alphavantage.co/query'
 
 # 支持的指数和股票映射
@@ -101,8 +101,8 @@ def fetch_from_alpha_vantage(symbol: str, years: int = 20) -> Optional[pd.DataFr
             params=params,
             timeout=30,
             proxies={
-                "http":  "http://192.168.1.50:7897",
-                "https": "http://192.168.1.50:7897",
+                "http":  os.environ.get("HTTP_PROXY", ""),
+                "https": os.environ.get("HTTPS_PROXY", os.environ.get("HTTP_PROXY", "")),
             } if os.environ.get("HTTP_PROXY") or os.environ.get("http_proxy") else None,
         )
         response.raise_for_status()

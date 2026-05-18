@@ -4,14 +4,21 @@
 
 <script setup>
 import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
+import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
 import { buildOverlaySeries } from '../utils/chartDataBuilder.js'
 import { logger } from '../utils/logger.js'
-import { initChart, getECharts } from '../utils/lazyEcharts.js'
-
-
+import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
+import { waitForDimensions } from '../utils/waitForDimensions.js'
+import { useTheme } from '../composables/useTheme.js'
+import { 
+  getDynamicMarketColors,
+  getDynamicChartColors,
+  buildTooltipFormatter,
+  buildGridOptions,
+  buildDataZoomOptions
+} from '../utils/echartsTheme.js'
 
 const emit = defineEmits(['datazoom'])
 
@@ -26,17 +33,26 @@ const props = defineProps({
   // 增量 tick (用于闪烁最新现价)
   tick: { type: Object, default: null },
   symbol: { type: String, default: '' },
+
+  // 新闻事件标记点 [{ date, headline, type, price }]
+  // type: 'bullish' | 'bearish' | 'neutral'
+  newsEvents: { type: Array, default: () => [] },
 })
 
 const chartEl = ref(null)
 let chart = null
 let _ro = null
-let _lastChartData = null   // 保留引用用于 tick patch
-let _isInitialized = false  // 初始化完成标记
+let _lastChartData = null
+let _isInitialized = false
+let _unsubscribeTheme = null
 
-// ── 动态构建 ECharts Option ──────────────────────────────────────
+const { activeTheme, onThemeChange } = useTheme()
+
 function buildOption(cData) {
   if (!cData || cData.isEmpty) return {}
+
+  const MARKET_COLORS = getDynamicMarketColors()
+  const CHART_COLORS = getDynamicChartColors()
 
   const {
     times, klineData, volumes,
@@ -53,17 +69,17 @@ function buildOption(cData) {
 
   // 主图 Grid (Index 0)
   const mainHeight = subCount === 2 ? '55%' : '65%'
-  grids.push({ top: 10, height: mainHeight, left: 55, right: 8 })
+  grids.push(buildGridOptions({ top: 10, height: mainHeight, left: 55, right: 8 }))
   xAxes.push({
     type: 'category', data: times, gridIndex: 0,
     axisLabel: { show: false },
-    axisLine: { lineStyle: { color: '#374151' } },
+    axisLine: { lineStyle: { color: CHART_COLORS.AXIS_LINE } },
   })
   yAxes.push({
     type: 'value', gridIndex: 0, scale: true,
     min: yMin, max: yMax,
-    splitLine: { lineStyle: { color: '#1f2937' } },
-    axisLabel: { color: '#6b7280', fontSize: 9 },
+    splitLine: { lineStyle: { color: CHART_COLORS.SPLIT_LINE, type: 'dashed' } },
+    axisLabel: { color: CHART_COLORS.AXIS_LABEL, fontSize: 10 },
   })
 
   // 动态生成副图 Grids
@@ -72,17 +88,17 @@ function buildOption(cData) {
 
   props.subCharts.forEach((subName, index) => {
     const gridIdx = index + 1
-    grids.push({ top: `${currentTop}%`, height: subHeight, left: 55, right: 8 })
+    grids.push(buildGridOptions({ top: `${currentTop}%`, height: subHeight, left: 55, right: 8 }))
     xAxes.push({
       type: 'category', data: times, gridIndex: gridIdx,
-      axisLabel: { show: index === subCount - 1 },  // 只有最下面一个副图显示X轴日期
-      axisLine: { lineStyle: { color: '#374151' } },
+      axisLabel: { show: index === subCount - 1, color: CHART_COLORS.AXIS_LABEL, fontSize: 10 },
+      axisLine: { lineStyle: { color: CHART_COLORS.AXIS_LINE } },
     })
     yAxes.push({
       type: 'value', gridIndex: gridIdx,
       splitLine: { show: false },
       axisLabel: {
-        color: '#6b7280', fontSize: 9,
+        color: CHART_COLORS.AXIS_LABEL, fontSize: 10,
         formatter: subName === 'VOL' ? (v) => {
           if (v >= 1e8) return (v / 1e8).toFixed(0) + '亿'
           if (v >= 1e4) return (v / 1e4).toFixed(0) + '万'
@@ -96,34 +112,60 @@ function buildOption(cData) {
   // ── 2. 组装 Series ──
   const series = []
 
-  // 主图：K线
+  // 主图：K线 (TradingView-style colors)
   series.push({
-    name: 'K线', type: 'candlestick', data: klineData,
+    name: 'K线', type: 'candlestick', data: klineData, sampling: 'lttb',
     xAxisIndex: 0, yAxisIndex: 0,
     itemStyle: {
-      color: '#ef232a', color0: '#14b143',
-      borderColor: '#ef232a', borderColor0: '#14b143',
+      color: MARKET_COLORS.UP,
+      color0: MARKET_COLORS.DOWN,
+      borderColor: MARKET_COLORS.UP,
+      borderColor0: MARKET_COLORS.DOWN,
     },
     barMaxWidth: 8,
+    // 新闻事件标记点
+    markPoint: props.newsEvents.length > 0 ? {
+      symbol: 'diamond',
+      symbolSize: 10,
+      data: props.newsEvents.map(e => ({
+        coord: [e.date, e.price],
+        value: e.headline,
+        itemStyle: {
+          color: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
+          borderColor: e.type === 'bullish' ? '#22c55e' : e.type === 'bearish' ? '#ef4444' : '#fbbf24',
+          borderWidth: 1,
+        },
+        label: {
+          show: false, // 不在图表上显示标签，hover tooltip 显示
+        },
+      })),
+      label: { show: false },
+      emphasis: {
+        itemStyle: {
+          shadowBlur: 10,
+          shadowColor: 'rgba(0, 0, 0, 0.5)',
+        },
+      },
+    } : undefined,
   })
 
   // 主图：均线
   if (maData?.ma5) {
     series.push(
       {
-        name: 'MA5', type: 'line', data: maData.ma5,
+        name: 'MA5', type: 'line', data: maData.ma5, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#ffffff', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
       },
       {
-        name: 'MA10', type: 'line', data: maData.ma10,
+        name: 'MA10', type: 'line', data: maData.ma10, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#fbbf24', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
       },
       {
-        name: 'MA20', type: 'line', data: maData.ma20,
+        name: 'MA20', type: 'line', data: maData.ma20, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0, symbol: 'none',
-        lineStyle: { color: '#c084fc', width: 1 },
+        lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
       }
     )
 
@@ -131,15 +173,15 @@ function buildOption(cData) {
     const { series: ovSeries, hasOverlay } = buildOverlaySeries(
       props.chartData,
       overlaySeriesData ?? [],
-      '#f97316'   // 亮橙色高辨识度
+      MARKET_COLORS.OVERLAY
     )
 
     if (hasOverlay && ovSeries.length > 0) {
       yAxes.push({
         type: 'value', gridIndex: 0, position: 'right',
-        splitLine: { show: false },          // 防止副轴网格干扰主图
-        axisLine: { show: true, lineStyle: { color: '#6b7280' } },
-        axisLabel: { show: true, fontSize: 9, color: '#f97316' },
+        splitLine: { show: false },
+        axisLine: { show: true, lineStyle: { color: CHART_COLORS.AXIS_LINE } },
+        axisLabel: { show: true, fontSize: 10, color: MARKET_COLORS.OVERLAY },
       })
       series.push(...ovSeries)
     }
@@ -155,27 +197,26 @@ function buildOption(cData) {
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, barMaxWidth: 8,
       })
       // OI（持仓量）：有 oi 字段时画成折线叠加在 VOL 区域
-      const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: '#f59e0b' } }))
+      const oiData = volumes.map((v) => ({ value: v.oi, itemStyle: { color: MARKET_COLORS.OI } }))
       if (oiData.some(v => v.value != null)) {
         series.push({
-          name: 'OI', type: 'line', data: oiData,
+          name: 'OI', type: 'line', data: oiData, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx,
           smooth: false, symbol: 'none',
-          lineStyle: { color: '#f59e0b', width: 1.5 },
+          lineStyle: { color: MARKET_COLORS.OI, width: 1.5 },
           tooltip: { formatter: p => `持仓量: ${p.value?.toLocaleString() ?? '-'}` },
         })
       }
 
     } else if (subName === 'D_OI') {
       // ΔOI 持仓变化柱（多空资金流向）
-      // 逻辑：涨+增仓→红(多头进攻) 跌+增仓→绿(空头进攻) 减仓→灰
       const doiData = volumes.map((v) => {
         const d = v.deltaOI
         if (d == null) return { value: null }
         const isUp = v.priceUp
-        let color = '#6b7280'  // 减仓灰
-        if (d > 0 && isUp)  color = UP       // 涨增仓 → 多头红
-        else if (d > 0 && !isUp) color = DOWN // 跌增仓 → 空头绿
+        let color = MARKET_COLORS.DELTA_OI_FLAT
+        if (d > 0 && isUp)  color = MARKET_COLORS.DELTA_OI_UP
+        else if (d > 0 && !isUp) color = MARKET_COLORS.DELTA_OI_DOWN
         return { value: d, itemStyle: { color } }
       })
       series.push({
@@ -195,20 +236,20 @@ function buildOption(cData) {
       const m = subChartData.MACD
       series.push(
         {
-          name: 'DIF', type: 'line', data: m.dif,
+          name: 'DIF', type: 'line', data: m.dif, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#60a5fa', width: 1 },
+          lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
         },
         {
-          name: 'DEA', type: 'line', data: m.dea,
+          name: 'DEA', type: 'line', data: m.dea, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#f87171', width: 1 },
+          lineStyle: { color: MARKET_COLORS.DEA, width: 1 },
         },
         {
           name: 'MACD', type: 'bar',
           data: m.macd.map(v => ({
             value: Math.abs(v),
-            itemStyle: { color: v >= 0 ? '#ef232a' : '#14b143' },
+            itemStyle: { color: v >= 0 ? MARKET_COLORS.MACD_UP : MARKET_COLORS.MACD_DOWN },
           })),
           xAxisIndex: axisIdx, yAxisIndex: axisIdx,
         }
@@ -218,27 +259,27 @@ function buildOption(cData) {
       const k = subChartData.KDJ
       series.push(
         {
-          name: 'K', type: 'line', data: k.k,
+          name: 'K', type: 'line', data: k.k, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#ffffff', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA5, width: 1 },
         },
         {
-          name: 'D', type: 'line', data: k.d,
+          name: 'D', type: 'line', data: k.d, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#fbbf24', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA10, width: 1 },
         },
         {
-          name: 'J', type: 'line', data: k.j,
+          name: 'J', type: 'line', data: k.j, sampling: 'lttb',
           xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-          lineStyle: { color: '#c084fc', width: 1 },
+          lineStyle: { color: MARKET_COLORS.MA20, width: 1 },
         }
       )
 
     } else if (subName === 'RSI' && subChartData?.RSI) {
       series.push({
-        name: 'RSI', type: 'line', data: subChartData.RSI,
+        name: 'RSI', type: 'line', data: subChartData.RSI, sampling: 'lttb',
         xAxisIndex: axisIdx, yAxisIndex: axisIdx, symbol: 'none',
-        lineStyle: { color: '#60a5fa', width: 1 },
+        lineStyle: { color: MARKET_COLORS.DIF, width: 1 },
       })
     }
   })
@@ -251,60 +292,36 @@ function buildOption(cData) {
     animation: false,
     tooltip: {
       trigger: 'axis',
-      axisPointer: { type: 'cross', crossStyle: { color: '#555' } },
-      backgroundColor: '#1e2130', borderColor: '#374151',
-      textStyle: { color: '#d1d5db', fontSize: 11 },
-      // 高阶混排 formatter：同时展示 K 线 OHLCV + 对比线数值
-      formatter(params) {
-        if (!Array.isArray(params) || !params.length) return ''
-        const kp = params.find(p => p.seriesType === 'candlestick')
-        if (!kp) return ''
-        const vals = kp.data
-        if (!vals) return ''
-        const [o, c, l, hi] = vals
-        const isUp  = c >= o
-        const color = isUp ? UP : DOWN
-        const sign  = isUp ? '+' : ''
-        const chgPct = o > 0 ? ((c - o) / o * 100).toFixed(2) : '0.00'
-        const chgAbs = (c - o).toFixed(2)
-        let html = `<span style="color:#94a3b8;font-size:10px">${kp.axisValue}</span><br/>`
-        html += `<span style="color:${color}">开 ${o?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:${color}">收 ${c?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:${color}">涨跌 ${sign}${chgAbs} (${sign}${chgPct}%)</span><br/>`
-        html += `<span style="color:#6b7280">低 ${l?.toFixed(2)}</span> &nbsp; `
-        html += `<span style="color:#6b7280">高 ${hi?.toFixed(2)}</span>`
-        const OV_COLOR = '#f97316'
-        const ovParams = params.filter(p => p.seriesType === 'line' && p.seriesName === '对比')
-        ovParams.forEach(p => {
-          const rawVal = p.value?.[1]
-          if (rawVal != null) {
-            html += `<br/><span style="color:${OV_COLOR}">➟ 对比 ${p.value[1]?.toFixed(4)}</span>`
-          }
-        })
-        return html
+      axisPointer: { 
+        type: 'cross', 
+        crossStyle: { color: CHART_COLORS.CROSSHAIR, type: 'dashed' },
+        lineStyle: { color: CHART_COLORS.CROSSHAIR, type: 'dashed' }
       },
+      backgroundColor: CHART_COLORS.TOOLTIP_BG,
+      borderColor: CHART_COLORS.TOOLTIP_BORDER,
+      borderWidth: 1,
+      padding: [8, 12],
+      textStyle: { 
+        color: CHART_COLORS.TOOLTIP_TEXT, 
+        fontSize: 11,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+      },
+      extraCssText: 'backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 6px;',
+      formatter: (params) => buildTooltipFormatter(params, { showVolume: true, showOverlay: true, newsEvents: props.newsEvents }),
     },
     legend: { show: false },
     grid: grids,
     xAxis: xAxes,
     yAxis: yAxes,
     series,
-    dataZoom: [
-      { type: 'inside', xAxisIndex: allGridIndices, start: 70, end: 100 },
-      {
-        type: 'slider', xAxisIndex: allGridIndices,
-        bottom: 0, height: 16,
-        borderColor: '#374151', fillerColor: 'rgba(96,165,250,0.1)',
-        handleStyle: { color: '#60a5fa' },
-        textStyle: { color: '#6b7280', fontSize: 9 },
-      },
-    ],
+    dataZoom: buildDataZoomOptions(allGridIndices),
   }
 }
 
 // ── Tick 增量更新（patch 最后根 K 线） ───────────────────────────
 function applyTickFast(cData, tick) {
   if (!chart || !tick || !tick.price) return
+  if (chart.isDisposed()) return
   const last = cData.klineData[cData.klineData.length - 1]
   if (!last) return
   const [o, , l, h] = last
@@ -323,19 +340,16 @@ onMounted(async () => {
 
   await nextTick()
 
-  // Wait for container dimensions with timeout
-  const startTime = performance.now()
-  while (chartEl.value && (chartEl.value.clientWidth === 0 || chartEl.value.clientHeight === 0)) {
-    if (performance.now() - startTime > 1000) {
-      console.error('[BaseKLineChart] Container has zero dimensions after 1s')
-      return
-    }
-    await new Promise(r => requestAnimationFrame(r))
+  // Wait for container dimensions with timeout recovery
+  const dimResult = await waitForDimensions(chartEl.value, 1000)
+  if (!dimResult.success) {
+    logger.warn('[BaseKLineChart] Container dimensions timeout, aborting init')
+    return
   }
 
   try {
-    const width = chartEl.value.clientWidth
-    const height = chartEl.value.clientHeight
+    const width = dimResult.width
+    const height = dimResult.height
     logger.debug(`[ECharts] 🔧 init ${props.symbol} @ ${width.toFixed(0)}×${height.toFixed(0)}`)
 
     chart = markRaw(await initChart(chartEl.value, 'dark'))
@@ -352,10 +366,7 @@ onMounted(async () => {
     })
 
     // ResizeObserver for resize only (not init)
-    _ro = new ResizeObserver(() => {
-      if (!_isInitialized || !chart) return
-      chart.resize()
-    })
+    _ro = createResizeObserver(chart)
     _ro.observe(chartEl.value)
 
   } catch (e) {
@@ -364,7 +375,11 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  if (chart && !chart.isDisposed()) {
+    chart.off('datazoom')
+  }
   _ro?.disconnect()
+  _unsubscribeTheme?.()
   _isInitialized = false
   if (chart) {
     logger.debug(`[ECharts] 🗑️  disposed instance for: ${props.symbol}`)
@@ -373,9 +388,21 @@ onBeforeUnmount(() => {
   }
 })
 
+function updateChartTheme() {
+  if (!chart || !_lastChartData || _lastChartData.isEmpty) return
+  const newOption = buildOption(_lastChartData)
+  chart.setOption(newOption, { notMerge: false })
+  logger.debug(`[BaseKLineChart] Theme updated to: ${activeTheme.value}`)
+}
+
+_unsubscribeTheme = onThemeChange(() => {
+  updateChartTheme()
+})
+
 // 核心 watcher：chartData 或 subCharts 变化时合并更新（节流 200ms）
 const debouncedUpdateChart = useDebounceFn(() => {
   if (!chart || !props.chartData || props.chartData.isEmpty) return
+  if (chart.isDisposed()) return
   _lastChartData = props.chartData
   chart.setOption(buildOption(props.chartData), { notMerge: false })
 }, 200)
@@ -383,16 +410,40 @@ const debouncedUpdateChart = useDebounceFn(() => {
 watch([() => props.chartData, () => props.subCharts], () => { debouncedUpdateChart() })
 
 // tick watcher：增量 patch 最后根 K 线
+const throttledApplyTick = useThrottleFn((data, tick) => {
+  if (!chart || !data || data.isEmpty) return
+  applyTickFast(data, tick)
+}, 100)
+
 watch(() => props.tick, (t) => {
-  if (!chart || !_lastChartData || _lastChartData.isEmpty) return
-  applyTickFast(_lastChartData, t)
+  throttledApplyTick(_lastChartData, t)
 })
 
 defineExpose({ 
   getChartInstance: () => chart,
   exportChart: async () => {
-    if (!chartEl.value) return
+    if (!chartEl.value || !chart) return
     try {
+      // Wait for chart to finish rendering with timeout fallback
+      await new Promise(resolve => {
+        const timeout = setTimeout(() => {
+          chart.off('finished')
+          resolve()
+        }, 200) // Timeout fallback in case 'finished' doesn't fire
+        
+        chart.on('finished', () => {
+          clearTimeout(timeout)
+          chart.off('finished')
+          resolve()
+        })
+        
+        // If chart is already rendered, resolve immediately
+        if (chart.isDisposed()) {
+          clearTimeout(timeout)
+          resolve()
+        }
+      })
+      
       const canvas = await html2canvas(chartEl.value, {
         backgroundColor: '#0f172a',
         scale: 2,

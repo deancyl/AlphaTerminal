@@ -4,21 +4,12 @@
   >
     <!-- 左侧：数据连接状态 -->
     <div class="flex items-center gap-3">
-      <div class="flex items-center gap-1.5">
-        <span
-          class="w-1.5 h-1.5 rounded-full"
-          :class="connectionStatus === 'connected' ? 'bg-bullish' : connectionStatus === 'degraded' ? 'bg-[var(--color-warning)]' : 'bg-bearish'"
-        />
-        <span>{{ connectionText }}</span>
-        <!-- Reconnect button when disconnected -->
-        <button
-          v-if="connectionStatus === 'disconnected' && showReconnect"
-          class="ml-1 px-1.5 py-0.5 rounded text-terminal-accent hover:bg-terminal-accent/20 transition"
-          @click="handleReconnect"
-        >
-          重连
-        </button>
-      </div>
+      <ConnectionStatus
+        :status="connectionStatus"
+        :latency="latency"
+        :retry-countdown="retryCountdown"
+        @retry="handleReconnect"
+      />
       <span class="text-theme-secondary">|</span>
       <span>数据更新: {{ lastUpdateTime }}</span>
       <!-- Connection stats tooltip -->
@@ -47,11 +38,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import ConnectionStatus from './ConnectionStatus.vue'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 const props = defineProps({
   connectionStatus: {
     type: String,
-    default: 'connected',
+    default: 'idle',
   },
   lastUpdate: {
     type: String,
@@ -73,21 +66,22 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  latency: {
+    type: Number,
+    default: null,
+  },
+  retryCountdown: {
+    type: Number,
+    default: null,
+  },
 })
 
 const emit = defineEmits(['reconnect'])
 
 const now = ref(new Date())
-let timer = null
+let unregisterPolling = null
 
-const connectionText = computed(() => {
-  switch (props.connectionStatus) {
-    case 'connected': return '已连接'
-    case 'degraded': return '降级模式'
-    case 'disconnected': return '未连接'
-    default: return '未知'
-  }
-})
+const { register } = usePollingManager()
 
 const lastUpdateTime = computed(() => {
   if (props.lastUpdate) return props.lastUpdate
@@ -143,11 +137,23 @@ function handleReconnect() {
   emit('reconnect')
 }
 
+function updateClock() {
+  now.value = new Date()
+}
+
 onMounted(() => {
-  timer = setInterval(() => { now.value = new Date() }, 1000)
+  unregisterPolling = register(
+    'status-bar-clock',
+    updateClock,
+    'low',
+    { interval: 1000 }
+  )
 })
 
 onUnmounted(() => {
-  if (timer) clearInterval(timer)
+  if (unregisterPolling) {
+    unregisterPolling()
+    unregisterPolling = null
+  }
 })
 </script>

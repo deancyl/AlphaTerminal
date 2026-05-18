@@ -91,6 +91,21 @@ def is_ready() -> bool:
         return _CACHE_READY
 
 
+def invalidate():
+    """清空板块缓存（用于强制刷新）"""
+    global _SECTORS_CACHE, _CACHE_READY, _SECTORS_CACHE_TS
+    with _LOCK:
+        _SECTORS_CACHE = []
+        _CACHE_READY = False
+        _SECTORS_CACHE_TS = 0.0
+    logger.info("[SectorsCache] Cache invalidated")
+
+
+async def warmup():
+    """预热板块缓存（触发异步刷新）"""
+    return await refresh_sectors_cache()
+
+
 def _fetch_sina_boards(param: str) -> list[dict]:
     """
     从新浪财经抓取行业/概念板块数据（直连，不走代理）

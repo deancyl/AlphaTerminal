@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional, Union
 logger = logging.getLogger(__name__)
 
 # Debug mode flag - set via environment variable for 20 debug cycles
-DEBUG_MODE = os.getenv("AGENT_DB_DEBUG", "true").lower() == "true"
+DEBUG_MODE = os.getenv("AGENT_DB_DEBUG", "false").lower() == "true"
 
 if DEBUG_MODE:
     logger.setLevel(logging.DEBUG)
@@ -208,8 +208,8 @@ def get_conn():
         try:
             conn.rollback()
             logger.debug("[AGENT_DB_CTX] Transaction rolled back")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}")
         raise
 
 

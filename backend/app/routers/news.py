@@ -9,6 +9,7 @@ Phase B: 统一 API 响应格式
 import asyncio
 import logging
 import time
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 from app.utils.response import success_response, error_response, ErrorCode
 
@@ -122,7 +123,6 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
             if host in BLOCKED_HOSTS or host.endswith(".local") or host.endswith(".internal"):
                 return error_response(1, "禁止访问内网地址", {"url": url})
 
-        import requests
         from bs4 import BeautifulSoup
 
         headers = {
@@ -135,10 +135,9 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
             "Accept-Language": "zh-CN,zh;q=0.9",
             "Accept-Encoding": "gzip, deflate",
         }
-        r = requests.get(url, headers=headers, timeout=10, allow_redirects=True)
-        r.encoding = r.apparent_encoding or "utf-8"
-        text_content = r.text[:100 * 1024]  # 最多读取 100KB
-        r.close()
+        async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+            text_content = r.text[:100 * 1024]  # 最多读取 100KB
 
         soup = BeautifulSoup(text_content, "html.parser")
 
@@ -179,3 +178,67 @@ async def video_transcript(video_id: str):
     """YouTube 字幕（走代理）"""
     from app.services.news_fetcher import fetch_youtube_transcript
     return fetch_youtube_transcript(video_id)
+
+
+@router.get("/news/events/{symbol}")
+async def news_events_for_symbol(
+    symbol: str,
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of events to return")
+):
+    """
+    Get news events for a specific stock symbol for chart markers.
+    Returns news with date, headline, type (bullish/bearish/neutral), and suggested price.
+    
+    Used by BaseKLineChart to display news markers on the K-line chart.
+    """
+    try:
+        clean_symbol = symbol.replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
+        
+        from app.services.news_engine import get_cached_news, is_cache_ready
+        
+        if not is_cache_ready():
+            return success_response({"events": [], "symbol": symbol, "total": 0})
+        
+        all_news = get_cached_news(limit=500)
+        
+        events = []
+        for news in all_news:
+            title = news.get("title", "")
+            if clean_symbol in title or symbol in title:
+                bullish_keywords = ["利好", "上涨", "突破", "新高", "增长", "盈利", "增持", "回购", "中标", "签约"]
+                bearish_keywords = ["利空", "下跌", "暴跌", "亏损", "减持", "质押", "违约", "诉讼", "调查", "处罚"]
+                
+                type_ = "neutral"
+                if any(k in title for k in bullish_keywords):
+                    type_ = "bullish"
+                elif any(k in title for k in bearish_keywords):
+                    type_ = "bearish"
+                
+                time_str = news.get("time", "")
+                date = time_str.split(" ")[0] if " " in time_str else time_str[:10]
+                
+                if date and len(date) == 10:
+                    events.append({
+                        "date": date,
+                        "headline": title,
+                        "type": type_,
+                        "price": None,
+                        "url": news.get("url", ""),
+                        "source": news.get("source", ""),
+                    })
+        
+        events = events[:limit]
+        
+        return success_response({
+            "events": events,
+            "symbol": symbol,
+            "total": len(events)
+        })
+        
+    except Exception as e:
+        logger.error(f"[News] news_events_for_symbol failed: {type(e).__name__}: {e}", exc_info=True)
+        return error_response(
+            ErrorCode.INTERNAL_ERROR,
+            f"Failed to get news events: {str(e)}",
+            {"events": [], "symbol": symbol, "total": 0}
+        )

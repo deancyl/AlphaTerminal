@@ -1,6 +1,7 @@
 """
 Performance Analysis API Router
 """
+import asyncio
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -38,7 +39,9 @@ async def generate_tearsheet(req: TearsheetRequest):
     if not req.returns:
         raise HTTPException(400, "returns list cannot be empty")
     
-    result = analyzer.calculate_tearsheet_metrics(
+    # CPU 密集计算移入线程池，避免阻塞事件循环
+    result = await asyncio.to_thread(
+        analyzer.calculate_tearsheet_metrics,
         returns=req.returns,
         dates=req.dates,
         benchmark_returns=req.benchmark_returns
@@ -59,7 +62,9 @@ async def generate_tearsheet_from_equity(req: EquityCurveRequest):
     if req.initial_capital <= 0:
         raise HTTPException(400, "initial_capital must be positive")
     
-    result = analyzer.calculate_from_equity_curve(
+    # CPU 密集计算移入线程池
+    result = await asyncio.to_thread(
+        analyzer.calculate_from_equity_curve,
         equity_curve=req.equity_curve,
         initial_capital=req.initial_capital
     )
@@ -74,12 +79,14 @@ async def generate_tearsheet_from_equity(req: EquityCurveRequest):
 async def generate_tearsheet_from_trades(req: TradesRequest):
     """Generate tear sheet from trade list"""
     if not req.trades:
-        raise HTTPException(400, "trades list cannot be empty")
+        raise HTTPException(400, "trades cannot be empty")
     
     if req.initial_capital <= 0:
         raise HTTPException(400, "initial_capital must be positive")
     
-    result = analyzer.calculate_from_trades(
+    # CPU 密集计算移入线程池
+    result = await asyncio.to_thread(
+        analyzer.calculate_from_trades,
         trades=req.trades,
         initial_capital=req.initial_capital,
         start_date=req.start_date,

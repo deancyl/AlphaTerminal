@@ -185,6 +185,54 @@ async def fund_nav_history(
     }
 
 
+@router.get("/open/returns/{code}")
+async def fund_returns(code: str):
+    """
+    获取基金阶段收益
+    
+    返回: 近1周/1月/3月/6月/1年/2年/3年/今年来/成立来 收益率
+    """
+    logger.info(f"[Fund Returns] 请求 {code}")
+    start = time.time()
+    
+    data = await fetcher.get_fund_returns(code)
+    
+    elapsed = time.time() - start
+    logger.info(f"[Fund Returns] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)}
+    }
+
+
+@router.get("/open/risk/{code}")
+async def fund_risk_metrics(code: str):
+    """
+    获取基金风险指标
+    
+    返回: 夏普比率、最大回撤、Alpha、Beta、波动率
+    """
+    logger.info(f"[Fund Risk Metrics] 请求 {code}")
+    start = time.time()
+    
+    data = await fetcher.get_fund_risk_metrics(code)
+    
+    elapsed = time.time() - start
+    logger.info(f"[Fund Risk Metrics] {code} 完成 elapsed={elapsed:.3f}s source={data.get('source', 'unknown')}")
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+        "_perf": {"elapsed_s": round(elapsed, 3)}
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════
 # 并发完整数据（新端点）
 # ══════════════════════════════════════════════════════════════════════

@@ -110,6 +110,7 @@
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
+import { safeDispose } from '../utils/chartManager.js'
 
 const props = defineProps({
   visible:   { type: Boolean, default: false },
@@ -201,8 +202,14 @@ async function renderChart() {
   chartInst.value.resize()
 
   const data  = historyData.value
+  if (!data || data.length === 0) return
+  
   const dates = data.map(d => d.date)
   const yields = data.map(d => d.yield)
+  
+  // Guard against empty arrays
+  if (yields.length === 0) return
+  
   const cur   = currentYield.value
   const minY  = Math.min(...yields)
   const maxY  = Math.max(...yields)
@@ -278,5 +285,5 @@ watch(() => props.visible, (v) => { if (v) fetchHistory() })
 watch(() => props.tenor,   ()  => { if (props.visible) fetchHistory() })
 watch(() => props.period,  ()  => { if (props.visible) fetchHistory() })
 
-onUnmounted(() => { chartInst.value?.dispose(); chartInst.value = null })
+onUnmounted(() => { safeDispose(chartInst.value); chartInst.value = null })
 </script>

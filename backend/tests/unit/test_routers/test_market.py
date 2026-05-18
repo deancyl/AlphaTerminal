@@ -13,7 +13,7 @@ client = TestClient(app)
 class TestMarketOverview:
     """Test cases for market overview endpoint."""
 
-    @patch('app.routers.market.get_latest_prices')
+    @patch('app.routers.market.overview.get_latest_prices')
     def test_market_overview_endpoint(self, mock_get_latest_prices):
         """Test GET /market/overview endpoint."""
         # Mock get_latest_prices to return sample data
@@ -35,7 +35,7 @@ class TestMarketOverview:
             assert data.get("code") == 0
             assert "data" in data
 
-    @patch('app.routers.market.get_latest_prices')
+    @patch('app.routers.market.overview.get_latest_prices')
     def test_market_overview_response_structure(self, mock_get_latest_prices):
         """Test that overview response has correct structure."""
         # Mock get_latest_prices to return sample data
@@ -59,7 +59,7 @@ class TestMarketOverview:
                 meta = result["meta"]
                 assert "markets" in meta
 
-    @patch('app.routers.market.get_latest_prices')
+    @patch('app.routers.market.overview.get_latest_prices')
     def test_market_overview_wind_symbols(self, mock_get_latest_prices):
         """Test that overview includes all wind symbols."""
         # Mock get_latest_prices to return sample data
@@ -82,7 +82,7 @@ class TestMarketOverview:
                 for symbol in expected:
                     assert symbol in wind
 
-    @patch('app.routers.market.get_latest_prices')
+    @patch('app.routers.market.overview.get_latest_prices')
     def test_market_overview_market_status(self, mock_get_latest_prices):
         """Test that overview includes market status."""
         # Mock get_latest_prices to return sample data

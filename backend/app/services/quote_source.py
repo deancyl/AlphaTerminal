@@ -7,6 +7,7 @@
 - 上层 async 路由通过 asyncio.to_thread() 调用同步函数，避免阻塞事件循环
 - 不混用 httpx.AsyncClient（避免连接池泄漏和调试困难）
 - ✅ Circuit Breaker 保护每个数据源，防止级联故障
+- ✅ v2: 支持优先级路由（通过 fetch_by_priority）
 """
 import asyncio
 import logging
@@ -86,7 +87,7 @@ DATA_SOURCES = {
         "proxy": False,
         "timeout": 30,
         "weight": 20,
-        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY") or "demo",
+        "api_key": os.environ.get("ALPHA_VANTAGE_API_KEY", ""),
         "has_pepb": True,
         "has_realtime": True,
     },
@@ -323,7 +324,10 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         logger.warning(f"[AlphaVantage] Circuit breaker OPEN, skipping {symbol}")
         return None
     
-    api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "demo")
+    api_key = DATA_SOURCES.get("alpha_vantage", {}).get("api_key", "")
+    if not api_key:
+        logger.warning(f"[AlphaVantage] No API key configured, skipping {symbol}")
+        return None
     url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={api_key}"
 
     # 获取代理配置
@@ -558,3 +562,107 @@ def close_circuit(source_name: str) -> bool:
         _source_status[source_name]["state"] = "closed"
         return True
     return False
+
+
+def clear_cache():
+    """清空行情数据源缓存（重置所有数据源的熔断状态和失败计数）"""
+    global _source_status
+    for source_name in _source_status:
+        _source_status[source_name] = {
+            "status": "unknown",
+            "latency": None,
+            "fail_count": 0,
+            "history": [],
+            "state": "closed"
+        }
+    logger.info("[QuoteSource] Cache cleared - all source statuses reset")
+
+
+async def warmup():
+    """预热行情数据源（探测所有数据源）"""
+    sources = DATA_SOURCES.keys()
+    results = {}
+    current_source_name = _current_source
+    for name in sources:
+        try:
+            result = await test_source_async(name)
+            current_state = _source_status.get(name, {})
+            history = current_state.get("history", [])
+            results[name] = {
+                **result,
+                "state": current_state.get("state", "unknown"),
+                "fail_count": current_state.get("fail_count", 0),
+                "is_primary": name == current_source_name,
+                "history": history[-5:] if history else []
+            }
+        except Exception as e:
+            results[name] = {"status": "error", "latency": None, "state": "unknown", "fail_count": 0, "is_primary": name == current_source_name, "history": [], "error": str(e)}
+    logger.info(f"[QuoteSource] Warmup complete: {len(results)} sources probed")
+    return results
+
+
+# ========== 优先级路由桥接（v2 新接口）============
+
+async def get_quote_by_priority_async(symbol: str) -> dict:
+    """
+    使用优先级路由获取行情数据（推荐使用）。
+    
+    优先级顺序由 FetcherPriority 配置决定：
+    - A股 realtime: Sina → Tencent → EastMoney
+    - 港股 hk_stocks: Tencent
+    - 美股 us_stocks: AlphaVantage
+    """
+    from app.services.fetchers import get_quote_by_priority, FetcherFactory
+    
+    if symbol.startswith('hk'):
+        data_type = "hk_stocks"
+    elif symbol.startswith('sh') or symbol.startswith('sz'):
+        data_type = "realtime"
+    else:
+        data_type = "us_stocks"
+    
+    try:
+        result = await get_quote_by_priority(symbol)
+        if result:
+            return {
+                "source": result.get("source", "priority"),
+                "latency_ms": result.get("latency_ms"),
+                "price": result.get("price"),
+                "prev_close": result.get("prev_close"),
+                "open": result.get("open"),
+                "high": result.get("high"),
+                "low": result.get("low"),
+                "pe_static": result.get("pe_static"),
+                "pe_ttm": result.get("pe_ttm"),
+                "pb": result.get("pb"),
+            }
+    except Exception as e:
+        logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback")
+    
+    return await get_quote_with_fallback_async(symbol)
+
+
+async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
+    """
+    使用优先级路由获取K线数据（推荐使用）。
+    
+    优先级顺序：AkShare → EastMoney → Sina
+    """
+    from app.services.fetchers import get_kline_by_priority
+    
+    try:
+        result = await get_kline_by_priority(symbol, period)
+        if result:
+            return {
+                "source": "priority",
+                "kline_type": period,
+                "data": result,
+                "count": len(result) if isinstance(result, list) else 0,
+            }
+    except Exception as e:
+        logger.warning(f"[priority] {symbol} K线失败: {e}")
+    
+    if period == "60min":
+        return await asyncio.to_thread(_parse_sina_kline_60min, symbol)
+    
+    return {"source": "none", "error": "K线数据获取失败", "data": []}

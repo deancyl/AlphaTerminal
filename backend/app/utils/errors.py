@@ -13,8 +13,8 @@
     # 抛出异常
     raise APIException(ErrorCode.NOT_FOUND, "资源不存在")
 """
-import time
 import uuid
+from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
 
@@ -100,7 +100,7 @@ class APIException(Exception):
     Attributes:
         code: 错误码
         message: 错误消息
-        data: 附加数据
+        details: 附加错误详情
         trace_id: 追踪ID
     """
     
@@ -108,12 +108,12 @@ class APIException(Exception):
         self,
         code: int = ErrorCode.INTERNAL_ERROR,
         message: Optional[str] = None,
-        data: Optional[Dict[str, Any]] = None,
+        details: Optional[Dict[str, Any]] = None,
         trace_id: Optional[str] = None
     ):
         self.code = code
         self.message = message or ErrorCodeMessage.get_message(code)
-        self.data = data
+        self.details = details or {}
         self.trace_id = trace_id or str(uuid.uuid4())[:8]
         super().__init__(self.message)
     
@@ -122,23 +122,24 @@ class APIException(Exception):
         return {
             "code": self.code,
             "message": self.message,
-            "data": self.data,
-            "trace_id": self.trace_id,
-            "timestamp": int(time.time() * 1000)
+            "data": None,
+            "error": {
+                "details": self.details,
+                "trace_id": self.trace_id,
+                "timestamp": datetime.now().isoformat(),
+            }
         }
 
 
 def success_response(
     data: Optional[Dict[str, Any]] = None,
-    message: str = "success",
-    trace_id: Optional[str] = None
+    message: str = "success"
 ) -> Dict[str, Any]:
     """创建标准成功响应
     
     Args:
         data: 响应数据
         message: 成功消息
-        trace_id: 追踪ID
         
     Returns:
         标准响应格式字典
@@ -147,34 +148,50 @@ def success_response(
         "code": ErrorCode.SUCCESS,
         "message": message,
         "data": data,
-        "trace_id": trace_id or str(uuid.uuid4())[:8],
-        "timestamp": int(time.time() * 1000)
+        "error": None,
     }
 
 
 def error_response(
-    code: int = ErrorCode.INTERNAL_ERROR,
+    code_or_message,
     message: Optional[str] = None,
-    data: Optional[Dict[str, Any]] = None,
-    trace_id: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None,
+    code: Optional[int] = None
 ) -> Dict[str, Any]:
     """创建标准错误响应
     
+    支持两种调用方式:
+    1. error_response(code, message, details) - 标准形式
+    2. error_response(message, code=X) - 简写形式
+    
     Args:
-        code: 错误码
-        message: 错误消息，默认使用错误码对应的消息
-        data: 附加数据
-        trace_id: 追踪ID
+        code_or_message: 错误码(int)或消息(str)
+        message: 错误消息（当第一个参数是错误码时）
+        details: 附加错误详情
+        code: 错误码（使用简写形式时）
         
     Returns:
         标准响应格式字典
     """
+    # 检测调用方式
+    if isinstance(code_or_message, int):
+        # 标准形式: error_response(code, message, details)
+        actual_code = code_or_message
+        actual_message = message or ErrorCodeMessage.get_message(actual_code)
+    else:
+        # 简写形式: error_response(message, code=X)
+        actual_code = code if code is not None else ErrorCode.INTERNAL_ERROR
+        actual_message = str(code_or_message)
+    
     return {
-        "code": code,
-        "message": message or ErrorCodeMessage.get_message(code),
-        "data": data,
-        "trace_id": trace_id or str(uuid.uuid4())[:8],
-        "timestamp": int(time.time() * 1000)
+        "code": actual_code,
+        "message": actual_message,
+        "data": None,
+        "error": {
+            "details": details or {},
+            "trace_id": str(uuid.uuid4())[:8],
+            "timestamp": datetime.now().isoformat(),
+        }
     }
 
 
@@ -204,29 +221,29 @@ def http_exception_handler(exc: HTTPException) -> Dict[str, Any]:
 
 class ValidationError(APIException):
     """数据验证错误"""
-    def __init__(self, message: str = "数据验证失败", data: Optional[Dict[str, Any]] = None):
-        super().__init__(ErrorCode.VALIDATION_ERROR, message, data)
+    def __init__(self, message: str = "数据验证失败", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.VALIDATION_ERROR, message, details)
 
 
 class NotFoundError(APIException):
     """资源不存在错误"""
-    def __init__(self, resource: str = "资源", data: Optional[Dict[str, Any]] = None):
-        super().__init__(ErrorCode.NOT_FOUND, f"{resource}不存在", data)
+    def __init__(self, resource: str = "资源", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.NOT_FOUND, f"{resource}不存在", details)
 
 
 class DatabaseError(APIException):
     """数据库错误"""
-    def __init__(self, message: str = "数据库操作失败", data: Optional[Dict[str, Any]] = None):
-        super().__init__(ErrorCode.DATABASE_ERROR, message, data)
+    def __init__(self, message: str = "数据库操作失败", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.DATABASE_ERROR, message, details)
 
 
 class ThirdPartyError(APIException):
     """第三方服务错误"""
-    def __init__(self, service: str = "第三方服务", message: str = "服务调用失败", data: Optional[Dict[str, Any]] = None):
-        super().__init__(ErrorCode.THIRD_PARTY_ERROR, f"{service}: {message}", data)
+    def __init__(self, service: str = "第三方服务", message: str = "服务调用失败", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.THIRD_PARTY_ERROR, f"{service}: {message}", details)
 
 
 class TimeoutError(APIException):
     """超时错误"""
-    def __init__(self, service: str = "服务", data: Optional[Dict[str, Any]] = None):
-        super().__init__(ErrorCode.TIMEOUT_ERROR, f"{service}请求超时", data)
+    def __init__(self, service: str = "服务", details: Optional[Dict[str, Any]] = None):
+        super().__init__(ErrorCode.TIMEOUT_ERROR, f"{service}请求超时", details)

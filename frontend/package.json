@@ -1,6 +1,6 @@
 {
   "name": "alphaterminal-frontend",
-  "version": "0.6.31",
+  "version": "0.6.40",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,6 +18,7 @@
     "fuse.js": "^7.2.0",
     "gridstack": "^12.4.2",
     "html2canvas": "^1.4.1",
+    "idb": "^8.0.3",
     "lightweight-charts": "^5.1.0",
     "localforage": "^1.10.0",
     "markdown-it": "^14.1.1",
@@ -25,6 +26,10 @@
     "vue": "^3.5.13",
     "vue-echarts": "^7.0.3",
     "vue-grid-layout": "^3.0.0-beta1",
+    "vue-router": "^4.6.4",
+    "vue-toastification": "^2.0.0-rc.5",
+    "vue-virtual-scroller": "^2.0.0-beta.8",
+    "web-vitals": "^5.2.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -36,6 +41,7 @@
     "postcss": "^8.5.1",
     "tailwindcss": "^3.4.17",
     "vite": "^6.4.2",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "vitest-axe": "^0.1.0"
   }
 }

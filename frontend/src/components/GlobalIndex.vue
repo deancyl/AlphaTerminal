@@ -34,12 +34,42 @@
 
     <!-- 指数卡片网格 -->
     <div class="flex-1 overflow-y-auto p-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <!-- Loading State -->
+      <LoadingSpinner v-if="loading && allIndexes.length === 0" text="加载全球指数数据..." />
+      
+      <!-- Error State -->
+      <ErrorDisplay 
+        v-else-if="error && allIndexes.length === 0" 
+        :error="error" 
+        :retry="refreshAll" 
+      />
+      
+      <!-- Empty State -->
+      <EmptyState 
+        v-else-if="!loading && filteredIndexes.length === 0" 
+        icon="🌍" 
+        message="暂无指数数据" 
+        hint="请检查网络连接或稍后重试" 
+      />
+      
+      <!-- Data Grid -->
+      <div 
+        v-else 
+        ref="indexGrid"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"
+        tabindex="0"
+        @keydown="handleKeydown"
+      >
         <div
-          v-for="index in filteredIndexes"
+          v-for="(index, idx) in filteredIndexes"
           :key="index.symbol"
-          class="bg-terminal-panel rounded-sm border border-theme-secondary p-4 hover:border-terminal-accent/30 transition cursor-pointer"
+          :data-index="idx"
+          class="bg-terminal-panel rounded-sm border p-4 transition cursor-pointer"
+          :class="focusedIndex === idx 
+            ? 'border-terminal-accent ring-1 ring-terminal-accent/30' 
+            : 'border-theme-secondary hover:border-terminal-accent/30'"
           @click="selectIndex(index)"
+          @mouseenter="focusedIndex = idx"
         >
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2">
@@ -95,14 +125,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import ErrorDisplay from './f9/ErrorDisplay.vue'
+import EmptyState from './f9/EmptyState.vue'
 
 const loading = ref(false)
+const error = ref('')
 const activeRegion = ref('all')
 const selectedIndex = ref(null)
 const detailChart = ref(null)
+const indexGrid = ref(null)
+const focusedIndex = ref(0)
 let chart = null
 
 const regions = [
@@ -120,25 +156,51 @@ const marketRegionMap = {
 }
 
 // 全球主要指数列表（后端支持: SPX, DJI, IXIC, N225, HSI）
+// 扩展支持更多全球指数
 const allIndexes = ref([
   // 美洲
   { symbol: 'SPX', name: '标普500', flag: '🇺🇸', region: 'americas', price: 4200.00, change_pct: 0.85, open: 4165.00, high: 4210.00, low: 4160.00, sparkline: generateSparkline(4200, 0.85) },
   { symbol: 'IXIC', name: '纳斯达克', flag: '🇺🇸', region: 'americas', price: 14500.00, change_pct: 1.20, open: 14320.00, high: 14580.00, low: 14300.00, sparkline: generateSparkline(14500, 1.20) },
   { symbol: 'DJI', name: '道琼斯', flag: '🇺🇸', region: 'americas', price: 33500.00, change_pct: 0.45, open: 33350.00, high: 33600.00, low: 33300.00, sparkline: generateSparkline(33500, 0.45) },
+  { symbol: 'RUT', name: '罗素2000', flag: '🇺🇸', region: 'americas', price: 1980.00, change_pct: 0.65, open: 1965.00, high: 1990.00, low: 1960.00, sparkline: generateSparkline(1980, 0.65) },
+  { symbol: 'VIX', name: '波动率指数', flag: '🇺🇸', region: 'americas', price: 18.50, change_pct: -2.30, open: 19.00, high: 19.50, low: 18.20, sparkline: generateSparkline(18.50, -2.30) },
+  { symbol: 'TSX', name: '多伦多综指', flag: '🇨🇦', region: 'americas', price: 21500.00, change_pct: 0.35, open: 21420.00, high: 21550.00, low: 21400.00, sparkline: generateSparkline(21500, 0.35) },
+  { symbol: 'IBOV', name: '巴西博维斯帕', flag: '🇧🇷', region: 'americas', price: 125000.00, change_pct: 0.80, open: 124000.00, high: 125500.00, low: 123800.00, sparkline: generateSparkline(125000, 0.80) },
   
-  // 欧洲 (暂无后端数据源，保持模拟)
+  // 欧洲
   { symbol: 'UKX', name: '富时100', flag: '🇬🇧', region: 'europe', price: 7800.00, change_pct: 0.30, open: 7775.00, high: 7820.00, low: 7760.00, sparkline: generateSparkline(7800, 0.30) },
   { symbol: 'DAX', name: '德国DAX', flag: '🇩🇪', region: 'europe', price: 16500.00, change_pct: 0.65, open: 16390.00, high: 16580.00, low: 16350.00, sparkline: generateSparkline(16500, 0.65) },
   { symbol: 'CAC', name: '法国CAC40', flag: '🇫🇷', region: 'europe', price: 7400.00, change_pct: 0.50, open: 7360.00, high: 7430.00, low: 7350.00, sparkline: generateSparkline(7400, 0.50) },
+  { symbol: 'SMI', name: '瑞士SMI', flag: '🇨🇭', region: 'europe', price: 11200.00, change_pct: 0.25, open: 11170.00, high: 11230.00, low: 11150.00, sparkline: generateSparkline(11200, 0.25) },
+  { symbol: 'IBEX', name: '西班牙IBEX35', flag: '🇪🇸', region: 'europe', price: 11500.00, change_pct: 0.40, open: 11450.00, high: 11550.00, low: 11420.00, sparkline: generateSparkline(11500, 0.40) },
+  { symbol: 'FTSEMIB', name: '意大利富时MIB', flag: '🇮🇹', region: 'europe', price: 34500.00, change_pct: 0.55, open: 34300.00, high: 34600.00, low: 34250.00, sparkline: generateSparkline(34500, 0.55) },
+  { symbol: 'AEX', name: '荷兰AEX', flag: '🇳🇱', region: 'europe', price: 780.00, change_pct: 0.35, open: 777.00, high: 785.00, low: 775.00, sparkline: generateSparkline(780, 0.35) },
   
   // 亚太
   { symbol: 'N225', name: '日经225', flag: '🇯🇵', region: 'asia', price: 32500.00, change_pct: 1.50, open: 32000.00, high: 32600.00, low: 31950.00, sparkline: generateSparkline(32500, 1.50) },
   { symbol: 'HSI', name: '恒生指数', flag: '🇭🇰', region: 'asia', price: 18500.00, change_pct: -0.80, open: 18650.00, high: 18700.00, low: 18450.00, sparkline: generateSparkline(18500, -0.80) },
+  { symbol: 'SSEC', name: '上证指数', flag: '🇨🇳', region: 'asia', price: 3150.00, change_pct: 0.45, open: 3135.00, high: 3165.00, low: 3130.00, sparkline: generateSparkline(3150, 0.45) },
+  { symbol: 'SZSE', name: '深证成指', flag: '🇨🇳', region: 'asia', price: 10500.00, change_pct: 0.65, open: 10430.00, high: 10550.00, low: 10420.00, sparkline: generateSparkline(10500, 0.65) },
+  { symbol: 'CSI300', name: '沪深300', flag: '🇨🇳', region: 'asia', price: 3850.00, change_pct: 0.55, open: 3830.00, high: 3870.00, low: 3825.00, sparkline: generateSparkline(3850, 0.55) },
+  { symbol: 'KS11', name: '韩国KOSPI', flag: '🇰🇷', region: 'asia', price: 2650.00, change_pct: 0.75, open: 2630.00, high: 2665.00, low: 2625.00, sparkline: generateSparkline(2650, 0.75) },
+  { symbol: 'TWII', name: '台湾加权', flag: '🇹🇼', region: 'asia', price: 18500.00, change_pct: 0.40, open: 18430.00, high: 18550.00, low: 18420.00, sparkline: generateSparkline(18500, 0.40) },
+  { symbol: 'AXJO', name: '澳洲标普200', flag: '🇦🇺', region: 'asia', price: 7600.00, change_pct: 0.30, open: 7580.00, high: 7630.00, low: 7570.00, sparkline: generateSparkline(7600, 0.30) },
+  { symbol: 'NSEI', name: '印度NIFTY50', flag: '🇮🇳', region: 'asia', price: 22500.00, change_pct: 0.85, open: 22300.00, high: 22550.00, low: 22280.00, sparkline: generateSparkline(22500, 0.85) },
+  { symbol: 'BSESN', name: '印度孟买SENSEX', flag: '🇮🇳', region: 'asia', price: 74000.00, change_pct: 0.80, open: 73500.00, high: 74200.00, low: 73400.00, sparkline: generateSparkline(74000, 0.80) },
+  { symbol: 'STI', name: '新加坡海峡时报', flag: '🇸🇬', region: 'asia', price: 3350.00, change_pct: 0.25, open: 3340.00, high: 3365.00, low: 3335.00, sparkline: generateSparkline(3350, 0.25) },
+  { symbol: 'JKSE', name: '印尼雅加达综指', flag: '🇮🇩', region: 'asia', price: 7200.00, change_pct: 0.45, open: 7170.00, high: 7230.00, low: 7160.00, sparkline: generateSparkline(7200, 0.45) },
+  { symbol: 'SET', name: '泰国SET指数', flag: '🇹🇭', region: 'asia', price: 1380.00, change_pct: 0.35, open: 1375.00, high: 1390.00, low: 1372.00, sparkline: generateSparkline(1380, 0.35) },
 ])
 
 const filteredIndexes = computed(() => {
   if (activeRegion.value === 'all') return allIndexes.value
   return allIndexes.value.filter(idx => idx.region === activeRegion.value)
+})
+
+// Reset focus when region changes
+watch(activeRegion, () => {
+  focusedIndex.value = 0
+  nextTick(() => indexGrid.value?.focus())
 })
 
 // 生成模拟走势图数据
@@ -233,6 +295,7 @@ function renderDetailChart() {
 
 async function refreshAll() {
   loading.value = true
+  error.value = ''
   try {
     // 尝试从API获取实时数据
     const data = await apiFetch('/api/v1/market/global')
@@ -253,6 +316,7 @@ async function refreshAll() {
     }
   } catch (e) {
     logger.warn('[GlobalIndex] API fetch failed, using mock data:', e.message)
+    error.value = '获取全球指数数据失败，显示模拟数据'
   } finally {
     loading.value = false
   }
@@ -261,6 +325,8 @@ async function refreshAll() {
 onMounted(() => {
   refreshAll()
   window.addEventListener('resize', handleResize)
+  // Focus grid for keyboard navigation
+  nextTick(() => indexGrid.value?.focus())
 })
 
 onBeforeUnmount(() => {
@@ -273,5 +339,54 @@ onBeforeUnmount(() => {
 
 function handleResize() {
   chart?.resize()
+}
+
+// Keyboard navigation
+function handleKeydown(e) {
+  const total = filteredIndexes.value.length
+  if (total === 0) return
+  
+  // Get grid columns based on viewport
+  const cols = window.innerWidth >= 1024 ? 3 : window.innerWidth >= 768 ? 2 : 1
+  
+  switch (e.key) {
+    case 'ArrowDown':
+      e.preventDefault()
+      focusedIndex.value = Math.min(focusedIndex.value + cols, total - 1)
+      scrollToFocused()
+      break
+    case 'ArrowUp':
+      e.preventDefault()
+      focusedIndex.value = Math.max(focusedIndex.value - cols, 0)
+      scrollToFocused()
+      break
+    case 'ArrowRight':
+      e.preventDefault()
+      focusedIndex.value = Math.min(focusedIndex.value + 1, total - 1)
+      scrollToFocused()
+      break
+    case 'ArrowLeft':
+      e.preventDefault()
+      focusedIndex.value = Math.max(focusedIndex.value - 1, 0)
+      scrollToFocused()
+      break
+    case 'Enter':
+    case ' ':
+      e.preventDefault()
+      if (filteredIndexes.value[focusedIndex.value]) {
+        selectIndex(filteredIndexes.value[focusedIndex.value])
+      }
+      break
+    case 'Escape':
+      selectedIndex.value = null
+      break
+  }
+}
+
+function scrollToFocused() {
+  nextTick(() => {
+    const el = indexGrid.value?.querySelector(`[data-index="${focusedIndex.value}"]`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 </script>

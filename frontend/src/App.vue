@@ -1,4 +1,18 @@
 <template>
+  <!-- Skip Link for Accessibility (WCAG 2.4.1) -->
+  <a
+    href="#main-content"
+    class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[99999] focus:px-4 focus:py-2 focus:bg-agent-blue focus:text-white focus:rounded focus:outline-none"
+  >
+    跳转到主内容
+  </a>
+  
+  <!-- ━━━ 离线提示横幅 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <OfflineBanner />
+  
+  <!-- ━━━ 版本更新检测 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+  <VersionChecker />
+  
   <!-- Teleport 全屏到 body，脱离主界面 DOM 树，强制 100vw/100vh -->
   <Teleport to="body">
     <div
@@ -34,67 +48,51 @@
       <button 
         class="px-6 py-2 bg-terminal-accent text-white rounded hover:bg-terminal-accent/80 transition"
         @click="clearError"
+        aria-label="重试加载"
       >
         重试
       </button>
     </div>
   </div>
 
-  <!-- 主内容区（overflow:visible，允许position:fixed正确工作） -->
-  <div class="flex h-screen bg-terminal-bg" style="overflow:visible">
+  <!-- 主内容区（100vh/100vw Flex布局） -->
+  <div class="flex h-screen w-screen bg-terminal-bg overflow-hidden">
 
-    <!-- ━━━ 桌面端 Sidebar（默认隐藏，点击☰展开）━━━━━━━━━━━━━━ -->
+    <!-- ━━━ 左侧 Sidebar（默认折叠，hover展开）━━━━━━━━━━━━ -->
     <template v-if="!isMobile">
-      <!-- 遮罩层 -->
-      <div v-if="isSidebarOpen" class="fixed inset-0 bg-black/30 z-[9998]" @click="isSidebarOpen = false" />
-      <!-- 侧边栏 -->
-      <div v-show="isSidebarOpen" class="flex-shrink-0 z-[9999]">
-        <Sidebar
-          :is-open="isSidebarOpen"
-          :active-id="currentView"
-          @navigate="handleSidebarNavigate"
-          @close="isSidebarOpen = false"
-        />
-      </div>
+      <Sidebar
+        :is-open="true"
+        :active-id="currentView"
+        @navigate="handleSidebarNavigate"
+      />
     </template>
 
-    <!-- ━━━ 左侧主体：网格 Dashboard ━━━━━━━━━━━━━━━━━━━━━━━ -->
-    <main
-      class="flex-1 flex flex-col transition-all duration-300 ease-in-out"
-      style="overflow-y:auto;overflow-x:hidden"
-      :style="{ width: isMobile ? '100%' : (isCopilotOpen ? 'calc(100% - 340px)' : '100%') }"
-    >
-      <!-- 顶部状态栏 -->
-      <header class="h-12 flex items-center justify-between px-4 border-b border-theme-secondary bg-terminal-panel/80 shrink-0">
+    <!-- ━━━ 右侧主体区域 ━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <!-- Topbar -->
+      <header class="h-12 flex items-center justify-between px-4 border-b border-terminal-border bg-terminal-card/80 shrink-0">
         <div class="flex items-center gap-3">
-          <!-- ☰ 侧边栏展开按钮（仅桌面端显示） -->
-          <button
-            v-if="!isMobile"
-            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
-            @click="isSidebarOpen = !isSidebarOpen"
-            title="切换侧边栏"
-          >
-            ☰
-          </button>
           <!-- 手机端主题切换按钮 -->
           <button
             v-if="isMobile"
-            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-terminal-dim hover:text-terminal-accent transition-colors text-lg"
+            class="w-10 h-10 min-w-[44px] min-h-[44px] flex items-center justify-center rounded text-gray-400 hover:text-agent-blue transition-colors text-lg"
             @click="cycleTheme"
             :title="`当前主题: ${currentTheme}, 点击切换`"
+            aria-label="切换主题"
           >
             {{ THEME_ICONS[currentTheme] || '🌙' }}
           </button>
-          <span class="text-terminal-accent font-bold text-base">📊 AlphaTerminal</span>
+          <!-- CommandCenter -->
+          <CommandCenter @select="handlePaletteSelectStock" />
         </div>
-        <div class="flex items-center gap-3 text-xs text-terminal-dim flex-nowrap overflow-x-auto scrollbar-hide max-w-full">
+        <div class="flex items-center gap-3 text-xs text-gray-500 flex-nowrap overflow-x-auto scrollbar-hide max-w-full">
           <!-- 仅桌面端显示时钟 -->
-          <span v-if="!isMobile" id="clock" class="font-mono">{{ currentTime }}</span>
-          <span class="px-2 py-0.5 rounded bg-terminal-accent/10 text-terminal-accent border border-terminal-accent/30">
+          <span v-if="!isMobile" id="clock" class="font-mono tabular-nums">{{ currentTime }}</span>
+          <span class="px-2 py-0.5 rounded bg-agent-blue/10 text-agent-blue border border-agent-blue/30">
             ● LIVE
           </span>
-          <!-- 仅桌面端显示锁定按钮（手机端不需要拖拽） -->
-<button
+          <!-- 仅桌面端显示锁定按钮 -->
+          <button
             v-if="!isMobile"
             class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition"
             :class="isLocked
@@ -102,29 +100,33 @@
               : 'border-green-500/30 bg-green-500/10 text-green-400 hover:bg-green-500/20'"
             @click="toggleLock"
             :title="isLocked ? '点击解锁网格（允许拖拽）' : '点击锁定网格（禁止拖拽）'"
+            aria-label="锁定或解锁网格布局"
+            :aria-pressed="isLocked"
           >
             <span v-if="isLocked">🔒</span>
             <span v-else>🔓</span>
             {{ isLocked ? '已锁定' : '可拖拽' }}
           </button>
-          <!-- 重置布局按钮（仅桌面端，解锁时显示） -->
+          <!-- 重置布局按钮 -->
           <button
             v-if="!isMobile && !isLocked"
             class="btn-xs flex items-center gap-1 px-2.5 py-0.5 rounded border text-xs transition border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20"
             @click="resetGridLayout"
             title="重置为默认布局"
+            aria-label="重置为默认布局"
           >
             <span>↺</span>
             重置布局
           </button>
           <!-- Copilot 唤醒按钮 -->
-<button
+          <button
             class="btn-xs flex items-center gap-1 px-1.5 py-0.5 rounded border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all text-xs leading-none relative"
             @click="toggleCopilot"
+            aria-label="打开或关闭AI助手"
+            :aria-expanded="isCopilotOpen"
           >
             <span v-if="isCopilotOpen">⏭ 收起</span>
             <span v-else>🤖 AI</span>
-            <!-- 未读消息指示器 -->
             <span v-if="!isCopilotOpen && copilotUnreadCount > 0" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center animate-pulse">
               {{ copilotUnreadCount > 9 ? '9+' : copilotUnreadCount }}
             </span>
@@ -132,41 +134,44 @@
         </div>
       </header>
 
-      <!-- 主视图区域（Phase 5 视图切换） -->
-      <div class="flex-1 overflow-auto p-4 relative">
-        <!-- F1修复: 骨架屏加载状态 -->
-        <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
-          <!-- 风向标骨架 -->
-          <div class="grid grid-cols-4 gap-2">
-            <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-panel border border-theme"></div>
-          </div>
-          <!-- 新闻/板块骨架 -->
-          <div class="grid grid-cols-2 gap-2">
-            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
-            <div class="h-32 rounded bg-terminal-panel border border-theme"></div>
-          </div>
-          <!-- K线骨架 -->
-          <div class="h-48 rounded bg-terminal-panel border border-theme"></div>
-          <div class="text-terminal-dim text-xs text-center">正在加载市场数据...</div>
-        </div>
+      <!-- Main Area (内部滚动) -->
+      <main id="main-content" class="flex-1 overflow-hidden flex flex-col" style="min-height: 600px;" role="main">
 
-        <!-- F2修复: 加载错误提示（增强：显示重试次数 + apiErrorState） -->
-        <div v-if="loadError && !isInitialLoading"
-             class="mb-2 px-3 py-2 rounded border border-bullish/40 bg-bullish/15 text-bullish text-xs flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2">
-            <span>⚠️ {{ loadError }}</span>
-            <span v-if="apiErrorState.failedCount > 1" class="text-bullish/70 text-[10px]">
-              （第 {{ apiErrorState.failedCount }} 次失败，自动重试中...）
-            </span>
+        <!-- 主视图区域 -->
+        <div class="flex-1 overflow-auto p-4 relative">
+          <!-- F1修复: 骨架屏加载状态 -->
+          <div v-if="isInitialLoading" class="absolute inset-0 z-10 bg-terminal-bg/95 flex flex-col gap-3 p-4 animate-pulse">
+            <!-- 风向标骨架 -->
+            <div class="grid grid-cols-4 gap-2">
+              <div v-for="i in 4" :key="i" class="h-16 rounded bg-terminal-card border border-terminal-border"></div>
+            </div>
+            <!-- 新闻/板块骨架 -->
+            <div class="grid grid-cols-2 gap-2">
+              <div class="h-32 rounded bg-terminal-card border border-terminal-border"></div>
+              <div class="h-32 rounded bg-terminal-card border border-terminal-border"></div>
+            </div>
+            <!-- K线骨架 -->
+            <div class="h-48 rounded bg-terminal-card border border-terminal-border"></div>
+            <div class="text-gray-500 text-xs text-center">正在加载市场数据...</div>
           </div>
-          <div class="flex items-center gap-2 shrink-0">
-            <button @click="Promise.all([fetchHighFreq(), fetchMedFreq(), fetchLowFreq()])" class="px-2 py-0.5 bg-bullish/30 rounded text-bullish-light hover:bg-bullish/40 text-[10px]">立即重试</button>
-            <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-panel rounded text-theme-secondary hover:text-theme-primary text-[10px]">忽略</button>
+
+          <!-- F2修复: 加载错误提示 -->
+          <div v-if="loadError && !isInitialLoading"
+               class="mb-2 px-3 py-2 rounded border border-red-500/40 bg-red-500/15 text-red-400 text-xs flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <span>⚠️ {{ loadError }}</span>
+              <span v-if="apiErrorState.failedCount > 1" class="text-red-400/70 text-[10px]">
+                （第 {{ apiErrorState.failedCount }} 次失败，自动重试中...）
+              </span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button @click="Promise.all([fetchHighFreq(), fetchMedFreq()])" class="px-2 py-0.5 bg-red-500/30 rounded text-red-300 hover:bg-red-500/40 text-[10px]">立即重试</button>
+              <button v-if="apiErrorState.isDegraded" @click="apiErrorState.isDegraded = false; loadError = null" class="px-2 py-0.5 bg-terminal-card rounded text-gray-400 hover:text-gray-200 text-[10px]">忽略</button>
+            </div>
           </div>
-        </div>
 
         <!-- 股票行情（默认） -->
-        <KeepAlive :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard']">
+        <KeepAlive :include="['DashboardGrid', 'MacroDashboard', 'FuturesDashboard', 'PortfolioDashboard', 'BondDashboard', 'ForexDashboard']">
           <DashboardGrid
             v-if="currentView === 'stock'"
             ref="dashboardGridRef"
@@ -186,6 +191,8 @@
           <FundDashboard v-else-if="currentView === 'fund'" />
           <!-- 期货行情 -->
           <FuturesDashboard v-else-if="currentView === 'futures'" @open-futures="openFuturesFullscreen" />
+          <!-- 外汇行情 -->
+          <ForexDashboard v-else-if="currentView === 'forex'" />
           <!-- 策略中心 -->
           <StrategyCenter v-else-if="currentView === 'strategy-center'" />
           <!-- 系统管理 -->
@@ -196,40 +203,53 @@
           <OptionsAnalysis v-else-if="currentView === 'options'" />
           <!-- 全球指数 -->
           <GlobalIndex v-else-if="currentView === 'global-index'" />
+          <!-- 研报平台 -->
+          <ResearchDashboard v-else-if="currentView === 'research'" />
           <!-- Walk-Forward Analysis -->
           <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
           <!-- F9 深度资料 -->
           <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
         </KeepAlive>
         
-        <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
-        <div 
-          v-if="isSwiping && isMobile"
-          class="absolute inset-0 z-20 pointer-events-none"
-        >
-          <!-- 左侧边缘指示器（向右滑动显示上一个视图） -->
-          <div 
-            v-if="swipeProgress > 0"
-            class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-theme-accent/30 to-transparent"
-            :style="{ width: `${Math.min(swipeProgress * 100, 50)}%` }"
+          <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+          <div
+            v-if="isSwiping && isMobile"
+            class="absolute inset-0 z-20 pointer-events-none"
           >
-            <div class="absolute left-4 top-1/2 -translate-y-1/2 text-theme-accent text-xs font-medium">
-              ← {{ getViewName(getNextView('right')) }}
+            <!-- 左侧边缘指示器 -->
+            <div
+              v-if="swipeProgress > 0"
+              class="absolute left-0 top-0 bottom-0 bg-gradient-to-r from-agent-blue/30 to-transparent"
+              :style="{ width: `${Math.min(swipeProgress * 100, 50)}%` }"
+            >
+              <div class="absolute left-4 top-1/2 -translate-y-1/2 text-agent-blue text-xs font-medium">
+                ← {{ getViewName(getNextView('right')) }}
+              </div>
             </div>
-          </div>
-          <!-- 右侧边缘指示器（向左滑动显示下一个视图） -->
-          <div 
-            v-if="swipeProgress < 0"
-            class="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-theme-accent/30 to-transparent"
-            :style="{ width: `${Math.min(Math.abs(swipeProgress) * 100, 50)}%` }"
-          >
-            <div class="absolute right-4 top-1/2 -translate-y-1/2 text-theme-accent text-xs font-medium">
-              {{ getViewName(getNextView('left')) }} →
+            <!-- 右侧边缘指示器 -->
+            <div
+              v-if="swipeProgress < 0"
+              class="absolute right-0 top-0 bottom-0 bg-gradient-to-l from-agent-blue/30 to-transparent"
+              :style="{ width: `${Math.min(Math.abs(swipeProgress) * 100, 50)}%` }"
+            >
+              <div class="absolute right-4 top-1/2 -translate-y-1/2 text-agent-blue text-xs font-medium">
+                {{ getViewName(getNextView('left')) }} →
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+      
+      <!-- ━━━ 底部状态栏 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+      <StatusBar
+        :connection-status="wsStatus"
+        :latency="latency"
+        :last-connected-at="lastConnectedAt"
+        :connection-attempts="connectionAttempts"
+        :market-status="marketStatus"
+        @reconnect="manualReconnect"
+      />
+    </div>
 
     <!-- ━━━ 快捷键帮助面板 ━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
     <KeyboardShortcutsHelp
@@ -251,13 +271,13 @@
     <aside
       v-show="isCopilotOpen"
       :class="isMobile 
-        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[70vh] rounded-t-2xl border-t-2 border-theme shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-panel pb-safe' 
-        : 'flex-shrink-0 flex flex-col bg-terminal-panel border-l border-theme-secondary transition-all duration-300 ease-in-out overflow-hidden'"
+        ? 'fixed bottom-0 left-0 right-0 z-[9998] max-h-[70vh] rounded-t-2xl border-t-2 border-terminal-border shadow-[0_-4px_20px_rgba(0,0,0,0.3)] bg-terminal-card pb-safe' 
+        : 'flex-shrink-0 flex flex-col bg-terminal-card border-l border-terminal-border transition-all duration-300 ease-in-out overflow-hidden'"
       :style="isMobile ? { width: '100%', maxWidth: '100%' } : { width: '340px', maxWidth: '340px' }"
     >
       <!-- 移动端拖拽指示器 -->
       <div v-if="isMobile" class="w-full flex justify-center pt-2 pb-1 cursor-pointer" @click="toggleCopilot">
-        <div class="w-12 h-1 rounded-full bg-terminal-dim/30"></div>
+        <div class="w-12 h-1 rounded-full bg-gray-600/30"></div>
       </div>
       <CopilotSidebar
         :market-overview="marketOverview"
@@ -295,12 +315,17 @@ import DashboardGrid from './components/DashboardGrid.vue'
 import SimpleQuotePanel from './components/SimpleQuotePanel.vue'
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import CommandCenter from './components/CommandCenter.vue'
 import ToastContainer from './components/ToastContainer.vue'
 import MobileBottomNav from './components/MobileBottomNav.vue'
+import OfflineBanner from './components/OfflineBanner.vue'
+import StatusBar from './components/StatusBar.vue'
+import VersionChecker from './components/VersionChecker.vue'
 
 // ── 按需加载的组件（延迟加载，减小首屏包体积）────────────────────
 const BondDashboard   = defineAsyncComponent(() => import('./components/BondDashboard.vue'))
 const FuturesDashboard = defineAsyncComponent(() => import('./components/FuturesDashboard.vue'))
+const ForexDashboard   = defineAsyncComponent(() => import('./components/ForexDashboard.vue'))
 const PortfolioDashboard = defineAsyncComponent(() => import('./components/PortfolioDashboard.vue'))
 const FundDashboard   = defineAsyncComponent(() => import('./components/FundDashboard.vue'))
 const StrategyCenter   = defineAsyncComponent(() => import('./components/StrategyCenter.vue'))
@@ -313,6 +338,7 @@ const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsA
 const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
+const ResearchDashboard = defineAsyncComponent(() => import('./components/ResearchDashboard.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -320,7 +346,7 @@ import { useTheme } from './composables/useTheme.js'
 import { useKeyboardShortcuts } from './composables/useKeyboardShortcuts.js'
 import { useToast } from './composables/useToast.js'
 import { useSwipe } from './composables/useSwipe.js'
-import { useFontSize } from './composables/useFontSize.js'
+import { useMarketStream } from './composables/useMarketStream.js'
 import { fetchApiBatch, apiFetch, apiErrorState } from './utils/api.js'
 import { logger } from './utils/logger.js'
 import { preloadECharts } from './utils/lazyEcharts.js'
@@ -328,13 +354,10 @@ import { preloadECharts } from './utils/lazyEcharts.js'
 const { ui, openKlineFullscreen } = useUiStore()
 const { currentSymbol } = useMarketStore()
 const { success: toastSuccess, info: toastInfo } = useToast()
+const { wsStatus, latency, manualReconnect, lastConnectedAt, connectionAttempts } = useMarketStream()
 
 // 初始化主题系统（必须在组件挂载前调用）
 const { theme: currentTheme, isDark, cycleTheme, THEME_ICONS } = useTheme()
-
-// 初始化字体大小（必须在组件挂载前调用）
-const { initFontSize } = useFontSize()
-initFontSize()
 
 // 全局错误处理
 const hasError = ref(false)
@@ -364,7 +387,10 @@ onErrorCaptured((err, instance, info) => {
 
 // Phase 5: 侧边栏与视图切换状态
 const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动端）
-const currentView   = ref('stock') // 默认视图：stock / bond / futures
+
+// 从 localStorage 恢复上次视图，实现跨会话持久化（不污染 URL）
+const savedView = typeof window !== 'undefined' ? localStorage.getItem('alphaterminal-view') : null
+const currentView   = ref(savedView || 'stock') // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
 const f9Symbol = ref('') // F9深度资料当前股票代码
@@ -382,7 +408,9 @@ watch(currentView, (newView, oldView) => {
     if (viewHistory.value.length > 20) {
       viewHistory.value.shift()
     }
-    // 更新浏览器历史
+    // 持久化到 localStorage（跨会话保存）
+    localStorage.setItem('alphaterminal-view', newView)
+    // 更新浏览器历史（仅当用户主动导航时才设置 hash）
     if (window.history && window.history.pushState) {
       window.history.pushState({ view: newView }, '', `#view=${newView}`)
     }
@@ -585,6 +613,22 @@ const currentTime     = ref('')
 const watchList       = ref([])   // 自选股列表
 const preFetchedKlineData = ref(null) // 预取的K线数据
 
+// Market status computed from current time
+const marketStatus = computed(() => {
+  const now = new Date()
+  const hour = now.getHours()
+  const minute = now.getMinutes()
+  const time = hour * 60 + minute
+  const day = now.getDay()
+  
+  if (day === 0 || day === 6) return 'closed'
+  if (time >= 9 * 60 + 15 && time < 11 * 60 + 30) return 'open'
+  if (time >= 13 * 60 && time < 15 * 60) return 'open'
+  if (time >= 9 * 60 && time < 9 * 60 + 15) return 'pre'
+  if (time >= 15 * 60 && time < 15 * 60 + 30) return 'post'
+  return 'closed'
+})
+
 let clockTimer = null
 
 function updateClock() {
@@ -679,22 +723,36 @@ onMounted(() => {
   updateClock()
   clockTimer = setInterval(updateClock, 1000)
 
-  // 预加载 ECharts（降低首屏体积约 800KB，异步加载不阻塞渲染）
-  preloadECharts()
-
-  // 首屏：两个梯队并发启动（浏览器自动调度，无 Stalled）
+  // 性能优化：首屏仅加载关键数据（market overview）
+  // ECharts 和非关键数据延迟加载，目标 < 3s 首屏渲染
   fetchHighFreq()
     .then(_checkInitDone)
     .catch(e => {
       console.error('[App] fetchHighFreq failed:', e.message)
-      _checkInitDone() // Continue even on error
+      _checkInitDone()
     })
-  fetchMedFreq()
-    .then(_checkInitDone)
-    .catch(e => {
-      console.error('[App] fetchMedFreq failed:', e.message)
-      _checkInitDone() // Continue even on error
-    })
+
+  // 延迟加载非关键数据（板块、期货、情绪）- 不阻塞首屏渲染
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(() => {
+      fetchMedFreq()
+        .then(_checkInitDone)
+        .catch(e => {
+          console.error('[App] fetchMedFreq failed:', e.message)
+          _checkInitDone()
+        })
+    }, { timeout: 2000 })
+  } else {
+    // Fallback for browsers without requestIdleCallback
+    setTimeout(() => {
+      fetchMedFreq()
+        .then(_checkInitDone)
+        .catch(e => {
+          console.error('[App] fetchMedFreq failed:', e.message)
+          _checkInitDone()
+        })
+    }, 1000)
+  }
 
   // 预取K线数据（等待后端就绪后执行）
   waitForBackendAndPrefetchKline()
@@ -706,8 +764,8 @@ onMounted(() => {
   
   // ── Android 硬件返回键支持（popstate 事件监听）──────────────────────
   if (window.history && window.addEventListener) {
-    // 初始化历史状态
-    window.history.replaceState({ view: currentView.value }, '', `#view=${currentView.value}`)
+    // 不再在初始加载时设置 hash，保持 URL 干净
+    // 视图持久化已通过 localStorage 实现
     
     // 监听浏览器历史变化（Android 返回键触发）
     window.addEventListener('popstate', handlePopState)

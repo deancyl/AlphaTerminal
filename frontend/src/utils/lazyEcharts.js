@@ -60,3 +60,42 @@ export function preloadECharts() {
   }
   return echartsPromise
 }
+
+/**
+ * Create a debounced resize handler for ECharts
+ * Prevents excessive resize calls during window/container resizing
+ * 
+ * @param {echarts.ECharts} chartInstance - The ECharts instance to resize
+ * @param {number} delay - Debounce delay in ms (default: 150ms)
+ * @returns {Function} Debounced resize handler
+ */
+export function createDebouncedResize(chartInstance, delay = 150) {
+  let timer = null
+  return () => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      chartInstance?.resize()
+      timer = null
+    }, delay)
+  }
+}
+
+/**
+ * Create a debounced ResizeObserver for ECharts
+ * Automatically handles cleanup when observer is disconnected
+ * 
+ * @param {echarts.ECharts} chartInstance - The ECharts instance to resize
+ * @param {number} delay - Debounce delay in ms (default: 150ms)
+ * @returns {ResizeObserver} ResizeObserver with debounced callback
+ */
+export function createResizeObserver(chartInstance, delay = 150) {
+  let timer = null
+  const observer = new ResizeObserver(() => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      chartInstance?.resize()
+      timer = null
+    }, delay)
+  })
+  return observer
+}

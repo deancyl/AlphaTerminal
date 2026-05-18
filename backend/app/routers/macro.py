@@ -7,15 +7,23 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from typing import Optional, List
 from app.utils.response import success_response, error_response, ErrorCode
+from app.config.timeout import MACRO_TIMEOUT
+from app.config.macro_config import (
+    MACRO_THREAD_POOL_SIZE,
+    MACRO_CACHE_DURATION,
+    MACRO_MAX_CACHE_SIZE,
+    MACRO_FETCH_TIMEOUT,
+    MACRO_CLEANUP_INTERVAL
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/macro", tags=["macro"])
 
 # ── 线程池执行器（用于并行化 akshare 同步调用）────────────────────
-_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="macro_")
+_executor = ThreadPoolExecutor(max_workers=MACRO_THREAD_POOL_SIZE, thread_name_prefix="macro_")
 
 # ── 延迟导入工具 ─────────────────────────────────────────────────────
 _akshare_module = None
@@ -61,65 +69,36 @@ def _safe_strftime(val, fmt='%Y年%m月份'):
     except (AttributeError, TypeError):
         return str(val) if val else None
 
-# ── 简单内存缓存（带过期清理）────────────────────────────────────────
-_cache = {}
+# ── 全局缓存导入 ─────────────────────────────────────────────────────
+from app.services.data_cache import get_cache
+
+_cache = get_cache()
 _cache_ttl = {}
-CACHE_DURATION = 300  # 5分钟缓存
-MAX_CACHE_SIZE = 50   # 最大缓存条目数
-
-def _cleanup_expired():
-    """清理过期缓存"""
-    now = datetime.now()
-    expired = [k for k, v in _cache_ttl.items() if now >= v]
-    for k in expired:
-        _cache.pop(k, None)
-        _cache_ttl.pop(k, None)
-    if expired:
-        logger.info(f"[Cache CLEANUP] 清理 {len(expired)} 条过期缓存")
-
-def get_cached(key):
-    """获取缓存数据"""
-    _cleanup_expired()
-    if key in _cache and key in _cache_ttl:
-        if datetime.now() < _cache_ttl[key]:
-            logger.info(f"[Cache HIT] {key}")
-            return _cache[key]
-    logger.info(f"[Cache MISS] {key}")
-    return None
-
-def set_cached(key, value):
-    """设置缓存数据（带大小限制）"""
-    _cleanup_expired()
-    # 如果缓存已满，删除最旧的条目
-    if len(_cache) >= MAX_CACHE_SIZE and key not in _cache:
-        oldest_key = min(_cache_ttl, key=_cache_ttl.get)
-        _cache.pop(oldest_key, None)
-        _cache_ttl.pop(oldest_key, None)
-        logger.info(f"[Cache EVICT] 移除最旧缓存: {oldest_key}")
-    
-    _cache[key] = value
-    _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
-    logger.info(f"[Cache SET] {key}, expires at {_cache_ttl[key]}")
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
-async def get_gdp_data(limit: int = 20):
+async def get_gdp_data(
+    limit: int = Query(20, ge=1, le=100, description="返回最近N个季度，范围1-100")
+):
     """
     获取中国GDP数据
     
     - **limit**: 返回最近N个季度（默认20，即5年）
     """
-    cache_key = f"macro_gdp_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:gdp:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_gdp()
-        # 取最近N条（数据按时间降序排列，最新在最前）
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理：直接使用 df.to_dict('records')
         data = (
             df[['季度', '国内生产总值-绝对值', '国内生产总值-同比增长',
                 '第一产业-同比增长', '第二产业-同比增长', '第三产业-同比增长']]
@@ -143,30 +122,37 @@ async def get_gdp_data(limit: int = 20):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("GDP数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] GDP fetch error: {e}")
-        return error_response(f"GDP数据获取失败: {str(e)}")
+        return error_response("GDP数据获取失败，请稍后重试")
 
 # ── CPI数据 ────────────────────────────────────────────────────────
 @router.get("/cpi")
-async def get_cpi_data(limit: int = 24):
+async def get_cpi_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国CPI数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_cpi_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:cpi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_cpi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '全国-当月', '全国-同比增长', '全国-环比增长', '城市-同比增长', '农村-同比增长']]
             .assign(
@@ -189,30 +175,37 @@ async def get_cpi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("CPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] CPI fetch error: {e}")
-        return error_response(f"CPI数据获取失败: {str(e)}")
+        return error_response("CPI数据获取失败，请稍后重试")
 
 # ── PPI数据 ────────────────────────────────────────────────────────
 @router.get("/ppi")
-async def get_ppi_data(limit: int = 24):
+async def get_ppi_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国PPI数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_ppi_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:ppi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_ppi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '当月', '当月同比增长', '累计']]
             .assign(
@@ -233,30 +226,37 @@ async def get_ppi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("PPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PPI fetch error: {e}")
-        return error_response(f"PPI数据获取失败: {str(e)}")
+        return error_response("PPI数据获取失败，请稍后重试")
 
 # ── PMI数据 ────────────────────────────────────────────────────────
 @router.get("/pmi")
-async def get_pmi_data(limit: int = 24):
+async def get_pmi_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国PMI数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_pmi_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:pmi:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_pmi()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '制造业-指数', '制造业-同比增长', '非制造业-指数', '非制造业-同比增长']]
             .assign(
@@ -278,11 +278,14 @@ async def get_pmi_data(limit: int = 24):
             "data": data,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("PMI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] PMI fetch error: {e}")
-        return error_response(f"PMI数据获取失败: {str(e)}")
+        return error_response("PMI数据获取失败，请稍后重试")
 
 # ── 综合宏观经济指标 ────────────────────────────────────────────────
 @router.get("/overview")
@@ -291,11 +294,12 @@ async def get_macro_overview():
     获取宏观经济综合概览（最新一期各指标）
     优化：使用线程池并行获取8个指标，将串行耗时降至并行耗时
     """
-    cached = get_cached("macro_overview")
+    cache = get_cache()
+    cached = cache.get("macro:overview")
     if cached:
         return cached
     
-    FETCH_TIMEOUT = 30  # 30秒超时
+    FETCH_TIMEOUT = MACRO_FETCH_TIMEOUT
     
     try:
         loop = asyncio.get_event_loop()
@@ -373,10 +377,10 @@ async def get_macro_overview():
         m2_latest = m2_df.iloc[0] if len(m2_df) > 0 else None
         sf_latest = sf_df.iloc[-1] if len(sf_df) > 0 else None
         
-        ind_df_valid = ind_df[_get_pd().notna(ind_df['今值'])] if len(ind_df) > 0 else None
+        ind_df_valid = ind_df[_get_pd().notna(ind_df.get('今值', ind_df.get('今值(%)', _get_pd().Series([None]*len(ind_df)))))] if len(ind_df) > 0 and ('今值' in ind_df.columns or '今值(%)' in ind_df.columns) else None
         ind_latest = ind_df_valid.iloc[-1] if ind_df_valid is not None and len(ind_df_valid) > 0 else None
         
-        unemp_df_filtered = unemp_df[unemp_df['item'].str.strip() == '全国城镇调查失业率'] if len(unemp_df) > 0 else None
+        unemp_df_filtered = unemp_df[unemp_df.get('item', _get_pd().Series(['']*len(unemp_df))).str.strip() == '全国城镇调查失业率'] if len(unemp_df) > 0 and 'item' in unemp_df.columns else None
         unemp_latest = unemp_df_filtered.iloc[-1] if unemp_df_filtered is not None and len(unemp_df_filtered) > 0 else None
         
         overview = {
@@ -411,17 +415,17 @@ async def get_macro_overview():
             "social_financing": {
                 "period": sf_latest["月份"] if sf_latest is not None else None,
                 "total": float(sf_latest["社会融资规模增量"]) if sf_latest is not None and not _get_pd().isna(sf_latest["社会融资规模增量"]) else None,
-                "yoy": None,  # akshare数据中没有同比增长
+                "yoy": None,
                 "unit": "亿元"
             },
             "industrial_production": {
-                "period": ind_latest["日期"].strftime('%Y年%m月份') if ind_latest is not None and not _get_pd().isna(ind_latest["日期"]) else None,
-                "yoy": float(ind_latest["今值"]) if ind_latest is not None and not _get_pd().isna(ind_latest["今值"]) else None,
+                "period": ind_latest.get("日期", ind_latest.get("月份", "")).strftime('%Y年%m月份') if ind_latest is not None and hasattr(ind_latest.get("日期", ind_latest.get("月份")), 'strftime') else (str(ind_latest.get("日期", ind_latest.get("月份", ""))) if ind_latest is not None else None),
+                "yoy": float(ind_latest.get("今值", ind_latest.get("今值(%)"))) if ind_latest is not None and not _get_pd().isna(ind_latest.get("今值", ind_latest.get("今值(%)"))) else None,
                 "unit": "%"
             },
             "unemployment": {
-                "period": unemp_latest["date"] if unemp_latest is not None else None,
-                "rate": float(unemp_latest["value"]) if unemp_latest is not None and not _get_pd().isna(unemp_latest["value"]) else None,
+                "period": unemp_latest.get("date", unemp_latest.get("月份")) if unemp_latest is not None else None,
+                "rate": float(unemp_latest.get("value", unemp_latest.get("失业率"))) if unemp_latest is not None and not _get_pd().isna(unemp_latest.get("value", unemp_latest.get("失业率"))) else None,
                 "unit": "%"
             }
         }
@@ -431,12 +435,11 @@ async def get_macro_overview():
             "last_update": datetime.now().isoformat()
         })
         
-        # 缓存结果
-        set_cached("macro_overview", result)
+        cache.set("macro:overview", result, ttl=MACRO_CACHE_DURATION)
         return result
     except Exception as e:
         logger.error(f"[Macro] Overview fetch error: {e}")
-        return error_response(f"宏观概览获取失败: {str(e)}")
+        return error_response("宏观概览获取失败，请稍后重试")
 
 # ── 经济日历 ────────────────────────────────────────────────────────
 @router.get("/calendar")
@@ -444,18 +447,40 @@ async def get_economic_calendar():
     """
     获取中国宏观经济数据发布日历（近期重要数据预告）
     """
-    cache_key = "macro_calendar"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = "macro:calendar"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        # 使用akshare的宏观数据获取近期发布日程
-        # 注：akshare没有专门的经济日历接口，我们用各指标的最新发布时间推算
+        loop = asyncio.get_running_loop()
         calendar_items = []
         
-        # GDP（每季度发布）
-        gdp_df = _get_ak().macro_china_gdp()
+        async def fetch_gdp():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        async def fetch_cpi():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        async def fetch_pmi():
+            return await asyncio.wait_for(
+                loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                timeout=MACRO_TIMEOUT
+            )
+        
+        gdp_df, cpi_df, pmi_df = await asyncio.gather(
+            fetch_gdp(),
+            fetch_cpi(),
+            fetch_pmi()
+        )
+        
         if len(gdp_df) > 0:
             latest = gdp_df.iloc[0]
             calendar_items.append({
@@ -467,8 +492,6 @@ async def get_economic_calendar():
                 "unit": "%"
             })
         
-        # CPI（每月发布）
-        cpi_df = _get_ak().macro_china_cpi()
         if len(cpi_df) > 0:
             latest = cpi_df.iloc[0]
             calendar_items.append({
@@ -480,8 +503,6 @@ async def get_economic_calendar():
                 "unit": "%"
             })
         
-        # PMI（每月发布）
-        pmi_df = _get_ak().macro_china_pmi()
         if len(pmi_df) > 0:
             latest = pmi_df.iloc[0]
             calendar_items.append({
@@ -497,30 +518,37 @@ async def get_economic_calendar():
             "calendar": calendar_items,
             "last_update": datetime.now().isoformat()
         })
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("经济日历获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Calendar fetch error: {e}")
-        return error_response(f"经济日历获取失败: {str(e)}")
+        return error_response("经济日历获取失败，请稍后重试")
 
 # ── M2货币供应量 ───────────────────────────────────────────────────
 @router.get("/m2")
-async def get_m2_data(limit: int = 24):
+async def get_m2_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国M2货币供应量数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_m2_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:m2:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_supply_of_money()
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_supply_of_money()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.head(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['统计时间', '货币和准货币（广义货币M2）同比增长', '货币和准货币（广义货币M2）']]
             .assign(
@@ -541,31 +569,37 @@ async def get_m2_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("M2数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] M2 fetch error: {e}")
-        return error_response(f"M2数据获取失败: {str(e)}")
+        return error_response("M2数据获取失败，请稍后重试")
 
 # ── 社会融资规模 ───────────────────────────────────────────────────
 @router.get("/social_financing")
-async def get_social_financing_data(limit: int = 24):
+async def get_social_financing_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国社会融资规模数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_social_financing_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:social_financing:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_shrzgm()
-        # 数据升序排列，取最后N条
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_shrzgm()),
+            timeout=MACRO_TIMEOUT
+        )
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理
         data = (
             df[['月份', '社会融资规模增量', '其中-人民币贷款']]
             .assign(
@@ -586,38 +620,48 @@ async def get_social_financing_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("社融数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Social financing fetch error: {e}")
-        return error_response(f"社融数据获取失败: {str(e)}")
+        return error_response("社融数据获取失败，请稍后重试")
 
 # ── 工业增加值 ─────────────────────────────────────────────────────
 @router.get("/industrial_production")
-async def get_industrial_production_data(limit: int = 24):
+async def get_industrial_production_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国工业增加值数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_industrial_production_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:industrial_production:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_industrial_production_yoy()
-        # 过滤掉今值为NaN的数据
-        df = df[_get_pd().notna(df['今值'])]
-        # 数据升序排列，取最后N条
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_industrial_production_yoy()),
+            timeout=MACRO_TIMEOUT
+        )
+        pd = _get_pd()
+        value_col = '今值' if '今值' in df.columns else ('今值(%)' if '今值(%)' in df.columns else None)
+        if value_col:
+            df = df[pd.notna(df[value_col])]
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理（需处理日期格式化）
-        df_work = df[['日期', '今值', '前值']].copy()
-        df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
-        df_work['yoy'] = df_work['今值'].apply(_safe_float)
-        df_work['previous'] = df_work['前值'].apply(_safe_float)
-        data = df_work[['month', 'yoy', 'previous']].to_dict('records')
+        if value_col and '日期' in df.columns:
+            df_work = df[['日期', value_col]].copy()
+            df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
+            df_work['yoy'] = df_work[value_col].apply(_safe_float)
+            data = df_work[['month', 'yoy']].to_dict('records')
+        else:
+            data = []
         
         result = success_response({
             "indicator": "IndustrialProduction",
@@ -628,42 +672,55 @@ async def get_industrial_production_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("工业增加值数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Industrial production fetch error: {e}")
-        return error_response(f"工业增加值数据获取失败: {str(e)}")
+        return error_response("工业增加值数据获取失败，请稍后重试")
 
 # ── 失业率 ─────────────────────────────────────────────────────────
 @router.get("/unemployment")
-async def get_unemployment_data(limit: int = 24):
+async def get_unemployment_data(limit: int = Query(24, ge=1, le=100)):
     """
     获取中国城镇调查失业率数据
     
     - **limit**: 返回最近N个月（默认24，即2年）
     """
-    cache_key = f"macro_unemployment_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = f"macro:unemployment:{limit}"
+    cached = cache.get(cache_key)
     if cached:
         return cached
     
     try:
-        df = _get_ak().macro_china_urban_unemployment()
-        # 筛选全国城镇调查失业率（注意：item字段有尾随空格）
-        df = df[df['item'].str.strip() == '全国城镇调查失业率']
-        # 数据升序排列，取最后N条
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
+            timeout=MACRO_TIMEOUT
+        )
+        pd = _get_pd()
+        if 'item' in df.columns:
+            df = df[df['item'].str.strip() == '全国城镇调查失业率']
         df = df.tail(limit) if len(df) > limit else df
         
-        # 向量化处理
-        data = (
-            df[['date', 'value']]
-            .assign(
-                month=lambda x: x['date'],
-                rate=lambda x: x['value'].apply(_safe_float),
+        date_col = 'date' if 'date' in df.columns else ('月份' if '月份' in df.columns else None)
+        value_col = 'value' if 'value' in df.columns else ('失业率' if '失业率' in df.columns else None)
+        
+        if date_col and value_col:
+            data = (
+                df[[date_col, value_col]]
+                .assign(
+                    month=lambda x: x[date_col],
+                    rate=lambda x: x[value_col].apply(_safe_float),
+                )
+                [['month', 'rate']]
+                .to_dict('records')
             )
-            [['month', 'rate']]
-            .to_dict('records')
-        )
+        else:
+            data = []
         
         result = success_response({
             "indicator": "Unemployment",
@@ -674,17 +731,22 @@ async def get_unemployment_data(limit: int = 24):
             "last_update": datetime.now().isoformat()
         })
         
-        set_cached(cache_key, result)
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
+    except asyncio.TimeoutError:
+        logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
+        return error_response("失业率数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except Exception as e:
         logger.error(f"[Macro] Unemployment fetch error: {e}")
-        return error_response(f"失业率数据获取失败: {str(e)}")
+        return error_response("失业率数据获取失败，请稍后重试")
 
 # ── 批量获取 ────────────────────────────────────────────────────────
+VALID_INDICATORS = {"gdp", "cpi", "ppi", "pmi", "m2", "social_financing", "industrial_production", "unemployment"}
+
 @router.get("/batch")
 async def get_macro_batch(
     indicators: str = "gdp,cpi,ppi,pmi",
-    limit: int = 12
+    limit: int = Query(12, ge=1, le=100, description="每个指标返回最近N期数据，范围1-100")
 ):
     """
     批量获取宏观经济指标
@@ -692,337 +754,545 @@ async def get_macro_batch(
     - **indicators**: 逗号分隔的指标代码（gdp,cpi,ppi,pmi,m2,social_financing,industrial_production,unemployment）
     - **limit**: 每个指标返回最近N期数据
     """
+    cache = get_cache()
+    indicator_list = sorted([i.strip().lower() for i in indicators.split(",")])
+    cache_key = f"macro:batch:{','.join(indicator_list)}:{limit}"
+    
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+    
     try:
-        indicator_list = [i.strip().lower() for i in indicators.split(",")]
+        invalid = set(indicator_list) - VALID_INDICATORS
+        if invalid:
+            return error_response(
+                f"无效的指标: {', '.join(invalid)}. 有效指标: {', '.join(VALID_INDICATORS)}",
+                code=ErrorCode.VALIDATION_ERROR
+            )
+        
         result = {}
+        loop = asyncio.get_running_loop()
         
-        if "gdp" in indicator_list:
-            df = _get_ak().macro_china_gdp().tail(limit)
-            df_work = df[['季度', '国内生产总值-同比增长']].copy()
-            df_work['quarter'] = df_work['季度']
-            df_work['yoy'] = df_work['国内生产总值-同比增长'].apply(_safe_float)
-            result["gdp"] = {
-                "data": df_work[['quarter', 'yoy']].to_dict('records'),
-                "unit": "%",
-                "frequency": "季度"
-            }
+        async def fetch_gdp():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gdp()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['季度', '国内生产总值-同比增长']].copy()
+                df_work['quarter'] = df_work['季度']
+                df_work['yoy'] = df_work['国内生产总值-同比增长'].apply(_safe_float)
+                return {
+                    "data": df_work[['quarter', 'yoy']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "季度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] GDP fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] GDP fetch error: {e}")
+                return None
         
-        if "cpi" in indicator_list:
-            df = _get_ak().macro_china_cpi().tail(limit)
-            df_work = df[['月份', '全国-同比增长']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['yoy'] = df_work['全国-同比增长'].apply(_safe_float)
-            result["cpi"] = {
-                "data": df_work[['month', 'yoy']].to_dict('records'),
-                "unit": "%",
-                "frequency": "月度"
-            }
+        async def fetch_cpi():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_cpi()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '全国-同比增长']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['yoy'] = df_work['全国-同比增长'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'yoy']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] CPI fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] CPI fetch error: {e}")
+                return None
         
-        if "ppi" in indicator_list:
-            df = _get_ak().macro_china_ppi().tail(limit)
-            df_work = df[['月份', '当月同比增长']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['yoy'] = df_work['当月同比增长'].apply(_safe_float)
-            result["ppi"] = {
-                "data": df_work[['month', 'yoy']].to_dict('records'),
-                "unit": "%",
-                "frequency": "月度"
-            }
+        async def fetch_ppi():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_ppi()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '当月同比增长']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['yoy'] = df_work['当月同比增长'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'yoy']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] PPI fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] PPI fetch error: {e}")
+                return None
         
-        if "pmi" in indicator_list:
-            df = _get_ak().macro_china_pmi().tail(limit)
-            df_work = df[['月份', '制造业-指数']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['index'] = df_work['制造业-指数'].apply(_safe_float)
-            result["pmi"] = {
-                "data": df_work[['month', 'index']].to_dict('records'),
-                "unit": "",
-                "frequency": "月度"
-            }
+        async def fetch_pmi():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_pmi()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '制造业-指数']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['index'] = df_work['制造业-指数'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'index']].to_dict('records'),
+                    "unit": "",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] PMI fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] PMI fetch error: {e}")
+                return None
         
-        if "m2" in indicator_list:
-            df = _get_ak().macro_china_m2_yearly().tail(limit)
-            df_work = df[['月份', 'M2-同比增长']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['yoy'] = df_work['M2-同比增长'].apply(_safe_float)
-            result["m2"] = {
-                "data": df_work[['month', 'yoy']].to_dict('records'),
-                "unit": "%",
-                "frequency": "月度"
-            }
+        async def fetch_m2():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_m2_yearly()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', 'M2-同比增长']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['yoy'] = df_work['M2-同比增长'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'yoy']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] M2 fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] M2 fetch error: {e}")
+                return None
         
-        if "social_financing" in indicator_list:
-            df = _get_ak().macro_china_bank_financing().tail(limit)
-            df_work = df[['月份', '社会融资规模增量']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['total'] = df_work['社会融资规模增量'].apply(_safe_float)
-            result["social_financing"] = {
-                "data": df_work[['month', 'total']].to_dict('records'),
-                "unit": "亿元",
-                "frequency": "月度"
-            }
+        async def fetch_social_financing():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_bank_financing()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '社会融资规模增量']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['total'] = df_work['社会融资规模增量'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'total']].to_dict('records'),
+                    "unit": "亿元",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] Social financing fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] Social financing fetch error: {e}")
+                return None
         
-        if "industrial_production" in indicator_list:
-            df = _get_ak().macro_china_gyzjz().tail(limit)
-            df_work = df[['月份', '同比增长']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['yoy'] = df_work['同比增长'].apply(_safe_float)
-            result["industrial_production"] = {
-                "data": df_work[['month', 'yoy']].to_dict('records'),
-                "unit": "%",
-                "frequency": "月度"
-            }
+        async def fetch_industrial_production():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_gyzjz()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '同比增长']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['yoy'] = df_work['同比增长'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'yoy']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] Industrial production fetch error: {e}")
+                return None
         
-        if "unemployment" in indicator_list:
-            df = _get_ak().macro_china_urban_unemployment().tail(limit)
-            df_work = df[['月份', '失业率']].copy()
-            df_work['month'] = df_work['月份']
-            df_work['rate'] = df_work['失业率'].apply(_safe_float)
-            result["unemployment"] = {
-                "data": df_work[['month', 'rate']].to_dict('records'),
-                "unit": "%",
-                "frequency": "月度"
-            }
+        async def fetch_unemployment():
+            try:
+                df = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, lambda: _get_ak().macro_china_urban_unemployment()),
+                    timeout=MACRO_TIMEOUT
+                )
+                df = df.tail(limit)
+                df_work = df[['月份', '失业率']].copy()
+                df_work['month'] = df_work['月份']
+                df_work['rate'] = df_work['失业率'].apply(_safe_float)
+                return {
+                    "data": df_work[['month', 'rate']].to_dict('records'),
+                    "unit": "%",
+                    "frequency": "月度"
+                }
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Batch] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
+                return None
+            except Exception as e:
+                logger.error(f"[Macro Batch] Unemployment fetch error: {e}")
+                return None
         
-        return success_response({
+        tasks = []
+        indicator_map = {
+            "gdp": fetch_gdp,
+            "cpi": fetch_cpi,
+            "ppi": fetch_ppi,
+            "pmi": fetch_pmi,
+            "m2": fetch_m2,
+            "social_financing": fetch_social_financing,
+            "industrial_production": fetch_industrial_production,
+            "unemployment": fetch_unemployment
+        }
+        
+        for indicator in indicator_list:
+            if indicator in indicator_map:
+                tasks.append((indicator, indicator_map[indicator]()))
+        
+        results = await asyncio.gather(*[task[1] for task in tasks])
+        
+        for i, (indicator, _) in enumerate(tasks):
+            if results[i] is not None:
+                result[indicator] = results[i]
+        
+        failed = [tasks[i][0] for i in range(len(tasks)) if results[i] is None]
+        if failed:
+            logger.warning(f"[Macro Batch] Failed to fetch: {', '.join(failed)}")
+        
+        response_data = {
             "indicators": result,
             "last_update": datetime.now().isoformat()
-        })
+        }
+        
+        if failed:
+            response_data["partial"] = True
+            response_data["failed_indicators"] = failed
+        
+        return success_response(response_data)
     except Exception as e:
         logger.error(f"[Macro] Batch fetch error: {e}")
-        return error_response(f"批量获取失败: {str(e)}")
+        return error_response("批量获取失败，请稍后重试")
 
 
-# ── 国际宏观数据 ────────────────────────────────────────────────────────
-
-@router.get("/usa/cpi")
-async def get_usa_cpi(limit: int = 24):
+@router.get("/dashboard")
+async def get_macro_dashboard():
     """
-    获取美国CPI数据
+    BFF endpoint: Returns all macro data aggregated.
     
-    - **limit**: 返回最近N个月（默认24）
+    Optimized with:
+    - Per-indicator caching (each indicator cached separately)
+    - Staggered fetching with graceful degradation
+    - Background warmup on startup
     """
-    cache_key = f"macro_usa_cpi_{limit}"
-    cached = get_cached(cache_key)
+    cache = get_cache()
+    cache_key = "macro:dashboard:v3"
+    
+    # Check dashboard cache first (fast path)
+    cached = cache.get(cache_key)
     if cached:
-        return cached
+        return success_response(cached)
     
-    try:
-        df = _get_ak().macro_usa_cpi()
-        df = df.tail(limit) if len(df) > limit else df
-        
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "date": str(row.get("日期", "")),
-                "cpi_yoy": _safe_float(row.get("同比", None)),
-                "cpi_mom": _safe_float(row.get("环比", None)),
-            })
-        
-        result = success_response({
-            "indicator": "CPI",
-            "country": "美国",
-            "name": "消费者物价指数",
-            "unit": "%",
-            "frequency": "月度",
-            "data": data,
-            "last_update": datetime.now().isoformat()
-        })
-        set_cached(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"[Macro] USA CPI fetch error: {e}")
-        return error_response(f"获取美国CPI失败: {str(e)}")
-
-
-@router.get("/usa/gdp")
-async def get_usa_gdp(limit: int = 20):
-    """
-    获取美国GDP数据
-    
-    - **limit**: 返回最近N个季度（默认20）
-    """
-    cache_key = f"macro_usa_gdp_{limit}"
-    cached = get_cached(cache_key)
-    if cached:
-        return cached
-    
-    try:
-        df = _get_ak().macro_usa_gdp()
-        df = df.tail(limit) if len(df) > limit else df
-        
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "quarter": str(row.get("季度", "")),
-                "gdp_yoy": _safe_float(row.get("同比", None)),
-            })
-        
-        result = success_response({
-            "indicator": "GDP",
-            "country": "美国",
-            "name": "国内生产总值",
-            "unit": "%",
-            "frequency": "季度",
-            "data": data,
-            "last_update": datetime.now().isoformat()
-        })
-        set_cached(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"[Macro] USA GDP fetch error: {e}")
-        return error_response(f"获取美国GDP失败: {str(e)}")
-
-
-@router.get("/usa/unemployment")
-async def get_usa_unemployment(limit: int = 24):
-    """
-    获取美国失业率数据
-    
-    - **limit**: 返回最近N个月（默认24）
-    """
-    cache_key = f"macro_usa_unemployment_{limit}"
-    cached = get_cached(cache_key)
-    if cached:
-        return cached
-    
-    try:
-        df = _get_ak().macro_usa_unemployment()
-        df = df.tail(limit) if len(df) > limit else df
-        
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "date": str(row.get("日期", "")),
-                "rate": _safe_float(row.get("失业率", None)),
-            })
-        
-        result = success_response({
-            "indicator": "Unemployment",
-            "country": "美国",
-            "name": "失业率",
-            "unit": "%",
-            "frequency": "月度",
-            "data": data,
-            "last_update": datetime.now().isoformat()
-        })
-        set_cached(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"[Macro] USA Unemployment fetch error: {e}")
-        return error_response(f"获取美国失业率失败: {str(e)}")
-
-
-@router.get("/euro/gdp")
-async def get_euro_gdp(limit: int = 20):
-    """
-    获取欧元区GDP数据
-    
-    - **limit**: 返回最近N个季度（默认20）
-    """
-    cache_key = f"macro_euro_gdp_{limit}"
-    cached = get_cached(cache_key)
-    if cached:
-        return cached
-    
-    try:
-        df = _get_ak().macro_euro_gdp()
-        df = df.tail(limit) if len(df) > limit else df
-        
-        data = []
-        for _, row in df.iterrows():
-            data.append({
-                "quarter": str(row.get("季度", "")),
-                "gdp_yoy": _safe_float(row.get("同比", None)),
-            })
-        
-        result = success_response({
-            "indicator": "GDP",
-            "country": "欧元区",
-            "name": "国内生产总值",
-            "unit": "%",
-            "frequency": "季度",
-            "data": data,
-            "last_update": datetime.now().isoformat()
-        })
-        set_cached(cache_key, result)
-        return result
-    except Exception as e:
-        logger.error(f"[Macro] Euro GDP fetch error: {e}")
-        return error_response(f"获取欧元区GDP失败: {str(e)}")
-
-
-@router.get("/international")
-async def get_international_macro():
-    """
-    获取国际宏观经济数据概览
-    
-    返回美国、欧元区主要指标
-    """
-    cache_key = "macro_international_overview"
-    cached = get_cached(cache_key)
-    if cached:
-        return cached
-    
-    result = {
-        "usa": {},
-        "euro": {},
-        "last_update": datetime.now().isoformat()
+    # Per-indicator cache keys
+    INDICATOR_CACHE_KEYS = {
+        "gdp": "macro:gdp:v1",
+        "cpi": "macro:cpi:v1",
+        "ppi": "macro:ppi:v1",
+        "pmi": "macro:pmi:v1",
+        "m2": "macro:m2:v1",
+        "sf": "macro:sf:v1",
+        "ind": "macro:ind:v1",
+        "unemp": "macro:unemp:v1",
     }
     
     try:
-        # 美国CPI
-        try:
-            df = _get_ak().macro_usa_cpi()
-            if df is not None and not df.empty:
-                latest = df.iloc[-1]
-                result["usa"]["cpi"] = {
-                    "date": str(latest.get("日期", "")),
-                    "yoy": _safe_float(latest.get("同比", None)),
-                }
-        except Exception as e:
-            logger.warning(f"[Macro] USA CPI fetch warning: {e}")
+        loop = asyncio.get_running_loop()
+        pd = _get_pd()
+        result = {}
+        raw_data = {}
         
-        # 美国GDP
-        try:
-            df = _get_ak().macro_usa_gdp()
-            if df is not None and not df.empty:
-                latest = df.iloc[-1]
-                result["usa"]["gdp"] = {
-                    "quarter": str(latest.get("季度", "")),
-                    "yoy": _safe_float(latest.get("同比", None)),
-                }
-        except Exception as e:
-            logger.warning(f"[Macro] USA GDP fetch warning: {e}")
+        # Fetch each indicator from cache or fetch fresh
+        async def fetch_indicator(name, cache_key, fetch_func):
+            """Fetch indicator from cache or fetch fresh"""
+            cached_indicator = cache.get(cache_key)
+            if cached_indicator is not None:
+                logger.debug(f"[Macro Dashboard] Cache HIT: {name}")
+                return cached_indicator, True
+            
+            try:
+                data = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, fetch_func),
+                    timeout=MACRO_TIMEOUT
+                )
+                if data is not None:
+                    cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
+                    logger.debug(f"[Macro Dashboard] Fetched fresh: {name}")
+                return data, False
+            except asyncio.TimeoutError:
+                logger.warning(f"[Macro Dashboard] {name} fetch timeout")
+                return None, False
+            except Exception as e:
+                logger.error(f"[Macro Dashboard] {name} fetch error: {e}")
+                return None, False
         
-        # 美国失业率
-        try:
-            df = _get_ak().macro_usa_unemployment()
-            if df is not None and not df.empty:
-                latest = df.iloc[-1]
-                result["usa"]["unemployment"] = {
-                    "date": str(latest.get("日期", "")),
-                    "rate": _safe_float(latest.get("失业率", None)),
-                }
-        except Exception as e:
-            logger.warning(f"[Macro] USA Unemployment fetch warning: {e}")
+        # Define fetch functions
+        fetch_funcs = {
+            "gdp": lambda: _get_ak().macro_china_gdp(),
+            "cpi": lambda: _get_ak().macro_china_cpi(),
+            "ppi": lambda: _get_ak().macro_china_ppi(),
+            "pmi": lambda: _get_ak().macro_china_pmi(),
+            "m2": lambda: _get_ak().macro_china_supply_of_money(),
+            "sf": lambda: _get_ak().macro_china_shrzgm(),
+            "ind": lambda: _get_ak().macro_china_industrial_production_yoy(),
+            "unemp": lambda: _get_ak().macro_china_urban_unemployment(),
+        }
         
-        # 欧元区GDP
-        try:
-            df = _get_ak().macro_euro_gdp()
-            if df is not None and not df.empty:
-                latest = df.iloc[-1]
-                result["euro"]["gdp"] = {
-                    "quarter": str(latest.get("季度", "")),
-                    "yoy": _safe_float(latest.get("同比", None)),
-                }
-        except Exception as e:
-            logger.warning(f"[Macro] Euro GDP fetch warning: {e}")
+        # Fetch all indicators in parallel (with per-indicator caching)
+        fetch_tasks = [
+            fetch_indicator(name, INDICATOR_CACHE_KEYS[name], fetch_funcs[name])
+            for name in fetch_funcs.keys()
+        ]
         
-        response = success_response(result)
-        set_cached(cache_key, response)
-        return response
+        fetch_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
         
+        # Map results to names
+        indicator_names = list(fetch_funcs.keys())
+        for i, (data, from_cache) in enumerate(fetch_results):
+            if isinstance(data, Exception):
+                logger.warning(f"[Macro Dashboard] {indicator_names[i]} fetch exception: {data}")
+                raw_data[indicator_names[i]] = None
+            else:
+                raw_data[indicator_names[i]] = data
+        
+        gdp_df = raw_data.get("gdp")
+        cpi_df = raw_data.get("cpi")
+        ppi_df = raw_data.get("ppi")
+        pmi_df = raw_data.get("pmi")
+        m2_df = raw_data.get("m2")
+        sf_df = raw_data.get("sf")
+        ind_df = raw_data.get("ind")
+        unemp_df = raw_data.get("unemp")
+        
+        # Process data (same as before)
+        if gdp_df is not None and len(gdp_df) > 0:
+            df_work = gdp_df[['季度', '国内生产总值-同比增长']].head(20).copy()
+            df_work['quarter'] = df_work['季度']
+            df_work['gdp_yoy'] = df_work['国内生产总值-同比增长'].apply(_safe_float)
+            result['gdp'] = {'data': df_work[['quarter', 'gdp_yoy']].to_dict('records')}
+        
+        if cpi_df is not None and len(cpi_df) > 0:
+            df_work = cpi_df[['月份', '全国-同比增长', '全国-环比增长']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['nation_yoy'] = df_work['全国-同比增长'].apply(_safe_float)
+            df_work['nation_mom'] = df_work['全国-环比增长'].apply(_safe_float)
+            result['cpi'] = {'data': df_work[['month', 'nation_yoy', 'nation_mom']].to_dict('records')}
+        
+        if ppi_df is not None and len(ppi_df) > 0:
+            df_work = ppi_df[['月份', '当月同比增长']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['yoy'] = df_work['当月同比增长'].apply(_safe_float)
+            result['ppi'] = {'data': df_work[['month', 'yoy']].to_dict('records')}
+        
+        if pmi_df is not None and len(pmi_df) > 0:
+            df_work = pmi_df[['月份', '制造业-指数', '非制造业-指数']].head(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['manufacturing_index'] = df_work['制造业-指数'].apply(_safe_float)
+            df_work['non_manufacturing_index'] = df_work['非制造业-指数'].apply(_safe_float)
+            result['pmi'] = {'data': df_work[['month', 'manufacturing_index', 'non_manufacturing_index']].to_dict('records')}
+        
+        if m2_df is not None and len(m2_df) > 0:
+            df_work = m2_df[['统计时间', '货币和准货币（广义货币M2）同比增长']].head(24).copy()
+            df_work['month'] = df_work['统计时间']
+            df_work['m2_yoy'] = df_work['货币和准货币（广义货币M2）同比增长'].apply(_safe_float)
+            result['m2'] = {'data': df_work[['month', 'm2_yoy']].to_dict('records')}
+        
+        if sf_df is not None and len(sf_df) > 0:
+            df_work = sf_df[['月份', '社会融资规模增量']].tail(24).copy()
+            df_work['month'] = df_work['月份']
+            df_work['total'] = df_work['社会融资规模增量'].apply(_safe_float)
+            result['social_financing'] = {'data': df_work[['month', 'total']].to_dict('records')}
+        
+        if ind_df is not None and len(ind_df) > 0:
+            value_col = '今值' if '今值' in ind_df.columns else ('今值(%)' if '今值(%)' in ind_df.columns else None)
+            if value_col and '日期' in ind_df.columns:
+                df_work = ind_df[['日期', value_col]].copy()
+                df_work = df_work[pd.notna(df_work[value_col])].tail(24)
+                df_work['month'] = df_work['日期'].apply(lambda x: _safe_strftime(x, '%Y-%m'))
+                df_work['yoy'] = df_work[value_col].apply(_safe_float)
+                result['industrial_production'] = {'data': df_work[['month', 'yoy']].to_dict('records')}
+        
+        if unemp_df is not None and len(unemp_df) > 0:
+            if 'item' in unemp_df.columns:
+                unemp_df = unemp_df[unemp_df['item'].str.strip() == '全国城镇调查失业率']
+            date_col = 'date' if 'date' in unemp_df.columns else ('月份' if '月份' in unemp_df.columns else None)
+            value_col = 'value' if 'value' in unemp_df.columns else ('失业率' if '失业率' in unemp_df.columns else None)
+            if date_col and value_col:
+                df_work = unemp_df[[date_col, value_col]].tail(24).copy()
+                df_work['month'] = df_work[date_col]
+                df_work['rate'] = df_work[value_col].apply(_safe_float)
+                result['unemployment'] = {'data': df_work[['month', 'rate']].to_dict('records')}
+        
+        # Build overview
+        gdp_latest = gdp_df.iloc[0] if gdp_df is not None and len(gdp_df) > 0 else None
+        cpi_latest = cpi_df.iloc[0] if cpi_df is not None and len(cpi_df) > 0 else None
+        ppi_latest = ppi_df.iloc[0] if ppi_df is not None and len(ppi_df) > 0 else None
+        pmi_latest = pmi_df.iloc[0] if pmi_df is not None and len(pmi_df) > 0 else None
+        m2_latest = m2_df.iloc[0] if m2_df is not None and len(m2_df) > 0 else None
+        sf_latest = sf_df.iloc[-1] if sf_df is not None and len(sf_df) > 0 else None
+        
+        ind_df_valid = ind_df[pd.notna(ind_df.get('今值', ind_df.get('今值(%)', pd.Series([None]*len(ind_df)))))] if ind_df is not None and len(ind_df) > 0 and ('今值' in ind_df.columns or '今值(%)' in ind_df.columns) else None
+        ind_latest = ind_df_valid.iloc[-1] if ind_df_valid is not None and len(ind_df_valid) > 0 else None
+        
+        unemp_df_filtered = unemp_df[unemp_df.get('item', pd.Series(['']*len(unemp_df))).str.strip() == '全国城镇调查失业率'] if unemp_df is not None and len(unemp_df) > 0 and 'item' in unemp_df.columns else None
+        unemp_latest = unemp_df_filtered.iloc[-1] if unemp_df_filtered is not None and len(unemp_df_filtered) > 0 else None
+        
+        result['overview'] = {
+            "gdp": {
+                "period": gdp_latest["季度"] if gdp_latest is not None else None,
+                "value": float(gdp_latest["国内生产总值-绝对值"]) if gdp_latest is not None and not pd.isna(gdp_latest.get("国内生产总值-绝对值")) else None,
+                "yoy": float(gdp_latest["国内生产总值-同比增长"]) if gdp_latest is not None and not pd.isna(gdp_latest.get("国内生产总值-同比增长")) else None,
+            },
+            "cpi": {
+                "period": cpi_latest["月份"] if cpi_latest is not None else None,
+                "value": float(cpi_latest["全国-当月"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-当月")) else None,
+                "yoy": float(cpi_latest["全国-同比增长"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-同比增长")) else None,
+                "mom": float(cpi_latest["全国-环比增长"]) if cpi_latest is not None and not pd.isna(cpi_latest.get("全国-环比增长")) else None,
+            },
+            "ppi": {
+                "period": ppi_latest["月份"] if ppi_latest is not None else None,
+                "value": float(ppi_latest["当月"]) if ppi_latest is not None and not pd.isna(ppi_latest.get("当月")) else None,
+                "yoy": float(ppi_latest["当月同比增长"]) if ppi_latest is not None and not pd.isna(ppi_latest.get("当月同比增长")) else None,
+            },
+            "pmi": {
+                "period": pmi_latest["月份"] if pmi_latest is not None else None,
+                "manufacturing": float(pmi_latest["制造业-指数"]) if pmi_latest is not None and not pd.isna(pmi_latest.get("制造业-指数")) else None,
+                "non_manufacturing": float(pmi_latest["非制造业-指数"]) if pmi_latest is not None and not pd.isna(pmi_latest.get("非制造业-指数")) else None,
+            },
+            "m2": {
+                "period": m2_latest["统计时间"] if m2_latest is not None else None,
+                "value": float(m2_latest["货币和准货币（广义货币M2）"]) if m2_latest is not None and not pd.isna(m2_latest.get("货币和准货币（广义货币M2）")) else None,
+                "yoy": float(m2_latest["货币和准货币（广义货币M2）同比增长"]) if m2_latest is not None and not pd.isna(m2_latest.get("货币和准货币（广义货币M2）同比增长")) else None,
+            },
+            "social_financing": {
+                "period": sf_latest["月份"] if sf_latest is not None else None,
+                "total": float(sf_latest["社会融资规模增量"]) if sf_latest is not None and not pd.isna(sf_latest.get("社会融资规模增量")) else None,
+            },
+            "industrial_production": {
+                "period": ind_latest.get("日期", ind_latest.get("月份", "")).strftime('%Y年%m月份') if ind_latest is not None and hasattr(ind_latest.get("日期", ind_latest.get("月份")), 'strftime') else (str(ind_latest.get("日期", ind_latest.get("月份", ""))) if ind_latest is not None else None),
+                "yoy": float(ind_latest.get("今值", ind_latest.get("今值(%)"))) if ind_latest is not None and not pd.isna(ind_latest.get("今值", ind_latest.get("今值(%)"))) else None,
+            },
+            "unemployment": {
+                "period": unemp_latest.get("date", unemp_latest.get("月份")) if unemp_latest is not None else None,
+                "rate": float(unemp_latest.get("value", unemp_latest.get("失业率"))) if unemp_latest is not None and not pd.isna(unemp_latest.get("value", unemp_latest.get("失业率"))) else None,
+            }
+        }
+        
+        result['calendar'] = []
+        if gdp_latest is not None:
+            result['calendar'].append({
+                "date": gdp_latest.get("季度", ""),
+                "indicator": "GDP",
+                "name": "国内生产总值",
+                "status": "released",
+                "value": _safe_float(gdp_latest.get("国内生产总值-同比增长")),
+                "unit": "%"
+            })
+        if cpi_latest is not None:
+            result['calendar'].append({
+                "date": cpi_latest.get("月份", ""),
+                "indicator": "CPI",
+                "name": "居民消费价格指数",
+                "status": "released",
+                "value": _safe_float(cpi_latest.get("全国-同比增长")),
+                "unit": "%"
+            })
+        if pmi_latest is not None:
+            result['calendar'].append({
+                "date": pmi_latest.get("月份", ""),
+                "indicator": "PMI",
+                "name": "采购经理指数",
+                "status": "released",
+                "value": _safe_float(pmi_latest.get("制造业-指数")),
+                "unit": ""
+            })
+        
+        result['last_update'] = datetime.now().isoformat()
+        result['partial'] = any(v is None for v in raw_data.values())
+        
+        cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
+        
+        return success_response(result)
     except Exception as e:
-        logger.error(f"[Macro] International overview fetch error: {e}")
-        return error_response(f"获取国际宏观数据失败: {str(e)}")
+        logger.error(f"[Macro Dashboard] Fetch error: {e}")
+        return error_response("宏观数据获取失败，请稍后重试")
+
+
+async def warmup_macro_cache():
+    """Pre-populate macro cache on server startup"""
+    logger.info("[Macro] Starting cache warmup...")
+    cache = get_cache()
+    
+    INDICATOR_CACHE_KEYS = {
+        "gdp": "macro:gdp:v1",
+        "cpi": "macro:cpi:v1",
+        "ppi": "macro:ppi:v1",
+        "pmi": "macro:pmi:v1",
+        "m2": "macro:m2:v1",
+        "sf": "macro:sf:v1",
+        "ind": "macro:ind:v1",
+        "unemp": "macro:unemp:v1",
+    }
+    
+    fetch_funcs = {
+        "gdp": lambda: _get_ak().macro_china_gdp(),
+        "cpi": lambda: _get_ak().macro_china_cpi(),
+        "ppi": lambda: _get_ak().macro_china_ppi(),
+        "pmi": lambda: _get_ak().macro_china_pmi(),
+        "m2": lambda: _get_ak().macro_china_supply_of_money(),
+        "sf": lambda: _get_ak().macro_china_shrzgm(),
+        "ind": lambda: _get_ak().macro_china_industrial_production_yoy(),
+        "unemp": lambda: _get_ak().macro_china_urban_unemployment(),
+    }
+    
+    loop = asyncio.get_running_loop()
+    
+    async def warmup_indicator(name, cache_key, fetch_func):
+        try:
+            data = await asyncio.wait_for(
+                loop.run_in_executor(_executor, fetch_func),
+                timeout=MACRO_TIMEOUT
+            )
+            if data is not None:
+                cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
+                logger.info(f"[Macro] Warmed up: {name}")
+        except Exception as e:
+            logger.warning(f"[Macro] Warmup failed for {name}: {e}")
+    
+    tasks = [
+        warmup_indicator(name, INDICATOR_CACHE_KEYS[name], fetch_funcs[name])
+        for name in fetch_funcs.keys()
+    ]
+    
+    try:
+        await asyncio.gather(*tasks, return_exceptions=True)
+        logger.info("[Macro] Cache warmup completed")
+    except Exception as e:
+        logger.warning(f"[Macro] Cache warmup failed: {e}")
+
+
+

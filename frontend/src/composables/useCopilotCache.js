@@ -1,13 +1,16 @@
 // 云端 Copilot 缓存管理
+import { onUnmounted } from 'vue'
+import LRUCache from '../utils/lruCache.js'
 
-const RESPONSE_CACHE = new Map()  // 简单内存缓存
+const RESPONSE_CACHE = new LRUCache(100)  // LRU缓存，最多100条
 const CACHE_TTL = 5 * 60 * 1000   // 5分钟缓存
 let currentAbortController = null  // 用于取消请求
+let cleanupInterval = null  // Cache lifecycle cleanup interval
 
 // 清理过期缓存
 export function cleanCache() {
   const now = Date.now()
-  for (const [key, value] of RESPONSE_CACHE) {
+  for (const [key, value] of RESPONSE_CACHE.entries()) {
     if (now - value.timestamp > CACHE_TTL) {
       RESPONSE_CACHE.delete(key)
     }
@@ -33,4 +36,29 @@ export function setCachedResponse(prompt, response) {
   })
 }
 
+// 获取缓存统计信息
+export function getCacheStats() {
+  return {
+    size: RESPONSE_CACHE.size,
+    capacity: RESPONSE_CACHE.capacity,
+    utilization: RESPONSE_CACHE.size / RESPONSE_CACHE.capacity
+  }
+}
+
 export { currentAbortController }
+
+// Cache lifecycle management - auto cleanup
+export function useCopilotCacheLifecycle() {
+  if (!cleanupInterval) {
+    cleanupInterval = setInterval(() => {
+      cleanCache()
+    }, CACHE_TTL)
+  }
+  
+  onUnmounted(() => {
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval)
+      cleanupInterval = null
+    }
+  })
+}

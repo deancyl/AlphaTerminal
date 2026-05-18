@@ -1,60 +1,130 @@
 <template>
-  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto">
-    
+  <div class="flex flex-col h-full bg-terminal-bg text-terminal-fg font-mono overflow-y-auto overflow-x-hidden" role="main" aria-label="基金看板">
+
     <!-- 顶部：选项卡 + 搜索 -->
     <div class="p-4 border-b border-theme-secondary shrink-0 bg-terminal-panel/50">
       <div class="flex flex-col gap-3">
         <!-- 选项卡 -->
-        <div class="flex gap-2">
-          <button 
+        <div class="flex gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1" role="tablist" aria-label="基金类型选择">
+          <button
             @click="activeTab = 'etf'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
-            :class="activeTab === 'etf' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            role="tab"
+            id="tab-etf"
+            :aria-selected="activeTab === 'etf'"
+            aria-controls="panel-etf"
+            tabindex="0"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
+            :class="activeTab === 'etf'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >📊 场内基金 (ETF/LOF)</button>
-          <button 
+          <button
             @click="activeTab = 'open'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
-            :class="activeTab === 'open' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            role="tab"
+            id="tab-open"
+            :aria-selected="activeTab === 'open'"
+            aria-controls="panel-open"
+            tabindex="0"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
+            :class="activeTab === 'open'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >💰 场外公募基金</button>
-          <button 
+          <button
             @click="activeTab = 'compare'"
-            class="px-4 py-2 text-sm rounded-t-sm border-b-2 transition-colors"
-            :class="activeTab === 'compare' 
-              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent' 
+            role="tab"
+            id="tab-compare"
+            :aria-selected="activeTab === 'compare'"
+            aria-controls="panel-compare"
+            tabindex="0"
+            class="px-3 py-2 text-xs sm:text-sm rounded-t-sm border-b-2 transition-colors whitespace-nowrap min-h-[44px] flex-shrink-0"
+            :class="activeTab === 'compare'
+              ? 'bg-terminal-panel border-terminal-accent text-terminal-accent'
               : 'bg-terminal-bg border-transparent text-theme-tertiary hover:text-theme-secondary'"
           >🔀 基金对比</button>
         </div>
         
         <!-- 搜索栏（ETF/公募基金）-->
-        <div v-if="activeTab !== 'compare'" class="flex items-center gap-2">
+        <div v-if="activeTab !== 'compare'" class="flex items-center gap-2" role="search">
           <div class="relative flex-1">
-            <input 
-              v-model="searchQuery" 
+            <label :for="searchInputId" class="sr-only">搜索基金</label>
+            <input
+              :id="searchInputId"
+              v-model="searchQuery"
               @keyup.enter="searchFund"
+              @keyup.escape="clearSearch"
               :placeholder="activeTab === 'etf' ? '输入 ETF 代码（如 510300）' : '输入基金代码/名称/拼音'"
               class="w-full bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none"
+              title="按 Enter 搜索，Esc 清空"
+              aria-describedby="search-hint"
             />
-            <button 
+            <button
               @click="searchFund"
+              :aria-label="activeTab === 'etf' ? '搜索 ETF 基金' : '搜索公募基金'"
               class="absolute right-1 top-1/2 -translate-y-1/2 px-2 py-0.5 text-xs bg-terminal-accent/20 text-terminal-accent rounded-sm hover:bg-terminal-accent/30 transition"
             >🔍</button>
           </div>
-          <!-- 快捷列表 -->
-          <div class="flex gap-1 flex-wrap">
-            <button 
-              v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)" 
+          <span id="search-hint" class="sr-only">按 Enter 键搜索，Esc 键清空输入</span>
+          <!-- 快捷列表 (方向键切换) -->
+          <div
+            class="flex gap-1 flex-wrap"
+            role="group"
+            aria-label="快捷基金列表"
+            @keyup.left="navigateQuickList(-1)"
+            @keyup.right="navigateQuickList(1)"
+          >
+            <button
+              v-for="(f, idx) in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
-              class="px-2 py-1 text-xs rounded-sm border transition-colors whitespace-nowrap"
-              :class="selectedFundCode === f.code 
-                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+              :tabindex="0"
+              class="px-3 py-2.5 text-xs rounded-sm border transition-colors whitespace-nowrap min-h-[44px]"
+              :class="selectedFundCode === f.code
+                ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                 : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
+              :aria-label="`${f.name}，代码 ${f.code}`"
+              :title="`${f.name} (${f.code}) - 左右箭头切换`"
             >
               {{ f.name }}
+            </button>
+          </div>
+        </div>
+
+        <!-- 数据新鲜度指示器 -->
+        <div v-if="fundInfo" class="flex items-center justify-between text-xs" role="status" aria-live="polite">
+          <div class="flex items-center gap-3">
+            <!-- 基金信息新鲜度 -->
+            <div v-if="fundInfoTimestamp" class="flex items-center gap-1" :aria-label="`基金信息更新时间：${fundInfoFreshness.ageText}`">
+              <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.icon }}</span>
+              <span class="text-theme-tertiary">信息:</span>
+              <span :style="{ color: fundInfoFreshness.color }">{{ fundInfoFreshness.ageText }}</span>
+            </div>
+            <!-- 净值历史新鲜度 -->
+            <div v-if="navHistoryTimestamp && activeTab !== 'etf'" class="flex items-center gap-1" :aria-label="`净值数据更新时间：${navHistoryFreshness.ageText}`">
+              <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.icon }}</span>
+              <span class="text-theme-tertiary">净值:</span>
+              <span :style="{ color: navHistoryFreshness.color }">{{ navHistoryFreshness.ageText }}</span>
+            </div>
+            <!-- 持仓新鲜度 -->
+            <div v-if="portfolioTimestamp && activeTab !== 'etf'" class="flex items-center gap-1" :aria-label="`持仓数据更新时间：${portfolioFreshness.ageText}`">
+              <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.icon }}</span>
+              <span class="text-theme-tertiary">持仓:</span>
+              <span :style="{ color: portfolioFreshness.color }">{{ portfolioFreshness.ageText }}</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- 过期警告 -->
+            <span v-if="hasStaleData" class="text-[var(--color-danger)] text-xs" role="alert" aria-live="assertive">
+              ⚠️ 数据已过期，请刷新
+            </span>
+            <!-- 刷新按钮 -->
+            <button
+              @click="refreshAllData"
+              :disabled="loading || autoLoading"
+              :aria-label="loading || autoLoading ? '数据加载中，请稍候' : '刷新所有数据'"
+              class="px-2 py-0.5 rounded-sm border border-theme-secondary text-theme-tertiary hover:border-terminal-accent hover:text-terminal-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              🔄 刷新
             </button>
           </div>
         </div>
@@ -62,7 +132,7 @@
     </div>
 
     <!-- 加载中（包括自动加载） -->
-    <div v-if="loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <div v-if="loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden" aria-live="polite" aria-busy="true" aria-label="加载基金数据中">
       <!-- 顶部指标骨架 -->
       <div class="grid grid-cols-3 gap-3">
         <div class="skeleton h-16 rounded-sm" v-for="n in 3" :key="n"></div>
@@ -76,15 +146,16 @@
     </div>
 
     <!-- 自动加载失败 -->
-    <div v-else-if="autoLoadFailed && !fundInfo" class="flex-1 flex items-center justify-center">
+    <div v-else-if="autoLoadFailed && !fundInfo" class="flex-1 flex items-center justify-center" role="alert" aria-live="assertive">
       <div class="text-center">
         <div class="text-4xl mb-3">⚠️</div>
         <div class="text-theme-muted text-sm mb-3">自动加载失败</div>
         <div class="text-xs text-theme-tertiary mb-4">
           请检查网络连接后重试
         </div>
-        <button 
+        <button
           @click="retryAutoLoad"
+          aria-label="重试自动加载"
           class="px-4 py-2 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition"
         >
           🔄 重试
@@ -93,9 +164,9 @@
     </div>
 
     <!-- 无数据（仅 ETF/公募基金显示） -->
-    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading && !autoLoading" class="flex-1 flex items-center justify-center">
+    <div v-else-if="activeTab !== 'compare' && !fundInfo && !loading && !autoLoading" class="flex-1 flex items-center justify-center" role="region" :aria-label="activeTab === 'etf' ? 'ETF 基金查询' : '公募基金查询'">
       <div class="text-center py-12">
-        <div class="text-6xl mb-4">📊</div>
+        <div class="text-6xl mb-4" aria-hidden="true">📊</div>
         <div class="text-lg text-terminal-accent font-bold mb-2">
           {{ activeTab === 'etf' ? 'ETF 基金查询' : '公募基金查询' }}
         </div>
@@ -105,13 +176,16 @@
 
         <!-- 快捷基金按钮 -->
         <div class="bg-terminal-panel/50 border border-theme rounded-sm p-4 mb-4 max-w-2xl mx-auto">
-          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：</div>
-          <div class="flex flex-wrap gap-2 justify-center">
+          <div class="text-xs text-terminal-dim mb-3">💡 快速查询：<span class="text-xs">(方向键/ Tab 导航)</span></div>
+          <div class="flex flex-wrap gap-2 justify-center" role="group" aria-label="快捷基金列表">
             <button
               v-for="f in (activeTab === 'etf' ? quickETFs : quickFunds)"
               :key="f.code"
               @click="selectFund(f.code)"
-              class="px-3 py-2 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent"
+              :tabindex="0"
+              class="px-3 py-2.5 text-sm rounded-sm border transition-colors whitespace-nowrap bg-terminal-bg border-theme-secondary text-theme-secondary hover:border-terminal-accent hover:text-terminal-accent min-h-[44px]"
+              :aria-label="`${f.name}，代码 ${f.code}`"
+              :title="`${f.name} (${f.code})`"
             >
               {{ f.name }}
             </button>
@@ -125,59 +199,71 @@
     </div>
 
     <!-- 主内容区（ETF/公募基金/对比） -->
-    <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-4 space-y-4 overflow-y-auto">
+    <div v-if="activeTab === 'compare' || fundInfo || loading || autoLoading" class="flex-1 p-2 sm:p-4 space-y-4 overflow-y-auto overflow-x-hidden">
       
       <!-- ETF 面板 -->
-      <div v-if="activeTab === 'etf'" class="space-y-4">
+      <div v-if="activeTab === 'etf'" role="tabpanel" id="panel-etf" aria-labelledby="tab-etf" tabindex="-1" class="space-y-4">
         <!-- 核心指标（ETF 特有） -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">最新价</div>
-            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
-              {{ fundInfo?.price ?? '-' }}
+          <!-- Loading skeleton for core metrics -->
+          <template v-if="loadingFundInfo">
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3" v-for="n in 6" :key="n">
+              <div class="skeleton h-3 w-12 rounded-sm mb-2"></div>
+              <div class="skeleton h-5 w-16 rounded-sm"></div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">涨跌幅</div>
-            <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
-              {{ fundInfo?.change_pct ?? '-' }}%
+          </template>
+          <template v-else>
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">最新价</div>
+              <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
+                {{ fundInfo?.price ?? '-' }}
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">IOPV 净值</div>
-            <div class="text-lg font-bold text-theme-primary">
-              {{ fundInfo?.iopv ?? '-' }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">涨跌幅</div>
+              <div class="text-lg font-bold" :class="getChangeColor(fundInfo?.change_pct)">
+                {{ fundInfo?.change_pct ?? '-' }}%
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">折溢价率</div>
-            <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
-              {{ fundInfo?.premium_rate ?? '-' }}%
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">IOPV 净值</div>
+              <div class="text-lg font-bold text-theme-primary">
+                {{ fundInfo?.iopv ?? '-' }}
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">成交量</div>
-            <div class="text-sm font-bold text-theme-primary">
-              {{ formatVolume(fundInfo?.volume) }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">折溢价率</div>
+              <div class="text-lg font-bold" :class="getChangeColor(-fundInfo?.premium_rate)">
+                {{ fundInfo?.premium_rate ?? '-' }}%
+              </div>
             </div>
-          </div>
-          <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
-            <div class="text-[10px] text-theme-tertiary mb-1">成交额</div>
-            <div class="text-sm font-bold text-theme-primary">
-              {{ formatAmount(fundInfo?.amount) }}
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">成交量</div>
+              <div class="text-sm font-bold text-theme-primary">
+                {{ formatVolume(fundInfo?.volume) }}
+              </div>
             </div>
-          </div>
+            <div class="bg-terminal-panel/50 border border-theme rounded-sm p-3">
+              <div class="text-xs text-theme-tertiary mb-1">成交额</div>
+              <div class="text-sm font-bold text-theme-primary">
+                {{ formatAmount(fundInfo?.amount) }}
+              </div>
+            </div>
+          </template>
         </div>
 
         <!-- 买卖盘五档 -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- 买盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="买盘五档">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📗 买盘五档</span>
-              <span class="text-[10px] text-theme-tertiary">实时</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📗 买盘五档</span>
+              <span class="text-xs text-theme-tertiary">实时</span>
             </div>
-            <div class="space-y-1">
+            <div v-if="loadingFundInfo" class="space-y-1">
+              <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
+            </div>
+            <div v-else class="space-y-1">
               <div v-for="bid in fundInfo?.bids || []" :key="bid.level" 
                    class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="bid.level === 1 ? 'bg-[var(--color-danger-bg)]' : ''">
@@ -189,12 +275,15 @@
           </div>
           
           <!-- 卖盘 -->
-          <div class="bg-terminal-panel border border-theme rounded-sm p-4">
+          <div class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="卖盘五档">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📕 卖盘五档</span>
-              <span class="text-[10px] text-theme-tertiary">实时</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📕 卖盘五档</span>
+              <span class="text-xs text-theme-tertiary">实时</span>
             </div>
-            <div class="space-y-1">
+            <div v-if="loadingFundInfo" class="space-y-1">
+              <div class="skeleton h-6 rounded-sm" v-for="n in 5" :key="n"></div>
+            </div>
+            <div v-else class="space-y-1">
               <div v-for="ask in fundInfo?.asks || []" :key="ask.level" 
                    class="flex items-center justify-between py-1 px-2 rounded-sm"
                    :class="ask.level === 1 ? 'bg-[var(--color-success-bg)]' : ''">
@@ -209,112 +298,152 @@
         <!-- K 线走势图 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📈 K 线走势</span>
-            <div class="flex gap-1">
-              <button 
-                v-for="p in klinePeriods" 
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 K 线走势</span>
+            <div class="flex gap-1" role="group" aria-label="K线周期选择">
+              <button
+                v-for="p in klinePeriods"
                 :key="p.key"
                 @click="loadETFHistory(p.key)"
-                class="px-2 py-0.5 text-[10px] rounded-sm border transition"
-                :class="klinePeriod === p.key 
-                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+                :aria-label="`切换到${p.label}K线`"
+                :aria-pressed="klinePeriod === p.key"
+                class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
+                :class="klinePeriod === p.key
+                  ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                   : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
               >{{ p.label }}</button>
             </div>
           </div>
-          <div ref="klineChartRef" class="w-full sm:h-[320px]" style="height: 280px;"></div>
+          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72" role="status" aria-live="polite">
+            <div class="text-center">
+              <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
+              <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
+            </div>
+          </div>
+          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72" role="alert" aria-live="assertive">
+            <div class="text-center">
+              <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
+              <div class="text-sm text-theme-muted mb-2">{{ klineError }}</div>
+              <button @click="retryKlineChart" aria-label="重试加载K线数据"
+                class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                🔄 重试
+              </button>
+            </div>
+          </div>
+          <div v-else ref="klineChartRef" class="w-full h-64 sm:h-72"></div>
         </div>
       </div>
 
       <!-- 公募基金面板（专业级） -->
-      <div v-else-if="activeTab === 'open'" class="space-y-4">
+      <div v-else-if="activeTab === 'open'" role="tabpanel" id="panel-open" aria-labelledby="tab-open" tabindex="-1" class="space-y-4">
         
         <!-- A. 头部概览区 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
-          <div class="flex items-start justify-between mb-4">
-            <div>
-              <h2 class="text-xl font-bold text-theme-primary">{{ fundInfo?.name ?? '-' }}</h2>
-              <div class="text-xs text-theme-tertiary mt-1">
-                代码：{{ selectedFundCode }} | 类型：{{ fundInfo?.type ?? '-' }} | 成立：{{ fundInfo?.found_date ?? '-' }}
+          <!-- Loading state for header -->
+          <div v-if="loadingFundInfo" class="space-y-4">
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <div class="skeleton h-6 w-48 rounded-sm mb-2"></div>
+                <div class="skeleton h-4 w-64 rounded-sm"></div>
+              </div>
+              <div class="text-right">
+                <div class="skeleton h-8 w-20 rounded-sm mb-1"></div>
+                <div class="skeleton h-3 w-24 rounded-sm"></div>
               </div>
             </div>
-            <div class="text-right">
-              <div class="text-3xl font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">
-                {{ fundInfo?.nav ?? '-' }}
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm" v-for="n in 8" :key="n">
+                <div class="skeleton h-3 w-10 rounded-sm mx-auto mb-1"></div>
+                <div class="skeleton h-4 w-12 rounded-sm mx-auto"></div>
               </div>
-              <div class="text-xs text-theme-tertiary">单位净值 ({{ fundInfo?.nav_date ?? '-' }})</div>
             </div>
           </div>
-          
-          <!-- 详细指标网格 -->
-          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">累计净值</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
+          <!-- Actual content -->
+          <template v-else>
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h2 class="text-xl font-bold text-theme-primary truncate" :title="fundInfo?.name">{{ fundInfo?.name ?? '-' }}</h2>
+                <div class="text-xs text-theme-tertiary mt-1">
+                  代码：{{ selectedFundCode }} | 类型：{{ fundInfo?.type ?? '-' }} | 成立：{{ fundInfo?.found_date ?? '-' }}
+                </div>
+              </div>
+              <div class="text-right">
+                <div class="text-3xl font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">
+                  {{ fundInfo?.nav ?? '-' }}
+                </div>
+                <div class="text-xs text-theme-tertiary">单位净值 ({{ fundInfo?.nav_date ?? '-' }})</div>
+              </div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">日涨跌</div>
-              <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
+            
+            <!-- 详细指标网格 -->
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">累计净值</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.accumulated_nav ?? '-' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">日涨跌</div>
+                <div class="text-sm font-bold" :class="getChangeColor(fundInfo?.nav_change_pct)">{{ fundInfo?.nav_change_pct ?? '-' }}%</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">基金规模</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">晨星评级</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">申购费率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">赎回费率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">分红频率</div>
+                <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
+              </div>
+              <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
+                <div class="text-xs text-theme-tertiary">基金经理</div>
+                <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
+              </div>
             </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">基金规模</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.scale ?? '-' }}亿</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">晨星评级</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.rating ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">申购费率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.purchase_fee ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">赎回费率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.redemption_fee ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">分红频率</div>
-              <div class="text-sm font-bold text-theme-primary">{{ fundInfo?.dividend_freq ?? 'N/A' }}</div>
-            </div>
-            <div class="text-center p-2 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary">基金经理</div>
-              <div class="text-xs font-bold text-theme-primary truncate" :title="fundInfo?.manager">{{ fundInfo?.manager ?? '-' }}</div>
-            </div>
-          </div>
+          </template>
         </div>
 
         <!-- B. 阶段收益追踪表 (Trailing Returns) -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 阶段收益追踪</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 阶段收益追踪</span>
             <span class="text-[10px] text-theme-tertiary">与同类平均及基准对比</span>
           </div>
-          <div class="overflow-x-auto scrollbar-hide">
-            <table class="w-full text-xs whitespace-nowrap">
+          <div class="overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+            <table class="w-full text-xs min-w-[600px] whitespace-nowrap" aria-label="阶段收益追踪表">
               <thead class="border-b border-theme">
                 <tr class="text-terminal-dim">
-                  <th class="px-2 py-2 text-left font-normal">指标</th>
-                  <th class="px-2 py-2 text-right font-normal">1 周</th>
-                  <th class="px-2 py-2 text-right font-normal">1 月</th>
-                  <th class="px-2 py-2 text-right font-normal">3 月</th>
-                  <th class="px-2 py-2 text-right font-normal">6 月</th>
-                  <th class="px-2 py-2 text-right font-normal">YTD</th>
-                  <th class="px-2 py-2 text-right font-normal">1 年</th>
-                  <th class="px-2 py-2 text-right font-normal">3 年</th>
-                  <th class="px-2 py-2 text-right font-normal">5 年</th>
+                  <th class="px-2 py-2 text-left font-normal" scope="col">指标</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 周</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">3 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">6 月</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">YTD</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">1 年</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">3 年</th>
+                  <th class="px-2 py-2 text-right font-normal" scope="col">5 年</th>
                 </tr>
               </thead>
               <tbody>
                 <tr class="border-b border-theme/30">
-                  <td class="px-2 py-2 text-theme-primary font-medium">本基金</td>
+                  <td class="px-2 py-2 text-theme-primary font-medium" scope="row">本基金</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right" :class="getChangeColor(trailingReturns.fund[p])">{{ trailingReturns.fund[p] ?? '-' }}%</td>
                 </tr>
                 <tr class="border-b border-theme/30 bg-theme-hover/20">
-                  <td class="px-2 py-2 text-theme-secondary">同类平均</td>
+                  <td class="px-2 py-2 text-theme-secondary" scope="row">同类平均</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right text-theme-secondary">{{ trailingReturns.category[p] ?? '-' }}%</td>
                 </tr>
                 <tr>
-                  <td class="px-2 py-2 text-theme-secondary">基准指数</td>
+                  <td class="px-2 py-2 text-theme-secondary" scope="row">基准指数</td>
                   <td v-for="p in trailingReturns.periods" :key="p" class="px-2 py-2 text-right text-theme-secondary">{{ trailingReturns.benchmark[p] ?? '-' }}%</td>
                 </tr>
               </tbody>
@@ -325,28 +454,28 @@
         <!-- C. 风险与波动指标 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">⚠️ 风险指标</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">⚠️ 风险指标</span>
           </div>
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">夏普比率</div>
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="衡量风险调整后收益，越高越好。>1为优秀，<0为亏损">
+              <div class="text-xs text-theme-tertiary mb-1">夏普比率</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.sharpe ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Sharpe Ratio</div>
+              <div class="text-xs text-theme-muted">Sharpe Ratio</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">最大回撤</div>
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="最大回撤幅度，衡量最大亏损风险。越小越好">
+              <div class="text-xs text-theme-tertiary mb-1">最大回撤</div>
               <div class="text-lg font-bold text-[var(--color-danger)]">{{ riskMetrics.max_drawdown ?? '-' }}%</div>
-              <div class="text-[10px] text-theme-muted">Max Drawdown</div>
+              <div class="text-xs text-theme-muted">Max Drawdown</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">阿尔法</div>
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="超额收益，相对基准的主动收益。>0表示跑赢基准">
+              <div class="text-xs text-theme-tertiary mb-1">阿尔法</div>
               <div class="text-lg font-bold" :class="getChangeColor(riskMetrics.alpha)">{{ riskMetrics.alpha ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Alpha</div>
+              <div class="text-xs text-theme-muted">Alpha</div>
             </div>
-            <div class="p-3 bg-terminal-bg/50 rounded-sm">
-              <div class="text-[10px] text-theme-tertiary mb-1">贝塔</div>
+            <div class="p-3 bg-terminal-bg/50 rounded-sm cursor-help" title="市场敏感度，衡量相对市场的波动。1=同步，>1=高波动">
+              <div class="text-xs text-theme-tertiary mb-1">贝塔</div>
               <div class="text-lg font-bold text-theme-primary">{{ riskMetrics.beta ?? '-' }}</div>
-              <div class="text-[10px] text-theme-muted">Beta</div>
+              <div class="text-xs text-theme-muted">Beta</div>
             </div>
           </div>
         </div>
@@ -356,51 +485,96 @@
           <!-- 净值走势图 -->
           <div class="lg:col-span-2 bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">📈 净值走势</span>
-              <div class="flex gap-1">
-                <button 
-                  v-for="p in navPeriods" 
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 净值走势</span>
+              <div class="flex gap-1" role="group" aria-label="净值周期选择">
+                <button
+                  v-for="p in navPeriods"
                   :key="p.key"
                   @click="loadNAVHistory(p.key)"
-                  class="px-2 py-0.5 text-[10px] rounded-sm border transition"
-                  :class="navPeriod === p.key 
-                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent' 
+                  :aria-label="`切换到近${p.label}净值`"
+                  :aria-pressed="navPeriod === p.key"
+                  class="px-3 py-2 text-xs rounded-sm border transition min-h-[44px]"
+                  :class="navPeriod === p.key
+                    ? 'bg-terminal-accent/20 border-terminal-accent/50 text-terminal-accent'
                     : 'bg-terminal-bg border-theme-secondary text-theme-tertiary hover:border-theme-secondary'"
                 >{{ p.label }}</button>
               </div>
             </div>
-            <div ref="navChartRef" class="w-full" style="height: 280px;"></div>
+            <div v-if="loadingNAVHistory" class="w-full flex items-center justify-center h-64 sm:h-72" role="status" aria-live="polite">
+              <div class="text-center">
+                <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
+                <div class="text-xs text-theme-tertiary">加载净值数据...</div>
+              </div>
+            </div>
+            <div v-else-if="navChartError" class="w-full flex items-center justify-center h-64 sm:h-72" role="alert" aria-live="assertive">
+              <div class="text-center">
+                <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
+                <div class="text-sm text-theme-muted mb-2">{{ navChartError }}</div>
+                <button @click="retryNavChart" aria-label="重试加载净值数据"
+                  class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                  🔄 重试
+                </button>
+              </div>
+            </div>
+            <div v-else ref="navChartRef" class="w-full h-64 sm:h-72"></div>
           </div>
 
           <!-- 资产配置饼图 -->
           <div class="bg-terminal-panel border border-theme rounded-sm p-4">
             <div class="flex items-center justify-between mb-3">
-              <span class="text-terminal-accent font-bold text-sm">🎯 资产配置</span>
-              <span class="text-[10px] text-theme-tertiary">X-Ray</span>
+              <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🎯 资产配置</span>
+              <span class="text-xs text-theme-tertiary">X-Ray</span>
             </div>
-            <div ref="assetChartRef" class="w-full" style="height: 200px;"></div>
-            <div class="mt-3 space-y-1">
-              <div v-for="(item, i) in assetAllocation" :key="i" 
-                   class="flex items-center justify-between text-xs">
-                <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full" :style="{ background: item.color }"></span>
-                  <span class="text-theme-secondary">{{ item.name }}</span>
-                </div>
-                <span class="text-theme-primary font-bold">{{ item.value }}%</span>
+            <div v-if="loadingPortfolio" class="w-full flex items-center justify-center h-48 sm:h-56" role="status" aria-live="polite">
+              <div class="text-center">
+                <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
+                <div class="text-xs text-theme-tertiary">加载资产配置...</div>
               </div>
             </div>
+            <div v-else-if="assetChartError" class="w-full flex items-center justify-center h-48 sm:h-56" role="alert" aria-live="assertive">
+              <div class="text-center">
+                <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
+                <div class="text-sm text-theme-muted mb-2">{{ assetChartError }}</div>
+                <button @click="retryAssetChart" aria-label="重试加载资产配置"
+                  class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                  🔄 重试
+                </button>
+              </div>
+            </div>
+            <template v-else>
+              <div ref="assetChartRef" class="w-full h-48 sm:h-56"></div>
+              <div class="mt-3 space-y-1">
+                <div v-for="(item, i) in assetAllocation" :key="i" 
+                     class="flex items-center justify-between text-xs">
+                  <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full" :style="{ background: item.color }"></span>
+                    <span class="text-theme-secondary">{{ item.name }}</span>
+                  </div>
+                  <span class="text-theme-primary font-bold">{{ item.value }}%</span>
+                </div>
+              </div>
+            </template>
           </div>
         </div>
 
         <!-- E. 重仓股（带进度条可视化） -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 十大重仓股</span>
-            <span class="text-[10px] text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 十大重仓股</span>
+            <span class="text-xs text-theme-tertiary">截至 {{ fundInfo?.quarter ?? '-' }}</span>
           </div>
-          <div class="space-y-2">
+          <div v-if="loadingPortfolio" class="space-y-2">
+            <div class="flex items-center gap-3" v-for="n in 5" :key="n">
+              <div class="skeleton h-3 w-4 rounded-sm"></div>
+              <div class="flex-1">
+                <div class="skeleton h-4 w-full rounded-sm mb-1"></div>
+                <div class="skeleton h-1.5 w-full rounded-sm"></div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="space-y-2">
             <div v-for="(stock, i) in topHoldings" :key="i" class="flex items-center gap-3">
-              <span class="text-[10px] text-theme-tertiary w-4 text-right">{{ i + 1 }}</span>
+              <span class="text-xs text-theme-tertiary w-4 text-right">{{ i + 1 }}</span>
               <div class="flex-1">
                 <div class="flex items-center justify-between text-xs mb-1">
                   <span class="text-theme-primary font-medium">{{ stock.name }} ({{ stock.code }})</span>
@@ -413,9 +587,7 @@
                 </div>
               </div>
             </div>
-            <div v-if="topHoldings.length === 0" class="text-center text-theme-muted text-sm py-8">
-              暂无重仓股数据
-            </div>
+            <EmptyState v-if="topHoldings.length === 0" icon="📊" message="暂无重仓股数据" hint="该基金暂未披露持仓信息" />
           </div>
         </div>
 
@@ -426,30 +598,31 @@
       </div>
 
       <!-- 基金对比面板 -->
-      <div v-if="activeTab === 'compare'" class="space-y-4">
+      <div v-if="activeTab === 'compare'" role="tabpanel" id="panel-compare" aria-labelledby="tab-compare" tabindex="-1" class="space-y-4">
         <!-- 基金选择器 -->
         <div class="bg-terminal-panel border border-theme rounded-sm p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">🔀 基金对比</span>
-            <span class="text-[10px] text-theme-tertiary">最多选择 3 只基金</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">🔀 基金对比</span>
+            <span class="text-xs text-theme-tertiary">最多选择 3 只基金</span>
           </div>
-          <div class="flex flex-wrap gap-2 mb-3">
+          <div class="flex flex-wrap gap-2 mb-3" role="group" aria-label="已选择的基金">
             <div v-for="(fund, idx) in compareFunds" :key="fund.code"
                  class="flex items-center gap-1 px-2 py-1 rounded-sm border text-xs"
                  :class="compareColors[idx]">
               <span>{{ fund.name }}</span>
-              <button @click="removeCompareFund(idx)" class="hover:text-[var(--color-danger)]">×</button>
+              <button @click="removeCompareFund(idx)" :aria-label="`移除基金${fund.name}`" class="hover:text-[var(--color-danger)]">×</button>
             </div>
           </div>
           <div class="flex gap-2">
-            <input v-model="compareInput" @keyup.enter="addCompareFund"
+            <label for="compare-fund-input" class="sr-only">输入基金代码</label>
+            <input id="compare-fund-input" v-model="compareInput" @keyup.enter="addCompareFund"
                    placeholder="输入基金代码添加"
                    class="flex-1 bg-terminal-bg border border-theme-secondary rounded-sm px-3 py-1.5 text-sm focus:border-terminal-accent outline-none" />
-            <button @click="addCompareFund"
+            <button @click="addCompareFund" aria-label="添加基金到对比"
                     class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-sm hover:bg-terminal-accent/30 transition">
               添加
             </button>
-            <button @click="clearCompareFunds"
+            <button @click="clearCompareFunds" aria-label="清空所有已选基金"
                     class="px-3 py-1.5 bg-terminal-panel text-theme-tertiary rounded-sm text-sm hover:text-theme-primary transition">
               清空
             </button>
@@ -457,33 +630,52 @@
         </div>
 
         <!-- 对比图表 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-4" role="region" aria-label="净值走势对比图表">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📈 净值走势对比</span>
-            <span class="text-[10px] text-theme-tertiary">归一化对比</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 净值走势对比</span>
+            <span class="text-xs text-theme-tertiary">归一化对比</span>
           </div>
-          <div ref="compareChartRef" class="w-full sm:h-[350px]" style="height: 280px;"></div>
+          <div v-if="loadingCompare" class="w-full flex items-center justify-center h-64 sm:h-80" role="status" aria-live="polite">
+            <div class="text-center">
+              <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
+              <div class="text-xs text-theme-tertiary">加载对比数据...</div>
+            </div>
+          </div>
+          <div v-else-if="compareChartError" class="w-full flex items-center justify-center h-64 sm:h-80" role="alert" aria-live="assertive">
+            <div class="text-center">
+              <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
+              <div class="text-sm text-theme-muted mb-2">{{ compareChartError }}</div>
+              <button @click="retryCompareChart" aria-label="重试加载对比数据"
+                class="px-3 py-1.5 bg-terminal-accent/20 text-terminal-accent rounded-sm text-xs hover:bg-terminal-accent/30 transition">
+                🔄 重试
+              </button>
+            </div>
+          </div>
+          <div v-else ref="compareChartRef" class="w-full h-64 sm:h-80"></div>
         </div>
 
         <!-- 对比表格：移动端优化 -->
-        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-3 md:p-4">
+        <div v-if="compareFunds.length >= 2" class="bg-terminal-panel border border-theme rounded-sm p-3 md:p-4" role="region" aria-label="收益对比表格">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-terminal-accent font-bold text-sm">📊 收益对比</span>
+            <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📊 收益对比</span>
           </div>
-          <div class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
-            <table class="w-full text-xs min-w-[300px]">
+          <div v-if="loadingCompare" class="space-y-2">
+            <div class="skeleton h-8 rounded-sm" v-for="n in 5" :key="n"></div>
+          </div>
+          <div v-else class="overflow-x-auto -mx-3 md:mx-0 px-3 md:px-0">
+            <table class="w-full text-xs min-w-[300px]" aria-label="收益对比表">
               <thead>
                 <tr class="border-b border-theme-secondary">
-                  <th class="text-left py-2 px-1 md:px-2 text-theme-tertiary">指标</th>
+                  <th class="text-left py-2 px-1 md:px-2 text-theme-tertiary" scope="col">指标</th>
                   <th v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2"
-                      :class="compareColorsText[idx]">
+                      :class="compareColorsText[idx]" scope="col">
                     <span class="truncate max-w-[80px] inline-block">{{ fund.name }}</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="period in comparePeriods" :key="period.key" class="border-b border-theme/30">
-                  <td class="py-2 px-1 md:px-2 text-theme-secondary">{{ period.label }}</td>
+                  <td class="py-2 px-1 md:px-2 text-theme-secondary" scope="row">{{ period.label }}</td>
                   <td v-for="(fund, idx) in compareFunds" :key="fund.code" class="text-right py-2 px-1 md:px-2 font-mono"
                       :class="getCompareReturnColor(fund.returns?.[period.key])">
                     {{ fund.returns?.[period.key] ?? '-' }}%
@@ -495,40 +687,83 @@
         </div>
 
         <!-- 提示 -->
-        <div v-if="compareFunds.length < 2" class="text-center py-8 text-theme-tertiary text-sm">
-          请至少添加 2 只基金进行对比
-        </div>
+        <EmptyState v-if="compareFunds.length < 2" icon="🔀" message="请至少添加 2 只基金进行对比" hint="在下方搜索框输入基金代码添加" />
       </div>
 
     </div>
+
+    <ConfirmModal ref="confirmModal" :message="`确定要清空 ${compareFunds.length} 只对比基金吗？`" @confirmed="onConfirmClear" />
   </div>
 </template>
 
 <script setup>
-import { ref, shallowRef, reactive, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, shallowRef, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { formatVol, formatAmount } from '../utils/formatters.js'
+import { useFundStore, FUND_QUICK_LIST } from '../stores/fund.js'
+import { dedupedFetch, abortPendingRequest, abortAllPendingRequests, isRequestPending } from '../utils/requestDedup.js'
+import { getFreshness } from '../utils/freshness.js'
+import { debounce } from '../utils/cache.js'
+import EmptyState from './f9/EmptyState.vue'
+import { useToast } from '../composables/useToast.js'
+import { useChartManager, safeDispose, safeResize } from '../utils/chartManager.js'
+import ConfirmModal from './ConfirmModal.vue'
 
-// ECharts 通过 CDN 加载，使用全局变量
+const fundStore = useFundStore()
+const { success, error, warning, info } = useToast()
+
+// Request deduplication keys
+const REQUEST_KEYS = {
+  ETF_INFO: (code) => `etf_info_${code}`,
+  ETF_HISTORY: (code, period) => `etf_history_${code}_${period}`,
+  NAV_HISTORY: (code, period) => `nav_history_${code}_${period}`,
+  PORTFOLIO: (code) => `portfolio_${code}`,
+  COMPARE: (idx) => `compare_${idx}`,
+}
+
+const { 
+  selectedFundCode, 
+  fundInfo, 
+  navHistory, 
+  topHoldings, 
+  assetAllocation,
+  trailingReturns, 
+  riskMetrics,
+  compareFunds,
+  loading: storeLoading,
+  dataSource,
+  lastUpdateTime 
+} = storeToRefs(fundStore)
+
 const getEcharts = () => window.echarts
 
-// ── 状态 ────────────────────────────────────────────────────────
 const loading = ref(false)
 const autoLoading = ref(false)
 const autoLoadFailed = ref(false)
 const searchQuery = ref('')
-const selectedFundCode = ref('')
-const activeTab = ref('open') // 'etf' | 'open' | 'compare'
-const fundInfo = ref(null)
-const dataSource = ref('')
-const lastUpdateTime = ref('')
+const searchInputId = 'fund-search-input'
+const activeTab = ref('open')
+const quickListFocusedIndex = ref(-1) // -1 means no selection, for arrow key navigation
 
-// ── 基金对比状态 ────────────────────────────────────────────────
-const compareFunds = ref([])
+// Granular loading states for each async operation
+const loadingFundInfo = ref(false)
+const loadingNAVHistory = ref(false)
+const loadingPortfolio = ref(false)
+const loadingCompare = ref(false)
+const loadingETFHistory = ref(false)
+
+// Error states for each chart
+const klineError = ref(null)
+const navChartError = ref(null)
+const assetChartError = ref(null)
+const compareChartError = ref(null)
+
 const compareInput = ref('')
 const compareChartRef = ref(null)
 const compareChart = shallowRef(null)
+const confirmModal = ref(null)
 const compareColors = [
   'bg-[var(--color-danger-bg)] text-[var(--color-danger)] border-[var(--color-danger-border)]',
   'bg-[var(--color-info-bg)] text-[var(--color-info)] border-[var(--color-info-border)]',
@@ -543,23 +778,45 @@ const comparePeriods = [
   { key: '3y', label: '近3年' },
 ]
 
-// 快捷列表
-const quickETFs = [
-  { code: '510300', name: '沪深 300ETF' },
-  { code: '510500', name: '中证 500ETF' },
-  { code: '159915', name: '创业板 ETF' },
-  { code: '518880', name: '黄金 ETF' },
-  { code: '513050', name: '中概互联 ETF' },
-]
+// ── 数据新鲜度追踪 ───────────────────────────────────────────────
+const fundInfoTimestamp = ref(null)
+const navHistoryTimestamp = ref(null)
+const portfolioTimestamp = ref(null)
+const freshnessTick = ref(0) // 用于触发 freshness 显示更新
+let freshnessInterval = null
 
-const quickFunds = [
-  { code: '005827', name: '易方达蓝筹' },
-  { code: '000311', name: '景顺长城沪深 300' },
-  { code: '110011', name: '易方达中小盘' },
-  { code: '007119', name: '睿远成长价值' },
-]
+// 计算各数据新鲜度状态（依赖 freshnessTick 以支持30秒刷新）
+const fundInfoFreshness = computed(() => {
+  freshnessTick.value // 引用以建立响应式依赖
+  return getFreshness(fundInfoTimestamp.value)
+})
+const navHistoryFreshness = computed(() => {
+  freshnessTick.value
+  return getFreshness(navHistoryTimestamp.value)
+})
+const portfolioFreshness = computed(() => {
+  freshnessTick.value
+  return getFreshness(portfolioTimestamp.value)
+})
 
-// 周期选项
+// 判断是否有数据已过期（> 5分钟）
+const hasStaleData = computed(() => {
+  return fundInfoTimestamp.value && fundInfoFreshness.value.status === 'EXPIRED' ||
+         navHistoryTimestamp.value && navHistoryFreshness.value.status === 'EXPIRED' ||
+         portfolioTimestamp.value && portfolioFreshness.value.status === 'EXPIRED'
+})
+
+// 刷新所有数据
+function refreshAllData() {
+  const code = selectedFundCode.value
+  if (code) {
+    selectFund(code)
+  }
+}
+
+const quickETFs = FUND_QUICK_LIST.etf
+const quickFunds = FUND_QUICK_LIST.open
+
 const klinePeriods = [
   { key: 'daily', label: '日 K' },
   { key: 'weekly', label: '周 K' },
@@ -575,35 +832,19 @@ const navPeriods = [
 ]
 const navPeriod = ref('6m')
 
-// 数据
 const klineHistory = ref([])
-const navHistory = ref([])
-const topHoldings = ref([])
-const assetAllocation = ref([])
 
-// 阶段收益追踪（Trailing Returns）
-const trailingReturns = reactive({
-  periods: ['1w', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y'],
-  fund: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-  category: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-  benchmark: { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null },
-})
-
-// 风险指标
-const riskMetrics = reactive({
-  sharpe: null,
-  max_drawdown: null,
-  alpha: null,
-  beta: null,
-})
-
-// Chart refs
 const klineChartRef = ref(null)
 const navChartRef = ref(null)
 const assetChartRef = ref(null)
 const klineChart = shallowRef(null)
 const navChart = shallowRef(null)
 const assetChart = shallowRef(null)
+
+// Request ID tracking to prevent race conditions on rapid fund switching
+const selectFundRequestId = ref(0)
+
+const chartManager = useChartManager()
 
 // ── API 调用 ────────────────────────────────────────────────────
 
@@ -613,59 +854,153 @@ async function searchFund() {
   await selectFund(query)
 }
 
+function clearSearch() {
+  searchQuery.value = ''
+  quickListFocusedIndex.value = -1
+}
+
+function navigateQuickList(direction) {
+  const list = activeTab.value === 'etf' ? quickETFs : quickFunds
+  if (list.length === 0) return
+  
+  // Update focused index
+  if (quickListFocusedIndex.value === -1) {
+    // Start from currently selected fund, or first item
+    const currentIdx = list.findIndex(f => f.code === selectedFundCode.value)
+    quickListFocusedIndex.value = currentIdx >= 0 ? currentIdx : 0
+  } else {
+    quickListFocusedIndex.value = (quickListFocusedIndex.value + direction + list.length) % list.length
+  }
+  
+  // Select the fund at the new index
+  const fund = list[quickListFocusedIndex.value]
+  if (fund) {
+    selectFund(fund.code)
+  }
+}
+
 async function selectFund(code, retryCount = 0, maxRetries = 2) {
   if (!code) return
-  selectedFundCode.value = code
-  
-  // Set loading state based on whether this is an auto-load
+
+  // Increment request ID to invalidate previous requests
+  const currentRequestId = ++selectFundRequestId.value
+
+  // Abort any pending requests for the previous fund code
+  const prevCode = selectedFundCode.value
+  if (prevCode && prevCode !== code) {
+    abortPendingRequest(REQUEST_KEYS.ETF_INFO(prevCode))
+    abortPendingRequest(REQUEST_KEYS.ETF_HISTORY(prevCode, klinePeriod.value))
+    abortPendingRequest(REQUEST_KEYS.NAV_HISTORY(prevCode, navPeriod.value))
+    abortPendingRequest(REQUEST_KEYS.PORTFOLIO(prevCode))
+  }
+
   if (retryCount === 0) {
     loading.value = true
     autoLoading.value = true
     autoLoadFailed.value = false
   }
   
-  dataSource.value = ''
-  
   try {
     if (activeTab.value === 'etf') {
+      loadingFundInfo.value = true
+      loadingETFHistory.value = true
       await Promise.all([
         loadETFInfo(code),
         loadETFHistory(klinePeriod.value),
       ])
+      
+      // Check if request is still valid after await
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after ETF data load, aborting')
+        return
+      }
     } else {
-      await Promise.all([
-        loadOpenFundInfo(code),
-        loadNAVHistory(navPeriod.value),
-        loadPortfolio(code),
+      // Load public fund data in parallel (matching ETF pattern)
+      const requestId = currentRequestId
+      loadingFundInfo.value = true
+      loadingNAVHistory.value = true
+      loadingPortfolio.value = true
+
+      const results = await Promise.allSettled([
+        fundStore.fetchFundInfo(code),
+        fundStore.fetchNavHistory(code, navPeriod.value),
+        fundStore.fetchPortfolio(code)
       ])
+
+      // Check if request is still valid after parallel load
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded after parallel load, aborting')
+        return
+      }
+
+      // Handle results - update loading states based on success/failure
+      results.forEach((result, idx) => {
+        if (result.status === 'fulfilled') {
+          if (idx === 0) loadingFundInfo.value = false
+          if (idx === 1) loadingNAVHistory.value = false
+          if (idx === 2) loadingPortfolio.value = false
+        } else {
+          // Log rejection reason
+          logger.warn(`[selectFund] Request ${idx} failed:`, result.reason)
+          if (idx === 0) loadingFundInfo.value = false
+          if (idx === 1) loadingNAVHistory.value = false
+          if (idx === 2) loadingPortfolio.value = false
+        }
+      })
+
+      fundInfoTimestamp.value = Date.now()
+    }
+    
+    // Final check before updating success state
+    if (currentRequestId !== selectFundRequestId.value) {
+      logger.debug('[selectFund] Request superseded before success update, aborting')
+      return
     }
     
     lastUpdateTime.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
     autoLoadFailed.value = false
   } catch (e) {
+    // Check if request is still valid before handling error
+    if (currentRequestId !== selectFundRequestId.value) {
+      logger.debug('[selectFund] Request superseded, ignoring error')
+      return
+    }
+    
     logger.error('[FundDashboard] 加载失败:', e)
     
-    // Retry logic with exponential backoff
     if (retryCount < maxRetries) {
-      const delay = Math.pow(2, retryCount) * 1000 // 1s, 2s, 4s...
+      const delay = Math.pow(2, retryCount) * 1000
       logger.warn(`[FundDashboard] 重试 ${retryCount + 1}/${maxRetries}，等待 ${delay}ms`)
       await new Promise(resolve => setTimeout(resolve, delay))
+      
+      // Check if request is still valid after retry delay
+      if (currentRequestId !== selectFundRequestId.value) {
+        logger.debug('[selectFund] Request superseded during retry delay, aborting')
+        return
+      }
+      
       return selectFund(code, retryCount + 1, maxRetries)
     } else {
       autoLoadFailed.value = true
       logger.error('[FundDashboard] 自动加载失败，已达最大重试次数')
     }
   } finally {
-    loading.value = false
-    autoLoading.value = false
-    // 等待 DOM 更新完成后再渲染图表
-    await nextTick()
-    await new Promise(resolve => setTimeout(resolve, 100))
-    if (activeTab.value === 'etf') {
-      renderKlineChart()
-    } else {
-      renderNavChart()
-      renderAssetChart()
+    // Only update UI if this is still the current request
+    if (currentRequestId === selectFundRequestId.value) {
+      loading.value = false
+      autoLoading.value = false
+      loadingFundInfo.value = false
+      loadingNAVHistory.value = false
+      loadingPortfolio.value = false
+      loadingETFHistory.value = false
+      await nextTick()
+      await new Promise(resolve => setTimeout(resolve, 100))
+      if (activeTab.value === 'etf') {
+        renderKlineChart()
+      } else {
+        renderNavChart()
+        renderAssetChart()
+      }
     }
   }
 }
@@ -674,132 +1009,195 @@ async function selectFund(code, retryCount = 0, maxRetries = 2) {
 
 function addCompareFund() {
   const code = compareInput.value.trim()
-  if (!code) return
-  if (compareFunds.value.length >= 3) {
-    alert('最多只能对比 3 只基金')
+  if (!code) {
+    warning('请输入基金代码')
     return
   }
-  if (compareFunds.value.some(f => f.code === code)) {
-    alert('该基金已在对比列表中')
-    return
-  }
-  // 添加到列表（先占位，后续异步加载数据）
-  compareFunds.value.push({
+  
+  const result = fundStore.addCompareFund({
     code,
-    name: code, // 临时名称
+    name: code,
     returns: {},
     history: [],
   })
+  
+  if (!result.success) {
+    warning(result.message)
+    return
+  }
+  
   compareInput.value = ''
+  success(`已添加 ${code} 到对比列表`)
   loadCompareData()
 }
 
 function removeCompareFund(idx) {
-  compareFunds.value.splice(idx, 1)
+  const fundName = compareFunds.value[idx]?.name || `基金 ${idx + 1}`
+  fundStore.removeCompareFund(idx)
+  info(`已移除 ${fundName}`)
   if (compareFunds.value.length >= 2) {
     renderCompareChart()
   }
 }
 
 function clearCompareFunds() {
-  compareFunds.value = []
+  const count = compareFunds.value.length
+  if (count === 0) {
+    info('对比列表已为空')
+    return
+  }
+  confirmModal.value?.show()
+}
+
+function onConfirmClear() {
+  fundStore.clearCompareFunds()
+  success('已清空对比列表')
 }
 
 async function loadCompareData() {
   if (compareFunds.value.length < 2) return
 
-  for (const fund of compareFunds.value) {
-    try {
-      // 加载基金基本信息
-      const infoRes = await apiFetch(`/api/v1/fund/open/info?code=${fund.code}`)
-      const infoData = extractData(infoRes)
-      if (infoData) {
-        fund.name = infoData.name || fund.code
+  loadingCompare.value = true
+  try {
+    // Parallel fetch all funds
+    const results = await Promise.allSettled(
+      compareFunds.value.map(async (fund) => {
+        // Parallel fetch all data for this fund
+        const [infoRes, navRes, returnsRes] = await Promise.all([
+          apiFetch(`/api/v1/fund/open/info?code=${fund.code}`),
+          apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`),
+          apiFetch(`/api/v1/fund/open/returns/${fund.code}`)
+        ])
+        
+        const infoData = extractData(infoRes)
+        const navData = extractData(navRes)
+        const returnsData = extractData(returnsRes)
+        
+        return { fund, infoData, navData, returnsData }
+      })
+    )
+    
+    // Process results
+    results.forEach((result, idx) => {
+      if (result.status === 'fulfilled') {
+        const { fund, infoData, navData, returnsData } = result.value
+        
+        if (infoData) {
+          fund.name = infoData.name || fund.code
+        }
+        
+        if (Array.isArray(navData)) {
+          fund.history = navData.map(d => ({
+            date: d.date,
+            nav: parseFloat(d.nav) || 0,
+          }))
+        }
+        
+        if (returnsData?.returns) {
+          fund.returns = {
+            '1m': returnsData.returns['1m'] ?? '-',
+            '3m': returnsData.returns['3m'] ?? '-',
+            '6m': returnsData.returns['6m'] ?? '-',
+            '1y': returnsData.returns['1y'] ?? '-',
+            '3y': returnsData.returns['3y'] ?? '-',
+          }
+        } else {
+          fund.returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
+        }
+      } else {
+        logger.warn(`[Compare] 加载基金 ${idx} 失败:`, result.reason)
+        compareFunds.value[idx].returns = { '1m': '-', '3m': '-', '6m': '-', '1y': '-', '3y': '-' }
       }
+    })
 
-      // 加载历史净值（用于对比图）
-      const navRes = await apiFetch(`/api/v1/fund/open/nav/${fund.code}?period=1y`)
-      const navData = extractData(navRes)
-      if (Array.isArray(navData)) {
-        fund.history = navData.map(d => ({
-          date: d.date,
-          nav: parseFloat(d.nav) || 0,
-        }))
-      }
-
-      // Mock 阶段收益（实际应从 API 获取）
-      fund.returns = {
-        '1m': (Math.random() * 10 - 3).toFixed(2),
-        '3m': (Math.random() * 15 - 5).toFixed(2),
-        '6m': (Math.random() * 20 - 8).toFixed(2),
-        '1y': (Math.random() * 30 - 10).toFixed(2),
-        '3y': (Math.random() * 50 - 15).toFixed(2),
-      }
-    } catch (e) {
-      logger.warn(`[Compare] 加载 ${fund.code} 失败:`, e)
-    }
+    await nextTick()
+    renderCompareChart()
+  } finally {
+    loadingCompare.value = false
   }
-
-  await nextTick()
-  renderCompareChart()
 }
 
 function renderCompareChart() {
-  if (!compareChartRef.value || compareFunds.value.length < 2) return
+  // Clear previous error
+  compareChartError.value = null
+  
+  if (!compareChartRef.value || compareFunds.value.length < 2) {
+    compareChartError.value = '请选择至少2只基金进行对比'
+    return
+  }
+  
   const echarts = getEcharts()
-  if (!echarts) return
-
-  if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
-    if (compareChart.value) {
-      try { compareChart.value.dispose() } catch (e) {}
-    }
-    compareChart.value = echarts.init(compareChartRef.value)
+  if (!echarts) {
+    compareChartError.value = '图表库未加载'
+    return
   }
-
-  // 归一化处理：以第一天为基准 1.0
-  const series = compareFunds.value.map((fund, idx) => {
-    if (!fund.history || fund.history.length === 0) return null
-    const baseNav = fund.history[0].nav
-    const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
-    return {
-      name: fund.name,
-      type: 'line',
-      smooth: true,
-      symbol: 'none',
-      data,
-      lineStyle: { width: 2 },
-      itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
+  
+  try {
+    if (!compareChart.value || compareChart.value.getDom() !== compareChartRef.value) {
+      chartManager.dispose('compareChart')
+      compareChart.value = echarts.init(compareChartRef.value)
+      chartManager.register('compareChart', compareChart.value, compareChartRef.value)
     }
-  }).filter(Boolean)
 
-  const option = {
-    tooltip: {
-      trigger: 'axis',
-      formatter: function(params) {
-        let html = `<div style="font-size:12px">${params[0].axisValue}</div>`
-        params.forEach(p => {
-          html += `<div style="font-size:11px">${p.marker} ${p.seriesName}: ${p.value[1]}</div>`
-        })
-        return html
+    // 归一化处理：以第一天为基准 1.0
+    const series = compareFunds.value.map((fund, idx) => {
+      if (!fund.history || fund.history.length === 0) return null
+      const baseNav = fund.history[0]?.nav
+      if (!baseNav || baseNav === 0) {
+        logger.warn('[CompareChart] Invalid baseNav for fund:', fund.code)
+        return null
       }
-    },
-    legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
-    xAxis: {
-      type: 'time',
-      axisLine: { lineStyle: { color: '#374151' } },
-      axisLabel: { color: '#6b7280', fontSize: 10 },
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#374151' } },
-      axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
-      splitLine: { lineStyle: { color: '#1f2937' } },
-    },
-    series,
+      const data = fund.history.map(d => [d.date, (d.nav / baseNav).toFixed(4)])
+      return {
+        name: fund.name,
+        type: 'line',
+        smooth: true,
+        symbol: 'none',
+        data,
+        lineStyle: { width: 2 },
+        itemStyle: { color: ['#ef4444', '#3b82f6', '#22c55e'][idx] },
+      }
+    }).filter(Boolean)
+    
+    if (series.length === 0) {
+      compareChartError.value = '暂无对比数据'
+      return
+    }
+
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: function(params) {
+          let html = `<div style="font-size:12px">${params[0].axisValue}</div>`
+          params.forEach(p => {
+            html += `<div style="font-size:11px">${p.marker} ${p.seriesName}: ${p.value[1]}</div>`
+          })
+          return html
+        }
+      },
+      legend: { data: compareFunds.value.map(f => f.name), textStyle: { color: '#9ca3af', fontSize: 11 }, top: 0 },
+      grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
+      xAxis: {
+        type: 'time',
+        axisLine: { lineStyle: { color: '#374151' } },
+        axisLabel: { color: '#6b7280', fontSize: 10 },
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#374151' } },
+        axisLabel: { color: '#6b7280', fontSize: 10, formatter: v => v.toFixed(2) },
+        splitLine: { lineStyle: { color: '#1f2937' } },
+      },
+      series,
+    }
+    compareChart.value.setOption(option, true)
+    compareChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 对比图表渲染失败:', e)
+    compareChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    chartManager.dispose('compareChart')
+    compareChart.value = null
   }
-  compareChart.value.setOption(option, true)
-  compareChart.value.resize()
 }
 
 function getCompareReturnColor(val) {
@@ -813,27 +1211,35 @@ function getCompareReturnColor(val) {
 // ── ETF 相关 ───────────────────────────────────────────────────
 
 async function loadETFInfo(code) {
+  loadingFundInfo.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/etf/info?code=${code}`)
-    const data = extractData(res)
-    if (data) {
-      fundInfo.value = {
-        code: data.code || code,
-        name: data.name || '-',
-        price: data.price || '-',
-        change_pct: data.change_pct ? parseFloat(data.change_pct).toFixed(2) : '-',
-        change: data.change || 0,
-        volume: data.volume || 0,
-        amount: data.amount || 0,
-        iopv: data.iopv || '-',
-        premium_rate: data.premium_rate ? parseFloat(data.premium_rate).toFixed(2) : '-',
-        bids: data.bids || [],
-        asks: data.asks || [],
+    await dedupedFetch(REQUEST_KEYS.ETF_INFO(code), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/etf/info?code=${code}`, { signal })
+      const data = extractData(res)
+      if (data) {
+        fundInfo.value = {
+          code: data.code || code,
+          name: data.name || '-',
+          price: data.price || '-',
+          change_pct: data.change_pct ? parseFloat(data.change_pct).toFixed(2) : '-',
+          change: data.change || 0,
+          volume: data.volume || 0,
+          amount: data.amount || 0,
+          iopv: data.iopv || '-',
+          premium_rate: data.premium_rate ? parseFloat(data.premium_rate).toFixed(2) : '-',
+          bids: data.bids || [],
+          asks: data.asks || [],
+        }
+        dataSource.value = data.source || 'unknown'
+        fundInfoTimestamp.value = Date.now()
       }
-      dataSource.value = data.source || 'unknown'
-    }
+    }, { debounce: 50 })
   } catch (e) {
-    logger.warn('[ETF Info] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[ETF Info] 获取失败:', e)
+    }
+  } finally {
+    loadingFundInfo.value = false
   }
 }
 
@@ -841,16 +1247,23 @@ async function loadETFHistory(period) {
   klinePeriod.value = period
   const code = selectedFundCode.value
   if (!code) return
-  
+
+  loadingETFHistory.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`)
-    const data = extractData(res)
-    klineHistory.value = Array.isArray(data) ? data : []
-    
+    await dedupedFetch(REQUEST_KEYS.ETF_HISTORY(code, period), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/etf/history?code=${code}&period=${period}`, { signal })
+      const data = extractData(res)
+      klineHistory.value = Array.isArray(data) ? data : []
+      navHistoryTimestamp.value = Date.now()
+    }, { debounce: 50 })
     await nextTick()
     renderKlineChart()
   } catch (e) {
-    logger.warn('[ETF History] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[ETF History] 获取失败:', e)
+    }
+  } finally {
+    loadingETFHistory.value = false
   }
 }
 
@@ -858,8 +1271,17 @@ async function loadETFHistory(period) {
 
 async function loadOpenFundInfo(code) {
   try {
-    const res = await apiFetch(`/api/v1/fund/open/info?code=${code}`)
-    const data = extractData(res)
+    // 并发加载基金信息、阶段收益和风险指标
+    const [infoRes, returnsRes, riskRes] = await Promise.all([
+      apiFetch(`/api/v1/fund/open/info?code=${code}`),
+      apiFetch(`/api/v1/fund/open/returns/${code}`),
+      apiFetch(`/api/v1/fund/open/risk/${code}`),
+    ])
+    
+    const data = extractData(infoRes)
+    const returnsData = extractData(returnsRes)
+    const riskData = extractData(riskRes)
+    
     if (data) {
       fundInfo.value = {
         code: data.code || code,
@@ -880,16 +1302,31 @@ async function loadOpenFundInfo(code) {
         dividend_freq: data.dividend_freq || 'N/A',
       }
       dataSource.value = data.source || 'unknown'
-      
-      // Mock 阶段收益和风险指标（实际应从 API 获取）
-      trailingReturns.fund = { '1w': 0.5, '1m': 2.3, '3m': -1.2, '6m': 5.8, 'ytd': 8.2, '1y': 12.5, '3y': 25.3, '5y': 68.9 }
-      trailingReturns.category = { '1w': 0.3, '1m': 1.8, '3m': -0.8, '6m': 4.5, 'ytd': 6.5, '1y': 10.2, '3y': 20.1, '5y': 55.2 }
-      trailingReturns.benchmark = { '1w': 0.4, '1m': 2.0, '3m': -1.0, '6m': 5.0, 'ytd': 7.5, '1y': 11.0, '3y': 22.5, '5y': 60.0 }
-      
-      riskMetrics.sharpe = 1.25
-      riskMetrics.max_drawdown = -18.5
-      riskMetrics.alpha = 2.3
-      riskMetrics.beta = 0.95
+    }
+    
+    // 使用真实阶段收益数据
+    if (returnsData && returnsData.returns) {
+      trailingReturns.fund = {
+        '1w': returnsData.returns['1w'] ?? null,
+        '1m': returnsData.returns['1m'] ?? null,
+        '3m': returnsData.returns['3m'] ?? null,
+        '6m': returnsData.returns['6m'] ?? null,
+        'ytd': returnsData.returns['ytd'] ?? null,
+        '1y': returnsData.returns['1y'] ?? null,
+        '3y': returnsData.returns['3y'] ?? null,
+        '5y': returnsData.returns['since_inception'] ?? null,
+      }
+      // 同类平均和基准指数暂无数据源，显示为 null
+      trailingReturns.category = { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null }
+      trailingReturns.benchmark = { '1w': null, '1m': null, '3m': null, '6m': null, 'ytd': null, '1y': null, '3y': null, '5y': null }
+    }
+    
+    // 使用真实风险指标数据
+    if (riskData) {
+      riskMetrics.sharpe = riskData.sharpe ?? null
+      riskMetrics.max_drawdown = riskData.max_drawdown ?? null
+      riskMetrics.alpha = riskData.alpha ?? null
+      riskMetrics.beta = riskData.beta ?? null
     }
   } catch (e) {
     logger.warn('[Open Fund Info] 获取失败:', e)
@@ -900,180 +1337,237 @@ async function loadNAVHistory(period) {
   navPeriod.value = period
   const code = selectedFundCode.value
   if (!code) return
-  
+
+  loadingNAVHistory.value = true
   try {
-    const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`)
-    const data = extractData(res)
-    navHistory.value = Array.isArray(data) ? data : []
-    
-    console.log('[NAV History] 获取成功，数据条数:', navHistory.value.length)
-    console.log('[NAV History] 第一条数据:', navHistory.value[0])
-    console.log('[NAV History] navChartRef:', !!navChartRef.value)
-    
+    await dedupedFetch(REQUEST_KEYS.NAV_HISTORY(code, period), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/open/nav/${code}?period=${period}`, { signal })
+      const data = extractData(res)
+      navHistory.value = Array.isArray(data) ? data : []
+      navHistoryTimestamp.value = Date.now()
+    }, { debounce: 50 })
     await nextTick()
-    console.log('[NAV History] after nextTick, navChartRef:', !!navChartRef.value)
     renderNavChart()
   } catch (e) {
-    logger.warn('[NAV History] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[NAV History] 获取失败:', e)
+    }
+  } finally {
+    loadingNAVHistory.value = false
   }
 }
 
 async function loadPortfolio(code) {
   try {
-    const res = await apiFetch(`/api/v1/fund/portfolio/${code}`)
-    const data = extractData(res)
-    if (data) {
-      topHoldings.value = (data.stocks || []).slice(0, 10)
-      fundInfo.value = { ...fundInfo.value, quarter: data.quarter || '' }
-      
-      if (data.assets && data.assets.length > 0) {
-        assetAllocation.value = data.assets.map((a, i) => ({
-          name: a.name,
-          value: a.ratio,
-          color: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'][i % 5]
-        }))
-      } else {
-        assetAllocation.value = [
-          { name: '股票', value: 85.5, color: '#60a5fa' },
-          { name: '债券', value: 5.2, color: '#34d399' },
-          { name: '现金', value: 8.3, color: '#fbbf24' },
-          { name: '其他', value: 1.0, color: '#a78bfa' }
-        ]
+    await dedupedFetch(REQUEST_KEYS.PORTFOLIO(code), async (signal) => {
+      const res = await apiFetch(`/api/v1/fund/portfolio/${code}`, { signal })
+      const data = extractData(res)
+      if (data) {
+        topHoldings.value = (data.stocks || []).slice(0, 10)
+        fundInfo.value = { ...fundInfo.value, quarter: data.quarter || '' }
+
+        if (data.assets && data.assets.length > 0) {
+          assetAllocation.value = data.assets.map((a, i) => ({
+            name: a.name,
+            value: a.ratio,
+            color: ['#60a5fa', '#34d399', '#fbbf24', '#f87171', '#a78bfa'][i % 5]
+          }))
+        } else {
+          assetAllocation.value = [
+            { name: '股票', value: 85.5, color: '#60a5fa' },
+            { name: '债券', value: 5.2, color: '#34d399' },
+            { name: '现金', value: 8.3, color: '#fbbf24' },
+            { name: '其他', value: 1.0, color: '#a78bfa' }
+          ]
+        }
+        portfolioTimestamp.value = Date.now()
       }
-      
-      await nextTick()
-      renderAssetChart()
-    }
+    }, { debounce: 50 })
+    await nextTick()
+    renderAssetChart()
   } catch (e) {
-    logger.warn('[Portfolio] 获取失败:', e)
+    if (e.name !== 'AbortError') {
+      logger.warn('[Portfolio] 获取失败:', e)
+    }
   }
 }
 
 // ── ECharts 渲染 ───────────────────────────────────────────────
 
 function renderKlineChart() {
-  if (!klineChartRef.value || !window.echarts) return
+  // Clear previous error
+  klineError.value = null
   
-  const echarts = window.echarts
+  if (!klineChartRef.value || !window.echarts) {
+    klineError.value = '图表容器未就绪'
+    return
+  }
   
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
-    if (klineChart.value) {
-      try { klineChart.value.dispose() } catch (e) {}
+  try {
+    const echarts = window.echarts
+
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!klineChart.value || klineChart.value.getDom() !== klineChartRef.value) {
+      chartManager.dispose('klineChart')
+      klineChart.value = echarts.init(klineChartRef.value)
+      chartManager.register('klineChart', klineChart.value, klineChartRef.value)
     }
-    klineChart.value = echarts.init(klineChartRef.value)
-  }
-  
-  const data = klineHistory.value.map(d => ({
-    date: d.date || d.trade_date,
-    value: d.close || d.nav
-  })).reverse()
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    grid: { top: 10, right: 10, bottom: 20, left: 40 },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.date),
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10 },
-      splitLine: { lineStyle: { color: '#374151' } }
-    },
-    series: [{
-      type: 'line',
-      data: data.map(d => d.value),
-      smooth: false,
-      lineStyle: { color: '#60a5fa', width: 1.5 },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
-            { offset: 1, color: 'rgba(96, 165, 250, 0)' }
-          ]
+    
+    const data = klineHistory.value.map(d => ({
+      date: d.date || d.trade_date,
+      value: d.close || d.nav
+    })).reverse()
+    
+    if (!data || data.length === 0) {
+      klineError.value = '暂无 K 线数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'axis' },
+      grid: { top: 10, right: 10, bottom: 20, left: 40 },
+      xAxis: {
+        type: 'category',
+        data: data.map(d => d.date),
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#374151' } }
+      },
+      series: [{
+        type: 'line',
+        data: data.map(d => d.value),
+        smooth: false,
+        lineStyle: { color: '#60a5fa', width: 1.5 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(96, 165, 250, 0.3)' },
+              { offset: 1, color: 'rgba(96, 165, 250, 0)' }
+            ]
+          }
         }
-      }
-    }]
+      }]
+    }
+    klineChart.value.setOption(option)
+    klineChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] K线图表渲染失败:', e)
+    klineError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    chartManager.dispose('klineChart')
+    klineChart.value = null
   }
-  klineChart.value.setOption(option)
-  klineChart.value.resize()
 }
 
 function renderNavChart() {
-  if (!navChartRef.value || !window.echarts) return
+  // Clear previous error
+  navChartError.value = null
   
-  const echarts = window.echarts
+  if (!navChartRef.value || !window.echarts) {
+    navChartError.value = '图表容器未就绪'
+    return
+  }
   
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
-    if (navChart.value) {
-      try { navChart.value.dispose() } catch (e) {}
+  try {
+    const echarts = window.echarts
+
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!navChart.value || navChart.value.getDom() !== navChartRef.value) {
+      chartManager.dispose('navChart')
+      navChart.value = echarts.init(navChartRef.value)
+      chartManager.register('navChart', navChart.value, navChartRef.value)
     }
-    navChart.value = echarts.init(navChartRef.value)
+    
+    const data = navHistory.value.map(d => ({
+      date: d.date,
+      nav: d.nav,
+      accumulated: d.accumulated_nav
+    }))
+    
+    if (!data || data.length === 0) {
+      navChartError.value = '暂无净值数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
+      grid: { top: 30, right: 10, bottom: 20, left: 40 },
+      xAxis: {
+        type: 'category',
+        data: data.map(d => d.date),
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
+      },
+      yAxis: {
+        type: 'value',
+        axisLine: { lineStyle: { color: '#4b5563' } },
+        axisLabel: { color: '#9ca3af', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#374151' } }
+      },
+      series: [
+        { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
+        { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
+      ]
+    }
+    navChart.value.setOption(option)
+    navChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 净值图表渲染失败:', e)
+    navChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    chartManager.dispose('navChart')
+    navChart.value = null
   }
-  
-  const data = navHistory.value.map(d => ({
-    date: d.date,
-    nav: d.nav,
-    accumulated: d.accumulated_nav
-  }))
-  
-  const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['单位净值', '累计净值'], textStyle: { color: '#9ca3af', fontSize: 10 } },
-    grid: { top: 30, right: 10, bottom: 20, left: 40 },
-    xAxis: {
-      type: 'category',
-      data: data.map(d => d.date),
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10, maxRotation: 45 }
-    },
-    yAxis: {
-      type: 'value',
-      axisLine: { lineStyle: { color: '#4b5563' } },
-      axisLabel: { color: '#9ca3af', fontSize: 10 },
-      splitLine: { lineStyle: { color: '#374151' } }
-    },
-    series: [
-      { name: '单位净值', type: 'line', data: data.map(d => d.nav), smooth: true, lineStyle: { color: '#60a5fa', width: 2 } },
-      { name: '累计净值', type: 'line', data: data.map(d => d.accumulated), smooth: true, lineStyle: { color: '#34d399', width: 2, type: 'dashed' } }
-    ]
-  }
-  navChart.value.setOption(option)
-  navChart.value.resize()
 }
 
 function renderAssetChart() {
-  if (!assetChartRef.value || !window.echarts) return
+  // Clear previous error
+  assetChartError.value = null
   
-  const echarts = window.echarts
+  if (!assetChartRef.value || !window.echarts) {
+    assetChartError.value = '图表容器未就绪'
+    return
+  }
   
-  // 如果实例不存在或关联的 DOM 已改变，重新初始化
-  if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
-    if (assetChart.value) {
-      try { assetChart.value.dispose() } catch (e) {}
+  try {
+    const echarts = window.echarts
+
+    // 如果实例不存在或关联的 DOM 已改变，重新初始化
+    if (!assetChart.value || assetChart.value.getDom() !== assetChartRef.value) {
+      chartManager.dispose('assetChart')
+      assetChart.value = echarts.init(assetChartRef.value)
+      chartManager.register('assetChart', assetChart.value, assetChartRef.value)
     }
-    assetChart.value = echarts.init(assetChartRef.value)
+    
+    if (!assetAllocation.value || assetAllocation.value.length === 0) {
+      assetChartError.value = '暂无资产配置数据'
+      return
+    }
+    
+    const option = {
+      tooltip: { trigger: 'item' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        center: ['50%', '50%'],
+        itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
+        label: { show: false },
+        data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
+      }]
+    }
+    assetChart.value.setOption(option)
+    assetChart.value.resize()
+  } catch (e) {
+    logger.error('[FundDashboard] 资产配置图表渲染失败:', e)
+    assetChartError.value = `图表渲染失败: ${e.message || '未知错误'}`
+    chartManager.dispose('assetChart')
+    assetChart.value = null
   }
-  
-  const option = {
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['50%', '50%'],
-      itemStyle: { borderRadius: 4, borderColor: '#1f2937', borderWidth: 2 },
-      label: { show: false },
-      data: assetAllocation.value.map(a => ({ name: a.name, value: a.value, itemStyle: { color: a.color } }))
-    }]
-  }
-  assetChart.value.setOption(option)
-  assetChart.value.resize()
 }
 
 // ── 工具函数 ───────────────────────────────────────────────────
@@ -1102,16 +1596,38 @@ function retryAutoLoad() {
 }
 
 function handleResize() {
-  klineChart.value?.resize()
-  navChart.value?.resize()
-  assetChart.value?.resize()
-  compareChart.value?.resize()
+  chartManager.resizeAll()
+}
+
+// ── 图表错误重试函数 ─────────────────────────────────────────────
+
+function retryKlineChart() {
+  klineError.value = null
+  renderKlineChart()
+}
+
+function retryNavChart() {
+  navChartError.value = null
+  renderNavChart()
+}
+
+function retryAssetChart() {
+  assetChartError.value = null
+  renderAssetChart()
+}
+
+function retryCompareChart() {
+  compareChartError.value = null
+  renderCompareChart()
 }
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
-  
-  // 默认加载第一个快捷基金（根据当前选项卡）
+
+  freshnessInterval = setInterval(() => {
+    freshnessTick.value++
+  }, 30000)
+
   if (activeTab.value === 'etf' && quickETFs.length > 0) {
     selectFund(quickETFs[0].code)
   } else if (activeTab.value === 'open' && quickFunds.length > 0) {
@@ -1121,28 +1637,41 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  if (klineChart.value) { try { klineChart.value.dispose() } catch (e) {} }
-  if (navChart.value) { try { navChart.value.dispose() } catch (e) {} }
-  if (assetChart.value) { try { assetChart.value.dispose() } catch (e) {} }
-  if (compareChart.value) { try { compareChart.value.dispose() } catch (e) {} }
-  // Clear references
+
+  chartManager.disposeAll()
+
   klineChart.value = null
   navChart.value = null
   assetChart.value = null
   compareChart.value = null
+
+  abortAllPendingRequests()
+
+  if (freshnessInterval) {
+    clearInterval(freshnessInterval)
+    freshnessInterval = null
+  }
 })
 
 // 监听选项卡切换
-watch(activeTab, () => {
+watch(activeTab, (newTab) => {
   searchQuery.value = ''
   fundInfo.value = null
   selectedFundCode.value = ''
-  // 切换到对比标签时，如果有足够的基金，重新渲染对比图
-  if (activeTab.value === 'compare' && compareFunds.value.length >= 2) {
-    nextTick(() => {
+
+  // Focus the new panel for keyboard navigation
+  nextTick(() => {
+    const panelId = `panel-${newTab}`
+    const panel = document.getElementById(panelId)
+    if (panel) {
+      panel.focus()
+    }
+
+    // Re-render compare chart if needed
+    if (newTab === 'compare' && compareFunds.value.length >= 2) {
       setTimeout(() => renderCompareChart(), 100)
-    })
-  }
+    }
+  })
 })
 </script>
 

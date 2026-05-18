@@ -14,6 +14,7 @@
 
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { safeNumber } from '../utils/typeCoercion.js'
 
 // 始终使用相对路径，让前端代理转发到后端
 const API_BASE = ''
@@ -74,6 +75,12 @@ export async function getMarketOverview() {
     // 实际返回: { wind: {'000001': {name, price, change_pct, volume, status, market}, meta: {...} }
     const indices = Object.values(wind)
       .filter(v => v && v.price !== undefined && v.market !== 'HK')
+      .map(v => ({
+        ...v,
+        price: safeNumber(v.price, 0),
+        change_pct: safeNumber(v.change_pct, 0),
+        volume: safeNumber(v.volume, 0),
+      }))
       .slice(0, 10)
     
     // 按市场惯例排序: 上证 → 沪深 → 深证 → 创业板
@@ -100,7 +107,11 @@ export async function getSectors() {
     const res = await apiFetch(`${API_BASE}/api/v1/market/sectors`, { timeoutMs: 10000 })
     // 后端返回格式: { code: 0, data: { sectors: [...] }, message: 'success' }
     const data = res?.data || res
-    const sectors = data?.sectors || []
+    const sectors = (data?.sectors || []).map(s => ({
+      ...s,
+      change_pct: safeNumber(s.change_pct, 0),
+      amount: safeNumber(s.amount, 0),
+    }))
     return sectors
   })
 }
@@ -137,7 +148,14 @@ export async function getLimitUpStocks() {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_up`, { timeoutMs: 15000 })
       // 后端返回格式: { code: 0, data: { limit_up: [...], count: N }, message: 'success' }
       const data = res?.data || res
-      return data?.limit_up || []
+      const stocks = (data?.limit_up || []).map(s => ({
+        ...s,
+        price: safeNumber(s.price, 0),
+        change_pct: safeNumber(s.change_pct, 0),
+        volume: safeNumber(s.volume, 0),
+        amount: safeNumber(s.amount, 0),
+      }))
+      return stocks
     } catch (e) {
       logger.warn('[CopilotData] limit_up failed:', e.message)
       return []
@@ -154,7 +172,14 @@ export async function getLimitDownStocks() {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/limit_down`, { timeoutMs: 15000 })
       // 后端返回格式: { code: 0, data: { limit_down: [...], count: N }, message: 'success' }
       const data = res?.data || res
-      return data?.limit_down || []
+      const stocks = (data?.limit_down || []).map(s => ({
+        ...s,
+        price: safeNumber(s.price, 0),
+        change_pct: safeNumber(s.change_pct, 0),
+        volume: safeNumber(s.volume, 0),
+        amount: safeNumber(s.amount, 0),
+      }))
+      return stocks
     } catch (e) {
       logger.warn('[CopilotData] limit_down failed:', e.message)
       return []
@@ -171,7 +196,14 @@ export async function getUnusualStocks() {
       const res = await apiFetch(`${API_BASE}/api/v1/stocks/unusual`, { timeoutMs: 15000 })
       // 后端返回格式: { code: 0, data: { unusual: [...], count: N }, message: 'success' }
       const data = res?.data || res
-      return data?.unusual || []
+      const stocks = (data?.unusual || []).map(s => ({
+        ...s,
+        price: safeNumber(s.price, 0),
+        change_pct: safeNumber(s.change_pct, 0),
+        volume: safeNumber(s.volume, 0),
+        amount: safeNumber(s.amount, 0),
+      }))
+      return stocks
     } catch (e) {
       logger.warn('[CopilotData] unusual failed:', e.message)
       return []
@@ -255,8 +287,19 @@ export async function getStockQuote(symbol) {
   try {
     const res = await apiFetch(`${API_BASE}/api/v1/stocks/quote?symbol=${encodeURIComponent(symbol)}`, { timeoutMs: 8000 })
     if (res && res.price !== undefined) {
-      cache[cacheKey] = { data: res, time: Date.now() }
-      return res
+      const quote = {
+        ...res,
+        price: safeNumber(res.price, 0),
+        change_pct: safeNumber(res.change_pct, 0),
+        volume: safeNumber(res.volume, 0),
+        amount: safeNumber(res.amount, 0),
+        high: safeNumber(res.high, 0),
+        low: safeNumber(res.low, 0),
+        open: safeNumber(res.open, 0),
+        prev_close: safeNumber(res.prev_close, 0),
+      }
+      cache[cacheKey] = { data: quote, time: Date.now() }
+      return quote
     }
   } catch (e) {
     logger.warn('[CopilotData] quote failed for', symbol, e.message)

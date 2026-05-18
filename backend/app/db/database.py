@@ -64,8 +64,8 @@ def get_conn():
         # 发生异常时回滚事务
         try:
             conn.rollback()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[DB_CTX] Rollback failed: {type(e).__name__}: {e}")
         raise
 
 def _get_conn():
@@ -235,6 +235,35 @@ def init_tables():
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_psym_portfolio ON position_summary(portfolio_id)")
 
+        # ── 高可用缓存持久化表（SQLite-backed cache）───────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS cache_persistence (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                expires_at REAL NOT NULL,
+                hit_count INTEGER DEFAULT 0,
+                size_bytes INTEGER DEFAULT 0,
+                source TEXT DEFAULT ''
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_expires ON cache_persistence(expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_source ON cache_persistence(source)")
+
+        # ── 基金净值历史表─────────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS fund_nav_history (
+                fund_code TEXT NOT NULL,
+                nav_date TEXT NOT NULL,
+                unit_nav REAL,
+                acc_nav REAL,
+                daily_growth REAL,
+                source TEXT DEFAULT 'akshare',
+                PRIMARY KEY (fund_code, nav_date)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_code ON fund_nav_history(fund_code)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────
@@ -371,6 +400,18 @@ def init_all_stocks_table():
                 updated_at   REAL
             )
         """)
+        # Performance indexes for StockScreener queries
+        # Note: For existing databases, run these SQL commands manually during off-peak hours:
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover);
+        # CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name);
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_chgpct ON market_all_stocks(price, change_pct)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_turnover ON market_all_stocks(price, turnover)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_price_mktcap ON market_all_stocks(price, mktcap)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_chgpct_turnover ON market_all_stocks(change_pct, turnover)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_allstocks_code_name ON market_all_stocks(code, name)")
         conn.commit()
         conn.close()
 
@@ -383,6 +424,41 @@ def init_persistence_tables():
     init_strategy_table()
     init_token_table()
     init_audit_table()
+    init_orders_table()
+
+
+def init_orders_table():
+    """初始化订单管理表"""
+    conn = _get_conn()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                symbol TEXT NOT NULL,
+                side TEXT NOT NULL,
+                order_type TEXT NOT NULL,
+                quantity INTEGER NOT NULL,
+                price REAL,
+                status TEXT NOT NULL DEFAULT 'staged',
+                filled_quantity INTEGER DEFAULT 0,
+                avg_fill_price REAL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                submitted_at TEXT,
+                filled_at TEXT,
+                cancelled_at TEXT,
+                reject_reason TEXT,
+                broker_order_id TEXT,
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_portfolio ON orders(portfolio_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_symbol ON orders(symbol)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC)")
+        conn.commit()
+    finally:
+        conn.close()
 
 def upsert_all_stocks(rows):
     """批量写入全市场个股数据（生产者：立即入队，不持有锁）"""
@@ -457,16 +533,18 @@ def search_stocks(
             conditions.append("mktcap <= ?")
             args.append(float(max_mktcap) * 1e8)
 
-        # 排序字段白名单 + 排序方向严格验证
         ORDER_FIELDS = {
             'code': 'code', 'name': 'name', 'price': 'price',
             'change_pct': 'change_pct', 'turnover': 'turnover',
             'volume': 'volume', 'amount': 'amount',
             'per': 'per', 'pb': 'pb', 'mktcap': 'mktcap',
         }
-        order_col = ORDER_FIELDS.get(sort_by, 'change_pct')
-        # 严格验证排序方向，防止 SQL 注入
-        order_dir = 'DESC' if sort_dir.upper() == 'DESC' else 'ASC'
+        if sort_by not in ORDER_FIELDS:
+            raise ValueError(f"Invalid sort_by: '{sort_by}'. Must be one of: {list(ORDER_FIELDS.keys())}")
+        order_col = ORDER_FIELDS[sort_by]
+        if sort_dir.upper() not in ('ASC', 'DESC'):
+            raise ValueError(f"Invalid sort_dir: '{sort_dir}'. Must be 'asc' or 'desc'")
+        order_dir = sort_dir.upper()
 
         where_clause = " AND ".join(conditions)
 

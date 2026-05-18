@@ -36,6 +36,94 @@ import {
 import { toast } from './useToast.js'
 import { logger } from '../utils/logger.js'
 
+export const ErrorCategory = {
+  NETWORK: {
+    type: ErrorType.NETWORK,
+    title: '网络错误',
+    icon: '🌐',
+    retryable: true,
+    suggestions: [
+      '检查网络连接',
+      '尝试刷新页面',
+      '稍后重试',
+    ],
+  },
+  TIMEOUT: {
+    type: ErrorType.TIMEOUT,
+    title: '请求超时',
+    icon: '⏱️',
+    retryable: true,
+    suggestions: [
+      '网络可能较慢，请稍后重试',
+      '尝试减少数据量',
+    ],
+  },
+  SERVER: {
+    type: ErrorType.SERVER,
+    title: '服务器错误',
+    icon: '🖥️',
+    retryable: true,
+    suggestions: [
+      '服务器繁忙，请稍后重试',
+      '如果问题持续，请联系支持',
+    ],
+  },
+  CLIENT: {
+    type: ErrorType.CLIENT,
+    title: '请求错误',
+    icon: '❌',
+    retryable: false,
+    suggestions: [
+      '请检查输入参数',
+      '刷新页面后重试',
+    ],
+  },
+  VALIDATION: {
+    type: ErrorType.VALIDATION,
+    title: '数据验证失败',
+    icon: '⚠️',
+    retryable: false,
+    suggestions: [
+      '请检查输入数据格式',
+      '确保所有必填字段已填写',
+    ],
+  },
+  BUSINESS: {
+    type: ErrorType.BUSINESS,
+    title: '业务错误',
+    icon: '📋',
+    retryable: false,
+    suggestions: [
+      '请检查操作是否合法',
+    ],
+  },
+  UNKNOWN: {
+    type: ErrorType.UNKNOWN,
+    title: '未知错误',
+    icon: '❓',
+    retryable: false,
+    suggestions: [
+      '请刷新页面重试',
+      '如果问题持续，请联系支持',
+    ],
+  },
+}
+
+export function getErrorCategory(error) {
+  const type = classifyError(error)
+  return ErrorCategory[type] || ErrorCategory.UNKNOWN
+}
+
+export function getErrorSuggestions(error) {
+  const category = getErrorCategory(error)
+  return category.suggestions
+}
+
+export function getErrorTitle(error) {
+  const category = getErrorCategory(error)
+  return category.title
+}
+
 /**
  * 判断错误是否可重试
  * @param {Error} error 
@@ -111,6 +199,51 @@ export function useApiError(options = {}) {
     isRetrying: false,
   })
   
+  // 最近错误历史（最多保留10条）
+  const recentErrors = reactive([])
+  const MAX_RECENT_ERRORS = 10
+  
+  /**
+   * 添加错误到历史记录
+   * @param {Object} errorInfo 
+   */
+  function addToErrorHistory(errorInfo) {
+    recentErrors.unshift({
+      ...errorInfo,
+      timestamp: Date.now(),
+    })
+    
+    // 限制历史记录数量
+    while (recentErrors.length > MAX_RECENT_ERRORS) {
+      recentErrors.pop()
+    }
+  }
+  
+  /**
+   * 强制显示错误通知（不受 showToast 配置影响）
+   * @param {string} title 
+   * @param {string} message 
+   */
+  function notifyError(title, message) {
+    toast.error(title, message)
+  }
+  
+  /**
+   * 获取最近的错误
+   * @param {number} limit 
+   * @returns {Array}
+   */
+  function getRecentErrors(limit = 5) {
+    return recentErrors.slice(0, limit)
+  }
+  
+  /**
+   * 清除错误历史
+   */
+  function clearErrorHistory() {
+    recentErrors.length = 0
+  }
+  
   /**
    * 计算重试延迟（带抖动）
    * @param {number} attempt - 当前尝试次数
@@ -140,37 +273,50 @@ export function useApiError(options = {}) {
   function handleError(error, context = {}) {
     const type = classifyError(error)
     const userMessage = formatErrorForUser(error, context)
+    const category = getErrorCategory(error)
     
-    // 更新状态
     errorState.lastError = error
     errorState.errorType = type
     errorState.errorMessage = userMessage
     errorState.errorCount++
     
-    // 显示 Toast
+    const errorInfo = {
+      type,
+      userMessage,
+      originalError: error,
+      category,
+      suggestions: category.suggestions,
+      retryable: category.retryable,
+      context,
+    }
+    
+    addToErrorHistory(errorInfo)
+    
     if (config.showToast) {
       const { silent = false } = context
       if (!silent) {
-        toast.error('操作失败', userMessage)
+        toast.error(category.title, userMessage)
       }
     }
     
-    // 上报错误
     if (config.report) {
       reportErrorBase(error, {
         source: 'api',
         ...context,
         errorType: type,
+        category: category.title,
       })
     }
     
-    // 记录日志
     logger.error(`[useApiError] ${type}: ${error.message}`, { error, context })
     
     return {
       type,
       userMessage,
       originalError: error,
+      category,
+      suggestions: category.suggestions,
+      retryable: category.retryable,
     }
   }
   
@@ -263,27 +409,30 @@ export function useApiError(options = {}) {
   }
   
   return {
-    // 状态
     errorState,
+    recentErrors,
     hasError: computed(() => errorState.lastError !== null),
     isRetrying: computed(() => errorState.isRetrying),
     
-    // 方法
     handleError,
     wrapApiCall,
     resetErrorState,
     clearError,
+    notifyError,
+    getRecentErrors,
+    clearErrorHistory,
     
-    // 工具函数
     isRetryable,
     formatErrorForUser,
     classifyError,
+    getErrorCategory,
+    getErrorSuggestions,
+    getErrorTitle,
     
-    // 常量
     ErrorType,
     ErrorCode,
+    ErrorCategory,
   }
 }
 
-// 导出工具函数和常量
 export { ErrorType, ErrorCode, classifyError, getUserMessage, createError }

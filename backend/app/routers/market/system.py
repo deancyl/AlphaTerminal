@@ -3,6 +3,7 @@
 提供系统版本和详细信息
 """
 import json
+import logging
 import platform
 import time
 from pathlib import Path
@@ -11,6 +12,8 @@ import psutil
 from fastapi import APIRouter
 
 from app.utils.response import success_response
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/system", tags=["system"])
@@ -27,8 +30,8 @@ def _read_frontend_version():
         if pkg_path.exists():
             with open(pkg_path, "r", encoding="utf-8") as f:
                 return json.load(f).get("version", "unknown")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[SYSTEM] Failed to read frontend version: {type(e).__name__}: {e}")
     return "unknown"
 
 

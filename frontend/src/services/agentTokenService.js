@@ -7,6 +7,90 @@
 import { apiFetch } from '../utils/api.js'
 
 const BASE_URL = '/api/agent/v1'
+const ADMIN_TOKEN_KEY = 'admin_jwt_token'
+const ADMIN_TOKEN_EXPIRY_KEY = 'admin_jwt_expiry'
+
+/**
+ * Get admin JWT token from localStorage or fetch new one
+ * @returns {Promise<string|null>} JWT token or null if not configured
+ */
+async function getAdminSessionToken() {
+  const storedToken = localStorage.getItem(ADMIN_TOKEN_KEY)
+  const storedExpiry = localStorage.getItem(ADMIN_TOKEN_EXPIRY_KEY)
+  
+  // Check if token exists and is not expired
+  if (storedToken && storedExpiry) {
+    const expiryTime = new Date(storedExpiry).getTime()
+    const now = Date.now()
+    // Refresh 1 hour before expiry
+    const refreshThreshold = expiryTime - (60 * 60 * 1000)
+    
+    if (now < refreshThreshold) {
+      return storedToken
+    }
+  }
+  
+  // Fetch new JWT token from backend
+  const adminApiKey = import.meta.env.VITE_ADMIN_API_KEY || ''
+  
+  if (!adminApiKey) {
+    console.warn('[AgentTokenService] VITE_ADMIN_API_KEY not configured, admin access disabled')
+    return null
+  }
+  
+  try {
+    const response = await apiFetch('/api/v1/admin/token', {
+      method: 'POST',
+      headers: {
+        'X-Admin-Api-Key': adminApiKey
+      }
+    })
+    
+    if (response.code === 0 && response.data?.token) {
+      const token = response.data.token
+      const expiresAt = response.data.expires_at
+      
+      localStorage.setItem(ADMIN_TOKEN_KEY, token)
+      localStorage.setItem(ADMIN_TOKEN_EXPIRY_KEY, expiresAt)
+      
+      console.log('[AgentTokenService] JWT token refreshed, expires at', expiresAt)
+      return token
+    }
+  } catch (error) {
+    console.error('[AgentTokenService] Failed to get JWT token:', error)
+  }
+  
+  return null
+}
+
+/**
+ * Validate current JWT token
+ * @returns {Promise<boolean>} True if valid
+ */
+async function validateSessionToken() {
+  const storedToken = localStorage.getItem(ADMIN_TOKEN_KEY)
+  if (!storedToken) return false
+  
+  try {
+    const response = await apiFetch('/api/v1/admin/token/validate', {
+      headers: {
+        'X-Admin-Token': storedToken
+      }
+    })
+    return response.code === 0 && response.data?.valid === true
+  } catch (error) {
+    console.error('[AgentTokenService] Token validation failed:', error)
+    return false
+  }
+}
+
+/**
+ * Clear stored JWT token
+ */
+function clearSessionToken() {
+  localStorage.removeItem(ADMIN_TOKEN_KEY)
+  localStorage.removeItem(ADMIN_TOKEN_EXPIRY_KEY)
+}
 
 /**
  * List all tokens
@@ -14,10 +98,11 @@ const BASE_URL = '/api/agent/v1'
  * @returns {Promise<Array>} List of tokens
  */
 export async function listTokens(includeInactive = false) {
+  const sessionToken = await getAdminSessionToken()
   const url = `${BASE_URL}/admin/tokens${includeInactive ? '?include_inactive=true' : ''}`
   const data = await apiFetch(url, {
     headers: {
-      'X-Admin-Auth': 'admin_ui' // Simple admin auth for UI
+      'X-Admin-Auth': sessionToken
     }
   })
   return data
@@ -34,6 +119,7 @@ export async function listTokens(includeInactive = false) {
  * @returns {Promise<Object>} Created token with raw token string
  */
 export async function createToken(params) {
+  const sessionToken = await getAdminSessionToken()
   const url = `${BASE_URL}/admin/tokens`
   const data = await apiFetch(url, {
     method: 'POST',
@@ -43,10 +129,10 @@ export async function createToken(params) {
       markets: params.markets || null,
       rate_limit: params.rate_limit || 120,
       expires_in_days: params.expires_in_days ?? 30,
-      paper_only: true, // Always paper trading for safety
+      paper_only: true,
     }),
     headers: {
-      'X-Admin-Auth': 'admin_ui'
+      'X-Admin-Auth': sessionToken
     }
   })
   return data
@@ -58,11 +144,12 @@ export async function createToken(params) {
  * @returns {Promise<Object>} Result
  */
 export async function revokeToken(tokenId) {
+  const sessionToken = await getAdminSessionToken()
   const url = `${BASE_URL}/admin/tokens/${tokenId}`
   const data = await apiFetch(url, {
     method: 'DELETE',
     headers: {
-      'X-Admin-Auth': 'admin_ui'
+      'X-Admin-Auth': sessionToken
     }
   })
   return data
@@ -102,3 +189,6 @@ export const SCOPE_COLORS = {
   C: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
   T: 'bg-red-500/20 text-red-400 border-red-500/30',
 }
+
+// Export session management functions
+export { getAdminSessionToken, validateSessionToken, clearSessionToken }

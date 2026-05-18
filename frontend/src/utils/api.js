@@ -12,6 +12,9 @@ import { logger } from './logger.js'
 import { reactive } from 'vue'
 import { broadcastDataSourceStatus } from '../composables/useDataSourceStatus.js'
 import { toast } from '../composables/useToast.js'
+import { isNetworkOnline } from '../composables/useNetworkStatus.js'
+import { dedupedFetch, abortPendingRequest, abortAllPendingRequests } from './requestDedup.js'
+import { TIMEOUTS } from './constants.js'
 
 // ── API 基础 URL ─────────────────────────────────────────────────
 // 始终使用相对路径，让前端代理（Vite proxy）转发到后端
@@ -21,8 +24,13 @@ const API_BASE_URL = ''
 // ── 熔断阈值（连续失败 N 次则触发降级广播）─────────────────────
 // JavaScript 单线程，使用简单变量即可
 let _consecutiveFailures = 0
-const _DEGRADE_THRESHOLD   = 3
-const _CIRCUIT_THRESHOLD   = 6
+let _firstFailureTime = null  // 首次失败时间戳
+let _lastToastTime = null     // 上次 toast 时间戳
+
+const _DEGRADE_THRESHOLD   = 5   // 提高到 5 次（原 3 次）
+const _CIRCUIT_THRESHOLD   = 5   // 降低到 5 次（原 10 次）
+const _FAILURE_WINDOW_MS   = 60000  // 失败计数窗口：60秒内的失败才累计
+const _TOAST_COOLDOWN_MS   = 30000  // Toast 冷却时间：30秒内不重复显示
 
 // ── 全局错误感知状态（供 UI 层消费）──────────────────────────────
 export const apiErrorState = reactive({
@@ -33,26 +41,49 @@ export const apiErrorState = reactive({
 })
 
 function _onFailure(url, status) {
-  // JavaScript 单线程，直接操作即可
+  const now = Date.now()
+  
+  // 如果超过窗口时间，重置计数
+  if (_firstFailureTime && (now - _firstFailureTime) > _FAILURE_WINDOW_MS) {
+    _consecutiveFailures = 0
+    _firstFailureTime = null
+  }
+  
+  // 记录首次失败时间
+  if (_consecutiveFailures === 0) {
+    _firstFailureTime = now
+  }
+  
   _consecutiveFailures++
   const n = _consecutiveFailures
   apiErrorState.failedCount = n
   apiErrorState.lastError = `${url}: ${status ?? '网络错误'}`
-  apiErrorState.lastFailedAt = Date.now()
+  apiErrorState.lastFailedAt = now
+  
+  // 检查是否应该显示 toast（考虑冷却时间）
+  const canShowToast = !_lastToastTime || (now - _lastToastTime) > _TOAST_COOLDOWN_MS
+  
   if (n >= _CIRCUIT_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('down', `API 连续${n}次失败: ${status ?? '网络错误'}`)
-    toast.error('数据源异常', `API 连续${n}次失败，已触发熔断保护`)
+    if (canShowToast) {
+      _lastToastTime = now
+      toast.error('数据源异常', `API 连续${n}次失败，已触发熔断保护`)
+    }
   } else if (n >= _DEGRADE_THRESHOLD) {
     apiErrorState.isDegraded = true
     broadcastDataSourceStatus('degraded', `主数据源响应异常 (${status ?? '网络错误'})，已切换备用`)
-    toast.warning('数据源降级', '主数据源响应异常，已切换备用数据源')
+    if (canShowToast) {
+      _lastToastTime = now
+      toast.warning('数据源降级', '主数据源响应异常，已切换备用数据源')
+    }
   }
 }
 
 function _onSuccess() {
   if (_consecutiveFailures > 0) {
     _consecutiveFailures = 0
+    _firstFailureTime = null
     apiErrorState.failedCount = 0
     apiErrorState.lastError = null
     if (apiErrorState.isDegraded) {
@@ -126,7 +157,7 @@ function sleep(ms) {
 /**
  * @param {string} url - 请求 URL
  * @param {Object} options - 选项
- * @param {number} options.timeoutMs - 超时时间 (默认 8000ms)
+ * @param {number} options.timeoutMs - 超时时间 (默认 TIMEOUTS.API_DEFAULT)
  * @param {number} options.retries - 重试次数 (默认 0)
  * @param {string} options.method - HTTP方法 (默认 GET)
  * @param {Object} options.headers - 请求头
@@ -145,8 +176,12 @@ function calculateRetryDelay(attempt) {
 }
 
 export async function apiFetch(url, options = {}) {
-  const { timeoutMs = 8000, retries = 0, method = 'GET', headers = {}, body, signal: externalSignal } = options
+  const { timeoutMs = TIMEOUTS.API_DEFAULT, retries = 2, method = 'GET', headers = {}, body, signal: externalSignal } = options
   let lastError = null
+
+  if (!isNetworkOnline()) {
+    throw new Error('网络已断开，请检查连接')
+  }
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     const controller = new AbortController()
@@ -207,16 +242,27 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
-      // 修复: 增加网络错误 (TypeError) 和 Fetch 失败的重试
+      const isAbortError = e.name === 'AbortError'
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
-      if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
+      const isClientError = e.message?.match(/^HTTP 4\d{2}$/) || e.message?.includes('参数校验失败')
+      const isServerError = e.message?.startsWith('HTTP 5')
+      
+      // AbortError（超时）不重试，直接抛出
+      if (isAbortError) {
+        throw new Error(`请求超时（${timeoutMs / 1000}s）`)
+      }
+      
+      // 仅对服务器错误和网络错误重试
+      if (attempt < retries && (isServerError || isNetworkError)) {
         const backoffMs = calculateRetryDelay(attempt)
         logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying in ${backoffMs}ms...`)
         await sleep(backoffMs)
         continue
       }
-      // 记录失败（用于熔断计数）
-      _onFailure(url, e.message)
+      // 仅对服务器错误(5xx)和网络错误触发熔断计数，4xx客户端错误不触发
+      if (!isClientError) {
+        _onFailure(url, e.message)
+      }
     } finally {
       clearTimeout(timer)
     }
@@ -282,4 +328,59 @@ export async function apiFetchValidated(url, schema, options = {}) {
   }
   
   return result.data
+}
+
+export async function apiFetchDeduped(key, url, options = {}) {
+  const { debounce = 100, ...fetchOptions } = options
+  return dedupedFetch(key, async (signal) => {
+    return apiFetch(url, { ...fetchOptions, signal })
+  }, { debounce })
+}
+
+export { 
+  dedupedFetch,
+  abortPendingRequest,
+  abortAllPendingRequests
+}
+
+/**
+ * Fetch quote with automatic deduplication.
+ */
+export async function fetchQuote(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE } = options
+  const cacheKey = `quote:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/quote/${symbol}`,
+    { timeoutMs, debounce: 100 }
+  )
+}
+
+/**
+ * Fetch quote detail with automatic deduplication.
+ */
+export async function fetchQuoteDetail(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE_DETAIL } = options
+  const cacheKey = `quote_detail:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/quote_detail/${symbol}`,
+    { timeoutMs, debounce: 100 }
+  )
+}
+
+/**
+ * Fetch order book with automatic deduplication.
+ */
+export async function fetchOrderBook(symbol, options = {}) {
+  const { timeoutMs = TIMEOUTS.API_QUOTE } = options
+  const cacheKey = `order_book:${symbol}`
+  
+  return apiFetchDeduped(
+    cacheKey,
+    `/api/v1/market/order_book/${symbol}`,
+    { timeoutMs, debounce: 50 }
+  )
 }

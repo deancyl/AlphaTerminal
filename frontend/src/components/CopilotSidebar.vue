@@ -1,6 +1,6 @@
 <template>
-  <div class="flex flex-col h-full">
-    <CopilotHeader />
+  <div class="flex flex-col h-full bg-theme-secondary border-l border-agent-blue/20">
+    <CopilotHeader :session-id="currentSessionId" @new-conversation="startNewConversation" />
     <CopilotQuickCommands :commands="quickCommands" :is-loading="isLoading" @execute="executeQuickCommand" />
     <CopilotContextSelector
       v-model:ctxMarket="ctxMarket"
@@ -13,25 +13,28 @@
       :providers="providers"
       :currentModels="currentModels"
       :portfolioList="portfolioList"
+      :isLoadingPortfolio="isLoadingPortfolio"
       v-model:selectedPortfolioId="selectedPortfolioId"
     />
-    <CopilotMessageList ref="messageListRef" :messages="messages" />
+    <CopilotMessageList ref="messageListRef" :messages="messages" @retry="handleRetry" />
     <CopilotInput
       v-model:inputText="inputText"
       :is-loading="isLoading"
       :message-count="messages.length"
+      :streaming-progress="streamingProgress"
+      :show-timeout-warning="showTimeoutWarning"
       @send="sendMessage"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { mdRender } from '../composables/useCopilotMarkdown.js'
 import { showMarket, showSectors, showNorthFlow, showLimitUp, showLimitDown, showUnusual } from '../composables/useCopilotData.js'
 import { parseCommand } from '../composables/useCopilotCommands.js'
 import { analyzeStock, openStock, compareStocks } from '../composables/useCopilotStock.js'
-import { sendToLLM } from '../composables/useCopilotChat.js'
+import { sendToLLM, getSessionId, clearSessionId } from '../composables/useCopilotChat.js'
 import { clearCache, searchStock, getTopSectors, getNorthFlowRanking } from '../services/copilotData.js'
 import { formatHelp, formatTopSectors, formatNorthFlowRanking } from '../services/copilotResponse.js'
 import { logger } from '../utils/logger.js'
@@ -47,6 +50,7 @@ import CopilotInput from './copilot/CopilotInput.vue'
 const messages = ref([])
 const inputText = ref('')
 const isLoading = ref(false)
+const isLoadingPortfolio = ref(false)
 const messageListRef = ref(null)
 const ctxMarket = ref(true)
 const ctxRates = ref(false)
@@ -55,6 +59,10 @@ const ctxPortfolio = ref(false)
 const ctxHistorical = ref(false)
 const selectedPortfolioId = ref(null)
 const portfolioList = ref([])
+const currentSessionId = ref(getSessionId())
+const streamingProgress = ref(0)
+const showTimeoutWarning = ref(false)
+let timeoutWarningTimer = null
 
 // Model selection
 const selectedProvider = ref('deepseek')
@@ -105,6 +113,7 @@ const emit = defineEmits([
 const { currentSymbol } = useMarketStore()
 
 async function loadPortfolioList() {
+  isLoadingPortfolio.value = true
   try {
     const res = await apiFetch('/api/v1/portfolio/')
     portfolioList.value = res.portfolios || []
@@ -113,10 +122,18 @@ async function loadPortfolioList() {
     }
   } catch (e) {
     logger.debug('[Copilot] Failed to load portfolio list:', e.message)
+  } finally {
+    isLoadingPortfolio.value = false
   }
 }
 
 onMounted(() => loadPortfolioList())
+
+function startNewConversation() {
+  clearSessionId()
+  currentSessionId.value = getSessionId()
+  messages.value = []
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -136,9 +153,40 @@ function addAssistantMessage(content) {
   scrollToBottom()
 }
 
-function addErrorMessage(content) {
-  messages.value.push({ role: 'assistant', content, displayedContent: content, streaming: false, isError: true })
+function addErrorMessage(content, errorType = 'generic') {
+  messages.value.push({ role: 'assistant', content, displayedContent: content, streaming: false, isError: true, errorType })
   scrollToBottom()
+}
+
+// Retry last user message
+function handleRetry(messageIndex) {
+  // Find the last user message before the error message
+  const errorIndex = messageIndex !== undefined ? messageIndex : messages.value.length - 1
+  
+  // Find the last user message before this error
+  let lastUserMessage = null
+  for (let i = errorIndex - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') {
+      lastUserMessage = messages.value[i]
+      break
+    }
+  }
+  
+  if (!lastUserMessage) {
+    logger.warn('[Copilot] No previous user message to retry')
+    return
+  }
+  
+  // Remove the error message
+  if (messageIndex !== undefined) {
+    messages.value.splice(messageIndex, 1)
+  } else {
+    messages.value.pop()
+  }
+  
+  // Re-execute the last user message
+  const cmd = parseCommand(lastUserMessage.content)
+  executeCommand(cmd, lastUserMessage.content)
 }
 
 // Quick command execution
@@ -172,7 +220,7 @@ async function executeQuickCommand(cmd) {
     }
     addAssistantMessage(text)
   } catch (e) {
-    addErrorMessage(`获取数据失败: ${e.message}`)
+    addErrorMessage(`获取数据失败: ${e.message}`, 'network')
   } finally {
     isLoading.value = false
   }
@@ -236,7 +284,7 @@ async function executeCommand(cmd, originalText) {
       await handleLLMChat(originalText)
     }
   } catch (e) {
-    addErrorMessage(`执行失败: ${e.message}`)
+    addErrorMessage(`执行失败: ${e.message}`, 'generic')
   } finally {
     isLoading.value = false
   }
@@ -247,6 +295,13 @@ async function handleLLMChat(text) {
   addUserMessage(text)
   const aiMsgIndex = messages.value.length
   messages.value.push({ role: 'assistant', content: '', displayedContent: '🧠 正在思考...', streaming: true, fromCache: false })
+  
+  // Reset progress and start timeout warning timer
+  streamingProgress.value = 0
+  showTimeoutWarning.value = false
+  timeoutWarningTimer = setTimeout(() => {
+    showTimeoutWarning.value = true
+  }, 30000) // 30 seconds
   
   await sendToLLM(text, {
     ctxMarket: ctxMarket.value, ctxRates: ctxRates.value, ctxNews: ctxNews.value,
@@ -259,11 +314,30 @@ async function handleLLMChat(text) {
       messages.value[aiMsgIndex].content = content
       scrollToBottom()
     },
-    onComplete: () => { messages.value[aiMsgIndex].streaming = false },
+    onProgress: (charCount) => {
+      streamingProgress.value = charCount
+    },
+    onComplete: () => { 
+      messages.value[aiMsgIndex].streaming = false
+      streamingProgress.value = 0
+      showTimeoutWarning.value = false
+      if (timeoutWarningTimer) {
+        clearTimeout(timeoutWarningTimer)
+        timeoutWarningTimer = null
+      }
+    },
     onError: (err) => {
       messages.value[aiMsgIndex].content = `❌ 请求失败: ${err.message}`
       messages.value[aiMsgIndex].isError = true
       messages.value[aiMsgIndex].streaming = false
+      messages.value[aiMsgIndex].errorType = err.type || 'network'
+      messages.value[aiMsgIndex].error = err.message
+      streamingProgress.value = 0
+      showTimeoutWarning.value = false
+      if (timeoutWarningTimer) {
+        clearTimeout(timeoutWarningTimer)
+        timeoutWarningTimer = null
+      }
     },
     onCached: (cached) => {
       messages.value[aiMsgIndex].displayedContent = cached
@@ -271,6 +345,12 @@ async function handleLLMChat(text) {
       messages.value[aiMsgIndex].renderedContent = mdRender(cached)
       messages.value[aiMsgIndex].streaming = false
       messages.value[aiMsgIndex].fromCache = true
+      streamingProgress.value = 0
+      showTimeoutWarning.value = false
+      if (timeoutWarningTimer) {
+        clearTimeout(timeoutWarningTimer)
+        timeoutWarningTimer = null
+      }
       scrollToBottom()
     }
   })
@@ -291,6 +371,13 @@ async function addToWatch(keyword) {
   emit('open-chart', { symbol: stock.symbol, name: stock.name, addToWatch: true })
   addAssistantMessage(`⭐ 已添加「${stock.name}(${stock.symbol})」到自选股`)
 }
+// Lifecycle cleanup
+onUnmounted(() => {
+  if (timeoutWarningTimer) {
+    clearTimeout(timeoutWarningTimer)
+    timeoutWarningTimer = null
+  }
+})
 </script>
 
 <style src="../styles/copilot-markdown.css"></style>

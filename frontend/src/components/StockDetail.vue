@@ -135,6 +135,7 @@ import { ref, watch, onMounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useStockDetail, useStockQuote } from '../composables/useStockDetail.js'
 import { useApiError } from '../composables/useApiError.js'
+import { useF9Data } from '../composables/useF9Data.js'
 
 // Import sub-components
 import CompanyOverview from './stock-detail/CompanyOverview.vue'
@@ -152,7 +153,7 @@ const props = defineProps({
 
 const { getBareSymbol } = useStockDetail()
 const { stockInfo, loading, fetchQuote, priceClass, changeClass } = useStockQuote()
-const { handleError } = useApiError({ showToast: false }) // Don't auto-show toast, we handle UI ourselves
+const { fetchF9Data, fetchF9Paginated, abort: abortF9Requests } = useF9Data()
 
 const inputSymbol = ref(props.symbol)
 const activeTab = ref('overview')
@@ -239,18 +240,14 @@ async function fetchShareholderData() {
   if (!inputSymbol.value) return
   shareholderLoading.value = true
   shareholderError.value = null
-  try {
-    const bareSymbol = getBareSymbol(inputSymbol.value)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/shareholder`, { timeoutMs: 30000 })
-    if (data && (data.circulateHolders || data.shareChanges || data.holderChanges)) {
-      shareholderData.value = data
-    } else {
-      shareholderError.value = '获取股东数据失败'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取股东数据', silent: true })
-    shareholderError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(inputSymbol.value)
+  const result = await fetchF9Data('shareholder', bareSymbol, {
+    errorMsg: '获取股东数据失败',
+    validate: data => data && (data.circulateHolders || data.shareChanges || data.holderChanges)
+  })
+  if (!result.aborted) {
+    shareholderData.value = result.data
+    shareholderError.value = result.error
     shareholderLoading.value = false
   }
 }
@@ -259,18 +256,14 @@ async function fetchMarginData(symbol) {
   if (!symbol) return
   marginLoading.value = true
   marginError.value = null
-  try {
-    const bareSymbol = getBareSymbol(symbol)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/margin`, { timeoutMs: 30000 })
-    if (data && data.current) {
-      marginData.value = data
-    } else {
-      marginError.value = '暂无融资融券数据'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取融资融券数据', silent: true })
-    marginError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(symbol)
+  const result = await fetchF9Data('margin', bareSymbol, {
+    errorMsg: '暂无融资融券数据',
+    validate: data => data && data.current
+  })
+  if (!result.aborted) {
+    marginData.value = result.data
+    marginError.value = result.error
     marginLoading.value = false
   }
 }
@@ -279,18 +272,14 @@ async function fetchFinancialData() {
   if (!inputSymbol.value) return
   financialLoading.value = true
   financialError.value = ''
-  try {
-    const bareSymbol = getBareSymbol(inputSymbol.value)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/financial`, { timeoutMs: 30000 })
-    if (data && data.indicators && data.indicators.length > 0) {
-      financialData.value = data
-    } else {
-      financialError.value = '暂无财务数据'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '加载财务数据', silent: true })
-    financialError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(inputSymbol.value)
+  const result = await fetchF9Data('financial', bareSymbol, {
+    errorMsg: '暂无财务数据',
+    validate: data => data && data.indicators && data.indicators.length > 0
+  })
+  if (!result.aborted) {
+    financialData.value = result.data
+    financialError.value = result.error
     financialLoading.value = false
   }
 }
@@ -299,18 +288,14 @@ async function fetchForecastData(symbol) {
   if (!symbol) return
   forecastLoading.value = true
   forecastError.value = null
-  try {
-    const bareSymbol = getBareSymbol(symbol)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/forecast`, { timeoutMs: 30000 })
-    if (data && ((data.eps_forecast && data.eps_forecast.length > 0) || (data.institutions && data.institutions.length > 0))) {
-      forecastData.value = data
-    } else {
-      forecastError.value = '暂无盈利预测数据'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取盈利预测数据', silent: true })
-    forecastError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(symbol)
+  const result = await fetchF9Data('forecast', bareSymbol, {
+    errorMsg: '暂无盈利预测数据',
+    validate: data => data && ((data.eps_forecast && data.eps_forecast.length > 0) || (data.institutions && data.institutions.length > 0))
+  })
+  if (!result.aborted) {
+    forecastData.value = result.data
+    forecastError.value = result.error
     forecastLoading.value = false
   }
 }
@@ -319,18 +304,14 @@ async function fetchPeersData(symbol) {
   if (!symbol) return
   peersLoading.value = true
   peersError.value = null
-  try {
-    const bareSymbol = getBareSymbol(symbol)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/peers`, { timeoutMs: 30000 })
-    if (data && data.peers && data.peers.length > 0) {
-      peersData.value = data
-    } else {
-      peersError.value = '暂无同业比较数据'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取同业比较数据', silent: true })
-    peersError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(symbol)
+  const result = await fetchF9Data('peers', bareSymbol, {
+    errorMsg: '暂无同业比较数据',
+    validate: data => data && data.peers && data.peers.length > 0
+  })
+  if (!result.aborted) {
+    peersData.value = result.data
+    peersError.value = result.error
     peersLoading.value = false
   }
 }
@@ -340,46 +321,48 @@ async function fetchAnnouncementsData(page = 1) {
   announcementsLoading.value = true
   announcementsError.value = null
   announcementsPage.value = page
-  try {
-    const bareSymbol = getBareSymbol(inputSymbol.value)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/announcements?page=${page}&page_size=${announcementsPageSize.value}`, { timeoutMs: 30000 })
-    if (data && data.announcements) {
-      announcementsData.value = data
-    } else {
-      announcementsError.value = '获取公告数据失败'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取公告数据', silent: true })
-    announcementsError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(inputSymbol.value)
+  const result = await fetchF9Paginated('announcements', bareSymbol, page, announcementsPageSize.value, {
+    errorMsg: '获取公告数据失败',
+    validate: data => data && data.announcements
+  })
+  if (!result.aborted) {
+    announcementsData.value = result.data
+    announcementsError.value = result.error
     announcementsLoading.value = false
   }
 }
 
 async function fetchInstitutionData() {
   if (!inputSymbol.value) return
-  
   institutionLoading.value = true
   institutionError.value = ''
-  
-  try {
-    const bareSymbol = getBareSymbol(inputSymbol.value)
-    const data = await apiFetch(`/api/v1/f9/${bareSymbol}/institution`, { timeoutMs: 30000 })
-    if (data && ((data.current && data.current.length > 0) || (data.trend && data.trend.length > 0))) {
-      institutionData.value = data
-    } else {
-      institutionError.value = '暂无机构持股数据'
-    }
-  } catch (e) {
-    const { userMessage } = handleError(e, { context: '获取机构持股数据', silent: true })
-    institutionError.value = userMessage
-  } finally {
+  const bareSymbol = getBareSymbol(inputSymbol.value)
+  const result = await fetchF9Data('institution', bareSymbol, {
+    errorMsg: '暂无机构持股数据',
+    validate: data => data && ((data.current && data.current.length > 0) || (data.trend && data.trend.length > 0))
+  })
+  if (!result.aborted) {
+    institutionData.value = result.data
+    institutionError.value = result.error
     institutionLoading.value = false
   }
 }
 
 // Watch props.symbol changes
-watch(() => props.symbol, (newSymbol) => {
+watch(() => props.symbol, (newSymbol, oldSymbol) => {
+  if (newSymbol !== oldSymbol && oldSymbol) {
+    // Abort pending F9 requests when symbol changes
+    abortF9Requests()
+    // Clear cached data for new symbol
+    financialData.value = null
+    shareholderData.value = null
+    marginData.value = null
+    institutionData.value = null
+    forecastData.value = null
+    peersData.value = null
+    announcementsData.value = null
+  }
   if (newSymbol) {
     inputSymbol.value = newSymbol
     handleSearch()

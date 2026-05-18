@@ -5,12 +5,18 @@ const getEcharts = () => window.echarts
 import { useResizeObserver } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
+import { useTheme } from '../composables/useTheme.js'
+
+const { getChartColors, onThemeChange } = useTheme()
 
 const chartRef = ref(null)
 const chartInstance = shallowRef(null)
 const isLoading = ref(true)
 const hasData = ref(false)
 let timer = null
+
+const { createSignal, complete, abort: abortRequests } = useAbortableRequest()
 
 // ── 渲染入口：永远在 nextTick + DOM 尺寸已就绪后执行 ──────────────────────
 const renderChart = async (dataList) => {
@@ -36,19 +42,28 @@ const renderChart = async (dataList) => {
     chartInstance.value = echarts.init(chartRef.value, 'dark')
   }
 
+  // Get theme-aware colors
+  const colors = getChartColors()
+
   const dates = dataList.map(item => item.date)
   const values = dataList.map(item => (item.main_net || 0) / 100000000)
   const option = {
     backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText },
+    },
     grid: { top: '15%', right: '5%', bottom: '15%', left: '15%' },
-    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: '#94a3b8' } },
-    yAxis: { type: 'value', axisLabel: { fontSize: 9, color: '#94a3b8' }, splitLine: { lineStyle: { color: '#334155' } } },
+    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 9, color: colors.chartText } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 9, color: colors.chartText }, splitLine: { lineStyle: { color: colors.chartGrid } } },
     series: [{
       name: '主力净额(亿)',
       type: 'bar',
       data: values,
-      itemStyle: { color: (p) => p.value > 0 ? '#ef4444' : '#22c55e' }
+      itemStyle: { color: (p) => p.value > 0 ? colors.colorBull : colors.colorBear }
     }]
   }
   chartInstance.value.setOption(option)
@@ -57,8 +72,9 @@ const renderChart = async (dataList) => {
 
 // ── 数据获取 ────────────────────────────────────────────────────────────
 const loadData = async () => {
+  const signal = createSignal()
   try {
-    const res = await apiFetch('/api/v1/market/fund_flow')
+    const res = await apiFetch('/api/v1/market/fund_flow', { signal })
     const items = res?.items || res?.data?.items || (Array.isArray(res) ? res : [])
     if (items.length > 0) {
       hasData.value = true
@@ -68,9 +84,12 @@ const loadData = async () => {
       hasData.value = false
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.error('[FundFlow] Fetch failed', e)
     hasData.value = false
   } finally {
+    complete()
     isLoading.value = false
   }
 }
@@ -89,8 +108,28 @@ onMounted(() => {
   timer = setInterval(loadData, 300000)
 })
 
+// Re-render chart on theme change
+onThemeChange(() => {
+  if (chartInstance.value) {
+    const colors = getChartColors()
+    chartInstance.value.setOption({
+      tooltip: {
+        backgroundColor: colors.tooltipBg,
+        borderColor: colors.tooltipBorder,
+        textStyle: { color: colors.tooltipText },
+      },
+      xAxis: { axisLabel: { color: colors.chartText } },
+      yAxis: { axisLabel: { color: colors.chartText }, splitLine: { lineStyle: { color: colors.chartGrid } } },
+      series: [{
+      itemStyle: { color: (p) => p.value > 0 ? colors.colorBull : colors.colorBear }
+      }],
+    })
+  }
+})
+
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  abortRequests('Component unmounted')
   if (chartInstance.value) {
     chartInstance.value.dispose()
     chartInstance.value = null

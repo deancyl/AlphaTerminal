@@ -1,14 +1,18 @@
 """
+from app.services.kline_gap_detector import gap_detector
 Market History Endpoints
 
 Price history and futures data endpoints extracted from market.py.
 """
 
+import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 
 from app.utils.response import success_response
+from app.config.timeout import AKSHARE_TIMEOUT
 from .dependencies import (
     _clean_symbol,
     _inject_change_pct,
@@ -19,6 +23,9 @@ from .dependencies import (
     FUTURES_FREQ_MAP,
     logger,
 )
+
+# Thread pool for futures history blocking calls
+_futures_executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix="futures_hist_")
 
 
 router = APIRouter()
@@ -85,12 +92,18 @@ async def market_history(
 
             try:
                 from app.services.data_fetcher import fetch_us_stock_history
-                sync_rows = fetch_us_stock_history(clean_sym, period=period, limit=5000)
+                # 添加超时保护，防止 AkShare 挂起
+                sync_rows = await asyncio.wait_for(
+                    asyncio.to_thread(fetch_us_stock_history, clean_sym, period, 5000),
+                    timeout=AKSHARE_TIMEOUT
+                )
                 if sync_rows:
                     raw_rows = sync_rows
                     total = len(sync_rows)
                     fetching = False
                     logger.info(f"[Market History] 同步返回 {clean_sym}: {len(sync_rows)} 条")
+            except asyncio.TimeoutError:
+                logger.warning(f"[Market History] 同步拉取超时 {clean_sym}，回退DB")
             except Exception as e:
                 logger.warning(f"[Market History] 同步拉取失败，回退DB: {e}")
 
@@ -176,15 +189,27 @@ async def market_history(
         history    = get_price_history(clean_sym, limit=limit)
         chart_type = "candlestick"
 
+    # Detect K-line gaps
+    gaps = []
+    gap_summary = {}
+    try:
+        if history and len(history) > 1:
+            gaps = gap_detector.detect_gaps(history, period)
+            gap_summary = gap_detector.get_gap_summary(gaps)
+    except Exception as e:
+        logger.warning(f"[K-line Gap] Detection failed: {e}")
+
     result = {
-        "symbol":     clean_sym,
-        "period":     period,
-        "chart_type": chart_type,
-        "has_more":   has_more,
-        "offset":     offset,
-        "fetching":   fetching,
-        "timestamp":  datetime.now().isoformat(),
-        "history":    history,
+        "symbol":       clean_sym,
+        "period":       period,
+        "chart_type":   chart_type,
+        "has_more":     has_more,
+        "offset":       offset,
+        "fetching":     fetching,
+        "timestamp":    datetime.now().isoformat(),
+        "history":      history,
+        "gaps":         gaps,
+        "gap_summary":  gap_summary,
     }
     return success_response(result)
 
@@ -213,7 +238,10 @@ async def futures_history(
 
     if period == "daily":
         try:
-            df = ak.futures_zh_daily_sina(symbol=clean_sym.upper())
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_daily_sina, symbol=clean_sym.upper()),
+                timeout=15.0
+            )
             if df is None or df.empty:
                 return {"symbol": clean_sym, "period": period, "history": []}
             df = df.tail(limit)
@@ -227,6 +255,9 @@ async def futures_history(
             df_work['hold'] = df_work['hold'].apply(lambda x: int(x) if x == x else 0)
             rows = df_work[['date', 'open', 'high', 'low', 'close', 'volume', 'hold']].to_dict('records')
             return {"symbol": clean_sym, "period": period, "history": list(reversed(rows))}
+        except asyncio.TimeoutError:
+            logger.error(f"[Futures] daily timeout {clean_sym}")
+            return success_response({"symbol": clean_sym, "period": period, "history": []}, "获取超时")
         except Exception as e:
             logger.error(f"[Futures] daily failed {clean_sym}: {e}")
             return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")
@@ -234,7 +265,10 @@ async def futures_history(
     elif period in FUTURES_FREQ_MAP:
         freq = FUTURES_FREQ_MAP[period]
         try:
-            df = ak.futures_zh_minute_sina(symbol=clean_sym.upper(), period=str(freq))
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.futures_zh_minute_sina, symbol=clean_sym.upper(), period=str(freq)),
+                timeout=15.0
+            )
             if df is None or df.empty:
                 return {"symbol": clean_sym, "period": period, "history": []}
             df = df.tail(limit)
@@ -249,6 +283,9 @@ async def futures_history(
             df_work['timestamp'] = df_work['date'].apply(_parse_timestamp)
             rows = df_work[['date', 'open', 'high', 'low', 'close', 'volume', 'hold', 'timestamp']].to_dict('records')
             return {"symbol": clean_sym, "period": period, "history": rows}
+        except asyncio.TimeoutError:
+            logger.error(f"[Futures] minute timeout {clean_sym}")
+            return success_response({"symbol": clean_sym, "period": period, "history": []}, "获取超时")
         except Exception as e:
             logger.error(f"[Futures] minute failed {clean_sym}: {e}")
             return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")

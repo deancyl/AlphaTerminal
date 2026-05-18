@@ -2,16 +2,12 @@
   <div class="space-y-4">
     <h2 class="text-lg font-bold text-terminal-accent">同业比较</h2>
 
-    <div v-if="loading" class="text-center py-8 text-terminal-dim">
-      加载中...
-    </div>
+    <LoadingSpinner v-if="loading" text="加载同业比较数据..." />
 
-    <div v-else-if="error" class="text-center py-8 text-red-400">
-      {{ error }}
-    </div>
+    <ErrorDisplay v-else-if="error" :error="error" :retry="emitRetry" />
 
     <div v-else-if="!data" class="text-center py-8 text-terminal-dim">
-      请输入股票代码查询同业比较数据
+      请输入股票代码查看同业比较
     </div>
 
     <div v-else class="space-y-4">
@@ -79,6 +75,10 @@
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getECharts, initChart } from '../../utils/lazyEcharts.js'
 import { useStockDetail } from '../../composables/useStockDetail'
+import { safeAverage } from '../../utils/safeMath.js'
+import { safeDispose } from '../../utils/chartManager.js'
+import LoadingSpinner from '../f9/LoadingSpinner.vue'
+import ErrorDisplay from '../f9/ErrorDisplay.vue'
 
 const props = defineProps({
   data: { type: Object, default: null },
@@ -87,7 +87,14 @@ const props = defineProps({
   currentSymbol: { type: String, default: '' }
 })
 
+const emit = defineEmits(['retry'])
+
 const { formatMetric, getMetricClass } = useStockDetail()
+
+// 重试处理：向父组件发送 retry 事件
+function emitRetry() {
+  emit('retry')
+}
 
 const radarChartRef = ref(null)
 let radarChartInstance = null
@@ -112,10 +119,10 @@ async function renderRadarChart() {
     p.roe !== null && p.pe !== null && p.pb !== null && p.revenue_growth !== null
   )
   
-  const avgRoe = validPeers.reduce((sum, p) => sum + p.roe, 0) / validPeers.length
-  const avgPe = validPeers.reduce((sum, p) => sum + p.pe, 0) / validPeers.length
-  const avgPb = validPeers.reduce((sum, p) => sum + p.pb, 0) / validPeers.length
-  const avgGrowth = validPeers.reduce((sum, p) => sum + p.revenue_growth, 0) / validPeers.length
+  const avgRoe = safeAverage(validPeers.map(p => p.roe))
+  const avgPe = safeAverage(validPeers.map(p => p.pe))
+  const avgPb = safeAverage(validPeers.map(p => p.pb))
+  const avgGrowth = safeAverage(validPeers.map(p => p.revenue_growth))
   
   const option = {
     backgroundColor: 'transparent',
@@ -194,7 +201,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  radarChartInstance?.dispose()
+  safeDispose(radarChartInstance)
 })
 
 function handleResize() {

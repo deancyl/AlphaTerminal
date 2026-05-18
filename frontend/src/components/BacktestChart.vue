@@ -130,7 +130,7 @@ function buildOption() {
     series: [
       // 主图 K 线
       {
-        name: 'K线', type: 'candlestick', data: klineData,
+        name: 'K线', type: 'candlestick', data: klineData, sampling: 'lttb',
         xAxisIndex: 0, yAxisIndex: 0,
         itemStyle: {
           color: '#ef232a', color0: '#14b143',
@@ -157,7 +157,7 @@ function buildOption() {
       },
       // 副图：资金曲线
       {
-        name: '资金曲线', type: 'line',
+        name: '资金曲线', type: 'line', sampling: 'lttb',
         data: equityData,
         xAxisIndex: 1, yAxisIndex: 1,
         symbol: 'none',

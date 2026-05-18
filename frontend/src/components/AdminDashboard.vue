@@ -49,6 +49,10 @@
         <span>☰</span> 菜单
       </button>
 
+      <LoadingSpinner v-if="loading" text="加载管理面板..." />
+      <ErrorDisplay v-else-if="error" :error="error" :retry="onRetry" />
+
+      <template v-else>
       <!-- 数据源控制 -->
       <DataSourcePanel
         v-if="activeTab === 'sources'"
@@ -81,6 +85,16 @@
         @toggle="toggleWatchdog"
         @manual-restart="manualRestart"
         @confirm-action="confirmAction"
+      />
+
+      <!-- 速率限制 -->
+      <RateLimitPanel
+        v-else-if="activeTab === 'ratelimit'"
+        :stats="rateLimitStats"
+        @refresh="refreshRateLimit"
+        @confirm-action="confirmAction"
+        @reset-ip="resetRateLimitIp"
+        @reset-all="resetRateLimitAll"
       />
 
       <!-- 缓存管理 -->
@@ -122,6 +136,11 @@
         @save="saveLlmConfig"
       />
 
+      <!-- Token 监控 -->
+      <TokenMonitoringPanel
+        v-else-if="activeTab === 'tokens'"
+      />
+
       <!-- API密钥管理 -->
       <AgentTokensPanel
         v-else-if="activeTab === 'agent_tokens'"
@@ -145,6 +164,7 @@
         @refresh="refreshLogs"
         @update:logLevel="logLevel = $event"
       />
+      </template>
     </main>
 
     <!-- 确认对话框 -->
@@ -175,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, reactive, shallowReactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
@@ -192,6 +212,10 @@ import LogsPanel from './admin/LogsPanel.vue'
 import AgentTokensPanel from './admin/AgentTokensPanel.vue'
 import McpPanel from './admin/McpPanel.vue'
 import LayoutPanel from './admin/LayoutPanel.vue'
+import RateLimitPanel from './admin/RateLimitPanel.vue'
+import TokenMonitoringPanel from './admin/TokenMonitoringPanel.vue'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import ErrorDisplay from './f9/ErrorDisplay.vue'
 
 const emit = defineEmits(['navigate', 'clear-layout'])
 
@@ -201,6 +225,8 @@ const mobileNavOpen = ref(false)
 const logLevel = ref('ALL')
 const proxyUrl = ref('')
 const probeData = ref(null)
+const loading = ref(true)
+const error = ref(null)
 
 // Placeholder functions for agent_tokens and mcp
 function refreshAgentTokens() {
@@ -215,13 +241,15 @@ const navItems = [
   { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'watchdog', label: '进程保活', desc: '监控后端进程状态，自动重启', icon: '🛡️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'ratelimit', label: '速率限制', desc: 'API请求频率控制和DoS防护', icon: '🚦', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'layout', label: '布局设置', desc: '管理仪表盘布局和组件位置', icon: '📐', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'llm', label: '模型配置', desc: 'LLM API Key 和连接配置', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'llm', label: '模型配置', desc: '多模型矩阵配置和并发控制', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'tokens', label: 'Token监控', desc: 'LLM API调用量和成本监控', icon: '📈', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'agent_tokens', label: 'API密钥', desc: '管理Agent和第三方API密钥', icon: '🔑', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'mcp', label: 'AI工具配置', desc: '配置MCP工具和外部服务', icon: '🔌', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'layout', label: '布局设置', desc: '管理仪表盘布局和组件位置', icon: '📐', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'logs', label: '日志查看', desc: '查看系统运行日志和错误信息', icon: '📝', status: false, statusClass: 'bg-gray-400' },
 ]
 
@@ -273,7 +301,7 @@ const cacheStatus = reactive({ market: 5497, sectors: 20, news: 150, db: 22 })
 const dbStatus = reactive({ size: '12.5', realtime: 22, daily: 12500, stocks: 5497 })
 
 // ── 系统监控 ──────────────────────────────────────────────────────────
-const systemMetrics = reactive({
+const systemMetrics = shallowReactive({
   cpu_percent: 5.4,
   memory: { percent: 56.2, used_gb: 4.3, total_gb: 7.65 },
   disk: { percent: 29.0, used_gb: 17.22, total_gb: 62.6 },
@@ -293,6 +321,14 @@ const watchdogStatus = reactive({
 })
 const watchdogLoading = ref(false)
 const watchdogError = ref(null)
+
+// ── Rate Limiting 速率限制 ──────────────────────────────────────────────────────────
+const rateLimitStats = reactive({
+  total_tracked_ips: 0,
+  blocked_requests: [],
+  endpoint_limits: {},
+  enabled: true
+})
 
 // ── 日志数据 + WebSocket 实时流 ──────────────────────────────────────────────────
 const MAX_LOGS = 300
@@ -753,6 +789,40 @@ async function manualRestart() {
   }
 }
 
+async function refreshRateLimit() {
+  try {
+    const data = await apiFetch('/api/v1/admin/ratelimit/stats')
+    if (data?.data) {
+      rateLimitStats.total_tracked_ips = data.data.total_tracked_ips || 0
+      rateLimitStats.blocked_requests = data.data.blocked_requests || []
+      rateLimitStats.endpoint_limits = data.data.endpoint_limits || {}
+      rateLimitStats.enabled = data.data.enabled ?? true
+    }
+  } catch (e) {
+    logger.error('[RateLimit] Refresh failed:', e)
+  }
+}
+
+async function resetRateLimitIp(ip) {
+  try {
+    await apiFetch('/api/v1/admin/ratelimit/reset?ip=' + encodeURIComponent(ip), { method: 'POST' })
+    toast.success(`已重置 ${ip} 的速率限制`)
+    await refreshRateLimit()
+  } catch (e) {
+    toast.error('重置失败: ' + e.message)
+  }
+}
+
+async function resetRateLimitAll() {
+  try {
+    await apiFetch('/api/v1/admin/ratelimit/reset', { method: 'POST' })
+    toast.success('已重置所有速率限制')
+    await refreshRateLimit()
+  } catch (e) {
+    toast.error('重置失败: ' + e.message)
+  }
+}
+
 async function dbMaintenance(action) {
   try {
     await apiFetch('/api/v1/admin/database/maintenance', {
@@ -784,13 +854,37 @@ async function refreshSystemMetrics() {
 
 // ── Lifecycle Hooks ──────────────────────────────────────────────────────────
 
+function onRetry() {
+  error.value = null
+  loading.value = true
+  initializeData()
+}
+
+async function initializeData() {
+  try {
+    await Promise.all([
+      refreshSourceStatus(),
+      refreshScheduler(),
+      refreshSystemMetrics(),
+      refreshLogs(),
+      refreshDbStatus(),
+      loadLlmConfig(),
+      refreshWatchdog(),
+      refreshRateLimit()
+    ])
+  } catch (e) {
+    logger.error('[AdminDashboard] initializeData failed:', e)
+    error.value = e.message || '加载管理面板失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(() => {
-  refreshSourceStatus()
-  refreshScheduler()
-  refreshSystemMetrics()
-  refreshLogs()
-  refreshDbStatus()
-  loadLlmConfig()
-  refreshWatchdog().catch(e => logger.error('[AdminDashboard] refreshWatchdog failed:', e))
+  initializeData().catch(e => {
+    logger.error('[AdminDashboard] onMounted failed:', e)
+    error.value = e.message || '加载管理面板失败'
+    loading.value = false
+  })
 })
 </script>

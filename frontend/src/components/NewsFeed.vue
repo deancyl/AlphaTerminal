@@ -1,11 +1,13 @@
 <template>
-  <div class="flex flex-col min-h-0 h-full overflow-hidden">
+  <div class="flex flex-col min-h-0 h-full overflow-hidden" role="region" aria-label="新闻快讯">
 
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-center justify-between mb-2 shrink-0 flex-wrap gap-1">
       <div class="flex items-center gap-2">
-        <span class="text-theme-primary font-semibold text-sm">快讯</span>
-        <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10">
+        <span class="text-theme-primary font-semibold text-sm" id="news-feed-title">快讯</span>
+        <span class="text-[10px] text-terminal-dim/60 px-1.5 py-0.5 rounded-sm bg-theme-tertiary/10"
+              aria-live="polite"
+              role="status">
           {{ filteredTotal }} 条
         </span>
       </div>
@@ -125,18 +127,30 @@
       </div>
     </div>
 
-    <!-- ── 新闻列表（自适应高度） ───────────────────────── -->
+    <!-- ── 新闻列表（虚拟化滚动） ───────────────────────── -->
     <div
       ref="listEl"
-      class="flex-1 overflow-y-auto mt-2 min-h-0"
+      class="flex-1 overflow-hidden mt-2 min-h-0"
+      role="list"
+      aria-label="新闻列表"
+      aria-describedby="news-feed-title"
     >
-      <div class="flex flex-col">
-        <div
-          v-for="item in pagedItems"
-          :key="item.id || item.title"
-          class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
-          @click="openModal(item, $event)"
-        >
+      <RecycleScroller
+        ref="scrollerRef"
+        class="h-full"
+        :items="virtualizedNewsItems"
+        :item-size="64"
+        key-field="id"
+        :buffer="300"
+        v-slot="{ item, index }"
+      >
+<div
+           class="group flex flex-col gap-1 py-1.5 px-2 -mx-2 border-b border-theme-secondary hover:bg-theme-hover/30 transition-colors cursor-pointer"
+           role="listitem"
+           :tabindex="0"
+           @click="openModal(item, $event)"
+           @keydown.enter="openModal(item, $event)"
+         >
           <!-- 第一行：时间 + 标签 + 情绪 + 来源 -->
           <div class="flex items-center gap-1.5">
             <span class="text-[11px] text-theme-tertiary font-mono w-10 shrink-0">{{ formatTime(item.time) }}</span>
@@ -155,20 +169,20 @@
             {{ item.title }}
           </p>
         </div>
-        <!-- 骨架屏 -->
-        <div v-if="isRefreshing && !pagedItems.length" class="flex flex-col">
-          <div v-for="i in 5" :key="i" class="py-3 px-2 -mx-2 border-b border-theme-secondary">
-            <div class="flex items-center gap-2 mb-2">
-              <div class="w-10 h-3.5 rounded-sm bg-terminal-panel"></div>
-              <div class="w-12 h-3 rounded-sm bg-terminal-panel"></div>
-            </div>
-            <div class="h-4 rounded-sm bg-terminal-panel w-full mb-1.5"></div>
-            <div class="h-4 rounded-sm bg-terminal-panel w-2/3"></div>
+      </RecycleScroller>
+      <!-- 骨架屏 -->
+      <div v-if="isRefreshing && !pagedItems.length" class="flex flex-col">
+        <div v-for="i in 5" :key="i" class="py-3 px-2 -mx-2 border-b border-theme-secondary">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-10 h-3.5 rounded-sm bg-terminal-panel"></div>
+            <div class="w-12 h-3 rounded-sm bg-terminal-panel"></div>
           </div>
+          <div class="h-4 rounded-sm bg-terminal-panel w-full mb-1.5"></div>
+          <div class="h-4 rounded-sm bg-terminal-panel w-2/3"></div>
         </div>
-        <div v-else-if="!pagedItems.length" class="text-center py-12 text-theme-tertiary text-sm">
-          暂无符合条件的快讯
-        </div>
+      </div>
+      <div v-else-if="!pagedItems.length" class="text-center py-12 text-theme-tertiary text-sm">
+        暂无符合条件的快讯
       </div>
     </div>
 
@@ -292,10 +306,16 @@ import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { emit as busEmit } from '../composables/useEventBus.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 
 // 响应式断点检测
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px 为手机端
+
+// Separate abort controllers for news and sentiment to avoid race condition
+const { createSignal: createNewsSignal, complete: completeNews, abort: abortNews } = useAbortableRequest()
+const { createSignal: createSentimentSignal, complete: completeSentiment, abort: abortSentiment } = useAbortableRequest()
 
 const props = defineProps({
   initialItems: { type: Array, default: () => [] }
@@ -307,9 +327,13 @@ const isRefreshing = ref(false)
 const showRefreshed = ref(false)
 const refreshMsg   = ref('')
 const listEl       = ref(null)
-const refreshTimer  = ref(null)
+const scrollerRef  = ref(null)
 const forceRefreshCounter = ref(0)
 const lastRefreshTime = ref(null)
+let unregisterNews = null
+let unregisterSentiment = null
+
+const { register } = usePollingManager()
 
 // ── 舆情情感数据 ──────────────────────────────────────────────
 const sentiment = ref({
@@ -321,7 +345,6 @@ const sentiment = ref({
   keywords: [],
   timestamp: '',
 })
-const sentimentTimer = ref(null)
 
 const filteredTotal = computed(() => filteredItems.value.length)
 
@@ -351,8 +374,9 @@ function getItemSentiment(item) {
 
 
 async function fetchSentiment() {
+  const signal = createSentimentSignal()
   try {
-    const res = await fetch(`/api/v1/market/sentiment/news?_t=${Date.now()}`)
+    const res = await fetch(`/api/v1/market/sentiment/news?_t=${Date.now()}`, { signal })
     if (!res.ok) return
     const json = await res.json()
     const data = (json && json.code === 0) ? json.data : json
@@ -360,7 +384,11 @@ async function fetchSentiment() {
       sentiment.value = { ...data }
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.debug('[NewsFeed] sentiment fetch failed:', e.message)
+  } finally {
+    completeSentiment()
   }
 }
 
@@ -524,6 +552,14 @@ const pagedItems = computed(() => {
   return filteredItems.value.slice(start, start + PAGE_SIZE.value)
 })
 
+// ── 虚拟化新闻列表 ─────────────────────────────────────────────────────
+const virtualizedNewsItems = computed(() => {
+  return pagedItems.value.map((item, index) => ({
+    ...item,
+    id: item.id || item.title || `news-${index}`,
+  }))
+})
+
 const visiblePages = computed(() => {
   const tp = totalPages.value
   const cp = currentPage.value
@@ -638,6 +674,7 @@ function closeModal() {
 // ── 数据拉取 ──────────────────────────────────────────────────────────
 async function fetchNews(quiet = false, isTimer = false) {
   if (!quiet) isRefreshing.value = true
+  const signal = createNewsSignal()
   try {
     if (isTimer) {
       forceRefreshCounter.value = (forceRefreshCounter.value || 0) + 1
@@ -646,7 +683,7 @@ async function fetchNews(quiet = false, isTimer = false) {
     const url = useForce
       ? '/api/v1/news/force_refresh'
       : `/api/v1/news/flash?_t=${Date.now()}`
-    const res = await fetch(url, useForce ? { method: 'POST' } : {})
+    const res = await fetch(url, useForce ? { method: 'POST', signal } : { signal })
     if (!res.ok) {
       let errMsg = `HTTP ${res.status}`
       try {
@@ -712,9 +749,12 @@ async function fetchNews(quiet = false, isTimer = false) {
       if (!quiet) busEmit('news-refreshed', { count: newItems.length, sources: [...new Set(newItems.map(it => it.source))] })
     }
   } catch (e) {
+    // Ignore abort errors
+    if (e.name === 'AbortError') return
     logger.warn('[NewsFeed] fetch failed:', e.message)
     if (!quiet) refreshMsg.value = `抓取失败: ${e.message}`
   } finally {
+    completeNews()
     if (!quiet) isRefreshing.value = false
   }
 }
@@ -725,17 +765,42 @@ async function manualRefresh() {
   await Promise.all([fetchNews(false), fetchSentiment()])
 }
 
-function startAutoRefresh() {
-  fetchNews(true)
-  fetchSentiment()
-  refreshTimer.value = setInterval(() => fetchNews(true, true), 2 * 60 * 1000)
-  sentimentTimer.value = setInterval(() => fetchSentiment(), 60 * 1000)
+function setupPolling() {
+  if (unregisterNews) unregisterNews()
+  if (unregisterSentiment) unregisterSentiment()
+  
+  unregisterNews = register(
+    'news-feed',
+    () => fetchNews(true, true),
+    'normal',
+    { interval: 2 * 60 * 1000 }
+  )
+  
+  unregisterSentiment = register(
+    'news-sentiment',
+    fetchSentiment,
+    'normal',
+    { interval: 60 * 1000 }
+  )
 }
 
-onMounted(startAutoRefresh)
+onMounted(() => {
+  fetchNews(true)
+  fetchSentiment()
+  setupPolling()
+})
+
 onUnmounted(() => {
-  if (refreshTimer.value) clearInterval(refreshTimer.value)
-  if (sentimentTimer.value) clearInterval(sentimentTimer.value)
+  if (unregisterNews) {
+    unregisterNews()
+    unregisterNews = null
+  }
+  if (unregisterSentiment) {
+    unregisterSentiment()
+    unregisterSentiment = null
+  }
+  abortNews('Component unmounted')
+  abortSentiment('Component unmounted')
 })
 </script>
 

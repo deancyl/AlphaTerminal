@@ -29,7 +29,7 @@ test.describe('Homepage', () => {
 
   test('should display sidebar or menu', async ({ page }) => {
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('load')
     
     // First, click the hamburger button to open the sidebar
     // The sidebar is hidden by default (isSidebarOpen = false in App.vue)

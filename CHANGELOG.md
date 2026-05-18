@@ -5,59 +5,327 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.6.30] - 2026-05-12
+## [0.6.44] - 2026-05-17
 
-### 新功能
+### 外部审计优化（9项任务）
 
-- **研报平台 (RPP)** — 券商研报查询与分析
-  - 新增研报列表查询：按股票代码、关键词、机构筛选
-  - 新增研报统计：机构分布、评级分布
-  - 新增PDF链接：直接跳转研报原文
-  - 数据源：AkShare `stock_research_report_em`
-  - API端点：
-    - `GET /api/v1/research/reports?symbol=xxx`
-    - `GET /api/v1/research/statistics?symbol=xxx`
-    - `GET /api/v1/research/health`
+本次更新实现了外部审计报告中的9项优先级任务，涵盖性能、基础设施、合规性和用户体验四个方面。
 
-- **ESG评价体系** — 环境社会治理评级
-  - 新增ESG评级查询：华证ESG、MSCI ESG、新浪ESG
-  - 新增碳排放数据：北京碳交易、国内碳交易
-  - 新增ESG排名：ESG评级较高的股票列表
-  - 数据源：AkShare `stock_esg_*` 系列
-  - API端点：
-    - `GET /api/v1/esg/rating/{symbol}`
-    - `GET /api/v1/esg/carbon`
-    - `GET /api/v1/esg/rank`
-    - `GET /api/v1/esg/health`
+#### 性能优化（Wave 1）
 
-- **键盘快捷键扩展** — 从26个扩展到51个
-  - 新增功能键：F1-F12完整支持
-  - 新增快速操作：Alt+1/2/3/4（买入/卖出/预警/笔记）
-  - 新增数据操作：Ctrl+E/I/S/N（导出/导入/保存/新建）
-  - 新增编辑操作：Ctrl+Z/Y（撤销/重做）
+- **新闻并行获取** — W1-T1
+  - 使用 `asyncio.gather()` 替代顺序获取
+  - 延迟从 ~3s 降至 ~0.62s（5倍提升）
+  - 文件：`backend/app/services/news_engine.py`
+
+- **数据库复合索引** — W1-T2
+  - 在 `market_all_stocks` 表添加5个复合索引
+  - 查询时间从 ~200ms 降至 ~2ms（100倍提升）
+  - 索引覆盖：price, change_pct, turnover, mktcap, code/name
+  - 文件：`backend/app/db/database.py`
+
+- **统一缓存架构** — W1-T3
+  - 创建 `DataCache` 单例类替代分散的字典缓存
+  - 13个路由器迁移至统一缓存
+  - 支持 TTL 过期、LRU 淘汰、内存限制
+  - 文件：`backend/app/services/data_cache.py`
+
+#### 基础设施（Wave 2）
+
+- **WebSocket 实时数据流** — W2-T1
+  - 新增 `backend/app/services/streaming/` 模块
+  - 实现熔断器保护（CLOSED/OPEN/HALF_OPEN 三态）
+  - HTTP 轮询降级机制
+  - 43个单元测试
+  - 文件：`streaming_manager.py`, `base_streamer.py`, `sina_streamer.py`
+
+- **HMAC-SHA256 审计追踪** — W2-T2
+  - 实现哈希链审计日志（prev_hash 链接）
+  - 7年保留期（SEC 17a-4 合规）
+  - 链完整性验证端点 `/api/v1/audit/verify`
+  - 文件：`backend/app/services/audit_chain.py`, `backend/app/routers/audit.py`
+
+#### 合规性（Wave 3）
+
+- **OMS 状态机** — W3-T1
+  - 新增 `backend/app/services/oms/` 模块
+  - 9个订单状态：STAGED, SUBMITTED, VALIDATED, PENDING, PARTIAL_FILLED, FILLED, CANCELLED, REJECTED, EXPIRED
+  - 状态转换验证矩阵
+  - 交易前风控检查（资金/持仓/价格/限额）
+  - Broker 适配器接口
+  - 35个单元测试
+  - 文件：`order_status.py`, `order_engine.py`, `pre_trade_validation.py`, `broker_adapter.py`
+
+#### 用户体验（Wave 4）
+
+- **K线新闻标记** — W4-T1
+  - K线图上显示新闻事件 markPoint
+  - 悬停显示新闻标题
+  - 情感颜色：绿色（利好）、红色（利空）、黄色（中性）
+  - 新增端点 `/api/v1/news/events/{symbol}`
+  - 文件：`frontend/src/components/BaseKLineChart.vue`, `frontend/src/utils/echartsTheme.js`
+
+- **防御性UX** — W4-T2
+  - 交易确认：两步确认 + 复选框验证
+  - 资金划转：两步确认 + 复选框验证
+  - 警告提示："此操作不可撤销"
+  - 文件：`SimulatedTradeModal.vue`, `PortfolioDashboard.vue`
+
+- **期权链T型报价表** — W4-T3
+  - 新增 `OptionsFetcher` 数据获取器
+  - T型报价表：看涨期权（左）/ 行权价（中）/ 看跌期权（右）
+  - Greeks 显示：Delta, Gamma, Theta, Vega, IV
+  - 支持 CFFEX（沪深300/中证1000）和 SSE（ETF期权）
+  - 新增端点 `/api/v1/options/cffex/chain`
+  - 文件：`backend/app/services/fetchers/options_fetcher.py`, `frontend/src/components/OptionsAnalysis.vue`
+
+### 新增模块
+
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| 流式传输 | `backend/app/services/streaming/` | WebSocket 实时数据基础设施 |
+| OMS | `backend/app/services/oms/` | 订单管理系统 |
+| 审计链 | `backend/app/services/audit_chain.py` | 哈希链审计追踪 |
+| 期权获取器 | `backend/app/services/fetchers/options_fetcher.py` | 期权数据获取 |
+| 审计路由 | `backend/app/routers/audit.py` | 审计 API 端点 |
+| OMS路由 | `backend/app/routers/oms.py` | OMS API 端点 |
+| 期权路由 | `backend/app/routers/options.py` | 期权 API 端点 |
+| 期权链组件 | `frontend/src/components/OptionsChain.vue` | 期权链显示组件 |
+
+### 测试覆盖
+
+- **新增测试**：78个
+  - 流式传输模块：43个测试
+  - OMS 模块：35个测试
+- **测试文件**：
+  - `backend/tests/unit/test_oms.py`
+  - `backend/tests/unit/test_services/test_streaming.py`
+
+### 性能指标
+
+| 指标 | 优化前 | 优化后 | 提升 |
+|------|--------|--------|------|
+| 新闻获取延迟 | ~3s | ~0.62s | 5x |
+| 数据库查询 | ~200ms | ~2ms | 100x |
+| 缓存命中率 | 分散 | 统一 | 13路由 |
+
+### 文件变更统计
+
+- 44个文件修改
+- 6174行新增
+- 791行删除
+
+## [0.6.40] - 2026-05-16
+
+### 核心修复
+
+- **外汇模块显示问题修复**
+  - 修复实时报价面板只显示6个数据的问题 → 现在显示10个货币对
+  - 修复交叉汇率矩阵大量N/A数据 → 添加EURUSD/GBPUSD/USDJPY/AUDUSD实现三角套利计算
+  - 修复K线走势图不显示的问题 → 添加`min-h-[400px]`确保图表容器有足够高度
+  - 新增熔断器重置端点 `POST /forex/circuit_breaker/reset`
+  - 优化离线模式提示（仅在无数据时显示）
+
+- **后端熔断器机制增强**
+  - 新增 `_get_fallback_quotes()` 返回10个货币对的备用数据
+  - 熔断器打开时自动使用备用数据而非空数组
+  - 添加 `reset_circuit_breaker()` 方法支持手动重置
+
+### 新增功能
+
+- **宏观模块配置中心化**
+  - 新增 `backend/app/config/macro_config.py` 配置模块
+  - 新增 `frontend/src/utils/macroErrors.js` 错误分类工具
+  - 新增 `frontend/src/utils/webVitals.js` 性能监控工具
+
+- **ECharts 错误边界**
+  - 新增 `useEChartsErrorBoundary.js` composable
+  - 图表错误自动捕获和恢复
+
+### 测试增强
+
+- **熔断器单元测试**
+  - 新增 `test_circuit_breaker.py` 熔断器测试套件
+
+- **内存泄漏E2E测试**
+  - 新增 `memory-leak.spec.js` 端到端内存泄漏检测
 
 ### 文档更新
 
-- **PRD覆盖率矩阵修正**
-  - F9深度资料：85% → 100%
-  - AI Copilot：75% → 95%
-  - EDB宏观经济：60% → 70%（仅中国数据）
-  - PMS组合管理：50% → 85%（无Brinson归因）
-  - 新闻资讯：35% → 75%（无研报平台）
+- **诊断工作流文档**
+  - 新增 `DIAGNOSIS_WORKFLOW_REVIEW.md` 诊断流程审查
+  - 更新 `AUTO_DIAGNOSIS_WORKFLOW.md` 自动诊断工作流
+  - 新增 `MACRO_OPTIMIZATION_SUMMARY_50.md` 宏观模块优化总结
 
-- **文档结构重组**
-  - `docs/architecture/` — 架构设计文档
-  - `docs/planning/` — 规划与PRD文档
-  - `docs/archive/` — 归档历史文档
-  - `docs/releases/` — 发布记录
+### 其他改进
+
+- **路由器超时保护**
+  - macro, forex, portfolio 端点添加 `asyncio.wait_for()` 超时保护
+  - 统一错误处理和输入验证
+
+## [0.6.33] - 2026-05-14
+
+### 核心修复
+
+- **投资组合模块 — AbortController 竞态条件修复**
+  - 修复 `Cannot read properties of null (reading 'signal')` 错误
+  - 问题原因：`loadPortfolios()` 和 `loadPortfolioData()` 共享 `_fetchController` 变量
+  - 解决方案：每个请求使用独立的本地 AbortController
+  - 消除了请求间的竞态条件
+
+### 新增功能
+
+- **API Key 认证中间件** — 支持 Agent 网关安全认证
+  - 新增 `api_key_auth.py` 中间件
+  - 支持 X-API-Key header 认证
+  - 可配置白名单路径
+
+- **研究复盘模块** — 新增研究复盘看板
+  - 新增 `research.py` 路由
+  - 支持研报数据展示
+
+- **输入验证工具** — 后端输入验证增强
+  - 新增 `input_validation.py` 工具模块
+  - 统一的参数验证函数
+
+- **安全数学工具** — 后端安全计算
+  - 新增 `safe_math.py` 工具模块
+  - 防止除零和 NaN 错误
+
+### 测试增强
+
+- **E2E 测试框架** — 端到端测试基础设施
+  - 新增 `tests/e2e/` 目录
+  - 新增 `tests/fixtures/` 测试夹具
+
+- **期货模块测试** — 新增期货相关测试
+  - `test_futures_real_data.py` — 真实数据集成测试
+  - `test_futures_rate_limit.py` — 速率限制测试
+  - `test_bond.py` — 债券模块测试
+
+- **前端单元测试** — 新增前端测试
+  - `FuturesDashboard.ux.test.js` — UX 测试
+  - `safeMath.spec.js` — 安全数学工具测试
+  - `waitForDimensions.spec.js` — 尺寸等待工具测试
+  - `indicators.edge.spec.js` — 指标边缘情况测试
+  - `useMarketStream.race.spec.js` — 市场流竞态测试
+
+### 其他改进
+
+- **前端组件优化** — 多个组件改进
+  - PortfolioDashboard — AbortController 修复
+  - FuturesDashboard — 加载状态优化
+  - BondDashboard — 错误处理增强
+  - FullscreenKline — 图表性能优化
+
+- **样式改进** — 新增过渡动画
+  - 添加 fade 过渡效果
+  - 优化加载状态显示
+
+## [0.6.32] - 2026-05-13
+
+### 新功能
+
+- **50次迭代优化 — 股票行情数据面板全面升级**
+  - 38个优化任务完成，覆盖5个主要领域
+  - 37个文件修改，5180行新增，295行删除
+  - 10个新的工具函数和组件
+
+### 核心修复 (Wave 1)
+
+- **DB Writer 健康监控** — 添加心跳检测和自动重启机制
+  - 新增 `_last_heartbeat`, `_items_processed`, `_writer_start_time` 监控变量
+  - 新增 `ensure_writer_running()` 和 `is_writer_healthy()` 函数
+  - 新增 `/debug/writer-status` 监控端点
+
+- **API 参数验证** — 严格的 sort_by 和分页参数验证
+  - `database.py` 添加 ValueError 抛出
+  - `symbols.py` 添加 FastAPI Query 验证
+
+- **WebSocket 竞态条件修复** — 连接锁 + 健康检查机制
+  - 添加 `_connecting` 连接锁防止并发连接
+  - 添加 `_lastMessageTime` 和健康检查定时器
+  - 60秒无消息自动重连
+
+### 加载状态 + 错误边界 (Wave 2)
+
+- **useLoadingState composable** — 可复用的加载状态管理
+  - 支持超时检测（默认30秒）
+  - 自动清理定时器
+
+- **WidgetErrorBoundary 组件** — 细粒度错误隔离
+  - 捕获子组件错误，显示友好提示
+  - 支持重试按钮
+  - 阻止错误传播
+
+- **DashboardGrid 错误处理** — 完善的错误状态管理
+  - API失败显示错误消息
+  - `onErrorCaptured` 安全网
+
+### 缓存 LRU + 可见性检测 (Wave 3)
+
+- **LRU 缓存工具** — 防止内存泄漏
+  - 最大100条缓存限制
+  - 自动淘汰最旧条目
+
+- **usePageVisibility composable** — 标签页可见性检测
+  - 实时追踪 `document.visibilityState`
+  - `wasHidden` 标记返回事件
+
+- **useSmartPolling composable** — 智能轮询
+  - 标签页隐藏时暂停轮询
+  - 返回时立即刷新数据
+
+- **WebSocket 心跳优化** — 根据可见性调整频率
+  - 可见时：30秒心跳
+  - 隐藏时：120秒心跳
+
+### 数据新鲜度 + 类型安全 (Wave 4)
+
+- **FreshnessIndicator 组件** — 数据新鲜度指示器
+  - 🟢 实时 (<1分钟)
+  - 🟡 5分钟内
+  - 🟠 1小时内
+  - 🔴 过期
+
+- **类型安全工具** — 防止运行时错误
+  - `safeNumber()`, `safeInt()`, `safePct()`, `safePrice()`
+  - formatters.js, chartDataBuilder.js, copilotData.js 全面应用
+
+### 请求取消 (Wave 5)
+
+- **useAbortableRequest composable** — 可取消的请求
+  - AbortController 管理
+  - 组件卸载自动取消
+
+- **F9 数据获取** — 支持请求取消
+  - 股票切换时取消前一个请求
+
+- **Copilot 聊天** — 支持请求取消
+  - 新消息发送时取消前一个请求
+
+### 新增组件
+
+- ConvertibleBondPanel — 可转债面板
+- ForexDashboard — 外汇看板
+- EsgDashboard — ESG看板
+- ResearchDashboard — 研报复盘看板
+- VersionChecker — 版本检查器
+- MobileCardTable, MobileScrollableTabs, SwapButton — 移动端组件
 
 ### 技术细节
 
-- 新增 `backend/app/routers/research.py` — 研报平台API
-- 新增 `backend/app/routers/esg.py` — ESG评价API
-- 更新 `frontend/src/composables/useKeyboardShortcuts.js` — 51个快捷键
-- 更新 `backend/app/main.py` — 注册新路由
-- PRD覆盖率从48%提升至52%
+- 新增文件：
+  - `frontend/src/composables/useLoadingState.js`
+  - `frontend/src/composables/usePageVisibility.js`
+  - `frontend/src/composables/useSmartPolling.js`
+  - `frontend/src/composables/useAbortableRequest.js`
+  - `frontend/src/utils/lruCache.js`
+  - `frontend/src/utils/freshness.js`
+  - `frontend/src/utils/typeCoercion.js`
+  - `frontend/src/components/WidgetErrorBoundary.vue`
+  - `frontend/src/components/FreshnessIndicator.vue`
+  - `frontend/src/composables/useF9Data.js`
 
 ---
 

@@ -1,7 +1,7 @@
 # QuantDinger Integration - Implementation Complete
 
 > Date: 2026-05-08
-> Version: v0.7.0-alpha
+> Version: v0.6.38
 > Status: ✅ All Phases Complete
 
 ---

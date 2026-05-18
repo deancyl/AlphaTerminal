@@ -66,6 +66,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { usePriceFlash } from '../composables/usePriceFlash.js'
+import { usePollingManager } from '../composables/usePollingManager.js'
 import { formatPrice, formatVol } from '../utils/formatters.js'
 
 const props = defineProps({
@@ -79,11 +80,12 @@ const loading = ref(true)
 const error = ref(null)
 const localSymbol = ref(props.symbol)
 const lastPrice = ref(0)
-const priceDirection = ref('') // 'up', 'down', ''
+const priceDirection = ref('')
 let prevPrice = 0
-let timer = null
+let unregisterPolling = null
 
 const { flashClass, triggerFlash } = usePriceFlash()
+const { register } = usePollingManager()
 
 const marketStatus = computed(() => {
   const pct = data.value?.change_pct || 0
@@ -111,20 +113,25 @@ function changeSymbol() {
   }
 }
 
+let fetchQuoteRequestId = 0
+
 async function fetchQuote() {
   if (!props.symbol) return
   
+  const currentRequestId = ++fetchQuoteRequestId
   loading.value = true
   error.value = null
   
   try {
     const json = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}`)
     
+    // Ignore stale responses
+    if (currentRequestId !== fetchQuoteRequestId) return
+    
     if (json) {
       const oldPrice = data.value?.price || 0
       data.value = json
       
-      // 检测价格方向
       if (json.price > prevPrice) {
         priceDirection.value = 'up'
       } else if (json.price < prevPrice) {
@@ -135,38 +142,43 @@ async function fetchQuote() {
       prevPrice = json.price
       lastPrice.value = json.price
       
-      // 触发价格闪烁动画
       triggerFlash(json.price, oldPrice)
     }
   } catch (e) {
+    if (currentRequestId !== fetchQuoteRequestId) return
     logger.error('[SimpleQuote] fetch error:', e)
     error.value = e.message || '获取数据失败'
   } finally {
-    loading.value = false
+    if (currentRequestId === fetchQuoteRequestId) {
+      loading.value = false
+    }
   }
 }
 
-// 轮询获取数据
-function startPolling() {
-  fetchQuote()
-  timer = setInterval(fetchQuote, 5000) // 5秒刷新
-}
-
-function stopPolling() {
-  if (timer) {
-    clearInterval(timer)
-    timer = null
+function setupPolling() {
+  if (unregisterPolling) {
+    unregisterPolling()
   }
+  unregisterPolling = register(
+    `simple-quote-${props.symbol}`,
+    fetchQuote,
+    'critical',
+    { interval: 5000 }
+  )
 }
 
 watch(() => props.symbol, (newSymbol) => {
   localSymbol.value = newSymbol
-  stopPolling()
-  startPolling()
+  setupPolling()
 })
 
-onMounted(startPolling)
-onUnmounted(stopPolling)
+onMounted(setupPolling)
+onUnmounted(() => {
+  if (unregisterPolling) {
+    unregisterPolling()
+    unregisterPolling = null
+  }
+})
 </script>
 
 <style scoped>

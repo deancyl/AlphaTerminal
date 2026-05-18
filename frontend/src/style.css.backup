@@ -9,62 +9,66 @@
      ============================================ */
   
   :root {
-    /* 默认深色主题变量（防止闪烁）- 柔和版 */
-    --bg-primary: #0f1115;
-    --bg-secondary: #181a20;
-    --bg-tertiary: #1e2128;
-    --bg-hover: rgba(255,255,255,0.06);
-    --bg-active: rgba(15,82,186,0.12);
+    /* 默认深色主题变量 - 专业克制版 */
+    /* 背景：纯中性深灰，无偏色 */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #121212;
+    --bg-tertiary: #202020;
+    --bg-hover: rgba(255,255,255,0.04);
+    --bg-active: rgba(100,100,100,0.08);
     
-    --text-primary: #e8ecf1;
-    --text-secondary: #a8b0bd;
-    --text-tertiary: #7a8290;
-    --text-muted: #5a6270;
+    /* 文字：降低对比度，避免纯白 */
+    --text-primary: #d1d5db;
+    --text-secondary: #8a8a8a;
+    --text-tertiary: #666666;
+    --text-muted: #4a4a4a;
     
-    --border-primary: #2a2d35;
-    --border-secondary: #23262d;
-    --border-hover: #3a3f4a;
+    /* 边框：极淡灰色，弱化线条感 */
+    --border-primary: #27272a;
+    --border-secondary: #222222;
+    --border-hover: #333333;
     
-    --color-primary: #0F52BA;
-    --color-up: #E63946;
-    --color-down: #1A936F;
+    /* 强调色：低饱和度 */
+    --color-primary: #3b82f6;
+    --color-up: #ef4444;
+    --color-down: #10b981;
     
-    --panel-bg: #1E1E1E;
-    --panel-bg-elevated: #2C2C2C;
-    --panel-bg-hover: #1C2333;
+    --panel-bg: #121212;
+    --panel-bg-elevated: #222222;
+    --panel-bg-hover: #1e1e1e;
     
-    --bullish: #E63946;
-    --bullish-light: #FF6B6B;
-    --bullish-bg: rgba(230,57,70,0.15);
-    --bullish-border: rgba(230,57,70,0.30);
-    --bearish: #1A936F;
-    --bearish-light: #5CD899;
-    --bearish-bg: rgba(26,147,111,0.15);
-    --bearish-border: rgba(26,147,111,0.30);
+    --bullish: #ef4444;
+    --bullish-light: #f87171;
+    --bullish-bg: rgba(239,68,68,0.08);
+    --bullish-border: rgba(239,68,68,0.20);
+    --bearish: #10b981;
+    --bearish-light: #34d399;
+    --bearish-bg: rgba(16,185,129,0.08);
+    --bearish-border: rgba(16,185,129,0.20);
     
-    --accent-primary: #0F52BA;
-    --accent-secondary: #4A8EFF;
-    --accent-bg: rgba(15,82,186,0.10);
-    --accent-border: rgba(15,82,186,0.30);
+    --accent-primary: #3b82f6;
+    --accent-secondary: #60a5fa;
+    --accent-bg: rgba(59,130,246,0.08);
+    --accent-border: rgba(59,130,246,0.20);
     
-    --status-live: #0F52BA;
+    --status-live: #3b82f6;
     --status-warning: #F5A623;
-    --status-error: #DC2626;
-    --status-info: #0F52BA;
-    --status-success: #16A34A;
+    --status-error: #ef4444;
+    --status-info: #3b82f6;
+    --status-success: #10b981;
     
     --chart-grid: #1C2333;
     --chart-text: #8B949E;
-    --chart-line: #0F52BA;
-    --chart-area: rgba(15,82,186,0.10);
+    --chart-line: #3b82f6;
+    --chart-area: rgba(59,130,246,0.10);
     
     --shadow-sm: 0 1px 2px rgba(0,0,0,0.30);
     --shadow-md: 0 4px 8px rgba(0,0,0,0.40);
     --shadow-lg: 0 8px 16px rgba(0,0,0,0.50);
     
-    --scrollbar-track: #1E1E1E;
-    --scrollbar-thumb: #30363D;
-    --scrollbar-thumb-hover: #484F58;
+    --scrollbar-track: #0a0a0a;
+    --scrollbar-thumb: #27272a;
+    --scrollbar-thumb-hover: #3f3f46;
     
     /* 间距系统 */
     --space-xs: 4px;
@@ -95,8 +99,8 @@
   }
   
   html, body {
-    background-color: var(--bg-primary);
-    color: var(--text-primary);
+    background-color: #0a0a0a;
+    color: #d1d5db;
     min-height: 100vh;
     margin: 0;
     padding: 0;
@@ -107,6 +111,11 @@
   [class*="price"], [class*="change"], [class*="pct"],
   td, th {
     font-feature-settings: "tnum" 1;
+    font-variant-numeric: tabular-nums;
+  }
+  
+  /* Tabular numbers for financial data display */
+  .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
   
@@ -136,7 +145,14 @@
       min-height: 48px;
       min-width: 48px;
     }
-    
+
+    /* 移动端小按钮例外 */
+    .btn-icon, .btn-xs, .icon-btn,
+    button.w-6, button.w-7, button.w-8 {
+      min-height: 28px;
+      min-width: 28px;
+    }
+
     /* 表格行高增加 */
     td, th {
       min-height: 48px;
@@ -165,19 +181,16 @@
      主题感知组件
      ============================================ */
   
-  /* 终端面板 - 柔和版 */
+  /* 终端面板 - 专业克制版 */
   .terminal-panel {
     @apply rounded-sm;
     background-color: var(--panel-bg);
-    border: 1px solid var(--border-secondary);
-    transition: border-color var(--duration-normal) ease,
-                box-shadow var(--duration-normal) ease,
-                transform var(--duration-normal) ease;
+    border: 1px solid var(--border-primary);
+    transition: border-color var(--duration-normal) ease;
   }
   
   .terminal-panel:hover {
-    border-color: var(--border-primary);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border-color: var(--border-hover);
   }
   
   /* 主题按钮 - PC端规范 */
@@ -197,54 +210,46 @@
   }
   
   .theme-btn.active {
-    background-color: var(--color-primary-bg);
-    color: var(--color-primary);
-    border-color: var(--color-primary-border);
+    background-color: var(--accent-bg);
+    color: var(--accent-primary);
+    border-color: var(--accent-border);
   }
   
   .theme-btn-primary {
     @apply px-4 rounded-sm text-sm font-medium transition-all;
     height: var(--btn-height);
     min-height: var(--btn-height);
-    background-color: var(--color-primary);
-    color: white;
-    border: 1px solid var(--color-primary);
-    box-shadow: 0 1px 3px rgba(15,82,186,0.2);
+    background-color: var(--accent-primary);
+    color: #e0e0e0;
+    border: 1px solid var(--accent-primary);
   }
   
   .theme-btn-primary:hover {
-    background-color: var(--color-primary-hover);
-    border-color: var(--color-primary-hover);
-    box-shadow: 0 2px 6px rgba(15,82,186,0.3);
-    transform: translateY(-1px);
-  }
-  
-  .theme-btn-primary:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 2px rgba(15,82,186,0.2);
+    background-color: var(--accent-secondary);
+    border-color: var(--accent-secondary);
   }
   
   /* 涨跌标签 */
   .bullish-tag {
-    background-color: var(--color-up-bg);
-    color: var(--color-up);
-    border: 1px solid var(--color-up-border);
+    background-color: var(--bullish-bg);
+    color: var(--bullish);
+    border: 1px solid var(--bullish-border);
   }
   
   .bearish-tag {
-    background-color: var(--color-down-bg);
-    color: var(--color-down);
-    border: 1px solid var(--color-down-border);
+    background-color: var(--bearish-bg);
+    color: var(--bearish);
+    border: 1px solid var(--bearish-border);
   }
   
   /* 状态指示器 */
-  .status-live { color: var(--color-primary); }
-  .status-warning { color: var(--color-warning); }
-  .status-error { color: var(--color-danger); }
-  .status-info { color: var(--color-info); }
-  .status-success { color: var(--color-success); }
+  .status-live { color: var(--accent-primary); }
+  .status-warning { color: var(--status-warning); }
+  .status-error { color: var(--status-error); }
+  .status-info { color: var(--status-info); }
+  .status-success { color: var(--status-success); }
   
-  /* 导航项 - 柔和版 */
+  /* 导航项 - 专业克制版 */
   .nav-item {
     @apply transition-all border-r-2;
     color: var(--text-secondary);
@@ -261,11 +266,10 @@
   }
   
   .nav-item.active {
-    background-color: rgba(15,82,186,0.12);
-    color: var(--color-primary);
-    border-color: var(--color-primary);
+    background-color: rgba(255,255,255,0.06);
+    color: var(--text-primary);
+    border-color: var(--border-hover);
     border-radius: 4px;
-    box-shadow: inset 0 0 0 1px rgba(15,82,186,0.1);
   }
   
   /* 表格样式 - 柔和版 */
@@ -326,8 +330,8 @@
   }
   
   .theme-input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(15,82,186,0.15);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
   }
   
   .theme-input::placeholder {
@@ -339,39 +343,39 @@
     border-color: var(--border-primary);
   }
   
-  /* 滚动条 */
+  /* 滚动条 - 极细隐蔽样式 */
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   
   ::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
+    background: transparent;
   }
   
   ::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 3px;
+    background: #27272a;
+    border-radius: 2px;
   }
   
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
+    background: #3f3f46;
   }
   
   /* 选中文字 */
   ::selection {
-    background-color: var(--color-primary-bg);
-    color: var(--color-primary);
+    background-color: var(--accent-bg);
+    color: var(--accent-primary);
   }
   
   /* 行情刷新闪烁动效 */
   @keyframes price-flash-up {
-    0% { background-color: var(--color-up-bg); }
+    0% { background-color: var(--bullish-bg); }
     100% { background-color: transparent; }
   }
   
   @keyframes price-flash-down {
-    0% { background-color: var(--color-down-bg); }
+    0% { background-color: var(--bearish-bg); }
     100% { background-color: transparent; }
   }
   
@@ -398,6 +402,17 @@
   @keyframes skeleton-loading {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+  }
+  
+  /* Vue Transition: Fade */
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity var(--duration-fast) ease;
+  }
+  
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
   }
 }
 
@@ -427,47 +442,47 @@
   }
   
   /* 涨跌颜色 */
-  .text-bullish { color: var(--color-up); }
-  .text-bearish { color: var(--color-down); }
-  .text-neutral { color: var(--color-neutral); }
+  .text-bullish { color: var(--bullish); }
+  .text-bearish { color: var(--bearish); }
+  .text-neutral { color: var(--text-tertiary); }
   
   /* 背景涨跌色 */
-  .bg-bullish { background-color: var(--color-up-bg); }
-  .bg-bearish { background-color: var(--color-down-bg); }
-  .bg-neutral { background-color: var(--color-neutral-bg); }
+  .bg-bullish { background-color: var(--bullish-bg); }
+  .bg-bearish { background-color: var(--bearish-bg); }
+  .bg-neutral { background-color: rgba(255,255,255,0.02); }
   
   /* 边框涨跌色 */
-  .border-bullish { border-color: var(--color-up-border); }
-  .border-bearish { border-color: var(--color-down-border); }
-  .border-neutral { border-color: var(--color-neutral-border); }
+  .border-bullish { border-color: var(--bullish-border); }
+  .border-bearish { border-color: var(--bearish-border); }
+  .border-neutral { border-color: var(--border-secondary); }
   
   /* 主题快捷色 */
   .text-theme { color: var(--text-primary); }
   .text-theme-secondary { color: var(--text-secondary); }
   .text-theme-tertiary { color: var(--text-tertiary); }
   .text-theme-muted { color: var(--text-muted); }
-  .text-theme-accent { color: var(--color-primary); }
+  .text-theme-accent { color: var(--accent-primary); }
   
   .bg-theme { background-color: var(--bg-primary); }
   .bg-theme-secondary { background-color: var(--bg-secondary); }
   .bg-theme-tertiary { background-color: var(--bg-tertiary); }
   .bg-theme-panel { background-color: var(--panel-bg); }
-  .bg-theme-accent { background-color: var(--color-primary-bg); }
+  .bg-theme-accent { background-color: var(--accent-bg); }
   .bg-theme-hover { background-color: var(--bg-hover); }
   
   .border-theme { border-color: var(--border-primary); }
   .border-theme-secondary { border-color: var(--border-secondary); }
   .border-theme-hover { border-color: var(--border-hover); }
-  .border-theme-accent { border-color: var(--color-primary-border); }
+  .border-theme-accent { border-color: var(--accent-border); }
   
   /* 终端风格文字 */
   .text-terminal { color: var(--text-primary); }
   .text-terminal-dim { color: var(--text-secondary); }
-  .text-terminal-accent { color: var(--color-primary); }
+  .text-terminal-accent { color: var(--accent-primary); }
   .text-terminal-primary { color: var(--text-primary); }
   .text-terminal-secondary { color: var(--text-secondary); }
-  .bg-terminal-bg { background-color: var(--bg-primary); }
-  .bg-terminal-panel { background-color: var(--panel-bg); }
+  .bg-terminal-bg { background-color: #0a0a0a; }
+  .bg-terminal-panel { background-color: #121212; }
   
   /* 触控热区 */
   .touch-target {
@@ -494,15 +509,15 @@
   
   /* 行情数据样式 */
   .price-up {
-    color: var(--color-up);
+    color: var(--bullish);
   }
   
   .price-down {
-    color: var(--color-down);
+    color: var(--bearish);
   }
   
   .price-flat {
-    color: var(--color-neutral);
+    color: var(--text-tertiary);
   }
 }
 
@@ -583,13 +598,28 @@
 
 /* 焦点状态 */
 :focus-visible {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Button focus indicators - ensure 3:1 contrast ratio */
+/* #3b82f6 on #121212 has ~4.5:1 contrast ratio (passes WCAG AA) */
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* Interactive card focus states */
+.cursor-pointer:focus-visible {
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 
 /* 键盘导航 */
 .keyboard-nav :focus {
-  outline: 2px solid var(--color-primary);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 

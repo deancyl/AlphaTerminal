@@ -34,7 +34,7 @@
               ref="inputRef"
               v-model="query"
               type="search"
-              placeholder="输入代码/名称/拼音，或Wind命令（如 BBQ/FX/EDB）"
+              placeholder="输入代码/名称/拼音首字母，或输入命令（如 :F9）"
               class="flex-1 bg-transparent text-[var(--text-primary)] text-sm outline-none placeholder-[var(--text-placeholder)]"
               @keydown="handleInputKeydown"
               aria-label="搜索股票或命令"
@@ -127,29 +127,6 @@
                 </div>
               </div>
 
-              <!-- Wind风格文本命令 -->
-              <div v-if="textCommandResults.length > 0" class="py-2">
-                <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">Wind命令</div>
-                <div
-                  v-for="(item, index) in textCommandResults"
-                  :key="item.cmd"
-                  class="px-4 py-2 flex items-center gap-3 cursor-pointer transition-colors"
-                  :class="selectedIndex === getGlobalIndex('textcmd', index) ? 'bg-[var(--color-primary-bg)]' : 'hover:bg-[var(--bg-hover)]'"
-                  @click="executeItem(item)"
-                  @mouseenter="selectedIndex = getGlobalIndex('textcmd', index)"
-                  role="option"
-                  :aria-selected="selectedIndex === getGlobalIndex('textcmd', index)"
-                  :id="`textcmd-${index}`"
-                >
-                  <span class="text-base">{{ item.icon }}</span>
-                  <div class="flex-1 min-w-0">
-                    <div class="text-sm text-[var(--text-primary)]">{{ item.name }}</div>
-                    <div class="text-[10px] text-[var(--text-muted)]">{{ item.desc }}</div>
-                  </div>
-                  <span class="text-[10px] text-[var(--text-muted)] px-2 py-0.5 rounded-sm border border-[var(--border-secondary)]">{{ item.cmd }}</span>
-                </div>
-              </div>
-
               <!-- 视图切换 -->
               <div v-if="viewResults.length > 0" class="py-2">
                 <div class="px-4 py-1 text-[10px] text-[var(--text-muted)] uppercase tracking-wider">视图</div>
@@ -201,6 +178,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 
 const props = defineProps({
@@ -211,11 +189,22 @@ const emit = defineEmits(['close', 'select-stock', 'change-view', 'open-f9'])
 
 // ── 状态 ──
 const query = ref('')
+const debouncedQuery = ref('') // 防抖后的查询值
 const inputRef = ref(null)
 const selectedIndex = ref(0)
 const recentSearches = ref([])
 const stockData = ref([]) // 从API加载的股票数据
 const isLoadingStocks = ref(false)
+
+// ── 防抖搜索（300ms）──
+const debouncedSearch = useDebounceFn((value) => {
+  debouncedQuery.value = value
+}, 300)
+
+// 监听原始query变化，触发防抖搜索
+watch(query, (newQuery) => {
+  debouncedSearch(newQuery)
+})
 
 // ── 加载股票列表 ──
 async function loadStockList() {
@@ -287,20 +276,6 @@ const COMMANDS = [
   { cmd: ':FULLSCREEN', name: '全屏模式', desc: '切换全屏显示', icon: '⛶', shortcut: 'F11', action: 'fullscreen' },
 ]
 
-// ── Wind风格文本命令 ──
-const TEXT_COMMANDS = [
-  { cmd: 'BBQ', name: '债券报价', desc: '债券综合报价屏', icon: '📉', view: 'bond' },
-  { cmd: 'FX', name: '外汇综合屏', desc: '国际外汇行情', icon: '💱', view: 'forex' },
-  { cmd: 'CNIX', name: '离岸人民币', desc: 'CNH/USD汇率', icon: '🇨🇳', view: 'forex', params: { currency: 'CNH' } },
-  { cmd: 'EDB', name: '经济数据库', desc: '宏观经济指标', icon: '🌍', view: 'macro' },
-  { cmd: 'ECO', name: '经济日历', desc: '全球经济日历', icon: '📅', view: 'macro', params: { tab: 'calendar' } },
-  { cmd: 'PMS', name: '组合管理', desc: '投资组合管理', icon: '💰', view: 'portfolio' },
-  { cmd: 'RPP', name: '研报平台', desc: '券商研报查询', icon: '📄', view: 'research' },
-  { cmd: 'ESG', name: 'ESG评级', desc: 'ESG评价体系', icon: '🌱', view: 'esg' },
-  { cmd: 'NEWS', name: '新闻资讯', desc: '财经新闻快讯', icon: '📰', view: 'news' },
-  { cmd: 'F9', name: '深度资料', desc: 'F9深度资料', icon: '📋', view: 'f9' },
-]
-
 // ── 视图列表 ──
 const VIEWS = [
   { id: 'stock', name: '股票行情', icon: '📊', shortcut: '1 / 0' },
@@ -316,20 +291,18 @@ const VIEWS = [
   { id: 'admin', name: '系统管理', icon: '⚙️', shortcut: 'Ctrl+Shift+A' },
   { id: 'agent_tokens', name: 'API Token管理', icon: '🔑', shortcut: 'Ctrl+Shift+T' },
   { id: 'mcp', name: 'AI工具配置', icon: '🤖', shortcut: 'Ctrl+Shift+M' },
-  { id: 'research', name: '研报平台', icon: '📄', shortcut: 'RPP' },
-  { id: 'esg', name: 'ESG评级', icon: '🌱', shortcut: 'ESG' },
 ]
 
-// ── 计算属性 ──
+// ── 计算属性（使用防抖后的查询值）──
 const stockResults = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toLowerCase().trim()
+  if (!debouncedQuery.value) return []
+  const q = debouncedQuery.value.toLowerCase().trim()
   const dataSource = stockData.value.length > 0 ? stockData.value : STOCK_DATA
   
   return dataSource.filter(s => {
     // 支持代码、名称、拼音首字母搜索
     const symbolMatch = s.symbol.toLowerCase().includes(q)
-    const nameMatch = s.name.includes(query.value)
+    const nameMatch = s.name.includes(debouncedQuery.value)
     const pinyinMatch = s.pinyin && s.pinyin.toLowerCase().includes(q)
     
     return symbolMatch || nameMatch || pinyinMatch
@@ -337,83 +310,26 @@ const stockResults = computed(() => {
 })
 
 const commandResults = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toUpperCase().trim()
-  
-  // 冒号命令（如 :F9）
-  if (q.startsWith(':')) {
-    return COMMANDS.filter(c =>
-      c.cmd.toLowerCase().includes(q.toLowerCase()) ||
-      c.name.includes(query.value)
-    )
-  }
-  
-  // Wind风格文本命令（如 BBQ, FX, EDB）
-  const textCmd = TEXT_COMMANDS.find(c => c.cmd === q)
-  if (textCmd) {
-    return [{
-      cmd: textCmd.cmd,
-      name: textCmd.name,
-      desc: textCmd.desc,
-      icon: textCmd.icon,
-      shortcut: textCmd.cmd,
-      action: 'view',
-      view: textCmd.view,
-      params: textCmd.params
-    }]
-  }
-  
-  // 模糊匹配文本命令
-  const matches = TEXT_COMMANDS.filter(c =>
-    c.cmd.includes(q) || c.name.includes(query.value)
+  if (!debouncedQuery.value) return []
+  const q = debouncedQuery.value.toLowerCase()
+  if (!q.startsWith(':')) return []
+  return COMMANDS.filter(c =>
+    c.cmd.toLowerCase().includes(q) ||
+    c.name.includes(debouncedQuery.value)
   )
-  if (matches.length > 0) {
-    return matches.map(c => ({
-      cmd: c.cmd,
-      name: c.name,
-      desc: c.desc,
-      icon: c.icon,
-      shortcut: c.cmd,
-      action: 'view',
-      view: c.view,
-      params: c.params
-    }))
-  }
-  
-  return []
 })
 
 const viewResults = computed(() => {
-  if (!query.value || query.value.startsWith(':')) return []
-  const q = query.value.toLowerCase()
+  if (!debouncedQuery.value || debouncedQuery.value.startsWith(':')) return []
+  const q = debouncedQuery.value.toLowerCase()
   return VIEWS.filter(v =>
-    v.name.includes(query.value) ||
+    v.name.includes(debouncedQuery.value) ||
     v.id.includes(q)
   )
 })
 
-// 文本命令结果
-const textCommandResults = computed(() => {
-  if (!query.value) return []
-  const q = query.value.toUpperCase().trim()
-  if (q.startsWith(':')) return []
-  
-  return TEXT_COMMANDS.filter(c =>
-    c.cmd.includes(q) || c.name.includes(query.value)
-  ).map(c => ({
-    cmd: c.cmd,
-    name: c.name,
-    desc: c.desc,
-    icon: c.icon,
-    shortcut: c.cmd,
-    action: 'view',
-    view: c.view,
-    params: c.params
-  }))
-})
-
 const totalResults = computed(() =>
-  stockResults.value.length + commandResults.value.length + viewResults.value.length + textCommandResults.value.length
+  stockResults.value.length + commandResults.value.length + viewResults.value.length
 )
 
 // ── 方法 ──
@@ -446,10 +362,8 @@ function getGlobalIndex(category, index) {
   let offset = 0
   if (category === 'command') {
     offset = stockResults.value.length
-  } else if (category === 'textcmd') {
-    offset = stockResults.value.length + commandResults.value.length
   } else if (category === 'view') {
-    offset = stockResults.value.length + commandResults.value.length + textCommandResults.value.length
+    offset = stockResults.value.length + commandResults.value.length
   }
   return offset + index
 }
@@ -458,7 +372,6 @@ function executeSelected() {
   const allResults = [
     ...stockResults.value,
     ...commandResults.value,
-    ...textCommandResults.value,
     ...viewResults.value
   ]
   if (allResults[selectedIndex.value]) {
@@ -467,11 +380,14 @@ function executeSelected() {
 }
 
 function executeItem(item) {
+  // 添加到最近搜索
   addToRecent(item)
 
   if (item.symbol) {
+    // 股票
     emit('select-stock', item)
   } else if (item.action) {
+    // 命令
     switch (item.action) {
       case 'f9':
         emit('open-f9')
@@ -489,11 +405,9 @@ function executeItem(item) {
           document.documentElement.requestFullscreen()
         }
         break
-      case 'view':
-        emit('change-view', item.view, item.params)
-        break
     }
   } else if (item.id) {
+    // 视图
     emit('change-view', item.id)
   }
 

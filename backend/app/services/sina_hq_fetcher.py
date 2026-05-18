@@ -29,12 +29,13 @@ def _get_hs300_pool() -> list[str]:
                     if df is not None and not df.empty:
                         logger.info(f"[SinaHQ] HS300 via {fname}: {len(df)} rows")
                         break
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[SinaHQ] HS300 fetch via {fname} failed: {type(e).__name__}: {e}")
                 continue
 
         if df is None or df.empty:
             logger.warning("[SinaHQ] 所有 HS300 接口均无数据，使用 FOCUS_STOCKS")
-            return None
+            return []
 
         codes = []
         for _, row in df.iterrows():
@@ -44,13 +45,14 @@ def _get_hs300_pool() -> list[str]:
                     continue
                 prefix = "sh" if code.startswith(("6", "5")) else "sz"
                 codes.append(f"{prefix}{code}")
-            except Exception:
+            except Exception as e:
+                logger.warning(f"[SinaHQ] Failed to parse HS300 row: {e}")
                 continue
         logger.info(f"[SinaHQ] HS300 成分股: {len(codes)} 只")
         return codes[:100]  # 熔断上限 100 只
     except Exception as e:
         logger.warning(f"[SinaHQ] HS300 获取失败: {type(e).__name__}: {e}")
-    return None
+    return []
 
 
 # ── 沪深300成分股（Task 4: 熔断优化）────────────────────────────────
@@ -154,13 +156,23 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
                         "market":   market,
                         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     })
-                except (ValueError, IndexError):
+                except ValueError as e:
+                    logger.warning(f"[SinaHQ] Invalid value in stock data: {e}")
+                    continue
+                except IndexError as e:
+                    logger.warning(f"[SinaHQ] Malformed stock data: {e}")
                     continue
 
             time_module.sleep(0.05)
 
+        except httpx.TimeoutException as e:
+            logger.warning(f"[SinaHQ] Batch timeout: {e}")
+            continue
+        except httpx.HTTPStatusError as e:
+            logger.warning(f"[SinaHQ] HTTP {e.response.status_code}: {e}")
+            continue
         except Exception as e:
-            logger.warning(f"[SinaHQ] batch failed: {e}")
+            logger.error(f"[SinaHQ] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
             continue
 
     logger.info(f"[SinaHQ] fetched {len(all_rows)} stocks")
@@ -203,7 +215,11 @@ def fetch_sina_industry_board() -> list[dict]:
                     "change_pct": round(chg_pct, 2),
                     "top_stock":  {"name": top_name, "code": top_code} if top_name else None,
                 })
-            except (ValueError, IndexError):
+            except ValueError as e:
+                logger.warning(f"[SinaIndustry] Invalid value: {e}")
+                continue
+            except IndexError as e:
+                logger.warning(f"[SinaIndustry] Malformed data: {e}")
                 continue
 
         sectors.sort(key=lambda x: x["change_pct"], reverse=True)

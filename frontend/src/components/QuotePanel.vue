@@ -1,9 +1,14 @@
 <template>
   <div
     class="quote-panel flex flex-col bg-theme border-l border-theme overflow-y-auto"
+    role="region"
+    aria-label="股票行情面板"
+    aria-live="polite"
     :class="isMobile ? 'panel-mobile' : 'panel-desktop'"
     :style="isMobile ? {} : { width: panelWidth + 'px' }"
   >
+    <LoadingSpinner v-if="loading || !hasValidData" />
+    <template v-else>
     <!-- ═══ Module 1: 基础行情与估值 ═════════════════════════════════ -->
     <div class="px-3 py-2.5 border-b border-theme">
 
@@ -14,9 +19,18 @@
           <div class="text-[10px] text-theme-tertiary font-mono mt-0.5">{{ symbol }}</div>
         </div>
         <!-- 最新价（大字醒目） -->
-        <div class="text-right">
-          <div class="text-[28px] font-mono font-bold leading-none" :class="priceColorClass">
-            {{ displayPrice }}
+        <div class="text-right" role="status" aria-label="最新价格">
+          <div class="flex items-baseline justify-end gap-1.5">
+            <span class="text-[28px] font-mono font-bold leading-none" :class="priceColorClass">
+              {{ displayPrice }}
+            </span>
+            <!-- 价格来源指示器 -->
+            <span v-if="priceSourceLabel" 
+                  class="text-[9px] px-1 py-0.5 rounded-sm font-medium"
+                  :class="[priceSourceStyle.color, priceSourceStyle.bgColor]"
+                  :title="'数据来源: ' + priceSourceLabel">
+              {{ priceSourceLabel }}
+            </span>
           </div>
           <div class="text-[12px] font-mono mt-1" :class="priceColorClass">
             <span>{{ displayChange }}</span>
@@ -146,43 +160,46 @@
 
     <!-- ═══ Module 3: 资金流向 ═══════════════════════════════════════ -->
     <div class="px-3 py-2.5 border-b border-theme">
-      <div class="flex items-center justify-between mb-2">
-        <div class="text-[10px] text-theme-tertiary uppercase tracking-wider">资金流向</div>
-        <div v-if="fundDonutData.isMock" class="text-[10px] text-theme-muted italic">模拟数据</div>
-      </div>
+      <div class="text-[10px] text-theme-tertiary uppercase tracking-wider mb-2">资金流向</div>
 
-      <!-- 主环路：环形图 -->
-      <div class="flex items-center gap-3 mb-3">
-        <div ref="fundDonutRef" style="width:72px;height:72px;"></div>
-        <div class="flex-1">
-          <div class="text-[11px] text-theme-primary mb-1">主力净流入</div>
-          <div class="text-[15px] font-mono font-bold" :class="fundDonutData.net >= 0 ? 'text-bullish' : 'text-bearish'">
-            {{ fundDonutData.net >= 0 ? '+' : '' }}{{ formatAmount(fundDonutData.net) }}
-          </div>
-          <div class="flex gap-2 mt-1">
-            <span class="text-[10px] text-bullish">入 {{ formatAmount(fundDonutData.inAmt) }}</span>
-            <span class="text-[10px] text-bearish">出 {{ formatAmount(fundDonutData.outAmt) }}</span>
+      <template v-if="fundDonutData.hasData">
+        <!-- 主环路：环形图 -->
+        <div class="flex items-center gap-3 mb-3">
+          <div ref="fundDonutRef" style="width:72px;height:72px;"></div>
+          <div class="flex-1">
+            <div class="text-[11px] text-theme-primary mb-1">主力净流入</div>
+            <div class="text-[15px] font-mono font-bold" :class="fundDonutData.net >= 0 ? 'text-bullish' : 'text-bearish'">
+              {{ fundDonutData.net >= 0 ? '+' : '' }}{{ formatAmount(fundDonutData.net) }}
+            </div>
+            <div class="flex gap-2 mt-1">
+              <span class="text-[10px] text-bullish">入 {{ formatAmount(fundDonutData.inAmt) }}</span>
+              <span class="text-[10px] text-bearish">出 {{ formatAmount(fundDonutData.outAmt) }}</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 各级拆解条 -->
-      <div class="space-y-2">
-        <div v-for="level in fundLevels" :key="level.label"
-             class="flex items-center gap-2">
-          <span class="text-[10px] text-theme-tertiary w-8 shrink-0">{{ level.label }}</span>
-          <div class="flex-1 h-1.5 bg-theme-secondary rounded-full overflow-hidden">
-            <div class="h-full rounded-full" :style="{ width: level.width + '%', backgroundColor: level.color }"></div>
-          </div>
-          <div class="flex flex-col items-end">
-            <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ level.inAmt >= 0 ? '+' : '' }}{{ formatAmount(level.inAmt) }}
-            </span>
-            <span class="text-[10px] font-mono" :class="level.outAmt >= 0 ? 'text-bullish' : 'text-bearish'">
-              {{ level.outAmt >= 0 ? '+' : '' }}{{ formatAmount(level.outAmt) }}
-            </span>
+        <!-- 各级拆解条 -->
+        <div class="space-y-2">
+          <div v-for="level in fundLevels" :key="level.label"
+               class="flex items-center gap-2">
+            <span class="text-[10px] text-theme-tertiary w-8 shrink-0">{{ level.label }}</span>
+            <div class="flex-1 h-1.5 bg-theme-secondary rounded-full overflow-hidden">
+              <div class="h-full rounded-full" :style="{ width: level.width + '%', backgroundColor: level.color }"></div>
+            </div>
+            <div class="flex flex-col items-end">
+              <span class="text-[10px] font-mono" :class="level.inAmt >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ level.inAmt >= 0 ? '+' : '' }}{{ formatAmount(level.inAmt) }}
+              </span>
+              <span class="text-[10px] font-mono" :class="level.outAmt >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ level.outAmt >= 0 ? '+' : '' }}{{ formatAmount(level.outAmt) }}
+              </span>
+            </div>
           </div>
         </div>
+      </template>
+
+      <div v-else class="text-[11px] text-theme-tertiary text-center py-4">
+        暂无资金流向数据
       </div>
     </div>
 
@@ -223,15 +240,33 @@
 
     <!-- ═══ 数据时间戳 ═══════════════════════════════════════════════ -->
     <div class="px-3 py-2 mt-auto">
-      <div class="text-[10px] text-theme-muted text-center">
-        {{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}
+      <div class="text-[10px] text-theme-muted text-center flex items-center justify-center gap-1.5">
+        <span>{{ isCrosshair ? '📌 历史快照' : '🔴 实时' }} · {{ data.timestamp || '' }}</span>
+        <FreshnessIndicator :timestamp="data.timestamp" />
+        <!-- 价格一致性警告 -->
+        <span v-if="!priceConsistency.consistent && priceConsistency.sources.length >= 2"
+              class="text-[9px] text-yellow-400 ml-1"
+              :title="priceConsistency.message">
+          ⚠️
+        </span>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import LoadingSpinner from './f9/LoadingSpinner.vue'
+import FreshnessIndicator from './FreshnessIndicator.vue'
+import { safeNumber, safePct } from '../utils/typeCoercion.js'
+import { getUnifiedPrice, getSourceStyle, getPriceConsistency } from '../utils/priceSourceTracker.js'
+import { useMarketStream } from '../composables/useMarketStream.js'
+import { useTheme } from '../composables/useTheme.js'
+import { debounce } from '../utils/debounce.js'
+import { useThrottleFn } from '@vueuse/core'
+
+const { getChartColors, onThemeChange } = useTheme()
 
 const props = defineProps({
   symbol:       { type: String,  default: '' },
@@ -244,54 +279,110 @@ const props = defineProps({
   latestCandle: { type: Object,  default: null },
   isMobile:     { type: Boolean, default: false },
   panelWidth:   { type: Number,  default: 300 },
+  loading:      { type: Boolean, default: false },
 })
 
+// Connect to WebSocket for this symbol
+const { tick: wsTick } = useMarketStream(props.symbol)
+
+// Throttle WebSocket tick updates to prevent reactivity avalanche
+const debouncedWsTick = ref(null)
+const throttledTickUpdate = useThrottleFn((t) => {
+  debouncedWsTick.value = t
+}, 100)
+watch(wsTick, throttledTickUpdate)
+
 // snapshotData 优先，否则用 realtimeData + latestCandle 合并
-const data = computed(() => props.snapshotData || props.realtimeData)
+const data = computed(() => {
+  const snapshot = props.snapshotData
+  const realtime = props.realtimeData
+
+  // Check if snapshot has actual data (not just empty object)
+  const hasSnapshot = snapshot && Object.keys(snapshot).length > 0
+  // Check if realtime has valid price
+  const hasRealtime = realtime &&
+                      Object.keys(realtime).length > 0 &&
+                      realtime.price != null &&
+                      realtime.price > 0
+
+  if (hasSnapshot) return snapshot
+  if (hasRealtime) return realtime
+  return {} // Empty fallback
+})
+
+const hasValidData = computed(() => {
+  const d = data.value
+  return d &&
+         Object.keys(d).length > 0 &&
+         d.price != null &&
+         d.price > 0
+})
+
 const isCrosshair = computed(() => !!props.snapshotData)
 
 // 名称：优先用 realtimeData.name，其次 props.name
 const panelName = computed(() => data.value.name || props.name || props.symbol)
 
-// ── 图表K线数据（最可靠的价格来源）─────────────────────────────
-// latestCandle 格式: { open, high, low, close, volume, change_pct, ... }
-const cdl = computed(() => props.latestCandle)
+// ── 统一价格源（优先级：WS tick > K线 > API > 快照）───────────────────────
+const unifiedPriceSource = computed(() => {
+  return getUnifiedPrice({
+    wsTick: debouncedWsTick.value,  // Throttled WS tick
+    latestCandle: props.latestCandle,
+    realtimeData: props.realtimeData,
+    snapshotData: props.snapshotData
+  })
+})
 
-// 最新价格（优先取K线数据，否则取API数据）
+const priceSourceStyle = computed(() => getSourceStyle(unifiedPriceSource.value.sourceKey))
+
+const priceConsistency = computed(() => {
+  return getPriceConsistency({
+    wsTick: debouncedWsTick.value,  // Throttled WS tick
+    latestCandle: props.latestCandle,
+    realtimeData: props.realtimeData
+  })
+})
+
+// 最新价格（使用统一价格源）
 const displayPrice = computed(() => {
-  if (cdl.value?.close != null) return cdl.value.close.toFixed(3)
-  if (data.value.price != null && data.value.price > 0) return data.value.price.toFixed(3)
+  const price = unifiedPriceSource.value.price
+  if (price != null && price > 0) return price.toFixed(3)
   return '--'
 })
 
+// 来源标签（用于UI显示）
+const priceSourceLabel = computed(() => unifiedPriceSource.value.source)
+
 const displayChange = computed(() => {
-  if (cdl.value?.change != null) {
-    const c = cdl.value.change
-    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  const unified = unifiedPriceSource.value
+  if (unified.change != null) {
+    return (unified.change >= 0 ? '+' : '') + unified.change.toFixed(3)
   }
-  if (data.value.change != null && data.value.change !== 0) {
-    const c = data.value.change
-    return (c >= 0 ? '+' : '') + c.toFixed(3)
+  const dataChange = safeNumber(data.value?.change, null)
+  if (dataChange != null && dataChange !== 0) {
+    return (dataChange >= 0 ? '+' : '') + dataChange.toFixed(3)
   }
   return '--'
 })
 
 const displayChangePct = computed(() => {
-  if (cdl.value?.change_pct != null) {
-    const c = cdl.value.change_pct
-    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  const unified = unifiedPriceSource.value
+  if (unified.changePct != null) {
+    return (unified.changePct >= 0 ? '+' : '') + unified.changePct.toFixed(2) + '%'
   }
-  if (data.value.change_pct != null && data.value.change_pct !== 0) {
-    const c = data.value.change_pct
-    return (c >= 0 ? '+' : '') + c.toFixed(2) + '%'
+  const dataPct = safePct(data.value?.change_pct, null)
+  if (dataPct != null && dataPct !== 0) {
+    return (dataPct >= 0 ? '+' : '') + dataPct.toFixed(2) + '%'
   }
   return '--'
 })
 
 // change_pct 用于颜色判定
 const _changePct = computed(() => {
-  if (cdl.value?.change_pct != null) return cdl.value.change_pct
-  if (data.value.change_pct != null) return data.value.change_pct
+  const unified = unifiedPriceSource.value
+  if (unified.changePct != null) return unified.changePct
+  const dataPct = safePct(data.value?.change_pct, null)
+  if (dataPct != null) return dataPct
   return null
 })
 
@@ -299,7 +390,7 @@ const _changePct = computed(() => {
 const priceColor = computed(() => {
   const c = _changePct.value
   if (c == null) return '#9ca3af'
-  return c >= 0 ? '#ef232a' : '#14b143'
+  return c >= 0 ? 'var(--color-up)' : 'var(--color-down)'
 })
 const priceColorClass = computed(() => {
   const c = _changePct.value
@@ -308,10 +399,14 @@ const priceColorClass = computed(() => {
 })
 // ── 52周位置 ───────────────────────────────────────────────────
 const pricePosition = computed(() => {
-  const { price, high_52w, low_52w } = data.value
-  if (price == null || high_52w == null || low_52w == null) return 50
-  if (high_52w === low_52w) return 50
-  return Math.min(100, Math.max(0, ((price - low_52w) / (high_52w - low_52w)) * 100))
+  const price = safeNumber(data.value?.price, null)
+  const high52w = safeNumber(data.value?.high_52w, null)
+  const low52w = safeNumber(data.value?.low_52w, null)
+  
+  if (price === null || high52w === null || low52w === null) return 50
+  if (high52w === low52w) return 50
+  
+  return Math.min(100, Math.max(0, ((price - low52w) / (high52w - low52w)) * 100))
 })
 
 // ── 判断是否为指数 ──────────────────────────────────────────────
@@ -327,7 +422,7 @@ const totalStocks = computed(() => {
 })
 
 // ── 基础字段（优先取最新K线数据，降级到API数据）─────────────────
-function candleVal(key) { return cdl.value?.[key] ?? data.value?.[key] }
+function candleVal(key) { return props.latestCandle?.[key] ?? data.value?.[key] }
 function candleOr(key, fallback) {
   const v = candleVal(key)
   return v != null && v !== 0 ? v : fallback
@@ -353,7 +448,6 @@ const valuationFields = [
   { key: 'pb',     label: '市净率',   formatter: v => (v == null || v === 0) ? '--' : v.toFixed(2) },
 ]
 
-// ── 周期收益字段（后端未返回这些字段，始终显示 --）───────────────────
 const returnFields = [
   { key: 'returns_5d',  label: '5日' },
   { key: 'returns_20d', label: '20日' },
@@ -365,58 +459,49 @@ function returnColorClass(v) {
   return v >= 0 ? 'text-[var(--color-danger)]' : 'text-[var(--color-success)]'
 }
 
-// ── 资金流向（mock数据填充UI占位）──────────────────────────────
-const fundFlowMock = {
-  main_net:   12.8e8,   // 主力净流入 +12.8亿
-  main_in:    35.2e8,
-  main_out:   22.4e8,
-  huge_in:    8.6e8, huge_out:  4.1e8,
-  big_in:     15.3e8, big_out:   10.2e8,
-  medium_in:  11.3e8, medium_out: 8.1e8,
-  small_in:   8.2e8, small_out:  6.5e8,
-}
-
 const fundLevels = computed(() => {
   const d = data.value
   const hasReal = d.fund_main_net != null
-  const mock = hasReal ? false : true
 
-  const net   = hasReal ? (d.fund_main_net ?? 0)  : fundFlowMock.main_net
-  const netIn  = hasReal ? (d.fund_main_in ?? 0)  : fundFlowMock.main_in
-  const netOut = hasReal ? (d.fund_main_out ?? 0) : fundFlowMock.main_out
+  // 无数据时返回空数组
+  if (!hasReal) return []
+
+  const netIn  = d.fund_main_in ?? 0
+  const netOut = d.fund_main_out ?? 0
   const total  = Math.abs(netIn) + Math.abs(netOut) || 1
 
   const toPct = v => Math.min(100, Math.max(0, Math.abs(v) / total * 100))
 
   return [
     { label: '超大单', color: '#f87171',
-      inAmt: hasReal ? d.fund_huge_in : fundFlowMock.huge_in,
-      outAmt: hasReal ? d.fund_huge_out : fundFlowMock.huge_out,
-      width: toPct(hasReal ? d.fund_huge_in : fundFlowMock.huge_in) },
+      inAmt: d.fund_huge_in ?? 0,
+      outAmt: d.fund_huge_out ?? 0,
+      width: toPct(d.fund_huge_in ?? 0) },
     { label: '大单',   color: '#fb923c',
-      inAmt: hasReal ? d.fund_big_in : fundFlowMock.big_in,
-      outAmt: hasReal ? d.fund_big_out : fundFlowMock.big_out,
-      width: toPct(hasReal ? d.fund_big_in : fundFlowMock.big_in) },
+      inAmt: d.fund_big_in ?? 0,
+      outAmt: d.fund_big_out ?? 0,
+      width: toPct(d.fund_big_in ?? 0) },
     { label: '中单',   color: '#fbbf24',
-      inAmt: hasReal ? d.fund_medium_in : fundFlowMock.medium_in,
-      outAmt: hasReal ? d.fund_medium_out : fundFlowMock.medium_out,
-      width: toPct(hasReal ? d.fund_medium_in : fundFlowMock.medium_in) },
+      inAmt: d.fund_medium_in ?? 0,
+      outAmt: d.fund_medium_out ?? 0,
+      width: toPct(d.fund_medium_in ?? 0) },
     { label: '小单',   color: '#6ee7b7',
-      inAmt: hasReal ? d.fund_small_in : fundFlowMock.small_in,
-      outAmt: hasReal ? d.fund_small_out : fundFlowMock.small_out,
-      width: toPct(hasReal ? d.fund_small_in : fundFlowMock.small_in) },
+      inAmt: d.fund_small_in ?? 0,
+      outAmt: d.fund_small_out ?? 0,
+      width: toPct(d.fund_small_in ?? 0) },
   ]
 })
 
-// 资金环形图数据（始终有值）
+// 资金环形图数据（无数据时返回空状态）
 const fundDonutData = computed(() => {
   const d = data.value
   const hasReal = d.fund_main_net != null
   return {
-    net:   hasReal ? d.fund_main_net  : fundFlowMock.main_net,
-    inAmt: hasReal ? d.fund_main_in   : fundFlowMock.main_in,
-    outAmt:hasReal ? d.fund_main_out  : fundFlowMock.main_out,
-    isMock: d.fund_main_net == null,
+    net:   hasReal ? d.fund_main_net  : 0,
+    inAmt: hasReal ? d.fund_main_in   : 0,
+    outAmt:hasReal ? d.fund_main_out  : 0,
+    isMock: false, // 不再使用模拟数据
+    hasData: hasReal,
   }
 })
 
@@ -433,20 +518,23 @@ let donutInstance = null
 function renderDonut() {
   if (!fundDonutRef.value || !window.echarts) return
   const fd = fundDonutData.value
-  if (!fd) return
+  if (!fd || !fd.hasData) return
 
   if (!donutInstance) {
     donutInstance = window.echarts.init(fundDonutRef.value, null, { renderer: 'canvas' })
   }
+
+  // Get theme-aware colors
+  const colors = getChartColors()
 
   donutInstance.setOption({
     backgroundColor: 'transparent',
     tooltip: {
       show: true,
       trigger: 'item',
-      backgroundColor: 'rgba(26,30,46,0.95)',
-      borderColor: '#4b5563',
-      textStyle: { color: '#9ca3af', fontSize: 10 },
+      backgroundColor: colors.tooltipBg,
+      borderColor: colors.tooltipBorder,
+      textStyle: { color: colors.tooltipText, fontSize: 10 },
       formatter: '{b}: {c} ({d}%)',
     },
     series: [{
@@ -456,33 +544,47 @@ function renderDonut() {
       avoidLabelOverlap: false,
       label: { show: false },
       data: [
-        { value: fd.inAmt,  name: '流入', itemStyle: { color: '#ef232a' } },
-        { value: fd.outAmt, name: '流出', itemStyle: { color: '#14b143' } },
+        { value: fd.inAmt,  name: '流入', itemStyle: { color: colors.bullish } },
+        { value: fd.outAmt, name: '流出', itemStyle: { color: colors.bearish } },
       ],
     }],
   })
 }
 
+// Re-render on theme change
+onThemeChange(() => {
+  nextTick(renderDonut)
+})
+
 watch(fundDonutData, () => { nextTick(renderDonut) }, { immediate: true })
 
 let _donutRO = null
+let _debouncedResize = null
+
 onMounted(() => {
   nextTick(renderDonut)
   if (fundDonutRef.value) {
+    _debouncedResize = debounce(() => {
+      if (donutInstance && !donutInstance.isDisposed()) {
+        donutInstance.resize()
+      }
+    }, 150, { leading: false, trailing: true })
+    
     _donutRO = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect
       if (width > 0 && height > 0) {
-        console.debug(`[ECharts] 📐 resize QuotePanel donut @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-        donutInstance?.resize()
+        _debouncedResize()
       }
     })
     _donutRO.observe(fundDonutRef.value)
   }
 })
 onUnmounted(() => {
+  if (_debouncedResize) {
+    _debouncedResize.cancel()
+  }
   _donutRO?.disconnect()
   if (donutInstance) {
-    console.debug('[ECharts] 🗑️  disposed instance for: QuotePanel donut')
     donutInstance.dispose()
     donutInstance = null
   }
@@ -492,8 +594,8 @@ onUnmounted(() => {
 <style scoped>
 .panel-desktop {
   height: 100%;
-  min-width: 280px;
-  max-width: 360px;
+  width: clamp(240px, 18vw, 360px);
+  min-width: 240px;
   flex-shrink: 0;
 }
 .panel-mobile {

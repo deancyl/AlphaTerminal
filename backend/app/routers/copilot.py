@@ -2,6 +2,12 @@
 AI Copilot 流式对话接口
 支持真实LLM接入（OpenAI/DeepSeek/MiniMax/通义千问） + 新闻上下文注入
 POST /api/v1/chat → SSE StreamingResponse
+
+Wave 2 Integration:
+- Multi-model configuration with hot-reload
+- Session management with config binding
+- Token tracking with cost calculation
+- Concurrency limiting per model
 """
 import asyncio
 import json
@@ -9,10 +15,21 @@ import os
 import re
 import uuid
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from typing import AsyncGenerator, Optional, List
+from typing import AsyncGenerator, Optional, List, Dict, Any
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+
+from app.services.model_config_service import get_model_config_service
+from app.services.session_manager import get_session_manager
+from app.services.token_tracking_service import get_token_tracking_service
+from app.services.concurrency_limiter import get_concurrency_limiter
+from app.services.copilot.context_assembler import get_context_assembler
+from app.utils.error_sanitizer import sanitize_error
+from app.utils.token_counter import count_tokens
+from app.config.settings import get_settings
 
 OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -21,7 +38,6 @@ MINIMAX_API_KEY  = os.getenv("MINIMAX_API_KEY", "")
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-# 添加控制台 handler（如果还没有）
 if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setLevel(logging.DEBUG)
@@ -29,6 +45,9 @@ if not logger.handlers:
     handler.setFormatter(formatter)
     logger.addHandler(handler)
 router = APIRouter()
+
+# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
+_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="copilot_")
 
 def _mask_key(key: str) -> str:
     """掩码处理 API Key"""
@@ -42,23 +61,21 @@ def _mask_key(key: str) -> str:
 # LLM 配置 — 优先级：数据库 > 环境变量 > 默认值
 # ═══════════════════════════════════════════════════════════════
 
-def _get_llm_config(provider: str) -> dict:
+def _get_llm_config(provider: str, model_id: Optional[str] = None) -> dict:
     """
-    获取指定 Provider 的完整配置（DB > .env > 默认值）。
+    获取指定 Provider 的完整配置（使用 ModelConfigService hot-reload）。
     """
-    # 1. 数据库（用户 UI 保存的配置，优先级最高）
-    try:
-        from app.db.database import get_admin_config
-        db_cfg = get_admin_config(f"llm_{provider}")
-        if db_cfg and isinstance(db_cfg, dict) and db_cfg.get("api_key"):
-            return {
-                "api_key":  db_cfg.get("api_key", ""),
-                "base_url": db_cfg.get("base_url", ""),
-                "model":    db_cfg.get("model", ""),
-            }
-    except Exception:
-        pass
-    # 2. 环境变量（.env 文件）
+    model_svc = get_model_config_service()
+    model = model_svc.get_model(provider, model_id)
+    
+    if model and model.api_key:
+        return {
+            "api_key": model.api_key,
+            "base_url": model.base_url,
+            "model": model.model_id,
+            "max_concurrent": model.max_concurrent,
+        }
+    
     defaults = {
         "deepseek": {"api_key": os.getenv("DEEPSEEK_API_KEY",""), "base_url": os.getenv("DEEPSEEK_API_BASE","https://api.deepseek.com"), "model": os.getenv("DEEPSEEK_MODEL","deepseek-chat")},
         "qianwen":  {"api_key": os.getenv("QIANWEN_API_KEY",""),  "base_url": os.getenv("QIANWEN_API_BASE","https://dashscope.aliyuncs.com/compatible-mode/v1"), "model": os.getenv("QIANWEN_MODEL","qwen-plus")},
@@ -78,6 +95,18 @@ def _detect_provider() -> str:
         if _get_llm_config(p).get("api_key"):
             return p
     return "mock"
+
+
+def _get_httpx_timeout():
+    """Get httpx timeout configuration from settings."""
+    import httpx
+    settings = get_settings()
+    return httpx.Timeout(
+        connect=settings.COPILOT_CONNECT_TIMEOUT_SECONDS,
+        read=settings.COPILOT_STREAM_TIMEOUT_SECONDS,
+        write=settings.COPILOT_TIMEOUT_SECONDS,
+        pool=settings.COPILOT_TIMEOUT_SECONDS,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -240,7 +269,7 @@ def _format_news(news_items: list) -> List[str]:
 
 
 def _build_context_block(symbol: Optional[str], price_info: dict, news_items: list, valuation_data: dict, 
-                         portfolio_data: dict = None, historical_data: dict = None) -> str:
+                         portfolio_data: Optional[dict] = None, historical_data: Optional[dict] = None) -> str:
     """构建注入给 LLM 的上下文数据块"""
     parts = []
     
@@ -333,7 +362,7 @@ async def _call_openai(messages: list[dict], model_override: str | None = None) 
         "max_tokens": 2000,
     }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -352,8 +381,7 @@ async def _call_openai(messages: list[dict], model_override: str | None = None) 
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[OpenAI] {e}")
-        yield _sse({"error": f"OpenAI API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="openai")})
 
 
 async def _call_deepseek(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -373,7 +401,7 @@ async def _call_deepseek(messages: list[dict], model_override: str | None = None
         "max_tokens": 8192,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -393,8 +421,7 @@ async def _call_deepseek(messages: list[dict], model_override: str | None = None
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[DeepSeek] {e}")
-        yield _sse({"error": f"DeepSeek API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="deepseek")})
 
 
 async def _call_qianwen(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -413,7 +440,7 @@ async def _call_qianwen(messages: list[dict], model_override: str | None = None)
         "max_tokens": 2000,
     }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -432,8 +459,7 @@ async def _call_qianwen(messages: list[dict], model_override: str | None = None)
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[Qianwen] {e}")
-        yield _sse({"error": f"通义千问 API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="qianwen")})
 
 
 async def _call_minimax(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -452,7 +478,7 @@ async def _call_minimax(messages: list[dict], model_override: str | None = None)
         "max_tokens": 2000,
     }
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -471,8 +497,7 @@ async def _call_minimax(messages: list[dict], model_override: str | None = None)
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[MiniMax] {e}")
-        yield _sse({"error": f"MiniMax API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="minimax")})
 
 
 async def _call_siliconflow(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -492,7 +517,7 @@ async def _call_siliconflow(messages: list[dict], model_override: str | None = N
         "max_tokens":  4096,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -512,8 +537,7 @@ async def _call_siliconflow(messages: list[dict], model_override: str | None = N
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[SiliconFlow] {e}")
-        yield _sse({"error": f"硅基流动 API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="siliconflow")})
 
 
 async def _call_opencode(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -533,7 +557,7 @@ async def _call_opencode(messages: list[dict], model_override: str | None = None
         "max_tokens":  4096,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -549,8 +573,7 @@ async def _call_opencode(messages: list[dict], model_override: str | None = None
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[OpenCode] {e}")
-        yield _sse({"error": f"OpenCode API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="opencode")})
 
 
 async def _call_opencode_go(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -570,7 +593,7 @@ async def _call_opencode_go(messages: list[dict], model_override: str | None = N
         "max_tokens":  4096,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -586,8 +609,7 @@ async def _call_opencode_go(messages: list[dict], model_override: str | None = N
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[OpenCode Go] {e}")
-        yield _sse({"error": f"OpenCode Go API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="opencode_go")})
 
 
 async def _call_opencode_zen(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -608,7 +630,7 @@ async def _call_opencode_zen(messages: list[dict], model_override: str | None = 
         "max_tokens":  4096,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -625,8 +647,7 @@ async def _call_opencode_zen(messages: list[dict], model_override: str | None = 
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[OpenCode Zen] {e}")
-        yield _sse({"error": f"OpenCode Zen API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="opencode_zen")})
 
 
 async def _call_kimi(messages: list[dict], model_override: str | None = None) -> AsyncGenerator[str, None]:
@@ -646,7 +667,7 @@ async def _call_kimi(messages: list[dict], model_override: str | None = None) ->
         "max_tokens":  4096,
     }
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=_get_httpx_timeout()) as client:
             async with client.stream("POST", url, headers=headers, json=payload) as resp:
                 async for line in resp.aiter_lines():
                     line = line.strip()
@@ -665,8 +686,7 @@ async def _call_kimi(messages: list[dict], model_override: str | None = None) ->
                         except json.JSONDecodeError:
                             continue
     except Exception as e:
-        logger.error(f"[Kimi] {e}")
-        yield _sse({"error": f"Kimi API 调用失败: {e}"})
+        yield _sse({"error": sanitize_error(e, provider="kimi")})
 
 
 async def _mock_stream(messages: list[dict]) -> AsyncGenerator[str, None]:
@@ -744,40 +764,50 @@ async def _mock_stream(messages: list[dict]) -> AsyncGenerator[str, None]:
 # 上下文注入：查询标的实时价格 + 最新新闻
 # ═══════════════════════════════════════════════════════════════
 
-def _fetch_price_context(symbol: Optional[str]) -> dict:
+async def _fetch_price_context(symbol: Optional[str]) -> dict:
     """查询标的的实时价格信息"""
     if not symbol:
         return {}
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        # 尝试直接匹配
-        row = conn.execute(
-            "SELECT name, price, change_pct FROM market_all_stocks WHERE symbol=? OR symbol=? OR symbol=? LIMIT 1",
-            (symbol, f"sh{symbol}", f"sz{symbol}")
-        ).fetchone()
-        conn.close()
-        if row:
-            return {"name": row[0] or "", "price": float(row[1] or 0), "change_pct": float(row[2] or 0)}
-    except Exception as e:
-        logger.warning(f"[Copilot] price lookup error: {e}")
-    return {}
+    
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            row = conn.execute(
+                "SELECT name, price, change_pct FROM market_all_stocks WHERE symbol=? OR symbol=? OR symbol=? LIMIT 1",
+                (symbol, f"sh{symbol}", f"sz{symbol}")
+            ).fetchone()
+            conn.close()
+            if row:
+                return {"name": row[0] or "", "price": float(row[1] or 0), "change_pct": float(row[2] or 0)}
+        except Exception as e:
+            logger.warning(f"[Copilot] price lookup error: {e}")
+        return {}
+    
+    return await loop.run_in_executor(_executor, _sync_query)
 
 
-def _fetch_latest_news(limit: int = 5) -> list:
+async def _fetch_latest_news(limit: int = 5) -> list:
     """获取最新快讯"""
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        rows = conn.execute(
-            "SELECT title, tag FROM news_cache ORDER BY ctime DESC LIMIT ?",
-            (limit,)
-        ).fetchall()
-        conn.close()
-        return [{"title": r[0], "tag": r[1]} for r in rows]
-    except Exception as e:
-        logger.warning(f"[Copilot] news lookup error: {e}")
-    return []
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            rows = conn.execute(
+                "SELECT title, tag FROM news_cache ORDER BY ctime DESC LIMIT ?",
+                (limit,)
+            ).fetchall()
+            conn.close()
+            return [{"title": r[0], "tag": r[1]} for r in rows]
+        except Exception as e:
+            logger.warning(f"[Copilot] news lookup error: {e}")
+        return []
+    
+    return await loop.run_in_executor(_executor, _sync_query)
 
 
 def _fetch_valuation_data(symbol: Optional[str]) -> dict:
@@ -815,191 +845,212 @@ def _fetch_valuation_data(symbol: Optional[str]) -> dict:
     return {"pe_ttm": None, "pb": None, "pe_percentile": None, "pb_percentile": None, "returns_ytd": None}
 
 
-def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
+async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
     """获取投资组合数据（持仓、盈亏等）"""
     if not portfolio_id:
         return {}
     
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        
-        # 获取组合基本信息
-        portfolio = conn.execute(
-            "SELECT id, name FROM portfolios WHERE id = ?",
-            (portfolio_id,)
-        ).fetchone()
-        
-        if not portfolio:
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            
+            portfolio = conn.execute(
+                "SELECT id, name FROM portfolios WHERE id = ?",
+                (portfolio_id,)
+            ).fetchone()
+            
+            if not portfolio:
+                conn.close()
+                return {}
+            
+            positions = conn.execute(
+                """SELECT 
+                    p.symbol,
+                    p.shares,
+                    p.avg_cost,
+                    s.name as stock_name,
+                    s.price as current_price
+                FROM positions p
+                LEFT JOIN market_all_stocks s ON p.symbol = s.symbol
+                WHERE p.portfolio_id = ? AND p.shares > 0""",
+                (portfolio_id,)
+            ).fetchall()
+            
+            positions_list = []
+            total_value = 0
+            total_cost = 0
+            
+            for pos in positions:
+                symbol = pos[0]
+                shares = pos[1] or 0
+                avg_cost = pos[2] or 0
+                name = pos[3] or ""
+                current_price = pos[4] or 0
+                
+                market_value = shares * current_price
+                cost_basis = shares * avg_cost
+                unrealized_pnl = market_value - cost_basis
+                unrealized_pnl_pct = (unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0
+                
+                positions_list.append({
+                    "symbol": symbol,
+                    "name": name,
+                    "shares": shares,
+                    "avg_cost": avg_cost,
+                    "current_price": current_price,
+                    "market_value": market_value,
+                    "unrealized_pnl": unrealized_pnl,
+                    "unrealized_pnl_pct": unrealized_pnl_pct
+                })
+                
+                total_value += market_value
+                total_cost += cost_basis
+            
+            total_pnl = total_value - total_cost
+            
             conn.close()
-            return {}
-        
-        # 获取持仓数据
-        positions = conn.execute(
-            """SELECT 
-                p.symbol,
-                p.shares,
-                p.avg_cost,
-                s.name as stock_name,
-                s.price as current_price
-            FROM positions p
-            LEFT JOIN market_all_stocks s ON p.symbol = s.symbol
-            WHERE p.portfolio_id = ? AND p.shares > 0""",
-            (portfolio_id,)
-        ).fetchall()
-        
-        # 计算持仓市值和盈亏
-        positions_list = []
-        total_value = 0
-        total_cost = 0
-        
-        for pos in positions:
-            symbol = pos[0]
-            shares = pos[1] or 0
-            avg_cost = pos[2] or 0
-            name = pos[3] or ""
-            current_price = pos[4] or 0
             
-            market_value = shares * current_price
-            cost_basis = shares * avg_cost
-            unrealized_pnl = market_value - cost_basis
-            unrealized_pnl_pct = (unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0
-            
-            positions_list.append({
-                "symbol": symbol,
-                "name": name,
-                "shares": shares,
-                "avg_cost": avg_cost,
-                "current_price": current_price,
-                "market_value": market_value,
-                "unrealized_pnl": unrealized_pnl,
-                "unrealized_pnl_pct": unrealized_pnl_pct
-            })
-            
-            total_value += market_value
-            total_cost += cost_basis
-        
-        total_pnl = total_value - total_cost
-        
-        conn.close()
-        
-        return {
-            "id": portfolio_id,
-            "name": portfolio[1],
-            "total_value": total_value,
-            "total_cost": total_cost,
-            "total_pnl": total_pnl,
-            "total_pnl_pct": (total_pnl / total_cost * 100) if total_cost > 0 else 0,
-            "positions": positions_list
-        }
-    except Exception as e:
-        logger.warning(f"[Copilot] portfolio lookup error: {e}")
-    return {}
+            return {
+                "id": portfolio_id,
+                "name": portfolio[1],
+                "total_value": total_value,
+                "total_cost": total_cost,
+                "total_pnl": total_pnl,
+                "total_pnl_pct": (total_pnl / total_cost * 100) if total_cost > 0 else 0,
+                "positions": positions_list
+            }
+        except Exception as e:
+            logger.warning(f"[Copilot] portfolio lookup error: {e}")
+        return {}
+    
+    return await loop.run_in_executor(_executor, _sync_query)
 
 
-def _fetch_historical_data(symbol: str, period: str = "daily", limit: int = 60) -> dict:
+async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int = 60) -> dict:
     """获取历史K线数据"""
     if not symbol:
         return {}
     
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        
-        # 确定表名
-        table_map = {
-            "daily": "market_data_daily",
-            "weekly": "market_data_weekly", 
-            "monthly": "market_data_monthly"
-        }
-        table = table_map.get(period, "market_data_daily")
-        
-        # 查询历史数据
-        rows = conn.execute(
-            f"""SELECT date, open, high, low, close, volume
-            FROM {table}
-            WHERE symbol = ?
-            ORDER BY date DESC
-            LIMIT ?""",
-            (symbol, limit)
-        ).fetchall()
-        
-        conn.close()
-        
-        if not rows:
-            return {}
-        
-        # 转换为列表（按时间正序）
-        data = []
-        for row in reversed(rows):
-            data.append({
-                "date": row[0],
-                "open": row[1],
-                "high": row[2],
-                "low": row[3],
-                "close": row[4],
-                "volume": row[5]
-            })
-        
-        return {
-            "symbol": symbol,
-            "period": period,
-            "data": data,
-            "count": len(data)
-        }
-    except Exception as e:
-        logger.warning(f"[Copilot] historical data lookup error: {e}")
-    return {}
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            
+            table_map = {
+                "daily": "market_data_daily",
+                "weekly": "market_data_weekly", 
+                "monthly": "market_data_monthly"
+            }
+            table = table_map.get(period, "market_data_daily")
+            
+            rows = conn.execute(
+                f"""SELECT date, open, high, low, close, volume
+                FROM {table}
+                WHERE symbol = ?
+                ORDER BY date DESC
+                LIMIT ?""",
+                (symbol, limit)
+            ).fetchall()
+            
+            conn.close()
+            
+            if not rows:
+                return {}
+            
+            data = []
+            for row in reversed(rows):
+                data.append({
+                    "date": row[0],
+                    "open": row[1],
+                    "high": row[2],
+                    "low": row[3],
+                    "close": row[4],
+                    "volume": row[5]
+                })
+            
+            return {
+                "symbol": symbol,
+                "period": period,
+                "data": data,
+                "count": len(data)
+            }
+        except Exception as e:
+            logger.warning(f"[Copilot] historical data lookup error: {e}")
+        return {}
+    
+    return await loop.run_in_executor(_executor, _sync_query)
+
+
 # 对话历史持久化
 # ═══════════════════════════════════════════════════════════════
 
-def _init_conversations_table():
+async def _init_conversations_table():
     """确保 conversations 表存在"""
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS copilot_conversations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id TEXT NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-        """)
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.warning(f"[Copilot] conversations table init error: {e}")
+    loop = asyncio.get_event_loop()
+    
+    def _sync_init():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS copilot_conversations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[Copilot] conversations table init error: {e}")
+    
+    await loop.run_in_executor(_executor, _sync_init)
 
-def _save_message(session_id: str, role: str, content: str):
+async def _save_message(session_id: str, role: str, content: str):
     """保存单条消息到历史"""
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        conn.execute(
-            "INSERT INTO copilot_conversations (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (session_id, role, content, datetime.now().isoformat())
-        )
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        logger.warning(f"[Copilot] save message error: {e}")
+    loop = asyncio.get_event_loop()
+    
+    def _sync_save():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            conn.execute(
+                "INSERT INTO copilot_conversations (session_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+                (session_id, role, content, datetime.now().isoformat())
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"[Copilot] save message error: {e}")
+    
+    await loop.run_in_executor(_executor, _sync_save)
 
-def _load_conversation(session_id: str, limit: int = 20) -> List[dict]:
+async def _load_conversation(session_id: str, limit: int = 20) -> List[dict]:
     """加载对话历史，返回消息列表"""
-    try:
-        from app.db.database import _get_conn
-        conn = _get_conn()
-        rows = conn.execute(
-            "SELECT role, content FROM copilot_conversations WHERE session_id = ? ORDER BY id DESC LIMIT ?",
-            (session_id, limit)
-        ).fetchall()
-        conn.close()
-        return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
-    except Exception as e:
-        logger.warning(f"[Copilot] load conversation error: {e}")
+    loop = asyncio.get_event_loop()
+    
+    def _sync_load():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            rows = conn.execute(
+                "SELECT role, content FROM copilot_conversations WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                (session_id, limit)
+            ).fetchall()
+            conn.close()
+            return [{"role": r[0], "content": r[1]} for r in reversed(rows)]
+        except Exception as e:
+            logger.warning(f"[Copilot] load conversation error: {e}")
         return []
+    
+    return await loop.run_in_executor(_executor, _sync_load)
 
 # SSE 流式对话端点
 # ═══════════════════════════════════════════════════════════════
@@ -1012,27 +1063,28 @@ async def copilot_chat(request: Request):
     请求体：
       prompt  : str  用户提问
       symbol? : str  当前标的（可选，用于上下文注入）
+      provider?: str 指定 provider
+      model?  : str  指定 model ID
+      session_id?: str 会话ID（可选）
+      user_id?: str  用户ID（可选）
 
-    上下文注入流程：
-      1. 读取 symbol → 查询 market_all_stocks 实时价格
-      2. 查询 news_cache 最新 N 条快讯
-      3. 拼接 SYSTEM_PROMPT_TEMPLATE（含 context_block）
-      4. 将完整 messages 发送给 LLM（流式 SSE）
+    Wave 2 Integration:
+      - Session management with config binding
+      - Concurrency limiting per model
+      - Token tracking with cost calculation
     """
     body = await request.json()
     prompt = (body.get("prompt") or "").strip()
     symbol = (body.get("symbol") or "").strip() or None
-
     provider_override = (body.get("provider") or "").strip().lower() or None
+    model_override = (body.get("model") or "").strip() or None
+    user_id = (body.get("user_id") or "").strip() or None
 
-    # 会话ID：支持对话历史续接
     session_id = (body.get("session_id") or "").strip()
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    # 初始化 conversations 表（如果不存在）
     _init_conversations_table()
-    model_override = (body.get("model") or "").strip() or None
 
     if not prompt:
         return StreamingResponse(
@@ -1041,49 +1093,81 @@ async def copilot_chat(request: Request):
         )
 
     provider = provider_override if provider_override else _detect_provider()
-
-    # ── Provider 可用性校验：前端指定但 API Key 为空时降级 Mock ──
-    # 从 _get_llm_config 获取配置（DB > .env）
-    cfg = _get_llm_config(provider)
+    cfg = _get_llm_config(provider, model_override)
+    
     if provider != "mock" and not cfg.get("api_key"):
         logger.warning(f"[Copilot] provider={provider} API Key 为空，降级为 Mock")
         provider = "mock"
 
-    # ── 构建上下文注入 ────────────────────────────────────────
-    # 前端可传 context 字段（格式化的市场/板块/情绪数据），补充后端实时数据
-    frontend_context = (body.get("context") or "").strip()
-    
-    # 基础上下文（实时价格、新闻、估值）
-    price_info = _fetch_price_context(symbol)
-    news_items = _fetch_latest_news(limit=5)
-    valuation_data = _fetch_valuation_data(symbol)
-    
-    # Week 3-4 新增：投资组合和历史数据上下文
-    portfolio_data = None
-    historical_data = None
-    
-    # 如果前端传了 portfolio_id，获取投资组合数据
-    portfolio_id = body.get("portfolio_id")
-    if portfolio_id:
-        portfolio_data = _fetch_portfolio_data(int(portfolio_id))
-    
-    # 如果前端传了查询历史数据的参数
-    hist_symbol = body.get("hist_symbol") or symbol
-    hist_period = body.get("hist_period", "daily")
-    hist_limit = body.get("hist_limit", 60)
-    if hist_symbol and body.get("include_historical"):
-        historical_data = _fetch_historical_data(hist_symbol, hist_period, hist_limit)
-    
-    context_block = _build_context_block(
-        symbol, price_info, news_items, valuation_data, 
-        portfolio_data, historical_data
+    model_id = model_override or cfg.get("model", "")
+
+    session_mgr = get_session_manager()
+    session = session_mgr.create_or_get_session(
+        session_id=session_id,
+        user_id=user_id,
+        config_version=1
     )
     
-    # 合并：前端上下文（更丰富）+ 后端上下文（实时行情+快讯）
+    bound_model = session_mgr.get_bound_model(session_id, provider)
+    if bound_model and not model_override:
+        model_id = bound_model
+        cfg = _get_llm_config(provider, model_id)
+    elif model_id:
+        session_mgr.bind_model(session_id, provider, model_id)
+
+    limiter = get_concurrency_limiter()
+    acquired = await limiter.acquire(provider, model_id, timeout=30.0)
+    if not acquired:
+        return StreamingResponse(
+            iter([_sse({"error": "并发限制，请稍后重试"})]),
+            media_type="text/event-stream",
+        )
+
+    frontend_context = (body.get("context") or "").strip()
+    
+    # Use ContextAssembler for intelligent context injection
+    context_assembler = get_context_assembler()
+    try:
+        assembly_result = await context_assembler.assemble(
+            query=prompt,
+            symbol=symbol,
+            portfolio_id=body.get("portfolio_id"),
+            timeout=20.0
+        )
+        context_block = assembly_result.context_text
+        logger.info(
+            f"[Copilot] Query classified as {assembly_result.query_type.value} "
+            f"(confidence: {assembly_result.classification.confidence:.2f}, "
+            f"symbols: {assembly_result.symbols}, tokens: {assembly_result.tokens_used})"
+        )
+    except Exception as e:
+        logger.warning(f"[Copilot] ContextAssembler failed, falling back to basic context: {e}")
+        # Fallback to original context assembly
+        price_info = _fetch_price_context(symbol)
+        news_items = _fetch_latest_news(limit=5)
+        valuation_data = _fetch_valuation_data(symbol)
+        
+        portfolio_data = None
+        historical_data = None
+        
+        portfolio_id = body.get("portfolio_id")
+        if portfolio_id:
+            portfolio_data = _fetch_portfolio_data(int(portfolio_id))
+        
+        hist_symbol = body.get("hist_symbol") or symbol
+        hist_period = body.get("hist_period", "daily")
+        hist_limit = body.get("hist_limit", 60)
+        if hist_symbol and body.get("include_historical"):
+            historical_data = _fetch_historical_data(hist_symbol, hist_period, hist_limit)
+        
+        context_block = _build_context_block(
+            symbol, price_info, news_items, valuation_data, 
+            portfolio_data, historical_data
+        )
+    
     if frontend_context:
         context_block = f"{frontend_context}\n{context_block}"
 
-    from datetime import datetime
     current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
 
     system_msg = SYSTEM_PROMPT_TEMPLATE.format(
@@ -1091,34 +1175,85 @@ async def copilot_chat(request: Request):
         context_block=context_block,
     )
 
-    # 加载对话历史（如果提供了 session_id）
     history = _load_conversation(session_id) if session_id else []
 
     messages = [
         {"role": "system", "content": system_msg},
     ]
-    # 添加历史消息（保持上下文连贯）
     for h in history:
         messages.append(h)
     messages.append({"role": "user", "content": prompt})
 
-    # 保存用户消息
     if session_id:
         _save_message(session_id, "user", prompt)
 
     logger.info(
-        f"[Copilot] provider={provider} model={model_override or 'default'} symbol={symbol or '-'} "
-        f"prompt='{prompt[:40]}...' history={len(history)} context_blocks={len(context_block)}"
+        f"[Copilot] provider={provider} model={model_id} session={session_id[:8]}... "
+        f"prompt='{prompt[:40]}...' history={len(history)}"
     )
 
+    start_time = time.time()
+    
+    tracking_svc = get_token_tracking_service()
+    prompt_tokens = sum(count_tokens(m.get("content", ""), model_id) for m in messages)
+    completion_tokens = 0
+    settings = get_settings()
+    max_duration_seconds = settings.COPILOT_STREAM_TIMEOUT_SECONDS
+
+    async def tracked_stream():
+        nonlocal completion_tokens
+        try:
+            start_stream_time = time.time()
+            async for chunk in _llm_stream(provider, messages, model_override):
+                if time.time() - start_stream_time > max_duration_seconds:
+                    logger.warning(f"[Copilot] Stream timeout after {max_duration_seconds}s")
+                    yield _sse({"error": "请求超时，请稍后重试", "done": True})
+                    return
+                
+                data = chunk.replace("data: ", "").strip()
+                if data:
+                    try:
+                        parsed = json.loads(data)
+                        if "content" in parsed:
+                            completion_tokens += count_tokens(parsed["content"], model_id)
+                    except json.JSONDecodeError:
+                        pass
+                yield chunk
+        finally:
+            limiter.release(provider, model_id)
+            
+            duration_ms = int((time.time() - start_time) * 1000)
+            
+            record = tracking_svc.track_usage(
+                model_id=model_id,
+                provider=provider,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                session_id=session_id,
+                user_id=user_id,
+                duration_ms=duration_ms
+            )
+            
+            session_mgr.update_session_usage(
+                session_id,
+                tokens=record.total_tokens,
+                cost_usd=record.cost_usd
+            )
+            
+            logger.debug(
+                f"[Copilot] Tracked: {record.total_tokens} tokens, ${record.cost_usd:.6f}, "
+                f"{duration_ms}ms"
+            )
+
     return StreamingResponse(
-        _llm_stream(provider, messages, model_override),
+        tracked_stream(),
         media_type="text/event-stream",
         headers={
             "Cache-Control":   "no-cache",
             "Connection":       "keep-alive",
             "X-Accel-Buffering": "no",
             "X-Session-Id": session_id,
+            "X-Model-Id": model_id,
         },
     )
 

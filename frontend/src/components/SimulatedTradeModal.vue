@@ -132,15 +132,102 @@
         </div>
       </div>
 
-      <!-- 底部按钮 -->
-      <div class="flex gap-3 mt-5">
+      <!-- 确认面板（第二步确认） -->
+      <div v-if="showConfirmation" class="mt-4 border-t border-[var(--border-primary)] pt-4">
+        <div class="bg-[var(--bg-secondary)] rounded-sm p-4 mb-4">
+          <h4 class="text-theme-primary font-bold text-sm mb-3">📋 交易确认</h4>
+          
+          <!-- 交易摘要 -->
+          <div class="space-y-2 text-xs">
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">账户：</span>
+              <span class="text-theme-primary">{{ portfolioName }} (ID: {{ portfolioId }})</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">操作：</span>
+              <span :class="form.direction === 'buy' ? 'text-[var(--color-success)]' : 'text-[var(--color-danger)]'">
+                {{ form.direction === 'buy' ? '📈 买入' : '📉 卖出' }}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">标的：</span>
+              <span class="text-theme-primary font-medium">{{ form.symbol?.toUpperCase() }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">价格：</span>
+              <span class="text-theme-primary">¥{{ form.price?.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">数量：</span>
+              <span class="text-theme-primary">{{ form.shares }} 股</span>
+            </div>
+            <div class="flex justify-between border-t border-[var(--border-light)] pt-2 mt-2">
+              <span class="text-[var(--text-secondary)] font-medium">交易总额：</span>
+              <span class="text-theme-primary font-bold">¥{{ ((form.price || 0) * (form.shares || 0)).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">交易日期：</span>
+              <span class="text-theme-primary">{{ form.date }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-[var(--text-secondary)]">操作时间：</span>
+              <span class="text-theme-primary">{{ new Date().toLocaleString() }}</span>
+            </div>
+          </div>
+          
+          <!-- 警告提示 -->
+          <div class="mt-3 text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)]/10 border border-[var(--color-warning-border)]/20 rounded-sm px-3 py-2">
+            ⚠️ 此操作不可撤销，请确认交易信息无误
+          </div>
+        </div>
+        
+        <!-- 确认复选框 -->
+        <label class="flex items-center gap-2 cursor-pointer mb-4">
+          <input
+            type="checkbox"
+            v-model="confirmedCheckbox"
+            class="w-4 h-4 rounded border-[var(--border-primary)] bg-[var(--bg-secondary)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+            aria-label="确认交易信息"
+          />
+          <span class="text-xs text-theme-primary">我已确认以上交易信息</span>
+        </label>
+        
+        <!-- 确认按钮 -->
+        <div class="flex gap-3">
+          <button
+            @click="cancelConfirmation"
+            class="flex-1 py-2 text-[var(--text-secondary)] hover:text-theme-primary rounded-sm border border-[var(--border-primary)] text-sm"
+            type="button"
+          >返回修改</button>
+          <button
+            @click="executeTrade"
+            :disabled="!confirmedCheckbox || loading"
+            :class="[
+              'flex-1 py-2 rounded-sm text-sm font-bold transition-colors',
+              !confirmedCheckbox || loading
+                ? 'bg-gray-600 text-[var(--text-secondary)] cursor-not-allowed'
+                : form.direction === 'buy'
+                  ? 'bg-[var(--color-success)] hover:bg-[var(--color-success-hover)] text-theme-primary'
+                  : 'bg-[var(--color-danger)] hover:bg-[var(--color-danger-hover)] text-theme-primary'
+            ]"
+            :aria-busy="loading"
+            type="button"
+          >
+            <span v-if="loading">提交中...</span>
+            <span v-else>✓ 确认提交</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 底部按钮（第一步：表单填写） -->
+      <div v-if="!showConfirmation" class="flex gap-3 mt-5">
         <button
           @click="close"
           class="flex-1 py-2 text-[var(--text-secondary)] hover:text-theme-primary rounded-sm border border-[var(--border-primary)] text-sm"
           type="button"
         >取消</button>
         <button
-          @click="submitTrade"
+          @click="proceedToConfirmation"
           :disabled="loading"
           :class="[
             'flex-1 py-2 rounded-sm text-sm font-bold transition-colors',
@@ -186,6 +273,8 @@ const success = ref('');
 const priceHint = ref('');
 const modalContainerRef = ref(null);
 const triggerRef = ref(null);
+const showConfirmation = ref(false);
+const confirmedCheckbox = ref(false);
 
 const isModalActive = computed(() => props.visible);
 
@@ -214,6 +303,8 @@ function reset() {
   error.value = '';
   success.value = '';
   priceHint.value = '';
+  showConfirmation.value = false;
+  confirmedCheckbox.value = false;
   form.direction = 'buy';
   form.symbol = '';
   form.price = null;
@@ -225,7 +316,7 @@ function close() {
   emit('close');
 }
 
-async function submitTrade() {
+function proceedToConfirmation() {
   error.value = '';
   success.value = '';
 
@@ -235,7 +326,23 @@ async function submitTrade() {
   if (!form.shares || form.shares <= 0) { error.value = '请输入有效的交易数量'; return; }
   if (!form.date) { error.value = '请选择交易日期'; return; }
 
+  // 显示确认面板
+  showConfirmation.value = true;
+  confirmedCheckbox.value = false;
+}
+
+function cancelConfirmation() {
+  showConfirmation.value = false;
+  confirmedCheckbox.value = false;
+}
+
+async function executeTrade() {
+  if (!confirmedCheckbox.value) return;
+  
+  error.value = '';
+  success.value = '';
   loading.value = true;
+
   const endpoint = form.direction === 'buy' ? 'buy' : 'sell';
   const body = form.direction === 'buy'
     ? {

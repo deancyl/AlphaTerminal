@@ -5,6 +5,7 @@
  */
 import { ref, computed, reactive } from 'vue'
 import { logger } from '../utils/logger.js'
+import { useSmartPolling } from './useSmartPolling.js'
 
 const BASE = '/api/v1/portfolio'
 
@@ -15,7 +16,6 @@ const positions   = ref([])  // 当前账户持仓
 const pnl         = ref(null) // 当前账户实时 PnL
 const snapshots   = ref([])  // 当前账户净值历史
 const loading     = ref(false)
-const pollTimer   = ref(null) // 轮询定时器
 
 // ── 工具 ─────────────────────────────────────────────────────
 async function api(path, opts = {}) {
@@ -146,20 +146,23 @@ async function saveSnapshot(pid) {
 }
 
 // ── 轮询控制 ─────────────────────────────────────────────────
+let smartPoller = null
 
 function startPoll(intervalMs = 20_000) {
   stopPoll()
   if (!activePid.value) return
-  fetchPnL(activePid.value)
-  pollTimer.value = setInterval(() => {
-    if (activePid.value) fetchPnL(activePid.value)
-  }, intervalMs)
+  
+  smartPoller = useSmartPolling(
+    () => fetchPnL(activePid.value),
+    { interval: intervalMs, pauseWhenHidden: true }
+  )
+  smartPoller.start()
 }
 
 function stopPoll() {
-  if (pollTimer.value) {
-    clearInterval(pollTimer.value)
-    pollTimer.value = null
+  if (smartPoller) {
+    smartPoller.stop()
+    smartPoller = null
   }
 }
 

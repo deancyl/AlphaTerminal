@@ -136,6 +136,7 @@
         :name="props.name"
         :realtimeData="quoteData"
         :latestCandle="latestCandle"
+        :loading="loading"
         class="quote-panel-wrapper"
       />
     </div>
@@ -152,7 +153,7 @@
       >
         <div
           v-if="showDetail"
-          class="fixed inset-0 z-[100000] bg-terminal-bg"
+          class="fixed inset-0 z-[10010] bg-terminal-bg"
         >
           <StockDetail
             :symbol="props.symbol"
@@ -166,15 +167,16 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useThrottleFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
-import { initChart, getECharts } from '../utils/lazyEcharts.js'
+import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { useDrawingStore } from '../stores/drawing.js'
 import { getChartColors, onThemeChange } from '../composables/useTheme.js'
 import { calcMA, calcMACD, calcKDJ, calcRSI, calcBOLL, calcOBV, calcDMI, calcCCI } from '../utils/indicators.js'
+import { waitForDimensions } from '../utils/waitForDimensions.js'
 import QuotePanel from './QuotePanel.vue'
 import DrawingCanvas from './DrawingCanvas.vue'
 import DrawingToolbar from './DrawingToolbar.vue'
@@ -194,8 +196,16 @@ const emit = defineEmits(['close', 'symbol-change'])
 const toggleMobileLandscape = async () => {
   try {
     if (!document.fullscreenElement) {
+      // Step 1: Enter fullscreen (works on most devices)
       await document.documentElement.requestFullscreen()
-      await screen.orientation?.lock('landscape')
+      
+      // Step 2: Try orientation lock (optional, may fail on iOS)
+      try {
+        await screen.orientation?.lock('landscape')
+      } catch (orientErr) {
+        // iOS doesn't support orientation lock - show guidance
+        console.info('[Landscape] Orientation lock not supported, user must rotate manually')
+      }
     } else {
       await document.exitFullscreen()
       screen.orientation?.unlock()
@@ -203,8 +213,11 @@ const toggleMobileLandscape = async () => {
     // 全屏切换完成后触发图表重绘
     setTimeout(handleResize, 150)
   } catch (e) {
-    console.warn('横屏切换失败(可能是iOS限制):', e)
-    alert('当前设备或浏览器不支持强制横屏，请手动旋转手机。')
+    // Only show error if fullscreen failed (not orientation lock)
+    if (!document.fullscreenElement) {
+      console.error('[Landscape] Fullscreen failed:', e)
+      alert('无法进入全屏模式，请检查浏览器设置')
+    }
   }
 }
 
@@ -220,14 +233,8 @@ const isMobile = computed(() => {
   }
 })
 
-// ── 全屏黑屏修复：确保 DOM 有真实像素尺寸后再 init ECharts ──────────────────
-async function waitForDimensions(el, timeout = 1000) {
-  const start = performance.now()
-  while (el && (el.clientWidth === 0 || el.clientHeight === 0)) {
-    if (performance.now() - start > timeout) break
-    await new Promise(r => requestAnimationFrame(r))
-  }
-}
+// ── 全屏黑屏修复：使用 waitForDimensions utility 确保容器有有效尺寸 ──────────────────
+// waitForDimensions 已移至 utils/waitForDimensions.js，提供超时恢复和 fallback 机制
 
 // Pinia Store
 const drawingStore = useDrawingStore()
@@ -236,7 +243,7 @@ const drawingStore = useDrawingStore()
 const period = ref('daily')
 const loading = ref(false)
 const chartError = ref('')
-const histData = ref([])
+const histData = shallowRef([])
 const quoteData = ref({})
 const latestPrice = ref(null)
 const latestChange = ref(0)
@@ -245,6 +252,8 @@ const latestChange = ref(0)
 const chartEl = ref(null)
 let chart = null
 let refreshTimer = null  // F1修复: K线自动刷新定时器
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+let _currentRequestId = 0    // Request ID: only show errors for current request
 
 // 十字指针状态
 const crosshairRef = ref(null)
@@ -398,10 +407,14 @@ function handleWindowKeydown(e) {
 // 获取历史数据
 async function fetchData() {
   if (!props.symbol) return
+  const requestId = ++_currentRequestId
   loading.value = true
-  chartError.value = ''
+  chartError.value = ''  // Clear previous error
 
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     const params = new URLSearchParams({
       period: period.value,
       limit: '500',
@@ -409,7 +422,7 @@ async function fetchData() {
     })
 
     // 修复: 使用 apiFetch 兼容统一响应格式 {code, message, data}
-    const d = await apiFetch(`/api/v1/market/history/${props.symbol}?${params}`)
+    const d = await apiFetch(`/api/v1/market/history/${props.symbol}?${params}`, { signal: _fetchController.signal })
     const historyArray = d?.history || d || []
 
     if (!Array.isArray(historyArray) || historyArray.length === 0) {
@@ -426,14 +439,27 @@ async function fetchData() {
 
     // ── 全屏黑屏修复：nextTick 确保 DOM 已挂载，再等物理尺寸，再渲染 ──
     await nextTick()
-    await waitForDimensions(chartEl.value)
+    const dimResult = await waitForDimensions(chartEl.value, 1000)
+    if (!dimResult.success) {
+      chartError.value = '图表容器尺寸异常，请稍后重试'
+      logger.warn('[FullscreenKline] waitForDimensions timeout, dimensions:', dimResult.width, 'x', dimResult.height)
+      return
+    }
     renderChart()
 
   } catch (e) {
-    chartError.value = `加载失败: ${e.message}`
-    logger.error('[FullscreenKline] fetchData error:', e)
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
+    // Only show error if this is the current request
+    if (requestId === _currentRequestId) {
+      chartError.value = `加载失败: ${e.message}`
+      logger.error('[FullscreenKline] fetchData error:', e)
+    }
   } finally {
-    loading.value = false
+    _fetchController = null
+    if (requestId === _currentRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -441,11 +467,18 @@ async function fetchData() {
 async function fetchQuote() {
   if (!props.symbol) return
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     // 修复: 使用正确的实时行情端点
-    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`)
+    const d = await apiFetch(`/api/v1/market/quote_detail/${props.symbol}?_t=${Date.now()}`, { signal: _fetchController.signal })
     if (d) quoteData.value = d.data || d
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     logger.warn('[FullscreenKline] fetchQuote error:', e.message)
+  } finally {
+    _fetchController = null
   }
 }
 
@@ -455,7 +488,12 @@ async function renderChart() {
 
   // ── 全屏黑屏修复：等 DOM 拿到真实尺寸后再 init ──────────────────────
   await nextTick()
-  await waitForDimensions(chartEl.value)
+  const dimResult = await waitForDimensions(chartEl.value, 1000)
+  if (!dimResult.success) {
+    chartError.value = '图表初始化失败，请刷新页面'
+    logger.warn('[FullscreenKline] renderChart: waitForDimensions timeout')
+    return
+  }
   if (!chartEl.value) return
 
   if (!chart) {
@@ -468,13 +506,19 @@ async function renderChart() {
     }
     // 初始化 ResizeObserver（替换全局 window.resize）
     if (chartEl.value) {
-      const ro = new ResizeObserver((entries) => {
+      let resizeTimer = null
+      const debouncedResize = (entries) => {
         const { width, height } = entries[0].contentRect
         if (width > 0 && height > 0) {
-          console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
-          chart?.resize()
+          if (resizeTimer) clearTimeout(resizeTimer)
+          resizeTimer = setTimeout(() => {
+            console.debug(`[ECharts] 📐 resize fullscreenKline @ ${width.toFixed(0)}×${height.toFixed(0)}`)
+            chart?.resize()
+            resizeTimer = null
+          }, 150)
         }
-      })
+      }
+      const ro = new ResizeObserver(debouncedResize)
       ro.observe(chartEl.value)
       // 清理时通过 onBeforeUnmount 处理
       _fullscreenRO = ro
@@ -534,11 +578,11 @@ async function renderChart() {
       },
     ],
     series: [
-      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, itemStyle: { color: tc.bullish, color0: tc.bearish, borderColor: tc.bullish, borderColor0: tc.bearish } },
-      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, smooth: true, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, smooth: true, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, smooth: true, lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
-      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, smooth: true, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
+      { name: 'K线', type: 'candlestick', xAxisIndex: 0, yAxisIndex: 0, data: klineData, sampling: 'lttb', itemStyle: { color: tc.bullish, color0: tc.bearish, borderColor: tc.bullish, borderColor0: tc.bearish } },
+      { name: 'MA5', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma5, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+      { name: 'MA10', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma10, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+      { name: 'MA20', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma20, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
+      { name: 'MA60', type: 'line', xAxisIndex: 0, yAxisIndex: 0, data: ma60, sampling: 'lttb', smooth: true, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
       ...subChartData.series,
     ],
   }
@@ -568,8 +612,8 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['DIF', 'DEA', 'MACD'], scale: true,
         series: [
-          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'DIF', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dif, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'DEA', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: macd.dea, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
           { name: 'MACD', type: 'bar', xAxisIndex: 1, yAxisIndex: 1, data: macd.macd, itemStyle: { color: (p) => p.value >= 0 ? tc.bullish : tc.bearish } },
         ]
       }
@@ -578,18 +622,18 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['K', 'D', 'J'], scale: true,
         series: [
-          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
+          { name: 'K', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.k, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'D', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.d, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'J', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: kdj.j, sampling: 'lttb', lineStyle: { color: tc.ma60, width: 1 }, symbol: 'none' },
         ]
       }
     case 'RSI':
       return {
         legend: ['RSI6', 'RSI12', 'RSI24'], scale: true,
         series: [
-          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
-          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
+          { name: 'RSI6', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 6), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'RSI12', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 12), sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'RSI24', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcRSI(closes, 24), sampling: 'lttb', lineStyle: { color: tc.ma20, width: 1 }, symbol: 'none' },
         ]
       }
     case 'BOLL':
@@ -597,9 +641,9 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['MID', 'UP', 'LOW'], scale: true,
         series: [
-          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
-          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.upper, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
-          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.lower, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'MID', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.mid, sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1.2 }, symbol: 'none' },
+          { name: 'UP', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.upper, sampling: 'lttb', lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'LOW', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: boll.lower, sampling: 'lttb', lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
         ]
       }
     case 'OBV':
@@ -607,8 +651,8 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['OBV', 'MA30'], scale: true,
         series: [
-          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv.map(v => v / 1e6), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
-          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => v / 1e6), 30), lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'OBV', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: obv.map(v => v / 1e6), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' },
+          { name: 'MA30', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcMA(obv.map(v => v / 1e6), 30), sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'DMI':
@@ -616,15 +660,15 @@ function calcSubChartData(data, indicator, tc) {
       return {
         legend: ['PDI', 'MDI', 'ADX'], scale: true,
         series: [
-          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
-          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
-          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
+          { name: 'PDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.pdi, sampling: 'lttb', lineStyle: { color: tc.bullish, width: 1 }, symbol: 'none' },
+          { name: 'MDI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.mdi, sampling: 'lttb', lineStyle: { color: tc.bearish, width: 1 }, symbol: 'none' },
+          { name: 'ADX', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: dmi.adx, sampling: 'lttb', lineStyle: { color: tc.ma10, width: 1 }, symbol: 'none' },
         ]
       }
     case 'CCI':
       return {
         legend: ['CCI'], scale: true,
-        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(closes, highs, lows), lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
+        series: [{ name: 'CCI', type: 'line', xAxisIndex: 1, yAxisIndex: 1, data: calcCCI(closes, highs, lows), sampling: 'lttb', lineStyle: { color: tc.ma5, width: 1 }, symbol: 'none' }]
       }
     default:
       return { legend: [], scale: false, series: [] }
@@ -706,6 +750,9 @@ onMounted(async () => {
 
 // 修复F3: onBeforeUnmount 确保 ECharts 在组件卸载前立即释放（比 onUnmounted 更可靠）
 onBeforeUnmount(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
   if (chart) {
     console.debug(`[ECharts] 🗑️  disposed instance for fullscreenKline: ${props.symbol}`)
     chart.dispose()
@@ -721,8 +768,11 @@ onBeforeUnmount(() => {
   _fullscreenRO = null
 })
 
-onUnmounted(() => { 
+onUnmounted(() => {
   // 双重保险：onUnmounted 也清理一次
+  // Cancel any pending fetch requests (in case onBeforeUnmount didn't run)
+  _fetchController?.abort()
+  _fetchController = null
   if (chart) {
     chart.dispose()
     chart = null
@@ -731,7 +781,7 @@ onUnmounted(() => {
 </script>
 
 <style>
-.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; z-index: 99999; outline: none; }
+.fullscreen-kline { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-primary); display: flex; flex-direction: column; z-index: 10000; outline: none; }
 
 .kline-header { height: 48px; background: var(--panel-bg); border-bottom: 1px solid var(--border-primary); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; flex-shrink: 0; }
 .header-left { display: flex; align-items: center; gap: 8px; min-width: 150px; }

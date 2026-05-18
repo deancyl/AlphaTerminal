@@ -7,6 +7,7 @@ import signal
 import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
@@ -15,34 +16,113 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, esg
-from app.services.scheduler import start_scheduler, stop_scheduler
+from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics
+from app.routers.macro import warmup_macro_cache
+from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
 from app.db.db_writer import start_writer, stop_writer
 from app.services.watchdog import init_watchdog, stop_watchdog
 from app.middleware.agent_auth import audit_middleware
+from app.middleware.rate_limit import setup_rate_limiting, RateLimitConfig
+from app.config.settings import get_settings
+from app.services.executor_manager import executor_manager, ExecutorStatus
+
+# ── 优化服务导入 ───────────────────────────────────────────────────────────────
+# 这些服务是可选增强，不影响核心功能
+try:
+    from app.services.source_health import get_health_checker
+    from app.services.degradation_chain import get_degradation_chain
+    from app.services.incremental_fetcher import get_incremental_fetcher
+    from app.services.warmup_strategy import get_warmup_strategy
+    from app.services.adaptive_circuit_breaker import get_adaptive_breaker_manager
+    _optimization_services_available = True
+except ImportError as e:
+    logger.warning(f"[Main] Optimization services not available: {e}")
+    _optimization_services_available = False
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理：启动和关闭时执行"""
-    # 启动时
-    start_writer()         # DB 异步写入线程
+    start_writer()
+    init_watchdog()
+    
+    logger.info("[Lifespan] Starting blocking data pre-warming...")
+    await run_initial_data_fetch()
+    logger.info("[Lifespan] Data pre-warming complete, starting HTTP server")
+    
+    # Warmup macro cache in background
+    asyncio.create_task(warmup_macro_cache())
+    logger.info("[Lifespan] Macro cache warmup started in background")
+    
     start_scheduler()
-    init_watchdog()        # 进程保活监控（从配置加载开关状态）
+    
+    # 注册核心服务到 ExecutorManager
+    executor_manager.register("scheduler", type('SchedulerProxy', (), {
+        'shutdown': lambda: stop_scheduler()
+    })(), shutdown_method="shutdown")
+    
+    executor_manager.register("db_writer", type('DBWriterProxy', (), {
+        'shutdown': lambda: stop_writer()
+    })(), shutdown_method="shutdown")
+    
+    executor_manager.register("watchdog", type('WatchdogProxy', (), {
+        'shutdown': lambda: stop_watchdog()
+    })(), shutdown_method="shutdown")
+
+    # ── 初始化优化服务 ─────────────────────────────────────────────────────────────
+    # 这些服务是可选增强，初始化失败不影响核心功能
+    if _optimization_services_available:
+        try:
+            # 初始化降级链（被动服务，无需启动）
+            degradation_chain = get_degradation_chain()
+            logger.info("[Lifespan] DegradationChain initialized")
+            
+            # 初始化增量获取器（被动服务，无需启动）
+            incremental_fetcher = get_incremental_fetcher()
+            logger.info("[Lifespan] IncrementalKlineFetcher initialized")
+            
+            # 初始化自适应熔断器管理器（被动服务，无需启动）
+            adaptive_breaker_manager = get_adaptive_breaker_manager()
+            logger.info("[Lifespan] AdaptiveCircuitBreaker initialized")
+            
+            # 初始化健康检查器（被动服务，手动调用check_all）
+            health_checker = get_health_checker()
+            logger.info("[Lifespan] SourceHealthChecker initialized")
+            
+            # 执行智能预热（异步，不阻塞启动）
+            warmup_strategy = get_warmup_strategy()
+            asyncio.create_task(warmup_strategy.warmup_all())
+            logger.info("[Lifespan] WarmupStrategy started in background")
+            
+        except Exception as e:
+            logger.warning(f"[Lifespan] Optimization services initialization failed: {e}")
 
     yield
+    
     # 关闭时：优雅退出 — 等待队列排空
-    stop_writer()          # DB 写入队列 graceful shutdown（最多30s）
-    stop_scheduler()
-    stop_watchdog()        # 停止 watchdog 线程
+    logger.info("[Lifespan] Starting graceful shutdown...")
+    
+    # 使用 ExecutorManager 统一管理关闭
+    shutdown_results = await executor_manager.shutdown_all(timeout=30.0)
+    
+    failed_shutdowns = [name for name, success in shutdown_results.items() if not success]
+    if failed_shutdowns:
+        logger.warning(f"[Lifespan] Some executors failed to shutdown: {failed_shutdowns}")
+    else:
+        logger.info("[Lifespan] All executors shutdown successfully")
 
 
 app = FastAPI(
     title="AlphaTerminal API",
-    version="0.6.31",
+    version="0.6.40",
     lifespan=lifespan,
 )
+
+# ── GZip 压缩中间件 ───────────────────────────────────────────────────────
+# Enable GZip compression for responses > 1KB
+# Reduces JSON payload sizes by 70-80%, critical for large K-line datasets
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # 初始化日志队列（WebSocket 实时日志流）
 init_logging_queue()
@@ -51,26 +131,32 @@ init_logging_queue()
 # Add audit middleware for agent API requests
 audit_middleware(app)
 
+# ── Rate Limiting Middleware ───────────────────────────────────────────────────
+# Global rate limit: 200/minute, expensive endpoints have stricter limits
+# Can be disabled via RATE_LIMIT_ENABLED=false environment variable
+import os
+_rate_limit_enabled = os.environ.get("RATE_LIMIT_ENABLED", "true").lower() == "true"
+rate_limit_config = RateLimitConfig(
+    global_limit=200,
+    global_period=60,
+    enabled=_rate_limit_enabled
+)
+setup_rate_limiting(app, config=rate_limit_config)
+
 # ── CORS 中间件 ──────────────────────────────────────────────────────────────
-# 允许的来源：本地开发 + 环境变量配置（生产环境应通过 ALLOWED_ORIGINS 配置）
-_allowed_origins = [
-    "http://localhost:60100",
-    "http://127.0.0.1:60100",
-    "http://0.0.0.0:60100",
-]
-# 从环境变量添加额外的允许来源
-_extra_origins = os.environ.get("ALLOWED_ORIGINS", "")
-if _extra_origins:
-    _allowed_origins.extend([o.strip() for o in _extra_origins.split(",") if o.strip()])
+# 使用 Settings 类统一管理 CORS 配置
+settings = get_settings()
+_cors_origins = settings.get_allowed_origins_list()
 
-# ── CORS 配置：开发环境允许所有来源，生产环境使用白名单 ─────────────────
-_is_production = os.environ.get("ENV", "development") == "production"
-
-if _is_production:
-    _cors_origins = _allowed_origins.copy()
+# 生产环境强制白名单模式
+if settings.is_production():
     # 生产环境必须配置 ALLOWED_ORIGINS，否则只允许 localhost
-    if not _cors_origins:
-        _cors_origins = ["http://localhost:60100"]
+    if _cors_origins == ["*"]:
+        logger.warning("Production mode with wildcard CORS is insecure. Please set ALLOWED_ORIGINS environment variable.")
+        _cors_origins = [
+            "http://localhost:60100",
+            "http://127.0.0.1:60100",
+        ]
 else:
     # 开发环境允许所有来源（便于调试）
     _cors_origins = ["*"]
@@ -97,20 +183,33 @@ async def validation_exception_handler_legacy(request: Request, exc: RequestVali
     try:
         body = await request.body()
     except (RuntimeError, ValueError):
-        # RuntimeError: Request body stream already consumed or closed
-        # ValueError: Invalid request body encoding
         pass
     errors = exc.errors()
     first = errors[0] if errors else {}
     field = ".".join(str(l) for l in (first.get("loc") or []))
     msg   = first.get("msg", "") or str(exc)
     logger.warning(f"[422 ValidationError] path={request.url.path} field={field} msg={msg}")
+    
+    def sanitize_value(v):
+        if isinstance(v, Exception):
+            return str(v)
+        elif isinstance(v, dict):
+            return {k: sanitize_value(vv) for k, vv in v.items()}
+        elif isinstance(v, list):
+            return [sanitize_value(vv) for vv in v]
+        elif isinstance(v, (str, int, float, bool, type(None))):
+            return v
+        else:
+            return str(v)
+    
+    sanitized_errors = [sanitize_value(e) for e in errors]
+    
     return JSONResponse(
         status_code=422,
         content={
             "code": 422,
             "message": f"参数校验失败: {field} {msg}",
-            "detail": errors,
+            "detail": sanitized_errors,
         },
     )
 
@@ -143,6 +242,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 # ── 路由注册 ─────────────────────────────────────────────────────────────────
 app.include_router(market.router, prefix="/api/v1", tags=["market"])
 app.include_router(admin.router, prefix="/api/v1", tags=["admin"])
+app.include_router(admin.session_router, prefix="/api/v1", tags=["admin"])
 app.include_router(admin_source.router, prefix="/api/v1", tags=["admin"])
 app.include_router(news.router, prefix="/api/v1", tags=["news"])
 app.include_router(sentiment.router, prefix="/api/v1", tags=["sentiment"])
@@ -158,8 +258,13 @@ app.include_router(f9_deep.router, prefix="/api/v1", tags=["f9_deep_data"])
 app.include_router(mcp.router, prefix="/api/v1", tags=["mcp"])
 app.include_router(performance.router, prefix="/api/v1/performance", tags=["performance"])
 app.include_router(health.router, prefix="/api/v1", tags=["health"])
-app.include_router(research.router, prefix="/api/v1", tags=["research"])
-app.include_router(esg.router, prefix="/api/v1", tags=["esg"])
+app.include_router(forex.router, prefix="/api/v1", tags=["forex"])
+app.include_router(options.router, prefix="/api/v1", tags=["options"])
+app.include_router(audit.router, tags=["audit"])
+app.include_router(research.router, tags=["research"])
+app.include_router(oms.router, tags=["oms"])  # Order Management System
+app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
+app.include_router(metrics.router, prefix="/api/v1", tags=["monitoring"])
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 

@@ -19,6 +19,9 @@ from unittest.mock import patch
 
 import pytest
 
+# Save original env state for cleanup
+_AGENT_DB_DEBUG_ORIGINAL = os.environ.get("AGENT_DB_DEBUG", None)
+
 # Set debug mode before import
 os.environ["AGENT_DB_DEBUG"] = "true"
 
@@ -29,6 +32,30 @@ from app.db.agent_db import (
     get_agent_db,
     init_agent_db,
 )
+
+
+@pytest.fixture(autouse=True)
+def cleanup_agent_db_debug_env():
+    """Ensure AGENT_DB_DEBUG is cleaned up after each test."""
+    yield
+    # Restore original state
+    if _AGENT_DB_DEBUG_ORIGINAL is None:
+        os.environ.pop("AGENT_DB_DEBUG", None)
+    else:
+        os.environ["AGENT_DB_DEBUG"] = _AGENT_DB_DEBUG_ORIGINAL
+
+
+def cleanup_env():
+    """Module-level cleanup function."""
+    if _AGENT_DB_DEBUG_ORIGINAL is None:
+        os.environ.pop("AGENT_DB_DEBUG", None)
+    else:
+        os.environ["AGENT_DB_DEBUG"] = _AGENT_DB_DEBUG_ORIGINAL
+
+
+# Register cleanup at module level
+import atexit
+atexit.register(cleanup_env)
 
 
 class TestAgentTokenDataclass:

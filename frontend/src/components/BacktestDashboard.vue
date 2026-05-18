@@ -1,5 +1,23 @@
 <template>
   <div class="flex flex-col md:flex-row w-full h-full overflow-hidden" role="main" aria-label="回测实验室">
+    
+    <!-- Error display for caught errors -->
+    <div v-if="componentError" class="flex-1 flex flex-col items-center justify-center p-8" role="alert" aria-live="assertive">
+      <div class="text-4xl mb-4" aria-hidden="true">⚠️</div>
+      <div class="text-lg text-terminal-dim mb-2">回测实验室加载失败</div>
+      <div class="text-sm text-theme-muted mb-4 max-w-md text-center">{{ componentError.message }}</div>
+      <button
+        class="px-4 py-2 text-sm rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent hover:text-white transition"
+        @click="handleRetry"
+        aria-label="重试加载"
+        type="button"
+      >
+        重试
+      </button>
+    </div>
+
+    <!-- Main content (hidden when error) -->
+    <template v-else>
 
     <!-- ═══════════════ 左侧边栏 ═══════════════ -->
     <aside class="shrink-0 w-full md:w-56 border-b md:border-b-0 md:border-r border-theme bg-terminal-panel/90 p-3 overflow-y-auto max-h-[45vh] md:max-h-none flex flex-col gap-3" role="form" aria-label="回测参数配置">
@@ -34,9 +52,16 @@
             <span class="text-[10px] text-theme-muted w-8">策略</span>
             <select v-model="strategyType"
               class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
-              <option value="ma_crossover">双均线</option>
-              <option value="rsi_oversold">RSI超卖</option>
-              <option value="bollinger_bands">布林带</option>
+              <optgroup label="传统策略">
+                <option value="ma_crossover">双均线</option>
+                <option value="rsi_oversold">RSI超卖</option>
+                <option value="bollinger_bands">布林带</option>
+              </optgroup>
+              <optgroup label="ML策略">
+                <option value="ml_lightgbm">ML-LightGBM</option>
+                <option value="ml_qlib_hist">ML-HIST (Qlib)</option>
+                <option value="ml_ensemble">ML-Ensemble</option>
+              </optgroup>
             </select>
           </div>
 
@@ -100,6 +125,34 @@
             <div class="hidden md:block text-[10px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
           </template>
 
+          <!-- ML策略参数 -->
+          <template v-if="strategyType.startsWith('ml_')">
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">模型ID</span>
+                <input v-model="mlModelId" type="text"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60"
+                  placeholder="my_model_id" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">特征集</span>
+                <select v-model="mlFeatureSet"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
+                  <option value="Alpha158">Alpha158</option>
+                  <option value="Alpha360">Alpha360</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">阈值</span>
+                <input v-model.number="mlThreshold" type="number" step="0.1" min="0" max="1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">预测阈值（默认0.5）</div>
+          </template>
+
           <!-- 窗口 -->
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-theme-muted w-8">窗口</span>
@@ -136,6 +189,12 @@
               <span class="text-[var(--color-info-light)]/70">价格触下轨时<span class="text-[var(--color-success)]">买入</span>；</span>
               <span class="text-[var(--color-info-light)]/70">价格触上轨时<span class="text-[var(--color-danger)]">卖出</span>。</span>
             </template>
+            <template v-else-if="strategyType.startsWith('ml_')">
+              💡 <span class="text-[var(--color-info-light)] font-medium">ML策略：</span>
+              <span class="text-[var(--color-info-light)]/70">机器学习模型预测涨跌概率，</span>
+              <span class="text-[var(--color-info-light)]/70">预测值 &gt; {{ mlThreshold }} 时<span class="text-[var(--color-success)]">买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">预测值 &lt; {{ 1 - mlThreshold }} 时<span class="text-[var(--color-danger)]">卖出</span>。</span>
+            </template>
           </div>
         </div>
       </div>
@@ -157,18 +216,35 @@
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <input v-model="symbol"
-            class="flex-1 min-h-[44px] bg-terminal-bg/60 border border-theme-secondary rounded-sm px-3 py-2 text-[10px] text-[var(--color-info)] focus:outline-none focus:border-terminal-accent/60 placeholder:text-theme-tertiary"
+          <input 
+            v-model="symbol"
+            class="flex-1 min-h-[44px] bg-terminal-bg/60 border rounded-sm px-3 py-2 text-[10px] text-[var(--color-info)] focus:outline-none placeholder:text-theme-tertiary transition-colors"
+            :class="symbolValidation.showError ? 'border-[var(--color-danger)] focus:border-[var(--color-danger)]' : 'border-theme-secondary focus:border-terminal-accent/60'"
             placeholder="输入代码 (例: sh600519)"
-            @keyup.enter="runBacktest" />
+            @blur="handleSymbolBlur"
+            @input="handleSymbolInput"
+            @keyup.enter="runBacktest"
+            :aria-invalid="symbolValidation.showError ? 'true' : 'false'"
+            :aria-describedby="symbolValidation.showError ? 'symbol-error' : undefined"
+            aria-label="股票代码"
+          />
           <!-- 格式校验 -->
           <span v-if="symbolValid"
             class="shrink-0 text-[12px] leading-none text-[var(--color-success)] select-none">✅</span>
-          <span v-else-if="symbol.length > 0"
+          <span v-else-if="symbol.length > 0 && symbolValidation.touched"
             class="shrink-0 text-[12px] leading-none text-[var(--color-danger)] select-none">❌</span>
         </div>
+        <!-- 验证错误消息 -->
+        <div v-if="symbolValidation.showError" 
+          id="symbol-error"
+          class="mt-1 text-[10px] text-[var(--color-danger)] flex items-center gap-1"
+          role="alert"
+          aria-live="polite">
+          <span>⚠️</span>
+          <span>{{ symbolValidation.error }}</span>
+        </div>
         <!-- 名称+行业显示 -->
-        <div v-if="symbolInfo"
+        <div v-else-if="symbolInfo"
           class="mt-1 text-[10px] text-[var(--color-info-light)] truncate">
           {{ symbolInfo.name }}<span class="text-cyan-500 ml-1">[{{ symbolInfo.industry }}]</span>
         </div>
@@ -389,58 +465,103 @@
           </div>
         </div>
 
-        <!-- 交易记录表格 -->
+        <!-- 交易记录表格（虚拟化） -->
         <div v-if="showTrades && backtestResult.trades?.length"
-          class="border-t border-theme/30 overflow-x-auto">
-          <table class="w-full text-xs min-w-[600px]">
-            <thead class="sticky top-0 bg-terminal-panel">
-              <tr class="text-theme-muted border-b border-theme/20">
-                <th class="px-2 py-1 text-left">方向</th>
-                <th class="px-2 py-1 text-right">买日期</th>
-                <th class="px-2 py-1 text-right">买价</th>
-                <th class="px-2 py-1 text-right">卖日期</th>
-                <th class="px-2 py-1 text-right">卖价</th>
-                <th class="px-2 py-1 text-right">数量</th>
-                <th class="px-2 py-1 text-right">盈亏额</th>
-                <th class="px-2 py-1 text-right">盈亏%</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(t, i) in backtestResult.trades" :key="i"
-                class="border-b border-theme/10 hover:bg-theme-tertiary/20 cursor-pointer"
-                @click="chartRef?.focusDate(t.entry_date)">
-                <td class="px-2 py-0.5">
-                  <span class="font-mono font-bold" :class="(t.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                    {{ (t.pnl||0) >= 0 ? '多' : '空' }}
-                  </span>
-                </td>
-                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.entry_date }}</td>
-                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ (t.entry_price||0).toFixed(2) }}</td>
-                <td class="px-2 py-1 text-right text-theme-secondary font-mono">{{ t.exit_date || '持仓中' }}</td>
-                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.exit_price != null ? t.exit_price.toFixed(2) : '—' }}</td>
-                <td class="px-2 py-1 text-right text-theme-primary font-mono">{{ t.shares }}</td>
-                <td class="px-2 py-1 text-right font-mono font-bold"
-                  :class="(t.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                  {{ (t.pnl||0) >= 0 ? '+' : '' }}{{ (t.pnl||0).toFixed(2) }}
-                </td>
-                <td class="px-2 py-1 text-right font-mono"
-                  :class="(t.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
-                  {{ (t.pnl_pct||0) >= 0 ? '+' : '' }}{{ (t.pnl_pct||0).toFixed(2) }}%
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          class="border-t border-theme/30 overflow-hidden">
+          <!-- 表头 -->
+          <div class="flex items-center text-xs border-b border-theme/20 bg-terminal-panel text-theme-muted">
+            <div class="px-2 w-12 shrink-0">方向</div>
+            <div class="px-2 w-24 shrink-0 text-right">买日期</div>
+            <div class="px-2 w-20 shrink-0 text-right">买价</div>
+            <div class="px-2 w-24 shrink-0 text-right">卖日期</div>
+            <div class="px-2 w-20 shrink-0 text-right">卖价</div>
+            <div class="px-2 w-16 shrink-0 text-right">数量</div>
+            <div class="px-2 w-20 shrink-0 text-right">盈亏额</div>
+            <div class="px-2 flex-1 text-right">盈亏%</div>
+          </div>
+          <RecycleScroller
+            class="virtualized-trades"
+            :items="virtualizedTrades"
+            :item-size="28"
+            key-field="id"
+            :buffer="200"
+            v-slot="{ item, index }"
+          >
+            <div
+              class="flex items-center text-xs border-b border-theme/10 hover:bg-theme-tertiary/20 cursor-pointer"
+              :style="{ height: '28px' }"
+              @click="chartRef?.focusDate(item.entry_date)"
+            >
+              <div class="px-2 w-12 shrink-0">
+                <span class="font-mono font-bold" :class="(item.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                  {{ (item.pnl||0) >= 0 ? '多' : '空' }}
+                </span>
+              </div>
+              <div class="px-2 w-24 shrink-0 text-right text-theme-secondary font-mono">{{ item.entry_date }}</div>
+              <div class="px-2 w-20 shrink-0 text-right text-theme-primary font-mono">{{ (item.entry_price||0).toFixed(2) }}</div>
+              <div class="px-2 w-24 shrink-0 text-right text-theme-secondary font-mono">{{ item.exit_date || '持仓中' }}</div>
+              <div class="px-2 w-20 shrink-0 text-right text-theme-primary font-mono">{{ item.exit_price != null ? item.exit_price.toFixed(2) : '—' }}</div>
+              <div class="px-2 w-16 shrink-0 text-right text-theme-primary font-mono">{{ item.shares }}</div>
+              <div class="px-2 w-20 shrink-0 text-right font-mono font-bold"
+                :class="(item.pnl||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (item.pnl||0) >= 0 ? '+' : '' }}{{ (item.pnl||0).toFixed(2) }}
+              </div>
+              <div class="px-2 flex-1 text-right font-mono"
+                :class="(item.pnl_pct||0) >= 0 ? 'text-bullish' : 'text-bearish'">
+                {{ (item.pnl_pct||0) >= 0 ? '+' : '' }}{{ (item.pnl_pct||0).toFixed(2) }}%
+              </div>
+            </div>
+          </RecycleScroller>
         </div>
       </div>
     </main>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted, onErrorCaptured } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { usePortfolioStore } from '../composables/usePortfolioStore.js'
+import { safeDivide } from '../utils/safeMath.js'
+import { useValidation } from '../composables/useValidation.js'
 import BacktestChart from './BacktestChart.vue'
+
+// ── Error Boundary State ─────────────────────────────────────────────
+const componentError = ref(null)
+
+onErrorCaptured((err, instance, info) => {
+  console.error('[BacktestDashboard] Uncaught error:', err)
+  console.error('[BacktestDashboard] Component:', instance?.$options?.name || 'unknown')
+  console.error('[BacktestDashboard] Info:', info)
+  
+  componentError.value = {
+    message: err.message || String(err),
+    component: instance?.$options?.name || 'unknown',
+    info,
+    timestamp: Date.now(),
+  }
+  
+  // Report to monitoring if available
+  if (typeof window !== 'undefined' && typeof window.reportError === 'function') {
+    try {
+      window.reportError(err)
+    } catch (e) {
+      console.error('[BacktestDashboard] Failed to report error:', e)
+    }
+  }
+  
+  // Prevent propagation to parent
+  return false
+})
+
+function handleRetry() {
+  componentError.value = null
+  // Reset state for retry
+  backtestResult.value = null
+  histData.value = []
+  statusMsg.value = ''
+}
 
 // ── 已知标的字典（用于联想显示，不依赖外部请求）────────────────
 const KNOWN_SYMBOLS = [
@@ -545,6 +666,12 @@ onMounted(async () => {
   await portfolioStore.fetchPortfolios()
 })
 
+onUnmounted(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
+})
+
 // portfolioStore.portfolios 在 reactive 代理中已自动解包，无需 .value
 // 显示所有账户（包括主账户和子账户），用 parent_id 判断层级
 const portfolioOptions = computed(() => {
@@ -576,7 +703,10 @@ async function onPortfolioChange() {
   if (!pid) return
   positionTagsLoading.value = true
   try {
-    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`)
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
+    const d = await apiFetch(`/api/v1/portfolio/${pid}/positions`, { signal: _fetchController.signal })
     const list = Array.isArray(d) ? d : (d?.positions || [])
     positionTags.value = list.map(p => ({
       symbol:     p.symbol || '',
@@ -584,8 +714,11 @@ async function onPortfolioChange() {
       normalized: normalizeSymbol(p.symbol),
     }))
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     positionTags.value = []
   } finally {
+    _fetchController = null
     positionTagsLoading.value = false
   }
 }
@@ -609,6 +742,11 @@ const bbStd         = ref(2)
 const windowPreset  = ref('1y')
 const initialCapital = 100000
 
+// ML策略参数
+const mlModelId     = ref('')
+const mlFeatureSet  = ref('Alpha158')
+const mlThreshold   = ref(0.5)
+
 // ── 标的格式校验（8位 = 市场前缀 + 6位代码）─────────────────────
 const symbolValid = computed(() => /^(sh|sz)[0-9]{6}$/.test(symbol.value.trim()))
 const symbolMatchedName = computed(() => {
@@ -616,6 +754,43 @@ const symbolMatchedName = computed(() => {
   const known = KNOWN_SYMBOLS.find(o => o.symbol === norm)
   return known?.name || null
 })
+
+// ── 标的验证状态 ────────────────────────────────────────────────────
+const symbolValidation = reactive({
+  error: '',
+  touched: false,
+  showError: false,
+})
+
+const STOCK_SYMBOL_PATTERN = /^(sh|sz)[0-9]{6}$/
+
+function validateSymbol() {
+  const value = symbol.value.trim()
+  if (!value) {
+    symbolValidation.error = '请输入股票代码'
+    symbolValidation.showError = true
+    return false
+  }
+  if (!STOCK_SYMBOL_PATTERN.test(value)) {
+    symbolValidation.error = '格式错误：应为 sh/sz + 6位数字（如 sh600519）'
+    symbolValidation.showError = true
+    return false
+  }
+  symbolValidation.error = ''
+  symbolValidation.showError = false
+  return true
+}
+
+function handleSymbolBlur() {
+  symbolValidation.touched = true
+  validateSymbol()
+}
+
+function handleSymbolInput() {
+  if (symbolValidation.touched) {
+    validateSymbol()
+  }
+}
 
 // 标的完整信息（名称+行业）
 const symbolInfo = computed(() => {
@@ -637,6 +812,8 @@ const showTrades    = ref(false)
 const chartWrapRef  = ref(null)
 const chartRef      = ref(null)  // BacktestChart 实例，用于联动
 
+let _fetchController = null  // AbortController：组件卸载时取消 pending 请求
+
 function presetDates(preset) {
   const end = new Date()
   const start = new Date()
@@ -654,18 +831,29 @@ function presetDates(preset) {
 // ── 核心：执行回测 ──────────────────────────────────────────────
 async function runBacktest() {
   if (running.value) return
+  
+  // 验证标的代码
+  symbolValidation.touched = true
+  if (!validateSymbol()) {
+    return
+  }
+  
   running.value = true
   statusMsg.value = ''
   backtestResult.value = null
   histData.value = []
 
   try {
+    // Abort any pending request before starting a new one
+    _fetchController?.abort()
+    _fetchController = new AbortController()
     const { start_date, end_date } = presetDates(windowPreset.value)
     const sym = symbol.value.trim() || 'sh600519'
 
     statusMsg.value = '📡 拉取历史数据...'
     const histResp = await apiFetch(
-      `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`
+      `/api/v1/market/history/${sym}?period=daily&limit=5000&offset=0`,
+      { signal: _fetchController.signal }
     )
     // 统一解包: apiFetch 已解包 data，需兼容 history 在不同层级
     const histDataRaw = histResp?.data?.history || histResp?.history || histResp || []
@@ -685,24 +873,32 @@ async function runBacktest() {
     histData.value = rawHist
 
     statusMsg.value = '⚙️ 运行回测引擎...'
+    const params = {
+      symbol:         sym,
+      period:         'daily',
+      start_date,
+      end_date,
+      initial_capital: initialCapital,
+      strategy_type:  strategyType.value,
+      params: (() => {
+        switch (strategyType.value) {
+          case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
+          case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
+          case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
+          default:                return {}
+        }
+      })(),
+    }
+    // Add ML params if strategy is ML-based
+    if (strategyType.value.startsWith('ml_')) {
+      params.ml_model_id = mlModelId.value
+      params.ml_feature_set = mlFeatureSet.value
+      params.ml_threshold = mlThreshold.value
+    }
     const btResp = await apiFetch('/api/v1/backtest/run', {
       method: 'POST',
-      body: {
-        symbol:         sym,
-        period:         'daily',
-        start_date,
-        end_date,
-        initial_capital: initialCapital,
-        strategy_type:  strategyType.value,
-        params: (() => {
-          switch (strategyType.value) {
-            case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
-            case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
-            case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
-            default:                return {}
-          }
-        })(),
-      },
+      body: params,
+      signal: _fetchController.signal,
     })
 
     // 兼容后端报错格式 {code, message, ...}
@@ -716,8 +912,11 @@ async function runBacktest() {
     statusMsg.value = `✅ 完成 ${data.trades_count||0} 笔交易`
     chartKey.value++
   } catch (e) {
+    // Ignore abort errors silently
+    if (e.name === 'AbortError' || e.message?.includes('aborted')) return
     statusMsg.value = `❌ ${e.message || '回测失败'}`
   } finally {
+    _fetchController = null
     running.value = false
   }
 }
@@ -728,10 +927,19 @@ const profitFactor = computed(() => {
   if (!t.length) return '—'
   const wins   = t.filter(x => (x.pnl || 0) > 0)
   const losses = t.filter(x => (x.pnl || 0) < 0)
-  const avgWin  = wins.length   ? wins.reduce((s, x) => s + x.pnl, 0) / wins.length : 0
-  const avgLoss = losses.length ? Math.abs(losses.reduce((s, x) => s + x.pnl, 0) / losses.length) : 0
+  const avgWin  = safeDivide(wins.reduce((s, x) => s + x.pnl, 0), wins.length)
+  const avgLoss = safeDivide(Math.abs(losses.reduce((s, x) => s + x.pnl, 0)), losses.length)
   if (!avgLoss) return avgWin ? '∞' : '—'
-  return (avgWin / avgLoss).toFixed(2)
+  return safeDivide(avgWin, avgLoss, 0).toFixed(2)
+})
+
+// ── 虚拟化交易记录 ──────────────────────────────────────────────
+const virtualizedTrades = computed(() => {
+  const trades = backtestResult.value?.trades || []
+  return trades.map((t, i) => ({
+    ...t,
+    id: i,
+  }))
 })
 
 // ── 策略体检报告 ─────────────────────────────────────────────────

@@ -21,10 +21,10 @@ import logging
 from datetime import datetime, date
 from typing import Optional
 
-from fastapi import HTTPException, Header
+from fastapi import HTTPException, Header, Depends
 
-# Import database utilities
 from app.db.database import _get_conn, _lock
+from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _insert_transaction(
     note: Optional[str] = None,
     operator: str = "system",
 ) -> int:
-    """写入一笔资金流水记录，返回自增 ID。"""
+    """写入一笔资金流水记录，返回自增 ID。SEC Rule 17a-4 audit trail included."""
     now = datetime.now().isoformat()
     cur = conn.execute(
         """INSERT INTO transactions
@@ -72,7 +72,27 @@ def _insert_transaction(
         (portfolio_id, txn_type, amount, balance_after,
          counterparty_id, related_symbol, note, now, operator),
     )
-    return cur.lastrowid
+    txn_id = cur.lastrowid
+
+    # Audit trail with hash chain (SEC Rule 17a-4 compliance)
+    # Use deferred import to avoid circular dependency
+    try:
+        from app.services.audit_chain import log_audit_event
+        log_audit_event(
+            actor_id=operator,
+            action=txn_type,
+            resource_type="cash",
+            resource_id=str(portfolio_id),
+            outcome="success",
+            before_state={"balance": balance_after - amount},
+            after_state={"balance": balance_after, "txn_id": txn_id},
+            conn=conn,  # Same transaction for atomicity
+        )
+    except Exception as e:
+        # Audit failure should not fail the transaction
+        logger.warning(f"[AuditChain] Failed to log cash operation: {e}")
+
+    return txn_id
 
 
 def _transfer_between_accounts(

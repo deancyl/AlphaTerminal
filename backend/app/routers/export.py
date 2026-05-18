@@ -2,18 +2,24 @@
 数据导出路由 - CSV/Excel/JSON 导出功能
 支持导出：持仓、回测结果、筛选器结果
 """
+import asyncio
 import io
 import csv
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 
 from ..db.database import get_conn
+from ..middleware import require_api_key
 
 router = APIRouter(prefix="/export", tags=["export"])
+
+# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
+_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="export_")
 
 
 def _generate_csv(data: List[Dict[str, Any]], filename: str) -> StreamingResponse:
@@ -74,7 +80,8 @@ def _generate_json(data: List[Dict[str, Any]], filename: str) -> StreamingRespon
 async def export_portfolio(
     portfolio_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
-    include_history: bool = Query(False, description="包含历史快照数据")
+    include_history: bool = Query(False, description="包含历史快照数据"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出投资组合数据
@@ -82,9 +89,10 @@ async def export_portfolio(
     - **format**: 导出格式 (csv/excel/json)
     - **include_history**: 是否包含历史净值快照
     """
-    try:
+    loop = asyncio.get_event_loop()
+    
+    def _sync_export():
         with get_conn() as conn:
-            # 获取组合基本信息
             portfolio = conn.execute(
                 "SELECT * FROM portfolios WHERE id = ?",
                 (portfolio_id,)
@@ -93,7 +101,6 @@ async def export_portfolio(
             if not portfolio:
                 raise HTTPException(status_code=404, detail="Portfolio not found")
             
-            # 获取持仓数据
             positions = conn.execute(
                 """SELECT 
                     p.symbol,
@@ -109,13 +116,11 @@ async def export_portfolio(
                 (portfolio_id,)
             ).fetchall()
             
-            # 转换为字典列表
             data = []
             for pos in positions:
-                # 计算衍生字段
                 shares = pos[1] or 0
                 avg_cost = pos[2] or 0
-                current_price = pos[4] or 0  # current_price is at index 4
+                current_price = pos[4] or 0
                 market_value = shares * current_price
                 cost_basis = shares * avg_cost
                 unrealized_pnl = market_value - cost_basis if shares > 0 else 0
@@ -125,7 +130,7 @@ async def export_portfolio(
                     "组合ID": portfolio_id,
                     "组合名称": portfolio[1],
                     "股票代码": pos[0],
-                    "股票名称": pos[3] or "",  # stock_name is at index 3
+                    "股票名称": pos[3] or "",
                     "持仓数量": shares,
                     "平均成本": avg_cost,
                     "当前价格": current_price,
@@ -135,7 +140,6 @@ async def export_portfolio(
                     "导出时间": datetime.now().isoformat()
                 })
             
-            # 添加汇总行
             if data:
                 total_value = sum(item["市值"] for item in data)
                 total_pnl = sum(item["浮动盈亏"] for item in data)
@@ -154,15 +158,22 @@ async def export_portfolio(
                     "导出时间": datetime.now().isoformat()
                 })
             
-            filename = f"portfolio_{portfolio_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            return data, portfolio
+    
+    try:
+        data, portfolio = await loop.run_in_executor(_executor, _sync_export)
+        
+        filename = f"portfolio_{portfolio_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        if format == "csv":
+            return _generate_csv(data, filename)
+        elif format == "excel":
+            return _generate_excel(data, filename)
+        else:
+            return _generate_json(data, filename)
             
-            if format == "csv":
-                return _generate_csv(data, filename)
-            elif format == "excel":
-                return _generate_excel(data, filename)
-            else:
-                return _generate_json(data, filename)
-                
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
@@ -170,7 +181,8 @@ async def export_portfolio(
 @router.post("/backtest/result")
 async def export_backtest_result(
     request: Dict[str, Any],
-    format: str = Query("excel", regex="^(csv|excel|json)$")
+    format: str = Query("excel", regex="^(csv|excel|json)$"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出回测结果（从前端传入的完整结果数据）
@@ -243,7 +255,8 @@ async def export_backtest_result(
 async def export_backtest(
     backtest_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
-    include_trades: bool = Query(True, description="包含交易记录")
+    include_trades: bool = Query(True, description="包含交易记录"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出回测结果
@@ -251,9 +264,10 @@ async def export_backtest(
     - **format**: 导出格式 (csv/excel/json)
     - **include_trades**: 是否包含详细交易记录
     """
-    try:
+    loop = asyncio.get_event_loop()
+    
+    def _sync_export():
         with get_conn() as conn:
-            # 获取回测基本信息
             backtest = conn.execute(
                 "SELECT * FROM backtest_results WHERE id = ?",
                 (backtest_id,)
@@ -262,7 +276,6 @@ async def export_backtest(
             if not backtest:
                 raise HTTPException(status_code=404, detail="Backtest not found")
             
-            # 获取交易记录
             trades = conn.execute(
                 """SELECT 
                     date,
@@ -277,10 +290,8 @@ async def export_backtest(
                 (backtest_id,)
             ).fetchall()
             
-            # 构建数据
             data = []
             
-            # 添加回测概览
             data.append({
                 "类型": "回测概览",
                 "回测ID": backtest_id,
@@ -298,7 +309,6 @@ async def export_backtest(
                 "导出时间": datetime.now().isoformat()
             })
             
-            # 添加交易记录
             if include_trades and trades:
                 for trade in trades:
                     data.append({
@@ -314,15 +324,22 @@ async def export_backtest(
                         "导出时间": datetime.now().isoformat()
                     })
             
-            filename = f"backtest_{backtest_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
-            if format == "csv":
-                return _generate_csv(data, filename)
-            elif format == "excel":
-                return _generate_excel(data, filename)
-            else:
-                return _generate_json(data, filename)
+            return data, backtest
+    
+    try:
+        data, backtest = await loop.run_in_executor(_executor, _sync_export)
+        
+        filename = f"backtest_{backtest_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        if format == "csv":
+            return _generate_csv(data, filename)
+        elif format == "excel":
+            return _generate_excel(data, filename)
+        else:
+            return _generate_json(data, filename)
                 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
 
@@ -330,7 +347,8 @@ async def export_backtest(
 @router.post("/screener")
 async def export_screener(
     filters: Dict[str, Any],
-    format: str = Query("csv", regex="^(csv|excel|json)$")
+    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出筛选器结果
@@ -365,7 +383,8 @@ async def export_market_history(
     period: str = Query("daily", regex="^(daily|weekly|monthly)$"),
     format: str = Query("csv", regex="^(csv|excel|json)$"),
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
-    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)")
+    end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
+    _: None = Depends(require_api_key)
 ):
     """
     导出历史行情数据
@@ -376,9 +395,10 @@ async def export_market_history(
     - **start_date**: 开始日期
     - **end_date**: 结束日期
     """
-    try:
+    loop = asyncio.get_event_loop()
+    
+    def _sync_export():
         with get_conn() as conn:
-            # 根据周期选择表
             table_map = {
                 "daily": "market_data_daily",
                 "weekly": "market_data_weekly",
@@ -386,7 +406,6 @@ async def export_market_history(
             }
             table = table_map.get(period, "market_data_daily")
             
-            # 构建查询
             query = f"""SELECT 
                 date,
                 open,
@@ -429,14 +448,21 @@ async def export_market_history(
                     "导出时间": datetime.now().isoformat()
                 })
             
-            filename = f"history_{symbol}_{period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            
-            if format == "csv":
-                return _generate_csv(data, filename)
-            elif format == "excel":
-                return _generate_excel(data, filename)
-            else:
-                return _generate_json(data, filename)
+            return data
+    
+    try:
+        data = await loop.run_in_executor(_executor, _sync_export)
+        
+        filename = f"history_{symbol}_{period}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        if format == "csv":
+            return _generate_csv(data, filename)
+        elif format == "excel":
+            return _generate_excel(data, filename)
+        else:
+            return _generate_json(data, filename)
                 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")

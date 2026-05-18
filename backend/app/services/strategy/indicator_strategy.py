@@ -327,15 +327,39 @@ class StrategyValidator:
         'import requests', 'eval(', 'exec(', 'open(', 'file(', '__import__',
         'compile(', 'getattr(', 'setattr(', 'delattr(',
     ]
+    
+    FORBIDDEN_REGEX_PATTERNS = [
+        r'eval\s*\(',           # eval( with whitespace
+        r'exec\s*\(',           # exec( with whitespace
+        r'__import__\s*\(',     # __import__( with whitespace
+        r'getattr\s*\(',        # getattr( with whitespace
+        r'setattr\s*\(',        # setattr( with whitespace
+        r'delattr\s*\(',        # delattr( with whitespace
+        r'compile\s*\(',        # compile( with whitespace
+        r'open\s*\(',           # open( with whitespace
+        r'__class__',           # Class introspection
+        r'__base__',            # Base class access
+        r'__subclasses__',      # Subclass enumeration
+        r'__mro__',             # Method resolution order
+        r'__globals__',         # Globals access
+        r'__builtins__',        # Builtins access
+        r'__getattribute__',    # Attribute access override
+    ]
 
     @classmethod
     def validate(cls, code: str) -> Tuple[bool, Optional[str]]:
+        import re
+        
         if not code or not code.strip():
             return False, "Strategy code cannot be empty"
 
         for pattern in cls.FORBIDDEN_PATTERNS:
             if pattern in code:
                 return False, f"Code contains forbidden pattern: {pattern}"
+        
+        for regex_pattern in cls.FORBIDDEN_REGEX_PATTERNS:
+            if re.search(regex_pattern, code):
+                return False, f"Code contains forbidden pattern: {regex_pattern}"
 
         if 'output' not in code:
             return False, "Code must contain 'output' variable definition"

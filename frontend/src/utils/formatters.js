@@ -1,6 +1,8 @@
 // utils/formatters.js - 公共格式化函数
 // 提取自各组件重复的 formatVol/formatAmount/formatPrice
 
+import { safeNumber, safePct } from './typeCoercion.js'
+
 /**
  * 格式化成交量
  * @param {number} v - 成交量
@@ -32,8 +34,9 @@ export function formatAmount(v) {
  * @returns {string} 格式化后的字符串
  */
 export function formatPrice(v, digits = 2) {
-  if (v == null || v === '' || Number.isNaN(v)) return '--'
-  return Number(v).toFixed(digits)
+  const num = safeNumber(v, NaN)
+  if (Number.isNaN(num)) return '--'
+  return num.toFixed(digits)
 }
 
 /**
@@ -42,8 +45,9 @@ export function formatPrice(v, digits = 2) {
  * @returns {string} 格式化后的字符串，带正负号
  */
 export function formatChangePct(v) {
-  if (v == null) return '--'
-  return (v >= 0 ? '+' : '') + v.toFixed(2) + '%'
+  const num = safePct(v, NaN)
+  if (Number.isNaN(num)) return '--'
+  return (num >= 0 ? '+' : '') + num.toFixed(2) + '%'
 }
 
 /**
@@ -120,9 +124,8 @@ export function formatVolume(num) {
  * @returns {string} 格式化后的字符串
  */
 export function formatHolderShares(num) {
-  if (num == null) return '--'
-  const n = parseFloat(num)
-  if (Number.isNaN(n)) return String(num)
+  const n = safeNumber(num, NaN)
+  if (Number.isNaN(n)) return '--'
   if (n >= 1e8) return (n / 1e8).toFixed(2) + '亿'
   if (n >= 1e4) return (n / 1e4).toFixed(2) + '万'
   return n.toFixed(0)
@@ -134,8 +137,7 @@ export function formatHolderShares(num) {
  * @returns {string} 格式化后的字符串
  */
 export function formatHolderPct(pct) {
-  if (pct == null) return '--'
-  const n = parseFloat(pct)
-  if (Number.isNaN(n)) return String(pct)
+  const n = safeNumber(pct, NaN)
+  if (Number.isNaN(n)) return '--'
   return n.toFixed(2) + '%'
 }
