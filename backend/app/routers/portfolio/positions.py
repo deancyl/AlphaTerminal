@@ -19,6 +19,7 @@ Dependencies:
 import asyncio
 import logging
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, date
 from typing import Optional
 
@@ -35,6 +36,9 @@ from .schemas import PositionIn
 
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
+
+# Shared thread pool for non-blocking SQLite operations
+_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
 
 # ── Helper Functions ─────────────────────────────────────────────
 
@@ -77,13 +81,10 @@ async def list_positions(
     offset: int = Query(0, ge=0, description="Number of positions to skip"),
 ):
     """账户当前持仓，可选包含所有子账户持仓"""
-    async def _inner():
-        # WAL 模式支持并发读
-        # Phase 4: 从 position_summary 读取（lot-based 系统）
+    def _sync_work():
         conn = _get_conn()
         try:
             if include_children:
-                # 获取所有后代账户ID
                 all_ids = _get_all_descendants(conn, portfolio_id)
                 if not all_ids:
                     return success_response({
@@ -164,6 +165,10 @@ async def list_positions(
         finally:
             conn.close()
     
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
+    
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
@@ -178,7 +183,7 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     shares=0 表示清仓（删除持仓）
     同时同步更新 position_summary 表（新lot-based系统）
     """
-    async def _inner():
+    def _sync_work():
         now = datetime.now().isoformat()
         with _lock:
             conn = _get_conn()
@@ -187,7 +192,6 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
                     "DELETE FROM positions WHERE portfolio_id=? AND symbol=?",
                     (body.portfolio_id, body.symbol)
                 )
-                # 同步清空 position_summary
                 conn.execute(
                     "DELETE FROM position_summary WHERE portfolio_id=? AND symbol=?",
                     (body.portfolio_id, body.symbol)
@@ -200,7 +204,6 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
                 "VALUES (?,?,?,?,?)",
                 (body.portfolio_id, body.symbol, body.shares, body.avg_cost, now)
             )
-            # 同步更新 position_summary（新lot-based系统）
             conn.execute(
                 "INSERT OR REPLACE INTO position_summary (portfolio_id, symbol, total_shares, avg_cost, market_value, unrealized_pnl, updated_at) "
                 "VALUES (?,?,?,?,?,?,?)",
@@ -209,6 +212,10 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
             conn.commit()
             conn.close()
         return success_response({"ok": True, "action": "upserted"})
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -231,7 +238,7 @@ def require_auth_for_sensitive_ops(api_key: str = None):
 @router.delete("/{portfolio_id}/positions/{symbol}")
 async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(require_api_key)):
     """清仓指定标的 - 需认证"""
-    async def _inner():
+    def _sync_work():
         with _lock:
             conn = _get_conn()
             cur = conn.execute(
@@ -241,6 +248,10 @@ async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(requ
             conn.commit()
             conn.close()
         return success_response({"ok": True})
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -259,17 +270,14 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     支持: 包含所有子账户的聚合视图
     依赖 SpotCache（后台每3分钟刷新的全市场实时行情）
     """
-    async def _inner():
+    def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
-        # WAL 模式支持并发读，但 SpotCache 读取和 DB 读取之间保持原子视图
         conn = _get_conn()
         try:
             if include_children:
-                # 获取所有后代账户ID
                 all_ids = _get_all_descendants(conn, portfolio_id)
                 placeholders = ','.join(['?' for _ in all_ids])
-                # 使用 position_summary 而非 positions（新lot-based系统）
                 rows = conn.execute(
                     f"""SELECT p.symbol, p.total_shares as shares, p.avg_cost, po.name as portfolio_name, po.id as portfolio_id
                         FROM position_summary p
@@ -278,13 +286,11 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     tuple(all_ids)
                 ).fetchall()
             else:
-                # 使用 position_summary 而非 positions（新lot-based系统）
                 rows = conn.execute(
                     "SELECT symbol, total_shares as shares, avg_cost FROM position_summary WHERE portfolio_id=?",
                     (portfolio_id,)
                 ).fetchall()
 
-            # 获取持仓股票的基本面数据（PE/PB等）
             stock_meta = {}
             try:
                 meta_rows = conn.execute(
@@ -298,7 +304,6 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             except Exception as e:
                 logger.warning(f"[Portfolio PnL] Failed to fetch stock metadata: {e}")
 
-            # ── 获取现金余额 ──────────────────────────────────────────────
             cash_balance = 0.0
             try:
                 cb = conn.execute(
@@ -314,24 +319,23 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             conn.close()
 
         if not rows:
-            return success_response({"positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
-                         "includes_children": include_children,
-                         "realized_pnl": 0.0, "unrealized_pnl": 0.0, "daily_pnl": 0.0,
-                         "cash_balance": cash_balance})
+            return {
+                "positions": [], "total_pnl": 0.0, "total_cost": 0.0, "total_value": 0.0,
+                "includes_children": include_children,
+                "realized_pnl": 0.0, "unrealized_pnl": 0.0, "daily_pnl": 0.0,
+                "cash_balance": cash_balance
+            }
 
         spot = SpotCache.get_stocks()
-        # 构建价格映射表，同时支持带前缀和不带前缀的代码
         price_map = {}
         for s in spot:
             code = s.get("code", "")
-            price_map[code] = s  # 带前缀格式: sz300391
-            # 同时添加不带前缀格式: 300391
+            price_map[code] = s
             if len(code) > 2:
-                price_map[code[2:]] = s  # 去掉前2位前缀
+                price_map[code[2:]] = s
                 price_map[code.lower()] = s
                 price_map[code.upper()] = s
         
-        # 如果 SpotCache 为空，从数据库兜底获取实时价格
         db_price_loaded = False
         if not spot or len(spot) < 10:
             logger.info("[Portfolio PnL] SpotCache 为空，从数据库兜底获取价格")
@@ -346,10 +350,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     name = r[1] or ""
                     price = float(r[2] or 0)
                     chg_pct = float(r[3] or 0) if r[3] else 0.0
-                    # 归一化代码格式：同时支持 sh600519 和 600519
                     price_map[sym] = {"code": sym, "name": name, "price": price, "chg_pct": chg_pct}
                     if len(sym) > 2:
-                        # 去掉前缀的版本
                         price_map[sym[2:]] = price_map[sym]
                         price_map[sym.lower()] = price_map[sym]
                         price_map[sym.upper()] = price_map[sym]
@@ -365,23 +367,18 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
         result = []
         total_cost = 0.0
         total_value = 0.0
-        missing_prices = []  # 记录未找到价格的股票
+        missing_prices = []
         
-        # 处理不同结构的rows
         for row in rows:
             if include_children:
-                # row: (symbol, shares, avg_cost, portfolio_name, portfolio_id)
                 symbol, shares, avg_cost, portfolio_name, portfolio_id_from_row = row
             else:
-                # row: (symbol, shares, avg_cost)
                 symbol, shares, avg_cost = row
                 portfolio_name = None
                 portfolio_id_from_row = None
                 
-            # 尝试多种格式的代码匹配
             info = price_map.get(symbol, {})
             if not info and len(symbol) == 6:
-                # 尝试添加前缀
                 if symbol.startswith("6"):
                     info = price_map.get(f"sh{symbol}", {})
                 elif symbol.startswith("0") or symbol.startswith("3"):
@@ -409,7 +406,6 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 market = "其他"
 
             meta = stock_meta.get(symbol, {})
-            # 判断价格来源：如果找到实时数据，使用实时价格；否则使用成本价
             has_realtime_price = bool(info and info.get("price"))
             pos_data = {
                 "symbol":       symbol,
@@ -438,31 +434,26 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             total_cost  += cost_total
             total_value += market_value
             
-        # 第二遍：计算权重
         for pos in result:
             pos["weight"] = round(pos["market_value"] / total_value * 100, 2) if total_value > 0 else 0.0
 
         total_pnl = total_value - total_cost
         total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
 
-        # ── 使用单一连接读取所有数据，避免竞态条件 ────────────────────────────
         conn = _get_conn()
         try:
-            # 从 position_lots 读取已实现 PnL
             closed_rows = conn.execute(
                 "SELECT SUM(realized_pnl) FROM position_lots WHERE portfolio_id=? AND status='closed'",
                 (portfolio_id,),
             ).fetchone()
             realized_pnl = closed_rows[0] or 0.0
 
-            # 从 position_summary 读取浮动盈亏
             unrealized_row = conn.execute(
                 "SELECT SUM(unrealized_pnl) FROM position_summary WHERE portfolio_id=?",
                 (portfolio_id,),
             ).fetchone()
             unrealized_pnl = float(unrealized_row[0]) if unrealized_row and unrealized_row[0] is not None else 0.0
 
-            # 从 transactions 计算当日盈亏
             today = datetime.now().strftime('%Y-%m-%d')
             txn_rows = conn.execute(
                 "SELECT SUM(amount) FROM transactions "
@@ -489,7 +480,6 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             conn.close()
 
         response = {
-            # ── 三分 PnL ──────────────────────────────────────────
             "total_value":      round(total_value + cash_balance, 2),
             "total_cost":       round(total_cost, 2),
             "total_pnl":        round(total_value + cash_balance - total_cost, 2),
@@ -516,7 +506,12 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             response["price_data_source"] = "SpotCache"
         response["price_data_count"] = len(spot) if spot else 0
 
-        return success_response(response)
+        return response
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -534,8 +529,7 @@ async def get_snapshots(
     end_date:   Optional[str] = Query(None, description="YYYY-MM-DD"),
 ):
     """净值历史快照"""
-    async def _inner():
-        # WAL 模式支持并发读
+    def _sync_work():
         conn = _get_conn()
         try:
             if start_date and end_date:
@@ -564,13 +558,18 @@ async def get_snapshots(
                 ).fetchall()
         finally:
             conn.close()
-        return success_response({
+        return {
             "snapshots": [
                 {"date": r[0], "total_asset": r[1], "total_cost": r[2],
                  "pnl_pct": round((r[1]-r[2])/r[2]*100, 2) if r[2] else 0.0}
                 for r in rows
             ]
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -582,8 +581,12 @@ async def get_snapshots(
 @router.post("/{portfolio_id}/snapshots")
 async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     """手动保存当日快照（供路由调用）"""
-    async def _inner():
+    def _sync_work():
         return _save_snapshot_impl(portfolio_id)
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -653,11 +656,10 @@ async def daily_pnl_only(portfolio_id: int):
     """
     仅返回当日三分数据（轻量端点，供 ECharts 看板高频轮询）。
     """
-    async def _inner():
+    def _sync_work():
         today = datetime.now().strftime('%Y-%m-%d')
         conn = _get_conn()
         try:
-            # realized today
             rt = conn.execute(
                 "SELECT SUM(amount) FROM transactions "
                 "WHERE portfolio_id=? AND created_at>=? AND type='sell_pnl'",
@@ -665,7 +667,6 @@ async def daily_pnl_only(portfolio_id: int):
             ).fetchone()
             realized_today = rt[0] or 0.0
 
-            # deposits/withdrawals/transfer today
             dt = conn.execute(
                 "SELECT SUM(amount) FROM transactions "
                 "WHERE portfolio_id=? AND created_at>=? AND type IN ('deposit','withdraw','transfer_in','transfer_out')",
@@ -673,7 +674,6 @@ async def daily_pnl_only(portfolio_id: int):
             ).fetchone()
             cash_flow = dt[0] or 0.0
 
-            # unrealized (from summary)
             unrealized = 0.0
             try:
                 ur = conn.execute(
@@ -686,15 +686,20 @@ async def daily_pnl_only(portfolio_id: int):
             except Exception as e:
                 logger.warning(f"[Portfolio daily_pnl] 读取 unrealized 失败 (portfolio_id={portfolio_id}): {e}")
 
-            return success_response({
+            return {
                 "date":           today,
                 "realized_today": round(realized_today, 2),
                 "cash_flow":      round(cash_flow, 2),
                 "unrealized_pnl": round(unrealized, 2),
                 "daily_pnl":      round(realized_today + cash_flow, 2),
-            })
+            }
         finally:
             conn.close()
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)

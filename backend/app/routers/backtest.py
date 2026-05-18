@@ -3,6 +3,8 @@
 """
 import json
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
@@ -14,6 +16,9 @@ from app.middleware import require_api_key
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
+_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="backtest_")
 
 # ── 安全限制 ─────────────────────────────────────────────────────────
 MAX_PARAMS_DEPTH = 5      # JSON 最大嵌套深度
@@ -445,62 +450,71 @@ class StrategyCreateRequest(BaseModel):
 @router.get("/strategies")
 async def get_strategies():
     """获取所有回测策略"""
-    conn = _get_conn()
-    try:
-        # 检查表是否存在
-        table_exists = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='backtest_strategies'"
-        ).fetchone()
-        
-        if not table_exists:
-            return success_response({"strategies": []})
-        
-        rows = conn.execute("""
-            SELECT id, name, description, type, params, created_at, updated_at
-            FROM backtest_strategies ORDER BY created_at DESC
-        """).fetchall()
-        
-        strategies = []
-        for r in rows:
-            strategies.append({
-                "id": r[0],
-                "name": r[1],
-                "description": r[2],
-                "type": r[3],
-                "params": json.loads(r[4]) if r[4] else {},
-                "created_at": r[5],
-                "updated_at": r[6]
-            })
-        
-        return success_response({"strategies": strategies})
-    except Exception as e:
-        logger.error(f"[Backtest] 获取策略列表失败: {e}")
-        return success_response({"strategies": []})
-    finally:
-        conn.close()
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        conn = _get_conn()
+        try:
+            table_exists = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='backtest_strategies'"
+            ).fetchone()
+            
+            if not table_exists:
+                conn.close()
+                return []
+            
+            rows = conn.execute("""
+                SELECT id, name, description, type, params, created_at, updated_at
+                FROM backtest_strategies ORDER BY created_at DESC
+            """).fetchall()
+            
+            strategies = []
+            for r in rows:
+                strategies.append({
+                    "id": r[0],
+                    "name": r[1],
+                    "description": r[2],
+                    "type": r[3],
+                    "params": json.loads(r[4]) if r[4] else {},
+                    "created_at": r[5],
+                    "updated_at": r[6]
+                })
+            conn.close()
+            return strategies
+        except Exception as e:
+            conn.close()
+            logger.error(f"[Backtest] 获取策略列表失败: {e}")
+            return []
+    
+    strategies = await loop.run_in_executor(_executor, _sync_query)
+    return success_response({"strategies": strategies})
 
 
 @router.post("/strategies")
 async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_api_key)):
     """创建新策略"""
-    # 验证 params 复杂度
     params = _validate_params(req.params)
+    loop = asyncio.get_event_loop()
     
-    conn = _get_conn()
-    try:
-        now = datetime.now().isoformat()
-        conn.execute("""
-            INSERT INTO backtest_strategies (name, description, type, params, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (req.name, req.description, req.strategy_type, 
-              json.dumps(params), now, now))
-        conn.commit()
-        
-        strategy_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        
-        return success_response({"id": strategy_id, "message": "Strategy created"})
-    finally:
-        conn.close()
+    def _sync_insert():
+        conn = _get_conn()
+        try:
+            now = datetime.now().isoformat()
+            conn.execute("""
+                INSERT INTO backtest_strategies (name, description, type, params, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (req.name, req.description, req.strategy_type, 
+                  json.dumps(params), now, now))
+            conn.commit()
+            
+            strategy_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.close()
+            return strategy_id
+        finally:
+            conn.close()
+    
+    strategy_id = await loop.run_in_executor(_executor, _sync_insert)
+    return success_response({"id": strategy_id, "message": "Strategy created"})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -510,62 +524,63 @@ async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_
 @router.post("/run")
 async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key)):
     """执行回测"""
-    # ── 第一步：入参解析与校验 ───────────────────────────────────
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
     strategy_type = req.strategy_type or "ma_crossover"
     raw_params = _validate_params(req.params)
     fast_ma, slow_ma = _extract_strategy_params(strategy_type, raw_params)
     
-    # 日期校验
     dates_valid, dates_error, _ = _validate_dates(req.start_date, req.end_date)
     if not dates_valid:
         return error_response(ErrorCode.BAD_REQUEST, dates_error)
     
-    # 资金校验
     capital_valid, capital_error, initial_capital = _validate_capital(req.initial_capital)
     if not capital_valid:
         return error_response(ErrorCode.BAD_REQUEST, capital_error)
     
-    # ── 第二步：获取历史数据 ──────────────────────────────────────
-    conn = _get_conn()
-    try:
-        rows = conn.execute("""
-            SELECT date, open, high, low, close, volume
-            FROM market_data_daily
-            WHERE symbol = ? AND date >= ? AND date <= ?
-            ORDER BY date ASC
-        """, (db_symbol, req.start_date, req.end_date)).fetchall()
-        
-        if len(rows) == 0:
-            return error_response(ErrorCode.NOT_FOUND, f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。")
-        if len(rows) < slow_ma:
-            return error_response(ErrorCode.BAD_REQUEST, f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。")
-        
-        # ── 基准收益率 ────────────────────────────────────────────
-        first_close = float(rows[0][4])
-        last_close = float(rows[-1][4])
-        benchmark_return_pct = 0.0 if first_close <= 0 else round(
-            (last_close - first_close) / first_close * 100, 2
-        )
-        
-        # ── 提取价格序列 ──────────────────────────────────────────
-        closes = [float(r[4]) for r in rows]
-        
-        # ── 策略信号生成 ──────────────────────────────────────────
-        signals = _generate_signals(strategy_type, closes, rows, raw_params)
-        
-        # ── 模拟交易 ──────────────────────────────────────────────
-        trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
-            signals, closes, rows, initial_capital, req.commission, req.slippage
-        )
-        
-        # ── 统计指标 ──────────────────────────────────────────────
-        metrics = _calculate_metrics(
-            trades, wins, losses, final_capital,
-            initial_capital, len(rows), benchmark_return_pct
-        )
-        
-        # ── 保存到数据库 ──────────────────────────────────────────
+    loop = asyncio.get_event_loop()
+    
+    def _sync_fetch_data():
+        conn = _get_conn()
+        try:
+            rows = conn.execute("""
+                SELECT date, open, high, low, close, volume
+                FROM market_data_daily
+                WHERE symbol = ? AND date >= ? AND date <= ?
+                ORDER BY date ASC
+            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            conn.close()
+            return rows
+        finally:
+            conn.close()
+    
+    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    
+    if len(rows) == 0:
+        return error_response(ErrorCode.NOT_FOUND, f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。")
+    if len(rows) < slow_ma:
+        return error_response(ErrorCode.BAD_REQUEST, f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。")
+    
+    first_close = float(rows[0][4])
+    last_close = float(rows[-1][4])
+    benchmark_return_pct = 0.0 if first_close <= 0 else round(
+        (last_close - first_close) / first_close * 100, 2
+    )
+    
+    closes = [float(r[4]) for r in rows]
+    
+    signals = _generate_signals(strategy_type, closes, rows, raw_params)
+    
+    trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
+        signals, closes, rows, initial_capital, req.commission, req.slippage
+    )
+    
+    metrics = _calculate_metrics(
+        trades, wins, losses, final_capital,
+        initial_capital, len(rows), benchmark_return_pct
+    )
+    
+    def _sync_save_result():
+        conn = _get_conn()
         try:
             conn.execute("""
                 INSERT INTO backtest_results 
@@ -596,71 +611,78 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
                 datetime.now().isoformat()
             ))
             conn.commit()
+            conn.close()
         except Exception as e:
+            conn.close()
             logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
-        
-        # ── 返回结果 ──────────────────────────────────────────────
-        return success_response({
-            "symbol": req.symbol,
-            "start_date": req.start_date,
-            "end_date": req.end_date,
-            "initial_capital": initial_capital,
-            "final_capital": round(final_capital, 2),
-            "total_return": metrics["total_return"],
-            "total_return_pct": metrics["total_return_pct"],
-            "max_drawdown": metrics["max_drawdown"],
-            "max_drawdown_pct": metrics["max_drawdown_pct"],
-            "wins": wins,
-            "losses": losses,
-            "win_rate": metrics["win_rate"],
-            "trades_count": metrics["total_trades"],
-            "sharpe_ratio": metrics["sharpe_ratio"],
-            "annualized_return_pct": metrics["annualized_return_pct"],
-            "benchmark_return_pct": benchmark_return_pct,
-            "strategy_type": strategy_type,
-            "trades": trades,
-            "equity_curve": metrics["equity_curve"],
-            "commission": req.commission,
-            "slippage": req.slippage,
-            "total_commission": round(total_commission, 2),
-            "total_slippage_cost": round(total_slippage_cost, 2),
-        })
-    finally:
-        conn.close()
+    
+    await loop.run_in_executor(_executor, _sync_save_result)
+    
+    return success_response({
+        "symbol": req.symbol,
+        "start_date": req.start_date,
+        "end_date": req.end_date,
+        "initial_capital": initial_capital,
+        "final_capital": round(final_capital, 2),
+        "total_return": metrics["total_return"],
+        "total_return_pct": metrics["total_return_pct"],
+        "max_drawdown": metrics["max_drawdown"],
+        "max_drawdown_pct": metrics["max_drawdown_pct"],
+        "wins": wins,
+        "losses": losses,
+        "win_rate": metrics["win_rate"],
+        "trades_count": metrics["total_trades"],
+        "sharpe_ratio": metrics["sharpe_ratio"],
+        "annualized_return_pct": metrics["annualized_return_pct"],
+        "benchmark_return_pct": benchmark_return_pct,
+        "strategy_type": strategy_type,
+        "trades": trades,
+        "equity_curve": metrics["equity_curve"],
+        "commission": req.commission,
+        "slippage": req.slippage,
+        "total_commission": round(total_commission, 2),
+        "total_slippage_cost": round(total_slippage_cost, 2),
+    })
 
 
 @router.get("/results")
 async def get_backtest_results(limit: int = 10):
     """获取回测结果"""
-    conn = _get_conn()
-    try:
-        rows = conn.execute("""
-            SELECT id, strategy_id, portfolio_id, start_date, end_date, 
-                   initial_capital, final_capital, total_return, 
-                   max_drawdown, win_rate, trades_count, created_at
-            FROM backtest_results ORDER BY created_at DESC LIMIT ?
-        """, (limit,)).fetchall()
-        
-        results = []
-        for r in rows:
-            results.append({
-                "id": r[0],
-                "strategy_id": r[1],
-                "portfolio_id": r[2],
-                "start_date": r[3],
-                "end_date": r[4],
-                "initial_capital": r[5],
-                "final_capital": r[6],
-                "total_return": r[7],
-                "max_drawdown": r[8],
-                "win_rate": r[9],
-                "trades_count": r[10],
-                "created_at": r[11]
-            })
-        
-        return success_response({"results": results})
-    finally:
-        conn.close()
+    loop = asyncio.get_event_loop()
+    
+    def _sync_query():
+        conn = _get_conn()
+        try:
+            rows = conn.execute("""
+                SELECT id, strategy_id, portfolio_id, start_date, end_date, 
+                       initial_capital, final_capital, total_return, 
+                       max_drawdown, win_rate, trades_count, created_at
+                FROM backtest_results ORDER BY created_at DESC LIMIT ?
+            """, (limit,)).fetchall()
+            
+            results = []
+            for r in rows:
+                results.append({
+                    "id": r[0],
+                    "strategy_id": r[1],
+                    "portfolio_id": r[2],
+                    "start_date": r[3],
+                    "end_date": r[4],
+                    "initial_capital": r[5],
+                    "final_capital": r[6],
+                    "total_return": r[7],
+                    "max_drawdown": r[8],
+                    "win_rate": r[9],
+                    "trades_count": r[10],
+                    "created_at": r[11]
+                })
+            conn.close()
+            return results
+        finally:
+            conn.close()
+    
+    results = await loop.run_in_executor(_executor, _sync_query)
+    return success_response({"results": results})
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -695,103 +717,110 @@ async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require
     if not capital_valid:
         return error_response(ErrorCode.BAD_REQUEST, capital_error)
     
-    conn = _get_conn()
-    try:
-        rows = conn.execute("""
-            SELECT date, open, high, low, close, volume
-            FROM market_data_daily
-            WHERE symbol = ? AND date >= ? AND date <= ?
-            ORDER BY date ASC
-        """, (db_symbol, req.start_date, req.end_date)).fetchall()
-        
-        if len(rows) < 126:
-            return error_response(ErrorCode.BAD_REQUEST, f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据")
-        
-        data = [{"date": r[0], "close": float(r[4])} for r in rows]
-        
-        default_param_grid = {
-            "ma_crossover": {
-                "fast_ma": [5, 10, 15],
-                "slow_ma": [20, 30, 60]
-            },
-            "rsi_oversold": {
-                "rsi_period": [7, 14, 21],
-                "rsi_buy": [25, 30, 35],
-                "rsi_sell": [65, 70, 75]
-            },
-            "bollinger_bands": {
-                "bb_period": [15, 20, 25],
-                "bb_std": [1.5, 2.0, 2.5]
-            }
+    loop = asyncio.get_event_loop()
+    
+    def _sync_fetch_data():
+        conn = _get_conn()
+        try:
+            rows = conn.execute("""
+                SELECT date, open, high, low, close, volume
+                FROM market_data_daily
+                WHERE symbol = ? AND date >= ? AND date <= ?
+                ORDER BY date ASC
+            """, (db_symbol, req.start_date, req.end_date)).fetchall()
+            conn.close()
+            return rows
+        finally:
+            conn.close()
+    
+    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    
+    if len(rows) < 126:
+        return error_response(ErrorCode.BAD_REQUEST, f"数据不足({len(rows)}天)，Walk-Forward需要至少6个月数据")
+    
+    data = [{"date": r[0], "close": float(r[4])} for r in rows]
+    
+    default_param_grid = {
+        "ma_crossover": {
+            "fast_ma": [5, 10, 15],
+            "slow_ma": [20, 30, 60]
+        },
+        "rsi_oversold": {
+            "rsi_period": [7, 14, 21],
+            "rsi_buy": [25, 30, 35],
+            "rsi_sell": [65, 70, 75]
+        },
+        "bollinger_bands": {
+            "bb_period": [15, 20, 25],
+            "bb_std": [1.5, 2.0, 2.5]
         }
-        
-        param_grid = req.param_grid or default_param_grid.get(req.strategy_type, {})
-        
-        analyzer = WalkForwardAnalyzer(
-            train_window_days=req.train_window_days,
-            test_window_days=req.test_window_days,
-            step_days=req.step_days,
-            mode=req.mode
-        )
-        
-        anomalies = analyzer.detect_anomalies(data, req.symbol, req.strategy_type)
-        anomaly_warnings = [
-            {
-                "level": w.level,
-                "category": w.category,
-                "message": w.message,
-                "suggestion": w.suggestion
-            }
-            for w in anomalies
-        ]
-        
-        result = analyzer.analyze(
-            data=data,
-            strategy_type=req.strategy_type,
-            param_grid=param_grid,
-            initial_capital=initial_capital,
-            symbol=req.symbol
-        )
-        
-        windows_data = []
-        for w in result.windows:
-            windows_data.append({
-                "window_index": w.window_index,
-                "train_start": w.train_start,
-                "train_end": w.train_end,
-                "test_start": w.test_start,
-                "test_end": w.test_end,
-                "train_return_pct": w.train_return_pct,
-                "train_sharpe": w.train_sharpe,
-                "test_return_pct": w.test_return_pct,
-                "test_sharpe": w.test_sharpe,
-                "return_gap": w.return_gap,
-                "is_overfitted": w.is_overfitted,
-                "best_params": w.best_params
-            })
-        
-        return success_response({
-            "symbol": result.symbol,
-            "strategy_type": result.strategy_type,
-            "window_mode": result.window_mode,
-            "total_windows": result.total_windows,
-            "avg_test_return_pct": result.avg_test_return_pct,
-            "avg_test_sharpe": result.avg_test_sharpe,
-            "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
-            "avg_test_win_rate": result.avg_test_win_rate,
-            "avg_train_return_pct": result.avg_train_return_pct,
-            "avg_return_gap": result.avg_return_gap,
-            "overfitting_windows": result.overfitting_windows,
-            "overfitting_ratio": result.overfitting_ratio,
-            "overfitting_severity": result.overfitting_severity,
-            "consistency_score": result.consistency_score,
-            "recommendation": result.recommendation,
-            "confidence": result.confidence,
-            "windows": windows_data,
-            "anomaly_warnings": anomaly_warnings
+    }
+    
+    param_grid = req.param_grid or default_param_grid.get(req.strategy_type, {})
+    
+    analyzer = WalkForwardAnalyzer(
+        train_window_days=req.train_window_days,
+        test_window_days=req.test_window_days,
+        step_days=req.step_days,
+        mode=req.mode
+    )
+    
+    anomalies = analyzer.detect_anomalies(data, req.symbol, req.strategy_type)
+    anomaly_warnings = [
+        {
+            "level": w.level,
+            "category": w.category,
+            "message": w.message,
+            "suggestion": w.suggestion
+        }
+        for w in anomalies
+    ]
+    
+    result = analyzer.analyze(
+        data=data,
+        strategy_type=req.strategy_type,
+        param_grid=param_grid,
+        initial_capital=initial_capital,
+        symbol=req.symbol
+    )
+    
+    windows_data = []
+    for w in result.windows:
+        windows_data.append({
+            "window_index": w.window_index,
+            "train_start": w.train_start,
+            "train_end": w.train_end,
+            "test_start": w.test_start,
+            "test_end": w.test_end,
+            "train_return_pct": w.train_return_pct,
+            "train_sharpe": w.train_sharpe,
+            "test_return_pct": w.test_return_pct,
+            "test_sharpe": w.test_sharpe,
+            "return_gap": w.return_gap,
+            "is_overfitted": w.is_overfitted,
+            "best_params": w.best_params
         })
-    finally:
-        conn.close()
+    
+    return success_response({
+        "symbol": result.symbol,
+        "strategy_type": result.strategy_type,
+        "window_mode": result.window_mode,
+        "total_windows": result.total_windows,
+        "avg_test_return_pct": result.avg_test_return_pct,
+        "avg_test_sharpe": result.avg_test_sharpe,
+        "avg_test_max_dd_pct": result.avg_test_max_dd_pct,
+        "avg_test_win_rate": result.avg_test_win_rate,
+        "avg_train_return_pct": result.avg_train_return_pct,
+        "avg_return_gap": result.avg_return_gap,
+        "overfitting_windows": result.overfitting_windows,
+        "overfitting_ratio": result.overfitting_ratio,
+        "overfitting_severity": result.overfitting_severity,
+        "consistency_score": result.consistency_score,
+        "recommendation": result.recommendation,
+        "confidence": result.confidence,
+        "windows": windows_data,
+        "anomaly_warnings": anomaly_warnings
+    })
 
 
 class SmartParamsRequest(BaseModel):
@@ -811,27 +840,27 @@ class SmartParamsResponse(BaseModel):
 
 @router.post("/walkforward/smart-params")
 async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_api_key)):
-    """
-    Smart parameter recommendation based on available data and strategy type.
-    """
-    import sqlite3
-    
-    # 1. Get available data days from database
+    """Smart parameter recommendation based on available data and strategy type."""
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
     
-    try:
-        conn = sqlite3.connect("backend/cache/alpha_terminal.db")
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM market_data_daily WHERE symbol = ?",
-            (db_symbol,)
-        )
-        row = cursor.fetchone()
-        available_days = row[0] if row else 0
-        conn.close()
-    except Exception:
-        available_days = 0
+    loop = asyncio.get_event_loop()
     
-    # 2. Strategy-specific configurations
+    def _sync_count_days():
+        conn = _get_conn()
+        try:
+            cursor = conn.execute(
+                "SELECT COUNT(*) FROM market_data_daily WHERE symbol = ?",
+                (db_symbol,)
+            )
+            row = cursor.fetchone()
+            conn.close()
+            return row[0] if row else 0
+        except Exception:
+            conn.close()
+            return 0
+    
+    available_days = await loop.run_in_executor(_executor, _sync_count_days)
+    
     strategy_config = {
         "ma_crossover": {
             "train_test_ratio": 4,
@@ -855,40 +884,35 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
     
     config = strategy_config.get(req.strategy_type, strategy_config["ma_crossover"])
     
-    # 3. Error handling for insufficient data
     if available_days < 126:
         return error_response(ErrorCode.BAD_REQUEST,
             f"数据不足({available_days}天)，Walk-Forward需要至少126天(6个月)")
     
-    # 4. Determine optimal parameters based on available data
-    if available_days >= 1260:  # 5 years
+    if available_days >= 1260:
         time_range = "5y"
         train_days = 504
         test_days = 126
-    elif available_days >= 756:  # 3 years
+    elif available_days >= 756:
         time_range = "3y"
         train_days = 378
         test_days = 126
-    elif available_days >= 504:  # 2 years
+    elif available_days >= 504:
         time_range = "2y"
         train_days = 252
         test_days = 63
-    else:  # 1 year minimum
+    else:
         time_range = "1y"
         train_days = 126
         test_days = 42
     
-    # 5. Calculate expected windows
     step = test_days
     expected_windows = max(1, (available_days - train_days) // step)
     
-    # 6. Generate reasoning
     reasoning = f"基于{available_days}天可用数据，推荐{time_range}范围。"
     reasoning += f"预计生成{expected_windows}个窗口，"
     reasoning += f"训练/测试比例{train_days//test_days}:1。"
     reasoning += config["description"]
     
-    # 7. Generate warnings
     warnings = []
     if expected_windows < 3:
         warnings.append("⚠️ 窗口数量较少(<3)，建议增加历史数据以提高统计显著性")

@@ -28,7 +28,7 @@ let _firstFailureTime = null  // 首次失败时间戳
 let _lastToastTime = null     // 上次 toast 时间戳
 
 const _DEGRADE_THRESHOLD   = 5   // 提高到 5 次（原 3 次）
-const _CIRCUIT_THRESHOLD   = 10  // 提高到 10 次（原 6 次）
+const _CIRCUIT_THRESHOLD   = 5   // 降低到 5 次（原 10 次）
 const _FAILURE_WINDOW_MS   = 60000  // 失败计数窗口：60秒内的失败才累计
 const _TOAST_COOLDOWN_MS   = 30000  // Toast 冷却时间：30秒内不重复显示
 
@@ -242,10 +242,18 @@ export async function apiFetch(url, options = {}) {
     } catch (e) {
       clearTimeout(timer)
       lastError = e
+      const isAbortError = e.name === 'AbortError'
       const isNetworkError = e.name === 'TypeError' || e.message?.includes('fetch') || e.message?.includes('Failed to fetch')
       const isClientError = e.message?.match(/^HTTP 4\d{2}$/) || e.message?.includes('参数校验失败')
+      const isServerError = e.message?.startsWith('HTTP 5')
       
-      if (attempt < retries && (e.name === 'AbortError' || e.message?.startsWith('HTTP 5') || isNetworkError)) {
+      // AbortError（超时）不重试，直接抛出
+      if (isAbortError) {
+        throw new Error(`请求超时（${timeoutMs / 1000}s）`)
+      }
+      
+      // 仅对服务器错误和网络错误重试
+      if (attempt < retries && (isServerError || isNetworkError)) {
         const backoffMs = calculateRetryDelay(attempt)
         logger.warn(`[apiFetch] ${url} failed (attempt ${attempt + 1}): ${e.message}, retrying in ${backoffMs}ms...`)
         await sleep(backoffMs)

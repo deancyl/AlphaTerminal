@@ -46,8 +46,8 @@ _MOCK_BONDS = [
 ]
 
 
-def _fetch_bond_data():
-    """后台抓取国债收益率曲线（akshare bond_china_yield，5秒超时兜底Mock）
+async def _fetch_bond_data_async():
+    """后台抓取国债收益率曲线（akshare bond_china_yield，30秒超时兜底Mock）
     同时提取商业银行普通债(AAA)曲线，用于计算真实信用利差"""
     global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -76,7 +76,10 @@ def _fetch_bond_data():
         import warnings
         warnings.filterwarnings("ignore")
 
-        df = ak.bond_china_yield()
+        df = await asyncio.wait_for(
+            asyncio.to_thread(ak.bond_china_yield),
+            timeout=30.0
+        )
         if df is not None and not df.empty:
             # 按日期升序排列，按唯一日期索引历史截面
             df = df.sort_values("日期").reset_index(drop=True)
@@ -123,6 +126,8 @@ def _fetch_bond_data():
                 _LAST_FETCH_TIME = time.time()
             logger.info(f"[Bond] yield curve + spreads + history fetched")
             return
+    except asyncio.TimeoutError:
+        logger.warning("[Bond] bond_china_yield timeout after 30s")
     except Exception as e:
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
@@ -166,7 +171,8 @@ def _get_bond_cache() -> dict:
     if stale and _REFRESH_SEM.acquire(blocking=False):
         def bg():
             try:
-                _fetch_bond_data()
+                # Run async function in new event loop for thread
+                asyncio.run(_fetch_bond_data_async())
             finally:
                 _REFRESH_SEM.release()
         t = threading.Thread(target=bg, daemon=True, name="bond-refresh")
@@ -246,16 +252,22 @@ async def _get_bond_history_df():
     if cached is not None:
         return cached
     async with _HISTORY_LOCK:
-        # 获取锁后进行双重检查 (Double-check)
         cached = _cache.get(_HISTORY_CACHE_KEY)
         if cached is not None:
             return cached
         import akshare as ak, warnings
         warnings.filterwarnings("ignore")
         logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
-        df = await asyncio.to_thread(ak.bond_china_yield)
-        _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
-        return df
+        try:
+            df = await asyncio.wait_for(
+                asyncio.to_thread(ak.bond_china_yield),
+                timeout=30.0
+            )
+            _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
+            return df
+        except asyncio.TimeoutError:
+            logger.warning("[Bond] _get_bond_history_df timeout after 30s")
+            return None
 
 
 @router.get("/bond/history")

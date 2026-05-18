@@ -8,12 +8,17 @@ trading.py — Phase 2: 持仓批次追踪与 FIFO 平仓引擎
 """
 import sqlite3
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional, NamedTuple
 from app.utils.safe_math import safe_divide, safe_percent, safe_round, precise_pnl
 from app.services.audit_chain import log_buy, log_sell
 
 logger = logging.getLogger(__name__)
+
+# ── 异步执行器（用于包装阻塞 SQLite 操作）──────────────────────────────
+_trading_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="trading_")
 
 # ── 持仓批次（Lot）数据结构 ──────────────────────────────────────────────
 class LotRecord(NamedTuple):
@@ -578,3 +583,48 @@ def get_position_summary(
         return [dict(zip(cols, r)) for r in rows]
     finally:
         conn.close()
+
+
+# ── 异步包装函数（用于 FastAPI 路由）──────────────────────────────────
+async def async_execute_sell(
+    portfolio_id: int,
+    symbol: str,
+    shares: int,
+    sell_price: float,
+    order_id: Optional[str] = None,
+    conn: Optional[sqlite3.Connection] = None,
+) -> SellResult:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _trading_executor,
+        lambda: execute_sell(portfolio_id, symbol, shares, sell_price, order_id, conn),
+    )
+
+
+async def async_execute_buy(
+    portfolio_id: int,
+    symbol: str,
+    shares: int,
+    buy_price: float,
+    buy_date: Optional[str] = None,
+    order_id: Optional[str] = None,
+) -> LotRecord:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _trading_executor,
+        lambda: execute_buy(portfolio_id, symbol, shares, buy_price, buy_date, order_id),
+    )
+
+
+async def async_get_open_lots(
+    portfolio_id: int,
+    symbol: Optional[str] = None,
+    include_children: bool = False,
+    limit: int = 0,
+    offset: int = 0,
+) -> list[LotRecord]:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _trading_executor,
+        lambda: get_open_lots(portfolio_id, symbol, include_children, limit, offset),
+    )

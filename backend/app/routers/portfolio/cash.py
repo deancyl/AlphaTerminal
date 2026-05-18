@@ -15,6 +15,7 @@ Extracted from portfolio.py for better code organization.
 import asyncio
 import sqlite3
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -37,6 +38,9 @@ router = APIRouter(tags=["portfolio"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
+# Shared thread pool for non-blocking SQLite operations
+_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
+
 
 # ══════════════════════════════════════════════════════════════
 #  Phase 1 扩展：资金流水 + 现金余额管理
@@ -55,19 +59,23 @@ async def transfer(body: TransactionIn, _: None = Depends(require_api_key)):
 @router.post("/transfer/direct")
 async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
     """直接划转：原子操作，同时更新两个账户的 cash_balance 并写流水"""
-    async def _inner():
+    def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "划转金额必须为正数")
-        result = _transfer_between_accounts(
+        return _transfer_between_accounts(
             body.from_portfolio_id,
             body.to_portfolio_id,
             body.amount,
             body.note,
         )
-        return success_response(result)
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
-        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        return success_response(result)
     except asyncio.TimeoutError:
         logger.warning("[cash] transfer_direct timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Transfer direct timeout")
@@ -88,7 +96,7 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
 @router.get("/{portfolio_id}/cash")
 async def get_cash(portfolio_id: int):
     """查询账户现金余额"""
-    async def _inner():
+    def _sync_work():
         conn = _get_conn()
         try:
             row = conn.execute(
@@ -99,7 +107,12 @@ async def get_cash(portfolio_id: int):
             conn.close()
         if not row:
             raise HTTPException(404, "账户不存在")
-        return success_response({"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]})
+        return {"portfolio_id": row[0], "name": row[1], "cash_balance": row[2]}
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -111,7 +124,7 @@ async def get_cash(portfolio_id: int):
 @router.post("/{portfolio_id}/cash/deposit")
 async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
     """充值：账户现金增加 + 写 deposit 流水"""
-    async def _inner():
+    def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "充值金额必须为正数")
         with _lock:
@@ -133,9 +146,14 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
                                     body.amount, new_balance, operator=body.operator,
                                     note=body.note or "充值")
                 conn.commit()
-                return success_response({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+                return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
                 conn.close()
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -147,7 +165,7 @@ async def cash_deposit(portfolio_id: int, body: CashOpIn, _: None = Depends(requ
 @router.post("/{portfolio_id}/cash/withdraw")
 async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(require_api_key)):
     """提现：账户现金减少 + 写 withdraw 流水"""
-    async def _inner():
+    def _sync_work():
         if body.amount <= 0:
             raise HTTPException(400, "提现金额必须为正数")
         with _lock:
@@ -172,9 +190,14 @@ async def cash_withdraw(portfolio_id: int, body: CashOpIn, _: None = Depends(req
                                     body.amount, new_balance, operator=body.operator,
                                     note=body.note or "提现")
                 conn.commit()
-                return success_response({"portfolio_id": portfolio_id, "cash_balance": new_balance})
+                return {"portfolio_id": portfolio_id, "cash_balance": new_balance}
             finally:
                 conn.close()
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -191,7 +214,7 @@ async def list_transactions(
     txn_type: Optional[str] = Query(None, description="过滤类型: deposit/withdraw/transfer_in/transfer_out/dividend/fee"),
 ):
     """资金流水记录查询"""
-    async def _inner():
+    def _sync_work():
         conn = _get_conn()
         try:
             sql = "SELECT * FROM transactions WHERE portfolio_id=?"
@@ -206,7 +229,12 @@ async def list_transactions(
                     "counterparty_id", "related_symbol", "note", "created_at", "operator"]
         finally:
             conn.close()
-        return success_response({"transactions": _row2dict(rows, cols), "total": len(rows)})
+        return {"transactions": _row2dict(rows, cols), "total": len(rows)}
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)

@@ -10,6 +10,7 @@ Extracted from portfolio.py for better code organization.
 import asyncio
 import logging
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
@@ -37,6 +38,9 @@ router = APIRouter(tags=["portfolio"])
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
 
+# Shared thread pool for non-blocking SQLite operations
+_portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="portfolio_")
+
 
 # ── Buy (BUY) - Add new lot ────────────────────────────────────────────
 
@@ -46,7 +50,7 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
     买入时新增一个批次（lot）。
     同一标的同一日期可有多批次，但 avg_cost 独立计算。
     """
-    async def _inner():
+    def _sync_work():
         lot = execute_buy(
             portfolio_id=portfolio_id,
             symbol=body.symbol,
@@ -55,17 +59,22 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
             buy_date=body.buy_date,
             order_id=body.order_id,
         )
-        return success_response({
+        return {
             "lot_id": lot.id,
             "symbol": lot.symbol,
             "shares": lot.shares,
             "avg_cost": lot.avg_cost,
             "buy_date": lot.buy_date,
             "status": lot.status,
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
-        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        return success_response(result)
     except asyncio.TimeoutError:
         logger.warning("[lots] buy_lot timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Buy lot timeout")
@@ -93,7 +102,7 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
       2. 每批次平仓时计算 realized_pnl 并累加
       3. 返回平仓明细和总已实现盈亏
     """
-    async def _inner():
+    def _sync_work():
         with get_conn() as conn:
             conn.execute("BEGIN IMMEDIATE TRANSACTION")
             try:
@@ -135,7 +144,7 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                 conn.rollback()
                 raise
 
-        return success_response({
+        return {
             "symbol": body.symbol,
             "shares_sold": body.shares - result.shares_remaining,
             "total_realized_pnl": result.total_realized_pnl,
@@ -151,10 +160,15 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                 }
                 for lc in result.lots_closed
             ],
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(_portfolio_executor, _sync_work)
     
     try:
-        return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        result = await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
+        return success_response(result)
     except asyncio.TimeoutError:
         logger.warning("[lots] sell_lot timeout after %ds", PORTFOLIO_TIMEOUT)
         raise HTTPException(504, "Sell lot timeout")
@@ -184,9 +198,8 @@ async def list_lots(
     返回某账户的未平批次（可按标的过滤）。
     当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的批次。
     """
-    async def _inner():
+    def _sync_work():
         lots = get_open_lots(portfolio_id, symbol, include_children=include_children)
-        # 收集涉及的账户 ID（用于前端标注来源）
         if include_children:
             conn = _get_conn()
             try:
@@ -195,7 +208,7 @@ async def list_lots(
                 conn.close()
         else:
             all_ids = [portfolio_id]
-        return success_response({
+        return {
             "lots": [
                 {
                     "id": l.id,
@@ -213,7 +226,12 @@ async def list_lots(
             "count": len(lots),
             "includes_children": include_children,
             "portfolio_ids": all_ids if include_children else [portfolio_id],
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -240,9 +258,13 @@ async def unrealized_pnl(
     计算浮动盈亏。
     未实现 PnL = Σ(shares × (current_price - avg_cost))
     """
+    def _sync_work():
+        return calc_unrealized_pnl(portfolio_id, symbol, current_price)
+    
     async def _inner():
-        result = calc_unrealized_pnl(portfolio_id, symbol, current_price)
-        return success_response(result)
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -272,12 +294,11 @@ async def check_conservation(portfolio_id: int):
 
     返回各子项明细和对齐结果，用于调试和自动化测试。
     """
-    async def _inner():
+    def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
         conn = _get_conn()
         try:
-            # 主账户自身资产
             parent = conn.execute(
                 "SELECT id, name, cash_balance FROM portfolios WHERE id=?",
                 (portfolio_id,)
@@ -287,19 +308,16 @@ async def check_conservation(portfolio_id: int):
 
             parent_cash = parent[2] or 0.0
 
-            # 直接子账户（不含后代）
             children = conn.execute(
                 "SELECT id, name, cash_balance FROM portfolios WHERE parent_id=?",
                 (portfolio_id,)
             ).fetchall()
 
-            # 获取主账户自身持仓市值（使用 position_summary 聚合表）
             parent_positions = conn.execute(
                 "SELECT portfolio_id, symbol, total_shares as shares, avg_cost, market_value FROM position_summary WHERE portfolio_id=? AND total_shares > 0",
                 (portfolio_id,)
             ).fetchall()
 
-            # 获取主账户所有后代（递归）
             all_desc_ids = _get_all_descendants(conn, portfolio_id)
             if all_desc_ids:
                 placeholders = ','.join(['?' for _ in all_desc_ids])
@@ -310,10 +328,8 @@ async def check_conservation(portfolio_id: int):
             else:
                 child_positions = []
 
-            # 获取子账户现金
             child_cash_total = sum((r[2] or 0.0) for r in children)
 
-            # 获取实时价格
             spot = SpotCache.get_stocks() or []
             price_map = {}
             for s in spot:
@@ -356,7 +372,7 @@ async def check_conservation(portfolio_id: int):
                 logger.warning(f"[Portfolio Conservation] 校验异常 (portfolio_id={portfolio_id}): {e}")
                 conservation_ok = False
 
-            return success_response({
+            return {
                 "parent_id": portfolio_id,
                 "parent_name": parent[1],
                 "parent": {
@@ -378,9 +394,14 @@ async def check_conservation(portfolio_id: int):
                 "grand_total": round(grand_total, 2),
                 "conservation_ok": conservation_ok,
                 "conservation_delta": round(grand_total - parent_total, 4),
-            })
+            }
         finally:
             conn.close()
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -397,12 +418,11 @@ async def get_portfolio_tree(portfolio_id: int):
     
     优化：使用单次递归CTE查询替代N+1递归查询。
     """
-    async def _inner():
+    def _sync_work():
         from app.services.sentiment_engine import SpotCache
 
         conn = _get_conn()
         try:
-            # Step 1: Single recursive CTE to fetch entire tree structure
             tree_rows = conn.execute("""
                 WITH RECURSIVE portfolio_tree AS (
                     SELECT id, name, type, parent_id, cash_balance, status, 0 as depth
@@ -418,9 +438,8 @@ async def get_portfolio_tree(portfolio_id: int):
             """, (portfolio_id,)).fetchall()
             
             if not tree_rows:
-                return success_response({"tree": {}})
+                return {"tree": {}}
             
-            # Step 2: Single query for all positions in the tree
             tree_ids = [r[0] for r in tree_rows]
             placeholders = ','.join(['?' for _ in tree_ids])
             pos_rows = conn.execute(f"""
@@ -429,14 +448,12 @@ async def get_portfolio_tree(portfolio_id: int):
                 WHERE portfolio_id IN ({placeholders})
             """, tuple(tree_ids)).fetchall()
             
-            # Step 3: Build position map (portfolio_id -> [(symbol, shares), ...])
             pos_map = {}
             for pid, sym, shares in pos_rows:
                 if pid not in pos_map:
                     pos_map[pid] = []
                 pos_map[pid].append((sym, shares))
             
-            # Step 4: Get price map from SpotCache (single call)
             spot = SpotCache.get_stocks() or []
             price_map = {}
             for s in spot:
@@ -446,12 +463,10 @@ async def get_portfolio_tree(portfolio_id: int):
                 if len(code) > 2:
                     price_map[code[2:]] = price
             
-            # Step 5: Build node map with calculated position values
             node_map = {}
             for row in tree_rows:
                 pid, name, ptype, parent_id, cash, status, depth = row
                 
-                # Calculate position value for this node
                 pos_value = 0.0
                 for sym, shares in pos_map.get(pid, []):
                     price = price_map.get(sym) or price_map.get(sym[2:] if len(sym) > 2 else sym) or 0.0
@@ -466,10 +481,9 @@ async def get_portfolio_tree(portfolio_id: int):
                     "position_value": round(pos_value, 2),
                     "total_assets": round((cash or 0.0) + pos_value, 2),
                     "children": [],
-                    "_parent_id": parent_id,  # Temporary for linking
+                    "_parent_id": parent_id,
                 }
             
-            # Step 6: Link children to parents (build tree structure)
             root = None
             for row in tree_rows:
                 pid = row[0]
@@ -481,7 +495,6 @@ async def get_portfolio_tree(portfolio_id: int):
                 elif parent_id in node_map:
                     node_map[parent_id]["children"].append(node)
             
-            # Step 7: Clean up temporary field
             def clean_node(node):
                 if "_parent_id" in node:
                     del node["_parent_id"]
@@ -491,9 +504,14 @@ async def get_portfolio_tree(portfolio_id: int):
             if root:
                 clean_node(root)
             
-            return success_response({"tree": root})
+            return {"tree": root}
         finally:
             conn.close()
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -518,7 +536,7 @@ async def list_lots_with_summary(
     Returns lots with pre-calculated unrealized_pnl from position_summary.
     Single endpoint replacing the need for separate /lots and /lots/summary calls.
     """
-    async def _inner():
+    def _sync_work():
         lots = get_open_lots(portfolio_id, symbol, include_children=include_children)
         summary_rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
         summary_map = {s['symbol']: s for s in summary_rows}
@@ -541,7 +559,7 @@ async def list_lots_with_summary(
         total = len(enriched_lots)
         paginated = enriched_lots[offset:offset + limit]
 
-        return success_response({
+        return {
             "lots": paginated,
             "count": len(paginated),
             "total": total,
@@ -551,7 +569,12 @@ async def list_lots_with_summary(
                 "total": total,
                 "has_more": offset + len(paginated) < total
             }
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -578,9 +601,14 @@ async def lots_summary(
     带 symbol → 返回单个标的聚合数据。
     include_children=True 时使用递归 CTE 聚合子树。
     """
-    async def _inner():
+    def _sync_work():
         rows = get_position_summary(portfolio_id, symbol, include_children=include_children)
-        return success_response({"summary": rows, "count": len(rows), "includes_children": include_children})
+        return {"summary": rows, "count": len(rows), "includes_children": include_children}
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -609,9 +637,13 @@ async def refresh_market_value(
     批量刷新持仓聚合表的 market_value 和 unrealized_pnl。
     行情刷新时由调度器调用，也可在 GET /lots/summary 前调用。
     """
+    def _sync_work():
+        return update_market_value(portfolio_id, symbol, current_price)
+    
     async def _inner():
-        result = update_market_value(portfolio_id, symbol, current_price)
-        return success_response(result)
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
@@ -638,7 +670,7 @@ async def lots_echarts_data(
     返回适合 ECharts 饼图 + 列表的持仓聚合数据。
     当 include_children=True 时，使用递归 CTE 聚合所有后代子账户的持仓。
     """
-    async def _inner():
+    def _sync_work():
         rows = get_position_summary(portfolio_id, include_children=include_children)
         total_mv = sum(r.get('market_value', 0) for r in rows)
         chart_data = []
@@ -654,10 +686,15 @@ async def lots_echarts_data(
                 "unrealized_pnl": r.get('unrealized_pnl', 0),
                 "weight_pct": pct,
             })
-        return success_response({
+        return {
             "total_market_value": round(total_mv, 2),
             "positions": chart_data,
-        })
+        }
+    
+    async def _inner():
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(_portfolio_executor, _sync_work)
+        return success_response(data)
     
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)

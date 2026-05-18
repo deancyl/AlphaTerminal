@@ -7,7 +7,7 @@ export const CACHE_TTL = {
 }
 
 export const TIMEOUTS = {
-  API_DEFAULT: 8000,
+  API_DEFAULT: 15000,
   API_QUOTE: 5000,
   API_QUOTE_DETAIL: 10000,
   API_MACRO: 30000,
