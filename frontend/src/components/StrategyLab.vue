@@ -6,6 +6,12 @@
         <span class="px-2 py-0.5 text-xs rounded bg-purple-500/20 text-purple-400 border border-purple-500/30">Beta</span>
       </div>
       <div class="flex items-center gap-2">
+        <button
+          @click="showVisualBuilder = true"
+          class="px-3 py-1.5 text-xs rounded-lg border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition flex items-center gap-1.5"
+        >
+          🎨 可视化构建
+        </button>
         <button @click="saveStrategy" :disabled="!strategyCode" class="px-3 py-1.5 text-xs rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
           💾 保存
         </button>
@@ -230,6 +236,16 @@
         </div>
       </div>
     </div>
+
+    <BottomSheet v-model="showVisualBuilder" title="可视化策略构建器" height="80vh">
+      <div class="p-4">
+        <ConditionBuilder
+          ref="conditionBuilderRef"
+          @code-generated="handleCodeGenerated"
+          @switch-to-code="showVisualBuilder = false"
+        />
+      </div>
+    </BottomSheet>
   </div>
 </template>
 
@@ -240,6 +256,8 @@ import { logger } from '../utils/logger.js'
 import { useToast } from '../composables/useToast.js'
 import { parseAnnotations, validateStrategy } from '../utils/strategyParser.js'
 import { STRATEGY_TEMPLATES, TEMPLATE_CATEGORIES, MARKET_OPTIONS } from '../templates/strategyTemplates.js'
+import BottomSheet from './BottomSheet.vue'
+import ConditionBuilder from './strategy/ConditionBuilder.vue'
 
 const { success: toastSuccess, error: toastError, info: toastInfo } = useToast()
 
@@ -249,6 +267,8 @@ const selectedStrategy = ref(null)
 const strategyCode = ref('')
 const strategyError = ref('')
 const isRunning = ref(false)
+const showVisualBuilder = ref(false)
+const conditionBuilderRef = ref(null)
 
 const strategyName = ref('')
 const strategyDescription = ref('')
@@ -430,6 +450,13 @@ async function runBacktest() {
 watch(strategyCode, () => {
   strategyError.value = ''
 })
+
+function handleCodeGenerated(code) {
+  strategyCode.value = code
+  showVisualBuilder.value = false
+  selectedTemplate.value = null
+  toastSuccess('代码已生成', '可视化策略代码已填充到编辑器')
+}
 
 fetchStrategies()
 </script>

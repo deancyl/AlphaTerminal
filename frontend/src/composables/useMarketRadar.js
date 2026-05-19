@@ -64,6 +64,17 @@ export function useMarketRadar() {
   // Use shallowRef for large datasets to prevent deep reactivity overhead
   const treemapData = shallowRef([])
   const anomalies = shallowRef([])
+  const temperature = ref({
+    score: 50,
+    label: '中性',
+    color: '#fbbf24',
+    limit_up: 0,
+    limit_down: 0,
+    advance: 0,
+    decline: 0,
+    total: 0,
+    timestamp: null
+  })
   const loading = ref(false)
   const error = ref(null)
   const lastUpdate = ref(null)
@@ -141,6 +152,39 @@ export function useMarketRadar() {
   }
   
   /**
+   * Fetch market temperature data
+   * @returns {Promise<void>}
+   */
+  async function fetchTemperature() {
+    try {
+      const response = await apiFetchDeduped(
+        'market_radar:temperature',
+        '/api/v1/market_radar/temperature',
+        { timeoutMs: 10000 }
+      )
+      
+      if (response) {
+        temperature.value = {
+          score: response.score ?? 50,
+          label: response.label || '中性',
+          color: response.color || '#fbbf24',
+          limit_up: response.limit_up ?? 0,
+          limit_down: response.limit_down ?? 0,
+          advance: response.advance ?? 0,
+          decline: response.decline ?? 0,
+          total: response.total ?? 0,
+          timestamp: response.timestamp
+        }
+      }
+      
+      logger.info('[MarketRadar] Temperature loaded:', temperature.value.score)
+    } catch (e) {
+      logger.error('[MarketRadar] Failed to fetch temperature:', e)
+      throw e
+    }
+  }
+  
+  /**
    * Refresh all data
    * @returns {Promise<void>}
    */
@@ -149,7 +193,7 @@ export function useMarketRadar() {
     error.value = null
     
     try {
-      await Promise.all([fetchTreemap(), fetchAnomalies()])
+      await Promise.all([fetchTreemap(), fetchAnomalies(), fetchTemperature()])
     } catch (e) {
       // Error already set in individual fetch methods
       logger.error('[MarketRadar] Refresh failed:', e)
@@ -228,6 +272,7 @@ export function useMarketRadar() {
     // State
     treemapData,
     anomalies,
+    temperature,
     loading,
     error,
     lastUpdate,
@@ -237,6 +282,7 @@ export function useMarketRadar() {
     // Methods
     fetchTreemap,
     fetchAnomalies,
+    fetchTemperature,
     refresh,
     formatTime,
     setRefreshInterval, // P2-8: Set refresh interval

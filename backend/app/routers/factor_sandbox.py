@@ -5,22 +5,24 @@ Provides endpoints for:
 - Listing all factors (attribution + screening)
 - Screening stocks with factor filters
 - Quick backtest preview for screened stocks
+- SSE streaming for real-time screening progress
 """
 
 import asyncio
-import json
 import logging
 import time
 import threading
+import uuid
+import json
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any, Tuple, AsyncGenerator
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
+from sse_starlette.sse import EventSourceResponse
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.attribution import get_factor_registry, FactorCategory
@@ -35,6 +37,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/factor_sandbox", tags=["factor_sandbox"])
 
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="factor_sandbox_")
+
+# Progress tracking for SSE streaming
+_screening_progress: Dict[str, Dict[str, Any]] = {}
+_progress_lock = threading.Lock()
 
 SENSITIVE_PATTERNS = [
     r'/[\w/.-]+\.py',
@@ -373,157 +379,6 @@ async def screen_stocks(req: ScreenRequest):
         return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
 
 
-@router.get("/screen/stream")
-async def screen_stocks_stream(
-    request: Request,
-    factors: str = Query(..., description="JSON string of factor filters"),
-    universe: str = Query("hs300", description="Stock universe"),
-    limit: int = Query(50, ge=1, le=500, description="Max results"),
-):
-    """
-    Screen stocks with SSE progress streaming
-    
-    Yields progress events every 10 stocks screened:
-    - progress: current progress
-    - total: total stocks to screen
-    - current_stock: symbol being screened
-    - passed: whether stock passed filters
-    
-    Final event contains complete results.
-    """
-    try:
-        # Parse factors from JSON string
-        factors_data = json.loads(factors)
-        screening_factors = [
-            ScreeningFactor(id=f["id"], params=f.get("params", {}))
-            for f in factors_data
-        ]
-    except (json.JSONDecodeError, KeyError) as e:
-        return error_response(ErrorCode.VALIDATION_ERROR, f"因子参数格式错误: {str(e)}")
-    
-    # Validate universe
-    try:
-        universe_enum = Universe(universe.lower())
-    except ValueError:
-        return error_response(ErrorCode.VALIDATION_ERROR, f"无效的股票范围: {universe}")
-    
-    async def event_generator() -> AsyncGenerator[str, None]:
-        """Generate SSE events for screening progress"""
-        screener = get_stock_screener()
-        registry = get_factor_registry()
-        
-        try:
-            # Get stocks to screen
-            stocks = await asyncio.get_event_loop().run_in_executor(
-                _executor, screener._get_universe_stocks, universe_enum
-            )
-            
-            if not stocks:
-                yield f"data: {json.dumps({'error': '无法获取股票列表', 'done': True})}\n\n"
-                return
-            
-            total_stocks = len(stocks)
-            max_screen = min(total_stocks, 500 if universe_enum == Universe.ALL else 2000)
-            stocks_to_screen = stocks[:max_screen]
-            
-            results = []
-            progress_interval = 10  # Send progress every 10 stocks
-            
-            for i, stock in enumerate(stocks_to_screen):
-                # Check if client disconnected
-                if await request.is_disconnected():
-                    logger.info(f"[FactorSandbox] Client disconnected at {i}/{max_screen}")
-                    break
-                
-                symbol = stock.get("symbol", "")
-                name = stock.get("name", "")
-                
-                if not symbol:
-                    continue
-                
-                try:
-                    # Screen single stock
-                    factor_values = {}
-                    total_score = 0.0
-                    passed_all = True
-                    
-                    for factor in screening_factors:
-                        factor_def = registry.get_factor(factor.id)
-                        if not factor_def:
-                            continue
-                        
-                        value = await asyncio.get_event_loop().run_in_executor(
-                            _executor,
-                            screener._calculate_factor_value,
-                            symbol, factor.id, factor.params
-                        )
-                        
-                        if value is not None:
-                            factor_values[factor.id] = value
-                            if factor_def.higher_is_better:
-                                total_score += min(value, 1.0)
-                            else:
-                                total_score += min(1.0 - value, 1.0)
-                        else:
-                            passed_all = False
-                    
-                    passed = passed_all and bool(factor_values)
-                    
-                    if passed:
-                        results.append({
-                            "symbol": symbol,
-                            "name": name,
-                            "score": round(total_score / len(screening_factors), 4) if screening_factors else 0,
-                            "factor_values": factor_values,
-                        })
-                    
-                    # Yield progress event every N stocks
-                    if (i + 1) % progress_interval == 0 or i == max_screen - 1:
-                        progress_data = json.dumps({
-                            'progress': i + 1,
-                            'total': max_screen,
-                            'current_stock': symbol,
-                            'passed': passed,
-                            'found': len(results),
-                        })
-                        yield f"data: {progress_data}\n\n"
-                
-                except Exception as e:
-                    logger.debug(f"[FactorSandbox] Error screening {symbol}: {e}")
-                    continue
-            
-            # Sort and limit results
-            results.sort(key=lambda x: x["score"], reverse=True)
-            results = results[:limit]
-            
-            # Send final results
-            final_data = json.dumps({
-                'done': True,
-                'results': results,
-                'total': len(results),
-                'screened': max_screen,
-                'universe': universe,
-            })
-            yield f"data: {final_data}\n\n"
-            
-        except Exception as e:
-            logger.error(f"[FactorSandbox] Stream error: {e}", exc_info=True)
-            error_type = type(e).__name__
-            user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
-            error_data = json.dumps({'error': user_msg, 'done': True})
-            yield f"data: {error_data}\n\n"
-    
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",  # Disable nginx buffering
-        }
-    )
-
-
 @router.post("/backtest_preview")
 async def backtest_preview(req: BacktestPreviewRequest):
     """
@@ -632,3 +487,224 @@ async def clear_cache():
     """Clear factor cache"""
     _factor_cache.clear()
     return success_response({"message": "Cache cleared"})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SSE Streaming Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ScreenStreamRequest(BaseModel):
+    """Request model for streaming stock screening"""
+    factors: List[FactorParam] = Field(..., min_length=1, max_length=20)
+    universe: str = Field(default="hs300")
+    limit: int = Field(default=50, ge=1, le=500)
+    
+    @field_validator('universe')
+    @classmethod
+    def validate_universe(cls, v: str) -> str:
+        valid = ['all', 'hs300', 'zz500', 'cyb50']
+        if v.lower() not in valid:
+            raise ValueError(f'universe must be one of: {valid}')
+        return v.lower()
+
+
+def _update_progress(task_id: str, **kwargs):
+    with _progress_lock:
+        if task_id not in _screening_progress:
+            _screening_progress[task_id] = {
+                "status": "pending",
+                "screened_stocks": 0,
+                "total_stocks": 0,
+                "matches": [],
+                "error": None,
+            }
+        _screening_progress[task_id].update(kwargs)
+
+
+def _get_progress(task_id: str) -> Optional[Dict[str, Any]]:
+    with _progress_lock:
+        return _screening_progress.get(task_id)
+
+
+def _clear_progress(task_id: str):
+    with _progress_lock:
+        _screening_progress.pop(task_id, None)
+
+
+@router.post("/screen/stream/start")
+async def start_streaming_screen(req: ScreenStreamRequest):
+    """
+    Start a streaming screening task and return task_id for SSE connection.
+    
+    Use GET /screen/{task_id}/stream to receive progress updates.
+    """
+    task_id = str(uuid.uuid4())
+    
+    _update_progress(
+        task_id,
+        status="pending",
+        screened_stocks=0,
+        total_stocks=0,
+        matches=[],
+        error=None,
+    )
+    
+    asyncio.create_task(_run_screening_task(
+        task_id=task_id,
+        factors=req.factors,
+        universe=req.universe,
+        limit=req.limit,
+    ))
+    
+    return success_response({
+        "task_id": task_id,
+        "stream_url": f"/api/v1/factor_sandbox/screen/{task_id}/stream",
+    })
+
+
+async def _run_screening_task(
+    task_id: str,
+    factors: List[FactorParam],
+    universe: str,
+    limit: int,
+):
+    """Background task to run screening with progress updates"""
+    try:
+        screener = get_stock_screener()
+        
+        screening_factors = [
+            ScreeningFactor(id=fp.id, params=fp.params)
+            for fp in factors
+        ]
+        
+        _update_progress(task_id, status="running")
+        
+        result = await screener.screen_stocks_with_progress(
+            factors=screening_factors,
+            universe=Universe(universe),
+            limit=limit,
+            progress_callback=lambda screened, total, matches: _update_progress(
+                task_id,
+                screened_stocks=screened,
+                total_stocks=total,
+                matches=matches[:limit],
+            ),
+        )
+        
+        _update_progress(
+            task_id,
+            status="complete",
+            screened_stocks=result["progress"]["screened_stocks"],
+            total_stocks=result["progress"]["total_stocks"],
+            matches=result["stocks"][:limit],
+        )
+        
+    except asyncio.CancelledError:
+        _update_progress(task_id, status="cancelled", error="Task cancelled")
+    except Exception as e:
+        logger.error(f"[FactorSandbox] Streaming screening error: {e}", exc_info=True)
+        error_type = type(e).__name__
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
+        _update_progress(task_id, status="error", error=user_msg)
+
+
+@router.get("/screen/{task_id}/stream")
+async def stream_screening_progress(task_id: str):
+    """
+    SSE endpoint for real-time screening progress.
+    
+    Yields events with format:
+    - type: "progress" | "complete" | "error"
+    - data: progress info or results
+    """
+    async def event_generator() -> AsyncGenerator[Dict[str, Any], None]:
+        last_screened = 0
+        
+        while True:
+            progress = _get_progress(task_id)
+            
+            if progress is None:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Task not found"}),
+                }
+                break
+            
+            status = progress.get("status")
+            
+            if status == "pending":
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "type": "progress",
+                        "status": "pending",
+                        "screened_stocks": 0,
+                        "total_stocks": 0,
+                        "matches": [],
+                    }),
+                }
+            elif status == "running":
+                current_screened = progress.get("screened_stocks", 0)
+                if current_screened != last_screened:
+                    yield {
+                        "event": "progress",
+                        "data": json.dumps({
+                            "type": "progress",
+                            "status": "running",
+                            "screened_stocks": progress.get("screened_stocks", 0),
+                            "total_stocks": progress.get("total_stocks", 0),
+                            "matches": progress.get("matches", []),
+                        }),
+                    }
+                    last_screened = current_screened
+            elif status == "complete":
+                yield {
+                    "event": "complete",
+                    "data": json.dumps({
+                        "type": "complete",
+                        "status": "complete",
+                        "screened_stocks": progress.get("screened_stocks", 0),
+                        "total_stocks": progress.get("total_stocks", 0),
+                        "matches": progress.get("matches", []),
+                    }),
+                }
+                _clear_progress(task_id)
+                break
+            elif status == "error":
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "type": "error",
+                        "error": progress.get("error", "Unknown error"),
+                    }),
+                }
+                _clear_progress(task_id)
+                break
+            elif status == "cancelled":
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "type": "cancelled",
+                        "error": "Task cancelled",
+                    }),
+                }
+                _clear_progress(task_id)
+                break
+            
+            await asyncio.sleep(0.3)
+    
+    return EventSourceResponse(event_generator())
+
+
+@router.post("/screen/{task_id}/cancel")
+async def cancel_screening_task(task_id: str):
+    """Cancel a running screening task"""
+    progress = _get_progress(task_id)
+    if progress is None:
+        return error_response(ErrorCode.NOT_FOUND, "Task not found")
+    
+    if progress.get("status") in ["complete", "error", "cancelled"]:
+        return error_response(ErrorCode.BAD_REQUEST, "Task already finished")
+    
+    _update_progress(task_id, status="cancelled", error="Cancelled by user")
+    return success_response({"message": "Task cancelled"})

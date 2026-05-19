@@ -589,34 +589,7 @@
 
       <!-- 经济日历 -->
       <div class="px-3 md:px-4 pb-4" aria-live="polite" aria-label="经济日历区域">
-        <div class="bg-terminal-panel rounded-lg border border-theme-secondary p-3 md:p-4">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-bold text-terminal-accent">📅 近期数据发布</h3>
-            <span class="text-[10px] text-terminal-dim/70">{{ calendar.length }}项</span>
-          </div>
-          <div v-if="calendar.length > 0" class="space-y-2">
-            <div v-for="(item, index) in calendar" :key="index" 
-                 class="flex items-center justify-between py-2 px-3 rounded-md hover:bg-terminal-bg/30 transition-colors"
-                 :class="index < calendar.length - 1 ? 'border-b border-theme/10' : ''">
-              <div class="flex items-center gap-3">
-                <span class="text-[10px] px-2 py-0.5 rounded-full font-medium" 
-                      :class="getStatusClass(item.status)">
-                  {{ item.status === 'released' ? '已发布' : '待发布' }}
-                </span>
-                <span class="text-sm text-terminal-primary font-medium">{{ item.name }}</span>
-              </div>
-              <div class="flex items-center gap-3 md:gap-4">
-                <span class="text-[10px] md:text-xs text-terminal-dim">{{ item.date }}</span>
-                <span v-if="item.value !== null" class="text-sm font-mono font-bold" :class="getColorClass(item.value)">
-                  {{ formatNumber(item.value) }}{{ item.unit }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="text-center py-8 text-terminal-dim text-sm">
-            暂无数据发布计划
-          </div>
-        </div>
+        <EconomicCalendar />
       </div>
     </div>
   </div>
@@ -634,6 +607,7 @@ import { useDataCache } from '../composables/useDataCache.js'
 import { getECharts, initChart } from '../utils/lazyEcharts.js'
 import { MacroDashboardResponseSchema } from '../schemas/macro.js'
 import Skeleton from './Skeleton.vue'
+import EconomicCalendar from './macro/EconomicCalendar.vue'
 
 const { handleError, getErrorCategory } = useApiError({ showToast: true })
 const { safeSetOption, validateChartData, showChartEmptyState, showChartErrorState } = useEChartsErrorBoundary()

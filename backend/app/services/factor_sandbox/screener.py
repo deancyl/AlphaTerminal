@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Callable
 
 import numpy as np
 import pandas as pd
@@ -241,6 +241,121 @@ class StockScreener:
             }
         
         return await loop.run_in_executor(_executor, _sync_screen)
+    
+    async def screen_stocks_with_progress(
+        self,
+        factors: List[ScreeningFactor],
+        universe: Universe,
+        limit: int = 50,
+        progress_callback: Optional[Callable[[int, int, List[Dict]], None]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Screen stocks with real-time progress updates.
+        
+        Args:
+            factors: List of factor filters to apply
+            universe: Stock universe to screen
+            limit: Maximum number of results to return
+            progress_callback: Called with (screened_count, total_count, matches_so_far)
+        
+        Returns:
+            Dict with stocks, total, and progress info
+        """
+        loop = asyncio.get_event_loop()
+        
+        def _sync_screen_with_progress():
+            start_time = time.time()
+            
+            stocks = self._get_universe_stocks(universe)
+            if not stocks:
+                return {
+                    "stocks": [],
+                    "total": 0,
+                    "error": "Failed to get universe stocks",
+                    "progress": {"total_stocks": 0, "screened_stocks": 0}
+                }
+            
+            total_stocks = len(stocks)
+            max_screen = min(total_stocks, 500 if universe == Universe.ALL else 2000)
+            stocks_to_screen = stocks[:max_screen]
+            
+            results = []
+            registry = get_factor_registry()
+            
+            progress_interval = max(10, min(50, len(stocks_to_screen) // 20))
+            
+            for idx, stock in enumerate(stocks_to_screen):
+                try:
+                    symbol = stock.get("symbol", "")
+                    name = stock.get("name", "")
+                    
+                    if not symbol:
+                        continue
+                    
+                    factor_values = {}
+                    total_score = 0.0
+                    passed_all = True
+                    
+                    for factor in factors:
+                        factor_def = registry.get_factor(factor.id)
+                        if not factor_def:
+                            continue
+                        
+                        value = self._calculate_factor_value(
+                            symbol, factor.id, factor.params
+                        )
+                        
+                        if value is not None:
+                            factor_values[factor.id] = value
+                            
+                            if factor_def.higher_is_better:
+                                total_score += min(value, 1.0)
+                            else:
+                                total_score += min(1.0 - value, 1.0)
+                        else:
+                            passed_all = False
+                    
+                    if passed_all and factor_values:
+                        results.append({
+                            "symbol": symbol,
+                            "name": name,
+                            "score": total_score / len(factors) if factors else 0,
+                            "factor_values": factor_values,
+                        })
+                        
+                except Exception as e:
+                    logger.debug(f"[Screener] Error screening {stock.get('symbol')}: {e}")
+                    continue
+                
+                if progress_callback and (idx + 1) % progress_interval == 0:
+                    sorted_results = sorted(results, key=lambda x: x["score"], reverse=True)
+                    progress_callback(idx + 1, max_screen, sorted_results[:limit])
+            
+            results.sort(key=lambda x: x["score"], reverse=True)
+            results = results[:limit]
+            
+            elapsed = time.time() - start_time
+            logger.info(f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches")
+            
+            return {
+                "stocks": [
+                    {
+                        "symbol": r["symbol"],
+                        "name": r["name"],
+                        "score": round(r["score"], 4),
+                        "factor_values": r["factor_values"],
+                    }
+                    for r in results
+                ],
+                "total": len(results),
+                "progress": {
+                    "total_stocks": total_stocks,
+                    "screened_stocks": len(stocks_to_screen),
+                    "universe": universe.value,
+                },
+            }
+        
+        return await loop.run_in_executor(_executor, _sync_screen_with_progress)
     
     def _get_universe_stocks(self, universe: Universe) -> List[Dict]:
         cache_key = f"universe:{universe.value}"

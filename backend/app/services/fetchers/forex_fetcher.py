@@ -311,15 +311,21 @@ class ForexFetcher(BaseMarketFetcher):
         return names.get(symbol, symbol)
     
     def _get_minimal_static_fallback(self) -> List[Dict[str, Any]]:
-        """最小静态回退数据（仅6个主要货币对）"""
+        """最小静态回退数据（10个货币对：6个CNY + 4个USD-based用于三角套利）"""
         ts = int(datetime.now().timestamp())
         return [
+            # CNY-based pairs (6个)
             {"symbol": "USDCNY", "name": "美元/人民币", "latest": 7.25, "bid": 7.248, "ask": 7.252, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.25, "high": 7.25, "low": 7.25, "prev_close": 7.25, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "EURCNY", "name": "欧元/人民币", "latest": 7.89, "bid": 7.888, "ask": 7.892, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 7.89, "high": 7.89, "low": 7.89, "prev_close": 7.89, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "GBPCNY", "name": "英镑/人民币", "latest": 9.12, "bid": 9.118, "ask": 9.122, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 9.12, "high": 9.12, "low": 9.12, "prev_close": 9.12, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "JPYCNY", "name": "日元/人民币", "latest": 0.0486, "bid": 0.0485, "ask": 0.0487, "spread": 0.0002, "change": 0.0, "change_pct": 0.0, "open": 0.0486, "high": 0.0486, "low": 0.0486, "prev_close": 0.0486, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "HKDCNY", "name": "港币/人民币", "latest": 0.929, "bid": 0.928, "ask": 0.930, "spread": 0.002, "change": 0.0, "change_pct": 0.0, "open": 0.929, "high": 0.929, "low": 0.929, "prev_close": 0.929, "source": "static", "is_demo": True, "timestamp": ts},
             {"symbol": "AUDCNY", "name": "澳元/人民币", "latest": 4.72, "bid": 4.718, "ask": 4.722, "spread": 0.004, "change": 0.0, "change_pct": 0.0, "open": 4.72, "high": 4.72, "low": 4.72, "prev_close": 4.72, "source": "static", "is_demo": True, "timestamp": ts},
+            # USD-based pairs for triangular arbitrage (4个)
+            {"symbol": "EURUSD", "name": "欧元/美元", "latest": 1.0876, "bid": 1.0874, "ask": 1.0878, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 1.0876, "high": 1.0876, "low": 1.0876, "prev_close": 1.0876, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "GBPUSD", "name": "英镑/美元", "latest": 1.2572, "bid": 1.2570, "ask": 1.2574, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 1.2572, "high": 1.2572, "low": 1.2572, "prev_close": 1.2572, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "USDJPY", "name": "美元/日元", "latest": 149.25, "bid": 149.23, "ask": 149.27, "spread": 0.04, "change": 0.0, "change_pct": 0.0, "open": 149.25, "high": 149.25, "low": 149.25, "prev_close": 149.25, "source": "static", "is_demo": True, "timestamp": ts},
+            {"symbol": "AUDUSD", "name": "澳元/美元", "latest": 0.6510, "bid": 0.6508, "ask": 0.6512, "spread": 0.0004, "change": 0.0, "change_pct": 0.0, "open": 0.6510, "high": 0.6510, "low": 0.6510, "prev_close": 0.6510, "source": "static", "is_demo": True, "timestamp": ts},
         ]
     
 

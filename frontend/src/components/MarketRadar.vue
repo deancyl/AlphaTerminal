@@ -82,6 +82,9 @@
       </div>
       
       <div class="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-1">
+        <!-- Temperature Gauge -->
+        <TemperatureGauge :temperature="temperature" />
+        
         <div v-if="anomalies.length === 0 && !loading" class="text-center text-secondary text-sm py-8">
           暂无异常数据
         </div>
@@ -97,6 +100,9 @@
     
     <!-- Mobile: Stacked layout -->
     <div v-else class="flex-1 flex flex-col gap-3 min-h-0 overflow-hidden">
+      <!-- Mobile: Temperature Gauge (compact) -->
+      <TemperatureGauge :temperature="temperature" />
+      
       <!-- Mobile: Treemap (P1-6: Increased height from 250px to 350px) -->
       <div class="bg-surface rounded-lg overflow-hidden border border-border-base" style="min-height: 350px; max-height: 45%;">
         <!-- Skeleton loading -->
@@ -219,6 +225,7 @@ import { useMarketRadar, REFRESH_INTERVAL_OPTIONS } from '@/composables/useMarke
 import { getDynamicThemeColors, getDynamicMarketColors } from '@/utils/echartsTheme.js'
 import { onThemeChange } from '@/composables/useTheme.js'
 import AnomalyCard from './market/AnomalyCard.vue'
+import TemperatureGauge from './market/TemperatureGauge.vue'
 import Skeleton from './Skeleton.vue'
 
 // Mobile detection
@@ -237,6 +244,7 @@ const { initChart, setOption, dispose, isReady } = useECharts(treemapContainer, 
 const {
   treemapData,
   anomalies,
+  temperature,
   loading,
   error,
   lastUpdate,

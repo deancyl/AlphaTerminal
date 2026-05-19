@@ -161,7 +161,8 @@ class TestAuditLogs:
         assert "logs" in data
         assert "total" in data
         assert "limit" in data
-        assert "offset" in data
+        # Keyset pagination uses next_after_timestamp/next_after_id instead of offset
+        assert "has_more" in data
 
     def test_logs_with_limit(self, temp_audit_db):
         """测试带 limit 参数"""
@@ -170,12 +171,13 @@ class TestAuditLogs:
         data = response.json()
         assert data["limit"] == 10
 
-    def test_logs_with_offset(self, temp_audit_db):
-        """测试带 offset 参数"""
-        response = temp_audit_db['client'].get("/api/v1/audit/logs?offset=5")
+    def test_logs_with_cursor(self, temp_audit_db):
+        """测试带 cursor 参数 (keyset pagination)"""
+        response = temp_audit_db['client'].get("/api/v1/audit/logs?after_timestamp=2024-01-01T00:00:00")
         assert response.status_code == 200
         data = response.json()
-        assert data["offset"] == 5
+        assert "next_after_timestamp" in data
+        assert "next_after_id" in data
 
     def test_logs_with_agent_id_filter(self, temp_audit_db):
         """测试按 agent_id 过滤"""
@@ -193,12 +195,14 @@ class TestAuditLogs:
         assert "logs" in data
 
     def test_logs_pagination(self, temp_audit_db):
-        """测试分页功能"""
-        response = temp_audit_db['client'].get("/api/v1/audit/logs?limit=20&offset=0")
+        """测试分页功能 (keyset pagination)"""
+        response = temp_audit_db['client'].get("/api/v1/audit/logs?limit=20")
         assert response.status_code == 200
         data = response.json()
         assert data["limit"] == 20
-        assert data["offset"] == 0
+        assert "has_more" in data
+        assert "next_after_timestamp" in data
+        assert "next_after_id" in data
 
 
 class TestAuditHealth:
@@ -277,10 +281,13 @@ class TestAuditValidation:
         response = temp_audit_db['client'].get("/api/v1/audit/logs?limit=1001")
         assert response.status_code == 422
 
-    def test_logs_offset_negative(self, temp_audit_db):
-        """测试 offset 为负数 (ge=0)"""
-        response = temp_audit_db['client'].get("/api/v1/audit/logs?offset=-1")
-        assert response.status_code == 422
+    def test_logs_after_timestamp_invalid(self, temp_audit_db):
+        """测试 after_timestamp 格式无效 - 应返回空结果而非错误"""
+        response = temp_audit_db['client'].get("/api/v1/audit/logs?after_timestamp=invalid")
+        # API gracefully handles invalid timestamp by returning empty results
+        assert response.status_code == 200
+        data = response.json()
+        assert "logs" in data
 
     def test_logs_limit_boundary_min(self, temp_audit_db):
         """测试 limit 边界值 (最小值)"""

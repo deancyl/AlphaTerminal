@@ -1,0 +1,313 @@
+"""
+Black-Scholes-Merton Options Pricing Engine
+
+Uses py_vollib for vectorized Greeks calculation.
+Default parameters calibrated for Chinese A-share market.
+"""
+import logging
+import math
+from dataclasses import dataclass
+from datetime import datetime, date
+from typing import Optional, Dict, Any, List, Tuple
+
+import numpy as np
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class GreeksResult:
+    """Container for all Greeks values"""
+    delta: float
+    gamma: float
+    theta: float
+    vega: float
+    rho: float
+    iv: Optional[float] = None
+
+
+class OptionsPricingEngine:
+    """
+    Black-Scholes-Merton pricing engine using py_vollib.
+    
+    Default parameters:
+        - Risk-free rate: 2.5% (China 10Y treasury)
+        - Dividend yield: 2.0% (HS300 average dividend)
+    """
+    
+    def __init__(
+        self,
+        risk_free_rate: float = 0.025,
+        dividend_yield: float = 0.02,
+    ):
+        self.r = risk_free_rate
+        self.q = dividend_yield
+        self._vol_lib = None
+        self._vol_lib_vec = None
+    
+    @property
+    def vol_lib(self):
+        """Lazy load vollib (py_vollib is deprecated)"""
+        if self._vol_lib is None:
+            try:
+                from vollib.black_scholes_merton import black_scholes_merton
+                from vollib.black_scholes_merton.implied_volatility import implied_volatility
+                from vollib.black_scholes_merton.greeks.analytical import (
+                    delta as calc_delta,
+                    gamma as calc_gamma,
+                    vega as calc_vega,
+                    theta as calc_theta,
+                    rho as calc_rho,
+                )
+                self._vol_lib = {
+                    'bsm': black_scholes_merton,
+                    'iv': implied_volatility,
+                    'delta': calc_delta,
+                    'gamma': calc_gamma,
+                    'vega': calc_vega,
+                    'theta': calc_theta,
+                    'rho': calc_rho,
+                }
+            except ImportError as e:
+                logger.error(f"[Pricing] vollib not installed: {e}")
+                raise ImportError("vollib required. Install: pip install py_vollib")
+        return self._vol_lib
+    
+    @property
+    def vol_lib_vec(self):
+        """Lazy load py_vollib_vectorized"""
+        if self._vol_lib_vec is None:
+            try:
+                import py_vollib_vectorized
+                self._vol_lib_vec = py_vollib_vectorized
+            except ImportError:
+                logger.warning("[Pricing] py_vollib_vectorized not available, using scalar mode")
+                self._vol_lib_vec = None
+        return self._vol_lib_vec
+    
+    def calculate_time_to_expiry(
+        self,
+        expiry_date: date,
+        current_date: Optional[date] = None,
+    ) -> float:
+        """
+        Calculate time to expiry in years.
+        
+        Args:
+            expiry_date: Option expiration date
+            current_date: Current date (defaults to today)
+            
+        Returns:
+            Time to expiry in years (minimum 1/365 to avoid division by zero)
+        """
+        if current_date is None:
+            current_date = date.today()
+        
+        days = (expiry_date - current_date).days
+        days = max(days, 1)
+        return days / 365.0
+    
+    def parse_expiry_from_code(self, code: str) -> Optional[date]:
+        """
+        Parse expiry date from CFFEX contract code.
+        
+        Examples:
+            io2506 -> 2025-06-21 (third Friday of June)
+            mo2509 -> 2025-09-19 (third Friday of September)
+        
+        Args:
+            code: Contract code like "io2506" or "mo2509"
+            
+        Returns:
+            Expiration date (third Friday of the month)
+        """
+        try:
+            if len(code) < 5:
+                return None
+            
+            year_part = code[-4:-2]
+            month_part = code[-2:]
+            
+            year = 2000 + int(year_part)
+            month = int(month_part)
+            
+            first_day = date(year, month, 1)
+            
+            first_friday = 1 + (4 - first_day.weekday()) % 7
+            third_friday = first_friday + 14
+            
+            return date(year, month, third_friday)
+            
+        except (ValueError, IndexError) as e:
+            logger.warning(f"[Pricing] Failed to parse expiry from code: {code} - {e}")
+            return None
+    
+    def calculate_iv(
+        self,
+        price: float,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        is_call: bool = True,
+    ) -> Optional[float]:
+        """
+        Calculate implied volatility using Householder 3rd order method.
+        
+        Args:
+            price: Option market price
+            spot: Underlying spot price
+            strike: Strike price
+            time_to_expiry: Time to expiry in years
+            is_call: True for call, False for put
+            
+        Returns:
+            Implied volatility (annualized), or None if calculation fails
+        """
+        if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
+            return None
+        
+        flag = 'c' if is_call else 'p'
+        
+        try:
+            iv = self.vol_lib['iv'](
+                price, spot, strike, time_to_expiry, self.r, self.q, flag
+            )
+            
+            if not math.isfinite(iv) or iv <= 0:
+                return None
+            return iv
+            
+        except Exception as e:
+            logger.debug(f"[Pricing] IV calculation failed: S={spot}, K={strike}, T={time_to_expiry:.4f}, P={price} - {e}")
+            return None
+    
+    def calculate_greeks(
+        self,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        volatility: float,
+        is_call: bool = True,
+    ) -> Optional[GreeksResult]:
+        """
+        Calculate all Greeks using Black-Scholes-Merton model.
+        
+        Args:
+            spot: Underlying spot price
+            strike: Strike price
+            time_to_expiry: Time to expiry in years
+            volatility: Implied or historical volatility (annualized)
+            is_call: True for call, False for put
+            
+        Returns:
+            GreeksResult with delta, gamma, theta, vega, rho
+        """
+        if spot <= 0 or strike <= 0 or time_to_expiry <= 0 or volatility <= 0:
+            return None
+        
+        flag = 'c' if is_call else 'p'
+        
+        try:
+            delta = self.vol_lib['delta'](
+                flag, spot, strike, time_to_expiry, self.r, volatility, self.q
+            )
+            gamma = self.vol_lib['gamma'](
+                flag, spot, strike, time_to_expiry, self.r, volatility, self.q
+            )
+            theta = self.vol_lib['theta'](
+                flag, spot, strike, time_to_expiry, self.r, volatility, self.q
+            )
+            vega = self.vol_lib['vega'](
+                flag, spot, strike, time_to_expiry, self.r, volatility, self.q
+            )
+            rho = self.vol_lib['rho'](
+                flag, spot, strike, time_to_expiry, self.r, volatility, self.q
+            )
+            
+            if not all(math.isfinite(g) for g in [delta, gamma, theta, vega, rho]):
+                return None
+            
+            return GreeksResult(
+                delta=delta,
+                gamma=gamma,
+                theta=theta,
+                vega=vega,
+                rho=rho,
+                iv=volatility,
+            )
+            
+        except (ValueError, RuntimeError) as e:
+            logger.debug(f"[Pricing] Greeks calculation failed: {e}")
+            return None
+    
+    def price_option_chain(
+        self,
+        options: List[Dict[str, Any]],
+        spot: float,
+        expiry_date: Optional[date] = None,
+        default_volatility: float = 0.20,
+    ) -> List[Dict[str, Any]]:
+        """
+        Calculate Greeks for an entire option chain.
+        
+        Args:
+            options: List of option dicts with keys:
+                - code: Contract code
+                - strike: Strike price
+                - latest: Market price
+                - is_call: True for call, False for put
+            spot: Underlying spot price
+            expiry_date: Expiration date (parsed from code if None)
+            default_volatility: Default IV if calculation fails (20% annual)
+            
+        Returns:
+            List of options with Greeks added
+        """
+        if not options or spot <= 0:
+            return options
+        
+        results = []
+        
+        for opt in options:
+            result = opt.copy()
+            
+            strike = opt.get('strike')
+            price = opt.get('latest')
+            is_call = opt.get('is_call', True)
+            code = opt.get('code', '')
+            
+            if strike is None or strike <= 0:
+                results.append(result)
+                continue
+            
+            if expiry_date is None:
+                expiry_date = self.parse_expiry_from_code(code)
+            
+            if expiry_date is None:
+                expiry_date = date.today()
+            
+            T = self.calculate_time_to_expiry(expiry_date)
+            
+            iv = None
+            if price and price > 0:
+                iv = self.calculate_iv(price, spot, strike, T, is_call)
+            
+            if iv is None:
+                iv = default_volatility
+            
+            greeks = self.calculate_greeks(spot, strike, T, iv, is_call)
+            
+            if greeks:
+                result['delta'] = round(greeks.delta, 4)
+                result['gamma'] = round(greeks.gamma, 4)
+                result['theta'] = round(greeks.theta, 4)
+                result['vega'] = round(greeks.vega, 4)
+                result['rho'] = round(greeks.rho, 4)
+                result['iv'] = round(greeks.iv, 4) if greeks.iv else None
+            
+            results.append(result)
+        
+        return results
+
+
+pricing_engine = OptionsPricingEngine()

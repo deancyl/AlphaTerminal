@@ -65,7 +65,11 @@ export function useECharts(containerRef, options = {}) {
 
     // Dispose existing chart if any
     if (chartInstance.value && !chartInstance.value.isDisposed?.()) {
-      chartInstance.value.dispose()
+      try {
+        chartInstance.value.dispose()
+      } catch (e) {
+        console.warn('[useECharts] Failed to dispose existing chart:', e)
+      }
     }
 
     try {
@@ -86,6 +90,7 @@ export function useECharts(containerRef, options = {}) {
     } catch (e) {
       console.error('[useECharts] Failed to initialize chart:', e)
       isReady.value = false
+      chartInstance.value = null
       return null
     }
   }
@@ -98,28 +103,41 @@ export function useECharts(containerRef, options = {}) {
   function setOption(option, notMerge = false) {
     if (!chartInstance.value || isDisposed.value) {
       console.warn('[useECharts] Cannot setOption: chart is disposed or null')
-      return
+      return false
+    }
+
+    if (chartInstance.value.isDisposed?.()) {
+      console.warn('[useECharts] Cannot setOption: chart is disposed')
+      isDisposed.value = true
+      return false
     }
 
     try {
       chartInstance.value.setOption(option, notMerge)
+      return true
     } catch (e) {
       console.error('[useECharts] setOption failed:', e)
+      return false
     }
   }
 
   /**
    * Resize the chart
+   * @returns {boolean} True if resize succeeded
    */
   function resize() {
-    if (!chartInstance.value || isDisposed.value) return
+    if (!chartInstance.value || isDisposed.value) return false
 
     try {
-      if (!chartInstance.value.isDisposed?.()) {
-        chartInstance.value.resize()
+      if (chartInstance.value.isDisposed?.()) {
+        isDisposed.value = true
+        return false
       }
+      chartInstance.value.resize()
+      return true
     } catch (e) {
-      // Ignore resize errors on disposed charts
+      console.warn('[useECharts] resize failed:', e)
+      return false
     }
   }
 

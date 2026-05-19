@@ -15,7 +15,6 @@ import { ref, computed, shallowRef } from 'vue'
 import { apiFetch, apiFetchDeduped } from '@/utils/api.js'
 import { logger } from '@/utils/logger.js'
 import { TIMEOUTS } from '@/utils/constants.js'
-import { useSSEProgress } from '@/composables/useSSEProgress.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -90,9 +89,6 @@ export function useFactorSandbox() {
   const limit = ref(50)
   
   let screeningAbortController = null
-  
-  // SSE progress tracking
-  const sseProgress = useSSEProgress()
   
   // ── Computed ───────────────────────────────────────────────────────────────
   
@@ -255,9 +251,9 @@ export function useFactorSandbox() {
     screeningProgress.value = null
     
     try {
-      const response = await apiFetch('/api/v1/factor_sandbox/screen', {
+      const startResponse = await apiFetch('/api/v1/factor_sandbox/screen/stream/start', {
         method: 'POST',
-        timeoutMs: 35000,
+        timeoutMs: 10000,
         signal: screeningAbortController.signal,
         body: JSON.stringify({
           factors: selectedFactors.value.map(f => ({
@@ -269,11 +265,63 @@ export function useFactorSandbox() {
         }),
       })
       
-      screenedStocks.value = response?.stocks || []
-      screeningProgress.value = response?.progress || null
+      const taskId = startResponse?.task_id
+      if (!taskId) {
+        throw new Error('Failed to start screening task')
+      }
+      
+      await new Promise((resolve, reject) => {
+        const eventSource = new EventSource(
+          `/api/v1/factor_sandbox/screen/${taskId}/stream`
+        )
+        
+        eventSource.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            
+            if (data.type === 'progress') {
+              screeningProgress.value = {
+                screened_stocks: data.screened_stocks || 0,
+                total_stocks: data.total_stocks || 0,
+                status: data.status,
+              }
+              if (data.matches && data.matches.length > 0) {
+                screenedStocks.value = data.matches
+              }
+            } else if (data.type === 'complete') {
+              screenedStocks.value = data.matches || []
+              screeningProgress.value = {
+                screened_stocks: data.screened_stocks || 0,
+                total_stocks: data.total_stocks || 0,
+                status: 'complete',
+              }
+              eventSource.close()
+              resolve()
+            } else if (data.type === 'error' || data.type === 'cancelled') {
+              error.value = data.error || '筛选失败'
+              eventSource.close()
+              reject(new Error(data.error || '筛选失败'))
+            }
+          } catch (parseError) {
+            logger.error('[useFactorSandbox] Failed to parse SSE event:', parseError)
+          }
+        }
+        
+        eventSource.onerror = (err) => {
+          logger.error('[useFactorSandbox] SSE connection error:', err)
+          eventSource.close()
+          reject(new Error('SSE连接失败'))
+        }
+        
+        screeningAbortController.signal.addEventListener('abort', () => {
+          eventSource.close()
+          reject(new Error('AbortError'))
+        })
+      })
+      
       return screenedStocks.value
     } catch (e) {
-      if (e.name === 'AbortError') {
+      if (e.name === 'AbortError' || e.message === 'AbortError') {
         logger.info('[useFactorSandbox] Screening cancelled')
         return []
       }
@@ -286,58 +334,12 @@ export function useFactorSandbox() {
     }
   }
   
-  async function runScreeningWithProgress() {
-    if (screeningLoading.value || selectedFactors.value.length === 0) return
-    
-    screeningLoading.value = true
-    error.value = null
-    screenedStocks.value = []
-    
-    const factorsJson = JSON.stringify(
-      selectedFactors.value.map(f => ({
-        id: f.id,
-        params: f.params || {},
-      }))
-    )
-    
-    const url = `/api/v1/factor_sandbox/screen/stream?factors=${encodeURIComponent(factorsJson)}&universe=${universe.value}&limit=${limit.value}`
-    
-    sseProgress.startStreaming(url)
-    
-    const checkInterval = setInterval(() => {
-      if (!sseProgress.isStreaming.value) {
-        clearInterval(checkInterval)
-        screeningLoading.value = false
-        
-        if (sseProgress.error.value) {
-          error.value = sseProgress.error.value
-        } else if (sseProgress.results.value.length > 0) {
-          screenedStocks.value = sseProgress.results.value
-          screeningProgress.value = {
-            total_stocks: sseProgress.total.value,
-            screened_stocks: sseProgress.progress.value,
-          }
-        }
-      }
-    }, 100)
-    
-    return new Promise((resolve) => {
-      const resolveInterval = setInterval(() => {
-        if (!sseProgress.isStreaming.value) {
-          clearInterval(resolveInterval)
-          resolve(screenedStocks.value)
-        }
-      }, 100)
-    })
-  }
-  
   function cancelScreening() {
     if (screeningAbortController) {
       screeningAbortController.abort()
       screeningAbortController = null
+      screeningLoading.value = false
     }
-    sseProgress.stopStreaming()
-    screeningLoading.value = false
   }
   
   /**
@@ -428,14 +430,6 @@ export function useFactorSandbox() {
     universe,
     limit,
     
-    // SSE Progress State
-    sseProgress: sseProgress.progress,
-    sseTotal: sseProgress.total,
-    sseCurrentStock: sseProgress.currentStock,
-    ssePassedCount: sseProgress.passedCount,
-    sseIsStreaming: sseProgress.isStreaming,
-    ssePercent: sseProgress.getProgressPercent,
-    
     // Computed
     factorsByCategory,
     isFactorSelected,
@@ -450,7 +444,6 @@ export function useFactorSandbox() {
     reorderFactors,
     updateFactorParams,
     runScreening,
-    runScreeningWithProgress,
     cancelScreening,
     getBacktestPreview,
     clearResults,

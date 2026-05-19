@@ -161,26 +161,24 @@
         
         <div v-else-if="screeningLoading" class="factor-sandbox__loading">
           <div class="factor-sandbox__loading-spinner"></div>
-          <div class="factor-sandbox__progress-container">
+          <span>正在筛选 {{ universe === 'all' ? '全市场' : universe }}...</span>
+          
+          <!-- Progress bar -->
+          <div v-if="screeningProgress && screeningProgress.total_stocks > 0" class="factor-sandbox__progress-bar-container">
             <div class="factor-sandbox__progress-bar">
               <div 
                 class="factor-sandbox__progress-fill" 
-                :style="{ width: `${ssePercent()}%` }"
+                :style="{ width: progressPercent + '%' }"
               ></div>
             </div>
-            <div class="factor-sandbox__progress-text">
-              <span>{{ sseProgress }}/{{ sseTotal }} 股票</span>
-              <span class="factor-sandbox__progress-percent">{{ ssePercent() }}%</span>
-            </div>
-            <div v-if="sseCurrentStock" class="factor-sandbox__progress-detail">
-              当前: {{ sseCurrentStock }}
-              <span v-if="ssePassedCount > 0" class="factor-sandbox__passed-count">
-                (已找到 {{ ssePassedCount }} 只)
-              </span>
-            </div>
+            <span class="factor-sandbox__progress-text">
+              {{ screeningProgress.screened_stocks }} / {{ screeningProgress.total_stocks }}
+              ({{ progressPercent.toFixed(0) }}%)
+            </span>
           </div>
+          
           <button @click="cancelScreening" class="factor-sandbox__cancel-btn" aria-label="取消筛选">
-            取消筛选
+            取消
           </button>
         </div>
         
@@ -284,21 +282,20 @@
         
         <div v-else-if="screeningLoading" class="factor-sandbox__loading">
           <div class="factor-sandbox__loading-spinner"></div>
-          <div class="factor-sandbox__progress-container">
+          <span>正在筛选...</span>
+          
+          <!-- Progress bar for mobile -->
+          <div v-if="screeningProgress && screeningProgress.total_stocks > 0" class="factor-sandbox__progress-bar-container">
             <div class="factor-sandbox__progress-bar">
               <div 
                 class="factor-sandbox__progress-fill" 
-                :style="{ width: `${ssePercent()}%` }"
+                :style="{ width: progressPercent + '%' }"
               ></div>
             </div>
-            <div class="factor-sandbox__progress-text">
-              <span>{{ sseProgress }}/{{ sseTotal }}</span>
-              <span class="factor-sandbox__progress-percent">{{ ssePercent() }}%</span>
-            </div>
+            <span class="factor-sandbox__progress-text">
+              {{ screeningProgress.screened_stocks }} / {{ screeningProgress.total_stocks }}
+            </span>
           </div>
-          <button @click="cancelScreening" class="factor-sandbox__cancel-btn" aria-label="取消筛选">
-            取消
-          </button>
         </div>
         
         <div v-else-if="screenedStocks.length === 0" class="factor-sandbox__empty">
@@ -389,15 +386,9 @@ const {
   toggleFactor,
   reorderFactors,
   updateFactorParams,
-  runScreeningWithProgress,
+  runScreening,
   cancelScreening,
   getBacktestPreview,
-  // SSE Progress
-  sseProgress,
-  sseTotal,
-  sseCurrentStock,
-  ssePassedCount,
-  ssePercent,
 } = useFactorSandbox()
 
 const factorSearch = ref('')
@@ -434,12 +425,17 @@ const filteredCategories = computed(() => {
   })
 })
 
+const progressPercent = computed(() => {
+  if (!screeningProgress.value || screeningProgress.value.total_stocks === 0) return 0
+  return (screeningProgress.value.screened_stocks / screeningProgress.value.total_stocks) * 100
+})
+
 function getFactorsByCategory(categoryId) {
   return factors.value.filter(f => f.category === categoryId)
 }
 
 async function handleScreen() {
-  await runScreeningWithProgress()
+  await runScreening()
 }
 
 function selectStock(stock) {
@@ -819,7 +815,6 @@ watch(selectedStock, (newStock, oldStock) => {
   gap: var(--space-sm);
   color: var(--text-muted);
   font-size: 12px;
-  padding: var(--space-md);
 }
 
 .factor-sandbox__loading-spinner {
@@ -831,17 +826,18 @@ watch(selectedStock, (newStock, oldStock) => {
   animation: spin 0.8s linear infinite;
 }
 
-.factor-sandbox__progress-container {
-  width: 100%;
-  max-width: 280px;
+.factor-sandbox__progress-bar-container {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--space-xs);
+  width: 100%;
+  max-width: 200px;
 }
 
 .factor-sandbox__progress-bar {
   width: 100%;
-  height: 8px;
+  height: 6px;
   background-color: var(--bg-surface-hover);
   border-radius: var(--radius-full);
   overflow: hidden;
@@ -849,49 +845,26 @@ watch(selectedStock, (newStock, oldStock) => {
 
 .factor-sandbox__progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), var(--color-primary-hover));
+  background-color: var(--color-primary);
   border-radius: var(--radius-full);
   transition: width 0.3s ease;
 }
 
 .factor-sandbox__progress-text {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.factor-sandbox__progress-percent {
-  font-weight: 600;
-  color: var(--color-primary);
-}
-
-.factor-sandbox__progress-detail {
   font-size: 10px;
   color: var(--text-muted);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.factor-sandbox__passed-count {
-  color: var(--color-bull);
-  font-weight: 500;
+  font-family: var(--font-mono);
 }
 
 .factor-sandbox__cancel-btn {
-  padding: var(--space-xs) var(--space-md);
-  font-size: 12px;
-  font-weight: 500;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 11px;
   color: var(--color-danger);
   background-color: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: all var(--duration-fast) var(--easing-default);
-  min-height: 36px;
 }
 
 .factor-sandbox__cancel-btn:hover {

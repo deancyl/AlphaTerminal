@@ -214,3 +214,81 @@ async def get_anomaly_by_type(
             status_code=500,
             detail=sanitize_error_message(e)
         )
+
+
+@router.get("/temperature")
+async def get_market_temperature():
+    """
+    Get market temperature score (0-100).
+    
+    Temperature calculation:
+    - Base score: 50 (neutral)
+    - Advance/Decline ratio: ±50 points max
+    - Limit up/down ratio: ±25 points max
+    
+    Formula: score = 50 + (advance - decline) / total * 50 + (limit_up - limit_down) / total * 25
+    
+    Color zones:
+    - 0-20: Blue (冰点) - Extremely cold
+    - 20-40: Cyan (偏冷) - Cold
+    - 40-60: Yellow (中性) - Neutral
+    - 60-80: Orange (偏热) - Warm
+    - 80-100: Red (过热) - Overheated
+    """
+    try:
+        from app.services.sentiment_engine import get_histogram
+        
+        sentiment = get_histogram()
+        
+        advance = sentiment.get('advance', 0)
+        decline = sentiment.get('decline', 0)
+        limit_up = sentiment.get('limit_up', 0)
+        limit_down = sentiment.get('limit_down', 0)
+        total = advance + decline + sentiment.get('unchanged', 0)
+        
+        if total == 0:
+            score = 50  # Default to neutral if no data
+        else:
+            # Calculate temperature score
+            advance_ratio = (advance - decline) / total
+            limit_ratio = (limit_up - limit_down) / total
+            score = 50 + advance_ratio * 50 + limit_ratio * 25
+            # Clamp to 0-100
+            score = max(0, min(100, score))
+        
+        # Determine temperature label
+        if score < 20:
+            label = "冰点"
+            color = "#3b82f6"  # Blue
+        elif score < 40:
+            label = "偏冷"
+            color = "#06b6d4"  # Cyan
+        elif score < 60:
+            label = "中性"
+            color = "#fbbf24"  # Yellow
+        elif score < 80:
+            label = "偏热"
+            color = "#f97316"  # Orange
+        else:
+            label = "过热"
+            color = "#ef4444"  # Red
+        
+        return {
+            "score": round(score, 1),
+            "label": label,
+            "color": color,
+            "limit_up": limit_up,
+            "limit_down": limit_down,
+            "advance": advance,
+            "decline": decline,
+            "total": total,
+            "timestamp": sentiment.get('timestamp', datetime.now().isoformat())
+        }
+        
+    except Exception as e:
+        logger.error(f"[MarketRadar] Failed to get temperature: {e}")
+        # P2-10: Sanitize error message
+        raise HTTPException(
+            status_code=500,
+            detail=sanitize_error_message(e)
+        )

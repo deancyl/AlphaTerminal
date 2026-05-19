@@ -5,8 +5,8 @@
     <div class="shrink-0 border-b border-theme p-3">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
-          <h2 class="text-sm font-bold text-theme-primary">🔄 Walk-Forward 分析</h2>
-          <span class="text-[10px] text-theme-muted">检测策略是否"死记硬背"历史数据</span>
+          <h2 class="text-sm font-bold text-theme-primary">📊 策略稳定性测试</h2>
+          <span class="text-[10px] text-theme-muted">验证策略在不同市场环境下的表现</span>
         </div>
         <div class="flex items-center gap-2">
           <button @click="showHelp = true" 
@@ -53,38 +53,43 @@
         </div>
       </div>
       
-      <!-- ═══════════════ Parameter Section with Hints ═══════════════ -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px]">
-        <div class="flex flex-col">
-          <span class="text-theme-muted mb-1">标的</span>
-          <input v-model="symbol" type="text" 
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary"
-            placeholder="sh600519" />
-          <span class="text-[9px] text-theme-tertiary mt-0.5">股票代码，如茅台</span>
+      <!-- ═══════════════ Advanced Settings (Collapsible) ═══════════════ -->
+      <details class="mb-3">
+        <summary class="cursor-pointer text-[10px] text-theme-accent font-bold px-2 py-1.5 rounded border border-theme hover:bg-theme-hover transition-colors">
+          ⚙️ 高级设置
+        </summary>
+        <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] p-2 rounded border border-theme bg-terminal-bg/50">
+          <div class="flex flex-col">
+            <span class="text-theme-muted mb-1">标的</span>
+            <input v-model="symbol" type="text" 
+              class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary"
+              placeholder="sh600519" />
+            <span class="text-[9px] text-theme-tertiary mt-0.5">股票代码，如茅台</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-theme-muted mb-1">策略</span>
+            <select v-model="strategyType" 
+              class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary">
+              <option value="ma_crossover">双均线</option>
+              <option value="rsi_oversold">RSI超卖</option>
+              <option value="bollinger_bands">布林带</option>
+            </select>
+            <span class="text-[9px] text-theme-tertiary mt-0.5">{{ strategyHint }}</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-theme-muted mb-1 cursor-help" title="训练窗口：用这段时间的历史数据寻找最优参数">训练窗口</span>
+            <input v-model.number="trainWindowDays" type="number" 
+              class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary" />
+            <span class="text-[9px] text-theme-tertiary mt-0.5">用这段时间找最优参数</span>
+          </div>
+          <div class="flex flex-col">
+            <span class="text-theme-muted mb-1 cursor-help" title="测试窗口：用训练后的数据验证参数是否真的有效，模拟'未来'表现">测试窗口</span>
+            <input v-model.number="testWindowDays" type="number" 
+              class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary" />
+            <span class="text-[9px] text-theme-tertiary mt-0.5">验证参数是否真的有效</span>
+          </div>
         </div>
-        <div class="flex flex-col">
-          <span class="text-theme-muted mb-1">策略</span>
-          <select v-model="strategyType" 
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary">
-            <option value="ma_crossover">双均线</option>
-            <option value="rsi_oversold">RSI超卖</option>
-            <option value="bollinger_bands">布林带</option>
-          </select>
-          <span class="text-[9px] text-theme-tertiary mt-0.5">{{ strategyHint }}</span>
-        </div>
-        <div class="flex flex-col">
-          <span class="text-theme-muted mb-1 cursor-help" title="训练窗口：用这段时间的历史数据寻找最优参数">训练窗口</span>
-          <input v-model.number="trainWindowDays" type="number" 
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary" />
-          <span class="text-[9px] text-theme-tertiary mt-0.5">用这段时间找最优参数</span>
-        </div>
-        <div class="flex flex-col">
-          <span class="text-theme-muted mb-1 cursor-help" title="测试窗口：用训练后的数据验证参数是否真的有效，模拟'未来'表现">测试窗口</span>
-          <input v-model.number="testWindowDays" type="number" 
-            class="bg-terminal-bg border border-theme-secondary rounded px-2 py-1 text-theme-primary" />
-          <span class="text-[9px] text-theme-tertiary mt-0.5">验证参数是否真的有效</span>
-        </div>
-      </div>
+      </details>
       
       <!-- ═══════════════ Smart Params Reasoning ═══════════════ -->
       <div v-if="smartParamsReasoning" class="mt-2 px-3 py-2 rounded-sm bg-[var(--color-info-bg)]/20 border border-[var(--color-info-border)] text-[10px]">
@@ -94,11 +99,11 @@
       
       <!-- ═══════════════ Info Box ═══════════════ -->
       <div class="mt-3 px-3 py-2 rounded-sm bg-[var(--color-info-bg)] border border-[var(--color-info-border)] text-[10px] leading-snug">
-        <span class="text-[var(--color-info-light)] font-medium">💡 Walk-Forward 原理：</span>
+        <span class="text-[var(--color-info-light)] font-medium">💡 稳定性测试原理：</span>
         <span class="text-[var(--color-info-light)]/70">用过去数据训练策略 → </span>
         <span class="text-[var(--color-info-light)]/70">"穿越"到未来验证 → </span>
         <span class="text-[var(--color-info-light)]/70">如果训练好但测试差 = </span>
-        <span class="text-[var(--color-danger)]">"死记硬背"（过拟合）</span>
+        <span class="text-[var(--color-danger)]">策略不稳定（过拟合）</span>
       </div>
       
       <div class="flex items-center justify-between mt-3">
@@ -126,7 +131,7 @@
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
       <div class="relative bg-terminal-panel border border-theme rounded-lg p-4 max-w-md mx-4 shadow-xl">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-bold text-theme-primary">🔄 Walk-Forward 分析说明</h3>
+          <h3 class="text-sm font-bold text-theme-primary">📊 策略稳定性测试说明</h3>
           <button @click="showHelp = false" class="text-theme-muted hover:text-theme-primary text-lg">×</button>
         </div>
         <div class="text-[11px] text-theme-secondary space-y-2 leading-relaxed">
@@ -170,6 +175,86 @@
     
     <div v-if="result" class="flex-1 overflow-y-auto p-3">
       
+      <!-- ═══════════════ Prominent Metrics Cards ═══════════════ -->
+      <div class="mb-4 grid grid-cols-2 gap-3">
+        <!-- Sharpe Ratio Card -->
+        <div class="p-4 rounded border border-theme bg-terminal-bg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] text-theme-muted">样本外夏普比率</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded" 
+              :class="result.avg_test_sharpe >= 2 ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 
+                       result.avg_test_sharpe >= 1 ? 'bg-[var(--color-info-bg)] text-[var(--color-info)]' : 
+                       'bg-[var(--color-warning-bg)] text-[var(--color-warning)]'">
+              {{ result.avg_test_sharpe >= 2 ? '优秀' : result.avg_test_sharpe >= 1 ? '良好' : '一般' }}
+            </span>
+          </div>
+          <div class="text-2xl font-mono font-bold"
+            :class="result.avg_test_sharpe >= 1 ? 'text-bullish' : 'text-theme-muted'">
+            {{ result.avg_test_sharpe.toFixed(2) }}
+          </div>
+          <div class="text-[9px] text-theme-tertiary mt-1">风险调整后收益指标</div>
+        </div>
+        
+        <!-- Max Drawdown Card -->
+        <div class="p-4 rounded border border-theme bg-terminal-bg">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-[10px] text-theme-muted">最大回撤</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded"
+              :class="result.max_drawdown_pct <= 10 ? 'bg-[var(--color-success-bg)] text-[var(--color-success)]' : 
+                       result.max_drawdown_pct <= 20 ? 'bg-[var(--color-warning-bg)] text-[var(--color-warning)]' : 
+                       'bg-[var(--color-danger-bg)] text-[var(--color-danger)]'">
+              {{ result.max_drawdown_pct <= 10 ? '低风险' : result.max_drawdown_pct <= 20 ? '中等' : '高风险' }}
+            </span>
+          </div>
+          <div class="text-2xl font-mono font-bold text-bearish">
+            -{{ (result.max_drawdown_pct || 0).toFixed(2) }}%
+          </div>
+          <div class="text-[9px] text-theme-tertiary mt-1">历史最大亏损幅度</div>
+        </div>
+      </div>
+      
+      <!-- ═══════════════ Timeline Visualization ═══════════════ -->
+      <div class="mb-4 p-3 rounded border border-theme bg-terminal-bg">
+        <div class="text-[11px] font-bold text-theme-primary mb-3">📈 训练/测试时间线</div>
+        <div class="relative h-8 bg-theme-tertiary/20 rounded overflow-hidden">
+          <!-- Timeline bar -->
+          <div class="absolute inset-y-0 left-0 flex">
+            <div v-for="(w, idx) in result.windows" :key="idx"
+              class="h-full flex"
+              :style="{ width: `${100 / result.windows.length}%` }">
+              <!-- Train segment (blue) -->
+              <div class="h-full bg-[var(--color-info)]/40 border-r border-[var(--color-info)]/20"
+                :style="{ width: `${(trainWindowDays / (trainWindowDays + testWindowDays)) * 100}%` }"
+                :title="`训练期: ${w.train_start} ~ ${w.train_end}`"></div>
+              <!-- Test segment (green) -->
+              <div class="h-full bg-[var(--color-success)]/40 border-r border-[var(--color-success)]/20"
+                :style="{ width: `${(testWindowDays / (trainWindowDays + testWindowDays)) * 100}%` }"
+                :title="`测试期: ${w.test_start} ~ ${w.test_end}`"></div>
+            </div>
+          </div>
+          <!-- Window markers -->
+          <div class="absolute inset-y-0 left-0 flex items-center">
+            <div v-for="(w, idx) in result.windows" :key="idx"
+              class="h-full flex items-center justify-center text-[8px] font-mono"
+              :style="{ width: `${100 / result.windows.length}%` }">
+              {{ idx + 1 }}
+            </div>
+          </div>
+        </div>
+        <!-- Legend -->
+        <div class="flex items-center gap-4 mt-2 text-[9px] text-theme-muted">
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 rounded bg-[var(--color-info)]/40"></div>
+            <span>训练期 ({{ trainWindowDays }}天)</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <div class="w-3 h-3 rounded bg-[var(--color-success)]/40"></div>
+            <span>测试期 ({{ testWindowDays }}天)</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- ═══════════════ Core Metrics ═══════════════ -->
       <div class="mb-4 p-3 rounded border border-theme bg-terminal-bg">
         <div class="text-[11px] font-bold text-theme-primary mb-2">📊 核心指标</div>
         <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -301,15 +386,15 @@
     
     <!-- ═══════════════ Improved Empty State ═══════════════ -->
     <div v-else-if="!running" class="flex-1 flex flex-col items-center justify-center text-theme-muted text-[11px] gap-2 p-4">
-      <span class="text-3xl">🔄</span>
-      <span class="text-theme-primary font-medium">Walk-Forward 分析</span>
+      <span class="text-3xl">📊</span>
+      <span class="text-theme-primary font-medium">策略稳定性测试</span>
       <span>选择预设或配置参数，点击开始分析</span>
-      <span class="text-[10px] text-theme-tertiary text-center max-w-xs">💡 这个工具帮你检测策略是否真的有效，而不是"看起来有效"</span>
+      <span class="text-[10px] text-theme-tertiary text-center max-w-xs">💡 这个工具帮你验证策略是否真的有效，而不是"看起来有效"</span>
     </div>
     
     <div v-if="running" class="absolute inset-0 z-10 flex flex-col items-center justify-center"
       style="background: rgba(15,23,42,0.85); backdrop-filter: blur(2px);">
-      <div class="text-[var(--color-info)] text-xs font-mono">⏳ Walk-Forward 分析中...</div>
+      <div class="text-[var(--color-info)] text-xs font-mono">⏳ 策略稳定性测试中...</div>
       <div class="text-[10px] text-theme-muted mt-2">正在优化参数并测试样本外表现</div>
     </div>
     

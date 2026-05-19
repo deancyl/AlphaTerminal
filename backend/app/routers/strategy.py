@@ -85,6 +85,74 @@ class CodeValidateResponse(BaseModel):
     security_score: int = 100
 
 
+class StrategyASTCondition(BaseModel):
+    type: str
+    indicator: str
+    params: Dict[str, Any] = {}
+    direction: str = "cross_above"
+    threshold: Optional[float] = None
+    band: Optional[str] = None
+    multiplier: Optional[float] = None
+
+
+class StrategyASTAction(BaseModel):
+    type: str
+    quantity: Optional[int] = None
+    percent: Optional[int] = None
+    signal: Optional[Any] = None
+
+
+class StrategyAST(BaseModel):
+    type: str = "strategy"
+    name: str
+    description: Optional[str] = ""
+    market: str = "AStock"
+    conditions: List[StrategyASTCondition]
+    actions: List[StrategyASTAction]
+    riskManagement: Optional[Dict[str, float]] = None
+
+
+class CompileRequest(BaseModel):
+    ast: StrategyAST
+
+
+class CompileResponse(BaseModel):
+    code: str
+    valid: bool
+    errors: List[str] = []
+
+
+class StrategyConditionAST(BaseModel):
+    type: str
+    indicator: str
+    params: Dict[str, Any] = {}
+    direction: str
+    threshold: Optional[float] = None
+    band: Optional[str] = None
+    multiplier: Optional[float] = None
+
+
+class StrategyActionAST(BaseModel):
+    type: str
+    quantity: Optional[int] = None
+    signal: Optional[Any] = None
+
+
+class StrategyAST(BaseModel):
+    type: str = "strategy"
+    name: str
+    description: Optional[str] = ""
+    conditions: List[StrategyConditionAST]
+    actions: List[StrategyActionAST]
+    riskManagement: Optional[Dict[str, Any]] = None
+
+
+class CompileResponse(BaseModel):
+    code: str
+    valid: bool
+    errors: List[str] = []
+
+
 @router.post("/validate")
 async def validate_strategy_code(request: CodeValidateRequest):
     """
@@ -124,6 +192,221 @@ async def validate_strategy_code(request: CodeValidateRequest):
             warnings=[],
             security_score=0,
         )
+
+
+def _generate_python_code(ast: StrategyAST) -> str:
+    """
+    Generate Python DSL code from Strategy AST.
+    
+    Supports Top 5 strategies:
+    - MA Cross (MA金叉)
+    - MACD Cross (MACD金叉)
+    - RSI Oversold (RSI超买超卖)
+    - Bollinger Bands (布林带突破)
+    - Volume Surge (成交量异动)
+    """
+    lines = []
+    
+    # Header annotations
+    lines.append(f"# @name {ast.name}")
+    if ast.description:
+        lines.append(f"# @description {ast.description}")
+    
+    # Risk management
+    if ast.riskManagement:
+        stop_loss = ast.riskManagement.get('stopLossPct', 2.0)
+        take_profit = ast.riskManagement.get('takeProfitPct', 6.0)
+        lines.append(f"# @strategy stopLossPct {stop_loss}")
+        lines.append(f"# @strategy takeProfitPct {take_profit}")
+    
+    lines.append("")
+    
+    # Generate indicator calculations and signals
+    buy_signals = []
+    sell_signals = []
+    indicators = {}
+    
+    for idx, condition in enumerate(ast.conditions):
+        cond_var = f"cond_{idx}"
+        
+        if condition.indicator == "MA":
+            # MA Cross strategy
+            fast = condition.params.get('fast_period', 5)
+            slow = condition.params.get('slow_period', 20)
+            lines.append(f"ma_fast_{idx} = df['close'].rolling({fast}).mean()")
+            lines.append(f"ma_slow_{idx} = df['close'].rolling({slow}).mean()")
+            indicators[f'ma_fast_{idx}'] = f'ma_fast_{idx}'
+            indicators[f'ma_slow_{idx}'] = f'ma_slow_{idx}'
+            
+            if condition.direction == 'cross_above':
+                lines.append(f"{cond_var} = (ma_fast_{idx} > ma_slow_{idx}) & (ma_fast_{idx}.shift(1) <= ma_slow_{idx}.shift(1))")
+                buy_signals.append(cond_var)
+            elif condition.direction == 'cross_below':
+                lines.append(f"{cond_var} = (ma_fast_{idx} < ma_slow_{idx}) & (ma_fast_{idx}.shift(1) >= ma_slow_{idx}.shift(1))")
+                sell_signals.append(cond_var)
+        
+        elif condition.indicator == "MACD":
+            # MACD Cross strategy
+            fast = condition.params.get('fast_period', 12)
+            slow = condition.params.get('slow_period', 26)
+            signal = condition.params.get('signal_period', 9)
+            lines.append(f"ema_fast_{idx} = df['close'].ewm(span={fast}, adjust=False).mean()")
+            lines.append(f"ema_slow_{idx} = df['close'].ewm(span={slow}, adjust=False).mean()")
+            lines.append(f"dif_{idx} = ema_fast_{idx} - ema_slow_{idx}")
+            lines.append(f"dea_{idx} = dif_{idx}.ewm(span={signal}, adjust=False).mean()")
+            lines.append(f"histogram_{idx} = (dif_{idx} - dea_{idx}) * 2")
+            indicators[f'dif_{idx}'] = f'dif_{idx}'
+            indicators[f'dea_{idx}'] = f'dea_{idx}'
+            indicators[f'histogram_{idx}'] = f'histogram_{idx}'
+            
+            if condition.direction == 'cross_above':
+                lines.append(f"{cond_var} = (dif_{idx} > dea_{idx}) & (dif_{idx}.shift(1) <= dea_{idx}.shift(1))")
+                buy_signals.append(cond_var)
+            elif condition.direction == 'cross_below':
+                lines.append(f"{cond_var} = (dif_{idx} < dea_{idx}) & (dif_{idx}.shift(1) >= dea_{idx}.shift(1))")
+                sell_signals.append(cond_var)
+        
+        elif condition.indicator == "RSI":
+            # RSI strategy
+            period = condition.params.get('period', 14)
+            threshold = condition.threshold or 30
+            lines.append(f"delta_{idx} = df['close'].diff()")
+            lines.append(f"gain_{idx} = delta_{idx}.where(delta_{idx} > 0, 0)")
+            lines.append(f"loss_{idx} = -delta_{idx}.where(delta_{idx} < 0, 0)")
+            lines.append(f"avg_gain_{idx} = gain_{idx}.rolling(window={period}).mean()")
+            lines.append(f"avg_loss_{idx} = loss_{idx}.rolling(window={period}).mean()")
+            lines.append(f"rs_{idx} = avg_gain_{idx} / avg_loss_{idx}")
+            lines.append(f"rsi_{idx} = 100 - (100 / (1 + rs_{idx}))")
+            indicators[f'rsi_{idx}'] = f'rsi_{idx}'
+            
+            if condition.direction == 'below':
+                # RSI < threshold (oversold)
+                lines.append(f"{cond_var} = rsi_{idx} < {threshold}")
+                buy_signals.append(cond_var)
+            elif condition.direction == 'above':
+                # RSI > threshold (overbought)
+                lines.append(f"{cond_var} = rsi_{idx} > {threshold}")
+                sell_signals.append(cond_var)
+        
+        elif condition.indicator == "BOLL":
+            # Bollinger Bands strategy
+            period = condition.params.get('period', 20)
+            std_dev = condition.params.get('std_dev', 2)
+            band = condition.band or 'lower'
+            lines.append(f"middle_{idx} = df['close'].rolling({period}).mean()")
+            lines.append(f"std_{idx} = df['close'].rolling({period}).std()")
+            lines.append(f"upper_{idx} = middle_{idx} + {std_dev} * std_{idx}")
+            lines.append(f"lower_{idx} = middle_{idx} - {std_dev} * std_{idx}")
+            indicators[f'upper_{idx}'] = f'upper_{idx}'
+            indicators[f'middle_{idx}'] = f'middle_{idx}'
+            indicators[f'lower_{idx}'] = f'lower_{idx}'
+            
+            if band == 'lower':
+                # Price breaks lower band
+                lines.append(f"{cond_var} = (df['close'] < lower_{idx}) & (df['close'].shift(1) >= lower_{idx}.shift(1))")
+                buy_signals.append(cond_var)
+            elif band == 'upper':
+                # Price breaks upper band
+                lines.append(f"{cond_var} = (df['close'] > upper_{idx}) & (df['close'].shift(1) <= upper_{idx}.shift(1))")
+                sell_signals.append(cond_var)
+        
+        elif condition.indicator == "VOLUME":
+            # Volume surge strategy
+            period = condition.params.get('period', 20)
+            multiplier = condition.multiplier or 2.0
+            lines.append(f"avg_vol_{idx} = df['volume'].rolling({period}).mean()")
+            lines.append(f"{cond_var} = df['volume'] > avg_vol_{idx} * {multiplier}")
+            indicators[f'avg_vol_{idx}'] = f'avg_vol_{idx}'
+            buy_signals.append(cond_var)
+    
+    lines.append("")
+    
+    # Combine signals
+    if buy_signals:
+        lines.append(f"buy = {' | '.join(buy_signals)}")
+    else:
+        lines.append("buy = pd.Series(False, index=df.index)")
+    
+    if sell_signals:
+        lines.append(f"sell = {' | '.join(sell_signals)}")
+    else:
+        lines.append("sell = pd.Series(False, index=df.index)")
+    
+    # Output
+    lines.append("")
+    lines.append("output = {")
+    indicators_str = ", ".join([f"'{k}': {v}" for k, v in indicators.items()])
+    lines.append(f"    'indicators': {{{indicators_str}}},")
+    lines.append("    'signals': {'buy': buy, 'sell': sell}")
+    lines.append("}")
+    
+    return "\n".join(lines)
+
+
+@router.post("/compile")
+async def compile_strategy(request: CompileRequest):
+    """
+    Compile Strategy AST to Python DSL code.
+    
+    Converts visual strategy builder JSON AST to executable Python code
+    that can be used with the backtest engine.
+    
+    Supported indicators:
+    - MA: Moving Average crossover
+    - MACD: MACD crossover
+    - RSI: RSI threshold
+    - BOLL: Bollinger Bands breakout
+    - VOLUME: Volume surge
+    """
+    try:
+        ast = request.ast
+        
+        # Validate AST
+        if not ast.conditions:
+            return {
+                "code": 0,
+                "data": {
+                    "code": "",
+                    "valid": False,
+                    "errors": ["至少需要一个策略条件"],
+                }
+            }
+        
+        # Generate Python code
+        python_code = _generate_python_code(ast)
+        
+        # Validate generated code
+        from app.services.strategy import StrategyValidator
+        is_valid, error = StrategyValidator.validate(python_code)
+        
+        if not is_valid:
+            return {
+                "code": 0,
+                "data": {
+                    "code": python_code,
+                    "valid": False,
+                    "errors": [f"生成的代码验证失败: {error}"],
+                }
+            }
+        
+        return {
+            "code": 0,
+            "data": {
+                "code": python_code,
+                "valid": True,
+                "errors": [],
+            }
+        }
+    except Exception as e:
+        logger.error(f"[Strategy] Compile error: {e}")
+        return {
+            "code": 0,
+            "data": {
+                "code": "",
+                "valid": False,
+                "errors": [f"编译失败: {str(e)}"],
+            }
+        }
 
 
 def _get_history_data(symbol: str, start_date: str, end_date: str) -> Optional[Dict]:

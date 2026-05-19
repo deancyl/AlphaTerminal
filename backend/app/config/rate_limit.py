@@ -27,7 +27,8 @@ ENDPOINT_LIMITS = {
     "macro": EndpointLimit(requests=30, period=60),
     "forex": EndpointLimit(requests=60, period=60),
     "bond": EndpointLimit(requests=30, period=60),
-    "market_radar": EndpointLimit(requests=30, period=60),  # P0-2: Market Radar rate limit
+    "market_radar": EndpointLimit(requests=30, period=60),
+    "global_index": EndpointLimit(requests=30, period=60),
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -39,7 +40,8 @@ EXEMPT_PATHS = [
     "/api/v1/bond/health",
     "/api/agent/v1/health",
     "/api/v1/macro/health",
-    "/api/v1/market_radar/health",  # P0-2: Market Radar health check exempt
+    "/api/v1/market_radar/health",
+    "/api/v1/market/global/regions",
 ]
 
 
@@ -80,8 +82,10 @@ def get_endpoint_category(path: str) -> str:
         return "macro"
     if "/bond/" in path:
         return "bond"
-    if "/market_radar/" in path:  # P0-2: Market Radar category
+    if "/market_radar/" in path:
         return "market_radar"
+    if "/market/global" in path:
+        return "global_index"
     if "/market/" in path or "/stocks/" in path:
         return "market"
     if "/news/" in path:

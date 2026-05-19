@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 import httpx
 import re
 
@@ -15,6 +15,7 @@ from app.db import get_latest_prices
 from app.utils.market_status import is_market_open
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
+from app.services.fetchers.global_index_fetcher import get_global_index_fetcher, GLOBAL_INDEX_SYMBOLS, INDEX_METADATA
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["market"])
@@ -36,7 +37,7 @@ CHINA_ALL_SYMBOLS = [
     "000510", "399100",
 ]
 RATE_SYMBOLS = ["shibor_1d", "shibor_1w", "shibor_1m", "shibor_3m", "shibor_1y"]
-GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225"]
+GLOBAL_SYMBOLS = ["HSI", "DJI", "IXIC", "SPX", "N225", "RUT", "VIX", "TSX", "IBOV", "UKX", "DAX", "CAC", "SMI", "IBEX", "KS11", "AXJO", "NSEI"]
 DERIVATIVE_SYMBOLS = ["GC", "CL"]
 
 SINA_HEADERS = {
@@ -417,32 +418,177 @@ def market_indices():
 
 @router.get("/market/global")
 async def market_global():
-    """全球核心市场指数（恒生、道琼斯、纳斯达克、标普500、日经）"""
+    """
+    全球核心市场指数（扩展至17个指数）
+    
+    数据源优先级：
+    1. Tencent Finance (qt.gtimg.cn) - 港股/美股
+    2. Yahoo Finance - 全球指数
+    3. 静态兜底数据（is_mock=True 标记）
+    
+    支持区域：
+    - Americas: SPX, IXIC, DJI, RUT, VIX, TSX, IBOV
+    - Europe: UKX, DAX, CAC, SMI, IBEX
+    - Asia-Pacific: N225, HSI, KS11, AXJO, NSEI
+    """
     try:
-        is_open_hk, status_hk = is_market_open("HK")
-        is_open_us, status_us = is_market_open("US")
-        is_open_jp, status_jp = is_market_open("JP")
-
-        status_map = {"HSI": status_hk, "DJI": status_us, "IXIC": status_us, "SPX": status_us, "N225": status_jp}
-
-        rows = get_latest_prices(GLOBAL_SYMBOLS)
+        from app.services.fetchers.global_index_fetcher import get_global_index_fetcher
+        
+        fetcher = get_global_index_fetcher()
+        quotes = await fetcher.fetch_all_quotes()
+        
+        global_data = []
+        for quote in quotes:
+            global_data.append({
+                "symbol": quote.symbol,
+                "name": quote.name,
+                "price": quote.price,
+                "change_pct": quote.change_pct,
+                "open": quote.open,
+                "high": quote.high,
+                "low": quote.low,
+                "volume": quote.volume,
+                "market": quote.market,
+                "flag": quote.flag,
+                "is_mock": quote.is_mock,
+                "source": "tencent" if not quote.is_mock else "static_fallback",
+            })
+        
         return success_response({
-            "global": [
-                {
-                    "symbol":     r["symbol"],
-                    "name":       r["name"],
-                    "price":      r["price"],
-                    "change_pct": r["change_pct"],
-                    "volume":     r["volume"],
-                    "status":     status_map.get(r["symbol"], "已休市"),
-                    "market":     r["market"],
-                }
-                for r in rows
-            ],
+            "global": global_data,
+            "regions": {
+                "Americas": ["SPX", "IXIC", "DJI", "RUT", "VIX", "TSX", "IBOV"],
+                "Europe": ["UKX", "DAX", "CAC", "SMI", "IBEX"],
+                "Asia-Pacific": ["N225", "HSI", "KS11", "AXJO", "NSEI"],
+            }
         })
     except Exception as e:
         logger.error(f"[market_global] 错误: {e}")
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
+
+
+@router.get("/market/global/kline")
+async def get_global_kline(
+    symbol: str = Query(..., description="指数代码，如 HSI, SPX"),
+    period: str = Query("daily", description="周期: daily 或 weekly"),
+    limit: int = Query(100, ge=1, le=500, description="返回数据条数")
+):
+    """
+    全球指数K线历史数据
+    
+    Args:
+        symbol: 指数代码 (HSI, SPX, IXIC, DJI, N225 等)
+        period: daily 或 weekly
+        limit: 返回条数 (1-500)
+    
+    Returns:
+        K线数据列表 [{date, open, high, low, close, volume, change_pct}, ...]
+    """
+    try:
+        fetcher = get_global_index_fetcher()
+        klines = await fetcher.fetch_kline_history(symbol, period, limit)
+        
+        if not klines:
+            return error_response(ErrorCode.NOT_FOUND, f"未找到 {symbol} 的K线数据")
+        
+        return success_response({
+            "symbol": symbol,
+            "period": period,
+            "data": klines,
+            "total": len(klines),
+        })
+    except ValueError as e:
+        return error_response(ErrorCode.BAD_REQUEST, str(e))
+    except Exception as e:
+        logger.error(f"[get_global_kline] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取K线数据失败: {str(e)}")
+
+
+@router.get("/market/global/sparkline")
+async def get_global_sparkline(
+    symbol: str = Query(..., description="指数代码"),
+    days: int = Query(20, ge=5, le=60, description="天数")
+):
+    """
+    全球指数迷你走势图数据（最近N天收盘价）
+    
+    Args:
+        symbol: 指数代码
+        days: 天数 (5-60)
+    
+    Returns:
+        收盘价列表 [price1, price2, ...]
+    """
+    try:
+        fetcher = get_global_index_fetcher()
+        sparkline = await fetcher.fetch_sparkline(symbol, days)
+        
+        return success_response({
+            "symbol": symbol,
+            "data": sparkline,
+            "days": len(sparkline),
+        })
+    except Exception as e:
+        logger.error(f"[get_global_sparkline] 错误: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"获取走势数据失败: {str(e)}")
+
+
+@router.get("/market/global/regions")
+async def get_global_regions():
+    """获取全球指数区域分类"""
+    return success_response({
+        "regions": [
+            {
+                "id": "americas",
+                "name": "美洲",
+                "name_en": "Americas",
+                "symbols": GLOBAL_INDEX_SYMBOLS["Americas"],
+            },
+            {
+                "id": "europe",
+                "name": "欧洲",
+                "name_en": "Europe",
+                "symbols": GLOBAL_INDEX_SYMBOLS["Europe"],
+            },
+            {
+                "id": "asia-pacific",
+                "name": "亚太",
+                "name_en": "Asia-Pacific",
+                "symbols": GLOBAL_INDEX_SYMBOLS["Asia-Pacific"],
+            },
+        ]
+    })
+
+
+def _get_region_for_symbol(symbol: str) -> str:
+    """根据指数代码获取区域"""
+    for region, symbols in GLOBAL_INDEX_SYMBOLS.items():
+        if symbol in symbols:
+            return region.lower().replace("-", "_")
+    return "unknown"
+
+
+def _get_market_status(market: str) -> str:
+    """获取市场状态"""
+    market_map = {
+        "US": "US",
+        "HK": "HK",
+        "JP": "JP",
+        "CA": "CA",
+        "BR": "BR",
+        "UK": "UK",
+        "DE": "DE",
+        "FR": "FR",
+        "CH": "CH",
+        "ES": "ES",
+        "KR": "KR",
+        "AU": "AU",
+        "IN": "IN",
+    }
+    
+    market_code = market_map.get(market, "US")
+    is_open, status = is_market_open(market_code)
+    return status
 
 
 @router.get("/market/rates")

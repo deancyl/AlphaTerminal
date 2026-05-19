@@ -15,11 +15,12 @@ import asyncio
 import logging
 import pandas as pd
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.services.pricing.black_scholes import pricing_engine
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,48 @@ class OptionsFetcher(BaseMarketFetcher):
         self._cache = {}
         self._cache_ttl = {}
         self._cache_lock = asyncio.Lock()
+    
+    def _get_underlying_symbol(self, option_symbol: str) -> str:
+        """
+        Get underlying index symbol from option symbol.
         
+        Args:
+            option_symbol: Option code like "io2506" or "mo2509"
+            
+        Returns:
+            Index symbol: "sh000300" for io, "sh000852" for mo
+        """
+        prefix = option_symbol[:2].lower()
+        
+        UNDERLYING_MAP = {
+            "io": "sh000300",  # 沪深300
+            "mo": "sh000852",  # 中证1000
+        }
+        
+        return UNDERLYING_MAP.get(prefix, "sh000300")
+    
+    async def _fetch_underlying_spot(self, symbol: str) -> Optional[float]:
+        """
+        Fetch underlying index spot price.
+        
+        Args:
+            symbol: Index symbol like "sh000300"
+            
+        Returns:
+            Spot price or None if fetch fails
+        """
+        try:
+            from app.services.quote_source import get_quote_with_fallback_async
+            quote = await get_quote_with_fallback_async(symbol)
+            if quote and (quote.get('price') or quote.get('close')):
+                return float(quote.get('price') or quote.get('close'))
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"[Options] Failed to fetch underlying spot: {symbol} - {e}")
+            return None
+    
     @property
     def ak(self):
         if self._ak is None:
@@ -173,7 +215,6 @@ class OptionsFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             
-            # 使用akshare获取期权链数据
             df = await asyncio.wait_for(
                 loop.run_in_executor(_executor, lambda: self.ak.option_cffex_hs300_spot_sina(symbol=symbol)),
                 timeout=30.0
@@ -184,13 +225,15 @@ class OptionsFetcher(BaseMarketFetcher):
                 logger.warning(f"[Options] option_cffex_hs300_spot_sina 返回空数据: {symbol}")
                 return self._get_empty_chain(symbol)
             
-            # akshare返回的格式：每行包含看涨和看跌合约信息在同一行
-            # 列名格式：看涨合约-买量, 看涨合约-最新价, 行权价, 看跌合约-最新价, 等
+            underlying_symbol = self._get_underlying_symbol(symbol)
+            spot = await self._fetch_underlying_spot(underlying_symbol)
+            
+            expiry_date = pricing_engine.parse_expiry_from_code(symbol)
+            
             calls = []
             puts = []
             
             for _, row in df.iterrows():
-                # 看涨期权数据
                 call_data = {
                     "code": str(row.get('看涨合约-标识', '')),
                     "name": str(row.get('看涨合约-标识', '')),
@@ -200,14 +243,9 @@ class OptionsFetcher(BaseMarketFetcher):
                     "change_pct": None,
                     "volume": clean_value(row.get('看涨合约-买量')),
                     "open_interest": clean_value(row.get('看涨合约-持仓量')),
-                    "delta": None,
-                    "gamma": None,
-                    "theta": None,
-                    "vega": None,
-                    "iv": None,
+                    "is_call": True,
                 }
                 
-                # 看跌期权数据
                 put_data = {
                     "code": str(row.get('看跌合约-标识', '')),
                     "name": str(row.get('看跌合约-标识', '')),
@@ -217,26 +255,37 @@ class OptionsFetcher(BaseMarketFetcher):
                     "change_pct": None,
                     "volume": clean_value(row.get('看跌合约-买量')),
                     "open_interest": clean_value(row.get('看跌合约-持仓量')),
-                    "delta": None,
-                    "gamma": None,
-                    "theta": None,
-                    "vega": None,
-                    "iv": None,
+                    "is_call": False,
                 }
                 
-                # 只添加有有效数据的期权
                 if call_data.get('code') and call_data.get('strike'):
                     calls.append(call_data)
                 if put_data.get('code') and put_data.get('strike'):
                     puts.append(put_data)
             
-            # 按行权价排序
+            if spot and spot > 0:
+                calls = pricing_engine.price_option_chain(
+                    calls, spot, expiry_date, default_volatility=0.20
+                )
+                puts = pricing_engine.price_option_chain(
+                    puts, spot, expiry_date, default_volatility=0.20
+                )
+            else:
+                for opt in calls + puts:
+                    opt['delta'] = None
+                    opt['gamma'] = None
+                    opt['theta'] = None
+                    opt['vega'] = None
+                    opt['iv'] = None
+            
             calls.sort(key=lambda x: x.get('strike', 0) or 0)
             puts.sort(key=lambda x: x.get('strike', 0) or 0)
             
             result = {
                 "symbol": symbol,
                 "name": self.CFFEX_SYMBOLS.get(symbol[:2], "未知品种"),
+                "underlying_spot": spot,
+                "expiry_date": expiry_date.isoformat() if expiry_date else None,
                 "calls": calls,
                 "puts": puts,
                 "update_time": datetime.now().strftime("%H:%M:%S"),
@@ -245,7 +294,7 @@ class OptionsFetcher(BaseMarketFetcher):
             
             self._set_cached(cache_key, result, ttl_seconds=300)
             self.cb.record_success()
-            logger.info(f"[Options] 获取CFFEX期权链成功: {symbol} calls={len(calls)} puts={len(puts)}")
+            logger.info(f"[Options] 获取CFFEX期权链成功: {symbol} calls={len(calls)} puts={len(puts)} spot={spot}")
             return result
             
         except asyncio.TimeoutError:

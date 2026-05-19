@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, watch, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, watch, onMounted, onUnmounted, onDeactivated } from 'vue'
 import { useECharts } from '@/composables/useECharts.js'
 import { apiFetchDeduped } from '@/utils/api.js'
 import { getDynamicThemeColors, getDynamicMarketColors } from '@/utils/echartsTheme.js'
@@ -32,9 +32,11 @@ import ErrorDisplay from '@/components/f9/ErrorDisplay.vue'
 
 const props = defineProps({
   symbol: { type: String, required: true },
+  syncedDate: { type: String, default: null },
   panelIndex: { type: Number, default: 0 },
   lineColor: { type: String, default: null },
-  connectGroup: { type: String, default: null }
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: null }
 })
 
 const emit = defineEmits(['crosshair-move', 'chart-ready', 'retry'])
@@ -81,8 +83,6 @@ function buildOption() {
   return {
     animation: false,
     backgroundColor: 'transparent',
-    // Add group for native echarts.connect()
-    ...(props.connectGroup && { group: props.connectGroup }),
     grid: {
       left: 50,
       right: 20,
@@ -129,7 +129,9 @@ function buildOption() {
           ]
         }
       },
-      sampling: 'lttb'
+      sampling: 'lttb',
+      progressiveThreshold: 3000,
+      progressive: 200
     }],
     tooltip: {
       trigger: 'axis',
@@ -143,7 +145,6 @@ function buildOption() {
         const item = klineData.value[idx]
         if (!item) return ''
 
-        // Emit crosshair move for date display
         emit('crosshair-move', item.date)
 
         const change = item.close - item.open
@@ -167,6 +168,19 @@ function buildOption() {
   }
 }
 
+watch(() => props.syncedDate, (date) => {
+  if (!date || !chartInstance.value || !isReady.value) return
+
+  const idx = klineData.value.findIndex(d => d.date === date)
+  if (idx >= 0) {
+    chartInstance.value.dispatchAction({
+      type: 'showTip',
+      seriesIndex: 0,
+      dataIndex: idx
+    })
+  }
+})
+
 onMounted(async () => {
   await fetchKline()
   const chart = await initChart()
@@ -176,13 +190,11 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
+onDeactivated(() => {
   dispose()
 })
 
-// Expose chart instance for parent component
-defineExpose({
-  chartInstance,
-  isReady
+onUnmounted(() => {
+  dispose()
 })
 </script>

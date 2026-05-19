@@ -176,8 +176,8 @@ class TimeMachineSession:
             "is_finished": self.is_finished(),
         }
         
-        # Include bars data for frontend K-line chart (alias as kline_data for compatibility)
-        if include_bars and self.bars:
+        # Include bars data for session creation response
+        if include_bars:
             result["bars"] = [
                 {
                     "date": b.date,
@@ -191,8 +191,6 @@ class TimeMachineSession:
                 }
                 for b in self.bars
             ]
-            # Add kline_data alias for frontend compatibility
-            result["kline_data"] = result["bars"]
         
         return result
 

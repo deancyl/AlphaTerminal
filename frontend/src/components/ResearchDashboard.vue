@@ -13,6 +13,7 @@
           class="flex-1 sm:w-32 px-3 py-2 text-xs bg-terminal-panel border border-theme-secondary rounded-sm text-terminal-primary placeholder-terminal-dim focus:outline-none focus:border-terminal-accent"
           style="min-height: 44px;"
           aria-label="股票代码输入"
+          data-tour="symbol-input"
           @keyup.enter="fetchData"
         />
         <button
@@ -48,6 +49,20 @@
         >
           <option value="">全部机构</option>
           <option v-for="inst in institutions" :key="inst" :value="inst">{{ inst }}</option>
+        </select>
+      </div>
+      <div class="flex items-center gap-2 w-full sm:w-auto">
+        <select
+          v-model="selectedCategory"
+          class="flex-1 sm:flex-none px-3 py-2 text-xs bg-terminal-bg border border-theme-secondary rounded-sm text-terminal-primary focus:outline-none focus:border-terminal-accent"
+          style="min-height: 44px; min-width: 120px;"
+          data-tour="category-filter"
+        >
+          <option value="">全部分类</option>
+          <option value="macro">宏观经济</option>
+          <option value="industry">行业研究</option>
+          <option value="stock">个股分析</option>
+          <option value="fixed_income">固定收益</option>
         </select>
       </div>
       <button
@@ -107,7 +122,7 @@
           </div>
         </div>
 
-        <div v-if="reports && reports.items?.length > 0" class="bg-terminal-panel rounded-lg border border-theme-secondary">
+        <div v-if="reports && reports.items?.length > 0" class="bg-terminal-panel rounded-lg border border-theme-secondary" data-tour="report-list">
           <div class="px-4 py-3 border-b border-theme-secondary flex items-center justify-between">
             <h3 class="text-sm font-medium text-terminal-primary">研报列表</h3>
             <span class="text-xs text-terminal-dim">共 {{ reports.total }} 条</span>
@@ -127,6 +142,7 @@
                   <th @click="sortBy('date')" class="px-4 py-2 text-left text-terminal-dim font-medium w-20 cursor-pointer hover:text-terminal-primary transition select-none">
                     日期 <span v-if="sortField === 'date'" class="text-terminal-accent">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
                   </th>
+                  <th class="px-4 py-2 text-left text-terminal-dim font-medium w-20">分类</th>
                   <th @click="sortBy('rating')" class="px-4 py-2 text-left text-terminal-dim font-medium w-16 cursor-pointer hover:text-terminal-primary transition select-none">
                     评级 <span v-if="sortField === 'rating'" class="text-terminal-accent">{{ sortOrder === 'asc' ? '↑' : '↓' }}</span>
                   </th>
@@ -143,6 +159,11 @@
                   <td class="px-4 py-2 text-terminal-primary truncate max-w-xs">{{ item.title || '-' }}</td>
                   <td class="px-4 py-2 text-terminal-dim">{{ item.institution || '-' }}</td>
                   <td class="px-4 py-2 text-terminal-dim">{{ item.date || '-' }}</td>
+                  <td class="px-4 py-2">
+                    <span class="px-2 py-0.5 rounded-sm text-[10px]" :class="getCategoryClass(item.category)">
+                      {{ getCategoryLabel(item.category) }}
+                    </span>
+                  </td>
                   <td class="px-4 py-2">
                     <span v-if="item.rating" class="px-2 py-0.5 rounded-sm text-[10px]" :class="getRatingClass(item.rating)">
                       {{ item.rating }}
@@ -209,7 +230,7 @@
       </div>
     </div>
 
-    <!-- 研报详情弹窗 -->
+<!-- 研报详情弹窗 -->
     <Teleport to="body">
       <div v-if="showDetailModal" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="closeDetailModal">
         <div class="absolute inset-0 bg-black/60" @click="closeDetailModal"></div>
@@ -224,6 +245,12 @@
               <span class="text-xs text-terminal-primary">{{ selectedReport?.institution || '-' }}</span>
             </div>
             <div class="flex items-center gap-2">
+              <span class="text-xs text-terminal-dim w-12">分类:</span>
+              <span class="px-2 py-0.5 rounded-sm text-[10px]" :class="getCategoryClass(selectedReport?.category)">
+                {{ getCategoryLabel(selectedReport?.category) }}
+              </span>
+            </div>
+            <div class="flex items-center gap-2">
               <span class="text-xs text-terminal-dim w-12">评级:</span>
               <span v-if="selectedReport?.rating" class="px-2 py-0.5 rounded-sm text-[10px]" :class="getRatingClass(selectedReport.rating)">
                 {{ selectedReport.rating }}
@@ -234,12 +261,38 @@
               <span class="text-xs text-terminal-dim w-12">日期:</span>
               <span class="text-xs text-terminal-primary">{{ selectedReport?.date || '-' }}</span>
             </div>
-            <div class="pt-3 border-t border-theme-secondary">
+            
+            <!-- LLM 总结区域 -->
+            <div v-if="summaryLoading" class="pt-3 border-t border-theme-secondary">
+              <div class="flex items-center gap-2 text-xs text-terminal-dim">
+                <span class="animate-pulse">⏳</span>
+                <span>正在生成总结...</span>
+              </div>
+            </div>
+            <div v-else-if="summary" class="pt-3 border-t border-theme-secondary">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="text-xs text-terminal-accent">🤖 AI 总结</span>
+                <span class="text-xs text-terminal-dim">{{ summaryModel }}</span>
+              </div>
+              <div class="text-xs text-terminal-primary bg-terminal-bg/50 rounded p-3 leading-relaxed">
+                {{ summary }}
+              </div>
+            </div>
+            
+            <div class="pt-3 border-t border-theme-secondary flex items-center gap-2">
+<button
+                  @click="summarizeReport"
+                  :disabled="summaryLoading"
+                  class="inline-flex items-center gap-1 px-4 py-2 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition disabled:opacity-50"
+                  data-tour="summarize-btn"
+                >
+                🤖 一键总结
+              </button>
               <a
                 v-if="selectedReport?.url"
                 :href="getPdfProxyUrl(selectedReport.url)"
                 target="_blank"
-                class="inline-flex items-center gap-1 px-4 py-2 rounded-sm text-xs bg-terminal-accent/20 text-terminal-accent hover:bg-terminal-accent/30 transition"
+                class="inline-flex items-center gap-1 px-4 py-2 rounded-sm text-xs border border-theme-secondary text-terminal-dim hover:bg-terminal-hover hover:text-terminal-primary transition"
               >
                 📄 查看原文 PDF
               </a>
@@ -263,6 +316,7 @@ const { handleError } = useApiError({ showToast: false })
 const symbol = ref('')
 const keyword = ref('')
 const selectedInstitution = ref('')
+const selectedCategory = ref('')
 const page = ref(1)
 const pageSize = 20
 const loading = ref(false)
@@ -272,13 +326,15 @@ const statistics = ref(null)
 const isFallback = ref(false)
 const cacheReady = ref(false)
 
-// 排序状态
 const sortField = ref('date')
 const sortOrder = ref('desc')
 
-// 详情弹窗状态
 const showDetailModal = ref(false)
 const selectedReport = ref(null)
+
+const summary = ref('')
+const summaryModel = ref('')
+const summaryLoading = ref(false)
 
 // 机构列表（从统计数据中提取）
 const institutions = computed(() => {
@@ -325,6 +381,20 @@ watch(selectedInstitution, () => {
   }
 })
 
+watch(selectedCategory, () => {
+  if (symbol.value) {
+    page.value = 1
+    fetchData()
+  }
+})
+
+watch(selectedCategory, () => {
+  if (symbol.value) {
+    page.value = 1
+    fetchData()
+  }
+})
+
 // 排序切换
 function sortBy(field) {
   if (sortField.value === field) {
@@ -345,6 +415,39 @@ function showReportDetail(report) {
 function closeDetailModal() {
   showDetailModal.value = false
   selectedReport.value = null
+  summary.value = ''
+  summaryModel.value = ''
+}
+
+async function summarizeReport() {
+  if (!selectedReport.value) return
+  
+  summaryLoading.value = true
+  summary.value = ''
+  
+  try {
+    const res = await apiFetch('/api/v1/research/summarize', {
+      method: 'POST',
+      body: JSON.stringify({
+        report_id: `${selectedReport.value.institution}_${selectedReport.value.date}`,
+        title: selectedReport.value.title,
+        institution: selectedReport.value.institution
+      }),
+      timeoutMs: 30000
+    })
+    
+    if (res?.code === 0) {
+      summary.value = res.data?.summary || ''
+      summaryModel.value = res.data?.model || ''
+    } else {
+      summary.value = res?.data?.summary || '总结生成失败'
+    }
+  } catch (e) {
+    handleError(e, { context: '研报总结' })
+    summary.value = '总结生成失败，请稍后重试'
+  } finally {
+    summaryLoading.value = false
+  }
 }
 
 function getPdfProxyUrl(url) {
@@ -368,7 +471,6 @@ async function fetchData() {
   isFallback.value = false
   
   try {
-    // 构建查询参数
     const params = new URLSearchParams({
       symbol: symbol.value,
       page: page.value.toString(),
@@ -381,6 +483,10 @@ async function fetchData() {
     
     if (selectedInstitution.value) {
       params.append('institution', selectedInstitution.value)
+    }
+    
+    if (selectedCategory.value) {
+      params.append('category', selectedCategory.value)
     }
     
     const [reportsRes, statsRes] = await Promise.all([
@@ -479,6 +585,26 @@ function getRatingClass(rating) {
   if (rating.includes('买入') || rating.includes('增持')) return 'bg-bullish/20 text-bullish'
   if (rating.includes('卖出') || rating.includes('减持')) return 'bg-bearish/20 text-bearish'
   return 'bg-terminal-panel text-terminal-dim'
+}
+
+function getCategoryLabel(category) {
+  const labels = {
+    'macro': '宏观',
+    'industry': '行业',
+    'stock': '个股',
+    'fixed_income': '固收'
+  }
+  return labels[category] || '个股'
+}
+
+function getCategoryClass(category) {
+  const classes = {
+    'macro': 'bg-blue-500/20 text-blue-400',
+    'industry': 'bg-purple-500/20 text-purple-400',
+    'stock': 'bg-green-500/20 text-green-400',
+    'fixed_income': 'bg-yellow-500/20 text-yellow-400'
+  }
+  return classes[category] || 'bg-terminal-panel text-terminal-dim'
 }
 
 let resizeTimer = null

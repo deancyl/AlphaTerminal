@@ -44,7 +44,7 @@
       <div class="animate-pulse w-1/2 h-4 bg-terminal-bg/30 rounded"></div>
     </div>
     
-    <div v-else-if="chartData && !chartData.isEmpty" class="flex-1 min-h-0">
+    <div v-else-if="chartData && !chartData.isEmpty" class="flex-1 min-h-[400px] min-h-0">
       <BaseKLineChart 
         :chart-data="chartData"
         :sub-charts="[]"

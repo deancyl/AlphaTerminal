@@ -1,35 +1,22 @@
 /**
  * useCrosshairSync.js - Crosshair synchronization composable
  *
- * @deprecated Since v0.6.54. Use native echarts.connect() instead.
- *
- * This composable is kept for backwards compatibility but is no longer used
- * in the Multi-Asset Matrix. The native echarts.connect() provides better
- * performance and simpler implementation.
- *
- * Migration guide:
- * - Before: useCrosshairSync() + manual dispatchAction
- * - After: echarts.connect(chartInstances) with group option
- *
- * Example:
- * ```javascript
- * // Old approach (deprecated)
- * const { syncedDate, onCrosshairMove } = useCrosshairSync()
- * chart.dispatchAction({ type: 'showTip', dataIndex })
- *
- * // New approach (recommended)
- * import * as echarts from 'echarts'
- * echarts.connect([chart1, chart2, chart3, chart4])
- * ```
+ * Provides synchronized crosshair movement across multiple charts.
+ * When user moves crosshair on one chart, all other charts sync to the same date.
  *
  * Features:
- * - Debounced updates (100ms) to prevent rapid re-renders
+ * - Native echarts.connect() for chart grouping (primary)
+ * - Manual debounced sync as fallback (100ms)
  * - Active panel tracking to prevent circular updates
  * - Reset functionality for modal close
  */
 
 import { ref, shallowRef } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
+import { getECharts } from '../utils/lazyEcharts.js'
+
+// Chart group name for echarts.connect()
+const CHART_GROUP = 'multi-asset-matrix'
 
 /**
  * Crosshair synchronization composable
@@ -183,6 +170,50 @@ export function useMultiChartCrosshair(panelCount = 4) {
     hideAllTips,
     resetSync
   }
+}
+
+/**
+ * Connect charts using native echarts.connect()
+ * This enables built-in crosshair synchronization across all charts in the group
+ *
+ * @param {Array} charts - Array of ECharts instances to connect
+ */
+export async function connectCharts(charts) {
+  if (!charts || !charts.length) return
+
+  try {
+    const echarts = await getECharts()
+
+    charts.forEach(chart => {
+      if (chart && !chart.isDisposed?.()) {
+        chart.group = CHART_GROUP
+      }
+    })
+
+    echarts.connect(CHART_GROUP)
+  } catch (e) {
+    console.warn('[useCrosshairSync] Failed to connect charts:', e)
+  }
+}
+
+/**
+ * Disconnect charts from the group
+ * Call this when the modal closes to prevent memory leaks
+ */
+export async function disconnectCharts() {
+  try {
+    const echarts = await getECharts()
+    echarts.disconnect(CHART_GROUP)
+  } catch (e) {
+    console.warn('[useCrosshairSync] Failed to disconnect charts:', e)
+  }
+}
+
+/**
+ * Get the chart group name
+ */
+export function getChartGroupName() {
+  return CHART_GROUP
 }
 
 export default useCrosshairSync

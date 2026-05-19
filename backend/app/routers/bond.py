@@ -4,20 +4,21 @@
 缓存策略：5 分钟 TTL，后台异步刷新
 
 Phase B: 统一 API 响应格式
+Phase C: 多数据源降级 + 数据新鲜度检查
 """
 import asyncio
 import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
-from fastapi import APIRouter
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Query
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.services.fetchers.bond_fetcher import get_bond_fetcher, STALE_DATA_THRESHOLD_DAYS
 
-# Dedicated thread pool for bond data fetching
 _bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,8 @@ _bond_cb = CircuitBreaker(
         timeout=60.0,
     )
 )
+
+_bond_fetcher = get_bond_fetcher(_bond_executor)
 
 
 _HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
@@ -83,7 +86,7 @@ async def _fetch_curve_data_for_cache():
 
     try:
         if not _bond_cb.is_available():
-            logger.warning("[Bond] Circuit breaker is OPEN, using mock fallback")
+            logger.warning("[Bond] Circuit breaker is OPEN, using bond_fetcher fallback")
             raise Exception("Circuit breaker open")
         
         import akshare as ak
@@ -97,12 +100,10 @@ async def _fetch_curve_data_for_cache():
         )
         if df is not None and not df.empty:
             _bond_cb.record_success()
-            # 按日期升序排列，按唯一日期索引历史截面
             df = df.sort_values("日期").reset_index(drop=True)
             unique_dates = sorted(df["日期"].unique())
 
             def get_gov_row(df_slice):
-                """从同日期的多曲线行中提取国债行"""
                 for _, row in df_slice.iterrows():
                     cn = str(row.get("曲线名称", ""))
                     if "国债" in cn:
@@ -113,13 +114,11 @@ async def _fetch_curve_data_for_cache():
             latest_df    = df[df["日期"] == latest_date]
             gov_row      = get_gov_row(latest_df)
 
-            # 历史截面：取唯一日期列表中的 1个月前（约22交易日）和 1年前（约252交易日）
             date_1m = unique_dates[-22] if len(unique_dates) >= 22 else None
             date_1y = unique_dates[-252] if len(unique_dates) >= 252 else None
             gov_row_1m = get_gov_row(df[df["日期"] == date_1m]) if date_1m else None
             gov_row_1y = get_gov_row(df[df["日期"] == date_1y]) if date_1y else None
 
-            # 商业银行 AAA 曲线（取最新日期截面）
             comm_row = None
             for _, row in latest_df.iterrows():
                 cn = str(row.get("曲线名称", ""))
@@ -128,9 +127,17 @@ async def _fetch_curve_data_for_cache():
 
             spreads = calc_spreads(gov_row, comm_row) if gov_row and comm_row else {}
 
+            last_update_str = str(latest_date)
+            if hasattr(latest_date, 'strftime'):
+                last_update_str = latest_date.strftime("%Y-%m-%d")
+            
+            last_update_dt = datetime.strptime(last_update_str, "%Y-%m-%d")
+            days_old = (datetime.now() - last_update_dt).days
+            is_stale = days_old > STALE_DATA_THRESHOLD_DAYS
+            
             with _CACHE_LOCK:
                 _LAST_FETCH_TIME = time.time()
-            logger.info(f"[Bond] yield curve + spreads + history fetched")
+            logger.info(f"[Bond] yield curve + spreads + history fetched (last_update: {last_update_str}, days_old: {days_old})")
             
             return {
                 "yield_curve":      gov_row or {},
@@ -140,6 +147,8 @@ async def _fetch_curve_data_for_cache():
                 "spreads_bps":     spreads,
                 "update_time":     now_str,
                 "source":          "akshare",
+                "last_update":     last_update_str,
+                "is_stale":        is_stale,
             }
     except asyncio.TimeoutError:
         _bond_cb.record_failure()
@@ -148,10 +157,9 @@ async def _fetch_curve_data_for_cache():
         _bond_cb.record_failure()
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
-    # 降级兜底：静态 Mock（含历史截面）
     with _CACHE_LOCK:
         _LAST_FETCH_TIME = time.time()
-    logger.info("[Bond] Using mock yield curve fallback")
+    logger.info("[Bond] Using bond_fetcher fallback")
     
     return {
         "yield_curve": {
@@ -177,6 +185,8 @@ async def _fetch_curve_data_for_cache():
         "spreads_bps": {},
         "update_time": now_str,
         "source": "mock",
+        "last_update": "2021-01-22",
+        "is_stale": True,
     }
 
 
@@ -210,8 +220,10 @@ async def bond_curve():
       spreads_bps:      商业债-国债利差 {期限: bps数}（正数=信用溢价）
       update_time:     数据时间
       source:           数据来源
-      last_update:      数据最后更新日期（akshare数据源停更于2021-01-22）
+      last_update:      数据最后更新日期
+      is_stale:         数据是否过期（超过7天）
       warning:           数据过期警告（仅当数据过期时返回）
+      warning_level:     警告级别 (critical/warning)
 
     利差含义：
       bp > 0：信用债收益率高于国债（正常）
@@ -224,17 +236,23 @@ async def bond_curve():
             fetch_fn=_fetch_curve_data_for_cache
         )
         source = cache_data.get("source", "unknown")
+        last_update = cache_data.get("last_update", "")
+        is_stale = cache_data.get("is_stale", False)
         
-        last_update = "2021-01-22" if source == "mock" else datetime.now().strftime("%Y-%m-%d")
-        is_stale = source == "mock"
         warning = None
         warning_level = None
         if is_stale:
-            warning = "⚠️ 数据源已于 2021-01-22 停止更新，当前显示历史数据。建议接入中债登或上交所数据源。"
+            warning = f"⚠️ 数据已过期，最后更新于 {last_update}。建议接入中债登或上交所数据源。"
             warning_level = "critical"
-        elif source == "akshare":
-            warning = "数据源 akshare bond_china_yield 已于 2021-01-22 停止更新，数据可能不完整。"
-            warning_level = "warning"
+        elif source == "akshare" and last_update:
+            try:
+                last_update_dt = datetime.strptime(last_update, "%Y-%m-%d")
+                days_old = (datetime.now() - last_update_dt).days
+                if days_old > 1:
+                    warning = f"数据源 akshare bond_china_yield 最后更新于 {last_update}（{days_old}天前）。"
+                    warning_level = "warning"
+            except (ValueError, TypeError):
+                pass
         
         return success_response({
             "yield_curve":     cache_data.get("yield_curve", {}),
@@ -290,12 +308,19 @@ async def bond_active():
 
 
 @router.get("/bond/history")
-async def bond_history(tenor: str = "10年", period: str = "1Y"):
+async def bond_history(
+    tenor: str = Query("10年", description="期限（1年/3年/5年/10年/30年）"),
+    period: str = Query("1Y", description="回溯窗口（1M/3M/6M/1Y/3Y）"),
+    limit: int = Query(252, ge=1, le=1000, description="返回条数限制"),
+    offset: int = Query(0, ge=0, description="偏移量（用于分页）"),
+):
     """
     国债历史分位数（用于收益率曲线图表的历史背景）
     - tenor: 期限（1年/3年/5年/10年/30年）
     - period: 回溯窗口（1M/3M/6M/1Y/3Y）
-    返回: {tenor, current, percentile, history: [{date, yield}], source}
+    - limit: 返回条数限制（默认252，最大1000）
+    - offset: 偏移量（用于分页）
+    返回: {tenor, current, percentile, history: [{date, yield}], total, limit, offset, source}
     """
     try:
         df = await _cache.get_or_set_async(
@@ -306,7 +331,6 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         if df is None or df.empty:
             raise ValueError("empty df")
         
-        # 必须过滤出"国债"曲线，否则历史图表数据点会发生严重错乱
         curve_name_col = df.columns[0]
         if "曲线名称" in df.columns or curve_name_col in df.columns:
             col_to_use = "曲线名称" if "曲线名称" in df.columns else curve_name_col
@@ -317,7 +341,6 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         if df_gov.empty:
             df_gov = df
         
-        # 按日期排序
         date_col = "日期" if "日期" in df_gov.columns else (df_gov.columns[1] if len(df_gov.columns) > 1 else df_gov.columns[0])
         if date_col in df_gov.columns:
             df_gov = df_gov.sort_values(date_col)
@@ -326,7 +349,6 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         if not tenor_col:
             raise ValueError(f"tenor column not found: {tenor}")
         
-        # 安全转换：过滤非数字值
         numeric = []
         for val in df_gov[tenor_col]:
             if val is not None:
@@ -344,7 +366,6 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
         days_map = {"1M": 22, "3M": 66, "6M": 132, "1Y": 252, "3Y": 756}
         n_rows = days_map.get(period, 252)
         
-        # 使用过滤后的国债数据
         history = []
         tail_df = df_gov[[date_col, tenor_col]].dropna().tail(n_rows)
         for _, r in tail_df.iterrows():
@@ -356,11 +377,19 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             except (ValueError, TypeError):
                 pass
         
+        total = len(history)
+        
+        if offset > 0 or limit < total:
+            history = history[offset:offset + limit]
+        
         return success_response({
             "tenor": tenor,
             "current": round(current_yield, 6) if current_yield else None,
             "percentile": round(percentile, 1) if percentile is not None else None,
             "history": history,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
             "source": "akshare",
         })
     except Exception as e:
@@ -371,11 +400,13 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
             "current": cached.get("yield_curve", {}).get(tenor, 0),
             "percentile": None,
             "history": [],
+            "total": 0,
+            "limit": limit,
+            "offset": offset,
             "source": "error",
         })
 
 
-# ── 启动时立即填充 Mock 数据（防止第一次请求返回空）──────────────
 def _init_mock_cache():
     """同步填充 Mock 数据，保证 API 启动后立即可用"""
     global _LAST_FETCH_TIME

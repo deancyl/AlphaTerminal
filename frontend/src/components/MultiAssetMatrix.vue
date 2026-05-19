@@ -66,10 +66,11 @@
             :key="panel.symbol"
             :panel="panel"
             :panel-index="idx"
-            :connect-group="CONNECT_GROUP"
+            :synced-date="syncedDate"
+            :is-active="activePanel === idx"
+            @crosshair-move="onCrosshairMove(idx, $event)"
             @chart-ready="registerChart(idx, $event.chart)"
             @chart-error="handleChartError(idx)"
-            @crosshair-move="syncedDate = $event"
           />
         </div>
 
@@ -96,9 +97,11 @@
               :key="currentPanel.symbol"
               :panel="currentPanel"
               :panel-index="currentPanelIndex"
-              :connect-group="CONNECT_GROUP"
+              :synced-date="syncedDate"
+              :is-active="true"
+              :disable-crosshair-sync="true"
+              @crosshair-move="onCrosshairMove(currentPanelIndex, $event)"
               @chart-ready="registerChart(currentPanelIndex, $event.chart)"
-              @crosshair-move="syncedDate = $event"
             />
           </div>
 
@@ -160,9 +163,9 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, defineAsyncComponent, computed, onBeforeUnmount } from 'vue'
+import { ref, shallowRef, defineAsyncComponent, computed, watch, onDeactivated } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
-import * as echarts from 'echarts'
+import { useCrosshairSync, connectCharts, disconnectCharts } from '@/composables/useCrosshairSync.js'
 import Tooltip from '@/components/Tooltip.vue'
 
 const MatrixPanel = defineAsyncComponent(() => import('./MatrixPanel.vue'))
@@ -190,33 +193,22 @@ const panels = ref([
 // Mobile: Current panel
 const currentPanel = computed(() => panels.value[currentPanelIndex.value])
 
-// Native ECharts connect group ID
-const CONNECT_GROUP = 'matrix-group'
-
-// Chart instances for native connect
+const { syncedDate, activePanel, onCrosshairMove, resetSync } = useCrosshairSync()
 const chartInstances = shallowRef([])
 
 // Loading and error tracking
 const loadingCount = ref(0)
 const failedCount = ref(0)
-
-// Synced date display (for footer)
-const syncedDate = ref(null)
+const chartsConnected = ref(false)
 
 function registerChart(idx, chart) {
   chartInstances.value[idx] = chart
   loadingCount.value++
 
-  // Connect all charts when all 4 are ready (desktop only)
-  if (!isMobile.value && chartInstances.value.filter(Boolean).length === 4) {
-    connectCharts()
-  }
-}
-
-function connectCharts() {
-  const validCharts = chartInstances.value.filter(chart => chart && !chart.isDisposed?.())
-  if (validCharts.length >= 2) {
-    echarts.connect(validCharts)
+  // Connect charts when all 4 are ready (desktop only)
+  if (!isMobile.value && loadingCount.value === 4 && !chartsConnected.value) {
+    connectCharts(chartInstances.value)
+    chartsConnected.value = true
   }
 }
 
@@ -228,6 +220,7 @@ function retryAll() {
   loadingCount.value = 0
   failedCount.value = 0
   chartInstances.value = []
+  chartsConnected.value = false
   // Force re-render by toggling show
   emit('close')
   setTimeout(() => {
@@ -245,24 +238,36 @@ function nextPanel() {
 }
 
 function close() {
-  // Disconnect charts
-  echarts.disconnect(CONNECT_GROUP)
-
-  // Hide tooltips
   chartInstances.value.forEach(chart => {
     if (chart && !chart.isDisposed?.()) {
       chart.dispatchAction({ type: 'hideTip' })
     }
   })
-
-  syncedDate.value = null
+  disconnectCharts()
+  chartsConnected.value = false
+  resetSync()
   emit('close')
 }
 
-// Cleanup on unmount
-onBeforeUnmount(() => {
-  echarts.disconnect(CONNECT_GROUP)
+// KeepAlive cleanup - called when component is deactivated (tab switch, modal close, etc.)
+onDeactivated(() => {
+  disconnectCharts()
+  chartsConnected.value = false
+  chartInstances.value.forEach(chart => {
+    if (chart && !chart.isDisposed?.()) {
+      chart.dispose()
+    }
+  })
   chartInstances.value = []
+  resetSync()
+})
+
+// Watch show prop to handle cleanup when modal closes
+watch(() => props.show, (newShow) => {
+  if (!newShow) {
+    disconnectCharts()
+    chartsConnected.value = false
+  }
 })
 </script>
 

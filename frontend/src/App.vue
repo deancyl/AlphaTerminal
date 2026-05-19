@@ -445,7 +445,7 @@ function getViewName(viewId) {
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
     'strategy-center': '策略中心', admin: '系统管理',
     f9: '深度资料', 'global-index': '全球指数',
-    'walk-forward': '滚动前向分析',
+    'walk-forward': '策略稳定性测试',
     'factor-sandbox': '因子沙盒',
     'market-radar': '市场雷达',
     'timemachine': '时光机'

@@ -1,6 +1,7 @@
 <template>
   <div
     class="bg-surface rounded-lg overflow-hidden flex flex-col border border-border-base transition-colors"
+    :class="{ 'ring-1 ring-primary': isActive }"
   >
     <header class="flex items-center justify-between px-3 py-2 border-b border-border-base shrink-0">
       <div class="flex items-center gap-2">
@@ -18,9 +19,9 @@
     <div class="flex-1 min-h-0">
       <SyncedKLineChart
         :symbol="panel.symbol"
+        :synced-date="syncedDate"
         :panel-index="panelIndex"
         :line-color="panel.color"
-        :connect-group="connectGroup"
         @crosshair-move="$emit('crosshair-move', $event)"
         @chart-ready="$emit('chart-ready', $event)"
       />
@@ -37,7 +38,8 @@ defineProps({
     required: true
   },
   panelIndex: { type: Number, default: 0 },
-  connectGroup: { type: String, default: null }
+  syncedDate: { type: String, default: null },
+  isActive: { type: Boolean, default: false }
 })
 
 defineEmits(['crosshair-move', 'chart-ready'])

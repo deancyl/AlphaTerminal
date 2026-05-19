@@ -2043,22 +2043,10 @@ Options chain data fetcher and T-quote table display for CFFEX and SSE options.
 ### API Endpoints
 
 ```bash
-# Get CFFEX options chain (with Greeks calculation)
-GET /api/v1/options/cffex/chain?symbol=io2506&calculate_greeks=true&underlying_price=4000
+# Get CFFEX options chain
+GET /api/v1/options/cffex/chain?symbol=io2506
 
-# Calculate Greeks using Black-Scholes model
-POST /api/v1/options/calculate_greeks
-{
-  "S": 4000,           # Underlying price
-  "K": 4000,           # Strike price
-  "T": 0.25,           # Time to expiry (years)
-  "r": 0.03,           # Risk-free rate
-  "option_type": "call",
-  "option_price": 50,  # Optional: for IV calculation
-  "sigma": 0.2         # Optional: known volatility
-}
-
-# Get Greeks for specific contract (SSE ETF options)
+# Get Greeks for specific contract
 GET /api/v1/options/greeks?code=io2506C1800
 
 # List available contracts
@@ -2072,12 +2060,11 @@ GET /api/v1/options/health
 
 | Greek | Description |
 |-------|-------------|
-| Delta | Price sensitivity to underlying |
-| Gamma | Delta sensitivity to underlying |
-| Theta | Time decay (per year) |
+| Delta | Price sensitivity |
+| Gamma | Delta sensitivity |
+| Theta | Time decay |
 | Vega | Volatility sensitivity |
-| Rho | Interest rate sensitivity |
-| IV | Implied volatility (from market price) |
+| IV | Implied volatility |
 
 ### File Locations
 
@@ -2085,8 +2072,6 @@ GET /api/v1/options/health
 |-----------|------|
 | Options Fetcher | `backend/app/services/fetchers/options_fetcher.py` |
 | Options Router | `backend/app/routers/options.py` |
-| Pricing Engine | `backend/app/services/options/pricing_engine.py` |
-| Greeks Calculator | `backend/app/services/options/greeks_calculator.py` |
 | Options Analysis | `frontend/src/components/OptionsAnalysis.vue` |
 | Options Chain | `frontend/src/components/OptionsChain.vue` |
 
@@ -2099,176 +2084,9 @@ ls backend/app/services/fetchers/options_fetcher.py
 # Test options endpoint
 curl http://localhost:60100/api/v1/options/health
 
-# Test Greeks calculation
-curl -X POST http://localhost:60100/api/v1/options/calculate_greeks \
-  -H "Content-Type: application/json" \
-  -d '{"S": 4000, "K": 4000, "T": 0.25, "r": 0.03, "option_type": "call", "sigma": 0.2}'
-
 # Check frontend component
 ls frontend/src/components/OptionsChain.vue
-
-# Run pricing engine tests
-pytest backend/tests/unit/test_services/test_options/test_pricing_engine.py -v
 ```
-
----
-
-## Black-Scholes Pricing Engine (v0.6.55)
-
-### Overview
-
-Local Black-Scholes-Merton option pricing engine for calculating Greeks and implied volatility. This engine fills the gap where akshare API doesn't provide Greeks for CFFEX index options.
-
-### Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│  BlackScholesEngine                                          │
-│  ├── price(S, K, T, r, sigma, option_type)                  │
-│  ├── delta(S, K, T, r, sigma, option_type)                  │
-│  ├── gamma(S, K, T, r, sigma)                               │
-│  ├── theta(S, K, T, r, sigma, option_type)                  │
-│  ├── vega(S, K, T, r, sigma)                                │
-│  ├── rho(S, K, T, r, sigma, option_type)                    │
-│  └── implied_volatility(option_price, S, K, T, r, type)     │
-└─────────────────────────────────────────────────────────────┘
-       │
-       ▼
-┌─────────────────────────────────────────────────────────────┐
-│  GreeksCalculator                                            │
-│  ├── parse_expiry_from_code(contract_code)                  │
-│  ├── calculate_time_to_expiry(expiry_date)                  │
-│  ├── calculate_option_greeks(...)                           │
-│  └── calculate_chain_greeks(chain_data, S, r)               │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Formulas
-
-```
-d1 = (ln(S/K) + (r + σ²/2)T) / (σ√T)
-d2 = d1 - σ√T
-
-Call Price = S·N(d1) - K·e^(-rT)·N(d2)
-Put Price = K·e^(-rT)·N(-d2) - S·N(-d1)
-
-Call Delta = N(d1)
-Put Delta = N(d1) - 1
-
-Gamma = N'(d1) / (S·σ·√T)
-
-Vega = S·√T·N'(d1)
-
-Call Theta = -S·N'(d1)·σ/(2√T) - r·K·e^(-rT)·N(d2)
-Put Theta = -S·N'(d1)·σ/(2√T) + r·K·e^(-rT)·N(-d2)
-
-Call Rho = K·T·e^(-rT)·N(d2)
-Put Rho = -K·T·e^(-rT)·N(-d2)
-```
-
-### Implied Volatility Solver
-
-Newton-Raphson iteration:
-
-```
-σ_new = σ - (price(σ) - market_price) / vega(σ)
-```
-
-Convergence criteria:
-- Maximum iterations: 100
-- Tolerance: 1e-6
-- Volatility bounds: [0.001, 5.0]
-
-### API Usage Examples
-
-```bash
-# Calculate Greeks with known volatility
-curl -X POST http://localhost:60100/api/v1/options/calculate_greeks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "S": 4000,
-    "K": 4000,
-    "T": 0.25,
-    "r": 0.03,
-    "option_type": "call",
-    "sigma": 0.2
-  }'
-
-# Response:
-{
-  "price": 174.3048,
-  "delta": 0.549738,
-  "gamma": 0.00098959,
-  "theta": -377.4096,
-  "vega": 791.6754,
-  "rho": 506.162,
-  "iv": 0.2
-}
-
-# Calculate IV from market price
-curl -X POST http://localhost:60100/api/v1/options/calculate_greeks \
-  -H "Content-Type: application/json" \
-  -d '{
-    "S": 4000,
-    "K": 4100,
-    "T": 0.25,
-    "r": 0.03,
-    "option_type": "call",
-    "option_price": 50
-  }'
-
-# Response:
-{
-  "price": 50.0,
-  "delta": 0.373993,
-  "gamma": 0.00190692,
-  "theta": -193.9304,
-  "vega": 757.746,
-  "rho": 361.4929,
-  "iv": 0.099341  # 9.93% implied volatility
-}
-```
-
-### CFFEX Chain Integration
-
-When fetching CFFEX options chain, Greeks are automatically calculated:
-
-```bash
-# Fetch chain with Greeks (underlying price auto-detected)
-GET /api/v1/options/cffex/chain?symbol=io2506&calculate_greeks=true
-
-# Fetch chain with explicit underlying price
-GET /api/v1/options/cffex/chain?symbol=io2506&calculate_greeks=true&underlying_price=4000
-
-# Fetch chain with custom risk-free rate
-GET /api/v1/options/cffex/chain?symbol=io2506&calculate_greeks=true&underlying_price=4000&risk_free_rate=0.025
-```
-
-### Expiry Date Parsing
-
-CFFEX contract codes follow the pattern: `{prefix}{YYMM}` where:
-- `io` = 沪深300股指期权
-- `mo` = 中证1000股指期权
-- `YYMM` = Year and month (e.g., `2506` = June 2025)
-
-Expiry date is the **third Friday** of the contract month.
-
-### Test Coverage
-
-| Test Category | Tests | Status |
-|---------------|-------|--------|
-| Option Pricing | 6 | ✅ Pass |
-| Greeks Calculation | 7 | ✅ Pass |
-| Implied Volatility | 6 | ✅ Pass |
-| Edge Cases | 6 | ✅ Pass |
-| Greeks with IV | 2 | ✅ Pass |
-| **Total** | **27** | **100% Pass** |
-
-### Performance
-
-- Greeks calculation: < 1ms per option
-- IV solver convergence: < 10 iterations typically
-- Chain calculation (64 options): < 50ms
 
 ---
 

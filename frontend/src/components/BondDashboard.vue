@@ -173,9 +173,9 @@
         </div>
       </div>
 
-      <!-- 无数据骨架屏 -->
+      <!-- Skeleton loading state when no data -->
       <div v-if="!hasData" class="py-3 space-y-2">
-        <div class="flex gap-2" v-for="n in 6" :key="n">
+        <div class="flex gap-2" v-for="n in 8" :key="n">
           <Skeleton height="24px" class="flex-1" />
           <Skeleton width="48px" height="24px" />
           <Skeleton width="48px" height="24px" />

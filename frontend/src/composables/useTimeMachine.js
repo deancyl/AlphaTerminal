@@ -104,12 +104,13 @@ export function useTimeMachine() {
         })
       })
       
-      session.value = response.data.session_id
-      klineData.value = response.data.kline_data || response.data.bars || []
-      currentBar.value = response.data.current_bar || 0
+      session.value = response?.data?.session_id
+      klineData.value = response?.data?.bars || []
+      currentBar.value = 0
       playbackStatus.value = 'paused'
       
-      portfolio.value = response.data.portfolio || {
+      // Initialize portfolio
+      portfolio.value = {
         cash: initialCapital,
         position_value: 0,
         total_value: initialCapital,
@@ -120,15 +121,18 @@ export function useTimeMachine() {
       trades.value = []
       
       logger.info('[TimeMachine] Session created:', session.value)
-      return response.data
+      return response?.data
     } catch (e) {
       const errorMsg = e.message || ''
       if (errorMsg.includes('404') || errorMsg.includes('not found')) {
         error.value = '会话已过期，请重新创建'
+        toast.error(error.value)
       } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
         error.value = '数据加载失败，请检查网络'
+        toast.error(error.value)
       } else {
         error.value = errorMsg || '创建会话失败'
+        toast.error(error.value)
       }
       logger.error('[TimeMachine] Create session failed:', e)
       throw e
@@ -151,16 +155,17 @@ export function useTimeMachine() {
         body: JSON.stringify({ bars })
       })
       
-      currentBar.value = response.data.current_bar
-      portfolio.value = response.data.portfolio
+      currentBar.value = response?.data?.current_bar ?? 0
+      portfolio.value = response?.data?.portfolio || portfolio.value
       
       // Add any new trades
-      if (response.data.new_trades?.length) {
+      if (response?.data?.new_trades?.length) {
         trades.value.push(...response.data.new_trades)
       }
       
-      return response.data
+      return response?.data
     } catch (e) {
+      toast.error('前进失败，请重试')
       logger.error('[TimeMachine] Step failed:', e)
       throw e
     }
@@ -181,7 +186,7 @@ export function useTimeMachine() {
         body: JSON.stringify({ action })
       })
       
-      playbackStatus.value = response.data.status
+      playbackStatus.value = response?.data?.status || 'paused'
       
       // Start local playback timer if playing
       if (playbackStatus.value === 'playing') {
@@ -190,8 +195,9 @@ export function useTimeMachine() {
         stopPlaybackTimer()
       }
       
-      return response.data
+      return response?.data
     } catch (e) {
+      toast.error('播放控制失败，请重试')
       logger.error('[TimeMachine] Toggle play failed:', e)
       throw e
     }
@@ -241,15 +247,16 @@ export function useTimeMachine() {
         body: JSON.stringify({ action, quantity })
       })
       
-      if (response.data.success) {
+      if (response?.data?.success) {
         trades.value.push(response.data.trade)
-        portfolio.value = response.data.portfolio
+        portfolio.value = response?.data?.portfolio || portfolio.value
         toast.success(`交易成功: ${action === 'buy' ? '买入' : '卖出'} ${quantity}股`)
         logger.info('[TimeMachine] Trade executed:', action, quantity)
       }
       
-      return response.data
+      return response?.data
     } catch (e) {
+      toast.error('交易执行失败，请检查资金或持仓')
       logger.error('[TimeMachine] Trade failed:', e)
       throw e
     }
@@ -269,11 +276,12 @@ export function useTimeMachine() {
         body: JSON.stringify({ target_bar: targetBar })
       })
       
-      currentBar.value = response.data.current_bar
-      portfolio.value = response.data.portfolio
+      currentBar.value = response?.data?.current_bar ?? 0
+      portfolio.value = response?.data?.portfolio || portfolio.value
       
-      return response.data
+      return response?.data
     } catch (e) {
+      toast.error('跳转失败，请重试')
       logger.error('[TimeMachine] Seek failed:', e)
       throw e
     }

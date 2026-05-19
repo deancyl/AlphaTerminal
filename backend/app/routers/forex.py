@@ -592,19 +592,21 @@ async def get_cross_rate_matrix(
 
 
 async def _fetch_forex_matrix_background(currencies: str):
-    """Background fetch for cross-rate matrix"""
+    """Background fetch for cross-rate matrix (O(N) optimized)"""
     try:
         currency_list = [c.strip().upper() for c in currencies.split(",") if c.strip()]
         
         if len(currency_list) < 2:
             return
         
+        # Step 1: Fetch all data sources in parallel (O(1) API calls)
         spot_quotes, cfets_rmb, cfets_cross = await asyncio.gather(
             forex_fetcher.get_spot_quotes(),
             forex_fetcher.get_cfets_spot(),
             forex_fetcher.get_cfets_crosses()
         )
         
+        # Step 2: Build rates dictionary (O(M) where M = total quotes)
         rates_dict: Dict[str, Decimal] = {}
         
         for q in spot_quotes:
@@ -627,9 +629,38 @@ async def _fetch_forex_matrix_background(currencies: str):
             if mid and "/" in pair:
                 rates_dict[pair] = Decimal(str(mid))
         
+        # Step 3: Pre-compute USD-based rates for all currencies (O(N))
+        usd_rates: Dict[str, Decimal] = {}
+        
+        for curr in currency_list:
+            if curr == "USD":
+                usd_rates[curr] = Decimal('1.0')
+            else:
+                # Try direct USD rate
+                usd_curr = f"USD/{curr}"
+                curr_usd = f"{curr}/USD"
+                
+                if usd_curr in rates_dict:
+                    usd_rates[curr] = rates_dict[usd_curr]
+                elif curr_usd in rates_dict:
+                    usd_rates[curr] = Decimal('1') / rates_dict[curr_usd]
+                else:
+                    # Try via CNY as fallback
+                    usd_cny = rates_dict.get("USD/CNY")
+                    curr_cny = rates_dict.get(f"{curr}/CNY") or rates_dict.get(f"{curr}CNY")
+                    cny_curr = rates_dict.get(f"CNY/{curr}")
+                    
+                    if usd_cny and curr_cny:
+                        usd_rates[curr] = usd_cny / curr_cny
+                    elif usd_cny and cny_curr:
+                        usd_rates[curr] = usd_cny * cny_curr
+        
+        # Step 4: Calculate cross-rates in single pass (O(N²) but with O(1) lookups)
         matrix = []
         for base_curr in currency_list:
             row_rates = []
+            base_usd = usd_rates.get(base_curr)
+            
             for quote_curr in currency_list:
                 if base_curr == quote_curr:
                     row_rates.append(CrossRateCell(
@@ -639,23 +670,43 @@ async def _fetch_forex_matrix_background(currencies: str):
                         is_calculated=False
                     ))
                 else:
-                    rate = forex_fetcher.calculate_cross_rate(base_curr, quote_curr, rates_dict)
-                    if rate is not None:
-                        direct_key = f"{base_curr}/{quote_curr}"
-                        is_calculated = direct_key not in rates_dict
+                    # Try direct rate first
+                    direct_key = f"{base_curr}/{quote_curr}"
+                    inverse_key = f"{quote_curr}/{base_curr}"
+                    
+                    if direct_key in rates_dict:
                         row_rates.append(CrossRateCell(
-                            rate=float(rate),
-                            change_pct=None,
-                            is_base=False,
-                            is_calculated=is_calculated
-                        ))
-                    else:
-                        row_rates.append(CrossRateCell(
-                            rate=None,
+                            rate=float(rates_dict[direct_key]),
                             change_pct=None,
                             is_base=False,
                             is_calculated=False
                         ))
+                    elif inverse_key in rates_dict:
+                        row_rates.append(CrossRateCell(
+                            rate=float(Decimal('1') / rates_dict[inverse_key]),
+                            change_pct=None,
+                            is_base=False,
+                            is_calculated=False
+                        ))
+                    else:
+                        # Calculate via USD (triangular arbitrage)
+                        quote_usd = usd_rates.get(quote_curr)
+                        
+                        if base_usd and quote_usd:
+                            cross_rate = base_usd / quote_usd
+                            row_rates.append(CrossRateCell(
+                                rate=float(cross_rate),
+                                change_pct=None,
+                                is_base=False,
+                                is_calculated=True
+                            ))
+                        else:
+                            row_rates.append(CrossRateCell(
+                                rate=None,
+                                change_pct=None,
+                                is_base=False,
+                                is_calculated=False
+                            ))
             
             matrix.append(CrossRateRow(
                 base_currency=base_curr,

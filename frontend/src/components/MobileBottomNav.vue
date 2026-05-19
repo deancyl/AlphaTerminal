@@ -108,7 +108,7 @@ const moreTabs = [
   { id: 'factor-sandbox', label: '因子', icon: '🔬' },
   { id: 'market-radar', label: '雷达', icon: '📡' },
   { id: 'timemachine', label: '时光机', icon: '⏰' },
-  { id: 'walk-forward', label: '前向', icon: '📊' },
+  { id: 'walk-forward', label: '稳定性', icon: '📊' },
   { id: 'admin', label: '设置', icon: '⚙️' },
 ]
 

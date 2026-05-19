@@ -16,7 +16,7 @@
         </button>
         <div class="ml-auto text-xs text-theme-muted">
           <span v-if="activeTab === 'quick'">快速回测：预设策略一键测试</span>
-          <span v-else-if="activeTab === 'advanced'">策略开发：自定义策略代码</span>
+          <span v-else-if="activeTab === 'advanced'">策略开发：可视化构建或自定义代码</span>
           <span v-else-if="activeTab === 'ml'">ML策略：使用机器学习模型进行预测和组合优化</span>
           <span v-else-if="activeTab === 'attribution'">多因子归因：拖拽因子组合进行归因分析</span>
         </div>
