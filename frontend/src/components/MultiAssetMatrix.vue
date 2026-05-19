@@ -66,11 +66,10 @@
             :key="panel.symbol"
             :panel="panel"
             :panel-index="idx"
-            :synced-date="syncedDate"
-            :is-active="activePanel === idx"
-            @crosshair-move="onCrosshairMove(idx, $event)"
+            :connect-group="CONNECT_GROUP"
             @chart-ready="registerChart(idx, $event.chart)"
             @chart-error="handleChartError(idx)"
+            @crosshair-move="syncedDate = $event"
           />
         </div>
 
@@ -97,11 +96,9 @@
               :key="currentPanel.symbol"
               :panel="currentPanel"
               :panel-index="currentPanelIndex"
-              :synced-date="syncedDate"
-              :is-active="true"
-              :disable-crosshair-sync="true"
-              @crosshair-move="onCrosshairMove(currentPanelIndex, $event)"
+              :connect-group="CONNECT_GROUP"
               @chart-ready="registerChart(currentPanelIndex, $event.chart)"
+              @crosshair-move="syncedDate = $event"
             />
           </div>
 
@@ -163,9 +160,9 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, defineAsyncComponent, computed } from 'vue'
+import { ref, shallowRef, defineAsyncComponent, computed, onBeforeUnmount } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
-import { useCrosshairSync } from '@/composables/useCrosshairSync.js'
+import * as echarts from 'echarts'
 import Tooltip from '@/components/Tooltip.vue'
 
 const MatrixPanel = defineAsyncComponent(() => import('./MatrixPanel.vue'))
@@ -193,16 +190,34 @@ const panels = ref([
 // Mobile: Current panel
 const currentPanel = computed(() => panels.value[currentPanelIndex.value])
 
-const { syncedDate, activePanel, onCrosshairMove, resetSync } = useCrosshairSync()
+// Native ECharts connect group ID
+const CONNECT_GROUP = 'matrix-group'
+
+// Chart instances for native connect
 const chartInstances = shallowRef([])
 
 // Loading and error tracking
 const loadingCount = ref(0)
 const failedCount = ref(0)
 
+// Synced date display (for footer)
+const syncedDate = ref(null)
+
 function registerChart(idx, chart) {
   chartInstances.value[idx] = chart
   loadingCount.value++
+
+  // Connect all charts when all 4 are ready (desktop only)
+  if (!isMobile.value && chartInstances.value.filter(Boolean).length === 4) {
+    connectCharts()
+  }
+}
+
+function connectCharts() {
+  const validCharts = chartInstances.value.filter(chart => chart && !chart.isDisposed?.())
+  if (validCharts.length >= 2) {
+    echarts.connect(validCharts)
+  }
 }
 
 function handleChartError(idx) {
@@ -230,14 +245,25 @@ function nextPanel() {
 }
 
 function close() {
+  // Disconnect charts
+  echarts.disconnect(CONNECT_GROUP)
+
+  // Hide tooltips
   chartInstances.value.forEach(chart => {
     if (chart && !chart.isDisposed?.()) {
       chart.dispatchAction({ type: 'hideTip' })
     }
   })
-  resetSync()
+
+  syncedDate.value = null
   emit('close')
 }
+
+// Cleanup on unmount
+onBeforeUnmount(() => {
+  echarts.disconnect(CONNECT_GROUP)
+  chartInstances.value = []
+})
 </script>
 
 <style scoped>

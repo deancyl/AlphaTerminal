@@ -163,7 +163,7 @@ const allIndexes = ref([
   { symbol: 'IXIC', name: '纳斯达克', flag: '🇺🇸', region: 'americas', price: 14500.00, change_pct: 1.20, open: 14320.00, high: 14580.00, low: 14300.00, sparkline: generateSparkline(14500, 1.20) },
   { symbol: 'DJI', name: '道琼斯', flag: '🇺🇸', region: 'americas', price: 33500.00, change_pct: 0.45, open: 33350.00, high: 33600.00, low: 33300.00, sparkline: generateSparkline(33500, 0.45) },
   { symbol: 'RUT', name: '罗素2000', flag: '🇺🇸', region: 'americas', price: 1980.00, change_pct: 0.65, open: 1965.00, high: 1990.00, low: 1960.00, sparkline: generateSparkline(1980, 0.65) },
-  { symbol: 'VIX', name: '波动率指数', flag: '🇺🇸', region: 'americas', price: 18.50, change_pct: -2.30, open: 19.00, high: 19.50, low: 18.20, sparkline: generateSparkline(18.50, -2.30) },
+  { symbol: 'VHSI', name: '恒指波幅', flag: '🇭🇰', region: 'asia', price: 18.50, change_pct: -2.30, open: 19.00, high: 19.50, low: 18.20, sparkline: generateSparkline(18.50, -2.30) },
   { symbol: 'TSX', name: '多伦多综指', flag: '🇨🇦', region: 'americas', price: 21500.00, change_pct: 0.35, open: 21420.00, high: 21550.00, low: 21400.00, sparkline: generateSparkline(21500, 0.35) },
   { symbol: 'IBOV', name: '巴西博维斯帕', flag: '🇧🇷', region: 'americas', price: 125000.00, change_pct: 0.80, open: 124000.00, high: 125500.00, low: 123800.00, sparkline: generateSparkline(125000, 0.80) },
   

@@ -157,11 +157,11 @@ class TimeMachineSession:
         """Check if playback has reached the end."""
         return self.current_bar_index >= len(self.bars) - 1
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self, include_bars: bool = False) -> Dict[str, Any]:
         """Serialize session state."""
         current_prices = {self.symbol: self.current_price()}
         
-        return {
+        result = {
             "session_id": self.session_id,
             "symbol": self.symbol,
             "start_date": self.start_date.isoformat(),
@@ -175,6 +175,26 @@ class TimeMachineSession:
             "portfolio": self.portfolio.to_dict(current_prices),
             "is_finished": self.is_finished(),
         }
+        
+        # Include bars data for frontend K-line chart (alias as kline_data for compatibility)
+        if include_bars and self.bars:
+            result["bars"] = [
+                {
+                    "date": b.date,
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                    "amount": b.amount,
+                    "change_pct": b.change_pct,
+                }
+                for b in self.bars
+            ]
+            # Add kline_data alias for frontend compatibility
+            result["kline_data"] = result["bars"]
+        
+        return result
 
 
 class SessionManager:
@@ -333,7 +353,7 @@ async def create_session(request: SessionCreateRequest):
         
         logger.info(f"[TimeMachine] Created session {session.session_id} for {request.symbol}")
         
-        return success_response(session.to_dict())
+        return success_response(session.to_dict(include_bars=True))
         
     except HTTPException:
         raise

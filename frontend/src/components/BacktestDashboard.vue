@@ -47,15 +47,26 @@
         <div class="text-[10px] text-theme-accent font-bold mb-2">⚙️ 策略参数</div>
 
         <div class="space-y-1.5">
-          <!-- 策略选择 -->
+<!-- 策略选择 -->
           <div class="flex items-center justify-between">
             <span class="text-[10px] text-theme-muted w-8">策略</span>
             <select v-model="strategyType"
               class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] focus:outline-none">
-              <optgroup label="传统策略">
+              <optgroup label="趋势跟踪">
                 <option value="ma_crossover">双均线</option>
+                <option value="momentum">价格动量</option>
+              </optgroup>
+              <optgroup label="均值回归">
                 <option value="rsi_oversold">RSI超卖</option>
                 <option value="bollinger_bands">布林带</option>
+              </optgroup>
+              <optgroup label="震荡指标">
+                <option value="macd_cross">MACD金叉</option>
+                <option value="kdj_cross">KDJ金叉</option>
+              </optgroup>
+              <optgroup label="突破策略">
+                <option value="volume_breakout">放量突破</option>
+                <option value="dual_thrust">Dual Thrust</option>
               </optgroup>
               <optgroup label="ML策略">
                 <option value="ml_lightgbm">ML-LightGBM</option>
@@ -125,6 +136,216 @@
             <div class="hidden md:block text-[10px] text-theme-muted leading-tight">布林带标准差倍数（默认2倍）</div>
           </template>
 
+          <!-- MACD参数 -->
+          <template v-if="strategyType === 'macd_cross'">
+            <div class="grid grid-cols-3 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">快线</span>
+                <input v-model.number="macdFast" type="number" min="5" max="20"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">慢线</span>
+                <input v-model.number="macdSlow" type="number" min="15" max="40"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">信号</span>
+                <input v-model.number="macdSignal" type="number" min="5" max="15"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">DIF上穿DEA买入，下穿卖出</div>
+          </template>
+
+          <!-- KDJ参数 -->
+          <template v-if="strategyType === 'kdj_cross'">
+            <div class="grid grid-cols-3 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">周期</span>
+                <input v-model.number="kdjN" type="number" min="5" max="20"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">K平滑</span>
+                <input v-model.number="kdjM1" type="number" min="1" max="10"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">D平滑</span>
+                <input v-model.number="kdjM2" type="number" min="1" max="10"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">K线上穿D线买入（K&lt;30），下穿卖出（K&gt;70）</div>
+          </template>
+
+          <!-- 放量突破参数 -->
+          <template v-if="strategyType === 'volume_breakout'">
+            <div class="grid grid-cols-3 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">量周期</span>
+                <input v-model.number="volPeriod" type="number" min="10" max="60"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">量倍数</span>
+                <input v-model.number="volMult" type="number" min="1.5" max="5" step="0.5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">价周期</span>
+                <input v-model.number="pricePeriod" type="number" min="10" max="60"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">成交量放大{{ volMult }}倍且价格突破{{ pricePeriod }}日高点买入</div>
+          </template>
+
+          <!-- 动量参数 -->
+          <template v-if="strategyType === 'momentum'">
+            <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">周期</span>
+                <input v-model.number="momPeriod" type="number" min="5" max="30"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">阈值</span>
+                <input v-model.number="momThreshold" type="number" min="-5" max="5" step="0.5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">动量={{ momThreshold }}时为临界点，向上买入向下卖出</div>
+          </template>
+
+          <!-- Dual Thrust参数 -->
+          <template v-if="strategyType === 'dual_thrust'">
+            <div class="grid grid-cols-3 md:flex md:flex-col gap-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">周期</span>
+                <input v-model.number="dtPeriod" type="number" min="2" max="10"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">上轨</span>
+                <input v-model.number="dtK1" type="number" min="0.1" max="1" step="0.1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-theme-muted w-8">下轨</span>
+                <input v-model.number="dtK2" type="number" min="0.1" max="1" step="0.1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-14 text-center focus:outline-none focus:border-[var(--color-info)]/60" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">价格突破上轨买入，突破下轨卖出</div>
+          </template>
+
+          <!-- MACD参数 -->
+          <template v-if="strategyType === 'macd_cross'">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">快线</span>
+                <input v-model.number="macdFast" type="number" min="5" max="20"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">慢线</span>
+                <input v-model.number="macdSlow" type="number" min="15" max="40"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">信号</span>
+                <input v-model.number="macdSignal" type="number" min="5" max="15"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">DIF上穿DEA时金叉买入</div>
+          </template>
+
+          <!-- KDJ参数 -->
+          <template v-if="strategyType === 'kdj_cross'">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">周期N</span>
+                <input v-model.number="kdjN" type="number" min="5" max="20"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">M1</span>
+                <input v-model.number="kdjM1" type="number" min="2" max="5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">M2</span>
+                <input v-model.number="kdjM2" type="number" min="2" max="5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">K线上穿D线且K&lt;30时买入</div>
+          </template>
+
+          <!-- 放量突破参数 -->
+          <template v-if="strategyType === 'volume_breakout'">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">量周期</span>
+                <input v-model.number="volPeriod" type="number" min="5" max="60"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">放量倍</span>
+                <input v-model.number="volMult" type="number" min="1.5" max="5" step="0.5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">价周期</span>
+                <input v-model.number="pricePeriod" type="number" min="5" max="60"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">成交量放大且价格突破时买入</div>
+          </template>
+
+          <!-- 价格动量参数 -->
+          <template v-if="strategyType === 'price_momentum'">
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">动量周期</span>
+                <input v-model.number="momentumPeriod" type="number" min="5" max="30"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">阈值%</span>
+                <input v-model.number="momentumThreshold" type="number" min="-10" max="10" step="0.5"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">动量向上穿越阈值时买入</div>
+          </template>
+
+          <!-- Dual Thrust参数 -->
+          <template v-if="strategyType === 'dual_thrust'">
+            <div class="grid grid-cols-3 gap-2">
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">回溯</span>
+                <input v-model.number="dtPeriod" type="number" min="2" max="20"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">K1</span>
+                <input v-model.number="dtK1" type="number" min="0.1" max="1" step="0.1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+              <div class="flex flex-col items-center">
+                <span class="text-[9px] text-theme-muted mb-1">K2</span>
+                <input v-model.number="dtK2" type="number" min="0.1" max="1" step="0.1"
+                  class="bg-terminal-bg/60 border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[10px] text-[var(--color-info)] w-full text-center focus:outline-none" />
+              </div>
+            </div>
+            <div class="hidden md:block text-[10px] text-theme-muted leading-tight">价格突破区间时入场</div>
+          </template>
+
           <!-- ML策略参数 -->
           <template v-if="strategyType.startsWith('ml_')">
             <div class="grid grid-cols-2 md:flex md:flex-col gap-2">
@@ -172,7 +393,7 @@
             <span class="text-[10px] font-mono text-theme-secondary">{{ (initialCapital / 10000).toFixed(0) }}万</span>
           </div>
 
-          <!-- 策略规则提示（根据所选策略动态切换） -->
+<!-- 策略规则提示（根据所选策略动态切换） -->
           <div class="hidden md:block mt-2 px-2 py-1.5 rounded-sm bg-[var(--color-info-bg)] border border-[var(--color-info-border)] text-[10px] leading-snug">
             <template v-if="strategyType === 'ma_crossover'">
               💡 <span class="text-[var(--color-info-light)] font-medium">双均线策略：</span>
@@ -189,6 +410,31 @@
               <span class="text-[var(--color-info-light)]/70">价格触下轨时<span class="text-[var(--color-success)]">买入</span>；</span>
               <span class="text-[var(--color-info-light)]/70">价格触上轨时<span class="text-[var(--color-danger)]">卖出</span>。</span>
             </template>
+            <template v-else-if="strategyType === 'macd_cross'">
+              💡 <span class="text-[var(--color-info-light)] font-medium">MACD金叉策略：</span>
+              <span class="text-[var(--color-info-light)]/70">DIF上穿DEA时<span class="text-[var(--color-success)]">金叉→买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">DIF下穿DEA时<span class="text-[var(--color-danger)]">死叉→卖出</span>。</span>
+            </template>
+            <template v-else-if="strategyType === 'kdj_cross'">
+              💡 <span class="text-[var(--color-info-light)] font-medium">KDJ金叉策略：</span>
+              <span class="text-[var(--color-info-light)]/70">K线上穿D线且K&lt;30时<span class="text-[var(--color-success)]">超卖金叉→买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">K线下穿D线且K&gt;70时<span class="text-[var(--color-danger)]">超买死叉→卖出</span>。</span>
+            </template>
+            <template v-else-if="strategyType === 'volume_breakout'">
+              💡 <span class="text-[var(--color-info-light)] font-medium">放量突破策略：</span>
+              <span class="text-[var(--color-info-light)]/70">成交量放大{{ volMult }}倍且价格突破{{ pricePeriod }}日高点时<span class="text-[var(--color-success)]">买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">价格跌破10日均线时<span class="text-[var(--color-danger)]">卖出</span>。</span>
+            </template>
+            <template v-else-if="strategyType === 'price_momentum'">
+              💡 <span class="text-[var(--color-info-light)] font-medium">价格动量策略：</span>
+              <span class="text-[var(--color-info-light)]/70">动量向上穿越{{ momentumThreshold }}%时<span class="text-[var(--color-success)]">买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">动量向下穿越-{{ momentumThreshold }}%时<span class="text-[var(--color-danger)]">卖出</span>。</span>
+            </template>
+            <template v-else-if="strategyType === 'dual_thrust'">
+              💡 <span class="text-[var(--color-info-light)] font-medium">Dual Thrust策略：</span>
+              <span class="text-[var(--color-info-light)]/70">价格突破上轨时<span class="text-[var(--color-success)]">买入</span>；</span>
+              <span class="text-[var(--color-info-light)]/70">价格突破下轨时<span class="text-[var(--color-danger)]">卖出</span>。</span>
+            </template>
             <template v-else-if="strategyType.startsWith('ml_')">
               💡 <span class="text-[var(--color-info-light)] font-medium">ML策略：</span>
               <span class="text-[var(--color-info-light)]/70">机器学习模型预测涨跌概率，</span>
@@ -196,6 +442,23 @@
               <span class="text-[var(--color-info-light)]/70">预测值 &lt; {{ 1 - mlThreshold }} 时<span class="text-[var(--color-danger)]">卖出</span>。</span>
             </template>
           </div>
+        </div>
+      </div>
+
+      <!-- 代码预览按钮 -->
+      <div class="px-3 py-2.5 border-b border-theme">
+        <button
+          @click="showCodePreview = !showCodePreview"
+          class="w-full min-h-[44px] py-2 text-[10px] rounded-sm bg-[var(--color-info-bg)] border border-[var(--color-info-border)] text-[var(--color-info)] hover:bg-[var(--color-info-hover)]/30 transition-colors"
+          type="button"
+          :aria-expanded="showCodePreview"
+        >
+          {{ showCodePreview ? '▼ 隐藏代码预览' : '▶ 显示代码预览' }}
+        </button>
+        
+        <!-- Code Preview Panel -->
+        <div v-if="showCodePreview" class="mt-2 p-2 rounded-sm bg-terminal-bg border border-theme font-mono text-[9px] text-theme-secondary overflow-x-auto max-h-48">
+          <pre class="whitespace-pre-wrap">{{ generatedStrategyCode }}</pre>
         </div>
       </div>
 
@@ -629,6 +892,55 @@ const strategyPresets = [
     windowPreset: '1y',
     desc: '触下轨买入，触上轨卖出'
   },
+  {
+    name: 'MACD金叉',
+    icon: '⚡',
+    strategyType: 'macd_cross',
+    macdFast: 12,
+    macdSlow: 26,
+    macdSignal: 9,
+    windowPreset: '1y',
+    desc: 'DIF上穿DEA买入，下穿卖出'
+  },
+  {
+    name: 'KDJ金叉',
+    icon: '🎯',
+    strategyType: 'kdj_cross',
+    kdjN: 9,
+    kdjM1: 3,
+    kdjM2: 3,
+    windowPreset: '6m',
+    desc: 'K线上穿D线买入，下穿卖出'
+  },
+  {
+    name: '放量突破',
+    icon: '📈',
+    strategyType: 'volume_breakout',
+    volPeriod: 20,
+    volMult: 2,
+    pricePeriod: 20,
+    windowPreset: '1y',
+    desc: '成交量放大且价格突破买入'
+  },
+  {
+    name: '动量策略',
+    icon: '🎯',
+    strategyType: 'momentum',
+    momPeriod: 14,
+    momThreshold: 0,
+    windowPreset: '1y',
+    desc: '动量向上买入，向下卖出'
+  },
+  {
+    name: 'Dual Thrust',
+    icon: '🚀',
+    strategyType: 'dual_thrust',
+    dtPeriod: 4,
+    dtK1: 0.5,
+    dtK2: 0.5,
+    windowPreset: '3m',
+    desc: '价格突破区间时入场'
+  },
 ]
 
 function applyPreset(preset) {
@@ -640,6 +952,20 @@ function applyPreset(preset) {
   if (preset.rsiSell != null) rsiSell.value = preset.rsiSell
   if (preset.bbPeriod != null) bbPeriod.value = preset.bbPeriod
   if (preset.bbStd != null) bbStd.value = preset.bbStd
+  if (preset.macdFast != null) macdFast.value = preset.macdFast
+  if (preset.macdSlow != null) macdSlow.value = preset.macdSlow
+  if (preset.macdSignal != null) macdSignal.value = preset.macdSignal
+  if (preset.kdjN != null) kdjN.value = preset.kdjN
+  if (preset.kdjM1 != null) kdjM1.value = preset.kdjM1
+  if (preset.kdjM2 != null) kdjM2.value = preset.kdjM2
+  if (preset.volPeriod != null) volPeriod.value = preset.volPeriod
+  if (preset.volMult != null) volMult.value = preset.volMult
+  if (preset.pricePeriod != null) pricePeriod.value = preset.pricePeriod
+  if (preset.momPeriod != null) momPeriod.value = preset.momPeriod
+  if (preset.momThreshold != null) momThreshold.value = preset.momThreshold
+  if (preset.dtPeriod != null) dtPeriod.value = preset.dtPeriod
+  if (preset.dtK1 != null) dtK1.value = preset.dtK1
+  if (preset.dtK2 != null) dtK2.value = preset.dtK2
   if (preset.windowPreset) windowPreset.value = preset.windowPreset
 }
 
@@ -652,6 +978,20 @@ function isPresetActive(preset) {
   if (preset.rsiSell != null && rsiSell.value !== preset.rsiSell) return false
   if (preset.bbPeriod != null && bbPeriod.value !== preset.bbPeriod) return false
   if (preset.bbStd != null && bbStd.value !== preset.bbStd) return false
+  if (preset.macdFast != null && macdFast.value !== preset.macdFast) return false
+  if (preset.macdSlow != null && macdSlow.value !== preset.macdSlow) return false
+  if (preset.macdSignal != null && macdSignal.value !== preset.macdSignal) return false
+  if (preset.kdjN != null && kdjN.value !== preset.kdjN) return false
+  if (preset.kdjM1 != null && kdjM1.value !== preset.kdjM1) return false
+  if (preset.kdjM2 != null && kdjM2.value !== preset.kdjM2) return false
+  if (preset.volPeriod != null && volPeriod.value !== preset.volPeriod) return false
+  if (preset.volMult != null && volMult.value !== preset.volMult) return false
+  if (preset.pricePeriod != null && pricePeriod.value !== preset.pricePeriod) return false
+  if (preset.momPeriod != null && momPeriod.value !== preset.momPeriod) return false
+  if (preset.momThreshold != null && momThreshold.value !== preset.momThreshold) return false
+  if (preset.dtPeriod != null && dtPeriod.value !== preset.dtPeriod) return false
+  if (preset.dtK1 != null && dtK1.value !== preset.dtK1) return false
+  if (preset.dtK2 != null && dtK2.value !== preset.dtK2) return false
   return true
 }
 
@@ -742,10 +1082,162 @@ const bbStd         = ref(2)
 const windowPreset  = ref('1y')
 const initialCapital = 100000
 
+// MACD parameters
+const macdFast      = ref(12)
+const macdSlow      = ref(26)
+const macdSignal    = ref(9)
+
+// KDJ parameters
+const kdjN          = ref(9)
+const kdjM1         = ref(3)
+const kdjM2         = ref(3)
+
+// Volume Breakout parameters
+const volPeriod     = ref(20)
+const volMult       = ref(2)
+const pricePeriod   = ref(20)
+
+// Momentum parameters
+const momPeriod     = ref(10)
+const momThreshold  = ref(0)
+const momentumPeriod = momPeriod      // Alias for template
+const momentumThreshold = momThreshold // Alias for template
+
+// Dual Thrust parameters
+const dtPeriod      = ref(4)
+const dtK1          = ref(0.5)
+const dtK2          = ref(0.5)
+
 // ML策略参数
 const mlModelId     = ref('')
 const mlFeatureSet  = ref('Alpha158')
 const mlThreshold   = ref(0.5)
+
+// 代码预览状态
+const showCodePreview = ref(false)
+
+// 生成策略代码预览
+const generatedStrategyCode = computed(() => {
+  return generateStrategyCodePreview(strategyType.value, {
+    fastMa: fastMa.value,
+    slowMa: slowMa.value,
+    rsiPeriod: rsiPeriod.value,
+    rsiBuy: rsiBuy.value,
+    rsiSell: rsiSell.value,
+    bbPeriod: bbPeriod.value,
+    bbStd: bbStd.value,
+    macdFast: macdFast.value,
+    macdSlow: macdSlow.value,
+    macdSignal: macdSignal.value,
+    kdjN: kdjN.value,
+    kdjM1: kdjM1.value,
+    kdjM2: kdjM2.value,
+    volPeriod: volPeriod.value,
+    volMult: volMult.value,
+    pricePeriod: pricePeriod.value,
+    momentumPeriod: momPeriod.value,
+    momentumThreshold: momThreshold.value,
+    dtPeriod: dtPeriod.value,
+    dtK1: dtK1.value,
+    dtK2: dtK2.value
+  })
+})
+
+function generateStrategyCodePreview(type, params) {
+  const templates = {
+    ma_crossover: `# 双均线策略
+# 快线周期: ${params.fastMa}, 慢线周期: ${params.slowMa}
+
+ma_fast = df['close'].rolling(${params.fastMa}).mean()
+ma_slow = df['close'].rolling(${params.slowMa}).mean()
+buy = (ma_fast > ma_slow) & (ma_fast.shift(1) <= ma_slow.shift(1))
+sell = (ma_fast < ma_slow) & (ma_fast.shift(1) >= ma_slow.shift(1))
+output = {'indicators': {'ma_fast': ma_fast, 'ma_slow': ma_slow}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    rsi_oversold: `# RSI超卖策略
+# 周期: ${params.rsiPeriod}, 买入阈值: ${params.rsiBuy}, 卖出阈值: ${params.rsiSell}
+
+delta = df['close'].diff()
+gain = delta.where(delta > 0, 0)
+loss = -delta.where(delta < 0, 0)
+avg_gain = gain.rolling(window=${params.rsiPeriod}).mean()
+avg_loss = loss.rolling(window=${params.rsiPeriod}).mean()
+rs = avg_gain / avg_loss
+rsi = 100 - (100 / (1 + rs))
+buy = rsi < ${params.rsiBuy}
+sell = rsi > ${params.rsiSell}
+output = {'indicators': {'rsi': rsi}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    bollinger_bands: `# 布林带策略
+# 周期: ${params.bbPeriod}, 标准差倍数: ${params.bbStd}
+
+middle = df['close'].rolling(${params.bbPeriod}).mean()
+std = df['close'].rolling(${params.bbPeriod}).std()
+upper = middle + ${params.bbStd} * std
+lower = middle - ${params.bbStd} * std
+buy = (df['close'] < lower) & (df['close'].shift(1) >= lower.shift(1))
+sell = (df['close'] > upper) & (df['close'].shift(1) <= upper.shift(1))
+output = {'indicators': {'upper': upper, 'middle': middle, 'lower': lower}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    macd_cross: `# MACD金叉策略
+# 快线: ${params.macdFast}, 慢线: ${params.macdSlow}, 信号线: ${params.macdSignal}
+
+ema_fast = df['close'].ewm(span=${params.macdFast}, adjust=False).mean()
+ema_slow = df['close'].ewm(span=${params.macdSlow}, adjust=False).mean()
+dif = ema_fast - ema_slow
+dea = dif.ewm(span=${params.macdSignal}, adjust=False).mean()
+buy = (dif > dea) & (dif.shift(1) <= dea.shift(1))
+sell = (dif < dea) & (dif.shift(1) >= dea.shift(1))
+output = {'indicators': {'dif': dif, 'dea': dea}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    kdj_cross: `# KDJ金叉策略
+# 周期N: ${params.kdjN}, M1: ${params.kdjM1}, M2: ${params.kdjM2}
+
+lowest_low = df['low'].rolling(window=${params.kdjN}).min()
+highest_high = df['high'].rolling(window=${params.kdjN}).max()
+rsv = (df['close'] - lowest_low) / (highest_high - lowest_low) * 100
+k = rsv.ewm(com=${params.kdjM1}-1, adjust=False).mean()
+d = k.ewm(com=${params.kdjM2}-1, adjust=False).mean()
+buy = (k > d) & (k.shift(1) <= d.shift(1)) & (k < 30)
+sell = (k < d) & (k.shift(1) >= d.shift(1)) & (k > 70)
+output = {'indicators': {'k': k, 'd': d}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    volume_breakout: `# 放量突破策略
+# 量周期: ${params.volPeriod}, 放量倍数: ${params.volMult}, 价周期: ${params.pricePeriod}
+
+vol_ma = df['volume'].rolling(window=${params.volPeriod}).mean()
+price_high = df['close'].rolling(window=${params.pricePeriod}).max()
+volume_surge = df['volume'] > vol_ma * ${params.volMult}
+price_breakout = df['close'] >= price_high.shift(1)
+buy = volume_surge & price_breakout
+sell = df['close'] < df['close'].rolling(window=${params.pricePeriod}).mean()
+output = {'indicators': {'vol_ma': vol_ma, 'price_high': price_high}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    price_momentum: `# 价格动量策略
+# 动量周期: ${params.momentumPeriod}, 阈值: ${params.momentumThreshold}%
+
+momentum = (df['close'] - df['close'].shift(${params.momentumPeriod})) / df['close'].shift(${params.momentumPeriod}) * 100
+buy = (momentum > ${params.momentumThreshold}) & (momentum.shift(1) <= ${params.momentumThreshold})
+sell = (momentum < -${params.momentumThreshold}) & (momentum.shift(1) >= -${params.momentumThreshold})
+output = {'indicators': {'momentum': momentum}, 'signals': {'buy': buy, 'sell': sell}}`,
+
+    dual_thrust: `# Dual Thrust策略
+# 回溯周期: ${params.dtPeriod}, K1: ${params.dtK1}, K2: ${params.dtK2}
+
+hh = df['high'].rolling(window=${params.dtPeriod}).max()
+ll = df['low'].rolling(window=${params.dtPeriod}).min()
+hc = df['close'].rolling(window=${params.dtPeriod}).max()
+lc = df['close'].rolling(window=${params.dtPeriod}).min()
+range_val = max(hh - ll, hc - lc)
+upper = df['open'] + ${params.dtK1} * range_val
+lower = df['open'] - ${params.dtK2} * range_val
+buy = df['close'] > upper.shift(1)
+sell = df['close'] < lower.shift(1)
+output = {'indicators': {'upper': upper, 'lower': lower}, 'signals': {'buy': buy, 'sell': sell}}`
+  }
+  
+  return templates[type] || `# 策略: ${type}\n# 请选择具体策略类型查看代码预览`
+}
 
 // ── 标的格式校验（8位 = 市场前缀 + 6位代码）─────────────────────
 const symbolValid = computed(() => /^(sh|sz)[0-9]{6}$/.test(symbol.value.trim()))
@@ -885,6 +1377,11 @@ async function runBacktest() {
           case 'ma_crossover':    return { fast_ma: fastMa.value,  slow_ma: slowMa.value }
           case 'rsi_oversold':   return { rsi_period: rsiPeriod.value, rsi_buy: rsiBuy.value, rsi_sell: rsiSell.value }
           case 'bollinger_bands': return { bb_period: bbPeriod.value, bb_std: bbStd.value }
+          case 'macd_cross':    return { macd_fast: macdFast.value, macd_slow: macdSlow.value, macd_signal: macdSignal.value }
+          case 'kdj_cross':     return { kdj_n: kdjN.value, kdj_m1: kdjM1.value, kdj_m2: kdjM2.value }
+          case 'volume_breakout': return { vol_period: volPeriod.value, vol_mult: volMult.value, price_period: pricePeriod.value }
+          case 'momentum':      return { mom_period: momPeriod.value, mom_threshold: momThreshold.value }
+          case 'dual_thrust':   return { dt_period: dtPeriod.value, dt_k1: dtK1.value, dt_k2: dtK2.value }
           default:                return {}
         }
       })(),

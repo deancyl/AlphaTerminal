@@ -8,16 +8,18 @@ Provides endpoints for:
 """
 
 import asyncio
+import json
 import logging
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any, Tuple, AsyncGenerator
 
 import numpy as np
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.utils.response import success_response, error_response, ErrorCode
@@ -369,6 +371,157 @@ async def screen_stocks(req: ScreenRequest):
         error_type = type(e).__name__
         user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
         return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
+
+
+@router.get("/screen/stream")
+async def screen_stocks_stream(
+    request: Request,
+    factors: str = Query(..., description="JSON string of factor filters"),
+    universe: str = Query("hs300", description="Stock universe"),
+    limit: int = Query(50, ge=1, le=500, description="Max results"),
+):
+    """
+    Screen stocks with SSE progress streaming
+    
+    Yields progress events every 10 stocks screened:
+    - progress: current progress
+    - total: total stocks to screen
+    - current_stock: symbol being screened
+    - passed: whether stock passed filters
+    
+    Final event contains complete results.
+    """
+    try:
+        # Parse factors from JSON string
+        factors_data = json.loads(factors)
+        screening_factors = [
+            ScreeningFactor(id=f["id"], params=f.get("params", {}))
+            for f in factors_data
+        ]
+    except (json.JSONDecodeError, KeyError) as e:
+        return error_response(ErrorCode.VALIDATION_ERROR, f"因子参数格式错误: {str(e)}")
+    
+    # Validate universe
+    try:
+        universe_enum = Universe(universe.lower())
+    except ValueError:
+        return error_response(ErrorCode.VALIDATION_ERROR, f"无效的股票范围: {universe}")
+    
+    async def event_generator() -> AsyncGenerator[str, None]:
+        """Generate SSE events for screening progress"""
+        screener = get_stock_screener()
+        registry = get_factor_registry()
+        
+        try:
+            # Get stocks to screen
+            stocks = await asyncio.get_event_loop().run_in_executor(
+                _executor, screener._get_universe_stocks, universe_enum
+            )
+            
+            if not stocks:
+                yield f"data: {json.dumps({'error': '无法获取股票列表', 'done': True})}\n\n"
+                return
+            
+            total_stocks = len(stocks)
+            max_screen = min(total_stocks, 500 if universe_enum == Universe.ALL else 2000)
+            stocks_to_screen = stocks[:max_screen]
+            
+            results = []
+            progress_interval = 10  # Send progress every 10 stocks
+            
+            for i, stock in enumerate(stocks_to_screen):
+                # Check if client disconnected
+                if await request.is_disconnected():
+                    logger.info(f"[FactorSandbox] Client disconnected at {i}/{max_screen}")
+                    break
+                
+                symbol = stock.get("symbol", "")
+                name = stock.get("name", "")
+                
+                if not symbol:
+                    continue
+                
+                try:
+                    # Screen single stock
+                    factor_values = {}
+                    total_score = 0.0
+                    passed_all = True
+                    
+                    for factor in screening_factors:
+                        factor_def = registry.get_factor(factor.id)
+                        if not factor_def:
+                            continue
+                        
+                        value = await asyncio.get_event_loop().run_in_executor(
+                            _executor,
+                            screener._calculate_factor_value,
+                            symbol, factor.id, factor.params
+                        )
+                        
+                        if value is not None:
+                            factor_values[factor.id] = value
+                            if factor_def.higher_is_better:
+                                total_score += min(value, 1.0)
+                            else:
+                                total_score += min(1.0 - value, 1.0)
+                        else:
+                            passed_all = False
+                    
+                    passed = passed_all and bool(factor_values)
+                    
+                    if passed:
+                        results.append({
+                            "symbol": symbol,
+                            "name": name,
+                            "score": round(total_score / len(screening_factors), 4) if screening_factors else 0,
+                            "factor_values": factor_values,
+                        })
+                    
+                    # Yield progress event every N stocks
+                    if (i + 1) % progress_interval == 0 or i == max_screen - 1:
+                        progress_data = json.dumps({
+                            'progress': i + 1,
+                            'total': max_screen,
+                            'current_stock': symbol,
+                            'passed': passed,
+                            'found': len(results),
+                        })
+                        yield f"data: {progress_data}\n\n"
+                
+                except Exception as e:
+                    logger.debug(f"[FactorSandbox] Error screening {symbol}: {e}")
+                    continue
+            
+            # Sort and limit results
+            results.sort(key=lambda x: x["score"], reverse=True)
+            results = results[:limit]
+            
+            # Send final results
+            final_data = json.dumps({
+                'done': True,
+                'results': results,
+                'total': len(results),
+                'screened': max_screen,
+                'universe': universe,
+            })
+            yield f"data: {final_data}\n\n"
+            
+        except Exception as e:
+            logger.error(f"[FactorSandbox] Stream error: {e}", exc_info=True)
+            error_type = type(e).__name__
+            user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
+            error_data = json.dumps({'error': user_msg, 'done': True})
+            yield f"data: {error_data}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
 
 
 @router.post("/backtest_preview")

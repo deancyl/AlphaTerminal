@@ -15,6 +15,7 @@ import { ref, computed, shallowRef } from 'vue'
 import { apiFetch, apiFetchDeduped } from '@/utils/api.js'
 import { logger } from '@/utils/logger.js'
 import { TIMEOUTS } from '@/utils/constants.js'
+import { useSSEProgress } from '@/composables/useSSEProgress.js'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -89,6 +90,9 @@ export function useFactorSandbox() {
   const limit = ref(50)
   
   let screeningAbortController = null
+  
+  // SSE progress tracking
+  const sseProgress = useSSEProgress()
   
   // ── Computed ───────────────────────────────────────────────────────────────
   
@@ -282,12 +286,58 @@ export function useFactorSandbox() {
     }
   }
   
+  async function runScreeningWithProgress() {
+    if (screeningLoading.value || selectedFactors.value.length === 0) return
+    
+    screeningLoading.value = true
+    error.value = null
+    screenedStocks.value = []
+    
+    const factorsJson = JSON.stringify(
+      selectedFactors.value.map(f => ({
+        id: f.id,
+        params: f.params || {},
+      }))
+    )
+    
+    const url = `/api/v1/factor_sandbox/screen/stream?factors=${encodeURIComponent(factorsJson)}&universe=${universe.value}&limit=${limit.value}`
+    
+    sseProgress.startStreaming(url)
+    
+    const checkInterval = setInterval(() => {
+      if (!sseProgress.isStreaming.value) {
+        clearInterval(checkInterval)
+        screeningLoading.value = false
+        
+        if (sseProgress.error.value) {
+          error.value = sseProgress.error.value
+        } else if (sseProgress.results.value.length > 0) {
+          screenedStocks.value = sseProgress.results.value
+          screeningProgress.value = {
+            total_stocks: sseProgress.total.value,
+            screened_stocks: sseProgress.progress.value,
+          }
+        }
+      }
+    }, 100)
+    
+    return new Promise((resolve) => {
+      const resolveInterval = setInterval(() => {
+        if (!sseProgress.isStreaming.value) {
+          clearInterval(resolveInterval)
+          resolve(screenedStocks.value)
+        }
+      }, 100)
+    })
+  }
+  
   function cancelScreening() {
     if (screeningAbortController) {
       screeningAbortController.abort()
       screeningAbortController = null
-      screeningLoading.value = false
     }
+    sseProgress.stopStreaming()
+    screeningLoading.value = false
   }
   
   /**
@@ -378,6 +428,14 @@ export function useFactorSandbox() {
     universe,
     limit,
     
+    // SSE Progress State
+    sseProgress: sseProgress.progress,
+    sseTotal: sseProgress.total,
+    sseCurrentStock: sseProgress.currentStock,
+    ssePassedCount: sseProgress.passedCount,
+    sseIsStreaming: sseProgress.isStreaming,
+    ssePercent: sseProgress.getProgressPercent,
+    
     // Computed
     factorsByCategory,
     isFactorSelected,
@@ -392,6 +450,7 @@ export function useFactorSandbox() {
     reorderFactors,
     updateFactorParams,
     runScreening,
+    runScreeningWithProgress,
     cancelScreening,
     getBacktestPreview,
     clearResults,

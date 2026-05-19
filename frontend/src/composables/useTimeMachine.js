@@ -105,12 +105,11 @@ export function useTimeMachine() {
       })
       
       session.value = response.data.session_id
-      klineData.value = response.data.kline_data || []
-      currentBar.value = 0
+      klineData.value = response.data.kline_data || response.data.bars || []
+      currentBar.value = response.data.current_bar || 0
       playbackStatus.value = 'paused'
       
-      // Initialize portfolio
-      portfolio.value = {
+      portfolio.value = response.data.portfolio || {
         cash: initialCapital,
         position_value: 0,
         total_value: initialCapital,

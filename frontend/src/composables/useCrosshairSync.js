@@ -1,8 +1,26 @@
 /**
  * useCrosshairSync.js - Crosshair synchronization composable
  *
- * Provides synchronized crosshair movement across multiple charts.
- * When user moves crosshair on one chart, all other charts sync to the same date.
+ * @deprecated Since v0.6.54. Use native echarts.connect() instead.
+ *
+ * This composable is kept for backwards compatibility but is no longer used
+ * in the Multi-Asset Matrix. The native echarts.connect() provides better
+ * performance and simpler implementation.
+ *
+ * Migration guide:
+ * - Before: useCrosshairSync() + manual dispatchAction
+ * - After: echarts.connect(chartInstances) with group option
+ *
+ * Example:
+ * ```javascript
+ * // Old approach (deprecated)
+ * const { syncedDate, onCrosshairMove } = useCrosshairSync()
+ * chart.dispatchAction({ type: 'showTip', dataIndex })
+ *
+ * // New approach (recommended)
+ * import * as echarts from 'echarts'
+ * echarts.connect([chart1, chart2, chart3, chart4])
+ * ```
  *
  * Features:
  * - Debounced updates (100ms) to prevent rapid re-renders
