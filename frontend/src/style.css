@@ -447,6 +447,100 @@
   }
 
   /* ============================================
+     主题 4: LIGHT - 亮色主题
+     白色背景，适合白天使用
+     ============================================ */
+  [data-theme="light"] {
+    /* ── 基础与面板 ── */
+    --bg-base: #f8fafc;        /* slate-50 - 最浅背景 */
+    --bg-surface: #f1f5f9;     /* slate-100 - 面板背景 */
+    --bg-surface-hover: #e2e8f0; /* slate-200 - hover 状态 */
+    --bg-elevated: #cbd5e1;    /* slate-300 - 提升层 */
+    --bg-overlay: rgba(248, 250, 252, 0.90);
+    --bg-glass: rgba(241, 245, 249, 0.95);
+
+    /* ── 边框与分割线 ── */
+    --border-base: #cbd5e1;    /* slate-300 */
+    --border-light: #e2e8f0;   /* slate-200 */
+    --border-focus: #3b82f6;   /* blue-500 */
+    --border-hover: #94a3b8;   /* slate-400 */
+
+    /* ── 文本层级 ── */
+    --text-primary: #0f172a;   /* slate-900 */
+    --text-secondary: #475569; /* slate-600 */
+    --text-muted: #64748b;     /* slate-500 */
+    --text-disabled: #94a3b8;  /* slate-400 */
+    --text-placeholder: #94a3b8; /* slate-400 */
+    --text-inverse: #f8fafc;   /* slate-50 */
+
+    /* ── 品牌与强调色 ── */
+    --color-primary: #3b82f6;  /* blue-500 */
+    --color-primary-hover: #2563eb; /* blue-600 */
+    --color-primary-light: #60a5fa; /* blue-400 */
+    --color-primary-dark: #1d4ed8; /* blue-700 */
+    --color-primary-bg: rgba(59, 130, 246, 0.10);
+    --color-primary-border: rgba(59, 130, 246, 0.30);
+
+    /* ── 金融语义色（中国惯例：红涨绿跌）── */
+    --color-bull: #ef4444;     /* red-500 - 上涨 */
+    --color-bull-light: #dc2626; /* red-600 */
+    --color-bull-bg: rgba(239, 68, 68, 0.10);
+    --color-bull-border: rgba(239, 68, 68, 0.25);
+
+    --color-bear: #22c55e;     /* green-500 - 下跌 */
+    --color-bear-light: #16a34a; /* green-600 */
+    --color-bear-bg: rgba(34, 197, 94, 0.10);
+    --color-bear-border: rgba(34, 197, 94, 0.25);
+
+    --color-neutral: #64748b;  /* slate-500 */
+    --color-neutral-bg: rgba(100, 116, 139, 0.10);
+    --color-neutral-border: rgba(100, 116, 139, 0.20);
+
+    /* ── 功能状态色 ── */
+    --color-warning: #f59e0b; /* amber-500 */
+    --color-warning-bg: rgba(245, 158, 11, 0.10);
+    --color-warning-border: rgba(245, 158, 11, 0.25);
+
+    --color-danger: #dc2626;  /* red-600 */
+    --color-danger-bg: rgba(220, 38, 38, 0.10);
+    --color-danger-border: rgba(220, 38, 38, 0.25);
+
+    --color-success: #16a34a; /* green-600 */
+    --color-success-bg: rgba(22, 163, 74, 0.10);
+    --color-success-border: rgba(22, 163, 74, 0.25);
+
+    --color-info: #3b82f6;    /* blue-500 */
+    --color-info-bg: rgba(59, 130, 246, 0.10);
+    --color-info-border: rgba(59, 130, 246, 0.25);
+
+    /* ── Copilot Agent 专用色 ── */
+    --color-agent-blue: #2563eb; /* blue-600 */
+    --color-agent-blue-hover: #3b82f6; /* blue-500 */
+    --color-agent-blue-bg: rgba(37, 99, 235, 0.10);
+    --color-agent-blue-border: rgba(37, 99, 235, 0.25);
+
+    /* ── 图表配色 ── */
+    --chart-bg: transparent;
+    --chart-grid: #e2e8f0;    /* slate-200 */
+    --chart-text: #64748b;    /* slate-500 */
+    --chart-line: #3b82f6;    /* blue-500 */
+    --chart-area: rgba(59, 130, 246, 0.08);
+    --chart-crosshair: rgba(15, 23, 42, 0.15);
+
+    /* ── 阴影 ── */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 8px 12px rgba(0, 0, 0, 0.10);
+    --shadow-xl: 0 12px 20px rgba(0, 0, 0, 0.12);
+    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.10);
+
+    /* ── 滚动条 ── */
+    --scrollbar-track: #f1f5f9; /* slate-100 */
+    --scrollbar-thumb: #cbd5e1; /* slate-300 */
+    --scrollbar-thumb-hover: #94a3b8; /* slate-400 */
+  }
+
+  /* ============================================
      默认主题回退（无 data-theme 时使用 dark）
      ============================================ */
   :root {

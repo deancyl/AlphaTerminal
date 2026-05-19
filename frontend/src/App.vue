@@ -212,6 +212,12 @@
           <WalkForwardPanel v-else-if="currentView === 'walk-forward'" />
           <!-- F9 深度资料 -->
           <StockDetail v-else-if="currentView === 'f9'" :symbol="f9Symbol" />
+          <!-- 因子沙盒 -->
+          <FactorSandbox v-else-if="currentView === 'factor-sandbox'" />
+          <!-- 市场雷达 -->
+          <MarketRadar v-else-if="currentView === 'market-radar'" />
+          <!-- 时光机 -->
+          <TimeMachine v-else-if="currentView === 'timemachine'" />
         </KeepAlive>
         
           <!-- ━━━ 移动端滑动指示器 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
@@ -350,6 +356,9 @@ const StockDetail     = defineAsyncComponent(() => import('./components/StockDet
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
 const ResearchDashboard = defineAsyncComponent(() => import('./components/ResearchDashboard.vue'))
 const MultiAssetMatrix = defineAsyncComponent(() => import('./components/MultiAssetMatrix.vue'))
+const FactorSandbox = defineAsyncComponent(() => import('./components/factor/FactorSandbox.vue'))
+const MarketRadar = defineAsyncComponent(() => import('./components/MarketRadar.vue'))
+const TimeMachine = defineAsyncComponent(() => import('./components/TimeMachine.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -436,7 +445,10 @@ function getViewName(viewId) {
     fund: '基金分析', portfolio: '投资组合', macro: '宏观经济',
     'strategy-center': '策略中心', admin: '系统管理',
     f9: '深度资料', 'global-index': '全球指数',
-    'walk-forward': '滚动前向分析'
+    'walk-forward': '滚动前向分析',
+    'factor-sandbox': '因子沙盒',
+    'market-radar': '市场雷达',
+    'timemachine': '时光机'
   }
   return names[viewId] || viewId
 }
