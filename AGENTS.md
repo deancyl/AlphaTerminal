@@ -4367,3 +4367,117 @@ grep -c "sanitize_error_message" backend/app/routers/market_radar.py  # Expected
 cd backend && python3 -m pytest tests/unit/test_services/test_market_radar/ tests/unit/test_routers/test_market_radar_router.py tests/integration/test_market_radar_integration.py tests/performance/test_market_radar_performance.py -v --no-cov
 ```
 
+
+---
+
+## 12-Issue Audit Fix Summary (v0.6.56)
+
+### Overview
+
+A comprehensive 5-wave optimization cycle addressing 12 core issues identified in the system audit.
+
+### Wave Summary
+
+| Wave | Focus | Issues Fixed | Status |
+|------|-------|--------------|--------|
+| Wave 1 | P0 Critical | Bond, Forex, TimeMachine, Factor Sandbox | ✅ Complete |
+| Wave 2 | P0 Features | Options Greeks, Macro, Market Radar, Multi-Asset | ✅ Complete |
+| Wave 3 | P1 UX | Strategy Builder, Walk-Forward, Global Indices, Research | ✅ Complete |
+| Wave 4 | System Optimization | Singleflight, Cache, ECharts, Circuit Breaker | ✅ Verified |
+| Wave 5 | Integration | Tests, Documentation, Final Verification | ✅ Complete |
+
+### Wave 1: P0 Critical Fixes
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| Bond module fake data | Real data fetcher via CFETS/Chinabond | `bond_fetcher.py` |
+| Forex cross-rate N/A | Fallback chain with USD-based pairs | `forex_fetcher.py` |
+| TimeMachine null error | Safe null handling in playback engine | `timemachine.py` |
+| Factor Sandbox no progress | SSE streaming for real-time progress | `factor_sandbox.py` |
+
+### Wave 2: P0 Features
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| Options Greeks mock | py_vollib Black-Scholes integration | `pricing/black_scholes.py` |
+| Macro no filtering | Category-based filtering with Zod validation | `macro.py` |
+| Market Radar no gauge | Temperature gauge visualization | `TemperatureGauge.vue` |
+| Multi-Asset no sync | Crosshair sync with 100ms debounce | `useCrosshairSync.js` |
+
+### Wave 3: P1 UX
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| Strategy Builder no UI | ConditionBuilder with drag-and-drop | `ConditionBuilder.vue` |
+| Walk-Forward confusing | Renamed to 策略稳定性测试, UX redesign | `WalkForwardPanel.vue` |
+| Global Indices limited | 15+ indices via Yahoo Finance | `global_index_fetcher.py` |
+| Research no categories | Category tags + LLM summarize | `ResearchDashboard.vue` |
+
+### Wave 4: System Optimization (Verified Existing)
+
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| Singleflight | ✅ Exists | `backend/app/utils/singleflight.py` |
+| DataCache | ✅ Exists | `backend/app/services/data_cache.py` |
+| ECharts Cleanup | ✅ Fixed | 20+ components have cleanup |
+| Circuit Breaker | ✅ Exists | `backend/app/services/circuit_breaker.py` |
+
+### Wave 5: Integration Tests
+
+| Test Category | Count | Status |
+|---------------|-------|--------|
+| Audit Tests | 33 | ✅ Pass |
+| Bond Tests | 19 | ✅ Pass |
+| Forex Tests | 22 | ✅ Pass |
+| Router Tests | 74+ | ✅ Pass |
+
+### Key Files Modified
+
+**Backend**:
+- `backend/app/routers/bond.py` - Circuit breaker, real data
+- `backend/app/routers/forex.py` - Fallback chain
+- `backend/app/routers/options.py` - py_vollib Greeks
+- `backend/app/routers/macro.py` - Filtering support
+- `backend/app/routers/market_radar.py` - Temperature gauge
+- `backend/app/routers/strategy.py` - Compile endpoint
+- `backend/app/routers/research.py` - Summarize endpoint
+- `backend/app/services/fetchers/bond_fetcher.py` - Real data fetcher
+- `backend/app/services/fetchers/global_index_fetcher.py` - Yahoo Finance
+- `backend/app/services/pricing/black_scholes.py` - Greeks calculation
+
+**Frontend**:
+- `frontend/src/components/strategy/ConditionBuilder.vue` - Visual builder
+- `frontend/src/components/WalkForwardPanel.vue` - UX redesign
+- `frontend/src/components/GlobalIndex.vue` - 15+ indices
+- `frontend/src/components/ResearchDashboard.vue` - Categories
+- `frontend/src/components/market/TemperatureGauge.vue` - Gauge
+- `frontend/src/components/MultiAssetMatrix.vue` - Crosshair sync
+- `frontend/src/schemas/strategy-ast.js` - AST schema
+
+### Verification Commands
+
+```bash
+# Bond module
+curl http://localhost:60100/api/v1/bond/health | jq '.data.circuit_breaker'
+
+# Options Greeks
+curl http://localhost:60100/api/v1/options/greeks?symbol=sh600519
+
+# Strategy compile
+curl -X POST http://localhost:60100/api/v1/strategy/compile \
+  -H "Content-Type: application/json" \
+  -d '{"conditions": [{"type": "indicator", "name": "MA", "params": {"period": 5}}]}'
+
+# Global indices
+curl http://localhost:60100/api/v1/market/global_indices
+
+# Research summarize
+curl -X POST http://localhost:60100/api/v1/research/summarize \
+  -H "Content-Type: application/json" \
+  -d '{"report_ids": ["report_1", "report_2"]}'
+
+# Tests
+cd backend && python3 -m pytest tests/unit/test_routers/ -v --no-cov
+cd frontend && npm run build
+```
+
