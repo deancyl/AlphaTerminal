@@ -106,3 +106,29 @@
   white-space: pre-wrap;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
+
+/* ── Inline Mini Charts ──────────────────────────────────── */
+.mini-chart-container {
+  margin: 0.5em 0;
+  border: 1px solid var(--border-base);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  overflow: hidden;
+}
+
+.mini-chart-container .chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 120px;
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.mini-chart-container .chart-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}

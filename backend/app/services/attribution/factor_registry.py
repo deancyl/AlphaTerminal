@@ -23,6 +23,7 @@ class FactorCategory(str, Enum):
     TECHNICAL = "technical"
     VOLATILITY = "volatility"
     SENTIMENT = "sentiment"
+    SCREENING = "screening"  # 筛选专用因子
 
 
 @dataclass
@@ -90,6 +91,7 @@ class FactorRegistry:
             FactorCategory.TECHNICAL: {"id": "technical", "name": "技术因子", "icon": "📊", "description": "技术分析指标"},
             FactorCategory.VOLATILITY: {"id": "volatility", "name": "波动因子", "icon": "📉", "description": "波动率相关指标"},
             FactorCategory.SENTIMENT: {"id": "sentiment", "name": "情绪因子", "icon": "🧠", "description": "市场情绪指标"},
+            FactorCategory.SCREENING: {"id": "screening", "name": "筛选因子", "icon": "🔍", "description": "条件选股专用"},
         }
         return [category_info[cat] for cat in FactorCategory]
     
@@ -355,6 +357,95 @@ class FactorRegistry:
             unit="分",
             higher_is_better=True
         ))
+        
+        # ── Screening Factors ───────────────────────────────────────────
+        self.register(FactorDefinition(
+            id="macd_golden_cross",
+            name="MACD金叉",
+            category=FactorCategory.SCREENING,
+            description="MACD金叉信号（DIF上穿DEA）",
+            calc_func=self._calc_macd_golden_cross,
+            params={"fast": 12, "slow": 26, "signal": 9},
+            unit="",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="rsi_oversold",
+            name="RSI超卖",
+            category=FactorCategory.SCREENING,
+            description="RSI低于30的超卖信号",
+            calc_func=self._calc_rsi_oversold,
+            params={"period": 14, "threshold": 30},
+            unit="",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="breakout_ma",
+            name="突破均线",
+            category=FactorCategory.SCREENING,
+            description="价格突破N日均线",
+            calc_func=self._calc_breakout_ma,
+            params={"period": 20},
+            unit="",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="foreign_inflow",
+            name="外资净流入",
+            category=FactorCategory.SCREENING,
+            description="北向资金净流入金额",
+            calc_func=self._calc_foreign_inflow,
+            params={"min_amount": 10000000},
+            unit="元",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="llm_sentiment",
+            name="LLM情绪得分",
+            category=FactorCategory.SCREENING,
+            description="AI情绪分析得分（0-1）",
+            calc_func=self._calc_llm_sentiment,
+            params={"min_score": 0.8},
+            unit="",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="volume_surge",
+            name="放量突破",
+            category=FactorCategory.SCREENING,
+            description="成交量放大超过N倍均量",
+            calc_func=self._calc_volume_surge,
+            params={"multiplier": 2.0, "period": 20},
+            unit="倍",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="institution_research",
+            name="机构调研",
+            category=FactorCategory.SCREENING,
+            description="近期机构调研次数",
+            calc_func=self._calc_institution_research,
+            params={"days": 30},
+            unit="次",
+            higher_is_better=True
+        ))
+        
+        self.register(FactorDefinition(
+            id="new_high",
+            name="创新高",
+            category=FactorCategory.SCREENING,
+            description="创N日新高",
+            calc_func=self._calc_new_high,
+            params={"period": 60},
+            unit="",
+            higher_is_better=True
+        ))
     
     # ── Calculation Functions ─────────────────────────────────────────────
     
@@ -556,6 +647,100 @@ class FactorRegistry:
         if 'analyst_rating' in data.columns:
             return data['analyst_rating'].values
         return np.full(len(data), np.nan)
+    
+    def _calc_macd_golden_cross(self, data: pd.DataFrame, fast: int = 12, slow: int = 26, signal: int = 9) -> np.ndarray:
+        if 'close' not in data.columns:
+            return np.full(len(data), np.nan)
+        
+        closes = data['close'].values
+        result = np.zeros(len(closes))
+        
+        def ema(data, period):
+            k = 2 / (period + 1)
+            result = np.zeros(len(data))
+            result[0] = data[0]
+            for i in range(1, len(data)):
+                result[i] = data[i] * k + result[i - 1] * (1 - k)
+            return result
+        
+        ema_fast = ema(closes, fast)
+        ema_slow = ema(closes, slow)
+        dif = ema_fast - ema_slow
+        dea = ema(dif, signal)
+        
+        for i in range(1, len(closes)):
+            if dif[i] > dea[i] and dif[i-1] <= dea[i-1]:
+                result[i] = 1
+        
+        return result
+    
+    def _calc_rsi_oversold(self, data: pd.DataFrame, period: int = 14, threshold: int = 30) -> np.ndarray:
+        rsi = self._calc_rsi(data, period)
+        result = np.zeros(len(rsi))
+        result[rsi < threshold] = 1
+        return result
+    
+    def _calc_breakout_ma(self, data: pd.DataFrame, period: int = 20) -> np.ndarray:
+        if 'close' not in data.columns:
+            return np.full(len(data), np.nan)
+        
+        closes = data['close'].values
+        result = np.zeros(len(closes))
+        
+        for i in range(period, len(closes)):
+            ma = np.mean(closes[i - period:i])
+            if closes[i] > ma and closes[i - 1] <= ma:
+                result[i] = 1
+        
+        return result
+    
+    def _calc_foreign_inflow(self, data: pd.DataFrame, min_amount: int = 10000000) -> np.ndarray:
+        if 'foreign_inflow' in data.columns:
+            inflow = data['foreign_inflow'].values
+            result = np.zeros(len(inflow))
+            result[inflow >= min_amount] = 1
+            return result
+        return np.full(len(data), np.nan)
+    
+    def _calc_llm_sentiment(self, data: pd.DataFrame, min_score: float = 0.8) -> np.ndarray:
+        if 'llm_sentiment' in data.columns:
+            sentiment = data['llm_sentiment'].values
+            result = np.zeros(len(sentiment))
+            result[sentiment >= min_score] = 1
+            return result
+        return np.full(len(data), np.nan)
+    
+    def _calc_volume_surge(self, data: pd.DataFrame, multiplier: float = 2.0, period: int = 20) -> np.ndarray:
+        if 'volume' not in data.columns:
+            return np.full(len(data), np.nan)
+        
+        volumes = data['volume'].values
+        result = np.zeros(len(volumes))
+        
+        for i in range(period, len(volumes)):
+            avg_vol = np.mean(volumes[i - period:i])
+            if avg_vol > 0 and volumes[i] >= avg_vol * multiplier:
+                result[i] = volumes[i] / avg_vol
+        
+        return result
+    
+    def _calc_institution_research(self, data: pd.DataFrame, days: int = 30) -> np.ndarray:
+        if 'institution_research_count' in data.columns:
+            return data['institution_research_count'].values
+        return np.full(len(data), np.nan)
+    
+    def _calc_new_high(self, data: pd.DataFrame, period: int = 60) -> np.ndarray:
+        if 'close' not in data.columns:
+            return np.full(len(data), np.nan)
+        
+        closes = data['close'].values
+        result = np.zeros(len(closes))
+        
+        for i in range(period, len(closes)):
+            if closes[i] >= np.max(closes[i - period:i + 1]):
+                result[i] = 1
+        
+        return result
 
 
 # Singleton instance

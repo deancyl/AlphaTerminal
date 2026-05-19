@@ -8,7 +8,7 @@
         :class="activeTab === tab
           ? 'text-[var(--color-info)]'
           : 'text-theme-muted hover:text-theme-primary'"
-        @click="emit('tab-change', tab)"
+        @click="handleTabClick(tab)"
       >
         {{ tab }}
         <!-- 选中指示条 -->
@@ -22,13 +22,13 @@
       <button
         ref="paramsButtonRef"
         class="ml-2 px-1.5 py-0.5 text-[10px] text-theme-tertiary hover:text-theme-primary border border-transparent hover:border-theme-secondary rounded-sm transition"
-        @click="showParams = !showParams"
+        @click="handleSettingsClick"
         title="指标参数设置"
       >⚙️ 设置</button>
 
-      <!-- 参数设置浮窗 -->
+      <!-- 参数设置浮窗（桌面端） -->
       <div 
-        v-if="showParams" 
+        v-if="showParams && !isMobile" 
         ref="paramsPopupRef"
         class="absolute mt-1 p-3 rounded-sm border border-theme-secondary bg-terminal-panel shadow-sm z-20 w-52"
         :style="popupPos"
@@ -40,21 +40,21 @@
             <span class="text-[10px] text-theme-secondary w-10">快线</span>
             <input type="number" :value="params.MACD.fast" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { MACD: { ...params.MACD, fast: +e.target.value } })"
+              @change="handleParamChange('MACD', { ...params.MACD, fast: +$event.target.value })"
             />
           </div>
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-[10px] text-theme-secondary w-10">慢线</span>
             <input type="number" :value="params.MACD.slow" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { MACD: { ...params.MACD, slow: +e.target.value } })"
+              @change="handleParamChange('MACD', { ...params.MACD, slow: +$event.target.value })"
             />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">信号</span>
             <input type="number" :value="params.MACD.signal" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { MACD: { ...params.MACD, signal: +e.target.value } })"
+              @change="handleParamChange('MACD', { ...params.MACD, signal: +$event.target.value })"
             />
           </div>
         </template>
@@ -64,7 +64,7 @@
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.KDJ.n" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { KDJ: { ...params.KDJ, n: +e.target.value } })"
+              @change="handleParamChange('KDJ', { ...params.KDJ, n: +$event.target.value })"
             />
           </div>
         </template>
@@ -74,7 +74,7 @@
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.RSI.period" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { RSI: { ...params.RSI, period: +e.target.value } })"
+              @change="handleParamChange('RSI', { ...params.RSI, period: +$event.target.value })"
             />
           </div>
         </template>
@@ -84,14 +84,14 @@
             <span class="text-[10px] text-theme-secondary w-10">周期</span>
             <input type="number" :value="params.BOLL.period" min="1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { BOLL: { ...params.BOLL, period: +e.target.value } })"
+              @change="handleParamChange('BOLL', { ...params.BOLL, period: +$event.target.value })"
             />
           </div>
           <div class="flex items-center gap-2">
             <span class="text-[10px] text-theme-secondary w-10">倍</span>
             <input type="number" :value="params.BOLL.stdDev" min="0.1" step="0.1"
               class="flex-1 bg-theme-secondary border border-theme-secondary rounded-sm px-1.5 py-0.5 text-[11px] text-theme-primary outline-none w-14"
-              @change="e => emit('params-change', { BOLL: { ...params.BOLL, stdDev: +e.target.value } })"
+              @change="handleParamChange('BOLL', { ...params.BOLL, stdDev: +$event.target.value })"
             />
           </div>
         </template>
@@ -100,18 +100,95 @@
 
     <!-- 副图内容（固定高度 140px） -->
     <div class="flex-1 min-h-0" ref="chartRef"></div>
+
+    <!-- 移动端 BottomSheet 设置面板 -->
+    <BottomSheet
+      v-model="showParams"
+      title="指标参数设置"
+      height="auto"
+    >
+      <div class="p-4 space-y-4">
+        <!-- MACD -->
+        <template v-if="activeTab === 'MACD'">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">快线周期</span>
+            <input type="number" :value="params.MACD.fast" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('MACD', { ...params.MACD, fast: +$event.target.value })"
+            />
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">慢线周期</span>
+            <input type="number" :value="params.MACD.slow" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('MACD', { ...params.MACD, slow: +$event.target.value })"
+            />
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">信号周期</span>
+            <input type="number" :value="params.MACD.signal" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('MACD', { ...params.MACD, signal: +$event.target.value })"
+            />
+          </div>
+        </template>
+        <!-- KDJ -->
+        <template v-else-if="activeTab === 'KDJ'">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">计算周期</span>
+            <input type="number" :value="params.KDJ.n" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('KDJ', { ...params.KDJ, n: +$event.target.value })"
+            />
+          </div>
+        </template>
+        <!-- RSI -->
+        <template v-else-if="activeTab === 'RSI'">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">计算周期</span>
+            <input type="number" :value="params.RSI.period" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('RSI', { ...params.RSI, period: +$event.target.value })"
+            />
+          </div>
+        </template>
+        <!-- BOLL -->
+        <template v-else-if="activeTab === 'BOLL'">
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">计算周期</span>
+            <input type="number" :value="params.BOLL.period" min="1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('BOLL', { ...params.BOLL, period: +$event.target.value })"
+            />
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-sm text-theme-secondary">标准差倍数</span>
+            <input type="number" :value="params.BOLL.stdDev" min="0.1" step="0.1"
+              class="w-20 bg-surface border border-border-base rounded-sm px-3 py-2 text-sm text-primary outline-none focus:border-primary"
+              @change="handleParamChange('BOLL', { ...params.BOLL, stdDev: +$event.target.value })"
+            />
+          </div>
+        </template>
+      </div>
+    </BottomSheet>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useDebounceFn, onClickOutside } from '@vueuse/core'
+import { useDebounceFn, onClickOutside, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
 import { buildXAxisLabels } from '../utils/symbols.js'
 import { UP, DOWN } from '../utils/indicators.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
 import { safeDispose } from '../utils/chartManager.js'
+import BottomSheet from './BottomSheet.vue'
+import { useHaptic } from '../composables/useHaptic.js'
+
+const { light, selection } = useHaptic()
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = breakpoints.smaller('md')
 
 
 
@@ -134,6 +211,21 @@ const params = computed(() => ({
   RSI:   { period: 14, ...(props.indicatorParams?.RSI || {}) },
   BOLL:  { period: 20, stdDev: 2, ...(props.indicatorParams?.BOLL || {}) },
 }))
+
+function handleTabClick(tab) {
+  selection()
+  emit('tab-change', tab)
+}
+
+function handleSettingsClick() {
+  light()
+  showParams.value = !showParams.value
+}
+
+function handleParamChange(indicator, newParams) {
+  light()
+  emit('params-change', { [indicator]: newParams })
+}
 
 // Dynamic popup position based on viewport boundaries
 const popupPos = computed(() => {

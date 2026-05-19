@@ -4,8 +4,8 @@
 
 @layer base {
   /* ============================================
-     AlphaTerminal 全局基础样式 v3.0
-     语义化 CSS 变量主题系统
+     AlphaTerminal 全局基础样式 v3.1
+     语义化 CSS 变量主题系统 + 专业金融字体
      支持：dark / black / wind / light 四个主题
      ============================================ */
 
@@ -66,103 +66,104 @@
     --panel-width: 280px;
     --touch-min: 44px;
 
-    /* 字体 */
-    --font-mono: "JetBrains Mono", "Roboto Mono", "Consolas", monospace;
-    --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-    --font-number: "JetBrains Mono", "Roboto Mono", "Consolas", monospace;
+    /* 字体系统 - 专业金融终端字体栈 */
+    --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "Roboto Mono", "Consolas", ui-monospace, monospace;
+    --font-data: "JetBrains Mono", "Inter", ui-monospace, monospace; /* 金融数据专用 */
   }
 
   /* ============================================
      主题 1: DARK - 专业深色（默认）
+     Deep Slate Palette - 金融终端专业配色
      ============================================ */
   [data-theme="dark"] {
     /* ── 基础与面板 ── */
-    --bg-base: #121212;
-    --bg-surface: #1E1E1E;
-    --bg-surface-hover: #252525;
-    --bg-elevated: #2C2C2C;
-    --bg-overlay: rgba(0, 0, 0, 0.60);
-    --bg-glass: rgba(22, 27, 34, 0.95);
+    --bg-base: #0f172a;        /* slate-900 - 最深背景 */
+    --bg-surface: #1e293b;     /* slate-800 - 面板背景 */
+    --bg-surface-hover: #334155; /* slate-700 - 悬停状态 */
+    --bg-elevated: #334155;    /* slate-700 - 提升层级 */
+    --bg-overlay: rgba(0, 0, 0, 0.70);
+    --bg-glass: rgba(15, 23, 42, 0.95);
 
     /* ── 边框与分割线 ── */
-    --border-base: #30363D;
-    --border-light: #2C2C2C;
-    --border-focus: #0F52BA;
-    --border-hover: #484F58;
+    --border-base: #334155;    /* slate-700 */
+    --border-light: #475569;   /* slate-600 */
+    --border-focus: #3b82f6;   /* blue-500 */
+    --border-hover: #475569;   /* slate-600 */
 
     /* ── 文本层级 ── */
-    --text-primary: #F0F6FC;
-    --text-secondary: #C9D1D9;
-    --text-muted: #8B949E;
-    --text-disabled: #484F58;
-    --text-placeholder: #6E7681;
-    --text-inverse: #121212;
+    --text-primary: #f1f5f9;   /* slate-100 */
+    --text-secondary: #94a3b8; /* slate-400 */
+    --text-muted: #64748b;     /* slate-500 */
+    --text-disabled: #475569;  /* slate-600 */
+    --text-placeholder: #64748b; /* slate-500 */
+    --text-inverse: #0f172a;   /* slate-900 */
 
     /* ── 品牌与强调色 ── */
-    --color-primary: #0F52BA;
-    --color-primary-hover: #1A6AD8;
-    --color-primary-light: #3A7BD8;
-    --color-primary-dark: #0A3D8C;
-    --color-primary-bg: rgba(15, 82, 186, 0.10);
-    --color-primary-border: rgba(15, 82, 186, 0.30);
+    --color-primary: #3b82f6;  /* blue-500 */
+    --color-primary-hover: #60a5fa; /* blue-400 */
+    --color-primary-light: #93c5fd; /* blue-300 */
+    --color-primary-dark: #2563eb; /* blue-600 */
+    --color-primary-bg: rgba(59, 130, 246, 0.10);
+    --color-primary-border: rgba(59, 130, 246, 0.30);
 
     /* ── 金融语义色（中国惯例：绿涨红跌）── */
-    --color-bull: #10b981;
-    --color-bull-light: #34d399;
-    --color-bull-bg: rgba(16, 185, 129, 0.15);
-    --color-bull-border: rgba(16, 185, 129, 0.30);
+    --color-bull: #22c55e;     /* green-500 - 上涨 */
+    --color-bull-light: #4ade80; /* green-400 */
+    --color-bull-bg: rgba(34, 197, 94, 0.15);
+    --color-bull-border: rgba(34, 197, 94, 0.30);
 
-    --color-bear: #ef4444;
-    --color-bear-light: #f87171;
+    --color-bear: #ef4444;     /* red-500 - 下跌 */
+    --color-bear-light: #f87171; /* red-400 */
     --color-bear-bg: rgba(239, 68, 68, 0.15);
     --color-bear-border: rgba(239, 68, 68, 0.30);
 
-    --color-neutral: #B0B8CC;
-    --color-neutral-bg: rgba(176, 184, 204, 0.10);
-    --color-neutral-border: rgba(176, 184, 204, 0.25);
+    --color-neutral: #94a3b8;  /* slate-400 */
+    --color-neutral-bg: rgba(148, 163, 184, 0.10);
+    --color-neutral-border: rgba(148, 163, 184, 0.25);
 
     /* ── 功能状态色 ── */
-    --color-warning: #F5A623;
-    --color-warning-bg: rgba(245, 166, 35, 0.15);
-    --color-warning-border: rgba(245, 166, 35, 0.30);
+    --color-warning: #f59e0b; /* amber-500 */
+    --color-warning-bg: rgba(245, 158, 11, 0.15);
+    --color-warning-border: rgba(245, 158, 11, 0.30);
 
-    --color-danger: #DC2626;
-    --color-danger-bg: rgba(220, 38, 38, 0.15);
-    --color-danger-border: rgba(220, 38, 38, 0.30);
+    --color-danger: #ef4444;  /* red-500 */
+    --color-danger-bg: rgba(239, 68, 68, 0.15);
+    --color-danger-border: rgba(239, 68, 68, 0.30);
 
-    --color-success: #16A34A;
-    --color-success-bg: rgba(22, 163, 74, 0.15);
-    --color-success-border: rgba(22, 163, 74, 0.30);
+    --color-success: #22c55e; /* green-500 */
+    --color-success-bg: rgba(34, 197, 94, 0.15);
+    --color-success-border: rgba(34, 197, 94, 0.30);
 
-    --color-info: #0F52BA;
-    --color-info-bg: rgba(15, 82, 186, 0.15);
-    --color-info-border: rgba(15, 82, 186, 0.30);
+    --color-info: #3b82f6;  /* blue-500 */
+    --color-info-bg: rgba(59, 130, 246, 0.15);
+    --color-info-border: rgba(59, 130, 246, 0.30);
 
     /* ── Copilot Agent 专用色 ── */
-    --color-agent-blue: #60A5FA;
-    --color-agent-blue-hover: #93C5FD;
+    --color-agent-blue: #60a5fa; /* blue-400 */
+    --color-agent-blue-hover: #93c5fd; /* blue-300 */
     --color-agent-blue-bg: rgba(96, 165, 250, 0.10);
     --color-agent-blue-border: rgba(96, 165, 250, 0.30);
 
     /* ── 图表配色 ── */
     --chart-bg: transparent;
-    --chart-grid: #1C2333;
-    --chart-text: #8B949E;
-    --chart-line: #0F52BA;
-    --chart-area: rgba(15, 82, 186, 0.10);
-    --chart-crosshair: rgba(240, 246, 252, 0.20);
+    --chart-grid: #1e293b;  /* slate-800 */
+    --chart-text: #64748b;  /* slate-500 */
+    --chart-line: #3b82f6;  /* blue-500 */
+    --chart-area: rgba(59, 130, 246, 0.10);
+    --chart-crosshair: rgba(241, 245, 249, 0.20);
 
     /* ── 阴影 ── */
     --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
     --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.40);
     --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.50);
     --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.60);
-    --shadow-glow: 0 0 20px rgba(15, 82, 186, 0.20);
+    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.20);
 
     /* ── 滚动条 ── */
-    --scrollbar-track: #1E1E1E;
-    --scrollbar-thumb: #30363D;
-    --scrollbar-thumb-hover: #484F58;
+    --scrollbar-track: #1e293b; /* slate-800 */
+    --scrollbar-thumb: #334155; /* slate-700 */
+    --scrollbar-thumb-hover: #475569; /* slate-600 */
   }
 
   /* ============================================
@@ -351,97 +352,98 @@
     --scrollbar-thumb-hover: #4D5669;
   }
 
-  /* ============================================
-     主题 4: LIGHT - 专业亮色
+/* ============================================
+     主题 1: DARK - 专业深色（默认）
+     深度 slate 色系，专业金融终端风格
      ============================================ */
-  [data-theme="light"] {
+  [data-theme="dark"] {
     /* ── 基础与面板 ── */
-    --bg-base: #F8F9FA;
-    --bg-surface: #FFFFFF;
-    --bg-surface-hover: #F5F5F5;
-    --bg-elevated: #FAFAFA;
-    --bg-overlay: rgba(0, 0, 0, 0.40);
-    --bg-glass: rgba(255, 255, 255, 0.95);
+    --bg-base: #0f172a;        /* slate-900 - 最深背景 */
+    --bg-surface: #1e293b;     /* slate-800 - 面板背景 */
+    --bg-surface-hover: #334155; /* slate-700 - hover 状态 */
+    --bg-elevated: #475569;    /* slate-600 - 提升层 */
+    --bg-overlay: rgba(15, 23, 42, 0.70);
+    --bg-glass: rgba(30, 41, 59, 0.95);
 
     /* ── 边框与分割线 ── */
-    --border-base: #D9D9D9;
-    --border-light: #E8E8E8;
-    --border-focus: #0F52BA;
-    --border-hover: #BFBFBF;
+    --border-base: #334155;    /* slate-700 */
+    --border-light: #475569;   /* slate-600 */
+    --border-focus: #3b82f6;   /* blue-500 */
+    --border-hover: #64748b;   /* slate-500 */
 
     /* ── 文本层级 ── */
-    --text-primary: #1A1A1A;
-    --text-secondary: #4A4A4A;
-    --text-muted: #7A7A7A;
-    --text-disabled: #C0C0C0;
-    --text-placeholder: #A0A0A0;
-    --text-inverse: #FFFFFF;
+    --text-primary: #f1f5f9;   /* slate-100 */
+    --text-secondary: #94a3b8; /* slate-400 */
+    --text-muted: #64748b;     /* slate-500 */
+    --text-disabled: #475569;  /* slate-600 */
+    --text-placeholder: #64748b; /* slate-500 */
+    --text-inverse: #0f172a;   /* slate-900 */
 
     /* ── 品牌与强调色 ── */
-    --color-primary: #0F52BA;
-    --color-primary-hover: #1A6AE8;
-    --color-primary-light: #4A8EFF;
-    --color-primary-dark: #0F52BA;
-    --color-primary-bg: rgba(15, 82, 186, 0.10);
-    --color-primary-border: rgba(15, 82, 186, 0.25);
+    --color-primary: #3b82f6;  /* blue-500 */
+    --color-primary-hover: #60a5fa; /* blue-400 */
+    --color-primary-light: #93c5fd; /* blue-300 */
+    --color-primary-dark: #2563eb; /* blue-600 */
+    --color-primary-bg: rgba(59, 130, 246, 0.10);
+    --color-primary-border: rgba(59, 130, 246, 0.30);
 
-    /* ── 金融语义色（严格统一）── */
-    --color-bull: #10b981;
-    --color-bull-light: #34d399;
-    --color-bull-bg: rgba(16, 185, 129, 0.08);
-    --color-bull-border: rgba(16, 185, 129, 0.25);
+    /* ── 金融语义色（中国惯例：红涨绿跌）── */
+    --color-bull: #ef4444;     /* red-500 - 上涨 */
+    --color-bull-light: #f87171; /* red-400 */
+    --color-bull-bg: rgba(239, 68, 68, 0.15);
+    --color-bull-border: rgba(239, 68, 68, 0.30);
 
-    --color-bear: #ef4444;
-    --color-bear-light: #f87171;
-    --color-bear-bg: rgba(239, 68, 68, 0.08);
-    --color-bear-border: rgba(239, 68, 68, 0.25);
+    --color-bear: #22c55e;     /* green-500 - 下跌 */
+    --color-bear-light: #4ade80; /* green-400 */
+    --color-bear-bg: rgba(34, 197, 94, 0.15);
+    --color-bear-border: rgba(34, 197, 94, 0.30);
 
-    --color-neutral: #868E96;
-    --color-neutral-bg: rgba(134, 142, 150, 0.08);
-    --color-neutral-border: rgba(134, 142, 150, 0.20);
+    --color-neutral: #94a3b8;  /* slate-400 */
+    --color-neutral-bg: rgba(148, 163, 184, 0.10);
+    --color-neutral-border: rgba(148, 163, 184, 0.25);
 
     /* ── 功能状态色 ── */
-    --color-warning: #FF7D00;
-    --color-warning-bg: rgba(255, 125, 0, 0.10);
-    --color-warning-border: rgba(255, 125, 0, 0.25);
+    --color-warning: #f59e0b; /* amber-500 */
+    --color-warning-bg: rgba(245, 158, 11, 0.15);
+    --color-warning-border: rgba(245, 158, 11, 0.30);
 
-    --color-danger: #DC2626;
-    --color-danger-bg: rgba(220, 38, 38, 0.10);
-    --color-danger-border: rgba(220, 38, 38, 0.25);
+    --color-danger: #dc2626;  /* red-600 */
+    --color-danger-bg: rgba(220, 38, 38, 0.15);
+    --color-danger-border: rgba(220, 38, 38, 0.30);
 
-    --color-success: #16A34A;
-    --color-success-bg: rgba(22, 163, 74, 0.10);
-    --color-success-border: rgba(22, 163, 74, 0.25);
+    --color-success: #16a34a; /* green-600 */
+    --color-success-bg: rgba(22, 163, 74, 0.15);
+    --color-success-border: rgba(22, 163, 74, 0.30);
 
-    --color-info: #0F52BA;
-    --color-info-bg: rgba(15, 82, 186, 0.10);
-    --color-info-border: rgba(15, 82, 186, 0.25);
+    --color-info: #3b82f6;    /* blue-500 */
+    --color-info-bg: rgba(59, 130, 246, 0.15);
+    --color-info-border: rgba(59, 130, 246, 0.30);
 
     /* ── Copilot Agent 专用色 ── */
-    --color-agent-blue: #2563EB;
-    --color-agent-blue-hover: #3B82F6;
-    --color-agent-blue-bg: rgba(37, 99, 235, 0.08);
-    --color-agent-blue-border: rgba(37, 99, 235, 0.25);
+    --color-agent-blue: #60a5fa; /* blue-400 */
+    --color-agent-blue-hover: #93c5fd; /* blue-300 */
+    --color-agent-blue-bg: rgba(96, 165, 250, 0.10);
+    --color-agent-blue-border: rgba(96, 165, 250, 0.30);
 
     /* ── 图表配色 ── */
     --chart-bg: transparent;
-    --chart-grid: #E8E8E8;
-    --chart-text: #A0A0A0;
-    --chart-line: #0F52BA;
-    --chart-area: rgba(15, 82, 186, 0.10);
-    --chart-crosshair: rgba(26, 26, 26, 0.10);
+    --chart-grid: #1e293b;    /* slate-800 */
+    --chart-text: #64748b;    /* slate-500 */
+    --chart-line: #3b82f6;    /* blue-500 */
+    --chart-area: rgba(59, 130, 246, 0.10);
+    --chart-crosshair: rgba(241, 245, 249, 0.20);
 
     /* ── 阴影 ── */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.08);
-    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.10);
-    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.12);
-    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.15);
-    --shadow-glow: 0 0 20px rgba(15, 82, 186, 0.10);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.50);
+    --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.60);
+    --shadow-xl: 0 12px 24px rgba(0, 0, 0, 0.70);
+    --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.20);
 
     /* ── 滚动条 ── */
-    --scrollbar-track: #F0F1F3;
-    --scrollbar-thumb: #D9D9D9;
-    --scrollbar-thumb-hover: #BFBFBF;
+    --scrollbar-track: #1e293b; /* slate-800 */
+    --scrollbar-thumb: #334155; /* slate-700 */
+    --scrollbar-thumb-hover: #475569; /* slate-600 */
   }
 
   /* ============================================
@@ -469,8 +471,9 @@
   }
 
   /* 数字等宽特性 - 金融终端必须 */
-  .font-mono, .font-number, code, pre,
+  .font-mono, .font-number, .font-data, code, pre,
   [class*="price"], [class*="change"], [class*="pct"],
+  [class*="volume"], [class*="amount"],
   td, th {
     font-feature-settings: "tnum" 1;
     font-variant-numeric: tabular-nums;
@@ -478,6 +481,11 @@
 
   .tabular-nums {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* 金融数据专用字体 */
+  .font-data {
+    font-family: var(--font-data);
   }
 
   /* 平滑主题过渡 */

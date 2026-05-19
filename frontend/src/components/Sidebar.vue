@@ -1,9 +1,9 @@
 <template>
   <aside
     class="flex-shrink-0 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out group"
-    :class="isCollapsed ? 'w-14' : 'w-56'"
-    @mouseenter="isCollapsed = false"
-    @mouseleave="isCollapsed = true"
+    :class="isCollapsed ? 'w-16' : 'w-64'"
+    @mouseenter="handleMouseEnter"
+    @mouseleave="handleMouseLeave"
     role="navigation"
     aria-label="主导航菜单"
   >
@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useTheme, THEMES, THEME_NAMES, THEME_ICONS } from '../composables/useTheme.js'
 
 const props = defineProps({
@@ -142,6 +142,24 @@ const emit = defineEmits(['navigate', 'close'])
 const { theme: currentTheme, setTheme } = useTheme()
 
 const isCollapsed = ref(true)
+let hoverTimer = null
+
+// 300ms hover delay to prevent accidental expansion
+function handleMouseEnter() {
+  hoverTimer = setTimeout(() => {
+    isCollapsed.value = false
+  }, 300)
+}
+
+function handleMouseLeave() {
+  clearTimeout(hoverTimer)
+  isCollapsed.value = true
+}
+
+// Cleanup timer on unmount
+onUnmounted(() => {
+  clearTimeout(hoverTimer)
+})
 
 const mainNavItems = [
   { id: 'stock',     label: '股票行情',   icon: '📊' },
@@ -158,6 +176,9 @@ const mainNavItems = [
 
 const aiNavItems = [
   { id: 'strategy-center', label: '策略中心', icon: '🎯' },
+  { id: 'factor-sandbox', label: '因子沙盒', icon: '🔬' },
+  { id: 'market-radar', label: '市场雷达', icon: '📡' },
+  { id: 'timemachine', label: '时光机', icon: '⏰' },
   { id: 'walk-forward', label: '滚动前向分析', icon: '📊' },
 ]
 

@@ -1,5 +1,6 @@
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import { generateChartId, parseChartParams, parseDataSource } from './useInlineChartRenderer.js'
 
 const mdParser = new MarkdownIt({
   html: false,
@@ -14,8 +15,26 @@ const defaultFenceRenderer = mdParser.renderer.rules.fence || function(tokens, i
 
 mdParser.renderer.rules.fence = function(tokens, idx, options, env, self) {
   const token = tokens[idx]
-  const code = token.content.trim()
   const info = token.info ? token.info.trim() : ''
+  const code = token.content.trim()
+  
+  if (info.startsWith('chart') || info.startsWith('chart-compare') || info.startsWith('chart-candle')) {
+    const params = parseChartParams(info)
+    const dataSource = parseDataSource(params.data)
+    const chartId = generateChartId(idx)
+    
+    const encodedData = encodeURIComponent(JSON.stringify({
+      type: params.type,
+      source: dataSource.source,
+      symbol: dataSource.symbol,
+      period: dataSource.period,
+      metric: dataSource.metric,
+      options: params.options
+    }))
+    
+    return `<div id="${chartId}" class="mini-chart-container" data-chart-config="${encodedData}"><div class="chart-placeholder">📊 加载图表...</div></div>`
+  }
+  
   const langClass = info ? ` language-${info}` : ''
   const encodedCode = encodeURIComponent(code)
   

@@ -1364,3 +1364,124 @@ async def copilot_status():
         "opencode_go": bool(os.getenv("OPENCODE_API_KEY", "")),
         "opencode_zen": bool(os.getenv("OPENCODE_API_KEY", "")),
     }
+
+
+@router.get("/chart_data/{data_type}/{symbol}")
+async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
+    """
+    Get chart data for inline rendering in Copilot markdown.
+    
+    Args:
+        data_type: Type of chart data (kline, financial, compare)
+        symbol: Stock symbol (e.g., sh600519)
+        period: Time period (e.g., 30d, 90d, 1y)
+    
+    Returns:
+        JSON response with chart data
+    """
+    import re
+    
+    days = 30
+    if period:
+        match = re.match(r"(\d+)([dy])", period.lower())
+        if match:
+            num = int(match.group(1))
+            unit = match.group(2)
+            days = num * 365 if unit == "y" else num
+    
+    loop = asyncio.get_event_loop()
+    
+    def _fetch_kline_data():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            
+            sym_clean = symbol.lower().replace("sh", "").replace("sz", "")
+            
+            rows = conn.execute(
+                """SELECT date, open, high, low, close, volume
+                FROM market_data_daily
+                WHERE symbol = ? OR symbol = ? OR symbol = ?
+                ORDER BY date DESC
+                LIMIT ?""",
+                (sym_clean, f"sh{sym_clean}", f"sz{sym_clean}", days)
+            ).fetchall()
+            
+            conn.close()
+            
+            data = []
+            for row in reversed(rows):
+                data.append({
+                    "date": row[0],
+                    "open": float(row[1] or 0),
+                    "high": float(row[2] or 0),
+                    "low": float(row[3] or 0),
+                    "close": float(row[4] or 0),
+                    "volume": int(row[5] or 0),
+                    "value": float(row[4] or 0)
+                })
+            
+            return data
+        except Exception as e:
+            logger.warning(f"[Copilot] kline data fetch error: {e}")
+            return []
+    
+    def _fetch_financial_data():
+        try:
+            from app.db.database import _get_conn
+            conn = _get_conn()
+            
+            sym_clean = symbol.lower().replace("sh", "").replace("sz", "")
+            
+            rows = conn.execute(
+                """SELECT date, pe_ttm, pb, turnover_rate
+                FROM market_quote_detail
+                WHERE symbol = ? OR symbol = ? OR symbol = ?
+                ORDER BY date DESC
+                LIMIT ?""",
+                (sym_clean, f"sh{sym_clean}", f"sz{sym_clean}", days)
+            ).fetchall()
+            
+            conn.close()
+            
+            data = []
+            for row in reversed(rows):
+                if row[1]:
+                    data.append({
+                        "date": row[0],
+                        "value": float(row[1]),
+                        "label": "PE_TTM"
+                    })
+            
+            return data
+        except Exception as e:
+            logger.warning(f"[Copilot] financial data fetch error: {e}")
+            return []
+    
+    try:
+        if data_type == "kline":
+            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+        elif data_type == "financial":
+            data = await loop.run_in_executor(_executor, _fetch_financial_data)
+        elif data_type == "compare":
+            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+        else:
+            data = await loop.run_in_executor(_executor, _fetch_kline_data)
+        
+        return {
+            "success": True,
+            "data": data,
+            "symbol": symbol,
+            "data_type": data_type,
+            "period": period,
+            "count": len(data)
+        }
+    except Exception as e:
+        logger.error(f"[Copilot] chart_data error: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "data": [],
+            "symbol": symbol,
+            "data_type": data_type
+        }

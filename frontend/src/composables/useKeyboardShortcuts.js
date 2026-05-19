@@ -47,7 +47,7 @@ export const SHORTCUTS = [
   { key: 'f5',        ctrl: false, alt: false, shift: false, action: 'refresh',     param: null,        description: '刷新数据', category: '功能' },
   { key: 'f6',        ctrl: false, alt: false, shift: false, action: 'watchlist',   param: null,        description: '自选股', category: '功能' },
   { key: 'f7',        ctrl: false, alt: false, shift: false, action: 'screener',    param: null,        description: '条件选股', category: '功能' },
-  { key: 'f8',        ctrl: false, alt: false, shift: false, action: 'view',        param: 'backtest',  description: '回测实验室', category: '功能' },
+  { key: 'f8',        ctrl: false, alt: false, shift: false, action: 'matrix',      param: null,        description: '多品种联动矩阵', category: '功能' },
   { key: 'f9',        ctrl: false, alt: false, shift: false, action: 'deep-info',   param: null,        description: '深度资料', category: '功能' },
   { key: 'f10',       ctrl: false, alt: false, shift: false, action: 'view',        param: 'admin',     description: '系统管理', category: '功能' },
   { key: 'f11',       ctrl: false, alt: false, shift: false, action: 'fullscreen',  param: null,        description: '全屏切换', category: '功能' },
@@ -96,6 +96,7 @@ export function useKeyboardShortcuts(options = {}) {
     onWatchlist = () => {},
     onSettings = () => {},
     onToggleTheme = () => {},
+    onMatrix = () => {},
     enabled = true
   } = options
 
@@ -154,6 +155,9 @@ export function useKeyboardShortcuts(options = {}) {
         break
       case 'watchlist':
         onWatchlist()
+        break
+      case 'matrix':
+        onMatrix()
         break
       case 'deep-info':
         // F9 深度资料

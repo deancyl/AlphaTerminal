@@ -1,17 +1,101 @@
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onUnmounted } from 'vue'
 import { mdRender } from '../../composables/useCopilotMarkdown.js'
+import { useInlineChartRenderer } from '../../composables/useInlineChartRenderer.js'
+import { apiFetchDeduped } from '../../utils/api.js'
 import CopyButton from './CopyButton.vue'
 import ErrorRetry from './ErrorRetry.vue'
 
 const props = defineProps({
-  messages: { type: Array, default: () => [] }
+  messages: { type: Array, default: () => [] },
+  currentSymbol: { type: String, default: '' }
 })
 
 const emit = defineEmits(['retry'])
 
 const historyEl = ref(null)
 defineExpose({ historyEl })
+
+const {
+  renderMiniChart,
+  renderCompareChart,
+  renderCandlestickChart,
+  disposeAll,
+  processPendingCharts
+} = useInlineChartRenderer()
+
+async function fetchChartData(config) {
+  const { source, symbol, period, metric } = config
+  const actualSymbol = symbol || props.currentSymbol || ''
+  
+  if (!actualSymbol) {
+    console.warn('[Copilot] No symbol for chart data fetch')
+    return null
+  }
+  
+  try {
+    const cacheKey = `chart:${source}:${actualSymbol}:${period}`
+    const response = await apiFetchDeduped(
+      cacheKey,
+      `/api/v1/copilot/chart_data/${source}/${actualSymbol}`,
+      { timeoutMs: 10000 }
+    )
+    
+    if (period && response.data) {
+      const days = parseInt(period.replace('d', '').replace('y', '365')) || 30
+      return response.data.slice(-days)
+    }
+    
+    return response.data
+  } catch (e) {
+    console.error('[Copilot] Chart data fetch failed:', e)
+    return null
+  }
+}
+
+async function injectCharts() {
+  await nextTick()
+  if (!historyEl.value) return
+  
+  const chartContainers = historyEl.value.querySelectorAll('.mini-chart-container')
+  
+  for (const container of chartContainers) {
+    if (container.dataset.rendered) continue
+    
+    const configStr = container.dataset.chartConfig
+    if (!configStr) continue
+    
+    try {
+      const config = JSON.parse(decodeURIComponent(configStr))
+      const chartId = container.id
+      
+      const data = await fetchChartData(config)
+      
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="chart-error text-xs text-secondary p-2">暂无图表数据</div>'
+        container.dataset.rendered = 'true'
+        continue
+      }
+      
+      container.innerHTML = ''
+      container.style.width = '100%'
+      container.style.height = '120px'
+      
+      if (config.type === 'compare') {
+        renderCompareChart(chartId, data)
+      } else if (config.type === 'candlestick') {
+        renderCandlestickChart(chartId, data)
+      } else {
+        renderMiniChart(chartId, data, { type: config.type || 'line' })
+      }
+      
+      container.dataset.rendered = 'true'
+    } catch (e) {
+      console.error('[Copilot] Chart render error:', e)
+      container.innerHTML = '<div class="chart-error text-xs text-secondary p-2">图表渲染失败</div>'
+    }
+  }
+}
 
 function injectCopyButtons() {
   nextTick(() => {
@@ -43,7 +127,14 @@ function injectCopyButtons() {
   })
 }
 
-watch(() => props.messages, injectCopyButtons, { deep: true })
+watch(() => props.messages, () => {
+  injectCopyButtons()
+  injectCharts()
+}, { deep: true })
+
+onUnmounted(() => {
+  disposeAll()
+})
 </script>
 
 <template>
@@ -72,14 +163,12 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
       :role="msg.role === 'user' ? 'presentation' : 'article'"
       :aria-label="msg.role === 'user' ? '用户消息' : 'AI回复'"
     >
-      <!-- User message - minimal style, right aligned -->
       <div v-if="msg.role === 'user'"
            class="mr-4 ml-8 text-right">
         <div class="text-[10px] mb-1 text-agent-blue/70">你</div>
         <div class="text-gray-300">{{ msg.content }}</div>
       </div>
 
-<!-- AI message - full width, no bubble -->
       <div v-else
            class="mr-4"
            :class="msg.isError ? 'border border-red-500/30 rounded p-3' : ''">
@@ -91,7 +180,6 @@ watch(() => props.messages, injectCopyButtons, { deep: true })
           <span v-html="msg.renderedContent || mdRender(msg.displayedContent)"></span>
           <span v-if="msg.streaming" class="animate-pulse text-agent-blue">▌</span>
         </div>
-        <!-- Error retry button -->
         <ErrorRetry
           v-if="msg.isError && msg.errorType"
           :error="msg.error"

@@ -3560,3 +3560,259 @@ curl http://localhost:60100/api/v1/backtest_monitor/metrics
 curl http://localhost:60100/api/v1/audit_playback/stats
 ```
 
+---
+
+## Top 5 Killer Features + UI/UX Deep Optimization (v0.6.52)
+
+### Overview
+
+A comprehensive feature release adding 5 killer features and deep UI/UX optimization for professional financial terminal experience.
+
+### New Features
+
+#### 1. Factor Sandbox (因子漏斗选股沙盒)
+
+**Description**: Drag-and-drop factor filtering system for real-time stock screening.
+
+**Features**:
+- 8 screening factors: MACD金叉, RSI超卖, 突破均线, 外资净流入, LLM情绪得分, 放量突破, 机构调研, 创新高
+- Drag-and-drop funnel UI
+- Real-time stock list display
+- Quick backtest preview
+
+**API Endpoints**:
+- `GET /api/v1/factor_sandbox/factors` - List all factors
+- `GET /api/v1/factor_sandbox/factors/screening` - List screening factors
+- `POST /api/v1/factor_sandbox/screen` - Screen stocks with factor filters
+- `POST /api/v1/factor_sandbox/backtest_preview` - Quick backtest preview
+
+**Files**:
+- `backend/app/routers/factor_sandbox.py`
+- `backend/app/services/factor_sandbox/screener.py`
+- `frontend/src/components/factor/FactorSandbox.vue`
+- `frontend/src/components/factor/FactorDragItem.vue`
+- `frontend/src/components/factor/FactorFunnel.vue`
+- `frontend/src/composables/useFactorSandbox.js`
+
+#### 2. Market Heat & Extremes Radar (市场温度计与极值雷达)
+
+**Description**: ECharts treemap heatmap + real-time anomaly detection.
+
+**Features**:
+- Sector/stock level treemap visualization
+- 5 anomaly types: volatility, capital_outflow, institution_research, new_high, volume_surge
+- TOP 5 stocks per anomaly type
+- Auto-refresh every 60 seconds
+
+**API Endpoints**:
+- `GET /api/v1/market_radar/treemap` - Treemap data
+- `GET /api/v1/market_radar/anomalies` - All anomalies
+- `GET /api/v1/market_radar/anomalies/{type}` - Specific anomaly type
+
+**Files**:
+- `backend/app/routers/market_radar.py`
+- `backend/app/services/market_radar/treemap_builder.py`
+- `backend/app/services/market_radar/anomaly_detector.py`
+- `frontend/src/components/MarketRadar.vue`
+- `frontend/src/components/market/AnomalyCard.vue`
+- `frontend/src/composables/useMarketRadar.js`
+
+#### 3. Time-Machine Replay (沉浸式历史复盘模式)
+
+**Description**: Historical K-line playback with paper trading for training.
+
+**Features**:
+- Daily K-line playback (minute-level ready via abstract engine)
+- Playback controls: play/pause/step/speed
+- Paper trading with position tracking
+- P&L calculation and trade history
+
+**API Endpoints**:
+- `POST /api/v1/timemachine/session/create` - Create replay session
+- `GET /api/v1/timemachine/session/{session_id}` - Get session state
+- `POST /api/v1/timemachine/session/{session_id}/play` - Start/pause playback
+- `POST /api/v1/timemachine/session/{session_id}/step` - Step forward N bars
+- `POST /api/v1/timemachine/session/{session_id}/trade` - Execute paper trade
+
+**Files**:
+- `backend/app/routers/timemachine.py`
+- `backend/app/services/timemachine/playback_engine.py`
+- `backend/app/services/timemachine/paper_trading.py`
+- `frontend/src/components/TimeMachine.vue`
+- `frontend/src/components/timemachine/PlaybackControls.vue`
+- `frontend/src/components/timemachine/PaperTradingPanel.vue`
+- `frontend/src/composables/useTimeMachine.js`
+
+#### 4. Agentic Copilot Inline Charts (AI投研助理伴飞面板)
+
+**Description**: Context-aware AI assistant with inline chart rendering capability.
+
+**Features**:
+- Mini ECharts rendering in markdown stream
+- Context awareness (current symbol from page)
+- 3 context-aware quick commands
+- Chart block syntax: `:::chart {type="line" data="kline:sh600519:30d"}`
+
+**API Endpoints**:
+- `GET /api/v1/copilot/chart_data/{data_type}/{symbol}` - Chart data for inline rendering
+
+**Files**:
+- `frontend/src/composables/useInlineChartRenderer.js`
+- `frontend/src/composables/useCopilotMarkdown.js` (modified)
+- `frontend/src/components/copilot/CopilotMessageList.vue` (modified)
+- `frontend/src/components/CopilotSidebar.vue` (modified)
+- `frontend/src/styles/copilot-markdown.css` (modified)
+
+#### 5. Multi-Asset Synchronization Matrix (跨周期跨品种联动四屏矩阵)
+
+**Description**: 4-panel synchronized view with crosshair sync.
+
+**Features**:
+- 4-panel grid: 上证指数, 十年期国债收益率, 沪深300股指期货, 人民币汇率
+- Crosshair synchronization (100ms debounced)
+- F8 keyboard shortcut to open
+- ESC to close
+
+**Files**:
+- `frontend/src/components/MultiAssetMatrix.vue`
+- `frontend/src/components/MatrixPanel.vue`
+- `frontend/src/components/SyncedKLineChart.vue`
+- `frontend/src/composables/useCrosshairSync.js`
+- `frontend/src/App.vue` (modified for F8 shortcut)
+- `frontend/src/composables/useKeyboardShortcuts.js` (modified)
+
+### PC UI/UX Optimization
+
+#### 1. Tabular Numeric Typography
+
+**Changes**:
+- Added `--font-data` CSS variable for JetBrains Mono
+- Added `font-variant-numeric: tabular-nums` for financial data
+- Added `font-display=swap` for faster initial render
+
+**Files**:
+- `frontend/src/style.css`
+- `frontend/tailwind.config.js`
+- `frontend/index.html`
+
+#### 2. Collapsible Mini Sidebar
+
+**Changes**:
+- Collapsed width: 64px (w-16)
+- Expanded width: 256px (w-64)
+- 300ms hover delay before expansion
+- Smooth transition animation
+
+**Files**:
+- `frontend/src/components/Sidebar.vue`
+
+#### 3. Deep Dark Mode Colors
+
+**Changes**:
+- Background: `#0f172a` (slate-900)
+- Surface: `#1e293b` (slate-800)
+- Bull (上涨): `#ef4444` (red-500)
+- Bear (下跌): `#22c55e` (green-500)
+
+**Files**:
+- `frontend/src/style.css`
+
+### Mobile UI/UX Optimization
+
+#### 1. Bottom Sheet Component
+
+**Features**:
+- v-model for open/close state
+- Backdrop with click-to-close
+- Drag handle indicator
+- Haptic feedback on close
+
+**Files**:
+- `frontend/src/components/BottomSheet.vue`
+
+#### 2. Haptic Feedback
+
+**Features**:
+- Browser support detection (`navigator.vibrate`)
+- 5 patterns: light, medium, heavy, success, error
+
+**Files**:
+- `frontend/src/composables/useHaptic.js`
+
+#### 3. Thumb Zone Optimization
+
+**Changes**:
+- QuoteHeader moves to bottom on mobile
+- Controls remain at top on desktop
+
+**Files**:
+- `frontend/src/components/AdvancedKlinePanel.vue`
+
+#### 4. Landscape Immersive Mode
+
+**Features**:
+- Full-screen K-line view in landscape
+- Mobile bottom nav hidden in landscape
+- Exit button in top-right corner
+
+**Files**:
+- `frontend/src/composables/useOrientation.js`
+- `frontend/src/components/AdvancedKlinePanel.vue`
+- `frontend/src/components/MobileBottomNav.vue`
+
+### Navigation Updates
+
+**PC Sidebar**:
+- Added: 因子沙盒 (🔬), 市场雷达 (📡), 时光机 (⏰)
+
+**Mobile Bottom Nav**:
+- Added: 因子 (🔬), 雷达 (📡), 时光机 (⏰) to more menu
+- Changed grid: 3x3 → 4x3 (12 items)
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 1: Backend APIs | 3 | ✅ Complete |
+| Wave 2: Frontend Components | 2 | ✅ Complete |
+| Wave 3: AI Integration | 2 | ✅ Complete |
+| Wave 4: Advanced Features | 1 | ✅ Complete |
+| Wave 5: PC UI/UX | 3 | ✅ Complete |
+| Wave 6: Mobile UI/UX | 4 | ✅ Complete |
+| Wave 7: Navigation | 1 | ✅ Complete |
+| Wave 8: Documentation | 1 | ✅ Complete |
+| **Total** | **17** | **100% Complete** |
+
+### Verification Commands
+
+```bash
+# Factor Sandbox
+curl http://localhost:60100/api/v1/factor_sandbox/health
+ls frontend/src/components/factor/FactorSandbox.vue
+
+# Market Radar
+curl http://localhost:60100/api/v1/market_radar/health
+ls frontend/src/components/MarketRadar.vue
+
+# Time-Machine
+curl http://localhost:60100/api/v1/timemachine/health
+ls frontend/src/components/TimeMachine.vue
+
+# Multi-Asset Matrix
+grep -c "F8" frontend/src/App.vue  # Expected: 3+
+ls frontend/src/components/MultiAssetMatrix.vue
+
+# PC UI/UX
+grep -c "tabular-nums" frontend/src/style.css  # Expected: 3+
+grep -c "w-16" frontend/src/components/Sidebar.vue  # Expected: 1+
+
+# Mobile UI/UX
+ls frontend/src/components/BottomSheet.vue
+ls frontend/src/composables/useHaptic.js
+ls frontend/src/composables/useOrientation.js
+
+# Frontend build
+cd frontend && npm run build  # Expected: Success
+```
+
+

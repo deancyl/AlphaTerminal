@@ -1,6 +1,6 @@
 <template>
   <nav
-    v-if="isMobile"
+    v-if="isMobile && !isLandscape"
     class="fixed bottom-0 left-0 right-0 z-[9997] bg-terminal-panel border-t border-theme-secondary/50 safe-area-pb"
     role="navigation"
     aria-label="移动端主导航"
@@ -8,7 +8,7 @@
     <!-- 更多菜单展开面板 -->
     <div
       v-if="showMore"
-      class="absolute bottom-full left-0 right-0 bg-terminal-panel border-t border-theme-secondary/50 p-4 grid grid-cols-3 gap-3 transition-all duration-200"
+      class="absolute bottom-full left-0 right-0 bg-terminal-panel border-t border-theme-secondary/50 p-4 grid grid-cols-4 gap-2 transition-all duration-200 max-h-[50vh] overflow-y-auto"
       role="menu"
       aria-label="更多导航选项"
     >
@@ -77,6 +77,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useOrientation } from '../composables/useOrientation.js'
 
 const props = defineProps({
   activeId: { type: String, default: 'stock' }
@@ -86,6 +87,7 @@ const emit = defineEmits(['navigate'])
 
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')
+const { isLandscape } = useOrientation()
 const showMore = ref(false)
 
 const mainTabs = [
@@ -103,6 +105,9 @@ const moreTabs = [
   { id: 'global-index', label: '全球', icon: '🌐' },
   { id: 'research', label: '研报', icon: '📄' },
   { id: 'strategy-center', label: '策略', icon: '🎯' },
+  { id: 'factor-sandbox', label: '因子', icon: '🔬' },
+  { id: 'market-radar', label: '雷达', icon: '📡' },
+  { id: 'timemachine', label: '时光机', icon: '⏰' },
   { id: 'walk-forward', label: '前向', icon: '📊' },
   { id: 'admin', label: '设置', icon: '⚙️' },
 ]

@@ -5,8 +5,11 @@ export default {
     "./src/**/*.{vue,js,ts,jsx,tsx}",
   ],
   darkMode: ['class', '[data-theme="dark"]', '[data-theme="black"]', '[data-theme="wind"]'],
-  theme: {
+theme: {
     extend: {
+      fontFamily: {
+        'data': ['JetBrains Mono', 'Inter', 'ui-monospace', 'monospace'],
+      },
       colors: {
         theme: {
           bg: {

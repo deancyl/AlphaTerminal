@@ -1,3 +1,13 @@
 <template>
-  <div class="flex items-center justify-center h-full text-terminal-dim text-xs">板块数据加载中...</div>
+  <MarketRadar @stock-click="onStockClick" />
 </template>
+
+<script setup>
+import MarketRadar from './MarketRadar.vue'
+
+const emit = defineEmits(['stock-click'])
+
+function onStockClick(stock) {
+  emit('stock-click', stock)
+}
+</script>

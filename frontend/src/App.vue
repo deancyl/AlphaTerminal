@@ -304,6 +304,12 @@
       @navigate="handleMobileNav"
     />
 
+    <!-- ━━━ 多品种联动矩阵 (F8) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+    <MultiAssetMatrix
+      :show="showMatrix"
+      @close="showMatrix = false"
+    />
+
   </div>
 </template>
 
@@ -343,6 +349,7 @@ const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIn
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
 const ResearchDashboard = defineAsyncComponent(() => import('./components/ResearchDashboard.vue'))
+const MultiAssetMatrix = defineAsyncComponent(() => import('./components/MultiAssetMatrix.vue'))
 
 import { useUiStore } from './composables/useUiStore.js'
 import { useMarketStore } from './stores/market.js'
@@ -459,7 +466,9 @@ const { helpVisible, searchVisible } = useKeyboardShortcuts({
     commandPaletteOpen.value = true 
   },
   onEscape: () => {
-    if (commandPaletteOpen.value) {
+    if (showMatrix.value) {
+      showMatrix.value = false
+    } else if (commandPaletteOpen.value) {
       commandPaletteOpen.value = false
     } else if (ui.klineFullscreen) {
       ui.klineFullscreen = false
@@ -499,6 +508,10 @@ const { helpVisible, searchVisible } = useKeyboardShortcuts({
     const newTheme = isDark.value ? 'light' : 'dark'
     localStorage.setItem('theme', newTheme)
     location.reload()
+  },
+  onMatrix: () => {
+    // F8: 多品种联动矩阵
+    showMatrix.value = !showMatrix.value
   }
 })
 
@@ -538,6 +551,7 @@ const commandPaletteOpen = ref(false) // 全局命令面板
 const isCopilotOpen = ref(false) // 默认收起 AI 助理
 const copilotUnreadCount = ref(0) // Copilot 未读消息数
 const isLocked = ref(true)     // 网格默认锁定
+const showMatrix = ref(false)  // 多品种联动矩阵 (F8)
 const dashboardGridRef = ref(null) // DashboardGrid ref for layout reset
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile

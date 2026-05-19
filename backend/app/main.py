@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic, cost_attribution, audit_playback, data_gaps
+from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic, cost_attribution, audit_playback, data_gaps, market_radar, factor_sandbox, timemachine
 from app.routers.macro import warmup_macro_cache
 from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
@@ -271,6 +271,9 @@ app.include_router(audit_playback.router, prefix="/api/v1", tags=["audit_playbac
 app.include_router(agentic.router, prefix="/api/v1/agentic", tags=["agentic"])  # Agentic workflow engine
 app.include_router(cost_attribution.router, prefix="/api/v1", tags=["cost_attribution"])  # LLM cost attribution
 app.include_router(data_gaps.router, prefix="/api/v1", tags=["data_gaps"])  # Data gap radar
+app.include_router(market_radar.router, tags=["market_radar"])  # Market heat radar
+app.include_router(factor_sandbox.router, prefix="/api/v1", tags=["factor_sandbox"])  # Factor sandbox screening
+app.include_router(timemachine.router, tags=["timemachine"])  # Time-machine K-line replay
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 

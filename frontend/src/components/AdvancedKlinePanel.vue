@@ -1,9 +1,12 @@
 <template>
   <!-- 全屏 K 线分析面板 -->
-  <div class="flex flex-col w-full h-full overflow-hidden">
-
-    <!-- 顶部控制栏 -->
+  <div 
+    class="flex flex-col w-full h-full overflow-hidden"
+    :class="{ 'landscape-immersive': isLandscape && isMobile }"
+  >
+    <!-- 顶部控制栏（桌面端：顶部，移动端：底部） -->
     <QuoteHeader
+      v-if="!isMobile || !isLandscape"
       :name="symbolName"
       :symbol="currentSymbol"
       :quote="currentQuote"
@@ -16,6 +19,7 @@
       :fullHist="histData"
       :maDisplays="maDisplays"
       :hoverData="hoverData"
+      :class="isMobile && !isLandscape ? 'order-last' : ''"
       @period-change="onPeriodChange"
       @adjustment-change="adj => adjustment = adj"
       @yaxis-change="y => yAxisType = y"
@@ -116,10 +120,23 @@
         class="absolute top-2 left-1/2 -translate-x-1/2 z-30 px-3 py-1 text-[11px] rounded-sm border border-[var(--color-warning)]/50 bg-[var(--color-warning-bg)] text-[var(--color-warning)] hover:bg-[var(--color-warning-bg)]/80 transition-colors"
         @click="exitDrillDown"
       >← 返回日线</button>
+
+      <!-- 横屏退出按钮 -->
+      <button
+        v-if="isLandscape && isMobile"
+        class="absolute top-2 right-2 z-40 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+        aria-label="退出横屏模式"
+        @click="exitLandscape"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4l16 16M4 20l16-16" stroke-linecap="round"/>
+        </svg>
+      </button>
     </div>
 
-    <!-- 副图区（SubChart 独立管理自己的 ECharts 实例） -->
+    <!-- 副图区（横屏时隐藏） -->
     <SubChart
+      v-if="!isLandscape || !isMobile"
       :hist="histData"
       :activeTab="subChartTab"
       :indicatorParams="indicatorParams"
@@ -147,11 +164,12 @@
 
 <script setup>
 import { ref, computed, watch, shallowRef, triggerRef, onMounted, onUnmounted, nextTick } from 'vue'
-import { useThrottleFn } from '@vueuse/core'
+import { useThrottleFn, useMediaQuery } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 
 import { useMarketStore } from '../stores/market.js'
 import { useMarketStream } from '../composables/useMarketStream.js'
+import { useOrientation } from '../composables/useOrientation.js'
 import { apiFetch } from '../utils/api.js'
 import { useKlineCache } from '../composables/useKlineCache.js'
 import { buildChartData } from '../utils/chartDataBuilder.js'
@@ -169,6 +187,14 @@ const {
   currentSymbol, currentSymbolName,
   setSymbol, isAShare, isIntradayPeriod,
 } = useMarketStore()
+
+// Mobile & Orientation detection
+const isMobile = useMediaQuery('(max-width: 768px)')
+const { isLandscape, unlockOrientation } = useOrientation()
+
+function exitLandscape() {
+  unlockOrientation()
+}
 
 // ── Refs ────────────────────────────────────────────────────────
 const baseChartRef        = ref(null)
@@ -747,3 +773,12 @@ onUnmounted(() => {
   }
 })
 </script>
+
+<style scoped>
+.landscape-immersive {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg-base);
+}
+</style>

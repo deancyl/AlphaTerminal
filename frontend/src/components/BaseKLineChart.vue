@@ -1,9 +1,70 @@
 <template>
-  <div ref="chartEl" class="w-full h-full"></div>
+  <div class="relative w-full h-full">
+    <!-- Settings Button (Mobile) -->
+    <button
+      v-if="showSettingsButton"
+      @click="openSettings"
+      class="absolute top-2 right-2 z-10 p-2 rounded-lg bg-surface/80 backdrop-blur-sm
+             border border-border-base hover:bg-surface transition-colors"
+      aria-label="指标设置"
+    >
+      <svg class="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </button>
+    
+    <div ref="chartEl" class="w-full h-full"></div>
+    
+    <!-- Settings Bottom Sheet -->
+    <BottomSheet v-model="showSettings" title="指标设置">
+      <div class="p-4 space-y-4">
+        <!-- MA Settings -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-medium text-secondary">均线</h4>
+          <div class="space-y-2">
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">MA5</span>
+              <input type="checkbox" v-model="indicatorSettings.ma5" @change="handleSettingChange" />
+            </label>
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">MA10</span>
+              <input type="checkbox" v-model="indicatorSettings.ma10" @change="handleSettingChange" />
+            </label>
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">MA20</span>
+              <input type="checkbox" v-model="indicatorSettings.ma20" @change="handleSettingChange" />
+            </label>
+          </div>
+        </div>
+        
+        <!-- Sub Chart Settings -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-medium text-secondary">副图指标</h4>
+          <div class="space-y-2">
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">VOL (成交量)</span>
+              <input type="checkbox" v-model="indicatorSettings.vol" @change="handleSettingChange" />
+            </label>
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">MACD</span>
+              <input type="checkbox" v-model="indicatorSettings.macd" @change="handleSettingChange" />
+            </label>
+            <label class="flex items-center justify-between p-2 rounded-lg bg-base/50">
+              <span class="text-primary">KDJ</span>
+              <input type="checkbox" v-model="indicatorSettings.kdj" @change="handleSettingChange" />
+            </label>
+          </div>
+        </div>
+      </div>
+    </BottomSheet>
+  </div>
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw, reactive } from 'vue'
 import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
@@ -12,6 +73,8 @@ import { logger } from '../utils/logger.js'
 import { initChart, getECharts, createResizeObserver } from '../utils/lazyEcharts.js'
 import { waitForDimensions } from '../utils/waitForDimensions.js'
 import { useTheme } from '../composables/useTheme.js'
+import { useHaptic } from '../composables/useHaptic.js'
+import BottomSheet from './BottomSheet.vue'
 import { 
   getDynamicMarketColors,
   getDynamicChartColors,
@@ -20,7 +83,7 @@ import {
   buildDataZoomOptions
 } from '../utils/echartsTheme.js'
 
-const emit = defineEmits(['datazoom'])
+const emit = defineEmits(['datazoom', 'settings-change'])
 
 const props = defineProps({
   // 核心：由 chartDataBuilder 算好的所有图表数据
@@ -37,6 +100,9 @@ const props = defineProps({
   // 新闻事件标记点 [{ date, headline, type, price }]
   // type: 'bullish' | 'bearish' | 'neutral'
   newsEvents: { type: Array, default: () => [] },
+  
+  // 是否显示设置按钮（移动端）
+  showSettingsButton: { type: Boolean, default: false },
 })
 
 const chartEl = ref(null)
@@ -47,6 +113,28 @@ let _isInitialized = false
 let _unsubscribeTheme = null
 
 const { activeTheme, onThemeChange } = useTheme()
+const { light, success } = useHaptic()
+
+// Settings state
+const showSettings = ref(false)
+const indicatorSettings = reactive({
+  ma5: true,
+  ma10: true,
+  ma20: true,
+  vol: true,
+  macd: false,
+  kdj: false,
+})
+
+function openSettings() {
+  light()
+  showSettings.value = true
+}
+
+function handleSettingChange() {
+  light()
+  emit('settings-change', { ...indicatorSettings })
+}
 
 function buildOption(cData) {
   if (!cData || cData.isEmpty) return {}

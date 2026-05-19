@@ -16,7 +16,7 @@
       :isLoadingPortfolio="isLoadingPortfolio"
       v-model:selectedPortfolioId="selectedPortfolioId"
     />
-    <CopilotMessageList ref="messageListRef" :messages="messages" @retry="handleRetry" />
+    <CopilotMessageList ref="messageListRef" :messages="messages" :current-symbol="currentSymbol" @retry="handleRetry" />
     <CopilotInput
       v-model:inputText="inputText"
       :is-loading="isLoading"
@@ -113,6 +113,44 @@ const quickCommands = [
   { cmd: '帮助', label: '帮助', icon: '❓', action: 'showHelp' },
 ]
 
+const contextCommands = computed(() => {
+  const commands = []
+  
+  if (currentSymbol.value) {
+    commands.push({
+      cmd: `分析 ${currentSymbol.value}`,
+      label: '分析当前',
+      icon: '🔍',
+      action: 'analyzeCurrent',
+      prompt: `请分析 ${currentSymbol.value} 的技术面和基本面，包括K线形态、均线系统、MACD指标、成交量分析，以及估值水平、财务指标、行业地位等`
+    })
+    
+    commands.push({
+      cmd: `对比 ${currentSymbol.value}`,
+      label: '同业对比',
+      icon: '⚖️',
+      action: 'comparePeers',
+      prompt: `对比 ${currentSymbol.value} 与同行业竞品的财务指标，包括ROE、毛利率、净利润率、PE、PB等关键指标`
+    })
+    
+    commands.push({
+      cmd: `K线 ${currentSymbol.value}`,
+      label: 'K线分析',
+      icon: '📈',
+      action: 'klineAnalysis',
+      prompt: `分析 ${currentSymbol.value} 的K线走势，识别支撑位、压力位、趋势方向，并给出技术分析结论`
+    })
+  }
+  
+  return commands
+})
+
+const contextInfo = computed(() => ({
+  symbol: currentSymbol.value,
+  page: 'dashboard',
+  timestamp: new Date().toISOString()
+}))
+
 // Props & Emits
 const props = defineProps({
   marketOverview: { type: Object, default: null },
@@ -208,6 +246,12 @@ async function executeQuickCommand(cmd) {
   
   try {
     let text = ''
+    
+    if (cmd.prompt) {
+      await handleLLMChat(cmd.prompt)
+      return
+    }
+    
     switch (cmd.action) {
       case 'showMarket':
         text = await showMarket()
