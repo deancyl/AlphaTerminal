@@ -3358,3 +3358,205 @@ curl -X POST http://localhost:60100/api/v1/admin/database/maintenance \
 pytest backend/tests/unit/test_utils/test_ip_validation.py -v
 ```
 
+
+---
+
+## P0 Incident Fix + QA Audit + New Admin Features (v0.6.51)
+
+### Overview
+
+A comprehensive optimization cycle addressing:
+1. **P0 Incident**: Bond/Futures/Macro modules crashing due to concurrency issues
+2. **QA Audit**: Top 10 security and performance vulnerabilities
+3. **New Features**: 5 new admin panel features
+
+### Part A - P0 Incident Fix
+
+#### Root Causes Identified
+
+| Issue | Severity | Location |
+|-------|----------|----------|
+| Shared default executor | HIGH | bond.py, futures.py |
+| No request coalescing | HIGH | bond.py, futures.py |
+| Event loop anti-pattern | HIGH | futures.py:244-249 |
+| Aggressive timeouts | MEDIUM | futures.py (5s) |
+| No Singleflight pattern | HIGH | All akshare endpoints |
+
+#### Wave 1: Thread Pool Isolation
+
+**Files Modified**:
+- `backend/app/routers/bond.py` - Added `_bond_executor` (8 workers)
+- `backend/app/routers/futures.py` - Added `_futures_executor` (10 workers)
+
+**Changes**:
+- Created dedicated ThreadPoolExecutor for each module
+- Replaced `asyncio.to_thread()` with `run_in_executor()`
+- Fixed event loop anti-pattern (removed `asyncio.new_event_loop()`)
+- Increased futures timeout from 5s to 15s
+- Migrated to `cache.get_or_set_async()` for request coalescing
+- Added bond polling job to scheduler (60s interval)
+
+#### Wave 2: Singleflight Utility
+
+**New File**: `backend/app/utils/singleflight.py`
+
+**Features**:
+- Production-grade request deduplication
+- `asyncio.shield()` for Future protection
+- `BaseException` handling for all error types
+- Automatic cleanup of in-flight requests
+
+**Tests**: 11 unit tests in `backend/tests/unit/test_utils/test_singleflight.py`
+
+#### Wave 3: KeepAlive + orjson
+
+**Frontend Changes**:
+- Added `:max="10"` to KeepAlive in App.vue
+- Added `onDeactivated` cleanup to 6 cached components:
+  - DashboardGrid.vue
+  - MacroDashboard.vue
+  - FuturesDashboard.vue
+  - BondDashboard.vue
+  - ForexDashboard.vue
+  - PortfolioDashboard.vue
+
+**Backend Changes**:
+- Added `orjson>=3.9.0` to requirements.txt
+- Configured `ORJSONResponse` as default response class
+
+#### Wave 4: SQLite Rate Limiter + Keyset Pagination
+
+**New File**: `backend/app/middleware/rate_limit_sqlite.py`
+
+**Features**:
+- SQLite-backed rate limiter with WAL mode
+- Thread-local connections for multi-worker support
+- Fail-open behavior on SQLite errors
+- Automatic expired entries cleanup
+
+**Pagination Changes**:
+- Added `get_audit_logs_keyset()` to `audit_db.py`
+- Added `after_timestamp` and `after_id` cursor parameters
+- O(1) performance for deep pages (vs O(n) with OFFSET)
+
+### Part B - QA Audit Fixes
+
+| Issue | Solution | Status |
+|-------|----------|--------|
+| Maintenance lock contention | State machine in background_tasks.py | ✅ Fixed |
+| ECharts context exhaustion | KeepAlive :max + onDeactivated | ✅ Fixed |
+| WebSocket reconnection DDOS | Proper jitter + initial scatter | ✅ Fixed |
+| Large JSON blocks event loop | orjson + StreamingResponse | ✅ Fixed |
+| Rate limiter multi-worker bypass | SQLite-backed rate limiter | ✅ Fixed |
+| Deep pagination spike | Keyset pagination | ✅ Fixed |
+
+### Part C - New Admin Features
+
+#### 1. Data Gap Radar
+
+**Description**: Calendar heatmap showing missing market data with one-click backfill.
+
+**API Endpoints**:
+- `GET /api/v1/data_gaps/scan` - Scan for missing data dates
+- `POST /api/v1/data_gaps/backfill` - One-click backfill
+- `GET /api/v1/data_gaps/calendar` - Calendar heatmap data
+
+**Files**:
+- `backend/app/routers/data_gaps.py`
+- `frontend/src/components/admin/DataGapsPanel.vue`
+
+#### 2. LLM Cost Attribution
+
+**Description**: Sankey diagram showing token consumption flow + prompt tree viewer.
+
+**API Endpoints**:
+- `GET /api/v1/cost_attribution/sankey` - Sankey diagram data
+- `GET /api/v1/cost_attribution/prompt_tree` - Prompt tree for session
+- `GET /api/v1/cost_attribution/breakdown` - Cost breakdown by dimension
+
+**Files**:
+- `backend/app/routers/cost_attribution.py`
+- `frontend/src/components/admin/CostAttributionPanel.vue`
+
+#### 3. Backtest Sandbox Monitor
+
+**Description**: Real-time CPU/memory monitoring for running backtests with kill button.
+
+**API Endpoints**:
+- `GET /api/v1/backtest_monitor/metrics` - Worker metrics
+- `POST /api/v1/backtest_monitor/kill/{worker_id}` - Kill worker
+- `WS /api/v1/backtest_monitor/stream` - Real-time updates
+
+**Files**:
+- `backend/app/routers/backtest_monitor.py`
+- `backend/app/services/backtest_worker_registry.py`
+- `frontend/src/components/admin/BacktestMonitorPanel.vue`
+
+#### 4. Source Switchboard
+
+**Description**: Visual topology of data sources with circuit breaker status and manual fallback.
+
+**API Endpoints**:
+- `GET /api/v1/admin/sources/topology` - Visual topology data
+- `POST /api/v1/admin/sources/switch` - Manual fallback switch
+
+**Files**:
+- `backend/app/routers/admin.py` (extended)
+- `frontend/src/components/admin/DataSourcePanel.vue` (extended)
+
+#### 5. Audit Playback
+
+**Description**: Diff view of config changes with time-travel rollback capability.
+
+**API Endpoints**:
+- `GET /api/v1/audit_playback/diff` - Config diff between timestamps
+- `POST /api/v1/audit_playback/rollback` - Time-travel rollback
+- `GET /api/v1/audit_playback/verify_chain` - Hash chain verification
+
+**Files**:
+- `backend/app/routers/audit_playback.py`
+- `frontend/src/components/admin/AuditPlaybackPanel.vue`
+
+### Summary
+
+| Wave | Tasks | Status |
+|------|-------|--------|
+| Wave 1: Thread Pool Isolation | 9 | ✅ Complete |
+| Wave 2: Singleflight | 1 | ✅ Complete |
+| Wave 3: KeepAlive + orjson | 1 | ✅ Complete |
+| Wave 4: Rate Limiter + Pagination | 1 | ✅ Complete |
+| Wave 5: Data Gap Radar | 1 | ✅ Complete |
+| Wave 6: LLM Cost Attribution | 1 | ✅ Complete |
+| Wave 7: Backtest Monitor | 1 | ✅ Complete |
+| Wave 8: Source Switchboard + Audit Playback | 1 | ✅ Complete |
+| **Total** | **16** | **100% Complete** |
+
+### Verification Commands
+
+```bash
+# Thread pool executors
+grep "_executor = ThreadPoolExecutor" backend/app/routers/bond.py
+grep "_executor = ThreadPoolExecutor" backend/app/routers/futures.py
+
+# Singleflight
+ls backend/app/utils/singleflight.py
+
+# KeepAlive
+grep ':max="10"' frontend/src/App.vue
+
+# orjson
+grep "orjson" backend/requirements.txt
+
+# SQLite rate limiter
+ls backend/app/middleware/rate_limit_sqlite.py
+
+# Keyset pagination
+grep "after_timestamp" backend/app/routers/audit.py
+
+# New features
+curl http://localhost:60100/api/v1/data_gaps/health
+curl http://localhost:60100/api/v1/cost_attribution/health
+curl http://localhost:60100/api/v1/backtest_monitor/metrics
+curl http://localhost:60100/api/v1/audit_playback/stats
+```
+
