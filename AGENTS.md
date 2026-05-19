@@ -4159,3 +4159,109 @@ grep -c "sanitize_error_message" backend/app/routers/market_radar.py  # Expected
 cd backend && python3 -m pytest tests/unit/test_services/test_market_radar/ tests/unit/test_routers/test_market_radar_router.py tests/integration/test_market_radar_integration.py tests/performance/test_market_radar_performance.py -v --no-cov
 ```
 
+---
+
+## Mobile Responsiveness + UX Improvements (v0.6.53)
+
+### Overview
+
+A comprehensive optimization cycle addressing mobile responsiveness and user experience issues for all v0.6.52 new features.
+
+### Mobile Responsiveness Fixes
+
+| Component | Issue | Solution | Status |
+|-----------|-------|----------|--------|
+| FactorSandbox | Fixed 3-column layout | Tab-based single column on mobile | ✅ Fixed |
+| FactorSandbox | No touch targets | Added `min-h-[44px]` to all buttons | ✅ Fixed |
+| FactorSandbox | No BottomSheet | Added BottomSheet for backtest preview | ✅ Fixed |
+| MarketRadar | Fixed side-by-side layout | Stacked treemap/cards vertically on mobile | ✅ Fixed |
+| MarketRadar | Treemap too tall | Reduced height to 250px (max 40%) on mobile | ✅ Fixed |
+| TimeMachine | Fixed 2-column layout | Stacked K-line/trading on mobile | ✅ Fixed |
+| TimeMachine | Small progress handle | Increased from 12px to 48px on mobile | ✅ Fixed |
+| TimeMachine | No landscape mode | Added `useOrientation` for immersive playback | ✅ Fixed |
+| MultiAssetMatrix | Fixed 2x2 grid | Single panel with tab navigation on mobile | ✅ Fixed |
+| MultiAssetMatrix | No panel switching | Added prev/next buttons for navigation | ✅ Fixed |
+
+### UX Critical Fixes (P0)
+
+| Component | Issue | Solution | Status |
+|-----------|-------|----------|--------|
+| MultiAssetMatrix | Missing Tooltip component | Created `Tooltip.vue` | ✅ Fixed |
+| MultiAssetMatrix | No sidebar entry | Added "四屏矩阵" to navigation | ✅ Fixed |
+| TimeMachine | Missing `/seek` endpoint | Implemented backend API | ✅ Fixed |
+| TimeMachine | Missing `/speed` endpoint | Implemented backend API | ✅ Fixed |
+| FactorSandbox | LLM sentiment fake data | Removed placeholder factor | ✅ Fixed |
+| MarketRadar | Treemap click broken | Added click handler | ✅ Fixed |
+
+### UX Confusing Fixes (P0)
+
+| Component | Issue | Solution | Status |
+|-----------|-------|----------|--------|
+| TimeMachine | No trade success feedback | Added `toast.success()` | ✅ Fixed |
+| TimeMachine | No daily-only hint | Added "当前仅支持日线级别复盘" | ✅ Fixed |
+| TimeMachine | Generic error messages | Replaced with specific Chinese messages | ✅ Fixed |
+| MarketRadar | TOP 5 vs TOP 10 mismatch | Changed to TOP 10 + "查看更多" | ✅ Fixed |
+| MarketRadar | No anomaly explanations | Added tooltip descriptions | ✅ Fixed |
+| FactorSandbox | Raw error messages | Changed to user-friendly message | ✅ Fixed |
+| FactorSandbox | No retry button | Added retry button in error state | ✅ Fixed |
+
+### User Guidance Fixes (P1)
+
+| Component | Improvements |
+|-----------|-------------|
+| FactorSandbox | Skeleton loading, factor tooltips, improved empty state, selection feedback |
+| MarketRadar | Treemap explanation, empty state retry, skeleton loading, error retry |
+| TimeMachine | Feature overview, keyboard hints, playback tooltips, loading progress |
+| MultiAssetMatrix | Loading progress indicator, panel descriptions, empty state retry |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `frontend/src/components/Tooltip.vue` | Reusable tooltip component |
+| `frontend/src/composables/useOrientation.js` | Mobile orientation detection |
+
+### API Endpoints Added
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/timemachine/session/{id}/seek` | Seek to specific bar |
+| POST | `/api/v1/timemachine/session/{id}/speed` | Set playback speed |
+
+### Verification Commands
+
+```bash
+# Mobile responsiveness
+grep -c "isMobile" frontend/src/components/factor/FactorSandbox.vue  # Expected: 10+
+grep -c "isMobile" frontend/src/components/TimeMachine.vue  # Expected: 15+
+grep -c "useOrientation" frontend/src/components/TimeMachine.vue  # Expected: 1+
+
+# UX fixes
+ls frontend/src/components/Tooltip.vue  # Should exist
+grep -c "multi-asset-matrix" frontend/src/components/Sidebar.vue  # Expected: 1+
+grep -c "def seek_to" backend/app/routers/timemachine.py  # Expected: 1
+grep -c "def set_speed" backend/app/routers/timemachine.py  # Expected: 1
+grep -c "chart.on('click'" frontend/src/components/MarketRadar.vue  # Expected: 1+
+
+# User guidance
+grep -c "toast.success" frontend/src/composables/useTimeMachine.js  # Expected: 1+
+grep -c "日线级别" frontend/src/components/TimeMachine.vue  # Expected: 1+
+grep -c "TOP 10" frontend/src/components/market/AnomalyCard.vue  # Expected: 1+
+grep -c "筛选失败" frontend/src/components/factor/FactorSandbox.vue  # Expected: 2+
+
+# Build verification
+cd frontend && npm run build  # Should succeed
+```
+
+### Summary Statistics
+
+| Category | Count |
+|----------|-------|
+| Mobile Responsiveness Fixes | 10 |
+| P0 Critical Fixes | 6 |
+| P0 Confusing Fixes | 7 |
+| P1 User Guidance Fixes | 18 |
+| **Total Issues Fixed** | **41** |
+| New Files Created | 2 |
+| New API Endpoints | 2 |
+
