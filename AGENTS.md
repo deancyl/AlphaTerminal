@@ -3228,3 +3228,133 @@ grep -c "'F5', 'F9', 'F11'" frontend/src/composables/useKeyboardShortcuts.js  # 
 | Copilot Context | `copilot.py`, `CopilotSidebar.vue` |
 | Keyboard | `useKeyboardShortcuts.js` |
 
+---
+
+## Top 10 QA/UX Improvements & New Features (v0.6.50)
+
+### Overview
+
+A comprehensive optimization cycle addressing the Top 10 Admin Panel issues and adding 2 major new features.
+
+### Part A - New Features
+
+#### 1. Agentic Intelligent Investment Research Workflow
+
+**Description**: Natural language task orchestration for multi-step investment research.
+
+**Architecture**:
+```
+User Query → QueryClassifier → WorkflowEngine → ToolRegistry → LLM → ReportGenerator
+```
+
+**Features**:
+- 7 built-in tools: `get_quote`, `get_news`, `get_financial`, `get_kline`, `search_stocks`, `get_sector_stocks`, `get_macro_data`
+- Intent parsing using QueryClassifier
+- Markdown report generation
+- Real-time progress tracking
+
+**API Endpoints**:
+- `GET /api/v1/agentic/tools` - List available tools
+- `POST /api/v1/agentic/workflow` - Create and execute workflow
+- `GET /api/v1/agentic/workflow/{id}` - Get workflow status
+
+**Files**:
+- `backend/app/services/agentic/tool_registry.py`
+- `backend/app/services/agentic/workflow_engine.py`
+- `backend/app/routers/agentic.py`
+- `frontend/src/components/AgenticWorkflow.vue`
+
+#### 2. Multi-Factor Dynamic Attribution Sandbox
+
+**Description**: Drag-and-drop factor combination for real-time attribution analysis.
+
+**Features**:
+- 22 predefined factors across 7 categories
+- OLS regression with R², t-statistics, p-values
+- Real-time calculation and visualization
+- Factor contribution breakdown
+
+**Factor Categories**:
+| Category | Factors |
+|----------|---------|
+| Value | PE, PB, PS |
+| Growth | ROE, ROA, REVENUE_GROWTH, PROFIT_GROWTH |
+| Quality | GROSS_MARGIN, NET_MARGIN, DEBT_RATIO |
+| Momentum | PRICE_MOMENTUM_1M, PRICE_MOMENTUM_3M, PRICE_MOMENTUM_6M |
+| Technical | MA5, MA20, MACD, RSI, BOLL |
+| Volatility | VOLATILITY_20D, TURNOVER_RATE |
+| Sentiment | NEWS_SENTIMENT, ANALYST_RATING |
+
+**API Endpoints**:
+- `GET /api/v1/attribution/factors` - List all factors
+- `GET /api/v1/attribution/factors/categories` - List categories
+- `POST /api/v1/attribution/sandbox` - Run attribution analysis
+
+**Files**:
+- `backend/app/services/attribution/factor_registry.py`
+- `backend/app/services/attribution/attribution_engine.py`
+- `backend/app/routers/attribution.py`
+- `frontend/src/components/attribution/FactorSandbox.vue`
+
+### Part B - Admin Panel Improvements
+
+#### P0 Critical Fixes
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| Admin session memory storage | SQLite persistence + background cleanup | `session_db.py`, `admin.py` |
+| VACUUM blocking all APIs | Background thread + WebSocket progress | `background_tasks.py`, `admin.py` |
+| IP spoofing bypass rate limit | Trusted proxy CIDR validation | `ip_validation.py`, `rate_limit.py` |
+| WAL checkpoint not implemented | `PRAGMA wal_checkpoint(TRUNCATE)` API | `admin.py` |
+| WebSocket zombie connections | Heartbeat detection + connection limit (100) | `ws_manager.py`, `admin.py` |
+
+#### P1 High Priority Fixes
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| alert() blocking JS thread | Replace with toast notifications | `AdminDashboard.vue` |
+| isSubmitting permanent lock | 30-second timeout protection | `AdminDashboard.vue` |
+| Tab switch losing input | v-if → v-show (keep-alive) | `AdminDashboard.vue` |
+| dbStatus hardcoded fake data | Real data fetching + error state | `DatabasePanel.vue` |
+
+### Mobile Navigation Consistency
+
+**Issue**: Mobile bottom nav missing 3 sections available on desktop.
+
+**Solution**: Added `forex`, `research`, `walk-forward` to mobile more menu.
+
+**Layout Change**: Grid changed from 4 columns to 3 columns (9 items = 3x3).
+
+**Files Modified**:
+- `frontend/src/components/MobileBottomNav.vue`
+
+### Summary
+
+| Category | Tasks | Status |
+|----------|-------|--------|
+| Part A - New Features | 2 | ✅ Complete |
+| Part B - P0 Fixes | 5 | ✅ Complete |
+| Part B - P1 Fixes | 4 | ✅ Complete |
+| Mobile Navigation | 1 | ✅ Complete |
+| **Total** | **12** | **100% Complete** |
+
+### Verification Commands
+
+```bash
+# Agentic workflow
+curl http://localhost:60100/api/v1/agentic/tools
+
+# Attribution sandbox
+curl http://localhost:60100/api/v1/attribution/factors
+
+# Admin session persistence
+sqlite3 database.db "SELECT * FROM admin_sessions"
+
+# WAL checkpoint
+curl -X POST http://localhost:60100/api/v1/admin/database/maintenance \
+  -H "Content-Type: application/json" -d '{"action": "wal_checkpoint"}'
+
+# IP validation tests
+pytest backend/tests/unit/test_utils/test_ip_validation.py -v
+```
+
