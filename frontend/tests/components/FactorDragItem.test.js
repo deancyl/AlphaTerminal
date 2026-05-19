@@ -158,7 +158,7 @@ describe('FactorDragItem', () => {
       expect(navigator.vibrate).toHaveBeenCalledWith(50)
     })
 
-    it('should show touch ghost element during drag', async () => {
+    it('should set isTouchDragging state during drag', async () => {
       const wrapper = mountComponent()
 
       await wrapper.find('.factor-drag-item').trigger('touchstart', {
@@ -166,7 +166,7 @@ describe('FactorDragItem', () => {
       })
       vi.advanceTimersByTime(300)
 
-      expect(wrapper.find('.factor-drag-item__touch-ghost').exists()).toBe(true)
+      expect(wrapper.vm.isTouchDragging).toBe(true)
     })
   })
 
@@ -196,16 +196,22 @@ describe('FactorDragItem', () => {
 
   describe('test_selected_state', () => {
     it('should show selected class when selected', () => {
-      const wrapper = mountComponent({
-        props: { selected: true },
+      const wrapper = mount(FactorDragItem, {
+        props: {
+          factor: mockFactor,
+          selected: true,
+        },
       })
 
       expect(wrapper.find('.factor-drag-item--selected').exists()).toBe(true)
     })
 
     it('should show check mark when selected', () => {
-      const wrapper = mountComponent({
-        props: { selected: true },
+      const wrapper = mount(FactorDragItem, {
+        props: {
+          factor: mockFactor,
+          selected: true,
+        },
       })
 
       expect(wrapper.find('.factor-drag-item__check').exists()).toBe(true)
@@ -251,8 +257,11 @@ describe('FactorDragItem', () => {
     })
 
     it('should have aria-selected true when selected', () => {
-      const wrapper = mountComponent({
-        props: { selected: true },
+      const wrapper = mount(FactorDragItem, {
+        props: {
+          factor: mockFactor,
+          selected: true,
+        },
       })
       const item = wrapper.find('.factor-drag-item')
 

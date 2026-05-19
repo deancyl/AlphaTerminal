@@ -4265,3 +4265,105 @@ cd frontend && npm run build  # Should succeed
 | New Files Created | 2 |
 | New API Endpoints | 2 |
 
+
+---
+
+## Market Radar Module Optimization Summary (50 Iterations)
+
+### Overview
+
+A comprehensive 50-iteration optimization cycle was completed to address the Top 10 QA/UX issues in the Market Radar module.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| N+1 API calls causing performance bottleneck | P0 | `asyncio.gather()` for parallel sector fetching | ✅ Fixed |
+| Missing Rate Limiting protection | P0 | Added `market_radar` to `ENDPOINT_LIMITS` (30 req/60s) | ✅ Fixed |
+| ECharts event listener memory leak | P0 | `chartInstance.value.off('click')` in `onBeforeUnmount` | ✅ Fixed |
+| Simplified anomaly detection logic | P1 | True 60-day high detection with K-line data | ✅ Fixed |
+| Missing data source status indicator | P1 | `dataSource` field with name, type, timestamp | ✅ Fixed |
+| Mobile treemap height insufficient | P1 | `min-height: 350px` (from 250px) | ✅ Fixed |
+| Missing ARIA accessibility support | P1 | Added `tabindex`, `role`, `aria-label` | ✅ Fixed |
+| Fixed refresh interval | P2 | localStorage persistence + user-selectable | ✅ Fixed |
+| Missing Drill-Down functionality | P2 | Modal showing sector stock list | ✅ Fixed |
+| Technical error messages exposed | P2 | `sanitize_error_message()` + user-friendly messages | ✅ Fixed |
+
+### New Features
+
+| Feature | Description |
+|---------|-------------|
+| Error Code System | Standardized `MarketRadarErrorCode` enum |
+| Error Handling Composable | `useMarketRadarError()` with retry mechanism |
+| Cache Warmup | Pre-warm cache on server startup |
+| Drill-Down Modal | Click sector to view stock list |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/market_radar/health` | Health check |
+| GET | `/api/v1/market_radar/treemap` | Treemap data (sector/stock level) |
+| GET | `/api/v1/market_radar/anomalies` | All anomaly types |
+| GET | `/api/v1/market_radar/anomalies/{type}` | Specific anomaly type |
+
+### Test Coverage
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Unit Tests (Service) | 10 | ✅ Pass |
+| Unit Tests (Router) | 8 | ✅ Pass |
+| Integration Tests | 7 | ✅ Pass |
+| Performance Tests | 3 | ✅ Pass |
+| **Total** | **28** | **100% Pass** |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Treemap Builder | `backend/app/services/market_radar/treemap_builder.py` |
+| Anomaly Detector | `backend/app/services/market_radar/anomaly_detector.py` |
+| Error Codes | `backend/app/services/market_radar/error_codes.py` |
+| Cache Warmup | `backend/app/services/market_radar/cache_warmup.py` |
+| Router | `backend/app/routers/market_radar.py` |
+| Vue Component | `frontend/src/components/MarketRadar.vue` |
+| Composable | `frontend/src/composables/useMarketRadar.js` |
+| Error Handling | `frontend/src/utils/marketRadarErrors.js` |
+
+### Verification Commands
+
+```bash
+# P0-1: N+1 optimization
+grep -c "asyncio.gather" backend/app/services/market_radar/treemap_builder.py  # Expected: 5
+
+# P0-2: Rate limiting
+grep "market_radar" backend/app/config/rate_limit.py  # Expected: 2 matches
+
+# P0-3: ECharts cleanup
+grep "chartInstance.value.off" frontend/src/components/MarketRadar.vue  # Expected: 1
+
+# P1-4: 60-day high detection
+grep -c "_detect_new_high_with_kline" backend/app/services/market_radar/anomaly_detector.py  # Expected: 3+
+
+# P1-5: Data source indicator
+grep -c "dataSource" frontend/src/composables/useMarketRadar.js  # Expected: 5+
+
+# P1-6: Mobile height
+grep "min-height: 350px" frontend/src/components/MarketRadar.vue  # Expected: 1
+
+# P1-7: ARIA support
+grep -c "aria-label" frontend/src/components/MarketRadar.vue  # Expected: 4+
+
+# P2-8: Refresh interval persistence
+grep "STORAGE_KEY_REFRESH_INTERVAL" frontend/src/composables/useMarketRadar.js  # Expected: 1
+
+# P2-9: Drill-Down
+grep -c "showDrillDown" frontend/src/components/MarketRadar.vue  # Expected: 5+
+
+# P2-10: Error messages
+grep -c "sanitize_error_message" backend/app/routers/market_radar.py  # Expected: 3+
+
+# Run all tests
+cd backend && python3 -m pytest tests/unit/test_services/test_market_radar/ tests/unit/test_routers/test_market_radar_router.py tests/integration/test_market_radar_integration.py tests/performance/test_market_radar_performance.py -v --no-cov
+```
+
