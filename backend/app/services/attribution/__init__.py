@@ -1,22 +1,44 @@
 """
-归因分析模块
+Attribution Analysis Module
 
-包含:
-- Brinson归因模型
-- Campisi固收归因（待实现）
+Contains:
+- FactorRegistry: Factor definitions and calculations
+- AttributionEngine: Multi-factor attribution analysis
+- Brinson: Brinson attribution model
 """
+
+from .factor_registry import (
+    FactorCategory,
+    FactorDefinition,
+    FactorRegistry,
+    get_factor_registry,
+)
+from .attribution_engine import (
+    FactorContribution,
+    AttributionResult,
+    AttributionEngine,
+    get_attribution_engine,
+)
 from .brinson import (
     calculate_brinson_attribution,
     aggregate_to_sectors,
     get_sector_from_symbol,
     BrinsonResult,
-    SectorContribution
+    SectorContribution,
 )
 
 __all__ = [
-    'calculate_brinson_attribution',
-    'aggregate_to_sectors',
-    'get_sector_from_symbol',
-    'BrinsonResult',
-    'SectorContribution'
+    "FactorCategory",
+    "FactorDefinition",
+    "FactorRegistry",
+    "get_factor_registry",
+    "FactorContribution",
+    "AttributionResult",
+    "AttributionEngine",
+    "get_attribution_engine",
+    "calculate_brinson_attribution",
+    "aggregate_to_sectors",
+    "get_sector_from_symbol",
+    "BrinsonResult",
+    "SectorContribution",
 ]

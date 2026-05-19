@@ -18,6 +18,9 @@ PONG_TIMEOUT = 10     # 等待 pong 响应超时（秒）
 CLEANUP_INTERVAL = 30  # 死连接清理间隔（秒）
 LOCK_TIMEOUT = 5.0  # Async lock timeout (seconds)
 
+# 连接限制
+MAX_CONNECTIONS = 100  # 最大连接数
+
 # 批量和速率限制配置
 BATCH_INTERVAL = 0.05  # 50ms 批量发送间隔
 MAX_SUBSCRIPTIONS = 50  # 每个连接最大订阅数
@@ -48,8 +51,50 @@ class WSConnection:
         self._latency = latency
 
     def is_alive(self) -> bool:
-        """检查连接是否还活着（pong 未超时）"""
-        return (time.time() - self._last_pong) < PONG_TIMEOUT
+        """检查连接是否还活着（pong 未超时）
+        
+        增强版：
+        - 更严格的超时检查（考虑 PING_INTERVAL）
+        - 记录 pong 超时日志
+        - 估算错过的 pong 次数
+        """
+        elapsed = time.time() - self._last_pong
+        
+        # 严格检查：如果超过 PONG_TIMEOUT，连接已死
+        if elapsed >= PONG_TIMEOUT:
+            missed_pongs = int(elapsed / PING_INTERVAL)
+            logger.warning(
+                f"[WS] Connection pong timeout: {elapsed:.1f}s > {PONG_TIMEOUT}s, "
+                f"estimated missed pongs: {missed_pongs}"
+            )
+            return False
+        
+        # 警告级别：接近超时但还未超时
+        if elapsed >= PONG_TIMEOUT * 0.8:
+            logger.debug(
+                f"[WS] Connection approaching pong timeout: {elapsed:.1f}s / {PONG_TIMEOUT}s"
+            )
+        
+        return True
+
+    def check_connection_health(self) -> dict:
+        """
+        主动检测连接健康状态
+        返回: {
+            'is_alive': bool,
+            'last_pong_age': float,
+            'latency': float | None,
+            'missed_pongs': int (估算值)
+        }
+        """
+        elapsed = time.time() - self._last_pong
+        missed_pongs = int(elapsed / PING_INTERVAL)
+        return {
+            'is_alive': elapsed < PONG_TIMEOUT,
+            'last_pong_age': elapsed,
+            'latency': self._latency,
+            'missed_pongs': missed_pongs
+        }
 
     def _check_rate_limit(self) -> bool:
         """检查是否超过速率限制，返回 True 表示允许发送"""
@@ -218,11 +263,18 @@ class ConnectionManager:
         logger.warning(f"[WS] removed {len(dead)} dead connections")
 
     async def connect(self, ws: WebSocket) -> WSConnection:
-        """注册新连接，返回 WSConnection 对象"""
-        conn = WSConnection(ws)
+        """注册新连接，返回 WSConnection 对象
+        
+        如果超过 MAX_CONNECTIONS 限制，会抛出 WebSocketDisconnect(code=1013)
+        """
         async with self._conn_lock:
+            if len(self._conns) >= MAX_CONNECTIONS:
+                logger.warning(f"[WS] Connection limit reached: {len(self._conns)}/{MAX_CONNECTIONS}")
+                await ws.close(code=1013, reason="Connection limit exceeded")
+                raise WebSocketDisconnect(code=1013)
+            conn = WSConnection(ws)
             self._conns.append(conn)
-        logger.info(f"[WS] client connected, total={len(self._conns)}")
+        logger.info(f"[WS] client connected, total={len(self._conns)}/{MAX_CONNECTIONS}")
         if not self._running:
             await self.start()
         return conn
@@ -305,6 +357,7 @@ class ConnectionManager:
         
         metrics = {
             "active_connections": len(self._conns),
+            "max_connections": MAX_CONNECTIONS,
             "latency_avg": sum(latencies) / len(latencies) if latencies else None,
             "latency_min": min(latencies) if latencies else None,
             "latency_max": max(latencies) if latencies else None,

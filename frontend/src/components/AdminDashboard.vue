@@ -53,9 +53,10 @@
       <ErrorDisplay v-else-if="error" :error="error" :retry="onRetry" />
 
       <template v-else>
+      <!-- 使用 v-show 替代 v-if 保留 Tab 切换时的输入状态 -->
       <!-- 数据源控制 -->
       <DataSourcePanel
-        v-if="activeTab === 'sources'"
+        v-show="activeTab === 'sources'"
         :source-status="sourceStatus"
         :probe-data="probeData"
         :source-health-data="sourceHealthData"
@@ -68,7 +69,7 @@
 
       <!-- 调度器控制 -->
       <SchedulerPanel
-        v-else-if="activeTab === 'scheduler'"
+        v-show="activeTab === 'scheduler'"
         :jobs="schedulerJobs"
         @refresh="refreshScheduler"
         @confirm-action="confirmAction"
@@ -77,7 +78,7 @@
 
       <!-- 进程保活 -->
       <WatchdogPanel
-        v-else-if="activeTab === 'watchdog'"
+        v-show="activeTab === 'watchdog'"
         :status="watchdogStatus"
         :loading="watchdogLoading"
         :error="watchdogError"
@@ -89,7 +90,7 @@
 
       <!-- 速率限制 -->
       <RateLimitPanel
-        v-else-if="activeTab === 'ratelimit'"
+        v-show="activeTab === 'ratelimit'"
         :stats="rateLimitStats"
         @refresh="refreshRateLimit"
         @confirm-action="confirmAction"
@@ -99,7 +100,7 @@
 
       <!-- 缓存管理 -->
       <CachePanel
-        v-else-if="activeTab === 'cache'"
+        v-show="activeTab === 'cache'"
         :status="cacheStatus"
         @confirm-action="confirmAction"
         @invalidate="invalidateCache"
@@ -108,7 +109,7 @@
 
       <!-- 数据库管理 -->
       <DatabasePanel
-        v-else-if="activeTab === 'database'"
+        v-show="activeTab === 'database'"
         :status="dbStatus"
         @confirm-action="confirmAction"
         @maintenance="dbMaintenance"
@@ -116,20 +117,20 @@
 
       <!-- 系统监控 -->
       <MonitorPanel
-        v-else-if="activeTab === 'monitor'"
+        v-show="activeTab === 'monitor'"
         :metrics="systemMetrics"
         @refresh="refreshSystemMetrics"
       />
 
       <!-- 布局设置 -->
       <LayoutPanel
-        v-else-if="activeTab === 'layout'"
+        v-show="activeTab === 'layout'"
         @clear-layout="$emit('clear-layout')"
       />
 
       <!-- LLM 配置 -->
       <LLMConfigPanel
-        v-else-if="activeTab === 'llm'"
+        v-show="activeTab === 'llm'"
         :providers="llmProviders"
         @refresh="loadLlmConfig"
         @test="testLlmConnection"
@@ -138,26 +139,26 @@
 
       <!-- Token 监控 -->
       <TokenMonitoringPanel
-        v-else-if="activeTab === 'tokens'"
+        v-show="activeTab === 'tokens'"
       />
 
       <!-- API密钥管理 -->
       <AgentTokensPanel
-        v-else-if="activeTab === 'agent_tokens'"
+        v-show="activeTab === 'agent_tokens'"
         @refresh="refreshAgentTokens"
         @navigate="(tab) => $emit('navigate', tab)"
       />
 
       <!-- AI工具配置 (MCP) -->
       <McpPanel
-        v-else-if="activeTab === 'mcp'"
+        v-show="activeTab === 'mcp'"
         @refresh="refreshMcpConfig"
         @navigate="(tab) => $emit('navigate', tab)"
       />
 
       <!-- 日志查看 -->
       <LogsPanel
-        v-else-if="activeTab === 'logs'"
+        v-show="activeTab === 'logs'"
         :logs="logs"
         :log-level="logLevel"
         :ws-connected="wsConnected"
@@ -258,6 +259,7 @@ const showConfirm = ref(false)
 const confirmMessage = ref('')
 const confirmCallback = ref(null)
 const isSubmitting = ref(false)
+const submitTimeout = ref(null)
 
 function confirmAction(title, message, callback) {
   confirmMessage.value = message
@@ -265,13 +267,31 @@ function confirmAction(title, message, callback) {
   showConfirm.value = true
 }
 
+function startSubmitTimeout() {
+  clearSubmitTimeout()
+  submitTimeout.value = setTimeout(() => {
+    isSubmitting.value = false
+    showConfirm.value = false
+    toast.warning('操作超时，已自动解锁')
+  }, 30000)
+}
+
+function clearSubmitTimeout() {
+  if (submitTimeout.value) {
+    clearTimeout(submitTimeout.value)
+    submitTimeout.value = null
+  }
+}
+
 async function executeConfirm() {
   if (!confirmCallback.value) return
   if (isSubmitting.value) return
   isSubmitting.value = true
+  startSubmitTimeout()
   try {
     await confirmCallback.value()
   } finally {
+    clearSubmitTimeout()
     isSubmitting.value = false
     showConfirm.value = false
   }
@@ -298,7 +318,7 @@ const schedulerJobs = ref([])
 const cacheStatus = reactive({ market: 5497, sectors: 20, news: 150, db: 22 })
 
 // ── 数据库状态 ──────────────────────────────────────────────────────────
-const dbStatus = reactive({ size: '12.5', realtime: 22, daily: 12500, stocks: 5497 })
+const dbStatus = reactive({ size: 0, realtime: 0, daily: 0, stocks: 0 })
 
 // ── 系统监控 ──────────────────────────────────────────────────────────
 const systemMetrics = shallowReactive({
@@ -683,7 +703,7 @@ async function controlCircuit(source, action) {
     })
     toast.success(data?.message || (action === 'open' ? '熔断成功' : '恢复成功'))
     await refreshSourceStatus()
-  } catch (e) { alert('操作失败: ' + e.message) }
+  } catch (e) { toast.error('操作失败', e.message) }
 }
 
 async function refreshScheduler() {
@@ -700,7 +720,7 @@ async function controlJob(jobId, action) {
       body: JSON.stringify({ action })
     })
     await refreshScheduler()
-  } catch (e) { alert('操作失败: ' + e.message) }
+  } catch (e) { toast.error('操作失败', e.message) }
 }
 
 async function invalidateCache(type) {
@@ -709,8 +729,8 @@ async function invalidateCache(type) {
       method: 'POST',
       body: JSON.stringify({ cache_type: type })
     })
-    alert('缓存已清空')
-  } catch (e) { alert('操作失败: ' + e.message) }
+    toast.success('缓存已清空')
+  } catch (e) { toast.error('操作失败', e.message) }
 }
 
 async function warmupCache(type) {
@@ -719,8 +739,8 @@ async function warmupCache(type) {
       method: 'POST',
       body: JSON.stringify({ data_type: type })
     })
-    alert('缓存预热已启动')
-  } catch (e) { alert('操作失败: ' + e.message) }
+    toast.success('缓存预热已启动')
+  } catch (e) { toast.error('操作失败', e.message) }
 }
 
 async function refreshWatchdog() {
@@ -762,12 +782,12 @@ async function toggleWatchdog(enabled) {
       await refreshWatchdog()
     }, 500)
     
-    alert(enabled ? '进程保活已启用' : '进程保活已禁用')
+    toast.success(enabled ? '进程保活已启用' : '进程保活已禁用')
   } catch (e) {
     logger.error('[Watchdog] Toggle failed:', e)
     watchdogError.value = e.message || '切换失败'
     await refreshWatchdog()
-    alert('操作失败: ' + e.message)
+    toast.error('操作失败', e.message)
   } finally {
     watchdogLoading.value = false
   }
@@ -777,13 +797,13 @@ async function manualRestart() {
   try {
     watchdogLoading.value = true
     await apiFetch('/api/v1/admin/watchdog/restart', { method: 'POST' })
-    alert('后端重启指令已发送，请等待 5-10 秒后刷新页面')
+    toast.info('后端重启指令已发送，请等待 5-10 秒后刷新页面')
     setTimeout(async () => {
       await refreshWatchdog()
     }, 3000)
   } catch (e) {
     watchdogError.value = e.message || '重启失败'
-    alert('重启失败: ' + e.message)
+    toast.error('重启失败', e.message)
   } finally {
     watchdogLoading.value = false
   }
@@ -825,12 +845,19 @@ async function resetRateLimitAll() {
 
 async function dbMaintenance(action) {
   try {
-    await apiFetch('/api/v1/admin/database/maintenance', {
+    const res = await apiFetch('/api/v1/admin/database/maintenance', {
       method: 'POST',
       body: JSON.stringify({ action })
     })
-    alert('维护操作已执行')
-  } catch (e) { alert('操作失败: ' + e.message) }
+    if (action === 'vacuum' && res.task_id) {
+      toast.info('VACUUM 已在后台启动，请查看进度')
+    } else {
+      toast.success('维护操作已执行')
+    }
+    await refreshDbStatus()
+  } catch (e) { 
+    toast.error('操作失败: ' + e.message) 
+  }
 }
 
 async function refreshDbStatus() {

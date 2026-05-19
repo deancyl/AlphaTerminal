@@ -266,6 +266,20 @@ def init_tables():
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_fund_nav_code ON fund_nav_history(fund_code)")
 
+        # ── Admin Session 持久化表 ────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS admin_sessions (
+                session_token TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                ip TEXT DEFAULT 'unknown',
+                user_agent TEXT DEFAULT NULL,
+                last_activity TEXT NOT NULL
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires ON admin_sessions(expires_at)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_admin_sessions_ip ON admin_sessions(ip)")
+
         conn.commit()
         conn.close()
         # ── 全市场个股缓存表 ──────────────────────────────────────

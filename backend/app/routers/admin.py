@@ -25,80 +25,47 @@ from app.services.scheduler import scheduler
 from app.services.sectors_cache import is_ready as sectors_cache_ready
 from app.db.database import _get_conn, _db_path
 from app.config.settings import get_settings
+from app.utils.ip_validation import get_client_ip_safe
+from app.db import session_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
 
 logger = logging.getLogger(__name__)
 
-# ── 线程池执行器（用于异步化 SQLite 同步调用）────────────────────
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="admin_")
 
-# ═══════════════════════════════════════════════════════════════
-# Admin Session Token Management
-# ═══════════════════════════════════════════════════════════════
 
-# In-memory session store (expires after ADMIN_SESSION_EXPIRY_HOURS)
-_admin_sessions: Dict[str, Dict[str, Any]] = {}
 ADMIN_SESSION_EXPIRY_HOURS = 24
 
-# JWT Configuration
-JWT_SECRET_KEY = secrets.token_hex(32)  # Generated once at startup
+JWT_SECRET_KEY = secrets.token_hex(32)
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 24
 
 def _generate_session_token(admin_key: str) -> str:
-    """Generate a secure session token using HMAC-SHA256."""
     timestamp = str(int(time.time()))
     random_bytes = secrets.token_hex(16)
     payload = f"{admin_key}:{timestamp}:{random_bytes}"
     return hashlib.sha256(payload.encode()).hexdigest()
 
 def _create_admin_session(admin_key: str) -> str:
-    """Create a new admin session and return the session token."""
     session_token = _generate_session_token(admin_key)
     expires_at = datetime.now() + timedelta(hours=ADMIN_SESSION_EXPIRY_HOURS)
-    _admin_sessions[session_token] = {
-        "created_at": datetime.now().isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "ip": "unknown",  # Will be updated on first use
-    }
+    session_db.create_admin_session(
+        session_token=session_token,
+        expires_at=expires_at,
+        ip="unknown",
+        user_agent=None
+    )
     logger.info(f"[Admin] Created new admin session, expires at {expires_at}")
     return session_token
 
 def _validate_admin_session(session_token: str, client_ip: str = "unknown") -> bool:
-    """Validate an admin session token. Returns True if valid, False otherwise."""
-    if not session_token:
-        return False
-    
-    session = _admin_sessions.get(session_token)
-    if not session:
-        return False
-    
-    # Check expiry
-    expires_at = datetime.fromisoformat(session["expires_at"])
-    if datetime.now() > expires_at:
-        del _admin_sessions[session_token]
-        logger.info(f"[Admin] Session expired for IP {client_ip}")
-        return False
-    
-    # Update IP on first use
-    if session["ip"] == "unknown":
-        session["ip"] = client_ip
-    
-    return True
+    return session_db.validate_admin_session(session_token, client_ip)
 
 def _cleanup_expired_sessions():
-    """Remove expired sessions from memory."""
-    now = datetime.now()
-    expired = [
-        token for token, session in _admin_sessions.items()
-        if now > datetime.fromisoformat(session["expires_at"])
-    ]
-    for token in expired:
-        del _admin_sessions[token]
-    if expired:
-        logger.info(f"[Admin] Cleaned up {len(expired)} expired sessions")
+    deleted = session_db.cleanup_expired_admin_sessions()
+    return deleted
 
 def _generate_jwt_token(admin_key: str) -> tuple[str, datetime]:
     """Generate a JWT token with expiry."""
@@ -156,7 +123,7 @@ class CacheWarmupRequest(BaseModel):
     data_type: str = Field(..., pattern="^(all|overview|sectors|macro|quotes)$")
 
 class DatabaseMaintenanceRequest(BaseModel):
-    action: str = Field(..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check)$")
+    action: str = Field(..., pattern="^(vacuum|analyze|backup|cleanup|integrity_check|wal_checkpoint)$")
 
 # ═══════════════════════════════════════════════════════════════
 # Multi-Model Management Request Models
@@ -219,18 +186,21 @@ def _record_failure(client_ip: str):
         _auth_failures[client_ip] = []
     _auth_failures[client_ip].append(_time.time())
 
-def verify_admin_key(api_key: Optional[str] = None, x_forwarded_for: str = Header(None)):
+def verify_admin_key(
+    request: Request,
+    api_key: Optional[str] = None,
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None)
+):
     """Admin API 密钥校验（带速率限制）"""
-    # 获取客户端 IP（支持代理）
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip, 
+                                    request.client.host if request and request.client else None)
     
     configured_key = os.environ.get("ADMIN_API_KEY", "")
     
-    # 未配置 key 时跳过认证（本机开发环境）
     if not configured_key:
         return True
     
-    # 速率限制检查
     if not _check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many failed attempts, please try again later")
     
@@ -239,20 +209,22 @@ def verify_admin_key(api_key: Optional[str] = None, x_forwarded_for: str = Heade
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
-def admin_read_auth(api_key: Optional[str] = None):
+def admin_read_auth(request: Request, api_key: Optional[str] = None):
     """读操作认证 - GET 类接口"""
-    return verify_admin_key(api_key)
+    return verify_admin_key(request, api_key)
 
-def admin_write_auth(api_key: Optional[str] = None):
+def admin_write_auth(request: Request, api_key: Optional[str] = None):
     """写操作认证 - POST/PUT/DELETE 类接口"""
-    return verify_admin_key(api_key)
+    return verify_admin_key(request, api_key)
 
 # Unauthenticated router for session token endpoint
 session_router = APIRouter(prefix="/admin", tags=["admin"])
 
 @session_router.post("/session")
 def get_admin_session(
-    x_forwarded_for: str = Header(None),
+    request: Request,
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None),
     x_admin_api_key: str = Header(None, alias="X-Admin-Api-Key"),
 ):
     """
@@ -264,7 +236,8 @@ def get_admin_session(
     This endpoint is intentionally unauthenticated (no Depends) because
     it's the authentication entry point for the admin UI.
     """
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
+                                    request.client.host if request.client else None)
     
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
@@ -285,23 +258,28 @@ def get_admin_session(
     
     logger.info(f"[Admin] Session token issued for IP {client_ip}")
     
+    session = session_db.get_admin_session(session_token)
+    
     return {
         "code": 0,
         "message": "success",
         "data": {
             "session_token": session_token,
-            "expires_at": _admin_sessions[session_token]["expires_at"],
+            "expires_at": session["expires_at"] if session else "",
             "expires_in_hours": ADMIN_SESSION_EXPIRY_HOURS,
         }
     }
 
 @session_router.get("/session/validate")
 def validate_admin_session(
-    x_forwarded_for: str = Header(None),
+    request: Request,
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None),
     x_admin_session: str = Header(None, alias="X-Admin-Session"),
 ):
     """Validate an admin session token."""
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
+                                    request.client.host if request.client else None)
     
     if not x_admin_session:
         return {"code": 1, "message": "No session token provided", "data": {"valid": False}}
@@ -310,14 +288,14 @@ def validate_admin_session(
     is_valid = _validate_admin_session(x_admin_session, client_ip)
     
     if is_valid:
-        session = _admin_sessions.get(x_admin_session, {})
+        session = session_db.get_admin_session(x_admin_session)
         return {
             "code": 0,
             "message": "success",
             "data": {
                 "valid": True,
-                "expires_at": session.get("expires_at"),
-                "ip": session.get("ip"),
+                "expires_at": session.get("expires_at") if session else None,
+                "ip": session.get("ip") if session else None,
             }
         }
     else:
@@ -325,7 +303,9 @@ def validate_admin_session(
 
 @session_router.post("/token")
 def get_admin_token(
-    x_forwarded_for: str = Header(None),
+    request: Request,
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None),
     x_admin_api_key: str = Header(None, alias="X-Admin-Api-Key"),
 ):
     """
@@ -334,7 +314,8 @@ def get_admin_token(
     Requires X-Admin-Api-Key header with the configured ADMIN_API_KEY.
     Returns a JWT token valid for 24 hours.
     """
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
+                                    request.client.host if request.client else None)
     
     settings = get_settings()
     configured_key = settings.ADMIN_API_KEY
@@ -367,14 +348,17 @@ def get_admin_token(
 
 @session_router.get("/token/validate")
 def validate_admin_token(
-    x_forwarded_for: str = Header(None),
+    request: Request,
+    x_forwarded_for: Optional[str] = Header(None),
+    x_real_ip: Optional[str] = Header(None),
     x_admin_token: str = Header(None, alias="X-Admin-Token"),
 ):
     """
     Validate an admin JWT token.
     Returns 401 if token is invalid or expired.
     """
-    client_ip = x_forwarded_for.split(",")[0].strip() if x_forwarded_for else "unknown"
+    client_ip = get_client_ip_safe(x_forwarded_for, x_real_ip,
+                                    request.client.host if request.client else None)
     
     if not x_admin_token:
         raise HTTPException(status_code=401, detail="No token provided")
@@ -917,14 +901,61 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
     action = body.action
     loop = asyncio.get_event_loop()
     
+    if action == "vacuum":
+        from app.services.background_tasks import get_task_manager
+        
+        task_manager = get_task_manager()
+        task_id = task_manager.create_task("vacuum")
+        
+        def _run_vacuum():
+            try:
+                task_manager.start_task(task_id)
+                task_manager.update_progress(task_id, 0, "准备执行 VACUUM...")
+                
+                conn = _get_conn()
+                try:
+                    task_manager.update_progress(task_id, 10, "执行 WAL checkpoint...")
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    
+                    task_manager.update_progress(task_id, 20, "开始 VACUUM...")
+                    conn.execute("VACUUM")
+                    
+                    task_manager.update_progress(task_id, 90, "VACUUM 完成，清理连接...")
+                    conn.close()
+                    
+                    task_manager.complete_task(task_id, {"message": "数据库已优化 (VACUUM)"})
+                except Exception as e:
+                    conn.close()
+                    task_manager.fail_task(task_id, str(e))
+            except Exception as e:
+                task_manager.fail_task(task_id, str(e))
+        
+        loop.run_in_executor(_executor, _run_vacuum)
+        
+        return {
+            "code": 0,
+            "message": "VACUUM 已在后台启动",
+            "task_id": task_id
+        }
+    
+    elif action == "wal_checkpoint":
+        def _sync_checkpoint():
+            conn = _get_conn()
+            try:
+                cursor = conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                result = cursor.fetchone()
+                conn.close()
+                return {"message": "WAL checkpoint 完成", "result": result}
+            finally:
+                conn.close()
+        
+        result = await loop.run_in_executor(_executor, _sync_checkpoint)
+        return {"code": 0, **result}
+    
     def _sync_maintenance():
         conn = _get_conn()
         try:
-            if action == "vacuum":
-                conn.execute("VACUUM")
-                conn.close()
-                return {"message": "数据库已优化 (VACUUM)"}
-            elif action == "analyze":
+            if action == "analyze":
                 conn.execute("ANALYZE")
                 conn.close()
                 return {"message": "数据库统计信息已更新 (ANALYZE)"}
@@ -940,6 +971,20 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
             conn.close()
     
     return await loop.run_in_executor(_executor, _sync_maintenance)
+
+
+@router.get("/database/maintenance/{task_id}")
+async def get_maintenance_task_status(task_id: str):
+    """获取数据库维护任务状态"""
+    from app.services.background_tasks import get_task_manager
+    
+    task_manager = get_task_manager()
+    task = task_manager.get_task(task_id)
+    
+    if not task:
+        return {"code": 1, "error": f"Task '{task_id}' not found"}
+    
+    return {"code": 0, "data": task.to_dict()}
 
 @router.get("/database/stats")
 async def get_database_stats():
@@ -1214,15 +1259,22 @@ def get_session_conversations(session_id: str):
 # WebSocket Real-time Token Updates
 # ═══════════════════════════════════════════════════════════════
 
-_token_stream_connections: set = set()
+_token_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_pongs": int}
 _token_stream_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+PING_INTERVAL = 5  # seconds
+PONG_TIMEOUT = 10  # seconds
+MAX_MISSED_PONGS = 3
 
 @router.websocket("/tokens/stream")
 async def token_stream_ws(websocket: WebSocket):
-    """WebSocket for real-time token usage updates"""
+    """WebSocket for real-time token usage updates with heartbeat"""
     await websocket.accept()
     conn_id = f"token_ws_{int(time.time())}_{secrets.token_hex(4)}"
-    _token_stream_connections.add(conn_id)
+    _token_stream_connections[conn_id] = {
+        "last_pong": time.time(),
+        "missed_pongs": 0
+    }
     
     await websocket.send_json({
         "type": "connected",
@@ -1233,35 +1285,67 @@ async def token_stream_ws(websocket: WebSocket):
     try:
         while True:
             try:
-                update = await asyncio.wait_for(_token_stream_queue.get(), timeout=30.0)
+                update = await asyncio.wait_for(_token_stream_queue.get(), timeout=PING_INTERVAL)
                 await websocket.send_json(update)
+                _token_stream_connections[conn_id]["last_pong"] = time.time()
+                _token_stream_connections[conn_id]["missed_pongs"] = 0
             except asyncio.TimeoutError:
+                conn_state = _token_stream_connections.get(conn_id)
+                if not conn_state:
+                    break
+                
                 await websocket.send_json({
-                    "type": "heartbeat",
+                    "type": "ping",
                     "timestamp": int(time.time())
                 })
+                
+                try:
+                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
+                    if msg.get("action") == "pong":
+                        conn_state["last_pong"] = time.time()
+                        conn_state["missed_pongs"] = 0
+                    else:
+                        pass
+                except asyncio.TimeoutError:
+                    conn_state["missed_pongs"] += 1
+                    logger.warning(f"[TokenWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}")
+                    if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
+                        logger.warning(f"[TokenWS] Closing dead connection: {conn_id}")
+                        break
+                except Exception as e:
+                    logger.debug(f"[TokenWS] Connection error: {e}")
+                    break
     except WebSocketDisconnect:
-        _token_stream_connections.discard(conn_id)
+        pass
+    except Exception as e:
+        logger.warning(f"[TokenWS] Unexpected error: {e}")
+    finally:
+        _token_stream_connections.pop(conn_id, None)
+        logger.info(f"[TokenWS] Connection closed: {conn_id}, remaining: {len(_token_stream_connections)}")
 
 
 # ═══════════════════════════════════════════════════════════════
 # WebSocket 实时日志流
 # ═══════════════════════════════════════════════════════════════
 
+_log_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_pongs": int}
+
 @router.websocket("/logs/stream")
 async def log_stream_ws(websocket: WebSocket):
-    """WebSocket实时日志流"""
+    """WebSocket实时日志流 with heartbeat"""
     await websocket.accept()
     
-    # 使用模块级日志队列
+    conn_id = f"log_ws_{int(time.time())}_{secrets.token_hex(4)}"
+    _log_stream_connections[conn_id] = {
+        "last_pong": time.time(),
+        "missed_pongs": 0
+    }
+    
     queue = _log_queue
     
-    async def log_writer():
-        """日志写入队列的 handler（供外部调用）"""
-        pass  # 实际实现在 services/logging_queue.py
-    
-    # 发送欢迎消息
     await websocket.send_json({
+        "type": "connected",
+        "conn_id": conn_id,
         "timestamp": int(time.time()),
         "level": "INFO",
         "message": "Log stream connected. Waiting for logs..."
@@ -1270,18 +1354,43 @@ async def log_stream_ws(websocket: WebSocket):
     try:
         while True:
             try:
-                # 从队列获取日志（5秒超时）
-                log_msg = await asyncio.wait_for(queue.get(), timeout=5.0)
+                log_msg = await asyncio.wait_for(queue.get(), timeout=PING_INTERVAL)
                 await websocket.send_json(log_msg)
+                _log_stream_connections[conn_id]["last_pong"] = time.time()
+                _log_stream_connections[conn_id]["missed_pongs"] = 0
             except asyncio.TimeoutError:
-                # 超时发送心跳
+                conn_state = _log_stream_connections.get(conn_id)
+                if not conn_state:
+                    break
+                
                 await websocket.send_json({
-                    "timestamp": int(time.time()),
-                    "level": "HEARTBEAT",
-                    "message": "heartbeat"
+                    "type": "ping",
+                    "timestamp": int(time.time())
                 })
+                
+                try:
+                    msg = await asyncio.wait_for(websocket.receive_json(), timeout=PONG_TIMEOUT)
+                    if msg.get("action") == "pong":
+                        conn_state["last_pong"] = time.time()
+                        conn_state["missed_pongs"] = 0
+                    else:
+                        pass
+                except asyncio.TimeoutError:
+                    conn_state["missed_pongs"] += 1
+                    logger.warning(f"[LogWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}")
+                    if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
+                        logger.warning(f"[LogWS] Closing dead connection: {conn_id}")
+                        break
+                except Exception as e:
+                    logger.debug(f"[LogWS] Connection error: {e}")
+                    break
     except WebSocketDisconnect:
         pass
+    except Exception as e:
+        logger.warning(f"[LogWS] Unexpected error: {e}")
+    finally:
+        _log_stream_connections.pop(conn_id, None)
+        logger.info(f"[LogWS] Connection closed: {conn_id}, remaining: {len(_log_stream_connections)}")
 
 # 预先创建日志队列供外部导入使用
 _log_queue = asyncio.Queue(maxsize=100)
@@ -1362,10 +1471,56 @@ async def get_ws_metrics():
         "code": 0,
         "data": {
             "active_connections": metrics.get("active_connections", 0),
+            "max_connections": metrics.get("max_connections", 100),
             "latency_avg": metrics.get("latency_avg"),
             "latency_min": metrics.get("latency_min"),
             "latency_max": metrics.get("latency_max"),
             "subscribed_symbols": metrics.get("subscribed_symbols", 0),
+            "token_stream_connections": len(_token_stream_connections),
+            "log_stream_connections": len(_log_stream_connections),
+        }
+    }
+
+
+@router.get("/websocket/stats")
+async def get_websocket_stats():
+    """获取所有 WebSocket 连接统计（包括 token_stream 和 log_stream）"""
+    from app.services.ws_manager import ws_manager
+    
+    ws_metrics = await ws_manager.get_metrics()
+    
+    token_conns = []
+    now = time.time()
+    for conn_id, state in _token_stream_connections.items():
+        token_conns.append({
+            "conn_id": conn_id,
+            "last_pong_age": now - state["last_pong"],
+            "missed_pongs": state["missed_pongs"]
+        })
+    
+    log_conns = []
+    for conn_id, state in _log_stream_connections.items():
+        log_conns.append({
+            "conn_id": conn_id,
+            "last_pong_age": now - state["last_pong"],
+            "missed_pongs": state["missed_pongs"]
+        })
+    
+    return {
+        "code": 0,
+        "data": {
+            "ws_manager": {
+                "active_connections": ws_metrics.get("active_connections", 0),
+                "max_connections": ws_metrics.get("max_connections", 100),
+            },
+            "token_stream": {
+                "connections": len(_token_stream_connections),
+                "details": token_conns[:20]
+            },
+            "log_stream": {
+                "connections": len(_log_stream_connections),
+                "details": log_conns[:20]
+            }
         }
     }
 
@@ -1589,7 +1744,6 @@ async def add_streaming_symbols(symbols: List[str] = Body(...)):
 
 @router.post("/streaming/symbols/remove")
 async def remove_streaming_symbols(symbols: List[str] = Body(...)):
-    """移除流式数据订阅 symbols"""
     from app.services.streaming import get_streaming_manager
     
     manager = get_streaming_manager()
@@ -1600,3 +1754,29 @@ async def remove_streaming_symbols(symbols: List[str] = Body(...)):
         "message": f"已移除 {len(symbols)} 个订阅",
         "data": {"symbols": symbols}
     }
+
+
+_admin_session_cleanup_running = False
+
+def _start_admin_session_cleanup_thread():
+    global _admin_session_cleanup_running
+    if _admin_session_cleanup_running:
+        return
+    
+    _admin_session_cleanup_running = True
+    
+    def cleanup_loop():
+        import time as _time
+        while True:
+            try:
+                _time.sleep(60)
+                session_db.cleanup_expired_admin_sessions()
+            except Exception as e:
+                logger.warning(f"[AdminSession] Cleanup thread error: {e}")
+    
+    import threading
+    thread = threading.Thread(target=cleanup_loop, daemon=True, name="admin_session_cleanup")
+    thread.start()
+    logger.info("[AdminSession] Started background cleanup thread (60s interval)")
+
+_start_admin_session_cleanup_thread()

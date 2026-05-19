@@ -343,15 +343,8 @@ def init_session_table():
 
 
 def get_session_conversations(session_id: str, limit: int = 100) -> List[Dict[str, Any]]:
-    """
-    Get conversation history for a session from copilot_conversations table.
-    
-    Note: The copilot_conversations table is created and managed by the copilot router.
-    This function provides read-only access to conversation data for admin purposes.
-    """
     conn = _get_conn()
     try:
-        # Check if the table exists first
         table_exists = conn.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='copilot_conversations'"
         ).fetchone()
@@ -380,5 +373,165 @@ def get_session_conversations(session_id: str, limit: int = 100) -> List[Dict[st
     except Exception as e:
         logger.warning(f"[SessionDB] get_session_conversations error: {e}")
         return []
+    finally:
+        conn.close()
+
+
+ADMIN_SESSION_EXPIRY_HOURS = 24
+
+
+def create_admin_session(
+    session_token: str,
+    expires_at: datetime,
+    ip: str = "unknown",
+    user_agent: Optional[str] = None
+) -> Dict[str, Any]:
+    now = datetime.now()
+    
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            conn.execute("""
+                INSERT INTO admin_sessions 
+                (session_token, created_at, expires_at, ip, user_agent, last_activity)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (
+                session_token,
+                now.isoformat(),
+                expires_at.isoformat(),
+                ip,
+                user_agent,
+                now.isoformat()
+            ))
+            conn.commit()
+            
+            return {
+                "session_token": session_token,
+                "created_at": now.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "ip": ip,
+                "user_agent": user_agent,
+                "last_activity": now.isoformat()
+            }
+        finally:
+            conn.close()
+
+
+def get_admin_session(session_token: str) -> Optional[Dict[str, Any]]:
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM admin_sessions WHERE session_token = ?", (session_token,)
+        ).fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            "session_token": row['session_token'],
+            "created_at": row['created_at'],
+            "expires_at": row['expires_at'],
+            "ip": row['ip'],
+            "user_agent": row['user_agent'],
+            "last_activity": row['last_activity']
+        }
+    finally:
+        conn.close()
+
+
+def validate_admin_session(session_token: str, client_ip: str = "unknown") -> bool:
+    if not session_token:
+        return False
+    
+    session = get_admin_session(session_token)
+    if not session:
+        return False
+    
+    expires_at = datetime.fromisoformat(session["expires_at"])
+    if datetime.now() > expires_at:
+        delete_admin_session(session_token)
+        logger.info(f"[AdminSession] Session expired for IP {client_ip}")
+        return False
+    
+    if session["ip"] == "unknown":
+        update_admin_session_activity(session_token, client_ip)
+    
+    return True
+
+
+def update_admin_session_activity(session_token: str, ip: str = None) -> bool:
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            now = datetime.now().isoformat()
+            if ip:
+                result = conn.execute("""
+                    UPDATE admin_sessions 
+                    SET last_activity = ?, ip = ? 
+                    WHERE session_token = ?
+                """, (now, ip, session_token))
+            else:
+                result = conn.execute("""
+                    UPDATE admin_sessions 
+                    SET last_activity = ? 
+                    WHERE session_token = ?
+                """, (now, session_token))
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
+
+
+def delete_admin_session(session_token: str) -> bool:
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute(
+                "DELETE FROM admin_sessions WHERE session_token = ?", (session_token,)
+            )
+            conn.commit()
+            return result.rowcount > 0
+        finally:
+            conn.close()
+
+
+def cleanup_expired_admin_sessions() -> int:
+    with _session_lock:
+        conn = _get_conn()
+        try:
+            result = conn.execute(
+                "DELETE FROM admin_sessions WHERE expires_at < ?",
+                (datetime.now().isoformat(),)
+            )
+            conn.commit()
+            deleted_count = result.rowcount
+            if deleted_count > 0:
+                logger.info(f"[AdminSession] Cleaned up {deleted_count} expired sessions")
+            return deleted_count
+        finally:
+            conn.close()
+
+
+def get_active_admin_sessions(limit: int = 100) -> List[Dict[str, Any]]:
+    conn = _get_conn()
+    try:
+        rows = conn.execute("""
+            SELECT * FROM admin_sessions 
+            WHERE expires_at > ? 
+            ORDER BY last_activity DESC 
+            LIMIT ?
+        """, (datetime.now().isoformat(), limit)).fetchall()
+        
+        result = []
+        for row in rows:
+            result.append({
+                "session_token": row['session_token'],
+                "created_at": row['created_at'],
+                "expires_at": row['expires_at'],
+                "ip": row['ip'],
+                "user_agent": row['user_agent'],
+                "last_activity": row['last_activity']
+            })
+        return result
     finally:
         conn.close()

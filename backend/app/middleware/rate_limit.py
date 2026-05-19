@@ -18,6 +18,7 @@ from app.config.rate_limit import (
     is_exempt_path,
     ENDPOINT_LIMITS,
 )
+from app.utils.ip_validation import get_client_ip_safe
 
 logger = logging.getLogger(__name__)
 
@@ -87,17 +88,9 @@ def get_limiter() -> InMemoryRateLimiter:
 
 def get_client_ip(request: Request) -> str:
     x_forwarded_for = request.headers.get("x-forwarded-for")
-    if x_forwarded_for:
-        return x_forwarded_for.split(",")[0].strip()
-    
     x_real_ip = request.headers.get("x-real-ip")
-    if x_real_ip:
-        return x_real_ip.strip()
-    
-    if request.client:
-        return request.client.host
-    
-    return "unknown"
+    remote_addr = request.client.host if request.client else None
+    return get_client_ip_safe(x_forwarded_for, x_real_ip, remote_addr)
 
 
 def create_rate_limit_response(

@@ -8,7 +8,7 @@
     <!-- 更多菜单展开面板 -->
     <div
       v-if="showMore"
-      class="absolute bottom-full left-0 right-0 bg-terminal-panel border-t border-theme-secondary/50 p-4 grid grid-cols-4 gap-3 transition-all duration-200"
+      class="absolute bottom-full left-0 right-0 bg-terminal-panel border-t border-theme-secondary/50 p-4 grid grid-cols-3 gap-3 transition-all duration-200"
       role="menu"
       aria-label="更多导航选项"
     >
@@ -97,10 +97,13 @@ const mainTabs = [
 
 const moreTabs = [
   { id: 'portfolio', label: '组合', icon: '💰' },
+  { id: 'forex', label: '外汇', icon: '💱' },
   { id: 'macro', label: '宏观', icon: '🌍' },
   { id: 'options', label: '期权', icon: '⚡' },
   { id: 'global-index', label: '全球', icon: '🌐' },
+  { id: 'research', label: '研报', icon: '📄' },
   { id: 'strategy-center', label: '策略', icon: '🎯' },
+  { id: 'walk-forward', label: '前向', icon: '📊' },
   { id: 'admin', label: '设置', icon: '⚙️' },
 ]
 

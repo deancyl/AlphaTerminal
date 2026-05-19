@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics
+from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic
 from app.routers.macro import warmup_macro_cache
 from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
@@ -265,6 +265,8 @@ app.include_router(research.router, tags=["research"])
 app.include_router(oms.router, tags=["oms"])  # Order Management System
 app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
 app.include_router(metrics.router, prefix="/api/v1", tags=["monitoring"])
+app.include_router(attribution.router, prefix="/api/v1", tags=["attribution"])  # Multi-factor attribution sandbox
+app.include_router(agentic.router, prefix="/api/v1/agentic", tags=["agentic"])  # Agentic workflow engine
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 
