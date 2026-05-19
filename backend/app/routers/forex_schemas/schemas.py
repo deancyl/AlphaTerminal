@@ -119,11 +119,13 @@ class ForexHistoryResponse(BaseModel):
 
 class CrossRateCell(BaseModel):
     """交叉汇率单元格"""
-    rate: Optional[float] = Field(None, description="汇率值")
+    rate: Optional[float] = Field(None, description="汇率值(中间价)")
+    bid: Optional[float] = Field(None, description="买入价")
+    ask: Optional[float] = Field(None, description="卖出价")
+    spread: Optional[float] = Field(None, description="点差百分比(%)")
     change_pct: Optional[float] = Field(None, description="涨跌幅(%)")
     is_base: bool = Field(False, description="是否为基准货币(对角线)")
     is_calculated: bool = Field(False, description="是否为计算得出(非直接报价)")
-
 
 class CrossRateRow(BaseModel):
     """交叉汇率行"""

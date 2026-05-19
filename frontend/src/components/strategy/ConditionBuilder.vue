@@ -105,11 +105,33 @@
             </div>
           </div>
 
+          <!-- Validation Errors Display -->
+          <div 
+            v-if="validationErrors.length > 0" 
+            class="validation-errors p-3 bg-bear/10 border border-bear/30 rounded-lg"
+            role="alert"
+            aria-live="polite"
+          >
+            <div class="flex items-start gap-2">
+              <span class="text-bear text-sm">⚠️</span>
+              <div class="flex-1">
+                <div class="text-xs text-bear font-medium mb-1">条件冲突</div>
+                <div 
+                  v-for="error in validationErrors" 
+                  :key="error" 
+                  class="text-bear text-sm"
+                >
+                  {{ error }}
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="flex items-center gap-3">
             <button
               @click="generateCode"
-              :disabled="isGenerating"
-              class="flex-1 px-4 py-2.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium transition flex items-center justify-center gap-2"
+              :disabled="isGenerating || validationErrors.length > 0"
+              class="flex-1 px-4 py-2.5 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium transition flex items-center justify-center gap-2"
             >
               <span v-if="isGenerating" class="animate-spin">⏳</span>
               <span v-else>⚙️</span>
@@ -141,6 +163,37 @@ import { apiFetch } from '@/utils/api.js'
 import { useToast } from '@/composables/useToast.js'
 import { logger } from '@/utils/logger.js'
 
+// ── Mutually Exclusive Condition Pairs ───────────────────────────────────────
+/**
+ * Pairs of condition types that cannot be enabled simultaneously.
+ * These represent logically contradictory conditions that would result in no matches.
+ */
+const MUTUALLY_EXCLUSIVE = [
+  ['MA_cross_up', 'MA_cross_down'],
+  ['RSI_overbought', 'RSI_oversold'],
+  ['MACD_golden_cross', 'MACD_death_cross'],
+  ['price_above_MA', 'price_below_MA'],
+  ['volume_surge', 'volume_decline'],
+]
+
+/**
+ * Validate conditions for mutually exclusive pairs
+ * @param {Array} conditions - Array of condition objects with { type, enabled }
+ * @returns {string[]} Array of error messages
+ */
+function validateConditions(conditions) {
+  const errors = []
+  const activeTypes = conditions.filter(c => c.enabled).map(c => c.type)
+  
+  for (const [type1, type2] of MUTUALLY_EXCLUSIVE) {
+    if (activeTypes.includes(type1) && activeTypes.includes(type2)) {
+      errors.push(`条件冲突: "${type1}" 和 "${type2}" 不能同时启用`)
+    }
+  }
+  
+  return errors
+}
+
 const emit = defineEmits(['code-generated', 'switch-to-code'])
 
 const { success: toastSuccess, error: toastError } = useToast()
@@ -163,6 +216,61 @@ const currentAST = computed(() => {
     return null
   }
 })
+
+/**
+ * Computed validation errors for mutually exclusive conditions.
+ * Returns an array of error messages when conflicting conditions are enabled.
+ */
+const validationErrors = computed(() => {
+  // For future multi-condition support, validate against enabled conditions
+  // Currently, templates define single conditions, but this prepares for expansion
+  if (!currentAST.value?.conditions) return []
+  
+  // Map AST conditions to validation format
+  const conditionsForValidation = currentAST.value.conditions.map(cond => ({
+    type: getConditionTypeKey(cond),
+    enabled: true, // All template conditions are enabled by default
+  }))
+  
+  return validateConditions(conditionsForValidation)
+})
+
+/**
+ * Convert AST condition to validation type key.
+ * Maps indicator + direction to the validation type used in MUTUALLY_EXCLUSIVE.
+ */
+function getConditionTypeKey(condition) {
+  const { indicator, direction, threshold, band } = condition
+  
+  // MA conditions
+  if (indicator === INDICATOR_TYPES.MA) {
+    if (direction === DIRECTION_TYPES.CROSS_ABOVE) return 'MA_cross_up'
+    if (direction === DIRECTION_TYPES.CROSS_BELOW) return 'MA_cross_down'
+    if (direction === DIRECTION_TYPES.ABOVE) return 'price_above_MA'
+    if (direction === DIRECTION_TYPES.BELOW) return 'price_below_MA'
+  }
+  
+  // RSI conditions
+  if (indicator === INDICATOR_TYPES.RSI) {
+    if (direction === DIRECTION_TYPES.ABOVE && threshold >= 70) return 'RSI_overbought'
+    if (direction === DIRECTION_TYPES.BELOW && threshold <= 30) return 'RSI_oversold'
+  }
+  
+  // MACD conditions
+  if (indicator === INDICATOR_TYPES.MACD) {
+    if (direction === DIRECTION_TYPES.CROSS_ABOVE) return 'MACD_golden_cross'
+    if (direction === DIRECTION_TYPES.CROSS_BELOW) return 'MACD_death_cross'
+  }
+  
+  // Volume conditions
+  if (indicator === INDICATOR_TYPES.VOLUME) {
+    if (direction === DIRECTION_TYPES.ABOVE) return 'volume_surge'
+    if (direction === DIRECTION_TYPES.BELOW) return 'volume_decline'
+  }
+  
+  // Return a unique key for non-conflicting conditions
+  return `${indicator}_${direction}`
+}
 
 watch(selectedTemplateId, (newId) => {
   if (newId && STRATEGY_TEMPLATES[newId]?.defaultParams) {

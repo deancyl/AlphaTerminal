@@ -58,6 +58,251 @@ class ValidationResult:
         return [str(v) for v in self.violations]
 
 
+class InfiniteLoopDetector(ast.NodeVisitor):
+    """
+    Detects potential infinite loops by analyzing while/for loop structures.
+    
+    Uses a stack-based approach to track nested loops and checks for break/return
+    statements anywhere in the loop body tree (including nested control structures).
+    """
+    
+    def __init__(self):
+        self.loop_stack: List[ast.AST] = []
+        self.infinite_loops: List[SecurityViolation] = []
+        self.empty_ranges: List[SecurityViolation] = []
+    
+    def visit_While(self, node: ast.While):
+        """Check while loops for potential infinite loops."""
+        # Check if condition is True (infinite loop candidate)
+        is_while_true = self._is_constant_true(node.test)
+        
+        if is_while_true:
+            # Check for break/return anywhere in the body tree
+            has_exit = self._has_exit_statement(node.body)
+            
+            if not has_exit:
+                self.infinite_loops.append(SecurityViolation(
+                    node_type="While",
+                    message="Potential infinite loop: while True without break or return",
+                    line=node.lineno,
+                    column=node.col_offset,
+                ))
+        
+        # Continue visiting nested structures
+        self.generic_visit(node)
+    
+    def visit_For(self, node: ast.For):
+        """Check for loops for potential issues like range(0) or range(-1)."""
+        # Check for range with potentially empty iterations
+        if isinstance(node.iter, ast.Call):
+            func_name = self._get_func_name(node.iter)
+            
+            if func_name == 'range':
+                # Check for range(0), range(-1), range(N, N), range(N, M) where M < N
+                range_issue = self._check_range_issue(node.iter)
+                if range_issue:
+                    self.empty_ranges.append(SecurityViolation(
+                        node_type="For",
+                        message=range_issue,
+                        line=node.lineno,
+                        column=node.col_offset,
+                        severity="warning",
+                    ))
+        
+        # Continue visiting nested structures
+        self.generic_visit(node)
+    
+    def _is_constant_true(self, node: ast.AST) -> bool:
+        """Check if a node represents the constant True."""
+        if isinstance(node, ast.Constant):
+            return node.value is True
+        elif isinstance(node, ast.NameConstant):  # Python 3.7 compatibility
+            return node.value is True
+        return False
+    
+    def _has_exit_statement(self, body: List[ast.stmt], in_nested_loop: bool = False) -> bool:
+        """
+        Check if body contains a break or return statement anywhere in the tree.
+        
+        This recursively checks all nested control structures including:
+        - if/elif/else blocks
+        - try/except/finally blocks
+        - with statements
+        - nested function definitions (return counts)
+        
+        Args:
+            body: List of statements to check
+            in_nested_loop: If True, we're inside a nested for/while loop.
+                           Break statements don't count as exit for outer loops.
+        
+        Returns:
+            True if an exit statement (break/return) is found that would exit the outer loop.
+        
+        Note: 
+            - break statements in nested loops do NOT count as exit for outer loops
+            - return statements ALWAYS count as exit (exits the entire function)
+        """
+        for stmt in body:
+            # Direct break statement (only counts if not in nested loop)
+            if isinstance(stmt, ast.Break):
+                if not in_nested_loop:
+                    return True
+                # If in nested loop, break only breaks the inner loop, not outer
+                continue
+            
+            # Return statement always exits the function (regardless of nested loop)
+            if isinstance(stmt, ast.Return):
+                return True
+            
+            # Check if statement
+            if isinstance(stmt, ast.If):
+                if (self._has_exit_statement(stmt.body, in_nested_loop) or 
+                    self._has_exit_statement(stmt.orelse, in_nested_loop)):
+                    return True
+            
+            # Check try/except/finally
+            if isinstance(stmt, ast.Try):
+                if (self._has_exit_statement(stmt.body, in_nested_loop) or 
+                    any(self._has_exit_statement(handler.body, in_nested_loop) for handler in stmt.handlers) or
+                    self._has_exit_statement(stmt.orelse, in_nested_loop) or
+                    self._has_exit_statement(stmt.finalbody, in_nested_loop)):
+                    return True
+            
+            # Check with statement
+            if isinstance(stmt, ast.With):
+                if self._has_exit_statement(stmt.body, in_nested_loop):
+                    return True
+            
+            # Check match statement (Python 3.10+)
+            if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
+                for case in stmt.cases:
+                    if self._has_exit_statement(case.body, in_nested_loop):
+                        return True
+            
+            # Check nested for/while loops
+            # break in nested loop doesn't break outer loop, but return does
+            if isinstance(stmt, (ast.For, ast.AsyncFor)):
+                # Check for return statements in nested for loop
+                if self._has_return_statement(stmt.body):
+                    return True
+                if self._has_return_statement(stmt.orelse):
+                    return True
+                # Note: break in nested for doesn't break outer while
+            
+            if isinstance(stmt, ast.While):
+                # Check for return statements in nested while loop
+                if self._has_return_statement(stmt.body):
+                    return True
+                if self._has_return_statement(stmt.orelse):
+                    return True
+                # Note: break in nested while doesn't break outer while
+        
+        return False
+    
+    def _has_return_statement(self, body: List[ast.stmt]) -> bool:
+        """
+        Check if body contains a return statement anywhere in the tree.
+        
+        This is a specialized version that only looks for return statements,
+        ignoring break statements. Used for checking nested loops where
+        break doesn't break outer loop but return does.
+        """
+        for stmt in body:
+            if isinstance(stmt, ast.Return):
+                return True
+            
+            if isinstance(stmt, ast.If):
+                if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
+                    return True
+            
+            if isinstance(stmt, ast.Try):
+                if (self._has_return_statement(stmt.body) or 
+                    any(self._has_return_statement(handler.body) for handler in stmt.handlers) or
+                    self._has_return_statement(stmt.orelse) or
+                    self._has_return_statement(stmt.finalbody)):
+                    return True
+            
+            if isinstance(stmt, ast.With):
+                if self._has_return_statement(stmt.body):
+                    return True
+            
+            if hasattr(ast, 'Match') and isinstance(stmt, ast.Match):
+                for case in stmt.cases:
+                    if self._has_return_statement(case.body):
+                        return True
+            
+            # Recursively check nested loops for return
+            if isinstance(stmt, (ast.For, ast.AsyncFor, ast.While)):
+                if self._has_return_statement(stmt.body) or self._has_return_statement(stmt.orelse):
+                    return True
+        
+        return False
+    
+    def _get_func_name(self, node: ast.AST) -> str:
+        """Extract function name from a Call node."""
+        if isinstance(node, ast.Name):
+            return node.id
+        elif isinstance(node, ast.Attribute):
+            return node.attr
+        elif isinstance(node, ast.Call):
+            return self._get_func_name(node.func)
+        return ""
+    
+    def _check_range_issue(self, call_node: ast.Call) -> Optional[str]:
+        """
+        Check if range() call will produce empty or potentially problematic iterations.
+        
+        Returns error message if issue found, None otherwise.
+        """
+        args = call_node.args
+        
+        if len(args) == 1:
+            # range(stop) - check if stop <= 0
+            stop = self._get_constant_value(args[0])
+            if stop is not None:
+                if stop <= 0:
+                    return f"range({stop}) will produce no iterations"
+        
+        elif len(args) >= 2:
+            # range(start, stop) or range(start, stop, step)
+            start = self._get_constant_value(args[0])
+            stop = self._get_constant_value(args[1])
+            step = self._get_constant_value(args[2]) if len(args) > 2 else 1
+            
+            if start is not None and stop is not None:
+                if step is not None:
+                    # Check if range will produce no iterations
+                    if step > 0 and stop <= start:
+                        return f"range({start}, {stop}) will produce no iterations"
+                    elif step < 0 and stop >= start:
+                        return f"range({start}, {stop}, {step}) will produce no iterations"
+        
+        return None
+    
+    def _get_constant_value(self, node: ast.AST) -> Optional[int]:
+        """Extract constant integer value from AST node if possible."""
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, int):
+                return node.value
+        elif isinstance(node, ast.UnaryOp):
+            if isinstance(node.op, ast.USub):
+                operand = self._get_constant_value(node.operand)
+                if operand is not None:
+                    return -operand
+        elif isinstance(node, ast.BinOp):
+            # Handle simple binary operations
+            left = self._get_constant_value(node.left)
+            right = self._get_constant_value(node.right)
+            if left is not None and right is not None:
+                if isinstance(node.op, ast.Add):
+                    return left + right
+                elif isinstance(node.op, ast.Sub):
+                    return left - right
+                elif isinstance(node.op, ast.Mult):
+                    return left * right
+        return None
+
+
 class ASTSecurityValidator(ast.NodeVisitor):
     """
     AST-based security validator for strategy code.
@@ -67,6 +312,7 @@ class ASTSecurityValidator(ast.NodeVisitor):
     - Forbidden function calls
     - Dangerous attribute access
     - Resource exhaustion patterns
+    - Infinite loops
     """
     
     FORBIDDEN_MODULES = {
@@ -123,6 +369,20 @@ class ASTSecurityValidator(ast.NodeVisitor):
         
         try:
             tree = ast.parse(code)
+            
+            # Run infinite loop detector
+            loop_detector = InfiniteLoopDetector()
+            loop_detector.visit(tree)
+            
+            # Add infinite loop violations
+            for violation in loop_detector.infinite_loops:
+                self.result.add_violation(violation)
+            
+            # Add empty range warnings
+            for warning in loop_detector.empty_ranges:
+                self.result.add_warning(warning)
+            
+            # Run security validator
             self.visit(tree)
         except SyntaxError as e:
             self.result.add_violation(SecurityViolation(
@@ -322,40 +582,6 @@ class ASTSecurityValidator(ast.NodeVisitor):
         
         self._current_function = old_function
     
-    def visit_While(self, node: ast.While):
-        """Check while loops for potential infinite loops."""
-        # Check if while True without break
-        if self._is_while_true(node):
-            has_break = self._has_break(node.body)
-            if not has_break:
-                self.result.add_violation(SecurityViolation(
-                    node_type="While",
-                    message="Potential infinite loop: while True without break",
-                    line=node.lineno,
-                    column=node.col_offset,
-                ))
-        
-        self.generic_visit(node)
-    
-    def visit_For(self, node: ast.For):
-        """Check for loops for potential issues."""
-        # Check for very large range
-        if isinstance(node.iter, ast.Call):
-            func_name = self._get_func_name(node.iter)
-            if func_name == 'range':
-                if len(node.iter.args) >= 1:
-                    size = self._estimate_size(node.iter.args[0])
-                    if size > 10**8:
-                        self.result.add_warning(SecurityViolation(
-                            node_type="For",
-                            message=f"Large range iteration: {size} iterations",
-                            line=node.lineno,
-                            column=node.col_offset,
-                            severity="warning",
-                        ))
-        
-        self.generic_visit(node)
-    
     def _get_func_name(self, node: ast.AST) -> str:
         """Extract function name from a Call node."""
         if isinstance(node, ast.Name):
@@ -384,34 +610,6 @@ class ASTSecurityValidator(ast.NodeVisitor):
             elif isinstance(node.op, ast.Mult):
                 return self._estimate_size(node.left) * self._estimate_size(node.right)
         return 1
-    
-    def _is_while_true(self, node: ast.While) -> bool:
-        """Check if while loop is 'while True'."""
-        if isinstance(node.test, ast.Constant):
-            return node.test.value is True
-        elif isinstance(node.test, ast.NameConstant):  # Python 3.7
-            return node.test.value is True
-        return False
-    
-    def _has_break(self, body: List[ast.stmt]) -> bool:
-        """Check if body contains a break statement."""
-        for stmt in body:
-            if isinstance(stmt, ast.Break):
-                return True
-            elif isinstance(stmt, ast.If):
-                if self._has_break(stmt.body) or self._has_break(stmt.orelse):
-                    return True
-            elif isinstance(stmt, ast.While):
-                # Nested while doesn't count
-                pass
-            elif isinstance(stmt, ast.For):
-                # Nested for doesn't count
-                pass
-            elif hasattr(stmt, 'body'):
-                if isinstance(stmt.body, list):
-                    if self._has_break(stmt.body):
-                        return True
-        return False
 
 
 def validate_strategy_ast(code: str) -> Tuple[bool, List[str]]:

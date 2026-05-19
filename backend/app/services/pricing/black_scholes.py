@@ -142,6 +142,65 @@ class OptionsPricingEngine:
             logger.warning(f"[Pricing] Failed to parse expiry from code: {code} - {e}")
             return None
     
+    def bisection_iv(
+        self,
+        price: float,
+        S: float,
+        K: float,
+        T: float,
+        r: float,
+        q: float,
+        option_type: str,
+        max_iterations: int = 100,
+        tolerance: float = 1e-6
+    ) -> Optional[float]:
+        """
+        Bisection method for implied volatility (fallback).
+        
+        Used when vollib's lets_be_rational fails for edge cases
+        (deep OTM, near expiry).
+        
+        Args:
+            price: Option market price
+            S: Underlying spot price
+            K: Strike price
+            T: Time to expiry in years
+            r: Risk-free rate
+            q: Dividend yield
+            option_type: 'call' or 'put'
+            max_iterations: Maximum iterations (default 100)
+            tolerance: Price tolerance for convergence (default 1e-6)
+            
+        Returns:
+            Implied volatility, or None if calculation fails
+        """
+        sigma_low = 0.001
+        sigma_high = 5.0
+        
+        flag = 'c' if option_type == 'call' else 'p'
+        
+        for _ in range(max_iterations):
+            sigma_mid = (sigma_low + sigma_high) / 2
+            
+            try:
+                price_mid = self.vol_lib['bsm'](flag, S, K, T, r, sigma_mid, q)
+            except Exception:
+                price_mid = None
+            
+            if price_mid is None:
+                sigma_high = sigma_mid
+                continue
+            
+            if abs(price_mid - price) < tolerance:
+                return sigma_mid
+            
+            if price_mid < price:
+                sigma_low = sigma_mid
+            else:
+                sigma_high = sigma_mid
+        
+        return (sigma_low + sigma_high) / 2
+    
     def calculate_iv(
         self,
         price: float,
@@ -149,9 +208,11 @@ class OptionsPricingEngine:
         strike: float,
         time_to_expiry: float,
         is_call: bool = True,
-    ) -> Optional[float]:
+    ) -> Tuple[Optional[float], Optional[str]]:
         """
         Calculate implied volatility using Householder 3rd order method.
+        
+        Falls back to bisection method for edge cases where lets_be_rational fails.
         
         Args:
             price: Option market price
@@ -161,25 +222,32 @@ class OptionsPricingEngine:
             is_call: True for call, False for put
             
         Returns:
-            Implied volatility (annualized), or None if calculation fails
+            Tuple of (implied volatility, method name)
+            - method: 'rational_approximation' or 'bisection' or None
         """
         if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
-            return None
+            return None, None
         
         flag = 'c' if is_call else 'p'
+        option_type = 'call' if is_call else 'put'
         
+        # Try vollib's lets_be_rational first
         try:
             iv = self.vol_lib['iv'](
                 price, spot, strike, time_to_expiry, self.r, self.q, flag
             )
             
-            if not math.isfinite(iv) or iv <= 0:
-                return None
-            return iv
-            
+            if math.isfinite(iv) and iv > 0:
+                return iv, 'rational_approximation'
         except Exception as e:
-            logger.debug(f"[Pricing] IV calculation failed: S={spot}, K={strike}, T={time_to_expiry:.4f}, P={price} - {e}")
-            return None
+            logger.debug(f"[Pricing] IV rational_approximation failed: S={spot}, K={strike}, T={time_to_expiry:.4f}, P={price} - {e}")
+        
+        # Fallback to bisection method
+        iv = self.bisection_iv(price, spot, strike, time_to_expiry, self.r, self.q, option_type)
+        if iv is not None and math.isfinite(iv) and iv > 0:
+            return iv, 'bisection'
+        
+        return None, None
     
     def calculate_greeks(
         self,
@@ -289,8 +357,9 @@ class OptionsPricingEngine:
             T = self.calculate_time_to_expiry(expiry_date)
             
             iv = None
+            iv_method = None
             if price and price > 0:
-                iv = self.calculate_iv(price, spot, strike, T, is_call)
+                iv, iv_method = self.calculate_iv(price, spot, strike, T, is_call)
             
             if iv is None:
                 iv = default_volatility

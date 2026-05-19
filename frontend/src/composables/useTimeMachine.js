@@ -8,8 +8,13 @@ import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { TIMEOUTS } from '../utils/constants.js'
 import { useToast } from './useToast.js'
+import { CircularBuffer } from '../utils/circularBuffer.js'
 
 const BASE = '/api/v1/timemachine'
+
+// Memory limits for TimeMachine playback
+const MAX_KLINE_BARS = 500  // Limit K-line history during playback
+const MAX_TRADES = 100      // Limit trade history
 
 // ── 工具函数 ─────────────────────────────────────────────────────
 function formatMoney(value) {
@@ -38,10 +43,13 @@ export function useTimeMachine() {
   const loading = ref(false)
   const error = ref(null)
   
-  // K-line data (use shallowRef for large datasets)
-  const klineData = shallowRef([])
+  // K-line data (use CircularBuffer for memory safety)
+  const klineBuffer = new CircularBuffer(MAX_KLINE_BARS)
   const currentBar = ref(0)
-  const totalBars = computed(() => klineData.value.length)
+  
+  // Computed for backward compatibility
+  const klineData = computed(() => klineBuffer.toArray())
+  const totalBars = computed(() => klineBuffer.length)
   
   // Playback state
   const playbackStatus = ref('idle') // 'idle' | 'playing' | 'paused'
@@ -57,7 +65,10 @@ export function useTimeMachine() {
     shares: 0,
     avg_cost: 0
   })
-  const trades = ref([])
+  
+  // Trades history (use CircularBuffer for memory safety)
+  const tradesBuffer = new CircularBuffer(MAX_TRADES)
+  const trades = computed(() => tradesBuffer.toArray())
   
   // Computed
   const currentDate = computed(() => {
@@ -105,11 +116,16 @@ export function useTimeMachine() {
       })
       
       session.value = response?.data?.session_id
-      klineData.value = response?.data?.bars || []
+      
+      klineBuffer.clear()
+      const bars = response?.data?.bars || []
+      for (const bar of bars) {
+        klineBuffer.push(bar)
+      }
+      
       currentBar.value = 0
       playbackStatus.value = 'paused'
       
-      // Initialize portfolio
       portfolio.value = {
         cash: initialCapital,
         position_value: 0,
@@ -118,7 +134,8 @@ export function useTimeMachine() {
         shares: 0,
         avg_cost: 0
       }
-      trades.value = []
+      
+      tradesBuffer.clear()
       
       logger.info('[TimeMachine] Session created:', session.value)
       return response?.data
@@ -158,9 +175,10 @@ export function useTimeMachine() {
       currentBar.value = response?.data?.current_bar ?? 0
       portfolio.value = response?.data?.portfolio || portfolio.value
       
-      // Add any new trades
       if (response?.data?.new_trades?.length) {
-        trades.value.push(...response.data.new_trades)
+        for (const trade of response.data.new_trades) {
+          tradesBuffer.push(trade)
+        }
       }
       
       return response?.data
@@ -247,12 +265,12 @@ export function useTimeMachine() {
         body: JSON.stringify({ action, quantity })
       })
       
-      if (response?.data?.success) {
-        trades.value.push(response.data.trade)
-        portfolio.value = response?.data?.portfolio || portfolio.value
-        toast.success(`交易成功: ${action === 'buy' ? '买入' : '卖出'} ${quantity}股`)
-        logger.info('[TimeMachine] Trade executed:', action, quantity)
-      }
+if (response?.data?.success) {
+         tradesBuffer.push(response.data.trade)
+         portfolio.value = response?.data?.portfolio || portfolio.value
+         toast.success(`交易成功: ${action === 'buy' ? '买入' : '卖出'} ${quantity}股`)
+         logger.info('[TimeMachine] Trade executed:', action, quantity)
+       }
       
       return response?.data
     } catch (e) {
@@ -327,10 +345,10 @@ export function useTimeMachine() {
     
     // Reset state
     session.value = null
-    klineData.value = []
+    klineBuffer.clear()
     currentBar.value = 0
     playbackStatus.value = 'idle'
-    trades.value = []
+    tradesBuffer.clear()
     portfolio.value = {
       cash: 1000000,
       position_value: 0,
@@ -368,6 +386,15 @@ export function useTimeMachine() {
   
   // ── Cleanup ─────────────────────────────────────────────────────
   
+  function clear() {
+    klineBuffer.clear()
+    tradesBuffer.clear()
+    currentBar.value = 0
+    session.value = null
+    playbackStatus.value = 'idle'
+    stopPlaybackTimer()
+  }
+  
   onUnmounted(() => {
     stopPlaybackTimer()
     if (session.value) {
@@ -403,6 +430,7 @@ export function useTimeMachine() {
     seekTo,
     getSessionStatus,
     endSession,
+    clear,
     
     // Utils
     formatMoney,

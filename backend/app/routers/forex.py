@@ -606,28 +606,44 @@ async def _fetch_forex_matrix_background(currencies: str):
             forex_fetcher.get_cfets_crosses()
         )
         
-        # Step 2: Build rates dictionary (O(M) where M = total quotes)
+        # Step 2: Build separate bid/ask dictionaries for precision
         rates_dict: Dict[str, Decimal] = {}
+        bid_rates: Dict[str, Decimal] = {}
+        ask_rates: Dict[str, Decimal] = {}
         
         for q in spot_quotes:
             symbol = q.get("symbol", "")
             latest = q.get("latest")
+            bid = q.get("bid")
+            ask = q.get("ask")
             if latest and len(symbol) == 6:
                 from_curr = symbol[:3]
                 to_curr = symbol[3:]
-                rates_dict[f"{from_curr}/{to_curr}"] = Decimal(str(latest))
+                key = f"{from_curr}/{to_curr}"
+                rates_dict[key] = Decimal(str(latest))
+                # Use bid/ask if available, otherwise use mid price
+                bid_rates[key] = Decimal(str(bid)) if bid else Decimal(str(latest))
+                ask_rates[key] = Decimal(str(ask)) if ask else Decimal(str(latest))
         
         for q in cfets_rmb:
             pair = q.get("pair", "")
             mid = q.get("mid")
+            bid = q.get("bid")
+            ask = q.get("ask")
             if mid and "/" in pair:
                 rates_dict[pair] = Decimal(str(mid))
+                bid_rates[pair] = Decimal(str(bid)) if bid else Decimal(str(mid))
+                ask_rates[pair] = Decimal(str(ask)) if ask else Decimal(str(mid))
         
         for q in cfets_cross:
             pair = q.get("pair", "")
             mid = q.get("mid")
+            bid = q.get("bid")
+            ask = q.get("ask")
             if mid and "/" in pair:
                 rates_dict[pair] = Decimal(str(mid))
+                bid_rates[pair] = Decimal(str(bid)) if bid else Decimal(str(mid))
+                ask_rates[pair] = Decimal(str(ask)) if ask else Decimal(str(mid))
         
         # Step 3: Pre-compute USD-based rates for all currencies (O(N))
         usd_rates: Dict[str, Decimal] = {}
@@ -689,24 +705,39 @@ async def _fetch_forex_matrix_background(currencies: str):
                             is_calculated=False
                         ))
                     else:
-                        # Calculate via USD (triangular arbitrage)
-                        quote_usd = usd_rates.get(quote_curr)
+                        # Calculate via USD (triangular arbitrage) with bid/ask precision
+                        cross_result = forex_fetcher.calculate_cross_rate_with_spread(
+                            base_curr, quote_curr, bid_rates, ask_rates
+                        )
                         
-                        if base_usd and quote_usd:
-                            cross_rate = base_usd / quote_usd
+                        if cross_result:
                             row_rates.append(CrossRateCell(
-                                rate=float(cross_rate),
+                                rate=float(cross_result["mid"]),
+                                bid=float(cross_result["bid"]),
+                                ask=float(cross_result["ask"]),
+                                spread=float(cross_result["spread"]),
                                 change_pct=None,
                                 is_base=False,
                                 is_calculated=True
                             ))
                         else:
-                            row_rates.append(CrossRateCell(
-                                rate=None,
-                                change_pct=None,
-                                is_base=False,
-                                is_calculated=False
-                            ))
+                            # Fallback to mid-price calculation
+                            quote_usd = usd_rates.get(quote_curr)
+                            if base_usd and quote_usd:
+                                cross_rate = base_usd / quote_usd
+                                row_rates.append(CrossRateCell(
+                                    rate=float(cross_rate),
+                                    change_pct=None,
+                                    is_base=False,
+                                    is_calculated=True
+                                ))
+                            else:
+                                row_rates.append(CrossRateCell(
+                                    rate=None,
+                                    change_pct=None,
+                                    is_base=False,
+                                    is_calculated=False
+                                ))
             
             matrix.append(CrossRateRow(
                 base_currency=base_curr,

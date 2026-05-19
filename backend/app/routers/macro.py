@@ -6,7 +6,7 @@
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query
 from typing import Optional, List
 from app.utils.response import success_response, error_response, ErrorCode
@@ -169,7 +169,7 @@ async def get_gdp_data(
             "unit": "亿元",
             "frequency": "季度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
@@ -238,7 +238,7 @@ async def get_cpi_data(
             "unit": "",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
@@ -305,7 +305,7 @@ async def get_ppi_data(
             "unit": "",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
@@ -373,7 +373,7 @@ async def get_pmi_data(
             "unit": "",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
@@ -529,7 +529,7 @@ async def get_macro_overview():
         
         result = success_response({
             "overview": overview,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         
         cache.set("macro:overview", result, ttl=MACRO_CACHE_DURATION)
@@ -753,7 +753,7 @@ async def get_economic_calendar(
                 "start_date": start_date,
                 "end_date": end_date
             },
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
@@ -819,7 +819,7 @@ async def get_m2_data(
             "unit": "%",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
@@ -886,7 +886,7 @@ async def get_social_financing_data(
             "unit": "亿元",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
@@ -955,7 +955,7 @@ async def get_industrial_production_data(
             "unit": "%",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
@@ -1031,7 +1031,7 @@ async def get_unemployment_data(
             "unit": "%",
             "frequency": "月度",
             "data": data,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         })
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
@@ -1280,7 +1280,7 @@ async def get_macro_batch(
         
         response_data = {
             "indicators": result,
-            "last_update": datetime.now().isoformat()
+            "last_update": datetime.now(timezone.utc).isoformat()
         }
         
         if failed:
@@ -1534,7 +1534,7 @@ async def get_macro_dashboard():
                 "unit": ""
             })
         
-        result['last_update'] = datetime.now().isoformat()
+        result['last_update'] = datetime.now(timezone.utc).isoformat()
         result['partial'] = any(v is None for v in raw_data.values())
         
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)

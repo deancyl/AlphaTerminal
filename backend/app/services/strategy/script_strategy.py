@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
 import pandas as pd
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -18,6 +19,28 @@ from .sandbox import (
 from .audit import log_strategy_execution, compute_code_hash
 
 logger = logging.getLogger(__name__)
+
+
+class InstructionLimitExceeded(RuntimeError):
+    """Raised when instruction limit is exceeded during execution."""
+    pass
+
+
+class InstructionCounter:
+    """Count executed instructions to detect runaway code."""
+    
+    def __init__(self, limit: int = 1_000_000):
+        self.limit = limit
+        self.count = 0
+    
+    def __call__(self, frame, event, arg):
+        if event == 'line':
+            self.count += 1
+            if self.count > self.limit:
+                raise InstructionLimitExceeded(
+                    f'Instruction limit exceeded: {self.limit}'
+                )
+        return self
 
 
 class OrderSide(Enum):
@@ -144,7 +167,15 @@ class ScriptStrategy:
         self._namespace["log"] = self._log
         
         try:
-            exec(self.code, self._namespace)
+            counter = InstructionCounter(limit=1_000_000)
+            old_trace = sys.gettrace()
+            sys.settrace(counter)
+            try:
+                exec(self.code, self._namespace)
+            finally:
+                sys.settrace(old_trace)
+        except InstructionLimitExceeded as e:
+            raise StrategySecurityError(str(e))
         except SyntaxError as e:
             raise ValueError(f"Strategy syntax error at line {e.lineno}: {e.msg}")
         except Exception as e:

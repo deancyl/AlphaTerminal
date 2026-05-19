@@ -59,10 +59,14 @@
               :aria-label="getCellAriaLabel(row.base_currency, currencies[colIdx], cell)"
             >
               <span v-if="cell.is_base" class="text-terminal-dim">—</span>
-              <span v-else-if="cell.rate !== null" class="font-mono tabular-nums">
-                {{ formatRate(cell.rate) }}
-                <span v-if="cell.is_calculated" class="text-[8px] text-terminal-dim ml-0.5">*</span>
-              </span>
+              <div v-else-if="cell.rate !== null" class="flex flex-col items-center">
+                <span class="font-mono tabular-nums font-medium">{{ formatRate(cell.rate) }}</span>
+                <span v-if="cell.bid && cell.ask" class="text-[9px] text-terminal-dim font-mono tabular-nums mt-0.5">
+                  {{ formatRate(cell.bid) }}/{{ formatRate(cell.ask) }}
+                  <span v-if="cell.spread" class="text-bearish ml-1">({{ cell.spread.toFixed(3) }}%)</span>
+                </span>
+                <span v-if="cell.is_calculated" class="text-[8px] text-terminal-dim mt-0.5">*</span>
+              </div>
               <span v-else class="text-terminal-dim">N/A</span>
             </td>
           </tr>
@@ -136,7 +140,11 @@ function getCellAriaLabel(baseCurrency, quoteCurrency, cell) {
   }
   if (cell.rate !== null) {
     const calculated = cell.is_calculated ? '(计算得出)' : ''
-    return `${baseCurrency}/${quoteCurrency} = ${cell.rate.toFixed(6)} ${calculated}`
+    let label = `${baseCurrency}/${quoteCurrency} = ${cell.rate.toFixed(6)} ${calculated}`
+    if (cell.bid && cell.ask) {
+      label += `, 买入: ${cell.bid.toFixed(6)}, 卖出: ${cell.ask.toFixed(6)}`
+    }
+    return label
   }
   return `${baseCurrency} 对 ${quoteCurrency}: 无数据`
 }

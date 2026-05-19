@@ -6,13 +6,12 @@
  *
  * Features:
  * - Native echarts.connect() for chart grouping (primary)
- * - Manual debounced sync as fallback (100ms)
+ * - requestAnimationFrame-based throttling (60fps) to prevent event storms
  * - Active panel tracking to prevent circular updates
  * - Reset functionality for modal close
  */
 
-import { ref, shallowRef } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
+import { ref, shallowRef, onUnmounted } from 'vue'
 import { getECharts } from '../utils/lazyEcharts.js'
 
 // Chart group name for echarts.connect()
@@ -30,10 +29,48 @@ export function useCrosshairSync() {
   // Active panel index - which panel initiated the current sync
   const activePanel = ref(null)
 
-  // Debounced sync function (100ms delay)
-  const debouncedSync = useDebounceFn((date) => {
+  // requestAnimationFrame-based throttling state
+  let rafId = null
+  let lastEmitTime = 0
+  const pendingEmit = ref(null)
+
+  /**
+   * Throttled emit function using requestAnimationFrame
+   * Limits crosshair updates to 60fps (16ms) to prevent event storms
+   *
+   * @param {string} date - The date to sync to
+   */
+  function emitCrosshairThrottled(date) {
+    const now = performance.now()
+
+    // Throttle to 60fps (16ms)
+    if (now - lastEmitTime < 16) {
+      pendingEmit.value = date
+      if (!rafId) {
+        rafId = requestAnimationFrame(() => {
+          if (pendingEmit.value) {
+            syncedDate.value = pendingEmit.value
+            lastEmitTime = performance.now()
+            pendingEmit.value = null
+          }
+          rafId = null
+        })
+      }
+      return
+    }
+
     syncedDate.value = date
-  }, 100)
+    lastEmitTime = now
+  }
+
+  // Cleanup on unmount
+  onUnmounted(() => {
+    if (rafId) {
+      cancelAnimationFrame(rafId)
+      rafId = null
+    }
+    pendingEmit.value = null
+  })
 
   /**
    * Handle crosshair move from a panel
@@ -46,7 +83,7 @@ export function useCrosshairSync() {
     // This prevents circular updates when other charts respond to sync
     if (activePanel.value === null || activePanel.value === panelIndex) {
       activePanel.value = panelIndex
-      debouncedSync(date)
+      emitCrosshairThrottled(date)
     }
   }
 

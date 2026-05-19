@@ -442,3 +442,50 @@ async def bond_health():
             "last_fetch_time": _LAST_FETCH_TIME,
         },
     })
+
+
+@router.get("/bond/risk_free_rate", summary="获取无风险利率")
+async def get_risk_free_rate():
+    """
+    获取当前无风险利率（10年期国债收益率）
+
+    Returns:
+        rate: 无风险利率（小数形式，如0.0275表示2.75%）
+        source: 数据来源
+        timestamp: 时间戳
+    """
+    try:
+        # Fetch yield curve data
+        curve_data = await _cache.get_or_set_async(
+            key=f"{NAMESPACE}main",
+            ttl=TTL,
+            fetch_fn=_fetch_curve_data_for_cache
+        )
+
+        # Find 10Y yield
+        yield_curve = curve_data.get("yield_curve", {})
+        for tenor, rate in yield_curve.items():
+            if tenor == "10年" or "10" in tenor:
+                rate_decimal = rate / 100  # Convert percentage to decimal
+                return success_response({
+                    "rate": rate_decimal,
+                    "source": curve_data.get("source", "unknown") + "_10y",
+                    "timestamp": curve_data.get("update_time", "")
+                })
+
+        # Fallback if 10Y not found
+        logger.warning("[Bond] 10Y yield not found in curve data, using fallback")
+        return success_response({
+            "rate": 0.025,
+            "source": "fallback",
+            "timestamp": datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.warning(f"[Bond] Failed to get risk-free rate: {e}")
+        return success_response({
+            "rate": 0.025,
+            "source": "fallback",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        })

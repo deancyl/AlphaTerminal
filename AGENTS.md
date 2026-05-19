@@ -4481,3 +4481,118 @@ cd backend && python3 -m pytest tests/unit/test_routers/ -v --no-cov
 cd frontend && npm run build
 ```
 
+
+---
+
+## Architecture Audit Fixes (v0.6.57)
+
+### Overview
+
+Comprehensive fixes for 6 architecture audit issues identified by the architect review.
+
+### Issue 1&2: Forex Cross-Rate Bid/Ask Precision
+
+**Problem**: Cross-rate calculation used mid-price division, losing bid/ask precision.
+
+**Solution**:
+- Added `bid`, `ask`, `spread` fields to `CrossRateCell` schema
+- Build separate bid/ask dictionaries for triangular arbitrage
+- Calculate: `EUR/JPY_bid = EUR/USD_bid × USD/JPY_bid`
+
+**Files**:
+- `backend/app/routers/forex_schemas/schemas.py`
+- `backend/app/services/fetchers/forex_fetcher.py`
+- `frontend/src/components/forex/CrossRateMatrix.vue`
+
+### Issue 3: EconomicCalendar Timezone
+
+**Problem**: Backend used `datetime.now()` without timezone offset.
+
+**Solution**:
+- Changed to `datetime.now(timezone.utc).isoformat()`
+- All timestamps now include UTC offset
+
+**Files**:
+- `backend/app/routers/macro.py`
+
+### Issue 4: Black-Scholes IV Iteration Fallback
+
+**Problem**: Hard-coded risk-free rate (0.025), no fallback for edge cases.
+
+**Solution**:
+- Added `bisection_iv()` method for numerical fallback
+- Added `/api/v1/bond/risk_free_rate` endpoint for dynamic rate
+- `calculate_iv()` now returns `(iv, method)` tuple
+
+**Files**:
+- `backend/app/services/pricing/black_scholes.py`
+- `backend/app/routers/bond.py`
+
+### Issue 7&12: Strategy AST Injection Protection
+
+**Problem**: `while True` detection missed `return` in nested loops, no instruction limit.
+
+**Solution**:
+- Enhanced `InfiniteLoopDetector` to detect `return` in nested loops
+- Added `InstructionCounter` with 1M instruction limit
+- Added frontend validation for mutually exclusive conditions
+
+**Files**:
+- `backend/app/services/strategy/ast_validator.py`
+- `backend/app/services/strategy/script_strategy.py`
+- `frontend/src/components/strategy/ConditionBuilder.vue`
+
+### Issue 11: CrosshairSync Event Storm
+
+**Problem**: Tooltip formatter emitted 60+ events/second, no throttle.
+
+**Solution**:
+- Added requestAnimationFrame-based throttling (60fps)
+- Pending emit buffer for rapid events
+- Proper cleanup in `onUnmounted`
+
+**Files**:
+- `frontend/src/composables/useCrosshairSync.js`
+
+### Issue 10: TimeMachine Memory Leak
+
+**Problem**: klineData stored ALL bars, no sliding window.
+
+**Solution**:
+- Integrated `CircularBuffer` with MAX_KLINE_BARS=500
+- Added `onDeactivated` cleanup
+- Limited trades history to 100
+
+**Files**:
+- `frontend/src/composables/useTimeMachine.js`
+- `frontend/src/components/TimeMachine.vue`
+
+### Verification Commands
+
+```bash
+# Forex bid/ask
+grep -c "bid: Optional" backend/app/routers/forex_schemas/schemas.py  # Expected: 1
+
+# Timezone
+grep -c "datetime.now(timezone.utc)" backend/app/routers/macro.py  # Expected: 11
+
+# Black-Scholes
+grep -c "bisection_iv" backend/app/services/pricing/black_scholes.py  # Expected: 3+
+
+# AST detection
+grep -c "_has_return_statement" backend/app/services/strategy/ast_validator.py  # Expected: 3+
+
+# Instruction counter
+grep -c "InstructionCounter" backend/app/services/strategy/script_strategy.py  # Expected: 2+
+
+# CrosshairSync
+grep -c "requestAnimationFrame" frontend/src/composables/useCrosshairSync.js  # Expected: 4+
+
+# TimeMachine
+grep -c "CircularBuffer" frontend/src/composables/useTimeMachine.js  # Expected: 5+
+
+# Tests
+cd backend && python3 -m pytest tests/unit/test_services/test_script_strategy_security.py -v
+cd frontend && npm run build
+```
+

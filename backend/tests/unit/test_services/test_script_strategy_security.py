@@ -416,6 +416,128 @@ def on_bar(ctx, bar):
 
 
 # ============================================================================
+# Nested Loop Detection Tests
+# ============================================================================
+
+class TestNestedLoopDetection:
+    """Test infinite loop detection with nested control structures."""
+    
+    @pytest.fixture
+    def sample_df(self):
+        """Create sample DataFrame for testing."""
+        return pd.DataFrame({
+            'open': [100.0, 101.0, 102.0],
+            'high': [101.0, 102.0, 103.0],
+            'low': [99.0, 100.0, 101.0],
+            'close': [100.5, 101.5, 102.5],
+            'volume': [1000000, 1100000, 1050000],
+        })
+    
+    def test_break_in_nested_if_detected(self, sample_df):
+        """break in nested if should be detected as exit for while True."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        if bar['close'] > 100:
+            break
+'''
+        strategy = ScriptStrategy(code)
+        result = strategy.run(sample_df)
+        assert 'context' in result
+    
+    def test_break_in_nested_for_not_detected(self, sample_df):
+        """break in nested for should NOT be detected as exit for while True."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        for i in range(10):
+            if i == 5:
+                break
+'''
+        with pytest.raises((ValueError, StrategySecurityError)):
+            ScriptStrategy(code)
+    
+    def test_return_in_nested_for_detected(self, sample_df):
+        """return in nested for should be detected as exit for while True."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        for i in range(10):
+            if i == 5:
+                return
+'''
+        strategy = ScriptStrategy(code)
+        result = strategy.run(sample_df)
+        assert 'context' in result
+    
+    def test_break_in_nested_while_not_detected(self, sample_df):
+        """break in nested while should NOT be detected as exit for outer while True."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        while x > 0:
+            break
+'''
+        with pytest.raises((ValueError, StrategySecurityError)):
+            ScriptStrategy(code)
+    
+    def test_return_in_nested_while_detected(self, sample_df):
+        """return in nested while should be detected as exit for outer while True."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        while x > 0:
+            return
+'''
+        strategy = ScriptStrategy(code)
+        result = strategy.run(sample_df)
+        assert 'context' in result
+    
+    def test_deeply_nested_return_detected(self, sample_df):
+        """return in deeply nested loops should be detected."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        for i in range(10):
+            for j in range(5):
+                if i + j == 10:
+                    return
+'''
+        strategy = ScriptStrategy(code)
+        result = strategy.run(sample_df)
+        assert 'context' in result
+    
+    def test_break_in_try_in_for_not_detected(self, sample_df):
+        """break in try block inside for should NOT break outer while."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        for i in range(10):
+            try:
+                break
+            except:
+                pass
+'''
+        with pytest.raises((ValueError, StrategySecurityError)):
+            ScriptStrategy(code)
+    
+    def test_return_in_try_in_for_detected(self, sample_df):
+        """return in try block inside for should break outer while."""
+        code = '''
+def on_bar(ctx, bar):
+    while True:
+        for i in range(10):
+            try:
+                return
+            except:
+                pass
+'''
+        strategy = ScriptStrategy(code)
+        result = strategy.run(sample_df)
+        assert 'context' in result
+
+
+# ============================================================================
 # Performance Tests
 # ============================================================================
 

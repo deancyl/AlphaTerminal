@@ -743,7 +743,105 @@ class ForexFetcher(BaseMarketFetcher):
         cross_rate = from_rate / to_rate
         
         return cross_rate.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
-    
+
+    def calculate_cross_rate_with_spread(
+        self,
+        from_curr: str,
+        to_curr: str,
+        bid_rates: Dict[str, Decimal],
+        ask_rates: Dict[str, Decimal],
+    ) -> Optional[Dict[str, Decimal]]:
+        """
+        计算交叉汇率 (含bid/ask精度)
+        
+        算法:
+        - EUR/JPY_bid = EUR/USD_bid × USD/JPY_bid
+        - EUR/JPY_ask = EUR/USD_ask × USD/JPY_ask
+        
+        Args:
+            from_curr: 源货币
+            to_curr: 目标货币
+            bid_rates: 买入价字典，格式 {"EUR/USD": Decimal("1.0795"), ...}
+            ask_rates: 卖出价字典，格式 {"EUR/USD": Decimal("1.0805"), ...}
+            
+        Returns:
+            dict: {"bid": Decimal, "ask": Decimal, "mid": Decimal, "spread": Decimal}
+            或 None (如果无法计算)
+        """
+        from_curr = from_curr.upper()
+        to_curr = to_curr.upper()
+        
+        if from_curr == to_curr:
+            return {
+                "bid": Decimal('1.0'),
+                "ask": Decimal('1.0'),
+                "mid": Decimal('1.0'),
+                "spread": Decimal('0.0')
+            }
+        
+        # Try direct rates first
+        direct_key = f"{from_curr}/{to_curr}"
+        inverse_key = f"{to_curr}/{from_curr}"
+        
+        if direct_key in bid_rates and direct_key in ask_rates:
+            bid = bid_rates[direct_key]
+            ask = ask_rates[direct_key]
+        elif inverse_key in bid_rates and inverse_key in ask_rates:
+            # Inverse: bid becomes ask, ask becomes bid
+            bid = Decimal('1') / ask_rates[inverse_key]
+            ask = Decimal('1') / bid_rates[inverse_key]
+        else:
+            # Triangular arbitrage via USD
+            from_usd_key = f"{from_curr}/USD"
+            to_usd_key = f"{to_curr}/USD"
+            usd_from_key = f"USD/{from_curr}"
+            usd_to_key = f"USD/{to_curr}"
+            
+            # Get from_curr to USD rates
+            if from_usd_key in bid_rates and from_usd_key in ask_rates:
+                from_bid = bid_rates[from_usd_key]
+                from_ask = ask_rates[from_usd_key]
+            elif usd_from_key in bid_rates and usd_from_key in ask_rates:
+                # USD/EUR inverse: EUR/USD
+                from_bid = Decimal('1') / ask_rates[usd_from_key]
+                from_ask = Decimal('1') / bid_rates[usd_from_key]
+            elif from_curr == "USD":
+                from_bid = Decimal('1.0')
+                from_ask = Decimal('1.0')
+            else:
+                return None
+            
+            # Get to_curr to USD rates
+            if to_usd_key in bid_rates and to_usd_key in ask_rates:
+                to_bid = bid_rates[to_usd_key]
+                to_ask = ask_rates[to_usd_key]
+            elif usd_to_key in bid_rates and usd_to_key in ask_rates:
+                # USD/JPY inverse: JPY/USD
+                to_bid = Decimal('1') / ask_rates[usd_to_key]
+                to_ask = Decimal('1') / bid_rates[usd_to_key]
+            elif to_curr == "USD":
+                to_bid = Decimal('1.0')
+                to_ask = Decimal('1.0')
+            else:
+                return None
+            
+            # Cross-rate calculation:
+            # EUR/JPY_bid = EUR/USD_bid × USD/JPY_bid
+            # EUR/JPY_ask = EUR/USD_ask × USD/JPY_ask
+            bid = from_bid * to_bid
+            ask = from_ask * to_ask
+        
+        # Calculate mid and spread
+        mid = (bid + ask) / 2
+        spread_pct = ((ask - bid) / mid * 100) if mid > 0 else Decimal('0.0')
+        
+        return {
+            "bid": bid.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
+            "ask": ask.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
+            "mid": mid.quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP),
+            "spread": spread_pct.quantize(Decimal('0.001'), rounding=ROUND_HALF_UP)
+        }
+
     async def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
         """获取单个货币对报价 (BaseMarketFetcher接口)"""
         quotes = await self.get_spot_quotes()

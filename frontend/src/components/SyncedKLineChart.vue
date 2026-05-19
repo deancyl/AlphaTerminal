@@ -145,7 +145,18 @@ function buildOption() {
         const item = klineData.value[idx]
         if (!item) return ''
 
-        emit('crosshair-move', item.date)
+        // Throttle emit to 60fps using rAF
+        if (!pendingEmit.value) {
+          pendingEmit.value = item.date
+          requestAnimationFrame(() => {
+            if (pendingEmit.value) {
+              emit('crosshair-move', pendingEmit.value)
+              pendingEmit.value = null
+            }
+          })
+        } else {
+          pendingEmit.value = item.date
+        }
 
         const change = item.close - item.open
         const changePct = ((change / item.open) * 100).toFixed(2)
