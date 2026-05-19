@@ -2,11 +2,14 @@
   <div class="flex flex-col h-full overflow-auto gap-2 p-3">
 
     <!-- 数据过期警告 -->
-    <div v-if="bondDataInfo.warning" class="mb-2 p-2 bg-warning/10 border border-warning/30 rounded">
-      <span class="text-warning text-xs">⚠️ 数据截止日期：{{ bondDataInfo.last_update }}</span>
-      <span class="text-theme-muted text-xs ml-2">
-        （{{ bondDataSource === 'mock' ? '模拟数据' : bondDataSource }}）
-      </span>
+    <div v-if="bondDataInfo.warning" class="mb-2 p-3 rounded-sm" :class="bondDataInfo.warning_level === 'critical' ? 'bg-bearish/10 border-2 border-bearish/50' : 'bg-warning/10 border border-warning/30'">
+      <div class="flex items-center gap-2">
+        <span class="text-lg">{{ bondDataInfo.warning_level === 'critical' ? '🚨' : '⚠️' }}</span>
+        <span class="text-xs" :class="bondDataInfo.warning_level === 'critical' ? 'text-bearish font-semibold' : 'text-warning'">{{ bondDataInfo.warning }}</span>
+      </div>
+      <div class="text-[10px] text-theme-muted mt-1">
+        数据截止日期：{{ bondDataInfo.last_update }} | 来源：{{ bondDataSource === 'mock' ? '模拟数据' : bondDataSource }}
+      </div>
     </div>
 
     <!-- ── 顶部：收益率矩阵（利率估值表）────────────────────────── -->
@@ -172,7 +175,7 @@
 
       <!-- 无数据骨架屏 -->
       <div v-if="!hasData" class="py-3 space-y-2">
-        <div class="flex gap-2" v-for="n in 4" :key="n">
+        <div class="flex gap-2" v-for="n in 6" :key="n">
           <Skeleton height="24px" class="flex-1" />
           <Skeleton width="48px" height="24px" />
           <Skeleton width="48px" height="24px" />
@@ -277,11 +280,15 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
 import { logger } from '../utils/logger.js'
 import { safeDivide } from '../utils/safeMath.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import YieldCurveChart from './YieldCurveChart.vue'
 import YieldSpreadChart from './YieldSpreadChart.vue'
 import BondHistoryModal from './BondHistoryModal.vue'
 import Skeleton from './Skeleton.vue'
 import { apiFetch } from '../utils/api.js'
+
+const { createSignal: createBondSignal, complete: completeBond, abort: abortBond } = useAbortableRequest()
+const { createSignal: createSpreadSignal, complete: completeSpread, abort: abortSpread } = useAbortableRequest()
 
 // ── 常量 ──────────────────────────────────────────────────────────
 const TENORS = [
@@ -355,14 +362,14 @@ const TENOR_LABEL_MAP = {
 }
 
 async function fetchBondData() {
+  const signal = createBondSignal()
   try {
     const [bc, ba] = await Promise.all([
-      apiFetch('/api/v1/bond/curve'),
-      apiFetch('/api/v1/bond/active'),
+      apiFetch('/api/v1/bond/curve', { signal }),
+      apiFetch('/api/v1/bond/active', { signal }),
     ])
 
     if (bc) {
-      // 后端返回格式: { code: 0, data: {...}, message: 'success' }
       const data = bc.data || bc
       const govCurve   = data.yield_curve  || {}
       const commCurve = data.comm_yield   || {}
@@ -406,32 +413,36 @@ async function fetchBondData() {
     }
 
     if (ba) {
-      // 兼容新旧格式
       const bonds = (ba.data && ba.data.bonds) || ba.bonds || []
       bondList.value = bonds.slice(0, 12)
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.warn('[BondDashboard] fetch failed:', e)
+  } finally {
+    completeBond()
   }
 }
 
 // 10Y-3Y 利差历史（取最近 252 个交易日，即 1 年）
 async function fetchSpreadHistory() {
+  const signal = createSpreadSignal()
   spreadLoading.value = true
   spreadError.value   = ''
   try {
     const [data10y, data3y] = await Promise.all([
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, { timeoutMs: 25000, retries: 0 }).catch(e => {
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('10年')}&period=1Y`, { timeoutMs: 25000, retries: 0, signal }).catch(e => {
+        if (e.name === 'AbortError') return null
         logger.warn('[BondDashboard] 10Y history fetch failed:', e)
         return null
       }),
-      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('3年')}&period=1Y`, { timeoutMs: 25000, retries: 0 }).catch(e => {
+      apiFetch(`/api/v1/bond/history?tenor=${encodeURIComponent('3年')}&period=1Y`, { timeoutMs: 25000, retries: 0, signal }).catch(e => {
+        if (e.name === 'AbortError') return null
         logger.warn('[BondDashboard] 3Y history fetch failed:', e)
         return null
       }),
     ])
     
-    // Check for timeout/network errors
     if (data10y === null && data3y === null) {
       spreadError.value = '请求超时，请检查网络连接'
     } else if (data10y === null || data3y === null) {
@@ -442,9 +453,11 @@ async function fetchSpreadHistory() {
     spreadHistory3y.value   = (data3y?.data?.history || data3y?.history || []).filter(d => d.yield > 0).map(d => ({ date: d.date, yield: d.yield }))
     spreadUpdateTime.value   = data10y ? new Date().toLocaleTimeString() : ''
   } catch (e) {
+    if (e.name === 'AbortError') return
     spreadError.value = e.message || '加载利差数据失败'
     logger.error('[BondDashboard] fetchSpreadHistory error:', e)
   } finally {
+    completeSpread()
     spreadLoading.value = false
   }
 }
@@ -466,11 +479,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  abortBond()
+  abortSpread()
 })
 
-// KeepAlive deactivated: cleanup to prevent resource usage when cached
 onDeactivated(() => {
   if (timer) clearInterval(timer)
   timer = null
+  abortBond()
+  abortSpread()
 })
 </script>

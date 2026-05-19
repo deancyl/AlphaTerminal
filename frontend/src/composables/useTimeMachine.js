@@ -7,6 +7,7 @@ import { ref, computed, shallowRef, watch, onUnmounted } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import { TIMEOUTS } from '../utils/constants.js'
+import { useToast } from './useToast.js'
 
 const BASE = '/api/v1/timemachine'
 
@@ -29,6 +30,9 @@ function formatDate(dateStr) {
 
 // ── Composable ─────────────────────────────────────────────────────
 export function useTimeMachine() {
+  // Toast for user feedback
+  const toast = useToast()
+  
   // Session state
   const session = ref(null)
   const loading = ref(false)
@@ -119,7 +123,14 @@ export function useTimeMachine() {
       logger.info('[TimeMachine] Session created:', session.value)
       return response.data
     } catch (e) {
-      error.value = e.message || '创建会话失败'
+      const errorMsg = e.message || ''
+      if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+        error.value = '会话已过期，请重新创建'
+      } else if (errorMsg.includes('network') || errorMsg.includes('fetch')) {
+        error.value = '数据加载失败，请检查网络'
+      } else {
+        error.value = errorMsg || '创建会话失败'
+      }
       logger.error('[TimeMachine] Create session failed:', e)
       throw e
     } finally {
@@ -234,6 +245,7 @@ export function useTimeMachine() {
       if (response.data.success) {
         trades.value.push(response.data.trade)
         portfolio.value = response.data.portfolio
+        toast.success(`交易成功: ${action === 'buy' ? '买入' : '卖出'} ${quantity}股`)
         logger.info('[TimeMachine] Trade executed:', action, quantity)
       }
       

@@ -659,13 +659,14 @@ def _bond_polling_job():
     """Pre-fetch bond yield curve data to warm cache."""
     try:
         import asyncio
-        from app.routers.bond import _fetch_bond_data_async
+        from app.routers.bond import _fetch_curve_data_for_cache
         
         # Create event loop for background thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(_fetch_bond_data_async())
+            # Call the fetch function directly (it returns data, we just want to warm cache)
+            loop.run_until_complete(_fetch_curve_data_for_cache())
         finally:
             loop.close()
         

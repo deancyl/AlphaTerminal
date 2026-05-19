@@ -1,12 +1,24 @@
 <template>
   <div class="relative w-full h-full">
-    <div ref="chartContainer" class="w-full h-full" />
-    <div v-if="loading" class="absolute inset-0 flex items-center justify-center bg-surface/50">
-      <div class="skeleton w-3/4 h-3/4 rounded" />
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="absolute inset-0">
+      <Skeleton height="100%" />
     </div>
-    <div v-else-if="error" class="absolute inset-0 flex items-center justify-center">
-      <span class="text-sm text-muted">{{ error }}</span>
+    
+    <!-- Error state -->
+    <div v-else-if="error" class="absolute inset-0 flex items-center justify-center p-4">
+      <ErrorDisplay 
+        :error="error"
+        :retry="fetchKline"
+      />
     </div>
+    
+    <!-- Chart -->
+    <div 
+      v-else
+      ref="chartContainer" 
+      class="w-full h-full"
+    />
   </div>
 </template>
 
@@ -15,15 +27,19 @@ import { ref, shallowRef, watch, onMounted, onUnmounted } from 'vue'
 import { useECharts } from '@/composables/useECharts.js'
 import { apiFetchDeduped } from '@/utils/api.js'
 import { getDynamicThemeColors, getDynamicMarketColors } from '@/utils/echartsTheme.js'
+import Skeleton from '@/components/Skeleton.vue'
+import ErrorDisplay from '@/components/f9/ErrorDisplay.vue'
 
 const props = defineProps({
   symbol: { type: String, required: true },
   syncedDate: { type: String, default: null },
   panelIndex: { type: Number, default: 0 },
-  lineColor: { type: String, default: null }
+  lineColor: { type: String, default: null },
+  loading: { type: Boolean, default: false },
+  error: { type: String, default: null }
 })
 
-const emit = defineEmits(['crosshair-move', 'chart-ready'])
+const emit = defineEmits(['crosshair-move', 'chart-ready', 'retry'])
 
 const chartContainer = ref(null)
 const { chartInstance, initChart, setOption, dispose, isReady } = useECharts(chartContainer, {

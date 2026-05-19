@@ -6,6 +6,7 @@
         @click="handlePlayPause"
         class="p-2 rounded-lg hover:bg-surface-hover transition-colors"
         :aria-label="status === 'playing' ? '暂停' : '播放'"
+        title="空格键: 播放/暂停"
       >
         <svg v-if="status !== 'playing'" class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 24 24">
           <path d="M8 5v14l11-7z" />
@@ -21,6 +22,7 @@
         :disabled="currentBar >= totalBars - 1"
         class="p-2 rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-40"
         aria-label="前进一根K线"
+        title="→: 单步前进"
       >
         <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 24 24">
           <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
@@ -33,6 +35,7 @@
         :disabled="currentBar + 10 >= totalBars"
         class="p-2 rounded-lg hover:bg-surface-hover transition-colors disabled:opacity-40"
         aria-label="前进10根K线"
+        title="Shift+→: 前进10根"
       >
         <svg class="w-5 h-5 text-primary" fill="currentColor" viewBox="0 0 24 24">
           <path d="M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z" />
@@ -43,7 +46,7 @@
       <div class="w-px h-6 bg-border-base"></div>
       
       <!-- Speed Control -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2" title="调整播放速度">
         <span class="text-xs text-secondary">速度</span>
         <select
           :value="speed"

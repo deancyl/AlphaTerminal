@@ -70,6 +70,14 @@ class StepRequest(BaseModel):
     bars: int = Field(1, ge=1, le=1000, description="Number of bars to step forward")
 
 
+class SeekRequest(BaseModel):
+    target_bar: int = Field(..., ge=0, description="Target bar index to seek to")
+
+
+class SpeedRequest(BaseModel):
+    speed: float = Field(..., ge=0.1, le=10.0, description="Playback speed multiplier")
+
+
 class TradeRequest(BaseModel):
     action: str = Field(..., description="buy or sell")
     quantity: float = Field(..., gt=0, description="Number of shares")
@@ -401,6 +409,44 @@ async def step_forward(session_id: str, request: StepRequest):
     session.current_bar_index = new_index
     
     return success_response(session.to_dict())
+
+
+@router.post("/session/{session_id}/seek")
+async def seek_to(session_id: str, request: SeekRequest):
+    """Seek to a specific bar in the playback."""
+    session = _session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found or expired")
+    
+    session.touch()
+    
+    if session.status == SessionStatus.PLAYING:
+        raise HTTPException(400, "Cannot seek while playing. Pause first.")
+    
+    max_bar = len(session.bars) - 1
+    session.current_bar_index = max(0, min(request.target_bar, max_bar))
+    
+    return success_response({
+        "success": True,
+        "current_bar": session.current_bar_index,
+        "total_bars": len(session.bars)
+    })
+
+
+@router.post("/session/{session_id}/speed")
+async def set_speed(session_id: str, request: SpeedRequest):
+    """Set playback speed multiplier."""
+    session = _session_manager.get_session(session_id)
+    if not session:
+        raise HTTPException(404, "Session not found or expired")
+    
+    session.touch()
+    session.speed = request.speed
+    
+    return success_response({
+        "success": True,
+        "speed": session.speed
+    })
 
 
 @router.post("/session/{session_id}/trade")

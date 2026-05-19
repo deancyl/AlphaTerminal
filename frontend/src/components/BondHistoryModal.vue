@@ -108,9 +108,13 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
 import { safeDispose } from '../utils/chartManager.js'
+
+const { createSignal, complete, abort } = useAbortableRequest()
 
 const props = defineProps({
   visible:   { type: Boolean, default: false },
@@ -165,6 +169,7 @@ const percentileBuckets = Array(20).fill(0)
 
 async function fetchHistory() {
   if (!props.visible) return
+  const signal = createSignal()
   isLoading.value = true
   error.value = ''
   historyData.value = []
@@ -174,7 +179,7 @@ async function fetchHistory() {
   try {
     const data = await apiFetch(
       `/api/v1/bond/history?tenor=${encodeURIComponent(props.tenor)}&period=${props.period}`,
-      10000
+      { timeoutMs: 10000, signal }
     )
     if (data.error || !data.history?.length) {
       throw new Error(data.error || '暂无历史数据（AkShare 限流或网络中断）')
@@ -184,8 +189,10 @@ async function fetchHistory() {
     percentile.value   = data.percentile ?? null
     await renderChart()
   } catch (e) {
+    if (e.name === 'AbortError') return
     error.value = String(e.message || '加载失败')
   } finally {
+    complete()
     isLoading.value = false
   }
 }
@@ -281,9 +288,11 @@ async function renderChart() {
 
 function close() { emit('close') }
 
-watch(() => props.visible, (v) => { if (v) fetchHistory() })
-watch(() => props.tenor,   ()  => { if (props.visible) fetchHistory() })
-watch(() => props.period,  ()  => { if (props.visible) fetchHistory() })
+const debouncedFetchHistory = useDebounceFn(fetchHistory, 300)
 
-onUnmounted(() => { safeDispose(chartInst.value); chartInst.value = null })
+watch(() => props.visible, (v) => { if (v) fetchHistory() })
+watch(() => props.tenor,   ()  => { if (props.visible) debouncedFetchHistory() })
+watch(() => props.period,  ()  => { if (props.visible) debouncedFetchHistory() })
+
+onUnmounted(() => { safeDispose(chartInst.value); chartInst.value = null; abort() })
 </script>

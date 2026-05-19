@@ -79,12 +79,16 @@ export function useFactorSandbox() {
   const backtestPreviews = shallowRef([])
   
   const loading = ref(false)
+  const factorsLoading = ref(false)
   const screeningLoading = ref(false)
   const backtestLoading = ref(false)
   const error = ref(null)
+  const screeningProgress = ref(null)
   
   const universe = ref('hs300')
   const limit = ref(50)
+  
+  let screeningAbortController = null
   
   // ── Computed ───────────────────────────────────────────────────────────────
   
@@ -113,6 +117,7 @@ export function useFactorSandbox() {
    * Fetch all available factors
    */
   async function fetchFactors() {
+    factorsLoading.value = true
     try {
       const response = await apiFetchDeduped(
         'factor_sandbox:factors',
@@ -140,6 +145,8 @@ export function useFactorSandbox() {
       logger.error('[useFactorSandbox] Fetch factors error:', e)
       error.value = e.message
       return []
+    } finally {
+      factorsLoading.value = false
     }
   }
   
@@ -216,19 +223,38 @@ export function useFactorSandbox() {
   }
   
   /**
-   * Run stock screening with selected factors
+   * Update parameters for a selected factor
+   * @param {string} factorId
+   * @param {Object} params
    */
+  function updateFactorParams(factorId, params) {
+    const idx = selectedFactors.value.findIndex(f => f.id === factorId)
+    if (idx >= 0) {
+      selectedFactors.value[idx] = {
+        ...selectedFactors.value[idx],
+        params: { ...params },
+      }
+    }
+  }
+  
   async function runScreening() {
     if (screeningLoading.value || selectedFactors.value.length === 0) return
+    
+    if (screeningAbortController) {
+      screeningAbortController.abort()
+    }
+    screeningAbortController = new AbortController()
     
     screeningLoading.value = true
     error.value = null
     screenedStocks.value = []
+    screeningProgress.value = null
     
     try {
       const response = await apiFetch('/api/v1/factor_sandbox/screen', {
         method: 'POST',
-        timeoutMs: 35000, // Backend has 30s timeout
+        timeoutMs: 35000,
+        signal: screeningAbortController.signal,
         body: JSON.stringify({
           factors: selectedFactors.value.map(f => ({
             id: f.id,
@@ -240,12 +266,26 @@ export function useFactorSandbox() {
       })
       
       screenedStocks.value = response?.stocks || []
+      screeningProgress.value = response?.progress || null
       return screenedStocks.value
     } catch (e) {
+      if (e.name === 'AbortError') {
+        logger.info('[useFactorSandbox] Screening cancelled')
+        return []
+      }
       logger.error('[useFactorSandbox] Screening error:', e)
       error.value = e.message
       return []
     } finally {
+      screeningLoading.value = false
+      screeningAbortController = null
+    }
+  }
+  
+  function cancelScreening() {
+    if (screeningAbortController) {
+      screeningAbortController.abort()
+      screeningAbortController = null
       screeningLoading.value = false
     }
   }
@@ -330,9 +370,11 @@ export function useFactorSandbox() {
     screenedStocks,
     backtestPreviews,
     loading,
+    factorsLoading,
     screeningLoading,
     backtestLoading,
     error,
+    screeningProgress,
     universe,
     limit,
     
@@ -348,7 +390,9 @@ export function useFactorSandbox() {
     toggleFactor,
     clearSelectedFactors,
     reorderFactors,
+    updateFactorParams,
     runScreening,
+    cancelScreening,
     getBacktestPreview,
     clearResults,
   }

@@ -159,9 +159,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
+import { useAbortableRequest } from '../composables/useAbortableRequest.js'
+
+const { createSignal, complete, abort } = useAbortableRequest()
 
 // State
 const bonds = ref([])
@@ -198,19 +201,22 @@ const paginatedBonds = computed(() => {
 
 // Methods
 async function fetchBonds() {
+  const signal = createSignal()
   loading.value = true
   error.value = ''
   try {
-    const data = await apiFetch('/api/v1/bond/convertible/list', 30000)
+    const data = await apiFetch('/api/v1/bond/convertible/list', { timeoutMs: 30000, signal })
     if (data?.bonds) {
       bonds.value = data.bonds
       totalBonds.value = data.total || data.bonds.length
       updateTime.value = new Date().toLocaleTimeString()
     }
   } catch (e) {
+    if (e.name === 'AbortError') return
     logger.warn('[ConvertibleBondPanel] fetch failed:', e)
     error.value = '加载失败，请稍后重试'
   } finally {
+    complete()
     loading.value = false
   }
 }
@@ -250,5 +256,12 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (refreshTimer) clearInterval(refreshTimer)
+  abort()
+})
+
+onDeactivated(() => {
+  if (refreshTimer) clearInterval(refreshTimer)
+  refreshTimer = null
+  abort()
 })
 </script>

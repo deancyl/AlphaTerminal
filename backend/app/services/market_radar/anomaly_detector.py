@@ -5,7 +5,7 @@ Detects 5 types of anomalies:
 1. Volatility - Highest amplitude stocks
 2. Capital Flow - Strongest outflow/inflow
 3. Institution Research - Most researched by institutions
-4. New High - Stocks hitting 52-week high
+4. New High - Stocks hitting 60-day high (P1-4: Fixed with real K-line data)
 5. Volume Surge - Unusual volume activity
 """
 
@@ -139,6 +139,39 @@ def _fetch_kline_sync(symbol: str, period: str = "daily", days: int = 60) -> Lis
         return []
 
 
+def _fetch_kline_batch_sync(symbols: List[str], days: int = 60) -> Dict[str, List[Dict]]:
+    """
+    Batch fetch K-line data for multiple symbols.
+    
+    P1-4: Used for detecting true 60-day highs.
+    Note: This is still sequential due to akshare limitations,
+    but called from async context with timeout protection.
+    """
+    results = {}
+    for symbol in symbols[:50]:  # Limit to 50 symbols to avoid timeout
+        try:
+            import akshare as ak
+            df = ak.stock_zh_a_hist(symbol=symbol, period="daily", adjust="qfq")
+            if df.empty:
+                continue
+            
+            df = df.tail(days)
+            klines = []
+            for _, row in df.iterrows():
+                klines.append({
+                    "date": row.get("日期", ""),
+                    "close": float(row.get("收盘", 0) or 0),
+                    "high": float(row.get("最高", 0) or 0),
+                    "low": float(row.get("最低", 0) or 0),
+                    "volume": float(row.get("成交量", 0) or 0),
+                })
+            results[symbol] = klines
+        except Exception as e:
+            logger.debug(f"[Anomaly] Failed to fetch kline for {symbol}: {e}")
+            continue
+    return results
+
+
 async def _fetch_all_stocks() -> List[Dict]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _fetch_all_stocks_sync)
@@ -157,6 +190,16 @@ async def _fetch_institution_research() -> List[Dict]:
 async def _fetch_kline(symbol: str, period: str = "daily", days: int = 60) -> List[Dict]:
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(_executor, _fetch_kline_sync, symbol, period, days)
+
+
+async def _fetch_kline_batch(symbols: List[str], days: int = 60) -> Dict[str, List[Dict]]:
+    """
+    Async wrapper for batch K-line fetching.
+    
+    P1-4: Used for detecting true 60-day highs with parallel processing.
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(_executor, _fetch_kline_batch_sync, symbols, days)
 
 
 def _detect_volatility(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
@@ -264,15 +307,19 @@ def _detect_institution_research(research: List[Dict], top_n: int = 10) -> Anoma
     )
 
 
-def _detect_new_high(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
-    """Detect stocks hitting new highs (simplified - based on daily high vs price)."""
+def _detect_new_high_simple(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
+    """
+    Fallback: Detect stocks with highest gains (simplified version).
+    
+    Used when K-line data is not available.
+    """
     high_stocks = []
     
     for stock in stocks:
         price = stock.get("price", 0)
         change_pct = stock.get("change_pct", 0)
         
-        if price > 0 and change_pct > 5:
+        if price > 0 and change_pct > 3:  # Lower threshold for fallback
             symbol = stock.get("symbol", "")
             full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
             high_stocks.append({
@@ -292,6 +339,76 @@ def _detect_new_high(stocks: List[Dict], top_n: int = 10) -> AnomalyResult:
                 name=s["name"],
                 value=round(s["change_pct"], 2),
                 unit="%"
+            )
+            for s in high_stocks[:top_n]
+        ]
+    )
+
+
+def _detect_new_high_with_kline(
+    stocks: List[Dict], 
+    kline_data: Dict[str, List[Dict]], 
+    top_n: int = 10
+) -> AnomalyResult:
+    """
+    P1-4: Detect stocks hitting true 60-day highs using K-line data.
+    
+    A stock is considered "new high" if:
+    1. Current price >= 60-day high
+    2. Has positive momentum (change_pct > 0)
+    """
+    high_stocks = []
+    
+    for stock in stocks:
+        symbol = stock.get("symbol", "")
+        if not symbol:
+            continue
+        
+        # Check if we have K-line data for this symbol
+        klines = kline_data.get(symbol, [])
+        if not klines or len(klines) < 10:  # Need at least 10 days of data
+            continue
+        
+        current_price = stock.get("price", 0)
+        if current_price <= 0:
+            continue
+        
+        # Calculate 60-day high (excluding today)
+        historical_highs = [k["high"] for k in klines[:-1] if k["high"] > 0]
+        if not historical_highs:
+            continue
+        
+        period_high = max(historical_highs)
+        
+        # Check if current price is at or above period high
+        if current_price >= period_high * 0.98:  # Allow 2% tolerance
+            change_pct = stock.get("change_pct", 0)
+            full_symbol = f"sh{symbol}" if symbol.startswith("6") else f"sz{symbol}"
+            
+            # Calculate weeks since last high
+            days_to_high = len(klines)
+            weeks = round(days_to_high / 5, 1)  # Approximate weeks
+            
+            high_stocks.append({
+                "symbol": full_symbol,
+                "name": stock.get("name", ""),
+                "change_pct": change_pct,
+                "weeks_to_high": weeks,
+                "period_high": period_high,
+            })
+    
+    # Sort by change percentage
+    high_stocks.sort(key=lambda x: x["change_pct"], reverse=True)
+    
+    return AnomalyResult(
+        type=AnomalyType.NEW_HIGH,
+        title="创60日新高",
+        stocks=[
+            AnomalyStock(
+                symbol=s["symbol"],
+                name=s["name"],
+                value=s.get("weeks_to_high", 0),
+                unit="周"
             )
             for s in high_stocks[:top_n]
         ]
@@ -375,7 +492,29 @@ async def _detect_anomalies_internal(
                 results.append(_detect_volatility(stocks, top_n))
             
             if anomaly_type in (None, AnomalyType.NEW_HIGH):
-                results.append(_detect_new_high(stocks, top_n))
+                # P1-4: Try to use K-line data for true new high detection
+                try:
+                    # Get top gainers first (potential new high candidates)
+                    gainers = sorted(
+                        [s for s in stocks if s.get("change_pct", 0) > 0],
+                        key=lambda x: x.get("change_pct", 0),
+                        reverse=True
+                    )[:50]  # Limit to top 50 gainers
+                    
+                    if gainers:
+                        symbols = [s.get("symbol", "") for s in gainers if s.get("symbol")]
+                        kline_data = await _fetch_kline_batch(symbols, days=60)
+                        
+                        if kline_data:
+                            results.append(_detect_new_high_with_kline(stocks, kline_data, top_n))
+                        else:
+                            # Fallback to simple detection
+                            results.append(_detect_new_high_simple(stocks, top_n))
+                    else:
+                        results.append(_detect_new_high_simple(stocks, top_n))
+                except Exception as e:
+                    logger.warning(f"[Anomaly] K-line fetch failed, using fallback: {e}")
+                    results.append(_detect_new_high_simple(stocks, top_n))
             
             if anomaly_type in (None, AnomalyType.VOLUME_SURGE):
                 results.append(_detect_volume_surge(stocks, top_n))

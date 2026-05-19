@@ -1,12 +1,14 @@
 <template>
   <div
     class="factor-funnel"
+    role="list"
+    aria-label="筛选漏斗"
     @dragover.prevent
     @drop="handleDrop"
   >
     <div class="factor-funnel__header">
       <span class="factor-funnel__title">筛选漏斗</span>
-      <span class="factor-funnel__count">{{ factors.length }} 个因子</span>
+      <span class="factor-funnel__count" aria-live="polite">{{ factors.length }} 个因子</span>
     </div>
     
     <div v-if="factors.length === 0" class="factor-funnel__empty">
@@ -20,11 +22,16 @@
         :key="factor.id"
         class="factor-funnel__item"
         :style="{ '--item-index': index }"
+        role="listitem"
+        :tabindex="0"
+        :aria-label="`第${index + 1}个因子: ${factor.name}`"
         draggable="true"
         @dragstart="handleItemDragStart($event, index)"
         @dragover.prevent="handleItemDragOver($event, index)"
         @drop="handleItemDrop($event, index)"
         @dragend="handleItemDragEnd"
+        @keydown.delete="handleKeyRemove(factor.id)"
+        @keydown.backspace.prevent="handleKeyRemove(factor.id)"
       >
         <div class="factor-funnel__item-connector" v-if="index > 0">
           <svg width="20" height="24" viewBox="0 0 20 24">
@@ -40,13 +47,24 @@
         <div class="factor-funnel__item-content">
           <div class="factor-funnel__item-order">{{ index + 1 }}</div>
           <div class="factor-funnel__item-name">{{ factor.name }}</div>
-          <button
+          <div class="factor-funnel__item-actions">
+            <button
+              v-if="hasConfigurableParams(factor)"
+              class="factor-funnel__item-config"
+              @click.stop="$emit('configure', factor)"
+              title="配置参数"
+            >
+              ⚙️
+            </button>
+<button
             class="factor-funnel__item-remove"
             @click.stop="$emit('remove', factor.id)"
+            :aria-label="`移除因子 ${factor.name}`"
             title="移除因子"
           >
-            ✕
-          </button>
+              ✕
+            </button>
+          </div>
         </div>
         
         <div class="factor-funnel__item-funnel">
@@ -74,7 +92,7 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['remove', 'reorder', 'add'])
+const emit = defineEmits(['remove', 'reorder', 'add', 'configure'])
 
 const draggedIndex = ref(null)
 const dropTargetIndex = ref(null)
@@ -118,6 +136,10 @@ function handleItemDragEnd() {
   dropTargetIndex.value = null
 }
 
+function handleKeyRemove(factorId) {
+  emit('remove', factorId)
+}
+
 function getFunnelPoints(index) {
   const total = props.factors.length
   if (total <= 1) return '0,0 100,0 100,8 0,8'
@@ -131,6 +153,18 @@ function getFunnelPoints(index) {
   const bottomRight = bottomLeft + bottomWidth
   
   return `${topLeft},0 ${topRight},0 ${bottomRight},8 ${bottomLeft},8`
+}
+
+// Factor parameter definitions
+const FACTOR_PARAMS = {
+  rsi_oversold: ['period', 'threshold'],
+  breakout_ma: ['period'],
+  volume_surge: ['multiplier', 'period'],
+  macd_golden_cross: ['fast', 'slow', 'signal'],
+}
+
+function hasConfigurableParams(factor) {
+  return factor.id in FACTOR_PARAMS
 }
 </script>
 
@@ -236,6 +270,13 @@ function getFunnelPoints(index) {
   background-color: var(--color-primary-bg);
 }
 
+.factor-funnel__item:focus-visible .factor-funnel__item-content {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-color: var(--color-primary-border);
+  background-color: var(--color-primary-bg);
+}
+
 .factor-funnel__item-order {
   display: flex;
   align-items: center;
@@ -256,6 +297,32 @@ function getFunnelPoints(index) {
   color: var(--text-primary);
 }
 
+.factor-funnel__item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.factor-funnel__item-config {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--easing-default);
+}
+
+.factor-funnel__item-config:hover {
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+}
+
 .factor-funnel__item-remove {
   display: flex;
   align-items: center;
@@ -274,6 +341,11 @@ function getFunnelPoints(index) {
 .factor-funnel__item-remove:hover {
   color: var(--color-danger);
   background-color: var(--color-danger-bg);
+}
+
+.factor-funnel__item-remove:focus-visible {
+  outline: 2px solid var(--color-danger);
+  outline-offset: 2px;
 }
 
 .factor-funnel__item-funnel {

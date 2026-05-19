@@ -7,6 +7,7 @@ Provides real-time stock screening with factor filters using akshare data.
 import asyncio
 import logging
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -48,6 +49,73 @@ class ScreeningResult:
     passed: bool = True
 
 
+class ThreadSafeCache:
+    """
+    Thread-safe cache with automatic TTL cleanup.
+    Used for both factor values and universe stock lists.
+    """
+    
+    def __init__(self, ttl: int = 300, max_entries: int = 10000):
+        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._lock = threading.Lock()
+        self._ttl = ttl
+        self._max_entries = max_entries
+        self._last_cleanup = time.time()
+        self._cleanup_interval = 60
+    
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                timestamp, value = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    return value
+                del self._cache[key]
+            return None
+    
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._cleanup_if_needed()
+            if len(self._cache) >= self._max_entries:
+                self._cleanup_expired()
+                if len(self._cache) >= self._max_entries:
+                    oldest_keys = sorted(self._cache.keys(), 
+                                         key=lambda k: self._cache[k][0])[:100]
+                    for k in oldest_keys:
+                        del self._cache[k]
+            self._cache[key] = (time.time(), value)
+    
+    def _cleanup_if_needed(self) -> None:
+        if time.time() - self._last_cleanup > self._cleanup_interval:
+            self._cleanup_expired()
+            self._last_cleanup = time.time()
+    
+    def _cleanup_expired(self) -> None:
+        now = time.time()
+        expired_keys = [
+            k for k, (ts, _) in self._cache.items()
+            if now - ts >= self._ttl
+        ]
+        for k in expired_keys:
+            del self._cache[k]
+    
+    def clear(self) -> None:
+        with self._lock:
+            self._cache.clear()
+    
+    def stats(self) -> Dict[str, Any]:
+        with self._lock:
+            now = time.time()
+            valid_entries = sum(
+                1 for ts, _ in self._cache.values()
+                if now - ts < self._ttl
+            )
+            return {
+                "total_entries": len(self._cache),
+                "valid_entries": valid_entries,
+                "ttl_seconds": self._ttl,
+            }
+
+
 class StockScreener:
     """
     Stock screening engine with factor-based filtering
@@ -55,15 +123,14 @@ class StockScreener:
     Features:
     - Multi-factor filtering with configurable parameters
     - Real-time data from akshare
-    - 5-minute factor value caching
+    - 5-minute factor value caching with automatic cleanup
     - Partial results on errors
     """
     
     def __init__(self):
         self._akshare = None
-        self._cache: Dict[str, Tuple[float, Any]] = {}
-        self._cache_ttl = 300  # 5 minutes
-        self._universe_cache: Dict[str, Tuple[float, List[Dict]]] = {}
+        self._cache = ThreadSafeCache(ttl=300, max_entries=50000)
+        self._universe_cache = ThreadSafeCache(ttl=300, max_entries=100)
     
     @property
     def ak(self):
@@ -83,17 +150,6 @@ class StockScreener:
         universe: Universe,
         limit: int = 50,
     ) -> Dict[str, Any]:
-        """
-        Screen stocks based on factor filters
-        
-        Args:
-            factors: List of factor filters with parameters
-            universe: Stock universe to screen
-            limit: Maximum number of results
-            
-        Returns:
-            Dict with 'stocks' and 'total' keys
-        """
         loop = asyncio.get_event_loop()
         
         def _sync_screen():
@@ -101,12 +157,21 @@ class StockScreener:
             
             stocks = self._get_universe_stocks(universe)
             if not stocks:
-                return {"stocks": [], "total": 0, "error": "Failed to get universe stocks"}
+                return {
+                    "stocks": [],
+                    "total": 0,
+                    "error": "Failed to get universe stocks",
+                    "progress": {"total_stocks": 0, "screened_stocks": 0}
+                }
+            
+            total_stocks = len(stocks)
+            max_screen = min(total_stocks, 500 if universe == Universe.ALL else 2000)
+            stocks_to_screen = stocks[:max_screen]
             
             results = []
             registry = get_factor_registry()
             
-            for stock in stocks[:500]:  # Limit to 500 for performance
+            for stock in stocks_to_screen:
                 try:
                     symbol = stock.get("symbol", "")
                     name = stock.get("name", "")
@@ -155,7 +220,7 @@ class StockScreener:
             results = results[:limit]
             
             elapsed = time.time() - start_time
-            logger.info(f"[Screener] Screened {len(stocks)} stocks in {elapsed:.2f}s, found {len(results)} matches")
+            logger.info(f"[Screener] Screened {len(stocks_to_screen)}/{total_stocks} stocks in {elapsed:.2f}s, found {len(results)} matches")
             
             return {
                 "stocks": [
@@ -168,18 +233,21 @@ class StockScreener:
                     for r in results
                 ],
                 "total": len(results),
+                "progress": {
+                    "total_stocks": total_stocks,
+                    "screened_stocks": len(stocks_to_screen),
+                    "universe": universe.value,
+                },
             }
         
         return await loop.run_in_executor(_executor, _sync_screen)
     
     def _get_universe_stocks(self, universe: Universe) -> List[Dict]:
-        """Get stock list for the specified universe"""
         cache_key = f"universe:{universe.value}"
         
-        if cache_key in self._universe_cache:
-            timestamp, data = self._universe_cache[cache_key]
-            if time.time() - timestamp < self._cache_ttl:
-                return data
+        cached = self._universe_cache.get(cache_key)
+        if cached is not None:
+            return cached
         
         try:
             if universe == Universe.ALL:
@@ -209,7 +277,7 @@ class StockScreener:
             else:
                 stocks = []
             
-            self._universe_cache[cache_key] = (time.time(), stocks)
+            self._universe_cache.set(cache_key, stocks)
             return stocks
             
         except Exception as e:
@@ -222,17 +290,11 @@ class StockScreener:
         factor_id: str,
         params: Dict[str, Any],
     ) -> Optional[float]:
-        """
-        Calculate factor value for a stock
-        
-        Returns normalized value between 0 and 1, or None if calculation fails
-        """
         cache_key = f"{symbol}:{factor_id}:{str(params)}"
         
-        if cache_key in self._cache:
-            timestamp, value = self._cache[cache_key]
-            if time.time() - timestamp < self._cache_ttl:
-                return value
+        cached = self._cache.get(cache_key)
+        if cached is not None:
+            return cached
         
         try:
             if factor_id == "macd_golden_cross":
@@ -243,8 +305,6 @@ class StockScreener:
                 value = self._check_breakout_ma(symbol, params)
             elif factor_id == "foreign_inflow":
                 value = self._check_foreign_inflow(symbol, params)
-            elif factor_id == "llm_sentiment":
-                value = self._check_llm_sentiment(symbol, params)
             elif factor_id == "volume_surge":
                 value = self._check_volume_surge(symbol, params)
             elif factor_id == "institution_research":
@@ -255,7 +315,7 @@ class StockScreener:
                 value = None
             
             if value is not None:
-                self._cache[cache_key] = (time.time(), value)
+                self._cache.set(cache_key, value)
             
             return value
             
@@ -391,12 +451,6 @@ class StockScreener:
         except Exception as e:
             logger.debug(f"[Screener] Foreign inflow check failed for {symbol}: {e}")
             return None
-    
-    def _check_llm_sentiment(self, symbol: str, params: Dict) -> Optional[float]:
-        """Check LLM sentiment score (placeholder - requires copilot integration)"""
-        min_score = params.get("min_score", 0.8)
-        
-        return 0.5
     
     def _check_volume_surge(self, symbol: str, params: Dict) -> Optional[float]:
         """Check for volume surge"""

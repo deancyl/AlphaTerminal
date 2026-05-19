@@ -10,9 +10,10 @@ Provides endpoints for:
 import asyncio
 import logging
 import time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 
 import numpy as np
 import pandas as pd
@@ -31,12 +32,141 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/factor_sandbox", tags=["factor_sandbox"])
 
-# Dedicated thread pool for CPU-bound factor calculations
 _executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="factor_sandbox_")
 
-# Cache for factor values (5 minutes)
-_factor_cache: Dict[str, tuple] = {}  # key: (symbol, factor_id), value: (timestamp, value)
-_CACHE_TTL = 300  # 5 minutes
+SENSITIVE_PATTERNS = [
+    r'/[\w/.-]+\.py',
+    r'line \d+',
+    r'Traceback',
+    r'File "',
+    r'Error:',
+    r'Exception:',
+    r'localhost',
+    r'127\.0\.0\.1',
+    r'0\.0\.0\.0',
+    r'password',
+    r'secret',
+    r'api[_-]?key',
+    r'token',
+]
+
+def sanitize_error_message(error: Exception) -> str:
+    import re
+    msg = str(error)
+    for pattern in SENSITIVE_PATTERNS:
+        msg = re.sub(pattern, '[REDACTED]', msg, flags=re.IGNORECASE)
+    if len(msg) > 100:
+        msg = msg[:100] + '...'
+    return msg
+
+USER_FRIENDLY_ERRORS = {
+    'ConnectionError': '网络连接失败，请检查网络设置',
+    'TimeoutError': '请求超时，请稍后重试',
+    'KeyError': '数据格式错误',
+    'ValueError': '参数错误',
+    'ImportError': '服务配置错误',
+}
+
+# Thread-safe cache for factor values with automatic cleanup
+class ThreadSafeFactorCache:
+    """
+    Thread-safe factor value cache with automatic TTL cleanup.
+    
+    Features:
+    - asyncio.Lock for async context protection
+    - threading.Lock for sync context protection (used in executor)
+    - Automatic cleanup of expired entries
+    - Max entries limit to prevent memory bloat
+    """
+    
+    def __init__(self, ttl: int = 300, max_entries: int = 10000):
+        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._async_lock = asyncio.Lock()
+        self._sync_lock = threading.Lock()
+        self._ttl = ttl
+        self._max_entries = max_entries
+        self._last_cleanup = time.time()
+        self._cleanup_interval = 60  # Cleanup every 60 seconds
+    
+    def get(self, key: str) -> Optional[Any]:
+        """Get cached value (sync, used in executor)"""
+        with self._sync_lock:
+            if key in self._cache:
+                timestamp, value = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    return value
+                else:
+                    # Remove expired entry
+                    del self._cache[key]
+            return None
+    
+    def set(self, key: str, value: Any) -> None:
+        """Set cached value (sync, used in executor)"""
+        with self._sync_lock:
+            # Cleanup if needed
+            self._cleanup_if_needed()
+            
+            # Enforce max entries limit
+            if len(self._cache) >= self._max_entries:
+                self._cleanup_expired()
+                if len(self._cache) >= self._max_entries:
+                    # Remove oldest entries
+                    oldest_keys = sorted(self._cache.keys(), 
+                                         key=lambda k: self._cache[k][0])[:100]
+                    for k in oldest_keys:
+                        del self._cache[k]
+            
+            self._cache[key] = (time.time(), value)
+    
+    async def get_async(self, key: str) -> Optional[Any]:
+        """Get cached value (async)"""
+        async with self._async_lock:
+            return self.get(key)
+    
+    async def set_async(self, key: str, value: Any) -> None:
+        """Set cached value (async)"""
+        async with self._async_lock:
+            self.set(key, value)
+    
+    def _cleanup_if_needed(self) -> None:
+        """Cleanup expired entries if interval elapsed"""
+        if time.time() - self._last_cleanup > self._cleanup_interval:
+            self._cleanup_expired()
+            self._last_cleanup = time.time()
+    
+    def _cleanup_expired(self) -> None:
+        """Remove all expired entries"""
+        now = time.time()
+        expired_keys = [
+            k for k, (ts, _) in self._cache.items()
+            if now - ts >= self._ttl
+        ]
+        for k in expired_keys:
+            del self._cache[k]
+    
+    def clear(self) -> None:
+        """Clear all cached entries"""
+        with self._sync_lock:
+            self._cache.clear()
+    
+    def stats(self) -> Dict[str, Any]:
+        """Get cache statistics"""
+        with self._sync_lock:
+            now = time.time()
+            valid_entries = sum(
+                1 for ts, _ in self._cache.values()
+                if now - ts < self._ttl
+            )
+            return {
+                "total_entries": len(self._cache),
+                "valid_entries": valid_entries,
+                "expired_entries": len(self._cache) - valid_entries,
+                "ttl_seconds": self._ttl,
+                "max_entries": self._max_entries,
+            }
+
+# Global thread-safe cache instance
+_factor_cache = ThreadSafeFactorCache(ttl=300, max_entries=10000)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -138,7 +268,8 @@ async def list_factors(
             "rsi_oversold", 
             "breakout_ma",
             "foreign_inflow",
-            "llm_sentiment",
+            # TODO: Integrate with copilot API for real sentiment analysis
+            # "llm_sentiment",
             "volume_surge",
             "institution_research",
             "new_high",
@@ -165,7 +296,8 @@ async def list_screening_factors():
         "rsi_oversold",
         "breakout_ma",
         "foreign_inflow",
-        "llm_sentiment",
+        # TODO: Integrate with copilot API for real sentiment analysis
+        # "llm_sentiment",
         "volume_surge",
         "institution_research",
         "new_high",
@@ -231,10 +363,12 @@ async def screen_stocks(req: ScreenRequest):
         
     except asyncio.TimeoutError:
         logger.error(f"[FactorSandbox] Screening timeout after 30s")
-        return error_response(ErrorCode.TIMEOUT_ERROR, "Screening timeout, please try with fewer factors")
+        return error_response(ErrorCode.TIMEOUT_ERROR, "筛选超时，请尝试减少因子数量或缩小股票范围")
     except Exception as e:
-        logger.error(f"[FactorSandbox] Screening error: {e}")
-        return error_response(ErrorCode.INTERNAL_ERROR, f"Screening failed: {str(e)}")
+        logger.error(f"[FactorSandbox] Screening error: {e}", exc_info=True)
+        error_type = type(e).__name__
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '筛选失败，请稍后重试')
+        return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
 
 
 @router.post("/backtest_preview")
@@ -326,24 +460,22 @@ async def backtest_preview(req: BacktestPreviewRequest):
         
     except asyncio.TimeoutError:
         logger.error(f"[FactorSandbox] Backtest preview timeout")
-        return error_response(ErrorCode.TIMEOUT_ERROR, "Backtest preview timeout")
+        return error_response(ErrorCode.TIMEOUT_ERROR, "回测预览超时，请稍后重试")
     except Exception as e:
-        logger.error(f"[FactorSandbox] Backtest preview error: {e}")
-        return error_response(ErrorCode.INTERNAL_ERROR, f"Backtest preview failed: {str(e)}")
+        logger.error(f"[FactorSandbox] Backtest preview error: {e}", exc_info=True)
+        error_type = type(e).__name__
+        user_msg = USER_FRIENDLY_ERRORS.get(error_type, '回测预览失败，请稍后重试')
+        return error_response(ErrorCode.INTERNAL_ERROR, user_msg)
 
 
 @router.get("/cache/stats")
 async def cache_stats():
     """Get factor cache statistics"""
-    return success_response({
-        "cache_entries": len(_factor_cache),
-        "cache_ttl_seconds": _CACHE_TTL,
-    })
+    return success_response(_factor_cache.stats())
 
 
 @router.post("/cache/clear")
 async def clear_cache():
     """Clear factor cache"""
-    global _factor_cache
-    _factor_cache = {}
+    _factor_cache.clear()
     return success_response({"message": "Cache cleared"})

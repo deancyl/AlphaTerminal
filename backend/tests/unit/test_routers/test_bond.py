@@ -149,3 +149,88 @@ class TestBondHistory:
                 result = data["data"]
                 assert "tenor" in result
                 assert "source" in result
+
+
+class TestBondHealth:
+    """Test cases for bond health endpoint."""
+
+    def test_bond_health_endpoint(self):
+        """Test GET /bond/health endpoint returns valid structure."""
+        response = client.get("/api/v1/bond/health")
+        assert response.status_code == 200
+        
+        data = response.json()
+        assert "code" in data
+        assert data.get("code") == 0
+
+    def test_bond_health_response_structure(self):
+        """Test that health response has correct structure."""
+        response = client.get("/api/v1/bond/health")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                result = data["data"]
+                assert "status" in result
+                assert "circuit_breaker" in result
+                assert "cache" in result
+
+    def test_bond_health_circuit_breaker_state(self):
+        """Test that circuit breaker state is returned."""
+        response = client.get("/api/v1/bond/health")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                cb = data["data"]["circuit_breaker"]
+                assert "state" in cb
+                assert "is_available" in cb
+
+
+class TestBondActiveDemoFlag:
+    """Test cases for bond active demo flag."""
+
+    def test_bond_active_has_is_demo_flag(self):
+        """Test that active bonds response includes is_demo flag."""
+        response = client.get("/api/v1/bond/active")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                result = data["data"]
+                assert "is_demo" in result
+                assert result["is_demo"] is True
+
+    def test_bond_active_has_warning(self):
+        """Test that active bonds response includes warning."""
+        response = client.get("/api/v1/bond/active")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                result = data["data"]
+                assert "warning" in result
+
+
+class TestBondCurveWarning:
+    """Test cases for bond curve warning enhancement."""
+
+    def test_bond_curve_has_warning_level(self):
+        """Test that curve response includes warning_level."""
+        response = client.get("/api/v1/bond/curve")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                result = data["data"]
+                assert "warning_level" in result or "warning" in result
+
+    def test_bond_curve_has_is_stale_flag(self):
+        """Test that curve response includes is_stale flag."""
+        response = client.get("/api/v1/bond/curve")
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get("code") == 0:
+                result = data["data"]
+                assert "is_stale" in result

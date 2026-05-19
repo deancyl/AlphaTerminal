@@ -179,6 +179,7 @@ const aiNavItems = [
   { id: 'factor-sandbox', label: '因子沙盒', icon: '🔬' },
   { id: 'market-radar', label: '市场雷达', icon: '📡' },
   { id: 'timemachine', label: '时光机', icon: '⏰' },
+  { id: 'multi-asset-matrix', label: '四屏矩阵', icon: '📊' },
   { id: 'walk-forward', label: '滚动前向分析', icon: '📊' },
 ]
 

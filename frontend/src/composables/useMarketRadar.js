@@ -2,11 +2,59 @@
  * useMarketRadar.js - Composable for Market Heat Radar API
  * 
  * Provides treemap data and anomaly detection for market visualization
+ * 
+ * Features:
+ * - P1-5: Data source tracking with name, type, and timestamp
+ * - P2-8: Configurable refresh interval with localStorage persistence
  */
 
-import { ref, shallowRef } from 'vue'
+import { ref, shallowRef, watch, onMounted, onBeforeUnmount } from 'vue'
 import { apiFetchDeduped } from '@/utils/api.js'
 import { logger } from '@/utils/logger.js'
+
+// P2-8: Refresh interval options (in milliseconds)
+export const REFRESH_INTERVAL_OPTIONS = [
+  { label: '30秒', value: 30000 },
+  { label: '60秒', value: 60000 },
+  { label: '2分钟', value: 120000 },
+  { label: '5分钟', value: 300000 },
+  { label: '关闭', value: 0 },
+]
+
+// P2-8: localStorage key for refresh interval
+const STORAGE_KEY_REFRESH_INTERVAL = 'market_radar_refresh_interval'
+
+/**
+ * Get refresh interval from localStorage
+ * @returns {number} Refresh interval in milliseconds
+ */
+function getStoredRefreshInterval() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY_REFRESH_INTERVAL)
+    if (stored) {
+      const parsed = parseInt(stored, 10)
+      // Validate that it's a valid option
+      if (REFRESH_INTERVAL_OPTIONS.some(opt => opt.value === parsed)) {
+        return parsed
+      }
+    }
+  } catch (e) {
+    logger.warn('[MarketRadar] Failed to read localStorage:', e)
+  }
+  return 60000 // Default: 60 seconds
+}
+
+/**
+ * Save refresh interval to localStorage
+ * @param {number} interval - Refresh interval in milliseconds
+ */
+function saveRefreshInterval(interval) {
+  try {
+    localStorage.setItem(STORAGE_KEY_REFRESH_INTERVAL, String(interval))
+  } catch (e) {
+    logger.warn('[MarketRadar] Failed to save localStorage:', e)
+  }
+}
 
 /**
  * Market Radar composable for treemap and anomaly data
@@ -19,6 +67,11 @@ export function useMarketRadar() {
   const loading = ref(false)
   const error = ref(null)
   const lastUpdate = ref(null)
+  const dataSource = ref(null) // P1-5: Data source status
+  
+  // P2-8: Refresh interval state
+  const refreshInterval = ref(getStoredRefreshInterval())
+  let refreshTimer = null
   
   /**
    * Fetch treemap data for market visualization
@@ -35,12 +88,31 @@ export function useMarketRadar() {
       
       treemapData.value = response?.data || []
       lastUpdate.value = response?.last_update || new Date().toISOString()
+      
+      // P1-5: Extract data source information
+      if (response?.source_detail) {
+        dataSource.value = {
+          name: response.source_detail.name || '未知',
+          type: response.source_detail.type || '缓存',
+          api: response.source_detail.api || '',
+          timestamp: response.last_update
+        }
+      } else if (response?.data_source) {
+        // Fallback for simpler data_source field
+        dataSource.value = {
+          name: response.data_source === 'akshare' ? '东方财富' : '缓存',
+          type: response.data_source === 'akshare' ? '实时' : '缓存',
+          timestamp: response.last_update
+        }
+      }
+      
       error.value = null
       
       logger.info('[MarketRadar] Treemap data loaded:', treemapData.value.length, 'items')
     } catch (e) {
       logger.error('[MarketRadar] Failed to fetch treemap:', e)
       error.value = e.message || '加载失败'
+      dataSource.value = null
       throw e
     }
   }
@@ -105,6 +177,53 @@ export function useMarketRadar() {
     }
   }
   
+  /**
+   * P2-8: Set refresh interval and persist to localStorage
+   * @param {number} interval - Refresh interval in milliseconds
+   */
+  function setRefreshInterval(interval) {
+    refreshInterval.value = interval
+    saveRefreshInterval(interval)
+    
+    // Restart timer with new interval
+    stopAutoRefresh()
+    if (interval > 0) {
+      startAutoRefresh()
+    }
+    
+    logger.info('[MarketRadar] Refresh interval set to:', interval, 'ms')
+  }
+  
+  /**
+   * P2-8: Start auto-refresh timer
+   */
+  function startAutoRefresh() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+    }
+    
+    if (refreshInterval.value > 0) {
+      refreshTimer = setInterval(() => {
+        refresh()
+      }, refreshInterval.value)
+    }
+  }
+  
+  /**
+   * P2-8: Stop auto-refresh timer
+   */
+  function stopAutoRefresh() {
+    if (refreshTimer) {
+      clearInterval(refreshTimer)
+      refreshTimer = null
+    }
+  }
+  
+  // P2-8: Watch for interval changes
+  watch(refreshInterval, (newInterval) => {
+    saveRefreshInterval(newInterval)
+  })
+  
   return {
     // State
     treemapData,
@@ -112,12 +231,17 @@ export function useMarketRadar() {
     loading,
     error,
     lastUpdate,
+    dataSource, // P1-5: Expose data source
+    refreshInterval, // P2-8: Expose refresh interval
     
     // Methods
     fetchTreemap,
     fetchAnomalies,
     refresh,
     formatTime,
+    setRefreshInterval, // P2-8: Set refresh interval
+    startAutoRefresh, // P2-8: Start timer
+    stopAutoRefresh, // P2-8: Stop timer
   }
 }
 

@@ -9,7 +9,10 @@
           class="w-2 h-2 rounded-full"
           :style="{ backgroundColor: panel.color }"
         />
-        <span class="font-medium text-sm text-primary">{{ panel.name }}</span>
+        <div>
+          <span class="font-medium text-sm text-primary">{{ panel.name }}</span>
+          <span class="text-xs text-muted ml-1">{{ panel.description }}</span>
+        </div>
       </div>
       <span class="text-xs text-muted font-data">{{ panel.subtitle }}</span>
     </header>

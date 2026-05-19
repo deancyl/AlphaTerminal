@@ -2,6 +2,8 @@
 Treemap Builder - Build ECharts treemap data from market data.
 
 Uses akshare to fetch sector and stock data, then formats for ECharts treemap series.
+
+OPTIMIZED: Uses asyncio.gather() for parallel fetching to avoid N+1 API calls.
 """
 
 import logging
@@ -13,6 +15,11 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="treemap_")
+
+# Data source tracking
+DATA_SOURCE_AKSHARE = "akshare"
+DATA_SOURCE_CACHE = "cache"
+DATA_SOURCE_FALLBACK = "fallback"
 
 
 def _fetch_sectors_sync() -> List[Dict]:
@@ -32,8 +39,8 @@ def _fetch_sectors_sync() -> List[Dict]:
         return []
 
 
-def _fetch_sector_stocks_sync(sector_name: str) -> List[Dict]:
-    """Fetch stocks in a specific sector."""
+def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
+    """Fetch stocks in a specific sector. Returns (sector_name, stocks_list) for parallel processing."""
     try:
         import akshare as ak
         df = ak.stock_board_industry_cons_em(symbol=sector_name)
@@ -48,10 +55,10 @@ def _fetch_sector_stocks_sync(sector_name: str) -> List[Dict]:
                 "amount": float(row.get("成交额", 0) or 0),
                 "market_cap": float(row.get("总市值", 0) or 0),
             })
-        return stocks
+        return (sector_name, stocks)
     except Exception as e:
         logger.warning(f"[Treemap] Failed to fetch stocks for {sector_name}: {e}")
-        return []
+        return (sector_name, [])
 
 
 def _fetch_all_stocks_sync() -> List[Dict]:
@@ -88,10 +95,42 @@ async def _fetch_sectors() -> List[Dict]:
     return await loop.run_in_executor(_executor, _fetch_sectors_sync)
 
 
-async def _fetch_sector_stocks(sector_name: str) -> List[Dict]:
-    """Async wrapper for sector stocks fetching."""
+async def _fetch_sector_stocks_batch(sector_names: List[str]) -> Dict[str, List[Dict]]:
+    """
+    Batch fetch stocks for multiple sectors using asyncio.gather().
+    
+    OPTIMIZATION: Instead of N sequential API calls, use parallel fetching.
+    This reduces total time from N * T to max(T) where T is single API call time.
+    
+    Args:
+        sector_names: List of sector names to fetch
+        
+    Returns:
+        Dictionary mapping sector_name to list of stocks
+    """
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(_executor, _fetch_sector_stocks_sync, sector_name)
+    
+    # Create parallel tasks for all sectors
+    tasks = [
+        loop.run_in_executor(_executor, _fetch_sector_stocks_sync, name)
+        for name in sector_names
+    ]
+    
+    # Execute all tasks in parallel
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    # Build result dictionary
+    sector_stocks_map = {}
+    for result in results:
+        if isinstance(result, Exception):
+            logger.warning(f"[Treemap] Parallel fetch error: {result}")
+            continue
+        if isinstance(result, tuple) and len(result) == 2:
+            sector_name, stocks = result
+            if stocks:
+                sector_stocks_map[sector_name] = stocks
+    
+    return sector_stocks_map
 
 
 async def _fetch_all_stocks() -> List[Dict]:
@@ -112,7 +151,8 @@ async def get_sector_stocks(sector_name: str, timeout: float = 15.0) -> List[Dic
         List of stock dictionaries
     """
     try:
-        return await asyncio.wait_for(_fetch_sector_stocks(sector_name), timeout=timeout)
+        result = await _fetch_sector_stocks_batch([sector_name])
+        return result.get(sector_name, [])
     except asyncio.TimeoutError:
         logger.warning(f"[Treemap] Timeout fetching stocks for {sector_name}")
         return []
@@ -130,7 +170,7 @@ async def build_treemap_data(
         timeout: Request timeout in seconds
         
     Returns:
-        Dictionary with treemap data and metadata
+        Dictionary with treemap data and metadata including data_source info
     """
     try:
         if level == "sector":
@@ -139,28 +179,53 @@ async def build_treemap_data(
             return await asyncio.wait_for(_build_stock_treemap(), timeout=timeout)
     except asyncio.TimeoutError:
         logger.error("[Treemap] Timeout building treemap data")
-        return {"data": [], "last_update": datetime.now().isoformat(), "error": "timeout"}
+        return {
+            "data": [],
+            "last_update": datetime.now().isoformat(),
+            "data_source": DATA_SOURCE_FALLBACK,
+            "error": "timeout"
+        }
 
 
 async def _build_sector_treemap() -> Dict[str, Any]:
-    """Build treemap with sector aggregation."""
-    sectors = await _fetch_sectors()
+    """
+    Build treemap with sector aggregation.
+    
+    OPTIMIZED: Uses asyncio.gather() for parallel sector stock fetching.
+    """
+    # Fetch sectors and all stocks in parallel
+    sectors, all_stocks = await asyncio.gather(
+        _fetch_sectors(),
+        _fetch_all_stocks()
+    )
+    
     if not sectors:
         logger.warning("[Treemap] No sectors fetched")
-        return {"data": [], "last_update": datetime.now().isoformat()}
+        return {
+            "data": [],
+            "last_update": datetime.now().isoformat(),
+            "data_source": DATA_SOURCE_FALLBACK
+        }
     
-    all_stocks = await _fetch_all_stocks()
     if not all_stocks:
         logger.warning("[Treemap] No stocks fetched")
-        return {"data": [], "last_update": datetime.now().isoformat()}
+        return {
+            "data": [],
+            "last_update": datetime.now().isoformat(),
+            "data_source": DATA_SOURCE_FALLBACK
+        }
     
     stock_by_symbol = {s["symbol"]: s for s in all_stocks}
     
+    # OPTIMIZATION: Batch fetch all sector stocks in parallel
+    # Instead of 30 sequential calls, use single parallel batch
+    sector_names = [s["name"] for s in sectors[:30]]
+    sector_stocks_map = await _fetch_sector_stocks_batch(sector_names)
+    
     treemap_data = []
     
-    for sector in sectors[:30]:
-        sector_name = sector["name"]
-        sector_stocks = await _fetch_sector_stocks(sector_name)
+    for sector_name in sector_names:
+        sector_stocks = sector_stocks_map.get(sector_name, [])
         
         if not sector_stocks:
             continue
@@ -206,6 +271,12 @@ async def _build_sector_treemap() -> Dict[str, Any]:
     return {
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),
+        "data_source": DATA_SOURCE_AKSHARE,
+        "source_detail": {
+            "name": "东方财富",
+            "type": "实时",
+            "api": "akshare.stock_board_industry_name_em"
+        }
     }
 
 
@@ -215,7 +286,11 @@ async def _build_stock_treemap() -> Dict[str, Any]:
     
     if not all_stocks:
         logger.warning("[Treemap] No stocks fetched for stock-level treemap")
-        return {"data": [], "last_update": datetime.now().isoformat()}
+        return {
+            "data": [],
+            "last_update": datetime.now().isoformat(),
+            "data_source": DATA_SOURCE_FALLBACK
+        }
     
     treemap_data = []
     
@@ -242,4 +317,10 @@ async def _build_stock_treemap() -> Dict[str, Any]:
     return {
         "data": treemap_data,
         "last_update": datetime.now().isoformat(),
+        "data_source": DATA_SOURCE_AKSHARE,
+        "source_detail": {
+            "name": "东方财富",
+            "type": "实时",
+            "api": "akshare.stock_zh_a_spot_em"
+        }
     }

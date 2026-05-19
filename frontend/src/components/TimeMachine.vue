@@ -1,8 +1,9 @@
 <template>
-  <div class="flex flex-col h-full bg-base">
-    <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-3 bg-surface border-b border-border-base">
-      <div class="flex items-center gap-4">
+  <div class="flex flex-col h-full bg-base" :class="{ 'landscape-immersive': isLandscape && isMobile }">
+    <!-- Header (hidden in landscape immersive mode) -->
+    <div v-if="!(isLandscape && isMobile)" class="flex items-center justify-between px-4 py-3 bg-surface border-b border-border-base">
+      <!-- Desktop: Full header -->
+      <div v-if="!isMobile" class="flex items-center gap-4">
         <h2 class="text-lg font-semibold text-primary">时光机复盘</h2>
         
         <!-- Symbol Selector -->
@@ -20,8 +21,25 @@
         </select>
       </div>
       
-      <!-- Date Range -->
-      <div class="flex items-center gap-3">
+      <!-- Mobile: Compact header -->
+      <div v-else class="flex items-center gap-2 flex-1 min-w-0">
+        <h2 class="text-base font-semibold text-primary whitespace-nowrap">时光机</h2>
+        <select
+          v-model="symbol"
+          :disabled="!!session"
+          class="flex-1 min-w-0 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
+                 focus:border-primary focus:outline-none text-xs min-h-[44px]"
+        >
+          <option value="sh600519">贵州茅台</option>
+          <option value="sh600036">招商银行</option>
+          <option value="sh601318">中国平安</option>
+          <option value="sz000001">平安银行</option>
+          <option value="sz000858">五粮液</option>
+        </select>
+      </div>
+      
+      <!-- Date Range & Actions -->
+      <div v-if="!isMobile" class="flex items-center gap-3">
         <input
           v-model="startDate"
           type="date"
@@ -57,10 +75,65 @@
           结束复盘
         </button>
       </div>
+      
+      <!-- Mobile: Action buttons only -->
+      <div v-else class="flex items-center gap-2">
+        <button
+          v-if="!session"
+          @click="handleCreateSession"
+          :disabled="loading || !symbol || !startDate || !endDate"
+          class="px-3 py-2 bg-primary text-white rounded-lg text-xs font-medium
+                 hover:bg-primary-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+        >
+          {{ loading ? '加载...' : '开始' }}
+        </button>
+        <template v-else>
+          <button
+            @click="showTradePanel = true"
+            class="px-3 py-2 bg-primary text-white rounded-lg text-xs font-medium min-h-[44px]"
+          >
+            交易
+          </button>
+          <button
+            @click="handleEndSession"
+            class="px-3 py-2 bg-danger text-white rounded-lg text-xs font-medium min-h-[44px]"
+          >
+            结束
+          </button>
+        </template>
+      </div>
+    </div>
+    
+    <!-- Landscape Immersive Mode: Exit Button -->
+    <button
+      v-if="isLandscape && isMobile"
+      @click="unlockOrientation"
+      class="absolute top-2 right-2 z-50 px-3 py-2 bg-surface/80 backdrop-blur rounded-lg text-xs font-medium text-primary border border-border-base min-h-[44px]"
+    >
+      退出横屏
+    </button>
+    
+    <!-- Mobile: Date Range (shown below header when no session) -->
+    <div v-if="isMobile && !session" class="flex items-center gap-2 px-4 py-2 bg-surface border-b border-border-base">
+      <input
+        v-model="startDate"
+        type="date"
+        :disabled="!!session"
+        class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
+               focus:border-primary focus:outline-none text-xs min-h-[44px]"
+      />
+      <span class="text-secondary text-xs">至</span>
+      <input
+        v-model="endDate"
+        type="date"
+        :disabled="!!session"
+        class="flex-1 px-2 py-2 bg-base rounded-lg border border-border-base text-primary
+               focus:border-primary focus:outline-none text-xs min-h-[44px]"
+      />
     </div>
     
     <!-- Main Content -->
-    <div class="flex-1 flex gap-4 p-4 min-h-0">
+    <div class="flex-1 flex gap-4 p-4 min-h-0" :class="{ 'flex-col': isMobile }">
       <!-- K-line Chart Area -->
       <div class="flex-1 bg-surface rounded-xl border border-border-base overflow-hidden relative">
         <!-- Empty State -->
@@ -68,12 +141,18 @@
           v-if="!session"
           class="absolute inset-0 flex items-center justify-center"
         >
-          <div class="text-center">
+          <div class="text-center max-w-md px-4">
             <svg class="w-16 h-16 text-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                     d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p class="text-secondary text-sm">选择股票和日期范围，开始时光机复盘</p>
+            <h3 class="text-lg font-semibold text-primary mb-2">沉浸式历史复盘</h3>
+            <p class="text-secondary text-sm mb-3">在历史行情中练习交易决策，提升实战能力</p>
+            <p class="text-xs text-muted">选择股票和日期范围，开始时光机复盘</p>
+            <p class="text-xs text-muted mt-1">当前仅支持日线级别复盘</p>
+            <div class="mt-4 text-xs text-muted space-y-1">
+              <p>⌨️ 快捷键：<span class="text-secondary">空格</span> 播放/暂停 | <span class="text-secondary">←→</span> 单步前进/后退</p>
+            </div>
           </div>
         </div>
         
@@ -85,6 +164,7 @@
           <div class="text-center">
             <div class="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
             <p class="text-secondary text-sm">加载历史数据...</p>
+            <p class="text-xs text-muted mt-1" v-if="totalBars > 0">{{ currentBar }}/{{ totalBars }} 根K线</p>
           </div>
         </div>
         
@@ -110,9 +190,9 @@
         </template>
       </div>
       
-      <!-- Paper Trading Panel -->
+      <!-- Desktop: Paper Trading Panel (side-by-side) -->
       <PaperTradingPanel
-        v-if="session"
+        v-if="session && !isMobile"
         :portfolio="portfolio"
         :trades="trades"
         :current-price="currentPrice"
@@ -120,10 +200,25 @@
       />
     </div>
     
+    <!-- Mobile: Paper Trading Panel (BottomSheet) -->
+    <BottomSheet
+      v-if="session && isMobile"
+      v-model="showTradePanel"
+      title="模拟交易"
+    >
+      <PaperTradingPanel
+        :portfolio="portfolio"
+        :trades="trades"
+        :current-price="currentPrice"
+        @trade="handleTrade"
+      />
+    </BottomSheet>
+    
     <!-- Progress Bar -->
     <div v-if="session && totalBars > 0" class="px-4 pb-4">
       <div
         class="relative h-2 bg-surface rounded-full overflow-hidden cursor-pointer"
+        :class="{ 'h-3': isMobile }"
         @click="handleProgressClick"
         ref="progressBar"
       >
@@ -133,10 +228,11 @@
           :style="{ width: `${progressPct}%` }"
         />
         
-        <!-- Draggable Cursor -->
+        <!-- Draggable Cursor (48px touch target on mobile) -->
         <div
-          class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md cursor-grab active:cursor-grabbing"
-          :style="{ left: `calc(${progressPct}% - 6px)` }"
+          class="absolute top-1/2 -translate-y-1/2 bg-white rounded-full shadow-md cursor-grab active:cursor-grabbing"
+          :class="isMobile ? 'w-12 h-12 -translate-y-1/2' : 'w-3 h-3'"
+          :style="isMobile ? { left: `calc(${progressPct}% - 24px)` } : { left: `calc(${progressPct}% - 6px)` }"
           @mousedown="startDrag"
           @touchstart="startDrag"
         />
@@ -163,11 +259,24 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useOrientation } from '@/composables/useOrientation.js'
 import { useTimeMachine } from '@/composables/useTimeMachine.js'
 import { buildChartData } from '@/utils/chartDataBuilder.js'
 import BaseKLineChart from '@/components/BaseKLineChart.vue'
 import PlaybackControls from '@/components/timemachine/PlaybackControls.vue'
 import PaperTradingPanel from '@/components/timemachine/PaperTradingPanel.vue'
+import BottomSheet from '@/components/BottomSheet.vue'
+
+// Mobile detection
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isMobile = breakpoints.smaller('md') // < 768px
+
+// Orientation detection for landscape immersive mode
+const { isLandscape, lockOrientation, unlockOrientation } = useOrientation()
+
+// Mobile-specific state
+const showTradePanel = ref(false)
 
 // TimeMachine composable
 const {
@@ -292,3 +401,14 @@ function startDrag(e) {
   document.addEventListener('touchend', handleEnd)
 }
 </script>
+
+<style scoped>
+.landscape-immersive {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+</style>

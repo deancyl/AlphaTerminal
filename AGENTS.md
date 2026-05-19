@@ -3816,3 +3816,346 @@ cd frontend && npm run build  # Expected: Success
 ```
 
 
+---
+
+## Bond Module Optimization Summary (v0.6.53)
+
+### Overview
+
+A comprehensive 20-iteration optimization cycle addressing Top 10 QA/UX issues in the Bond module, focusing on stability, data safety, and user experience.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Scheduler references non-existent function | P0 | Fix `_fetch_bond_data_async` → `_fetch_curve_data_for_cache` | ✅ Fixed |
+| No circuit breaker protection | P0 | Add `CircuitBreaker` to bond.py | ✅ Fixed |
+| No rate limiting for bond endpoints | P0 | Add `"bond"` category to rate_limit.py | ✅ Fixed |
+| Missing AbortController | P0 | Add `useAbortableRequest` to 3 components | ✅ Fixed |
+| Bare number timeout ignored | P0 | Fix `apiFetch(url, N)` → `apiFetch(url, { timeoutMs: N })` | ✅ Fixed |
+| Data source warning not prominent | P1 | Add `warning_level` + `is_stale` flags | ✅ Fixed |
+| Active bonds is mock data | P1 | Add `is_demo: true` flag + warning | ✅ Fixed |
+| Watch handlers without debounce | P1 | Add `useDebounceFn(300ms)` to watchers | ✅ Fixed |
+| Skeleton layout mismatch | P2 | Fix 4 rows → 6 tenors | ✅ Fixed |
+| ECharts dispose unsafe | P2 | Use `safeDispose` in YieldSpreadChart | ✅ Fixed |
+
+### New Features
+
+| Feature | Description |
+|---------|-------------|
+| `/api/v1/bond/health` | Health check endpoint with circuit breaker state |
+| Circuit Breaker | 5 failures → mock fallback, 60s timeout |
+| Rate Limiting | 30 requests per 60 seconds |
+| AbortController | Request cancellation on unmount/deactivate |
+| Debounced Watchers | 300ms debounce on tenor/period changes |
+
+### Files Modified
+
+**Backend**:
+- `backend/app/services/scheduler.py` - Fixed function reference
+- `backend/app/routers/bond.py` - Added circuit breaker, health endpoint, enhanced warnings
+- `backend/app/config/rate_limit.py` - Added bond category
+
+**Frontend**:
+- `frontend/src/components/BondDashboard.vue` - AbortController, skeleton fix
+- `frontend/src/components/BondHistoryModal.vue` - AbortController, debounce
+- `frontend/src/components/ConvertibleBondPanel.vue` - AbortController, timeout fix
+- `frontend/src/components/YieldSpreadChart.vue` - safeDispose
+
+**Tests**:
+- `backend/tests/unit/test_routers/test_bond.py` - 19 tests (all pass)
+
+### Verification Commands
+
+```bash
+# Health check
+curl http://localhost:60100/api/v1/bond/health | jq '.data.circuit_breaker'
+
+# Circuit breaker state
+grep "_bond_cb" backend/app/routers/bond.py  # Expected: 5+
+
+# Rate limiting
+grep '"bond":' backend/app/config/rate_limit.py  # Expected: 1
+
+# AbortController usage
+grep -c "useAbortableRequest" frontend/src/components/BondDashboard.vue  # Expected: 3+
+
+# Debounce
+grep -c "useDebounceFn" frontend/src/components/BondHistoryModal.vue  # Expected: 1+
+
+# Tests
+cd backend && python3 -m pytest tests/unit/test_routers/test_bond.py -v  # Expected: 19 passed
+```
+
+### Summary
+
+| Wave | Focus | Tasks | Status |
+|------|-------|-------|--------|
+| Wave 1 | P0 Backend Critical | 4 | ✅ Complete |
+| Wave 2 | P0 Frontend Critical | 4 | ✅ Complete |
+| Wave 3 | P1 Backend | 3 | ✅ Complete |
+| Wave 4 | P1 Frontend | 3 | ✅ Complete |
+| Wave 5 | P2 Performance | 3 | ✅ Complete |
+| Wave 6 | Testing & Docs | 3 | ✅ Complete |
+| **Total** | | **20** | **100% Complete** |
+
+---
+
+## Factor Sandbox Module Optimization Summary (v0.6.53)
+
+### Overview
+
+A comprehensive 20-wave optimization cycle addressing Top 10 QA/UX issues in the Factor Sandbox module.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Backend cache no lock protection | P0 | ThreadSafeCache with asyncio.Lock + threading.Lock | ✅ Fixed |
+| Screener singleton cache memory leak | P0 | Auto cleanup + max entries limit | ✅ Fixed |
+| Frontend ECharts memory leak | P0 | shallowRef + onDeactivated + cleanupPreviewChart() | ✅ Fixed |
+| Full market screening no pagination | P1 | Progress indicator (screened/total) | ✅ Fixed |
+| Drag no touch support | P1 | Long press drag + touch events + ghost element | ✅ Fixed |
+| Screening no cancel mechanism | P1 | AbortController + cancel button | ✅ Fixed |
+| Error message leaks sensitive info | P1 | sanitize_error_message() + USER_FRIENDLY_ERRORS | ✅ Fixed |
+| Factor params no UI | P2 | Parameter config modal per factor | ✅ Fixed |
+| No keyboard navigation | P2 | tabindex + @keydown handlers + ARIA attributes | ✅ Fixed |
+| Results no virtual scrolling | P2 | VirtualizedTable integration | ✅ Fixed |
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `backend/tests/unit/test_routers/test_factor_sandbox.py` | Backend unit tests |
+| `frontend/tests/components/FactorSandbox.test.js` | Frontend component tests |
+| `frontend/tests/composables/useFactorSandbox.test.js` | Composable tests |
+
+### Thread-Safe Cache Implementation
+
+```python
+class ThreadSafeCache:
+    def __init__(self, ttl: int = 300, max_entries: int = 10000):
+        self._cache: Dict[str, Tuple[float, Any]] = {}
+        self._lock = threading.Lock()
+        self._ttl = ttl
+        self._max_entries = max_entries
+    
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key in self._cache:
+                timestamp, value = self._cache[key]
+                if time.time() - timestamp < self._ttl:
+                    return value
+                del self._cache[key]
+            return None
+    
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._cleanup_if_needed()
+            if len(self._cache) >= self._max_entries:
+                self._cleanup_expired()
+            self._cache[key] = (time.time(), value)
+```
+
+### Touch Drag Implementation
+
+```javascript
+// Long press detection
+const LONG_PRESS_DURATION = 300
+let longPressTimer = null
+
+function handleTouchStart(event) {
+  longPressTimer = setTimeout(() => {
+    isTouchDragging.value = true
+    if (navigator.vibrate) navigator.vibrate(50)
+  }, LONG_PRESS_DURATION)
+}
+
+function handleTouchMove(event) {
+  if (!isTouchDragging.value) return
+  event.preventDefault()
+  updateTouchGhostPosition(touch.clientX, touch.clientY)
+}
+
+function handleTouchEnd(event) {
+  if (isTouchDragging.value) {
+    const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY)
+    if (dropTarget?.closest('.factor-funnel')) {
+      emit('touchdrop', props.factor)
+    }
+  }
+}
+```
+
+### Error Message Sanitization
+
+```python
+SENSITIVE_PATTERNS = [
+    r'/[\w/.-]+\.py',
+    r'line \d+',
+    r'Traceback',
+    r'password',
+    r'api[_-]?key',
+    r'token',
+]
+
+USER_FRIENDLY_ERRORS = {
+    'ConnectionError': '网络连接失败，请检查网络设置',
+    'TimeoutError': '请求超时，请稍后重试',
+    'KeyError': '数据格式错误',
+    'ValueError': '参数错误',
+}
+```
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/factor_sandbox/factors` | List all factors |
+| GET | `/api/v1/factor_sandbox/factors/screening` | List screening factors |
+| POST | `/api/v1/factor_sandbox/screen` | Screen stocks with factors |
+| POST | `/api/v1/factor_sandbox/backtest_preview` | Quick backtest preview |
+| GET | `/api/v1/factor_sandbox/cache/stats` | Cache statistics |
+| POST | `/api/v1/factor_sandbox/cache/clear` | Clear cache |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Backend Router | `backend/app/routers/factor_sandbox.py` |
+| Screener Service | `backend/app/services/factor_sandbox/screener.py` |
+| Frontend Component | `frontend/src/components/factor/FactorSandbox.vue` |
+| Frontend Composable | `frontend/src/composables/useFactorSandbox.js` |
+| Drag Item Component | `frontend/src/components/factor/FactorDragItem.vue` |
+| Funnel Component | `frontend/src/components/factor/FactorFunnel.vue` |
+
+### Verification Commands
+
+```bash
+# Thread-safe cache
+grep -c "ThreadSafeCache" backend/app/routers/factor_sandbox.py  # Expected: 2+
+grep -c "threading.Lock" backend/app/services/factor_sandbox/screener.py  # Expected: 1+
+
+# ECharts cleanup
+grep -c "onDeactivated" frontend/src/components/factor/FactorSandbox.vue  # Expected: 1+
+grep -c "cleanupPreviewChart" frontend/src/components/factor/FactorSandbox.vue  # Expected: 3+
+
+# Touch support
+grep -c "handleTouchStart" frontend/src/components/factor/FactorDragItem.vue  # Expected: 1+
+grep -c "LONG_PRESS_DURATION" frontend/src/components/factor/FactorDragItem.vue  # Expected: 1+
+
+# Cancel mechanism
+grep -c "AbortController" frontend/src/composables/useFactorSandbox.js  # Expected: 3+
+grep -c "cancelScreening" frontend/src/composables/useFactorSandbox.js  # Expected: 2+
+
+# Error sanitization
+grep -c "USER_FRIENDLY_ERRORS" backend/app/routers/factor_sandbox.py  # Expected: 2+
+
+# Tests
+pytest backend/tests/unit/test_routers/test_factor_sandbox.py -v
+cd frontend && npm test -- tests/components/FactorSandbox --run
+```
+
+
+
+---
+
+## Market Radar Module Optimization Summary (50 Iterations)
+
+### Overview
+
+A comprehensive 50-iteration optimization cycle was completed to address the Top 10 QA/UX issues in the Market Radar module.
+
+### Key Improvements
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| N+1 API calls causing performance bottleneck | P0 | `asyncio.gather()` for parallel sector fetching | ✅ Fixed |
+| Missing Rate Limiting protection | P0 | Added `market_radar` to `ENDPOINT_LIMITS` (30 req/60s) | ✅ Fixed |
+| ECharts event listener memory leak | P0 | `chartInstance.value.off('click')` in `onBeforeUnmount` | ✅ Fixed |
+| Simplified anomaly detection logic | P1 | True 60-day high detection with K-line data | ✅ Fixed |
+| Missing data source status indicator | P1 | `dataSource` field with name, type, timestamp | ✅ Fixed |
+| Mobile treemap height insufficient | P1 | `min-height: 350px` (from 250px) | ✅ Fixed |
+| Missing ARIA accessibility support | P1 | Added `tabindex`, `role`, `aria-label` | ✅ Fixed |
+| Fixed refresh interval | P2 | localStorage persistence + user-selectable | ✅ Fixed |
+| Missing Drill-Down functionality | P2 | Modal showing sector stock list | ✅ Fixed |
+| Technical error messages exposed | P2 | `sanitize_error_message()` + user-friendly messages | ✅ Fixed |
+
+### New Features
+
+| Feature | Description |
+|---------|-------------|
+| Error Code System | Standardized `MarketRadarErrorCode` enum |
+| Error Handling Composable | `useMarketRadarError()` with retry mechanism |
+| Cache Warmup | Pre-warm cache on server startup |
+| Drill-Down Modal | Click sector to view stock list |
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/market_radar/health` | Health check |
+| GET | `/api/v1/market_radar/treemap` | Treemap data (sector/stock level) |
+| GET | `/api/v1/market_radar/anomalies` | All anomaly types |
+| GET | `/api/v1/market_radar/anomalies/{type}` | Specific anomaly type |
+
+### Test Coverage
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| Unit Tests (Service) | 10 | ✅ Pass |
+| Unit Tests (Router) | 8 | ✅ Pass |
+| Integration Tests | 7 | ✅ Pass |
+| Performance Tests | 3 | ✅ Pass |
+| **Total** | **28** | **100% Pass** |
+
+### File Locations
+
+| Component | Path |
+|-----------|------|
+| Treemap Builder | `backend/app/services/market_radar/treemap_builder.py` |
+| Anomaly Detector | `backend/app/services/market_radar/anomaly_detector.py` |
+| Error Codes | `backend/app/services/market_radar/error_codes.py` |
+| Cache Warmup | `backend/app/services/market_radar/cache_warmup.py` |
+| Router | `backend/app/routers/market_radar.py` |
+| Vue Component | `frontend/src/components/MarketRadar.vue` |
+| Composable | `frontend/src/composables/useMarketRadar.js` |
+| Error Handling | `frontend/src/utils/marketRadarErrors.js` |
+
+### Verification Commands
+
+```bash
+# P0-1: N+1 optimization
+grep -c "asyncio.gather" backend/app/services/market_radar/treemap_builder.py  # Expected: 5
+
+# P0-2: Rate limiting
+grep "market_radar" backend/app/config/rate_limit.py  # Expected: 2 matches
+
+# P0-3: ECharts cleanup
+grep "chartInstance.value.off" frontend/src/components/MarketRadar.vue  # Expected: 1
+
+# P1-4: 60-day high detection
+grep -c "_detect_new_high_with_kline" backend/app/services/market_radar/anomaly_detector.py  # Expected: 3+
+
+# P1-5: Data source indicator
+grep -c "dataSource" frontend/src/composables/useMarketRadar.js  # Expected: 5+
+
+# P1-6: Mobile height
+grep "min-height: 350px" frontend/src/components/MarketRadar.vue  # Expected: 1
+
+# P1-7: ARIA support
+grep -c "aria-label" frontend/src/components/MarketRadar.vue  # Expected: 4+
+
+# P2-8: Refresh interval persistence
+grep "STORAGE_KEY_REFRESH_INTERVAL" frontend/src/composables/useMarketRadar.js  # Expected: 1
+
+# P2-9: Drill-Down
+grep -c "showDrillDown" frontend/src/components/MarketRadar.vue  # Expected: 5+
+
+# P2-10: Error messages
+grep -c "sanitize_error_message" backend/app/routers/market_radar.py  # Expected: 3+
+
+# Run all tests
+cd backend && python3 -m pytest tests/unit/test_services/test_market_radar/ tests/unit/test_routers/test_market_radar_router.py tests/integration/test_market_radar_integration.py tests/performance/test_market_radar_performance.py -v --no-cov
+```
+

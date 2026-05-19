@@ -15,6 +15,7 @@ from fastapi import APIRouter
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 # Dedicated thread pool for bond data fetching
 _bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
@@ -27,6 +28,16 @@ NAMESPACE = "bond:"
 TTL = 300  # 5 minutes
 _CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
+
+# Circuit breaker for bond data fetching
+_bond_cb = CircuitBreaker(
+    "bond_akshare",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout=60.0,
+    )
+)
+
 
 _HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
 _HISTORY_TTL = 3600  # 1 hour
@@ -71,6 +82,10 @@ async def _fetch_curve_data_for_cache():
         return spreads
 
     try:
+        if not _bond_cb.is_available():
+            logger.warning("[Bond] Circuit breaker is OPEN, using mock fallback")
+            raise Exception("Circuit breaker open")
+        
         import akshare as ak
         import warnings
         warnings.filterwarnings("ignore")
@@ -81,6 +96,7 @@ async def _fetch_curve_data_for_cache():
             timeout=30.0
         )
         if df is not None and not df.empty:
+            _bond_cb.record_success()
             # 按日期升序排列，按唯一日期索引历史截面
             df = df.sort_values("日期").reset_index(drop=True)
             unique_dates = sorted(df["日期"].unique())
@@ -126,8 +142,10 @@ async def _fetch_curve_data_for_cache():
                 "source":          "akshare",
             }
     except asyncio.TimeoutError:
+        _bond_cb.record_failure()
         logger.warning("[Bond] bond_china_yield timeout after 30s")
     except Exception as e:
+        _bond_cb.record_failure()
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
     # 降级兜底：静态 Mock（含历史截面）
@@ -207,10 +225,16 @@ async def bond_curve():
         )
         source = cache_data.get("source", "unknown")
         
-        # akshare bond_china_yield 数据源已于 2021-01-22 停止更新
-        # 当使用 mock 兜底数据时，说明数据已过期
         last_update = "2021-01-22" if source == "mock" else datetime.now().strftime("%Y-%m-%d")
-        warning = "数据已过期，建议使用其他数据源" if source == "mock" else None
+        is_stale = source == "mock"
+        warning = None
+        warning_level = None
+        if is_stale:
+            warning = "⚠️ 数据源已于 2021-01-22 停止更新，当前显示历史数据。建议接入中债登或上交所数据源。"
+            warning_level = "critical"
+        elif source == "akshare":
+            warning = "数据源 akshare bond_china_yield 已于 2021-01-22 停止更新，数据可能不完整。"
+            warning_level = "warning"
         
         return success_response({
             "yield_curve":     cache_data.get("yield_curve", {}),
@@ -221,7 +245,9 @@ async def bond_curve():
             "update_time":     cache_data.get("update_time", ""),
             "source":          source,
             "last_update":     last_update,
+            "is_stale":        is_stale,
             "warning":         warning,
+            "warning_level":   warning_level,
         })
     except Exception as e:
         logger.error(f"[bond_curve] 错误: {e}")
@@ -253,11 +279,13 @@ async def bond_yield_curve():
 async def bond_active():
     """
     活跃债券列表（Mock 数据 + 真实来源开发中）
-    返回：{bonds: [{code, name, rate, ytm, change_bps, type}]}
+    返回：{bonds: [{code, name, rate, ytm, change_bps, type}], source, is_demo}
     """
     return success_response({
         "bonds": _MOCK_BONDS,
         "source": "mock",
+        "is_demo": True,
+        "warning": "当前显示演示数据，真实数据源开发中",
     })
 
 
@@ -367,3 +395,19 @@ def _init_mock_cache():
     logger.info("[Bond] Mock yield curve initialized")
 
 _init_mock_cache()
+
+
+@router.get("/bond/health")
+async def bond_health():
+    """Bond module health check endpoint."""
+    return success_response({
+        "status": "ok",
+        "circuit_breaker": {
+            "state": _bond_cb._state.value,
+            "is_available": _bond_cb.is_available(),
+        },
+        "cache": {
+            "has_data": _cache.get(f"{NAMESPACE}main") is not None,
+            "last_fetch_time": _LAST_FETCH_TIME,
+        },
+    })

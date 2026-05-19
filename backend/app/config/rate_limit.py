@@ -2,6 +2,8 @@
 Rate Limiting Configuration
 
 Defines rate limits for different endpoint categories.
+
+P0-2: Added market_radar endpoint rate limit
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -24,6 +26,8 @@ ENDPOINT_LIMITS = {
     "futures": EndpointLimit(requests=60, period=60),
     "macro": EndpointLimit(requests=30, period=60),
     "forex": EndpointLimit(requests=60, period=60),
+    "bond": EndpointLimit(requests=30, period=60),
+    "market_radar": EndpointLimit(requests=30, period=60),  # P0-2: Market Radar rate limit
     "default": EndpointLimit(requests=200, period=60),
 }
 
@@ -32,8 +36,10 @@ EXEMPT_PATHS = [
     "/api/v1/health",
     "/api/v1/f9/health",
     "/api/v1/forex/health",
+    "/api/v1/bond/health",
     "/api/agent/v1/health",
     "/api/v1/macro/health",
+    "/api/v1/market_radar/health",  # P0-2: Market Radar health check exempt
 ]
 
 
@@ -72,6 +78,10 @@ def get_endpoint_category(path: str) -> str:
         return "futures"
     if "/macro/" in path:
         return "macro"
+    if "/bond/" in path:
+        return "bond"
+    if "/market_radar/" in path:  # P0-2: Market Radar category
+        return "market_radar"
     if "/market/" in path or "/stocks/" in path:
         return "market"
     if "/news/" in path:

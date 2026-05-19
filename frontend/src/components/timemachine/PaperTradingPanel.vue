@@ -1,5 +1,26 @@
 <template>
   <div class="w-72 bg-surface rounded-xl border border-border-base flex flex-col overflow-hidden">
+    <!-- Collapsible Guidance Panel -->
+    <div class="p-4 border-b border-border-base bg-surface-hover/50">
+      <button 
+        @click="showGuidance = !showGuidance"
+        class="flex items-center gap-2 text-sm text-secondary w-full"
+      >
+        <span>💡</span>
+        <span>模拟交易说明</span>
+        <svg class="w-4 h-4 ml-auto transition-transform" :class="{ 'rotate-180': showGuidance }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      
+      <div v-if="showGuidance" class="mt-2 text-xs text-muted space-y-1">
+        <p>• 这是模拟交易，不涉及真实资金</p>
+        <p>• 买入时检查可用现金是否充足</p>
+        <p>• 卖出时检查持仓数量是否足够</p>
+        <p>• 建议每次交易不超过总资金的20%</p>
+      </div>
+    </div>
+    
     <!-- Portfolio Summary -->
     <div class="p-4 border-b border-border-base">
       <h4 class="text-sm font-semibold text-primary mb-3">模拟账户</h4>
@@ -183,6 +204,7 @@ const emit = defineEmits(['trade'])
 
 const tradeDirection = ref('buy')
 const tradeQuantity = ref(100)
+const showGuidance = ref(true) // Expanded by default for user guidance
 
 const canTrade = computed(() => {
   if (!props.currentPrice || tradeQuantity.value <= 0) return false
