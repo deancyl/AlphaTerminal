@@ -512,6 +512,24 @@ def start_scheduler():
         logger.info("[Scheduler] 启动时宏观数据预热已触发")
     threading.Thread(target=_startup_macro, daemon=True).start()
 
+    # Task: 每 60 秒轮询债券数据并写入全局缓存
+    scheduler.add_job(
+        _bond_polling_job,
+        "interval",
+        seconds=60,
+        id="bond_polling",
+        name="BondPolling",
+        replace_existing=True,
+    )
+    logger.info("[Scheduler] 债券轮询任务已注册（每60秒）")
+
+    # 启动时立即触发一次债券数据预热（不阻塞主线程）
+    def _startup_bond():
+        import time; time.sleep(2)
+        _bond_polling_job()
+        logger.info("[Scheduler] 启动时债券数据预热已触发")
+    threading.Thread(target=_startup_bond, daemon=True).start()
+
     # ── P3: 每日收盘快照（15:30 执行）────────────────────────────
     def _record_portfolio_snapshots():
         """遍历所有账户，计算当日 total_asset，写入 portfolio_snapshots"""
@@ -635,6 +653,25 @@ def _memory_monitor():
             logger.debug(f"[MemoryMonitor] 内存使用正常: {mem_mb:.1f}MB")
     except Exception as e:
         logger.warning(f"[MemoryMonitor] 监控异常: {e}")
+
+
+def _bond_polling_job():
+    """Pre-fetch bond yield curve data to warm cache."""
+    try:
+        import asyncio
+        from app.routers.bond import _fetch_bond_data_async
+        
+        # Create event loop for background thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_fetch_bond_data_async())
+        finally:
+            loop.close()
+        
+        logger.info("[Scheduler] Bond data pre-fetch completed")
+    except Exception as e:
+        logger.error(f"[Scheduler] Bond polling failed: {e}", exc_info=True)
 
 
 def _macro_polling_job():

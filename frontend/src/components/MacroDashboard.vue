@@ -623,7 +623,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, nextTick, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, nextTick, computed, onWatcherCleanup } from 'vue'
 import { apiFetchValidated } from '../utils/api.js'
 import { useGracefulDegradation } from '../composables/useGracefulDegradation.js'
 import { useApiError } from '../composables/useApiError.js'
@@ -1522,6 +1522,31 @@ onUnmounted(() => {
 
   chartManager.disposeAll()
 
+  gdpChartInstance = null
+  cpiChartInstance = null
+  pmiChartInstance = null
+  ppiChartInstance = null
+  m2ChartInstance = null
+  socialFinancingChartInstance = null
+  industrialProductionChartInstance = null
+  unemploymentChartInstance = null
+})
+
+// KeepAlive deactivated: dispose all ECharts instances to prevent Canvas context exhaustion
+onDeactivated(() => {
+  // Stop polling
+  stopPolling()
+  
+  // Abort any pending requests
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+  
+  // Dispose all chart instances
+  chartManager.disposeAll()
+  
+  // Clear chart instance references
   gdpChartInstance = null
   cpiChartInstance = null
   pmiChartInstance = null

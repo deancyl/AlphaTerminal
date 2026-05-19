@@ -12,12 +12,12 @@ from .agent_auth import (
 from .rate_limit import (
     RateLimitMiddleware,
     RateLimitConfig,
-    InMemoryRateLimiter,
     get_limiter,
     get_client_ip,
     create_rate_limit_response,
     add_rate_limit_headers,
     setup_rate_limiting,
+    InMemoryRateLimiter,
 )
 
 from .api_key_auth import (
@@ -36,10 +36,10 @@ __all__ = [
     "APIKeyAuth",
     "RateLimitMiddleware",
     "RateLimitConfig",
-    "InMemoryRateLimiter",
     "get_limiter",
     "get_client_ip",
     "create_rate_limit_response",
     "add_rate_limit_headers",
     "setup_rate_limiting",
+    "InMemoryRateLimiter",
 ]

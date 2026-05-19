@@ -1,15 +1,14 @@
 """
 期货行情路由 - Phase 7
 数据源：akshare futures_zh_realtime（国内期货） + Sina hf_（国际商品）
-缓存策略：3 分钟 TTL，后台异步刷新
+缓存策略：3 分钟 TTL，请求合并（request coalescing）
 
 Phase B: 统一 API 响应格式
 """
 import logging
 import asyncio
 import re
-import threading
-import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
@@ -17,13 +16,15 @@ from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
+# Dedicated thread pool for futures data fetching
+_futures_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="futures_")
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _cache = get_cache()
 NAMESPACE = "futures:"
 TTL = 180  # 3 minutes
-_CACHE_LOCK = threading.RLock()
 
 # Circuit breaker for futures data fetching
 _futures_cb = CircuitBreaker(
@@ -33,8 +34,6 @@ _futures_cb = CircuitBreaker(
         timeout=60.0,
     )
 )
-_LAST_FETCH_TIME = 0
-_REFRESH_SEM = threading.Semaphore(1)
 
 # Module-level cache for test compatibility (initialized by _init_mock_cache)
 _FUTURES_CACHE = {}
@@ -110,10 +109,11 @@ async def _fetch_index_futures_realtime():
     
     for symbol, name, ak_symbol_name in contracts:
         try:
-            # Use asyncio.wait_for for 5 second timeout
+            # Use asyncio.wait_for for 15 second timeout
+            loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.futures_zh_realtime, symbol=ak_symbol_name),
-                timeout=5.0
+                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_realtime(symbol=ak_symbol_name)),
+                timeout=15.0
             )
             
             if df is not None and len(df) > 0:
@@ -169,61 +169,50 @@ async def _fetch_index_futures_realtime():
     return index_futures, source
 
 
-def _fetch_futures_data():
-    """后台抓取期货数据（腾讯 qt.gtimg.cn + akshare，5秒超时兜底Mock）"""
-    global _LAST_FETCH_TIME
-    now_str = datetime.now().strftime("%H:%M")
+def _fetch_commodities_sync():
+    """Sync fetch of commodity futures data from Tencent."""
     spot_data = {}
     fetch_success = False
-    index_source = "mock"
-
+    
     try:
-        # 腾讯 qt.gtimg.cn 国内期货现货（直连不过代理）
         codes = ",".join(WATCHED_COMMODITIES.keys())
-        try:
-            with httpx.Client(timeout=5.0) as client:
-                resp = client.get(f"https://qt.gtimg.cn/q={codes}")
-                resp.raise_for_status()
-                raw = resp.text
-            for line in raw.splitlines():
-                line = line.strip()
-                if "=" not in line or "none_match" in line:
-                    continue
-                try:
-                    sym = line.split("=")[0].replace("v_qt_", "").replace("v_", "").strip('" ')
-                    fields = line.split("=")[1].strip('";\n')
-                    f = [x.strip() for x in fields.split(",")]
-                    if len(f) > 10:
-                        price  = float(f[1]) if f[1] else None
-                        change = float(f[32]) if f[32] else 0.0  # 涨跌幅%
-                        spot_data[sym] = {
-                            "price": round(price, 2) if price else 0,
-                            "change_pct": round(change, 2),
-                            "tick": f[30] if len(f) > 30 else "",
-                        }
-                except Exception:
-                    continue
-            logger.info(f"[Futures] Tencent qt data: {len(spot_data)} items")
-            if len(spot_data) > 0:
-                fetch_success = True
-        except Exception as e:
-            logger.warning(f"[Futures] Tencent fetch failed: {e}")
-
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.get(f"https://qt.gtimg.cn/q={codes}")
+            resp.raise_for_status()
+            raw = resp.text
+        for line in raw.splitlines():
+            line = line.strip()
+            if "=" not in line or "none_match" in line:
+                continue
+            try:
+                sym = line.split("=")[0].replace("v_qt_", "").replace("v_", "").strip('" ')
+                fields = line.split("=")[1].strip('";\n')
+                f = [x.strip() for x in fields.split(",")]
+                if len(f) > 10:
+                    price  = float(f[1]) if f[1] else None
+                    change = float(f[32]) if f[32] else 0.0
+                    spot_data[sym] = {
+                        "price": round(price, 2) if price else 0,
+                        "change_pct": round(change, 2),
+                        "tick": f[30] if len(f) > 30 else "",
+                    }
+            except Exception:
+                continue
+        logger.info(f"[Futures] Tencent qt data: {len(spot_data)} items")
+        if len(spot_data) > 0:
+            fetch_success = True
     except Exception as e:
-        logger.warning(f"[Futures] overall fetch failed: {e}")
-
-    # 如果腾讯数据获取失败，使用 Mock 数据作为 fallback
+        logger.warning(f"[Futures] Tencent fetch failed: {e}")
+    
     if not fetch_success or len(spot_data) == 0:
         logger.warning("[Futures] Using mock commodity data as fallback")
-        # 使用 Mock 商品数据的 price/change_pct
         for mock_item in _MOCK_COMMODITIES:
             spot_data[mock_item["symbol"]] = {
                 "price": mock_item.get("price", 0),
                 "change_pct": mock_item.get("change_pct", 0),
                 "tick": mock_item.get("tick", ""),
             }
-
-    # 整理商品期货列表
+    
     commodities = []
     for sym, (name, unit) in WATCHED_COMMODITIES.items():
         d = spot_data.get(sym, {})
@@ -238,15 +227,30 @@ def _fetch_futures_data():
             "sector":     sector_key[0],
             "sector_emoji": sector_key[1],
         })
+    
+    return commodities
 
-    # Fetch real index futures data (synchronously in thread)
+
+async def _fetch_futures_data():
+    """
+    Fetch futures data from multiple sources.
+    
+    Returns:
+        dict: {
+            index_futures: list,
+            commodities: list,
+            update_time: str,
+            index_source: str
+        }
+    """
+    now_str = datetime.now().strftime("%H:%M")
+    index_source = "mock"
+    
+    loop = asyncio.get_running_loop()
+    commodities = await loop.run_in_executor(None, _fetch_commodities_sync)
+    
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            index_futures, index_source = loop.run_until_complete(_fetch_index_futures_realtime())
-        finally:
-            loop.close()
+        index_futures, index_source = await _fetch_index_futures_realtime()
     except Exception as e:
         logger.warning(f"[Futures] Index futures fetch failed: {e}, using mock")
         index_futures = _MOCK_INDEX_FUTURES
@@ -258,28 +262,18 @@ def _fetch_futures_data():
         "update_time":   now_str,
         "index_source":  index_source,
     }
-    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
-    with _CACHE_LOCK:
-        _LAST_FETCH_TIME = time.time()
-    logger.info(f"[Futures] cached {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
+    
+    logger.info(f"[Futures] Fetched {len(commodities)} commodities + {len(index_futures)} index futures (source: {index_source})")
+    return cache_data
 
 
-def _get_futures_cache() -> dict:
-    """TTL 3分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _LAST_FETCH_TIME
-    stale = (time.time() - _LAST_FETCH_TIME) > TTL
-
-    if stale and _REFRESH_SEM.acquire(blocking=False):
-        def bg():
-            try:
-                _fetch_futures_data()
-            finally:
-                _REFRESH_SEM.release()
-        t = threading.Thread(target=bg, daemon=True, name="futures-refresh")
-        t.start()
-
-    cached = _cache.get(f"{NAMESPACE}main")
-    return cached if cached else {}
+async def _get_futures_cache() -> dict:
+    """Get futures data with request coalescing (prevents thundering herd)."""
+    return await _cache.get_or_set_async(
+        key=f"{NAMESPACE}main",
+        ttl=TTL,
+        fetch_fn=_fetch_futures_data
+    )
 
 
 @router.get("/futures/index_history")
@@ -317,16 +311,17 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
         contract_symbol = f"{symbol}0"
         
         # 根据周期选择API
+        loop = asyncio.get_running_loop()
         if period == "daily":
             # 日线数据
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.futures_zh_daily_sina, symbol=contract_symbol),
+                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_daily_sina(symbol=contract_symbol)),
                 timeout=10.0
             )
         else:
             # 分钟数据
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.futures_zh_minute_sina, symbol=contract_symbol),
+                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_minute_sina(symbol=contract_symbol)),
                 timeout=10.0
             )
         
@@ -396,7 +391,7 @@ async def futures_main_indexes():
     股指期货主力（IF · IC · IM）
     """
     try:
-        cache = _get_futures_cache()
+        cache = await _get_futures_cache()
         return success_response({
             "index_futures": cache.get("index_futures", []),
             "update_time":  cache.get("update_time", ""),
@@ -413,7 +408,7 @@ async def futures_commodities():
     国内大宗商品期货实时行情
     """
     try:
-        cache = _get_futures_cache()
+        cache = await _get_futures_cache()
         return success_response({
             "commodities": cache.get("commodities", []),
             "update_time": cache.get("update_time", ""),
@@ -465,9 +460,10 @@ async def futures_term_structure(symbol: str = "RB"):
         warnings.filterwarnings("ignore")
         # 同步 IO 放入线程池，避免阻塞 FastAPI 事件循环
         # 添加 10 秒超时保护
+        loop = asyncio.get_running_loop()
         try:
             df = await asyncio.wait_for(
-                asyncio.to_thread(ak.futures_zh_realtime, symbol=zh_name),
+                loop.run_in_executor(_futures_executor, lambda: ak.futures_zh_realtime(symbol=zh_name)),
                 timeout=10.0
             )
         except asyncio.TimeoutError:
@@ -562,7 +558,7 @@ _MOCK_INDEX_FUTURES = [
 
 
 def _init_mock_cache():
-    global _LAST_FETCH_TIME, _FUTURES_CACHE
+    """Initialize mock cache on module load."""
     now_str = datetime.now().strftime("%H:%M")
     # Add is_demo label to mock data for transparency
     mock_index_with_demo = [{**mock, "is_demo": True} for mock in _MOCK_INDEX_FUTURES]
@@ -574,9 +570,8 @@ def _init_mock_cache():
         "index_source":  "mock",
     }
     _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
+    global _FUTURES_CACHE
     _FUTURES_CACHE = cache_data
-    with _CACHE_LOCK:
-        _LAST_FETCH_TIME = time.time()
     logger.info("[Futures] Mock cache initialized with DEMO labels")
 
 _init_mock_cache()

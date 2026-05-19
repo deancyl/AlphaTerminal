@@ -7,7 +7,12 @@
         <p class="text-xs text-theme-muted mt-1">实时监控 LLM API 调用量、Token 消耗和成本</p>
       </div>
       <div class="flex items-center gap-3">
-        <!-- Time Range Selector -->
+        <button
+          class="px-3 py-2 bg-theme-surface border border-theme text-theme-secondary rounded-sm text-xs hover:bg-theme-hover transition-colors"
+          @click="$emit('switch-tab', 'cost-attribution')"
+        >
+          💰 成本归因
+        </button>
         <select
           v-model="timeRange"
           class="bg-theme-surface border border-theme rounded-sm px-3 py-2 text-sm text-theme-primary

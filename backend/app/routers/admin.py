@@ -1780,3 +1780,225 @@ def _start_admin_session_cleanup_thread():
     logger.info("[AdminSession] Started background cleanup thread (60s interval)")
 
 _start_admin_session_cleanup_thread()
+
+
+# ═══════════════════════════════════════════════════════════════
+# Source Switchboard - Visual Topology & Manual Fallback
+# ═══════════════════════════════════════════════════════════════
+
+class SourceSwitchRequest(BaseModel):
+    source: str = Field(..., description="Source name to switch from")
+    fallback: str = Field(..., description="Fallback source to switch to")
+
+@router.get("/sources/topology")
+async def get_source_topology():
+    """
+    Get visual topology data for Source Switchboard.
+    
+    Returns nodes (data sources) and edges (fallback relationships).
+    Each node has status indicator (green/yellow/red).
+    """
+    from app.services import quote_source
+    
+    # Get current status
+    status_data = quote_source.get_source_status()
+    sources = status_data.get("sources", {})
+    current_source = quote_source._current_source
+    
+    # Build nodes
+    nodes = []
+    for name, status in sources.items():
+        # Determine status color
+        if status.get("state") == "open":
+            node_status = "red"  # Circuit breaker open - failed
+        elif status.get("health") == "healthy":
+            node_status = "green"  # Healthy
+        elif status.get("health") == "unknown":
+            node_status = "yellow"  # Not probed yet
+        else:
+            node_status = "red"  # Unhealthy
+        
+        nodes.append({
+            "id": name,
+            "name": name.upper(),
+            "type": "data_source",
+            "status": node_status,
+            "state": status.get("state", "unknown"),
+            "health": status.get("health", "unknown"),
+            "latency_ms": status.get("latency_ms"),
+            "fail_count": status.get("fail_count", 0),
+            "is_primary": name == current_source,
+            "is_current": name == current_source,
+            "last_check": status.get("last_fail_time")
+        })
+    
+    # Build edges (fallback chain)
+    # Default fallback order: tencent -> sina -> eastmoney
+    fallback_order = ["tencent", "sina", "eastmoney"]
+    edges = []
+    
+    for i in range(len(fallback_order) - 1):
+        source = fallback_order[i]
+        target = fallback_order[i + 1]
+        edges.append({
+            "source": source,
+            "target": target,
+            "type": "fallback",
+            "label": f"{source} → {target}"
+        })
+    
+    # Add bidirectional edges for visualization
+    for node in nodes:
+        if node["id"] not in fallback_order:
+            # Connect unknown sources to the chain
+            edges.append({
+                "source": "eastmoney",
+                "target": node["id"],
+                "type": "fallback",
+                "label": f"fallback → {node['id']}"
+            })
+    
+    return {
+        "code": 0,
+        "data": {
+            "nodes": nodes,
+            "edges": edges,
+            "current_source": current_source,
+            "timestamp": int(time.time())
+        }
+    }
+
+
+@router.post("/sources/switch")
+async def switch_data_source(body: SourceSwitchRequest):
+    """
+    Manually switch to a fallback data source.
+    
+    This performs a hot-swap without service restart:
+    1. Opens circuit breaker on the source
+    2. Sets the fallback as current source
+    3. Logs the switch for audit trail
+    """
+    from app.services import quote_source
+    from app.services.audit_chain import log_audit_event
+    
+    source = body.source.lower()
+    fallback = body.fallback.lower()
+    
+    # Validate sources exist
+    status_data = quote_source.get_source_status()
+    sources = status_data.get("sources", {})
+    
+    if source not in sources:
+        raise HTTPException(status_code=400, detail=f"Source '{source}' not found")
+    if fallback not in sources:
+        raise HTTPException(status_code=400, detail=f"Fallback '{fallback}' not found")
+    
+    # Check if fallback is healthy
+    fallback_status = sources.get(fallback, {})
+    if fallback_status.get("state") == "open":
+        raise HTTPException(status_code=400, detail=f"Fallback '{fallback}' is currently circuit-broken")
+    
+    # Perform the switch
+    try:
+        # Open circuit on source
+        quote_source.open_circuit(source)
+        
+        # Set fallback as current
+        quote_source._current_source = fallback
+        
+        # Log audit event
+        log_audit_event(
+            actor_id="admin",
+            action="source_switch",
+            resource_type="data_source",
+            resource_id=source,
+            outcome="success",
+            before_state={"current_source": source},
+            after_state={"current_source": fallback}
+        )
+        
+        logger.info(f"[Admin] Switched data source from {source} to {fallback}")
+        
+        return {
+            "code": 0,
+            "message": f"已切换数据源: {source} → {fallback}",
+            "data": {
+                "previous_source": source,
+                "current_source": fallback,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+    except Exception as e:
+        logger.error(f"[Admin] Failed to switch data source: {e}")
+        raise HTTPException(status_code=500, detail=f"切换失败: {str(e)}")
+
+
+@router.get("/sources/config")
+async def get_source_config():
+    """
+    Get current data source configuration (priority, weights, health check settings).
+    """
+    loop = asyncio.get_event_loop()
+    
+    def _sync_get():
+        conn = _get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM admin_config WHERE key = 'source_balance'")
+            row = cursor.fetchone()
+            conn.close()
+            return row
+        finally:
+            conn.close()
+    
+    row = await loop.run_in_executor(_executor, _sync_get)
+    
+    if row:
+        config = json.loads(row[0])
+    else:
+        config = {
+            "strategy": "weighted_round_robin",
+            "weights": {"tencent": 50, "sina": 30, "eastmoney": 20},
+            "health_check": {
+                "interval": 10,
+                "timeout": 3,
+                "fail_threshold": 3
+            }
+        }
+    
+    return {
+        "code": 0,
+        "data": config
+    }
+
+
+@router.post("/sources/config")
+async def update_source_config(config: SourceBalanceConfig):
+    """
+    Update data source configuration (hot-swap without restart).
+    """
+    loop = asyncio.get_event_loop()
+    
+    def _sync_set():
+        conn = _get_conn()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO admin_config (key, value, updated_at) VALUES (?, ?, ?)",
+                ("source_balance", json.dumps(config.dict()), datetime.now().isoformat())
+            )
+            conn.commit()
+            conn.close()
+        finally:
+            conn.close()
+    
+    await loop.run_in_executor(_executor, _sync_set)
+    
+    logger.info(f"[Admin] Updated source config: strategy={config.strategy}")
+    
+    return {
+        "code": 0,
+        "message": "数据源配置已更新",
+        "data": config.dict()
+    }

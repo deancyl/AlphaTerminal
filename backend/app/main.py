@@ -8,7 +8,7 @@ import os
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, ORJSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
@@ -16,7 +16,7 @@ from contextlib import asynccontextmanager
 
 logger = logging.getLogger(__name__)
 
-from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic
+from app.routers import market, copilot, news, sentiment, bond, futures, portfolio, stocks, websocket as ws_router, admin, admin_source, fund, export, macro, agent, mcp, performance, f9_deep, health, research, forex, audit, oms, options, ml, metrics, attribution, agentic, cost_attribution, audit_playback, data_gaps
 from app.routers.macro import warmup_macro_cache
 from app.services.scheduler import start_scheduler, stop_scheduler, run_initial_data_fetch
 from app.services.logging_queue import init_logging_queue
@@ -117,6 +117,7 @@ app = FastAPI(
     title="AlphaTerminal API",
     version="0.6.40",
     lifespan=lifespan,
+    default_response_class=ORJSONResponse,
 )
 
 # ── GZip 压缩中间件 ───────────────────────────────────────────────────────
@@ -266,7 +267,10 @@ app.include_router(oms.router, tags=["oms"])  # Order Management System
 app.include_router(ml.router, prefix="/api/v1/ml", tags=["ml"])
 app.include_router(metrics.router, prefix="/api/v1", tags=["monitoring"])
 app.include_router(attribution.router, prefix="/api/v1", tags=["attribution"])  # Multi-factor attribution sandbox
+app.include_router(audit_playback.router, prefix="/api/v1", tags=["audit_playback"])  # Audit playback & rollback
 app.include_router(agentic.router, prefix="/api/v1/agentic", tags=["agentic"])  # Agentic workflow engine
+app.include_router(cost_attribution.router, prefix="/api/v1", tags=["cost_attribution"])  # LLM cost attribution
+app.include_router(data_gaps.router, prefix="/api/v1", tags=["data_gaps"])  # Data gap radar
 app.include_router(ws_router.router)  # WebSocket: /ws/market/{symbol}
 app.include_router(agent.router)  # Agent Gateway: /api/agent/v1
 
@@ -278,6 +282,15 @@ except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest module not loaded: {e}")
 except Exception as e:
     logger.error(f"Unexpected error loading backtest module: {e}")
+
+# 回测监控模块
+try:
+    from app.routers import backtest_monitor
+    app.include_router(backtest_monitor.router, prefix="/api/v1/backtest_monitor", tags=["backtest_monitor"])
+except (ImportError, AttributeError, SyntaxError) as e:
+    logger.warning(f"Backtest monitor module not loaded: {e}")
+except Exception as e:
+    logger.error(f"Unexpected error loading backtest monitor module: {e}")
 
 # 策略模块
 try:

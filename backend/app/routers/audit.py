@@ -15,7 +15,7 @@ from app.services.audit_chain import (
     get_chain_stats,
     log_audit_event,
 )
-from app.db.audit_db import get_audit_logs, count_audit_logs
+from app.db.audit_db import get_audit_logs, get_audit_logs_keyset, count_audit_logs
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
 
@@ -63,37 +63,63 @@ async def get_audit_stats():
 
 @router.get("/logs")
 async def query_audit_logs(
+    after_timestamp: Optional[str] = Query(None, description="Cursor: get logs before this timestamp (ISO format)"),
+    after_id: Optional[int] = Query(None, ge=1, description="Cursor: get logs with id less than this (for same timestamp)"),
     agent_id: Optional[str] = Query(None, description="Filter by agent ID"),
     action: Optional[str] = Query(None, description="Filter by action type"),
     limit: int = Query(100, ge=1, le=1000, description="Max results"),
-    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    offset: int = Query(0, ge=0, description="Offset for pagination (deprecated, use after_timestamp/after_id)"),
 ):
     """
-    Query audit logs with filters.
+    Query audit logs with keyset pagination for O(1) performance.
+    
+    Keyset pagination uses cursor (after_timestamp, after_id) instead of OFFSET.
+    This provides constant-time performance even for deep pages.
     
     Args:
+        after_timestamp: Cursor timestamp - get logs before this time
+        after_id: Cursor ID - for disambiguating same-timestamp records
         agent_id: Filter by agent ID
         action: Filter by action type
         limit: Max results (1-1000)
-        offset: Offset for pagination
+        offset: DEPRECATED - use cursor instead
         
     Returns:
         - logs: List of audit log entries
-        - total: Total count matching filters
+        - has_more: Boolean indicating if more results exist
+        - next_after_timestamp: Cursor timestamp for next page
+        - next_after_id: Cursor ID for next page
+        - total: Total count matching filters (for UI display)
     """
-    logs = get_audit_logs(
-        agent_id=agent_id,
-        action=action,
-        limit=limit,
-        offset=offset,
-    )
+    if after_timestamp and after_id is not None:
+        logs = get_audit_logs_keyset(
+            after_timestamp=after_timestamp,
+            after_id=after_id,
+            limit=limit,
+            agent_id=agent_id,
+            action=action,
+        )
+    else:
+        logs = get_audit_logs(
+            agent_id=agent_id,
+            action=action,
+            limit=limit,
+            offset=offset,
+        )
+    
     total = count_audit_logs(agent_id=agent_id, action=action)
+    has_more = len(logs) == limit
+    
+    next_after_timestamp = logs[-1]["timestamp"] if logs else None
+    next_after_id = logs[-1]["id"] if logs else None
     
     return {
         "logs": logs,
+        "has_more": has_more,
+        "next_after_timestamp": next_after_timestamp,
+        "next_after_id": next_after_id,
         "total": total,
         "limit": limit,
-        "offset": offset,
     }
 
 

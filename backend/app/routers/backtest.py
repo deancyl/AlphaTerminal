@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
 from app.utils.response import success_response, error_response, ErrorCode
 from app.middleware import require_api_key
+from app.services.backtest_worker_registry import get_backtest_registry
 
 logger = logging.getLogger(__name__)
 
@@ -541,112 +542,128 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
     
     loop = asyncio.get_event_loop()
     
-    def _sync_fetch_data():
-        conn = _get_conn()
-        try:
-            rows = conn.execute("""
-                SELECT date, open, high, low, close, volume
-                FROM market_data_daily
-                WHERE symbol = ? AND date >= ? AND date <= ?
-                ORDER BY date ASC
-            """, (db_symbol, req.start_date, req.end_date)).fetchall()
-            conn.close()
-            return rows
-        finally:
-            conn.close()
+    async def _run_backtest_task():
+        """Inner task for backtest execution (for worker registry tracking)."""
+        def _sync_fetch_data():
+            conn = _get_conn()
+            try:
+                rows = conn.execute("""
+                    SELECT date, open, high, low, close, volume
+                    FROM market_data_daily
+                    WHERE symbol = ? AND date >= ? AND date <= ?
+                    ORDER BY date ASC
+                """, (db_symbol, req.start_date, req.end_date)).fetchall()
+                conn.close()
+                return rows
+            finally:
+                conn.close()
+        
+        rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+        
+        if len(rows) == 0:
+            raise ValueError(f"本地数据库无 {req.symbol} 在此时段的日K数据")
+        if len(rows) < slow_ma:
+            raise ValueError(f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)")
+        
+        first_close = float(rows[0][4])
+        last_close = float(rows[-1][4])
+        benchmark_return_pct = 0.0 if first_close <= 0 else round(
+            (last_close - first_close) / first_close * 100, 2
+        )
+        
+        closes = [float(r[4]) for r in rows]
+        
+        signals = _generate_signals(strategy_type, closes, rows, raw_params)
+        
+        trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
+            signals, closes, rows, initial_capital, req.commission, req.slippage
+        )
+        
+        metrics = _calculate_metrics(
+            trades, wins, losses, final_capital,
+            initial_capital, len(rows), benchmark_return_pct
+        )
+        
+        def _sync_save_result():
+            conn = _get_conn()
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                conn.execute("""
+                    INSERT INTO backtest_results 
+                    (strategy_id, portfolio_id, start_date, end_date, 
+                     initial_capital, final_capital, total_return, annual_return,
+                     sharpe_ratio, max_drawdown, win_rate, trades_count, details, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    None, None,
+                    req.start_date, req.end_date,
+                    initial_capital,
+                    round(final_capital, 2),
+                    metrics["total_return_pct"],
+                    metrics["annualized_return_pct"],
+                    metrics["sharpe_ratio"],
+                    metrics["max_drawdown_pct"],
+                    metrics["win_rate"],
+                    metrics["total_trades"],
+                    json.dumps({
+                        "symbol": req.symbol,
+                        "trades": trades,
+                        "equity_curve": metrics["equity_curve"],
+                        "strategy_type": strategy_type,
+                        "wins": wins,
+                        "losses": losses,
+                        "benchmark_return_pct": benchmark_return_pct
+                    }),
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                conn.close()
+                logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
+        
+        await loop.run_in_executor(_executor, _sync_save_result)
+        
+        return {
+            "symbol": req.symbol,
+            "start_date": req.start_date,
+            "end_date": req.end_date,
+            "initial_capital": initial_capital,
+            "final_capital": round(final_capital, 2),
+            "total_return": metrics["total_return"],
+            "total_return_pct": metrics["total_return_pct"],
+            "max_drawdown": metrics["max_drawdown"],
+            "max_drawdown_pct": metrics["max_drawdown_pct"],
+            "wins": wins,
+            "losses": losses,
+            "win_rate": metrics["win_rate"],
+            "trades_count": metrics["total_trades"],
+            "sharpe_ratio": metrics["sharpe_ratio"],
+            "annualized_return_pct": metrics["annualized_return_pct"],
+            "benchmark_return_pct": benchmark_return_pct,
+            "strategy_type": strategy_type,
+            "trades": trades,
+            "equity_curve": metrics["equity_curve"],
+            "commission": req.commission,
+            "slippage": req.slippage,
+            "total_commission": round(total_commission, 2),
+            "total_slippage_cost": round(total_slippage_cost, 2),
+        }
     
-    rows = await loop.run_in_executor(_executor, _sync_fetch_data)
+    registry = get_backtest_registry()
+    task = asyncio.create_task(_run_backtest_task())
+    worker_id = registry.register(task, req.symbol, strategy_type)
     
-    if len(rows) == 0:
-        return error_response(ErrorCode.NOT_FOUND, f"本地数据库无 {req.symbol} 在此时段的日K数据，请先通过行情模块或脚本源回填历史数据。")
-    if len(rows) < slow_ma:
-        return error_response(ErrorCode.BAD_REQUEST, f"数据条数({len(rows)})不足以计算慢线({slow_ma}周期)，请扩大回测窗口。")
-    
-    first_close = float(rows[0][4])
-    last_close = float(rows[-1][4])
-    benchmark_return_pct = 0.0 if first_close <= 0 else round(
-        (last_close - first_close) / first_close * 100, 2
-    )
-    
-    closes = [float(r[4]) for r in rows]
-    
-    signals = _generate_signals(strategy_type, closes, rows, raw_params)
-    
-    trades, wins, losses, final_capital, total_commission, total_slippage_cost = _simulate_trades(
-        signals, closes, rows, initial_capital, req.commission, req.slippage
-    )
-    
-    metrics = _calculate_metrics(
-        trades, wins, losses, final_capital,
-        initial_capital, len(rows), benchmark_return_pct
-    )
-    
-    def _sync_save_result():
-        conn = _get_conn()
-        try:
-            # BEGIN IMMEDIATE 防止并发写入冲突（v0.6.49）
-            conn.execute("BEGIN IMMEDIATE")
-            conn.execute("""
-                INSERT INTO backtest_results 
-                (strategy_id, portfolio_id, start_date, end_date, 
-                 initial_capital, final_capital, total_return, annual_return,
-                 sharpe_ratio, max_drawdown, win_rate, trades_count, details, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                None, None,
-                req.start_date, req.end_date,
-                initial_capital,
-                round(final_capital, 2),
-                metrics["total_return_pct"],
-                metrics["annualized_return_pct"],
-                metrics["sharpe_ratio"],
-                metrics["max_drawdown_pct"],
-                metrics["win_rate"],
-                metrics["total_trades"],
-                json.dumps({
-                    "symbol": req.symbol,
-                    "trades": trades,
-                    "equity_curve": metrics["equity_curve"],
-                    "strategy_type": strategy_type,
-                    "wins": wins,
-                    "losses": losses,
-                    "benchmark_return_pct": benchmark_return_pct
-                }),
-                datetime.now().isoformat()
-            ))
-            conn.commit()
-            conn.close()
-        except Exception as e:
-            conn.close()
-            logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
-    
-    await loop.run_in_executor(_executor, _sync_save_result)
-    
-    return success_response({
-        "symbol": req.symbol,
-        "start_date": req.start_date,
-        "end_date": req.end_date,
-        "initial_capital": initial_capital,
-        "final_capital": round(final_capital, 2),
-        "total_return": metrics["total_return"],
-        "total_return_pct": metrics["total_return_pct"],
-        "max_drawdown": metrics["max_drawdown"],
-        "max_drawdown_pct": metrics["max_drawdown_pct"],
-        "wins": wins,
-        "losses": losses,
-        "win_rate": metrics["win_rate"],
-        "trades_count": metrics["total_trades"],
-        "sharpe_ratio": metrics["sharpe_ratio"],
-        "annualized_return_pct": metrics["annualized_return_pct"],
-        "benchmark_return_pct": benchmark_return_pct,
-        "strategy_type": strategy_type,
-        "trades": trades,
-        "equity_curve": metrics["equity_curve"],
-        "commission": req.commission,
-        "slippage": req.slippage,
-        "total_commission": round(total_commission, 2),
-        "total_slippage_cost": round(total_slippage_cost, 2),
-    })
+    try:
+        result = await task
+        return success_response(result)
+    except asyncio.CancelledError:
+        return error_response(ErrorCode.BAD_REQUEST, "Backtest was cancelled")
+    except ValueError as e:
+        return error_response(ErrorCode.BAD_REQUEST, str(e))
+    except Exception as e:
+        logger.error(f"[Backtest] Execution failed: {e}")
+        return error_response(ErrorCode.INTERNAL_ERROR, f"Backtest failed: {str(e)}")
 
 
 @router.get("/results")

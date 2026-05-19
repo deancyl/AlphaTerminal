@@ -9,11 +9,15 @@ import asyncio
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
+
+# Dedicated thread pool for bond data fetching
+_bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,13 +27,9 @@ NAMESPACE = "bond:"
 TTL = 300  # 5 minutes
 _CACHE_LOCK = threading.RLock()
 _LAST_FETCH_TIME = 0
-_REFRESH_SEM = threading.Semaphore(1)
 
 _HISTORY_CACHE_KEY = f"{NAMESPACE}history_df"
 _HISTORY_TTL = 3600  # 1 hour
-
-# 异步锁防止缓存雪崩（Thundering Herd）
-_HISTORY_LOCK = asyncio.Lock()
 
 # ── Mock 活跃债券数据（无可靠免费接口时的兜底）────────────────────
 _MOCK_BONDS = [
@@ -46,9 +46,8 @@ _MOCK_BONDS = [
 ]
 
 
-async def _fetch_bond_data_async():
-    """后台抓取国债收益率曲线（akshare bond_china_yield，30秒超时兜底Mock）
-    同时提取商业银行普通债(AAA)曲线，用于计算真实信用利差"""
+async def _fetch_curve_data_for_cache():
+    """Fetch function for get_or_set_async - returns curve data dict"""
     global _LAST_FETCH_TIME
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
 
@@ -76,8 +75,9 @@ async def _fetch_bond_data_async():
         import warnings
         warnings.filterwarnings("ignore")
 
+        loop = asyncio.get_running_loop()
         df = await asyncio.wait_for(
-            asyncio.to_thread(ak.bond_china_yield),
+            loop.run_in_executor(_bond_executor, ak.bond_china_yield),
             timeout=30.0
         )
         if df is not None and not df.empty:
@@ -112,7 +112,11 @@ async def _fetch_bond_data_async():
 
             spreads = calc_spreads(gov_row, comm_row) if gov_row and comm_row else {}
 
-            cache_data = {
+            with _CACHE_LOCK:
+                _LAST_FETCH_TIME = time.time()
+            logger.info(f"[Bond] yield curve + spreads + history fetched")
+            
+            return {
                 "yield_curve":      gov_row or {},
                 "yield_curve_1m":  gov_row_1m or {},
                 "yield_curve_1y":  gov_row_1y or {},
@@ -121,18 +125,17 @@ async def _fetch_bond_data_async():
                 "update_time":     now_str,
                 "source":          "akshare",
             }
-            _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
-            with _CACHE_LOCK:
-                _LAST_FETCH_TIME = time.time()
-            logger.info(f"[Bond] yield curve + spreads + history fetched")
-            return
     except asyncio.TimeoutError:
         logger.warning("[Bond] bond_china_yield timeout after 30s")
     except Exception as e:
         logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
 
     # 降级兜底：静态 Mock（含历史截面）
-    cache_data = {
+    with _CACHE_LOCK:
+        _LAST_FETCH_TIME = time.time()
+    logger.info("[Bond] Using mock yield curve fallback")
+    
+    return {
         "yield_curve": {
             "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
             "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
@@ -157,29 +160,23 @@ async def _fetch_bond_data_async():
         "update_time": now_str,
         "source": "mock",
     }
-    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
-    with _CACHE_LOCK:
-        _LAST_FETCH_TIME = time.time()
-    logger.info("[Bond] Using mock yield curve fallback")
 
 
-def _get_bond_cache() -> dict:
-    """TTL 5分钟；过期则后台刷新，返回旧缓存（绝不阻塞）"""
-    global _LAST_FETCH_TIME
-    stale = (time.time() - _LAST_FETCH_TIME) > TTL
-
-    if stale and _REFRESH_SEM.acquire(blocking=False):
-        def bg():
-            try:
-                # Run async function in new event loop for thread
-                asyncio.run(_fetch_bond_data_async())
-            finally:
-                _REFRESH_SEM.release()
-        t = threading.Thread(target=bg, daemon=True, name="bond-refresh")
-        t.start()
-
-    cached = _cache.get(f"{NAMESPACE}main")
-    return cached if cached else {}
+async def _fetch_history_df_for_cache():
+    """Fetch function for get_or_set_async - returns DataFrame"""
+    import akshare as ak, warnings
+    warnings.filterwarnings("ignore")
+    logger.info("[Bond] _fetch_history_df_for_cache: fetching fresh data from akshare (cache miss)")
+    try:
+        loop = asyncio.get_running_loop()
+        df = await asyncio.wait_for(
+            loop.run_in_executor(_bond_executor, ak.bond_china_yield),
+            timeout=30.0
+        )
+        return df
+    except asyncio.TimeoutError:
+        logger.warning("[Bond] _fetch_history_df_for_cache timeout after 30s")
+        return None
 
 
 @router.get("/bond/curve")
@@ -203,8 +200,12 @@ async def bond_curve():
       bp < 0：信用债收益率低于国债（异常，可能为数据问题）
     """
     try:
-        cache = _get_bond_cache()
-        source = cache.get("source", "unknown")
+        cache_data = await _cache.get_or_set_async(
+            key=f"{NAMESPACE}main",
+            ttl=TTL,
+            fetch_fn=_fetch_curve_data_for_cache
+        )
+        source = cache_data.get("source", "unknown")
         
         # akshare bond_china_yield 数据源已于 2021-01-22 停止更新
         # 当使用 mock 兜底数据时，说明数据已过期
@@ -212,12 +213,12 @@ async def bond_curve():
         warning = "数据已过期，建议使用其他数据源" if source == "mock" else None
         
         return success_response({
-            "yield_curve":     cache.get("yield_curve", {}),
-            "yield_curve_1m":  cache.get("yield_curve_1m", {}),
-            "yield_curve_1y":  cache.get("yield_curve_1y", {}),
-            "comm_yield":      cache.get("comm_yield", {}),
-            "spreads_bps":     cache.get("spreads_bps", {}),
-            "update_time":     cache.get("update_time", ""),
+            "yield_curve":     cache_data.get("yield_curve", {}),
+            "yield_curve_1m":  cache_data.get("yield_curve_1m", {}),
+            "yield_curve_1y":  cache_data.get("yield_curve_1y", {}),
+            "comm_yield":      cache_data.get("comm_yield", {}),
+            "spreads_bps":     cache_data.get("spreads_bps", {}),
+            "update_time":     cache_data.get("update_time", ""),
             "source":          source,
             "last_update":     last_update,
             "warning":         warning,
@@ -233,11 +234,15 @@ async def bond_yield_curve():
     国债收益率曲线（仅国债，回落兼容）
     """
     try:
-        cache = _get_bond_cache()
+        cache_data = await _cache.get_or_set_async(
+            key=f"{NAMESPACE}main",
+            ttl=TTL,
+            fetch_fn=_fetch_curve_data_for_cache
+        )
         return success_response({
-            "yield_curve": cache.get("yield_curve", {}),
-            "update_time": cache.get("update_time", ""),
-            "source": cache.get("source", "unknown"),
+            "yield_curve": cache_data.get("yield_curve", {}),
+            "update_time": cache_data.get("update_time", ""),
+            "source": cache_data.get("source", "unknown"),
         })
     except Exception as e:
         logger.error(f"[bond_yield_curve] 错误: {e}")
@@ -256,31 +261,6 @@ async def bond_active():
     })
 
 
-async def _get_bond_history_df():
-    """带 1 小时 TTL 的内存缓存，增加异步锁防止雪崩(Thundering Herd)"""
-    global _HISTORY_CACHE, _HISTORY_CACHE_TIME
-    cached = _cache.get(_HISTORY_CACHE_KEY)
-    if cached is not None:
-        return cached
-    async with _HISTORY_LOCK:
-        cached = _cache.get(_HISTORY_CACHE_KEY)
-        if cached is not None:
-            return cached
-        import akshare as ak, warnings
-        warnings.filterwarnings("ignore")
-        logger.info("[Bond] _get_bond_history_df: fetching fresh data from akshare (cache miss)")
-        try:
-            df = await asyncio.wait_for(
-                asyncio.to_thread(ak.bond_china_yield),
-                timeout=30.0
-            )
-            _cache.set(_HISTORY_CACHE_KEY, df, ttl=_HISTORY_TTL)
-            return df
-        except asyncio.TimeoutError:
-            logger.warning("[Bond] _get_bond_history_df timeout after 30s")
-            return None
-
-
 @router.get("/bond/history")
 async def bond_history(tenor: str = "10年", period: str = "1Y"):
     """
@@ -290,7 +270,11 @@ async def bond_history(tenor: str = "10年", period: str = "1Y"):
     返回: {tenor, current, percentile, history: [{date, yield}], source}
     """
     try:
-        df = await _get_bond_history_df()
+        df = await _cache.get_or_set_async(
+            key=_HISTORY_CACHE_KEY,
+            ttl=_HISTORY_TTL,
+            fetch_fn=_fetch_history_df_for_cache
+        )
         if df is None or df.empty:
             raise ValueError("empty df")
         

@@ -423,7 +423,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch, onErrorCaptured } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, nextTick, watch, onErrorCaptured } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
@@ -1063,6 +1063,20 @@ onUnmounted(() => {
   _fetchController = null
   grid?.destroy(false)
   stopLowPolling()
+})
+
+// KeepAlive deactivated: cleanup to prevent Canvas context exhaustion
+onDeactivated(() => {
+  // Cancel any pending fetch requests
+  _fetchController?.abort()
+  _fetchController = null
+  // Stop polling to prevent background resource usage
+  stopLowPolling()
+  // GridStack cleanup
+  if (grid) {
+    grid.destroy(false)
+    grid = null
+  }
 })
 
 // Phase 5: 格式化宏观价格（带单位）

@@ -102,6 +102,81 @@ def log_audit(
             conn.close()
 
 
+def get_audit_logs_keyset(
+    after_timestamp: Optional[str] = None,
+    after_id: Optional[int] = None,
+    limit: int = 100,
+    agent_id: Optional[str] = None,
+    action: Optional[str] = None,
+    resource: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+) -> List[Dict]:
+    """
+    Get audit logs using keyset (cursor-based) pagination.
+    
+    This provides O(1) performance for deep pages compared to OFFSET pagination.
+    
+    Args:
+        after_timestamp: Get logs before this timestamp (ISO format) - cursor
+        after_id: Get logs with id less than this (for same timestamp) - cursor
+        limit: Maximum number of logs to return
+        agent_id: Filter by agent ID
+        action: Filter by action type
+        resource: Filter by resource (LIKE match)
+        start_time: Filter by start time
+        end_time: Filter by end time
+        
+    Returns:
+        List of audit log records
+    """
+    conn = _get_conn()
+    try:
+        conditions = []
+        params = []
+        
+        # Keyset pagination: get records BEFORE the cursor
+        if after_timestamp and after_id is not None:
+            conditions.append("(timestamp < ? OR (timestamp = ? AND id < ?))")
+            params.extend([after_timestamp, after_timestamp, after_id])
+        
+        # Regular filters
+        if agent_id:
+            conditions.append("agent_id = ?")
+            params.append(agent_id)
+        if action:
+            conditions.append("action = ?")
+            params.append(action)
+        if resource:
+            conditions.append("resource LIKE ?")
+            params.append(f"%{resource}%")
+        if start_time:
+            conditions.append("timestamp >= ?")
+            params.append(start_time.isoformat())
+        if end_time:
+            conditions.append("timestamp <= ?")
+            params.append(end_time.isoformat())
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        # Keyset pagination: ORDER BY timestamp DESC, id DESC for stable ordering
+        query = f"""
+            SELECT * FROM audit_logs
+            WHERE {where_clause}
+            ORDER BY timestamp DESC, id DESC
+            LIMIT ?
+        """
+        params.append(limit)
+        
+        rows = conn.execute(query, params).fetchall()
+        return [_row_to_dict(row) for row in rows]
+    except Exception as e:
+        logger.error(f"[AuditDB] Keyset query failed: {e}")
+        return []
+    finally:
+        conn.close()
+
+
 def get_audit_logs(
     agent_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -112,7 +187,7 @@ def get_audit_logs(
     offset: int = 0,
 ) -> List[Dict]:
     """
-    Query audit logs with filters
+    Query audit logs with filters (OFFSET pagination - deprecated, use get_audit_logs_keyset)
     
     Args:
         agent_id: Filter by agent ID

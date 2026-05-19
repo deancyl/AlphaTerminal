@@ -274,7 +274,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated } from 'vue'
 import { logger } from '../utils/logger.js'
 import { safeDivide } from '../utils/safeMath.js'
 import YieldCurveChart from './YieldCurveChart.vue'
@@ -466,5 +466,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+})
+
+// KeepAlive deactivated: cleanup to prevent resource usage when cached
+onDeactivated(() => {
+  if (timer) clearInterval(timer)
+  timer = null
 })
 </script>

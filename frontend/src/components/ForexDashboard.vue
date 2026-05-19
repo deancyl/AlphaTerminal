@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, watch, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, watch, computed, onWatcherCleanup } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useSmartPolling } from '../composables/useSmartPolling.js'
@@ -384,6 +384,15 @@ onUnmounted(() => {
   stopPolling()
   if (timeInterval) {
     clearInterval(timeInterval)
+  }
+})
+
+// KeepAlive deactivated: cleanup to prevent resource usage when cached
+onDeactivated(() => {
+  stopPolling()
+  if (timeInterval) {
+    clearInterval(timeInterval)
+    timeInterval = null
   }
 })
 

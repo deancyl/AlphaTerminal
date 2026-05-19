@@ -115,11 +115,21 @@
         @maintenance="dbMaintenance"
       />
 
+      <!-- 数据缺口雷达 -->
+      <DataGapsPanel
+        v-show="activeTab === 'data_gaps'"
+      />
+
       <!-- 系统监控 -->
       <MonitorPanel
         v-show="activeTab === 'monitor'"
         :metrics="systemMetrics"
         @refresh="refreshSystemMetrics"
+      />
+
+      <!-- 回测监控 -->
+      <BacktestMonitorPanel
+        v-show="activeTab === 'backtest'"
       />
 
       <!-- 布局设置 -->
@@ -140,6 +150,12 @@
       <!-- Token 监控 -->
       <TokenMonitoringPanel
         v-show="activeTab === 'tokens'"
+        @switch-tab="activeTab = $event"
+      />
+
+      <!-- 成本归因 -->
+      <CostAttributionPanel
+        v-show="activeTab === 'cost-attribution'"
       />
 
       <!-- API密钥管理 -->
@@ -215,6 +231,8 @@ import McpPanel from './admin/McpPanel.vue'
 import LayoutPanel from './admin/LayoutPanel.vue'
 import RateLimitPanel from './admin/RateLimitPanel.vue'
 import TokenMonitoringPanel from './admin/TokenMonitoringPanel.vue'
+import BacktestMonitorPanel from './admin/BacktestMonitorPanel.vue'
+import DataGapsPanel from './admin/DataGapsPanel.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
@@ -245,7 +263,9 @@ const navItems = [
   { id: 'ratelimit', label: '速率限制', desc: 'API请求频率控制和DoS防护', icon: '🚦', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'data_gaps', label: '数据缺口', desc: '监控缺失数据并一键回填', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
+  { id: 'backtest', label: '回测监控', desc: '监控运行中的回测任务和资源', icon: '🔬', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'llm', label: '模型配置', desc: '多模型矩阵配置和并发控制', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'tokens', label: 'Token监控', desc: 'LLM API调用量和成本监控', icon: '📈', status: true, statusClass: 'bg-[var(--color-success-light)]' },
   { id: 'agent_tokens', label: 'API密钥', desc: '管理Agent和第三方API密钥', icon: '🔑', status: true, statusClass: 'bg-[var(--color-success-light)]' },

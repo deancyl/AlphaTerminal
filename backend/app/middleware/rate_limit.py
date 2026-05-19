@@ -11,6 +11,10 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from app.middleware.rate_limit_sqlite import SQLiteRateLimiter
+
+InMemoryRateLimiter = SQLiteRateLimiter
+
 from app.config.rate_limit import (
     RateLimitConfig,
     EndpointLimit,
@@ -23,66 +27,13 @@ from app.utils.ip_validation import get_client_ip_safe
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class RateLimitEntry:
-    count: int = 0
-    reset_at: float = 0.0
-    first_request: float = 0.0
+_limiter: Optional[SQLiteRateLimiter] = None
 
 
-class InMemoryRateLimiter:
-    def __init__(self):
-        self._storage: Dict[str, RateLimitEntry] = {}
-    
-    def is_allowed(self, key: str, limit: int, period: int) -> Tuple[bool, int, int, int]:
-        now = time.time()
-        
-        if key not in self._storage:
-            self._storage[key] = RateLimitEntry(
-                count=1,
-                reset_at=now + period,
-                first_request=now
-            )
-            return True, limit - 1, limit, int(self._storage[key].reset_at)
-        
-        entry = self._storage[key]
-        
-        if now > entry.reset_at:
-            entry.count = 1
-            entry.reset_at = now + period
-            entry.first_request = now
-            return True, limit - 1, limit, int(entry.reset_at)
-        
-        if entry.count >= limit:
-            retry_after = int(entry.reset_at - now)
-            return False, 0, limit, int(entry.reset_at)
-        
-        entry.count += 1
-        return True, limit - entry.count, limit, int(entry.reset_at)
-    
-    def get_stats(self) -> Dict[str, Any]:
-        return {
-            "total_keys": len(self._storage),
-            "entries": {
-                k: {"count": v.count, "reset_at": v.reset_at}
-                for k, v in list(self._storage.items())[:100]
-            }
-        }
-    
-    def reset(self, key: Optional[str] = None):
-        if key:
-            self._storage.pop(key, None)
-        else:
-            self._storage.clear()
-
-
-_limiter: Optional[InMemoryRateLimiter] = None
-
-
-def get_limiter() -> InMemoryRateLimiter:
+def get_limiter() -> SQLiteRateLimiter:
     global _limiter
     if _limiter is None:
-        _limiter = InMemoryRateLimiter()
+        _limiter = SQLiteRateLimiter()
     return _limiter
 
 

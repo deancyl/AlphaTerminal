@@ -455,7 +455,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, reactive, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, reactive, onMounted, onUnmounted, onDeactivated } from 'vue';
 import { apiFetch } from '../utils/api.js';
 import { useValidation } from '../composables/useValidation.js';
 import OpenLotsPanel from './OpenLotsPanel.vue';
@@ -871,6 +871,14 @@ onMounted(async () => {
 onUnmounted(() => {
   // No shared controller to clean up - each request uses its own
 });
+
+// KeepAlive deactivated: cleanup to prevent resource usage when cached
+onDeactivated(() => {
+  // Reset state to prevent stale data when reactivated
+  positions.value = [];
+  loading.value = false;
+  error.value = '';
+})
 
 watch(selectedPortfolioId, loadPortfolioData);
 
