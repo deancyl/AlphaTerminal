@@ -144,7 +144,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[shareholder] Data processing error in circulate holders: {e}")
                     return None
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] circulate holders: {e}")
+                    logger.warning(f"[HTTP] circulate holders: {e}")
                     return None
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -176,7 +176,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[shareholder] Data processing error in share changes: {e}")
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] share changes: {e}")
+                    logger.warning(f"[HTTP] share changes: {e}")
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -206,7 +206,7 @@ async def get_shareholder_data(symbol: str):
                     logger.warning(f"[shareholder] Data processing error in holder changes: {e}")
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] holder changes: {e}")
+                    logger.warning(f"[HTTP] holder changes: {e}")
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -1044,7 +1044,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
                 logger.warning(f"[Announcements] Data processing error for {symbol}: {e}")
                 return []
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] for {symbol}: {e}")
+                logger.warning(f"[HTTP] for {symbol}: {e}")
                 return []
         
         loop = asyncio.get_event_loop()

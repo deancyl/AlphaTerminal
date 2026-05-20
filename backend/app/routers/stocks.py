@@ -76,7 +76,7 @@ async def get_limit_up():
                            'float_market_cap', 'total_market_cap', 'turnover_rate', 'seal_fund',
                            'first_seal_time', 'last_seal_time', 'board_count', 'industry']].to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()
@@ -117,7 +117,7 @@ async def get_limit_down():
                            'float_market_cap', 'total_market_cap', 'turnover_rate',
                            'continue_stop', 'open_count', 'industry']].to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()
@@ -158,7 +158,7 @@ async def get_unusual():
             result_df = result_df.sort_values('turnover_rate', ascending=False).head(30)
             return result_df.to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()

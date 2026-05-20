@@ -634,8 +634,8 @@ async def get_economic_calendar(
                     )
                     return (indicator_config, df)
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] {indicator_config['indicator']}: {e}")
-            return (indicator_config, None)
+                logger.warning(f"[HTTP] {indicator_config['indicator']}: {e}")
+                return (indicator_config, None)
         
         cn_indicators = [ind for ind in ECONOMIC_CALENDAR_INDICATORS if ind["country"] == "CN"]
         fetch_tasks = [fetch_indicator_data(ind) for ind in cn_indicators]
@@ -1097,7 +1097,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] GDP fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_cpi():
@@ -1119,7 +1119,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] CPI fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_ppi():
@@ -1141,7 +1141,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] PPI fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_pmi():
@@ -1163,7 +1163,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] PMI fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_m2():
@@ -1185,7 +1185,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] M2 fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_social_financing():
@@ -1207,7 +1207,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] Social financing fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_industrial_production():
@@ -1229,7 +1229,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         async def fetch_unemployment():
@@ -1251,7 +1251,7 @@ async def get_macro_batch(
                 logger.warning(f"[Macro Batch] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None
         
         tasks = []
@@ -1352,7 +1352,7 @@ async def get_macro_dashboard():
                 logger.warning(f"[Macro Dashboard] {name} fetch timeout")
                 return None, False
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] error: {e}", exc_info=True)
+                logger.error(f"[HTTP] error: {e}", exc_info=True)
                 return None, False
         
         # Define fetch functions

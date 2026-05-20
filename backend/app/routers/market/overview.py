@@ -75,7 +75,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                 except (ValueError, IndexError, AttributeError):
                     continue
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}")
 
     # 3) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指 + 恒生指数HSI，不过代理）
     qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI", "hkHSI")]
@@ -101,7 +101,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                 except (ValueError, IndexError, AttributeError):
                     continue
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}")
 
     return results
 

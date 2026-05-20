@@ -1423,7 +1423,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}")
             return []
     
     def _fetch_financial_data():
@@ -1455,7 +1455,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}")
             return []
     
     try:
