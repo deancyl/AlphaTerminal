@@ -61,133 +61,54 @@ _MOCK_BONDS = [
 
 
 async def _fetch_curve_data_for_cache():
-    """Fetch function for get_or_set_async - returns curve data dict"""
+    """Fetch function for get_or_set_async - returns curve data dict
+    
+    Uses bond_fetcher's multi-source fallback chain:
+    1. bond_spot_quote (real-time dealer quotes) - PRIMARY
+    2. bond_spot_deal (real-time deals)
+    3. akshare bond_china_yield (historical, may be stale)
+    4. CFETS / Chinabond
+    5. Mock data
+    """
     global _LAST_FETCH_TIME
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    def parse_row(row):
-        tenors = {}
-        for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
-            if col in row and row[col] is not None:
-                try:
-                    tenors[col] = round(float(row[col]), 4)
-                except (ValueError, TypeError) as e:
-                    logger.debug(f"[BOND] Failed to parse tenor value '{col}': {type(e).__name__}: {e}")
-        return tenors
-
-    def calc_spreads(gov_row, other_row):
-        spreads = {}
-        for col in ["3月", "6月", "1年", "3年", "5年", "7年", "10年", "30年"]:
-            g = gov_row.get(col)
-            o = other_row.get(col)
-            if g is not None and o is not None:
-                spreads[col] = round((o - g) * 100, 2)   # bps
-        return spreads
-
+    
     try:
         if not _bond_cb.is_available():
-            logger.warning("[Bond] Circuit breaker is OPEN, using bond_fetcher fallback")
-            raise Exception("Circuit breaker open")
-        
-        import akshare as ak
-        import warnings
-        warnings.filterwarnings("ignore")
-
-        loop = asyncio.get_running_loop()
-        df = await asyncio.wait_for(
-            loop.run_in_executor(_bond_executor, ak.bond_china_yield),
-            timeout=30.0
-        )
-        if df is not None and not df.empty:
-            _bond_cb.record_success()
-            df = df.sort_values("日期").reset_index(drop=True)
-            unique_dates = sorted(df["日期"].unique())
-
-            def get_gov_row(df_slice):
-                for _, row in df_slice.iterrows():
-                    cn = str(row.get("曲线名称", ""))
-                    if "国债" in cn:
-                        return parse_row(row)
-                return None
-
-            latest_date  = unique_dates[-1]
-            latest_df    = df[df["日期"] == latest_date]
-            gov_row      = get_gov_row(latest_df)
-
-            date_1m = unique_dates[-22] if len(unique_dates) >= 22 else None
-            date_1y = unique_dates[-252] if len(unique_dates) >= 252 else None
-            gov_row_1m = get_gov_row(df[df["日期"] == date_1m]) if date_1m else None
-            gov_row_1y = get_gov_row(df[df["日期"] == date_1y]) if date_1y else None
-
-            comm_row = None
-            for _, row in latest_df.iterrows():
-                cn = str(row.get("曲线名称", ""))
-                if "商业" in cn and comm_row is None:
-                    comm_row = parse_row(row)
-
-            spreads = calc_spreads(gov_row, comm_row) if gov_row and comm_row else {}
-
-            last_update_str = str(latest_date)
-            if hasattr(latest_date, 'strftime'):
-                last_update_str = latest_date.strftime("%Y-%m-%d")
-            
-            last_update_dt = datetime.strptime(last_update_str, "%Y-%m-%d")
-            days_old = (datetime.now() - last_update_dt).days
-            is_stale = days_old > STALE_DATA_THRESHOLD_DAYS
-            
+            logger.warning("[Bond] Circuit breaker is OPEN, using mock fallback")
             with _CACHE_LOCK:
                 _LAST_FETCH_TIME = time.time()
-            logger.info(f"[Bond] yield curve + spreads + history fetched (last_update: {last_update_str}, days_old: {days_old})")
+            return _bond_fetcher._get_mock_data(is_stale=True)
+        
+        # Use bond_fetcher's multi-source fallback chain
+        # This will try bond_spot_quote (real-time) first, then fallback to other sources
+        data = await _bond_fetcher.fetch_yield_curve()
+        
+        if data and data.get("yield_curve"):
+            _bond_cb.record_success()
+            with _CACHE_LOCK:
+                _LAST_FETCH_TIME = time.time()
             
-            return {
-                "yield_curve":      gov_row or {},
-                "yield_curve_1m":  gov_row_1m or {},
-                "yield_curve_1y":  gov_row_1y or {},
-                "comm_yield":      comm_row or {},
-                "spreads_bps":     spreads,
-                "update_time":     now_str,
-                "source":          "akshare",
-                "last_update":     last_update_str,
-                "is_stale":        is_stale,
-            }
+            source = data.get("source", "unknown")
+            last_update = data.get("last_update", "")
+            logger.info(f"[Bond] Yield curve fetched from {source}, last_update: {last_update}")
+            
+            return data
+        else:
+            _bond_cb.record_failure()
+            logger.warning("[Bond] bond_fetcher returned empty data")
+            
     except asyncio.TimeoutError:
         _bond_cb.record_failure()
-        logger.warning("[Bond] bond_china_yield timeout after 30s")
+        logger.warning("[Bond] bond_fetcher timeout")
     except Exception as e:
         _bond_cb.record_failure()
-        logger.warning(f"[Bond] bond_china_yield failed: {type(e).__name__}: {e}")
+        logger.warning(f"[Bond] bond_fetcher failed: {type(e).__name__}: {e}")
 
+    # Last resort: mock data
     with _CACHE_LOCK:
         _LAST_FETCH_TIME = time.time()
-    logger.info("[Bond] Using bond_fetcher fallback")
-    
-    return {
-        "yield_curve": {
-            "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
-            "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
-            "10年": 3.1185, "30年": 3.7156,
-        },
-        "yield_curve_1m": {
-            "3月": 2.0816, "6月": 2.1955, "1年": 2.5225,
-            "3年": 2.8345, "5年": 3.0273, "7年": 3.2012,
-            "10年": 3.1985, "30年": 3.7956,
-        },
-        "yield_curve_1y": {
-            "3月": 2.2316, "6月": 2.3355, "1年": 2.6525,
-            "3年": 2.9645, "5年": 3.1373, "7年": 3.3112,
-            "10年": 3.2185, "30年": 3.9156,
-        },
-        "comm_yield": {
-            "3月": 2.5210, "6月": 2.6557, "1年": 2.8580,
-            "3年": 3.3284, "5年": 3.5453, "7年": 3.6985,
-            "10年": 3.8367, "30年": 4.4626,
-        },
-        "spreads_bps": {},
-        "update_time": now_str,
-        "source": "mock",
-        "last_update": "2021-01-22",
-        "is_stale": True,
-    }
+    logger.warning("[Bond] Using mock fallback")
+    return _bond_fetcher._get_mock_data(is_stale=True)
 
 
 async def _fetch_history_df_for_cache():
@@ -407,25 +328,29 @@ async def bond_history(
         })
 
 
-def _init_mock_cache():
-    """同步填充 Mock 数据，保证 API 启动后立即可用"""
+def _init_cache_warmup():
+    """Start background cache warmup with real data."""
     global _LAST_FETCH_TIME
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-    cache_data = {
-        "yield_curve": {
-            "3月": 2.0316, "6月": 2.1355, "1年": 2.4525,
-            "3年": 2.7645, "5年": 2.9373, "7年": 3.1112,
-            "10年": 3.1185, "30年": 3.7156,
-        },
-        "update_time": now_str,
-        "source": "mock",
-    }
-    _cache.set(f"{NAMESPACE}main", cache_data, ttl=TTL)
-    with _CACHE_LOCK:
-        _LAST_FETCH_TIME = time.time()
-    logger.info("[Bond] Mock yield curve initialized")
+    logger.info("[Bond] Starting background cache warmup...")
+    
+    async def warmup():
+        try:
+            data = await _fetch_curve_data_for_cache()
+            if data and data.get("yield_curve"):
+                logger.info(f"[Bond] Cache warmup complete, source: {data.get('source')}")
+            else:
+                logger.warning("[Bond] Cache warmup returned empty data")
+        except Exception as e:
+            logger.warning(f"[Bond] Cache warmup failed: {e}")
+    
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        asyncio.create_task(warmup())
+    except RuntimeError:
+        pass
 
-_init_mock_cache()
+_init_cache_warmup()
 
 
 @router.get("/bond/health")
