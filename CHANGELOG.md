@@ -5,6 +5,60 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.64] - 2026-05-20
+
+### 全域后端静默失败肃清战役 - 异常处理基础设施
+
+本次更新建立了完整的异常处理基础设施，实现"零静默失败"的生产级系统。
+
+#### 新增功能
+
+- **异常历史审计表** — `error_history` 表持久化异常记录
+  - 字段：id, timestamp, module, error_type, error_code, message, details, resolved, resolved_at, resolved_by
+  - 支持7天自动清理、按模块/类型统计、状态标记
+
+- **统一异常处理装饰器** — `@handle_errors(module='xxx')` 装饰器
+  - 自动日志记录（带 exc_info=True）
+  - 数据库持久化到 error_history 表
+  - 标准错误响应（使用 sanitize_error 清洗）
+
+- **异常历史查询 API** — 管理面板新增接口
+  - `GET /api/v1/admin/errors/history` - 查询异常历史
+  - `GET /api/v1/admin/errors/stats` - 异常统计
+  - `POST /api/v1/admin/errors/{id}/resolve` - 标记已解决
+  - `POST /api/v1/admin/errors/cleanup` - 清理过期记录
+
+#### 修复内容
+
+- **异常清洗链集成** — `exception_handlers.py`
+  - `general_exception_handler` 集成 `sanitize_error` 清洗异常消息
+  - 防止敏感信息泄露（文件路径、API密钥等）
+
+- **导入修复** — `utils/__init__.py`
+  - 从 `errors.py` 导入 `sanitize_error`, `success_response`, `error_response`
+  - 移除对废弃 `response.py` 的依赖
+
+- **静默失败修复** — `error_logger.py`
+  - `QueueFull` 异常从 `pass` 改为 `logger.warning`
+  - 确保队列满时有日志记录
+
+#### 文件变更
+
+| 文件 | 类型 | 描述 |
+|------|------|------|
+| `backend/app/db/error_history_db.py` | 新增 | 异常历史数据库操作 |
+| `backend/app/utils/error_decorator.py` | 新增 | @handle_errors 装饰器 |
+| `backend/app/routers/admin.py` | 修改 | 添加异常历史 API |
+| `backend/app/services/error_logger.py` | 修改 | 修复静默失败 |
+| `backend/app/utils/__init__.py` | 修改 | 更新导入 |
+| `backend/app/utils/exception_handlers.py` | 修改 | 集成异常清洗 |
+
+#### 验证结果
+
+- ✅ 所有模块导入测试通过
+- ✅ 服务重启验证通过（后端 8002，前端 60100）
+- ✅ API 功能测试通过（/api/v1/admin/errors/stats）
+
 ## [0.6.63] - 2026-05-20
 
 ### 紧急修复（语法错误修复）
