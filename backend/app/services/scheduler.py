@@ -4,6 +4,8 @@ APScheduler 调度器 - Phase 3 真实缓冲写入
 import logging
 import fcntl
 import os
+import asyncio
+import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
 from app.db import flush_buffer_to_realtime
 from datetime import datetime
