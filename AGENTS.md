@@ -5305,3 +5305,43 @@ These are non-blocking issues that do not affect runtime behavior.
 
 v0.6.62 is designated as the final LTS release for the v0.6.x series. No further v0.6.x releases are planned. All future development will focus on v0.7.0 architecture.
 
+---
+
+## v0.6.63 Emergency Fix (2026-05-20)
+
+### Overview
+
+Emergency fix release addressing Python syntax errors that prevented backend startup.
+
+### Issues Fixed
+
+| Issue | Solution | Files |
+|-------|----------|-------|
+| except block indentation errors | Fixed indentation for 18 files | Multiple router and service files |
+| InMemoryRateLimiter import error | Replaced with TokenBucketRateLimiter | middleware/__init__.py |
+| Missing httpx/asyncio imports | Added imports | scheduler.py |
+| Nested function reference error | Refactored run_initial_data_fetch | scheduler.py |
+
+### Commits
+
+```
+ec7acf6e - fix: Remove macro data fetch from startup
+f4ee51f2 - fix: Refactor run_initial_data_fetch
+20022512 - fix: Add missing httpx and asyncio imports
+c1cd018f - fix: Update middleware imports
+0443f7f8 - fix: Correct indentation for except blocks across all backend files
+f7da3bbe - fix: Correct indentation for except blocks in router files
+```
+
+### Verification
+
+```bash
+# Check backend health
+curl http://localhost:60100/api/v1/macro/overview
+
+# Check all APIs
+curl http://localhost:60100/api/v1/market/overview
+curl http://localhost:60100/api/v1/news/flash
+curl http://localhost:60100/api/v1/forex/spot
+```
+

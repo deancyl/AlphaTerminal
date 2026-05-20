@@ -5,6 +5,51 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.63] - 2026-05-20
+
+### 紧急修复（语法错误修复）
+
+本次更新修复了 v0.6.62 中遗留的 Python 语法错误，确保后端服务正常启动。
+
+#### 修复内容
+
+- **修复 except 块缩进错误** — 18个文件中的 except 块缺少正确缩进
+  - `overview.py`: 2处
+  - `positions.py`: 1处
+  - `copilot.py`: 2处
+  - `f9_deep.py`: 2处
+  - `macro.py`: 9处
+  - `stocks.py`: 2处
+  - `global_index_fetcher.py`: 1处
+  - `bond_fetcher.py`: 2处
+  - `options_fetcher.py`: 1处 + 意外缩进修复
+  - `playback_engine.py`: 1处
+  - `anomaly_detector.py`: 1处
+  - `news_engine.py`: 2处
+  - `f9_fetcher.py`: 7处
+  - `sina_hq_fetcher.py`: 1处
+
+- **修复导入错误** — middleware/__init__.py
+  - 替换 `InMemoryRateLimiter` 为 `TokenBucketRateLimiter` 和 `SQLiteRateLimiter`
+
+- **修复缺失导入** — scheduler.py
+  - 添加 `httpx` 和 `asyncio` 导入
+
+- **重构启动数据获取** — scheduler.py
+  - 移除对嵌套函数 `_forex_polling_job` 和 `_macro_polling_job` 的依赖
+  - 直接调用 `forex_fetcher` 获取数据
+
+#### 提交记录
+
+| Commit | 描述 |
+|--------|------|
+| `ec7acf6e` | fix: Remove macro data fetch from startup |
+| `f4ee51f2` | fix: Refactor run_initial_data_fetch |
+| `20022512` | fix: Add missing httpx and asyncio imports |
+| `c1cd018f` | fix: Update middleware imports |
+| `0443f7f8` | fix: Correct indentation for except blocks across all backend files |
+| `f7da3bbe` | fix: Correct indentation for except blocks in router files |
+
 ## [0.6.62] - 2026-05-20
 
 ### 最终收官（v0.6.x LTS 终局版本）
