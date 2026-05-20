@@ -5,6 +5,67 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.65] - 2026-05-20
+
+### 全域后端静默失败肃清战役 - Wave 4-5 完成
+
+本次更新完成了路由层改造和日志调用补全，实现完整的异常处理基础设施。
+
+#### Wave 4: 路由层改造
+
+- **@handle_errors 装饰器应用** — 50 个路由文件
+  - 主路由目录: 39 个文件
+  - 子目录 (market/, portfolio/): 11 个文件
+  - 总路由函数: 378 个
+
+- **装饰器功能**:
+  - 自动异常捕获
+  - 日志记录（带 exc_info=True）
+  - 错误消息清洗（sanitize_error）
+  - 数据库持久化到 error_history 表
+  - 标准错误响应返回
+
+- **module 参数命名规则**:
+  - 主目录文件: 使用文件名（如 `admin`, `stocks`, `macro`）
+  - 子目录文件: 使用 `子目录名_文件名`（如 `market_overview`, `portfolio_positions`）
+
+#### Wave 5: exc_info 补全
+
+- **日志调用改造** — 100 个文件
+  - routers/: 40 个文件
+  - services/: 45 个文件
+  - db/: 8 个文件
+  - utils/: 3 个文件
+  - middleware/: 3 个文件
+  - mcp/: 1 个文件
+
+- **改造规则**:
+  - `logger.error()` 在 except 块内 → 添加 `exc_info=True`
+  - `logger.exception()` → 保持不变（默认包含）
+  - `logger.warning()` 在 except 块内 → 添加 `exc_info=True`
+
+- **统计**:
+  - exc_info=True 总数: 872（从 ~400 增加）
+  - Python 文件编译: 227 个文件全部通过
+
+#### 文件变更统计
+
+| 类别 | 文件数 | 描述 |
+|------|--------|------|
+| 路由文件 | 50 | 应用 @handle_errors 装饰器 |
+| 服务文件 | 45 | 补全 exc_info=True |
+| 数据库文件 | 8 | 补全 exc_info=True |
+| 工具文件 | 3 | 补全 exc_info=True |
+| 中间件文件 | 3 | 补全 exc_info=True |
+| MCP 文件 | 1 | 补全 exc_info=True |
+| **总计** | **117** | |
+
+#### 验证结果
+
+- ✅ 后端编译通过
+- ✅ 服务启动成功（后端 8002，前端 60100）
+- ✅ API 功能测试通过
+
 ## [0.6.64] - 2026-05-20
 
 ### 全域后端静默失败肃清战役 - 异常处理基础设施
