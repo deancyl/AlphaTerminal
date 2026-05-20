@@ -623,17 +623,46 @@ async def run_initial_data_fetch():
     
     loop = asyncio.get_running_loop()
     
+    # Fetch forex data directly
     try:
-        await loop.run_in_executor(None, _forex_polling_job)
+        from app.services.fetchers.forex_fetcher import forex_fetcher
+        from app.services.data_cache import get_cache
+        
+        cache = get_cache()
+        quotes = await forex_fetcher.get_spot_quotes()
+        
+        # Build cross-rate matrix data
+        currency_list = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
+        cfets_rmb = await forex_fetcher.get_cfets_spot()
+        cfets_cross = await forex_fetcher.get_cfets_crosses()
+        
+        from decimal import Decimal
+        rates_dict = {}
+        for q in quotes:
+            symbol = q.get("symbol", "")
+            if symbol.endswith("CNY"):
+                rates_dict[symbol.replace("CNY", "")] = Decimal(str(q.get("bid", q.get("price", 0))))
+        
+        # Add CFETS rates
+        for item in cfets_rmb:
+            symbol = item.get("symbol", "")
+            if symbol.endswith("CNY"):
+                rates_dict[symbol.replace("CNY", "")] = Decimal(str(item.get("bid", item.get("price", 0))))
+        
+        cache.set("forex:spot:v1", quotes, ttl=60)
+        cache.set("forex:rates:v1", {k: float(v) for k, v in rates_dict.items()}, ttl=60)
+        
         logger.info("[Startup] Forex data fetched")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] failed: {e}", exc_info=True)
+        logger.error(f"[HTTP] forex failed: {e}", exc_info=True)
     
+    # Fetch macro data directly
     try:
-        await loop.run_in_executor(None, _macro_polling_job)
+        from app.routers.macro import _fetch_curve_data_for_cache
+        await _fetch_curve_data_for_cache()
         logger.info("[Startup] Macro data fetched")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] failed: {e}", exc_info=True)
+        logger.error(f"[HTTP] macro failed: {e}", exc_info=True)
     
     logger.info("[Startup] Blocking data fetch complete")
 
