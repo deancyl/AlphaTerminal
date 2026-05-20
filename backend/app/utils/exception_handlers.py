@@ -21,6 +21,7 @@ from app.utils.errors import (
     http_exception_handler,
     ErrorCode
 )
+from app.utils.error_sanitizer import sanitize_error
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,8 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     """处理通用异常"""
     trace_id = str(exc.trace_id) if hasattr(exc, 'trace_id') else None
     
+    sanitized_message = sanitize_error(exc, log_full_error=True)
+    
     logger.error(
         f"Unhandled Exception: {str(exc)}",
         extra={
@@ -117,15 +120,16 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
             "path": request.url.path,
             "method": request.method,
             "traceback": traceback.format_exc(),
-        }
+        },
+        exc_info=True
     )
     
     return JSONResponse(
         status_code=500,
         content=error_response(
             code=ErrorCode.INTERNAL_ERROR,
-            message="服务器内部错误",
-            details={"detail": "请联系管理员"} if not __debug__ else {"error": str(exc)}
+            message=sanitized_message,
+            details={"trace_id": trace_id} if trace_id else None
         )
     )
 

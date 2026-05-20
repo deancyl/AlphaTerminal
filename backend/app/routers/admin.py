@@ -2002,3 +2002,85 @@ async def update_source_config(config: SourceBalanceConfig):
         "message": "数据源配置已更新",
         "data": config.dict()
     }
+
+
+# ── Error History API ───────────────────────────────────────────────────────
+
+@router.get("/errors/history")
+async def get_error_history(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    module: Optional[str] = Query(None),
+    resolved: Optional[int] = Query(None),
+    since_hours: Optional[int] = Query(24, ge=1, le=168),
+):
+    from app.db.error_history_db import get_error_history as _get_error_history
+    
+    errors = _get_error_history(
+        limit=limit,
+        offset=offset,
+        module=module,
+        resolved=resolved,
+        since_hours=since_hours,
+    )
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": {
+            "errors": errors,
+            "total": len(errors),
+            "limit": limit,
+            "offset": offset,
+        }
+    }
+
+
+@router.get("/errors/stats")
+async def get_error_stats(
+    since_hours: int = Query(24, ge=1, le=168),
+):
+    from app.db.error_history_db import get_error_stats as _get_error_stats
+    
+    stats = _get_error_stats(since_hours=since_hours)
+    
+    return {
+        "code": 0,
+        "message": "success",
+        "data": stats
+    }
+
+
+@router.post("/errors/{error_id}/resolve")
+async def resolve_error(error_id: int):
+    from app.db.error_history_db import mark_error_resolved
+    
+    success = mark_error_resolved(error_id)
+    
+    if success:
+        return {
+            "code": 0,
+            "message": "错误已标记为已解决",
+            "data": {"error_id": error_id}
+        }
+    else:
+        return {
+            "code": 104,
+            "message": "错误记录不存在",
+            "data": None
+        }
+
+
+@router.post("/errors/cleanup")
+async def cleanup_errors(
+    days: int = Query(7, ge=1, le=30),
+):
+    from app.db.error_history_db import cleanup_old_errors
+    
+    deleted = cleanup_old_errors(days=days)
+    
+    return {
+        "code": 0,
+        "message": f"已清理 {deleted} 条过期错误记录",
+        "data": {"deleted": deleted, "days": days}
+    }
