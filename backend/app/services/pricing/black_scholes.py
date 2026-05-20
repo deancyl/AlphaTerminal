@@ -7,10 +7,11 @@ Default parameters calibrated for Chinese A-share market.
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional, Dict, Any, List, Tuple
 
 import numpy as np
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -249,6 +250,85 @@ class OptionsPricingEngine:
         
         return None, None
     
+
+    async def get_risk_free_rate_async(self) -> float:
+        """
+        Fetch current risk-free rate from Bond module's 10Y treasury yield.
+        
+        Returns:
+            Risk-free rate as decimal (e.g., 0.0275 for 2.75%)
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(
+                    'http://localhost:8002/api/v1/bond/risk_free_rate'
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('success') and data.get('data', {}).get('rate'):
+                        return float(data['data']['rate'])
+        except Exception as e:
+            logger.debug(f"[Pricing] Failed to fetch risk-free rate: {e}")
+        
+        # Fallback to default
+        return self.r
+    
+    def bisection_iv(
+        self,
+        price: float,
+        spot: float,
+        strike: float,
+        time_to_expiry: float,
+        is_call: bool = True,
+        max_iterations: int = 100,
+        tolerance: float = 1e-6
+    ) -> Optional[float]:
+        """
+        Bisection method for implied volatility calculation.
+        
+        Used as fallback when rational approximation fails.
+        
+        Args:
+            price: Option market price
+            spot: Underlying spot price
+            strike: Strike price
+            time_to_expiry: Time to expiry in years
+            is_call: True for call, False for put
+            max_iterations: Maximum iterations (default: 100)
+            tolerance: Convergence tolerance (default: 1e-6)
+            
+        Returns:
+            Implied volatility or None if convergence fails
+        """
+        if price <= 0 or spot <= 0 or strike <= 0 or time_to_expiry <= 0:
+            return None
+        
+        flag = 'c' if is_call else 'p'
+        
+        sigma_low = 0.001
+        sigma_high = 5.0
+        
+        for _ in range(max_iterations):
+            sigma_mid = (sigma_low + sigma_high) / 2
+            
+            try:
+                price_mid = self.vol_lib['bsm'](
+                    flag, spot, strike, time_to_expiry, self.r, sigma_mid, self.q
+                )
+                
+                if abs(price_mid - price) < tolerance:
+                    return sigma_mid
+                
+                if price_mid < price:
+                    sigma_low = sigma_mid
+                else:
+                    sigma_high = sigma_mid
+            except Exception:
+                # If BSM fails, narrow the range
+                sigma_high = sigma_mid
+        
+        return None
+
     def calculate_greeks(
         self,
         spot: float,

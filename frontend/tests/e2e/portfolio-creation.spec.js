@@ -19,7 +19,9 @@ test.describe('Portfolio Creation', () => {
 
   test('should open create portfolio dialog', async ({ page }) => {
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
+    // Wait for initial data to load
+    await page.waitForTimeout(2000)
     
     // First, click the hamburger button to open the sidebar
     // The sidebar is hidden by default (isSidebarOpen = false in App.vue)

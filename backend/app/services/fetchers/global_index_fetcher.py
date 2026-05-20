@@ -11,6 +11,8 @@ Data sources (free):
 1. Tencent Finance (qt.gtimg.cn) - Primary for HK/US/CN
 2. Yahoo Finance (query1.finance.yahoo.com) - Fallback for global
 3. Alpha Vantage (free tier) - Last resort
+
+Circuit Breaker: 5 consecutive failures → OPEN, 60s timeout
 """
 
 import asyncio
@@ -25,10 +27,19 @@ import httpx
 import re
 import json
 
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+
 logger = logging.getLogger(__name__)
 
-# Thread pool for blocking operations
 _executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="global_index_")
+
+_GLOBAL_INDEX_CB = CircuitBreaker(
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        success_threshold=2,
+        timeout=60.0
+    )
+)
 
 # Global index configuration
 GLOBAL_INDEX_SYMBOLS = {
@@ -139,36 +150,49 @@ class GlobalIndexFetcher:
     
     async def fetch_all_quotes(self) -> List[IndexQuote]:
         """Fetch quotes for all configured indices"""
+        if not _GLOBAL_INDEX_CB.can_execute():
+            logger.warning("[GlobalIndex] Circuit breaker OPEN, using mock fallback")
+            all_symbols = []
+            for region_symbols in GLOBAL_INDEX_SYMBOLS.values():
+                all_symbols.extend(region_symbols)
+            return [self._create_mock_quote(s) for s in all_symbols]
+        
         all_symbols = []
         for region_symbols in GLOBAL_INDEX_SYMBOLS.values():
             all_symbols.extend(region_symbols)
         
         results = []
+        success_count = 0
+        failure_count = 0
         tasks = [self._fetch_single_quote(symbol) for symbol in all_symbols]
         quotes = await asyncio.gather(*tasks, return_exceptions=True)
         
         for symbol, quote in zip(all_symbols, quotes):
             if isinstance(quote, Exception):
                 logger.warning(f"[GlobalIndex] Failed to fetch {symbol}: {quote}")
-                # Use cached data or mock
+                failure_count += 1
                 cached = self._get_cached_quote(symbol)
                 if cached:
                     results.append(cached)
                 else:
                     results.append(self._create_mock_quote(symbol))
             else:
+                success_count += 1
                 results.append(quote)
+        
+        if success_count > failure_count:
+            _GLOBAL_INDEX_CB.record_success()
+        else:
+            _GLOBAL_INDEX_CB.record_failure()
         
         return results
     
     async def _fetch_single_quote(self, symbol: str) -> IndexQuote:
         """Fetch quote for a single index"""
-        # Check cache first
         cached = self._get_cached_quote(symbol)
         if cached:
             return cached
         
-        # Try Tencent first (faster for HK/US/CN)
         if symbol in TENCENT_SYMBOL_MAP:
             try:
                 quote = await self._fetch_from_tencent(symbol)
@@ -178,7 +202,6 @@ class GlobalIndexFetcher:
             except Exception as e:
                 logger.debug(f"[GlobalIndex] Tencent failed for {symbol}: {e}")
         
-        # Fallback to Yahoo Finance
         try:
             quote = await self._fetch_from_yahoo(symbol)
             if quote:

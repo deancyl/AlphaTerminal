@@ -345,28 +345,37 @@ export async function getTopSectors(limit = 5) {
 }
 
 /**
- * 获取北向资金数据（暂无真实API，用SHIBOR替代或模拟）
+ * 获取北向资金数据
+ * 数据源：后端 /api/v1/market/north_flow_ranking
  */
 export async function getNorthFlowRanking() {
-  // 北向资金需要专门的港交所数据接口，暂时用模拟
-  const mockData = {
-    topBuy: [
-      { symbol: 'sh600519', name: '贵州茅台', amount: 12.5 },
-      { symbol: 'sz300750', name: '宁德时代', amount: 8.3 },
-      { symbol: 'sh601318', name: '中国平安', amount: 6.2 },
-      { symbol: 'sz000333', name: '美的集团', amount: 5.8 },
-      { symbol: 'sh600036', name: '招商银行', amount: 4.5 },
-    ],
-    topSell: [
-      { symbol: 'sh601012', name: '隆基绿能', amount: -3.2 },
-      { symbol: 'sz002594', name: '比亚迪', amount: -2.8 },
-      { symbol: 'sh600028', name: '中国石化', amount: -1.9 },
-      { symbol: 'sh600050', name: '中国联通', amount: -1.2 },
-      { symbol: 'sz000002', name: '万科A', amount: -0.8 },
-    ],
-    note: '⚠️ 北向资金数据为参考模拟，实际数据需接入港交所深港通/沪港通专项接口',
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/market/north_flow_ranking`)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const result = await response.json()
+    if (result.code === 0 && result.data) {
+      return {
+        topBuy: result.data.topBuy || [],
+        topSell: result.data.topSell || [],
+        summary: result.data.summary || {},
+        dataSource: result.data.dataSource || { name: '未知', type: 'unknown' },
+        note: result.data.note || ''
+      }
+    }
+    throw new Error(result.message || '获取北向资金数据失败')
+  } catch (error) {
+    console.error('[getNorthFlowRanking] API调用失败:', error)
+    // 降级返回空数据，避免前端崩溃
+    return {
+      topBuy: [],
+      topSell: [],
+      summary: { north_net_buy: 0, south_net_buy: 0 },
+      dataSource: { name: '离线模式', type: 'fallback' },
+      note: '⚠️ 北向资金数据获取失败，请检查网络连接'
+    }
   }
-  return mockData
 }
 
 // ========== 股票代码数据库 (扩展版) ==========

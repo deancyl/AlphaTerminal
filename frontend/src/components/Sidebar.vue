@@ -28,6 +28,8 @@
         <button
           v-for="item in mainNavItems"
           :key="item.id"
+          :data-testid="`nav-${item.id}`"
+          :data-route="item.id"
           class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
           :class="[
             activeId === item.id
@@ -56,6 +58,8 @@
         <button
           v-for="item in aiNavItems"
           :key="item.id"
+          :data-testid="`nav-${item.id}`"
+          :data-route="item.id"
           class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
           :class="[
             activeId === item.id
@@ -106,6 +110,8 @@
         <button
           v-for="item in adminNavItems"
           :key="item.id"
+          :data-testid="`nav-${item.id}`"
+          :data-route="item.id"
           class="w-full flex items-center gap-3 px-2 py-2 transition-all duration-200 rounded-sm"
           :class="[
             activeId === item.id

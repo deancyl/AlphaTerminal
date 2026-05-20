@@ -116,6 +116,79 @@ test('should load homepage', async ({ page }) => {
 })
 ```
 
+## Copilot 模块测试覆盖
+
+### 测试结构
+
+`backend/tests/unit/test_routers/test_copilot.py` 包含 **14 个测试类，63 个测试用例**：
+
+| 测试类 | 测试数量 | 覆盖内容 |
+|--------|---------|---------|
+| `TestCopilotChatEndpoint` | 1 | 基础聊天成功 |
+| `TestCopilotInputValidation` | 7 | 输入验证（空、空白、null、长文本、unicode） |
+| `TestCopilotErrorHandling` | 1 | 并发限制超限 |
+| `TestCopilotAsyncSSE` | 5 | 异步 SSE 流（httpx.AsyncClient） |
+| `TestCopilotServiceLayerFailures` | 16 | 服务层 mock、上下文组装、provider 回退 |
+| `TestCopilotStatusEndpoint` | 3 | 状态端点结构 |
+| `TestCopilotLLMProviders` | 8 | LLM provider 集成（OpenAI/DeepSeek/Qianwen 等） |
+| `TestCopilotTokenTracking` | 3 | Token 追踪准确性、成本计算 |
+| `TestCopilotSessionBinding` | 3 | 会话创建、模型绑定 |
+| `TestCopilotContextLength` | 2 | 上下文长度限制（4096 token） |
+| `TestCopilotDatabaseErrors` | 2 | SQLite 错误处理 |
+| `TestCopilotProviderFallback` | 3 | Provider 回退链 |
+| `TestCopilotRateLimiting` | 3 | 速率限制（30 req/60s） |
+| `TestCopilotContextAssembly` | 4 | 上下文组装（symbol/portfolio） |
+
+### 运行测试
+
+```bash
+# 运行 Copilot 测试
+cd backend && pytest tests/unit/test_routers/test_copilot.py -v
+
+# 运行带覆盖率
+cd backend && pytest tests/unit/test_routers/test_copilot.py --cov=app.routers.copilot
+```
+
+### Mock 模式
+
+测试使用以下 mock 模式：
+
+```python
+# 异步 SSE 生成器
+def _mock_sse_generator(chunks):
+    async def async_gen():
+        for chunk in chunks:
+            yield f"data: {json.dumps(chunk)}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
+    return async_gen()
+
+# 上下文组装结果
+def _create_mock_assembly_result(query_type=QueryType.QUICK_QA, context_text="[TEST]", symbols=None, confidence=0.9):
+    return AssemblyResult(
+        query_type=query_type,
+        context_text=context_text,
+        tokens_used=100,
+        symbols=symbols or [],
+        classification=ClassificationResult(...)
+    )
+```
+
+### 已知问题
+
+当前有 45 个测试失败，原因是业务代码 `copilot.py` 中存在 **7 处 async/await 错误**：
+
+| 行号 | 函数 | 问题 |
+|------|------|------|
+| 1114 | `_init_conversations_table()` | 缺少 await |
+| 1173 | `_fetch_price_context()` | 缺少 await |
+| 1174 | `_fetch_latest_news()` | 缺少 await |
+| 1182 | `_fetch_portfolio_data()` | 缺少 await |
+| 1188 | `_fetch_historical_data()` | 缺少 await |
+| 1205 | `_load_conversation()` | 缺少 await |
+| 1215 | `_save_message()` | 缺少 await |
+
+修复业务代码后，所有测试应通过。
+
 ## 运行测试命令
 
 ```bash

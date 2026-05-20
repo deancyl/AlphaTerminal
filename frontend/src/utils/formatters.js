@@ -67,6 +67,59 @@ export function formatDate(d) {
  * @param {string|Date} d - 日期时间
  * @returns {string} 格式化后的时间
  */
+
+/**
+ * Format datetime with explicit timezone
+ * @param {string|Date} d - Date/datetime string or Date object
+ * @param {string} timezone - IANA timezone (default: 'Asia/Shanghai')
+ * @returns {string} Formatted datetime string
+ */
+export function formatDateTimeTZ(d, timezone = 'Asia/Shanghai') {
+  if (!d) return '--'
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return '--'
+  
+  try {
+    const formatter = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+      hour12: false
+    })
+    return formatter.format(date)
+  } catch (e) {
+    // Fallback to basic format if timezone is invalid
+    return date.toLocaleString('zh-CN')
+  }
+}
+
+/**
+ * Format date with explicit timezone
+ * @param {string|Date} d - Date string or Date object
+ * @param {string} timezone - IANA timezone (default: 'Asia/Shanghai')
+ * @returns {string} Formatted date string (YYYY-MM-DD)
+ */
+export function formatDateTZ(d, timezone = 'Asia/Shanghai') {
+  if (!d) return '--'
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return '--'
+  
+  try {
+    const formatter = new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: timezone
+    })
+    return formatter.format(date).replace(/\//g, '-')
+  } catch (e) {
+    return date.toISOString().slice(0, 10)
+  }
+}
+
 export function formatTime(d) {
   if (!d) return '--'
   const date = new Date(d)

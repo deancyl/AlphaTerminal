@@ -407,13 +407,26 @@ onErrorCaptured((err, instance, info) => {
 
 // Phase 5: 侧边栏与视图切换状态
 const isSidebarOpen = ref(false)   // 侧边栏默认收起（桌面端+移动端）
-const currentView   = ref('stock') // 默认视图：stock / bond / futures
+
+// 从 URL hash 恢复视图（支持页面刷新后保持路由）
+function getInitialView() {
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash
+    const match = hash.match(/#view=(\w+)/)
+    if (match && match[1]) {
+      return match[1]
+    }
+  }
+  return 'stock'
+}
+
+const currentView   = ref(getInitialView()) // 默认视图：stock / bond / futures
 const futuresFullscreen = ref(false)
 const futuresFullscreenSymbol = ref('IF0')
 const f9Symbol = ref('') // F9深度资料当前股票代码
 
 // ── 历史导航状态（Android 硬件返回键支持）──────────────────────────────
-const viewHistory = ref(['stock']) // 视图历史栈
+const viewHistory = ref([getInitialView()]) // 视图历史栈
 const isHistoryNavigation = ref(false) // 防止循环 push
 
 // Watch for currentView changes with comprehensive debug logging
@@ -567,6 +580,7 @@ const showMatrix = ref(false)  // 多品种联动矩阵 (F8)
 const dashboardGridRef = ref(null) // DashboardGrid ref for layout reset
 const breakpoints = useBreakpoints(breakpointsTailwind)
 const isMobile = breakpoints.smaller('md')  // < 768px is mobile
+const currentTime = ref('')  // 时钟显示
 
 // 全屏 K 线状态（提升到 App 根级别，脱离 stacking context 约束）
 function openFullscreenKline({ symbol, name }) {

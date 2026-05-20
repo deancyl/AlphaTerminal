@@ -1,7 +1,7 @@
 # AlphaTerminal 文档目录
 
-> 最后更新: 2026-05-18  
-> 当前版本: v0.6.48  
+> 最后更新: 2026-05-20  
+> 当前版本: v0.6.58  
 > 开发计划: [todo0429.md](../todo0429.md) - v0.6.x路线图
 
 ## 📁 文档结构
@@ -25,6 +25,8 @@ docs/
 │   ├── HISTORICAL_DATA_GUIDE.md # 历史数据指南
 │   ├── ALPHA_VANTAGE_GUIDE.md  # AlphaVantage 指南
 │   └── PRD-SPEC-v0.4-KLINE-MODULE.md # K线模块PRD
+├── tests/                       # 测试文档 ⭐ NEW
+│   └── COPILOT_TEST_COVERAGE.md # Copilot 测试覆盖 (63 tests)
 ├── reports/                     # 报告文档
 │   └── PERFORMANCE_REPORT.md   # 性能优化报告
 ├── archive/                     # 归档文档（历史版本）
@@ -52,6 +54,11 @@ docs/
 3. [E2E_DEPENDENCIES.md](E2E_DEPENDENCIES.md) - E2E 依赖环境指南 ⭐ NEW
 4. [WIKI_ARCHITECTURE.md](guides/WIKI_ARCHITECTURE.md) - 系统架构
 5. [DATA_SOURCE_ABSTRACTION.md](guides/DATA_SOURCE_ABSTRACTION.md) - 数据源设计
+
+### 测试文档
+1. [TESTING_GUIDE.md](TESTING_GUIDE.md) - 测试编写指南
+2. [COPILOT_TEST_COVERAGE.md](tests/COPILOT_TEST_COVERAGE.md) - Copilot 测试覆盖 (63 tests) ⭐ NEW
+3. [E2E_TEST_PLAN.md](E2E_TEST_PLAN.md) - E2E 测试计划
 
 ### 部署运维
 1. [deployment_guide.md](guides/deployment_guide.md) - 生产部署

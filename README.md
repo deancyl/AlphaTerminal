@@ -10,7 +10,8 @@
 [![Vue.js](https://img.shields.io/badge/Vue-3.5-green.svg)](https://vuejs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-blue.svg)](https://fastapi.tiangolo.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v0.6.56-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Release](https://img.shields.io/badge/Release-v0.6.58-blue.svg)](https://github.com/deancyl/AlphaTerminal/releases)
+[![Tests](https://img.shields.io/badge/Tests-63%20Copilot-green.svg)](docs/tests/COPILOT_TEST_COVERAGE.md)
 
 *"让每一位个人投资者，都拥有一座专业的投研数据堡垒。"*
 
@@ -335,6 +336,48 @@ AlphaTerminal/
 ├── docs/
 ├── KNOWN_ISSUES_TODO.md         # 缺陷追踪 + 路线图
 └── README.md
+```
+
+---
+
+## 🧪 测试覆盖
+
+### 后端测试
+
+| 模块 | 测试文件 | 测试数量 | 状态 |
+|------|----------|---------|------|
+| Copilot | `tests/unit/test_routers/test_copilot.py` | 63 | ✅ |
+| Backtest | `tests/unit/test_routers/test_backtest.py` | 15+ | ✅ |
+| Portfolio | `tests/unit/test_routers/test_portfolio.py` | 51+ | ✅ |
+| Macro | `tests/unit/test_routers/test_macro.py` | 23+ | ✅ |
+| Bond | `tests/unit/test_routers/test_bond.py` | 19+ | ✅ |
+| Forex | `tests/unit/test_routers/test_forex.py` | 22+ | ✅ |
+
+### Copilot 模块测试详情
+
+Copilot 模块包含 **14 个测试类，63 个测试用例**，覆盖：
+
+- ✅ Token 追踪准确性
+- ✅ 会话绑定与管理
+- ✅ 上下文长度限制（4096 token）
+- ✅ 数据库错误处理
+- ✅ Provider 回退链
+- ✅ 速率限制（30 req/60s）
+- ✅ 上下文组装
+
+详细文档: [docs/tests/COPILOT_TEST_COVERAGE.md](docs/tests/COPILOT_TEST_COVERAGE.md)
+
+### 运行测试
+
+```bash
+# 运行所有后端测试
+cd backend && pytest tests/ -v
+
+# 运行 Copilot 测试
+cd backend && pytest tests/unit/test_routers/test_copilot.py -v
+
+# 运行带覆盖率
+cd backend && pytest tests/ --cov=app --cov-report=html
 ```
 
 ---

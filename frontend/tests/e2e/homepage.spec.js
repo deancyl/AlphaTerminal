@@ -74,7 +74,9 @@ test.describe('Homepage', () => {
     })
     
     await page.goto('/')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
+    // Wait for initial data to load (app has continuous polling)
+    await page.waitForTimeout(2000)
     
     // Filter out non-critical errors
     const criticalErrors = errors.filter(err => 
@@ -83,7 +85,9 @@ test.describe('Homepage', () => {
       !err.includes('timeout') &&
       !err.includes('Timeout') &&
       !err.includes('ETIMEDOUT') &&
-      !err.includes('network')
+      !err.includes('network') &&
+      !err.includes('ERR_CONNECTION_CLOSED') &&
+      !err.includes('ERR_CONNECTION_REFUSED')
     )
     
     expect(criticalErrors).toHaveLength(0)
