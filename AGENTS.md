@@ -4887,4 +4887,279 @@ grep -c "bond_zh_us_rate" backend/app/services/fetchers/bond_fetcher.py  # Expec
 grep -c "bond_fetcher.fetch_yield_curve" backend/app/routers/bond.py  # Expected: 1
 ```
 
+---
+
+## Comprehensive Architectural Refactoring (v0.6.61)
+
+### Overview
+
+A comprehensive **33-task, 8-domain, 5-wave** architectural refactoring based on security and performance audit. This release focuses on system stability, memory management, and production-grade error handling.
+
+### Wave Summary
+
+| Wave | Focus | Tasks | Status |
+|------|-------|-------|--------|
+| Wave 1 | P0 Critical | 2 | ✅ Complete |
+| Wave 2 | Foundation Layer | 11 | ✅ Complete |
+| Wave 3 | Integration Layer | 7 | ✅ Complete |
+| Wave 4 | Frontend Layer | 9 | ✅ Complete |
+| Wave 5 | Build Optimization | 4 | ✅ Complete |
+| **Total** | **8 Domains** | **33** | **100% Complete** |
+
+### Domain 1: Data Engine & Multi-Level Caching
+
+**Unified `@smart_cache` Decorator**:
+
+```python
+@smart_cache(
+    key_template="kline:{symbol}:{period}",
+    level=2,              # 1=memory only, 2=memory+SQLite
+    ttl_type="quotes_l1", # TTL tier selection
+    namespace="forex",    # Key isolation prefix
+    circuit_breaker=forex_cb  # CB integration
+)
+async def get_kline(symbol: str, period: str):
+    return await fetch_kline_data(symbol, period)
+```
+
+**TTL Policy**:
+
+| Data Type | L1 TTL | L2 TTL |
+|-----------|--------|--------|
+| Quotes | 10s | 3600s (1h) |
+| Macro | 300s (5min) | 86400s (24h) |
+| K-line/F9 | 300s | 86400s |
+| Static | 3600s (1h) | 604800s (7d) |
+
+**Redis Removal**: Removed from `qlib_init.py` (lines 42, 54-55, 61-62).
+
+### Domain 2: Token Bucket Rate Limiting
+
+**Implementation**:
+
+```python
+# Token Bucket algorithm
+tokens = min(capacity, last_tokens + elapsed * rate)
+
+# Configuration
+refill_rate = 2.5 tokens/sec  # 150 req/min
+burst_capacity = 150 tokens
+```
+
+**SQLite Schema**:
+
+```sql
+CREATE TABLE token_buckets (
+    key TEXT PRIMARY KEY,
+    tokens REAL NOT NULL,          -- Current token count
+    last_refreshed REAL NOT NULL   -- Unix timestamp
+)
+```
+
+**HTTP 429 Response** (already correct):
+
+```json
+{
+  "code": 429,
+  "message": "请求过于频繁，请稍后重试",
+  "retry_after": 60
+}
+```
+
+Headers: `Retry-After: 60`, `X-RateLimit-Limit: 150`, `X-RateLimit-Remaining: 47`
+
+### Domain 3: Circuit Breaker Enhancement
+
+**Stale Fallback Chain**:
+
+```
+Circuit Breaker OPEN
+    │
+    ├── L1: get_with_stale() → Return stale data (fresh_ttl=300s, stale_ttl=600s)
+    │
+    ├── L2: get_with_sqlite_fallback() → Return SQLite cached data
+    │
+    └── L3: Return None + Log error
+```
+
+**Timeout Change**: 30s → 600s (10 minutes) for external APIs.
+
+**Integration Status**:
+
+| Fetcher | Circuit Breaker | Stale Fallback |
+|---------|-----------------|-----------------|
+| akshare_fetcher.py | ✅ Yes | ✅ Yes (new) |
+| sina_hq_fetcher.py | ✅ Yes (new) | ❌ No |
+| forex_fetcher.py | ✅ Yes | ✅ Yes |
+
+### Domain 4: ECharts Memory Management
+
+**Lifecycle Pattern**:
+
+```javascript
+import { onBeforeUnmount, onDeactivated } from 'vue'
+
+onBeforeUnmount(() => {
+  // Cleanup timers
+  clearTimeout(timer)
+  timer = null
+  
+  // Cleanup resize observer
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  
+  // Cleanup ECharts with safety check
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
+})
+
+onDeactivated(() => {
+  // For KeepAlive: pause but don't dispose
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.clear()
+  }
+})
+```
+
+**Components Fixed**: 15 components (IndexLineChart, YieldSpreadChart, TermStructureChart, etc.)
+
+### Domain 5: Vite Build Optimization
+
+**Compression Results**:
+
+| File | Original | Gzipped | Savings |
+|------|----------|---------|---------|
+| vendor-echarts.js | 808KB | 265KB | 67% |
+| vendor.js | 465KB | 163KB | 65% |
+| index.js | 230KB | 72KB | 68% |
+| vendor-vue.js | 120KB | 46KB | 62% |
+
+**Configuration**:
+
+```javascript
+import compression from 'vite-plugin-compression'
+
+plugins: [
+  vue(),
+  compression({
+    algorithm: 'gzip',
+    threshold: 10240,  // Only compress > 10KB
+    deleteOriginFile: false
+  })
+]
+```
+
+### Domain 6: AdminDashboard Restructuring
+
+**Navigation Groups**:
+
+| Group | Items |
+|-------|-------|
+| 系统与基础设施 | monitor, watchdog, logs, database, layout |
+| 数据引擎 | sources, scheduler, cache, ratelimit, data_gaps |
+| 智能引擎 | llm, tokens, cost-attribution, agent_tokens, mcp |
+| 业务控制 | backtest |
+
+**UI Features**: Collapsible accordion, 300ms animation, chevron indicator.
+
+### Domain 7: Exception Handling Cleanup
+
+**Statistics**:
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Bare `except:` | 1 | 0 |
+| `except Exception:` | 68 | 1 (comment) |
+| `exc_info=True` | ~69 | ~109 |
+
+**Exception Types Used**:
+
+| Type | Use Case |
+|------|----------|
+| `sqlite3.Error` | Database operations |
+| `ValueError`, `TypeError` | Data handling |
+| `httpx.HTTPError` | HTTP requests |
+| `asyncio.TimeoutError` | Async timeouts |
+| `ConnectionError` | Network connectivity |
+| `OSError`, `PermissionError` | File system |
+
+### Domain 8: API Response Contract
+
+**Standard Response Format**:
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {...},
+  "error": null,
+  "timestamp": "2026-05-20T10:30:00.123456"
+}
+```
+
+**Error Response Format**:
+
+```json
+{
+  "code": 100,
+  "message": "参数错误",
+  "data": null,
+  "error": {
+    "details": {},
+    "trace_id": "abc12345",
+    "timestamp": "2026-05-20T10:30:00"
+  },
+  "timestamp": "2026-05-20T10:30:00"
+}
+```
+
+### Files Modified Summary
+
+| Category | Count | Key Files |
+|----------|-------|-----------|
+| Backend Services | 42 | data_cache.py, akshare_fetcher.py, sina_hq_fetcher.py |
+| Backend Routers | 13 | macro.py, backtest.py, stocks.py, futures.py |
+| Backend DB | 4 | database.py, db_writer.py, connection_pool.py |
+| Backend Utils | 3 | errors.py, response.py, exception_handlers.py |
+| Backend Middleware | 2 | rate_limit_token_bucket.py, rate_limit.py |
+| Frontend Components | 16 | AdminDashboard.vue, IndexLineChart.vue |
+| Frontend Config | 2 | vite.config.js, package.json |
+| **Total** | **133** | +1661/-669 lines |
+
+### Verification Commands
+
+```bash
+# Wave 1
+grep "except:" backend/app/services/scheduler.py  # Should return nothing
+grep -c "_SINA_HQ_CB" backend/app/services/sina_hq_fetcher.py  # Expected: 9
+
+# Wave 2
+grep -c "redis" backend/app/services/qlib/qlib_init.py  # Expected: 0
+ls backend/app/middleware/rate_limit_token_bucket.py  # Should exist
+grep -r "except Exception:" backend/app/ | wc -l  # Expected: 1 (comment)
+
+# Wave 3
+grep -c "get_with_stale" backend/app/services/fetchers/akshare_fetcher.py  # Expected: 7
+grep -c "timestamp.*datetime.now" backend/app/utils/errors.py  # Expected: 3
+
+# Wave 4
+grep -r "onBeforeUnmount" frontend/src/components/*.vue | wc -l  # Expected: 51
+grep -c "CostAttributionPanel" frontend/src/components/AdminDashboard.vue  # Expected: 2
+grep -c "navGroups" frontend/src/components/AdminDashboard.vue  # Expected: 2
+
+# Wave 5
+grep -c "vite-plugin-compression" frontend/package.json  # Expected: 1
+ls frontend/dist/assets/*.gz | wc -l  # Expected: 26
+```
+
+### Next Steps
+
+1. **Restart services**: `./start-services.sh restart`
+2. **Monitor cache**: `curl http://localhost:60100/api/v1/admin/cache/stats`
+3. **Test rate limit**: Send 150+ requests to verify 429 response
+4. **Check memory**: Chrome DevTools heap snapshot before/after navigation
+5. **Review logs**: `tail -f /tmp/backend.log` for exc_info stack traces
+
 

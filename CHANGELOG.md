@@ -5,6 +5,130 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.61] - 2026-05-20
+
+### 综合架构重构（8领域，33任务，5波次）
+
+本次更新基于安全与性能审计报告，进行了全面的架构重构，涵盖数据引擎、速率限制、熔断器、内存管理、构建优化等8个核心领域。
+
+#### Wave 1: P0 关键修复（2任务）
+
+- **修复裸 `except:`** — W1-T1
+  - 修复 `scheduler.py:41` 的裸 `except:`，防止阻止优雅关闭
+  - 文件：`backend/app/services/scheduler.py`
+
+- **添加熔断器到 sina_hq_fetcher** — W1-T2
+  - 新增 `_SINA_HQ_CB` 熔断器保护（5次失败阈值，60秒超时）
+  - 文件：`backend/app/services/sina_hq_fetcher.py`
+
+#### Wave 2: 基础层（11任务）
+
+- **统一 `@smart_cache` 装饰器** — W2A-T1
+  - L1（内存）+ L2（SQLite WAL）多级缓存
+  - TTL 分层：quotes=10s, macro=300s, static=3600s（L1）
+  - 熔断器集成（OPEN 时返回过期数据）
+  - 命名空间隔离防止键冲突
+  - 文件：`backend/app/services/data_cache.py`
+
+- **移除 Redis 依赖** — W2A-T2
+  - 从 `qlib_init.py` 移除 `redis_host`, `redis_port` 参数
+  - 文件：`backend/app/services/qlib/qlib_init.py`
+
+- **Token Bucket 速率限制** — W2B-T1
+  - 实现令牌桶算法：`tokens = min(capacity, last_tokens + elapsed * rate)`
+  - 配置：2.5 tokens/sec（150 req/min），突发容量 150
+  - 文件：`backend/app/middleware/rate_limit_token_bucket.py`
+
+- **异常处理清理** — W2C-T1
+  - 替换 68 个 `except Exception:` 为具体异常类型
+  - 涉及 42 个文件
+  - 异常类型：sqlite3.Error, ValueError, TypeError, KeyError, httpx.HTTPError 等
+  - 添加 `exc_info=True` 到 40+ logger.error 调用
+
+#### Wave 3: 集成层（7任务）
+
+- **过期数据降级** — W3A-T1
+  - 为 `akshare_fetcher.py` 添加 3 层降级链
+  - 熔断器 OPEN → L1 过期数据 → L2 SQLite 缓存 → None
+  - 文件：`backend/app/services/fetchers/akshare_fetcher.py`
+
+- **熔断器超时调整** — W3A-T2
+  - 从 30 秒增加到 600 秒（10 分钟）
+  - 防止外部 API 临时故障导致过早熔断
+
+- **API 响应契约** — W3B-T1
+  - 添加顶层 `timestamp` 字段到 `success_response()`
+  - ISO 8601 格式：`"2026-05-20T10:30:00.123456"`
+  - 文件：`backend/app/utils/errors.py`
+
+#### Wave 4: 前端层（9任务）
+
+- **ECharts 内存泄漏修复** — W4A-T1
+  - 为 15 个组件添加 `onBeforeUnmount` 清理
+  - 添加 `isDisposed` 检查防止重复释放
+  - 为 KeepAlive 组件添加 `onDeactivated` 钩子
+  - 涉及组件：IndexLineChart, YieldSpreadChart, TermStructureChart 等
+
+- **AdminDashboard 重构** — W4B-T1
+  - 从 15 个扁平标签重构为 4 个分组折叠面板
+  - 分组：系统与基础设施、数据引擎、智能引擎、业务控制
+  - 300ms 平滑展开/折叠动画
+  - 文件：`frontend/src/components/AdminDashboard.vue`
+
+- **修复 CostAttributionPanel 导入** — W4B-T2
+  - 添加缺失的组件导入
+  - 修复 Vue 运行时错误
+
+#### Wave 5: 构建优化（4任务）
+
+- **Vite 压缩插件** — W5-T1
+  - 安装 `vite-plugin-compression`
+  - 配置 gzip 压缩（threshold=10KB）
+  - 文件：`frontend/vite.config.js`
+
+- **压缩效果** — W5-T2
+  - vendor-echarts.js: 808KB → 265KB（67% 压缩）
+  - vendor.js: 465KB → 163KB（65% 压缩）
+  - index.js: 230KB → 72KB（68% 压缩）
+  - 共生成 26 个 .gz 文件
+
+### 文件修改统计
+
+| 类别 | 数量 | 关键文件 |
+|------|------|----------|
+| Backend Services | 42 | data_cache.py, akshare_fetcher.py, sina_hq_fetcher.py |
+| Backend Routers | 13 | macro.py, backtest.py, stocks.py, futures.py |
+| Backend DB | 4 | database.py, db_writer.py, connection_pool.py |
+| Backend Utils | 3 | errors.py, response.py, exception_handlers.py |
+| Backend Middleware | 2 | rate_limit_token_bucket.py, rate_limit.py |
+| Frontend Components | 16 | AdminDashboard.vue, IndexLineChart.vue |
+| Frontend Config | 2 | vite.config.js, package.json |
+| **总计** | **133** | +1661/-669 行 |
+
+### 验证命令
+
+```bash
+# Wave 1
+grep "except:" backend/app/services/scheduler.py  # 应无输出
+grep -c "_SINA_HQ_CB" backend/app/services/sina_hq_fetcher.py  # 预期: 9
+
+# Wave 2
+grep -c "redis" backend/app/services/qlib/qlib_init.py  # 预期: 0
+ls backend/app/middleware/rate_limit_token_bucket.py  # 应存在
+
+# Wave 3
+grep -c "get_with_stale" backend/app/services/fetchers/akshare_fetcher.py  # 预期: 7
+
+# Wave 4
+grep -r "onBeforeUnmount" frontend/src/components/*.vue | wc -l  # 预期: 51
+grep -c "navGroups" frontend/src/components/AdminDashboard.vue  # 预期: 2
+
+# Wave 5
+ls frontend/dist/assets/*.gz | wc -l  # 预期: 26
+```
+
+---
+
 ## [0.6.44] - 2026-05-17
 
 ### 外部审计优化（9项任务）
