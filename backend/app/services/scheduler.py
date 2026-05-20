@@ -655,14 +655,8 @@ async def run_initial_data_fetch():
         logger.info("[Startup] Forex data fetched")
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] forex failed: {e}", exc_info=True)
-    
-    # Fetch macro data directly
-    try:
-        from app.routers.macro import _fetch_curve_data_for_cache
-        await _fetch_curve_data_for_cache()
-        logger.info("[Startup] Macro data fetched")
-    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] macro failed: {e}", exc_info=True)
+    except Exception as e:
+        logger.error(f"[Startup] forex fetch error: {e}", exc_info=True)
     
     logger.info("[Startup] Blocking data fetch complete")
 
