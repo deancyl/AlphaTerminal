@@ -4596,3 +4596,119 @@ cd backend && python3 -m pytest tests/unit/test_services/test_script_strategy_se
 cd frontend && npm run build
 ```
 
+---
+
+## v0.6.58 Release Notes
+
+### Overview
+
+This release addresses P0 critical issues (North-bound flow real API) and P1 Circuit Breaker protection for data modules.
+
+### P0 Critical Fixes
+
+#### 1. North-bound Flow Real API
+
+**Problem**: North-bound flow data was hardcoded mock data, not real market data.
+
+**Solution**:
+- Added new endpoint: `GET /api/v1/market/north_flow_ranking`
+- Data sources: `ak.stock_hsgt_fund_flow_summary_em()` + `ak.stock_hsgt_hist_em()`
+- Frontend: Modified `copilotData.js` to call real backend API with fallback
+
+**Files**:
+- `backend/app/routers/market/overview.py` - New endpoint
+- `frontend/src/services/copilotData.js` - API integration
+
+**API Response**:
+```json
+{
+  "code": 0,
+  "data": {
+    "topBuy": [{"symbol": "", "name": "股票名", "amount": 3.75, "change": 2.5}],
+    "topSell": [{"symbol": "", "name": "股票名", "amount": -1.0, "change": 0}],
+    "summary": {
+      "north_net_buy": 15.5,
+      "south_net_buy": 8.2,
+      "date": "2025-01-20"
+    },
+    "dataSource": {"name": "东方财富-沪深港通", "type": "real"}
+  }
+}
+```
+
+### P1 Circuit Breaker Protection
+
+#### 2. Convertible Bond Module
+
+**Problem**: No protection against cascading failures when data source is unavailable.
+
+**Solution**:
+- Added `CircuitBreaker` with config: 5 failures → OPEN, 60s timeout
+- Protected functions: `_fetch_cov_list_async`, `_fetch_cov_spot_async`, `_fetch_cov_compare_async`
+- Response includes `circuit_breaker` status field
+
+**Files**:
+- `backend/app/routers/convertible_bond.py`
+
+**Circuit Breaker States**:
+| State | Description |
+|-------|-------------|
+| closed | Normal operation |
+| open | Fallback to mock data |
+| half_open | Testing recovery |
+
+#### 3. Global Index Module
+
+**Problem**: No protection against cascading failures when external APIs fail.
+
+**Solution**:
+- Added `CircuitBreaker` with config: 5 failures → OPEN, 60s timeout
+- Protected function: `fetch_all_quotes`
+- Logic: success_count > failure_count → record success
+
+**Files**:
+- `backend/app/services/fetchers/global_index_fetcher.py`
+
+### Test Coverage
+
+| Test File | Purpose |
+|-----------|---------|
+| `test_forex_bid_ask.py` | Forex bid/ask precision |
+| `admin.spec.js` | Admin panel E2E |
+| `ai-agent-routes.spec.js` | AI agent routes E2E |
+| `market-routes.spec.js` | Market routes E2E |
+| `performance.spec.js` | Performance E2E |
+| `COPILOT_TEST_COVERAGE.md` | Copilot test documentation |
+
+### Verification Commands
+
+```bash
+# North-bound flow API
+curl http://localhost:60100/api/v1/market/north_flow_ranking | jq '.data.summary'
+
+# Convertible bond Circuit Breaker
+grep -c "_CB_CIRCUIT_BREAKER" backend/app/routers/convertible_bond.py  # Expected: 16+
+
+# Global index Circuit Breaker
+grep -c "_GLOBAL_INDEX_CB" backend/app/services/fetchers/global_index_fetcher.py  # Expected: 4+
+
+# Frontend API integration
+grep -c "north_flow_ranking" frontend/src/services/copilotData.js  # Expected: 2
+
+# Run tests
+cd backend && python3 -m pytest tests/unit/test_routers/test_copilot.py -v
+cd frontend && npm run build
+```
+
+### Mock Data Classification Summary
+
+| Module | Type | Reason | Action |
+|--------|------|--------|--------|
+| North-bound Flow | **True Mock** | No real API connected | ✅ Replaced with real API |
+| Futures | Architecture Cache | Defensive fallback | ✅ Already has Circuit Breaker |
+| Bond | Architecture Cache | Defensive fallback | ✅ Already has Circuit Breaker |
+| Convertible Bond | Architecture Cache | Defensive fallback | ✅ Added Circuit Breaker |
+| Global Index | Architecture Cache | Defensive fallback | ✅ Added Circuit Breaker |
+| LLM Sentiment | True Mock | No real LLM integration | Deferred (requires LLM API key) |
+
+
