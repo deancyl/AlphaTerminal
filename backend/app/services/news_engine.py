@@ -179,7 +179,7 @@ async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
                     continue
             return rows
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}")
+            logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}")
             return []
 
     results = await asyncio.gather(*[fetch_one(s) for s in symbols])
@@ -245,7 +245,7 @@ def refresh_news_cache(background: bool = True):
             logger.info(f"[HEARTBEAT] News fetch timeout at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             return
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.error(f"[HTTP] failed: {e}", exc_info=True)
+            logger.error(f"[HTTP] failed: {e}", exc_info=True)
             logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
             return
 

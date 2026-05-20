@@ -495,7 +495,7 @@ class BondDataFetcher:
                 "is_stale": False,
             }
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}")
             return None
     
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
@@ -543,7 +543,7 @@ class BondDataFetcher:
                 "is_stale": False,
             }
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}")
             return None
     
     def _map_cfets_code_to_tenor(self, code: str, name: str) -> Optional[str]:

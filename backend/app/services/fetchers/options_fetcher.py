@@ -119,7 +119,7 @@ class OptionsFetcher(BaseMarketFetcher):
         self._ak = None
         
         self._data_cache = get_cache()  # Use unified DataCache
-                self._cache_lock = asyncio.Lock()
+        self._cache_lock = asyncio.Lock()
     
     def _get_underlying_symbol(self, option_symbol: str) -> str:
         """
@@ -159,7 +159,7 @@ class OptionsFetcher(BaseMarketFetcher):
             return None
             
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] underlying spot: {symbol} - {e}")
+            logger.warning(f"[HTTP] underlying spot: {symbol} - {e}")
             return None
     
     @property

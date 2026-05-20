@@ -513,7 +513,7 @@ async def _detect_anomalies_internal(
                     else:
                         results.append(_detect_new_high_simple(stocks, top_n))
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed, using fallback: {e}")
+                    logger.warning(f"[HTTP] failed, using fallback: {e}")
                     results.append(_detect_new_high_simple(stocks, top_n))
             
             if anomaly_type in (None, AnomalyType.VOLUME_SURGE):

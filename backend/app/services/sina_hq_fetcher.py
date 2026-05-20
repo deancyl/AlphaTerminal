@@ -41,7 +41,7 @@ def _get_hs300_pool() -> list[str]:
                         logger.info(f"[SinaHQ] HS300 via {fname}: {len(df)} rows")
                         break
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] via {fname} failed: {type(e).__name__}: {e}")
+                logger.warning(f"[HTTP] via {fname} failed: {type(e).__name__}: {e}")
                 continue
 
         if df is None or df.empty:
