@@ -4711,4 +4711,109 @@ cd frontend && npm run build
 | Global Index | Architecture Cache | Defensive fallback | ✅ Added Circuit Breaker |
 | LLM Sentiment | True Mock | No real LLM integration | Deferred (requires LLM API key) |
 
+---
+
+## Top 15 QA/UX Critical Fixes (v0.6.59)
+
+### Overview
+
+A comprehensive optimization cycle addressing 15 critical QA/UX issues across routing, memory management, gesture handling, performance, and Forex module compliance.
+
+### Wave 1 - P0 Critical Fixes (5 Issues)
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Browser history race condition | P0 | Debounce (100ms) + hashchange listener + guard flag | ✅ Fixed |
+| KeepAlive memory leak (BaseKLineChart) | P0 | Add `onDeactivated`/`onActivated` hooks | ✅ Fixed |
+| KeepAlive memory leak (MarketRadar) | P0 | Add `onDeactivated`/`onActivated` hooks | ✅ Fixed |
+| WebSocket connection storms | P0 | Increase grace period 200ms → 2000ms | ✅ Fixed |
+| API circuit breaker dead code | P0 | Fix thresholds: DEGRADE=3, CIRCUIT=7 | ✅ Fixed |
+
+### Wave 2 - P1 High Priority (1 Issue)
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| DOM blocking in drill-down modal | P1 | Replace `<table>` with `VirtualizedTable` | ✅ Fixed |
+
+### Wave 3 - P1/P2 UX Improvements (5 Issues)
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Gesture hijacking | P1 | Add exclusion logic for chart containers | ✅ Fixed |
+| Sidebar tooltips | P1 | Replace `:title` with CSS tooltips | ✅ Fixed |
+| backdrop-filter performance | P1 | Remove blur, use solid background | ✅ Fixed |
+| ECharts Vue proxy overhead | P1 | Add `markRaw()` to all `setOption` calls | ✅ Fixed |
+| Layout thrashing | P2 | Add CSS `contain: layout paint` | ✅ Fixed |
+
+### Wave 4 - Forex Module Fixes (5 Issues)
+
+| Issue | Priority | Solution | Status |
+|-------|----------|----------|--------|
+| Mock data compliance | P0 | Add `FOREX_ALLOW_MOCK_DATA` env var (default: False) | ✅ Fixed |
+| Cache penetration | P0 | Implement Stale-While-Revalidate pattern | ✅ Fixed |
+| Thread pool isolation | P1 | Separate pools for fast/slow operations | ✅ Fixed |
+| CrossRateMatrix O(N²) hover | P1 | Replace Vue reactive with CSS-only hover | ✅ Fixed |
+| Keyboard navigation | P1 | Implement true 2D grid navigation | ✅ Fixed |
+
+### Performance Improvements
+
+| Metric | Before | After |
+|--------|--------|-------|
+| WebSocket grace period | 200ms | 2000ms |
+| API degrade threshold | 5 | 3 |
+| API circuit threshold | 5 | 7 |
+| Drill-down modal render | O(N) blocking | O(1) virtualized |
+| CrossRateMatrix hover | O(N²) re-renders | O(1) CSS-only |
+| Sidebar tooltip delay | 1-2 seconds | Immediate |
+| Cache miss behavior | Immediate 503 error | Stale-while-revalidate |
+
+### Files Modified
+
+**Frontend (12 files):**
+- `App.vue` - History race condition fix
+- `BaseKLineChart.vue` - onDeactivated, markRaw
+- `MarketRadar.vue` - onDeactivated, VirtualizedTable
+- `useMarketStream.js` - Grace period
+- `api.js` - Circuit breaker thresholds
+- `constants.js` - WS_DISCONNECT_GRACE_MS
+- `useSwipe.js` - Gesture exclusion
+- `Sidebar.vue` - CSS tooltips, contain
+- `AdvancedKlinePanel.vue` - Remove backdrop-filter
+- `CrossRateMatrix.vue` - CSS-only hover
+- `ForexQuotePanel.vue` - 2D keyboard navigation
+- `style.css` - contain-layout classes
+
+**Backend (5 files):**
+- `settings.py` - FOREX_ALLOW_MOCK_DATA
+- `errors.py` - SERVICE_UNAVAILABLE error code
+- `data_cache.py` - get_with_stale() method
+- `forex.py` - Mock control, stale-while-revalidate, thread pools
+- `forex_fetcher.py` - Separate thread pools
+
+### Verification Commands
+
+```bash
+# Check WebSocket grace period
+grep "WS_DISCONNECT_GRACE_MS" frontend/src/utils/constants.js
+
+# Check circuit breaker thresholds
+grep "_DEGRADE_THRESHOLD\|_CIRCUIT_THRESHOLD" frontend/src/utils/api.js
+
+# Check KeepAlive cleanup
+grep -c "onDeactivated" frontend/src/components/BaseKLineChart.vue
+grep -c "onDeactivated" frontend/src/components/MarketRadar.vue
+
+# Check VirtualizedTable
+grep -c "VirtualizedTable" frontend/src/components/MarketRadar.vue
+
+# Check Forex mock control
+grep "FOREX_ALLOW_MOCK_DATA" backend/app/config/settings.py
+
+# Check stale-while-revalidate
+grep "get_with_stale" backend/app/services/data_cache.py
+
+# Run tests
+cd backend && pytest tests/unit/test_routers/test_forex.py -v
+```
+
 
