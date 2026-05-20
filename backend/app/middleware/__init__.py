@@ -17,8 +17,9 @@ from .rate_limit import (
     create_rate_limit_response,
     add_rate_limit_headers,
     setup_rate_limiting,
-    InMemoryRateLimiter,
 )
+from .rate_limit_token_bucket import TokenBucketRateLimiter
+from .rate_limit_sqlite import SQLiteRateLimiter
 
 from .api_key_auth import (
     require_api_key,
@@ -41,5 +42,6 @@ __all__ = [
     "create_rate_limit_response",
     "add_rate_limit_headers",
     "setup_rate_limiting",
-    "InMemoryRateLimiter",
+    "TokenBucketRateLimiter",
+    "SQLiteRateLimiter",
 ]
