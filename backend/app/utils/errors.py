@@ -53,6 +53,7 @@ class ErrorCode:
     TIMEOUT_ERROR = 310           # 请求超时
     API_ERROR = 320               # API调用错误
     DATA_SOURCE_ERROR = 330       # 数据源错误
+    SERVICE_UNAVAILABLE = 340     # 服务暂不可用
     
     # 业务逻辑错误 (4xx)
     BUSINESS_ERROR = 400          # 业务通用错误
@@ -80,6 +81,7 @@ class ErrorCodeMessage:
         ErrorCode.TIMEOUT_ERROR: "请求超时",
         ErrorCode.API_ERROR: "API调用失败",
         ErrorCode.DATA_SOURCE_ERROR: "数据源错误",
+        ErrorCode.SERVICE_UNAVAILABLE: "服务暂不可用",
         ErrorCode.BUSINESS_ERROR: "业务处理错误",
         ErrorCode.INSUFFICIENT_DATA: "数据不足",
         ErrorCode.CALCULATION_ERROR: "计算错误",

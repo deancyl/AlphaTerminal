@@ -53,6 +53,18 @@ export function useSwipe(options = {}) {
     // Only handle on mobile and when enabled
     if (!isMobile.value || !enabled) return
 
+    // EXCLUSION: Check if touch started in a chart container
+    // Don't hijack gestures meant for chart pan/zoom interactions
+    const target = event.target
+    const isChartContainer =
+      target.closest('[data-chart]') ||
+      target.closest('.chart-wrapper') ||
+      target.closest('.chart-container') ||
+      target.closest('.echart-container') ||
+      target.closest('.echarts-instance')
+
+    if (isChartContainer) return
+
     const touch = event.touches[0]
     touchStartX.value = touch.clientX
     touchStartY.value = touch.clientY

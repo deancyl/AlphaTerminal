@@ -28,7 +28,12 @@ from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
-_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="forex_fetch_")
+# Separate thread pools for different operation types
+# Fast operations (spot quotes, matrix) - high priority, quick response
+_spot_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_spot_")
+
+# Slow operations (history, detailed quotes) - can block, longer running
+_history_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_history_")
 
 _akshare = None
 
@@ -376,7 +381,7 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, self.ak.forex_spot_em),
+                loop.run_in_executor(_spot_executor, self.ak.forex_spot_em),
                 timeout=30.0
             )
             
@@ -454,7 +459,7 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, lambda: self.ak.forex_hist_em(symbol=symbol)),
+                loop.run_in_executor(_history_executor, lambda: self.ak.forex_hist_em(symbol=symbol)),
                 timeout=30.0
             )
             
@@ -519,7 +524,7 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, self.ak.fx_spot_quote),
+                loop.run_in_executor(_spot_executor, self.ak.fx_spot_quote),
                 timeout=30.0
             )
             
@@ -574,7 +579,7 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, self.ak.fx_pair_quote),
+                loop.run_in_executor(_spot_executor, self.ak.fx_pair_quote),
                 timeout=30.0
             )
             
@@ -629,7 +634,7 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             loop = asyncio.get_running_loop()
             df = await asyncio.wait_for(
-                loop.run_in_executor(_executor, self.ak.currency_boc_safe),
+                loop.run_in_executor(_history_executor, self.ak.currency_boc_safe),
                 timeout=30.0
             )
             

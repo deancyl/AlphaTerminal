@@ -30,8 +30,10 @@
       v-else-if="quotes.length > 0" 
       class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3"
       tabindex="0"
-      @keydown.down="focusNext"
-      @keydown.up="focusPrev"
+      @keydown.right="focusRight"
+      @keydown.left="focusLeft"
+      @keydown.down="focusDown"
+      @keydown.up="focusUp"
       @keydown.enter="selectCurrent"
       @keydown.space.prevent="selectCurrent"
       role="listbox"
@@ -92,7 +94,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 
 const props = defineProps({
   quotes: {
@@ -119,14 +122,44 @@ const props = defineProps({
 
 const emit = defineEmits(['select', 'retry'])
 
+// Breakpoints for responsive column count
+const breakpoints = useBreakpoints(breakpointsTailwind)
+const isSm = breakpoints.smaller('md')   // < 768px → 2 cols
+const isMd = breakpoints.between('md', 'lg')  // 768-1024px → 4 cols
+const isLg = breakpoints.greater('lg')  // > 1024px → 6 cols
+
+// Calculate current column count based on viewport
+const columnCount = computed(() => {
+  if (isLg.value) return 6
+  if (isMd.value) return 4
+  return 2  // default/sm
+})
+
 const focusedIndex = ref(0)
 
-function focusNext() {
+// 2D grid navigation functions
+function focusRight() {
   focusedIndex.value = Math.min(focusedIndex.value + 1, props.quotes.length - 1)
 }
 
-function focusPrev() {
+function focusLeft() {
   focusedIndex.value = Math.max(focusedIndex.value - 1, 0)
+}
+
+function focusDown() {
+  const cols = columnCount.value
+  const newIndex = focusedIndex.value + cols
+  if (newIndex < props.quotes.length) {
+    focusedIndex.value = newIndex
+  }
+}
+
+function focusUp() {
+  const cols = columnCount.value
+  const newIndex = focusedIndex.value - cols
+  if (newIndex >= 0) {
+    focusedIndex.value = newIndex
+  }
 }
 
 function selectCurrent() {

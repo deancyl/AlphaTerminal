@@ -321,7 +321,7 @@
 
 <script setup>
 import { ref, shallowRef, onMounted, onUnmounted, onErrorCaptured, watch, computed, defineAsyncComponent } from 'vue'
-import { useDocumentVisibility, useIntervalFn, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useDocumentVisibility, useIntervalFn, useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import LoadingFallback from './components/LoadingFallback.vue'
 
 // ── 始终需要的组件（同步加载）──────────────────────────────────────
@@ -428,11 +428,16 @@ const f9Symbol = ref('') // F9深度资料当前股票代码
 // ── 历史导航状态（Android 硬件返回键支持）──────────────────────────────
 const viewHistory = ref([getInitialView()]) // 视图历史栈
 const isHistoryNavigation = ref(false) // 防止循环 push
+const isProcessingPopstate = ref(false) // 防止重入
 
 // Watch for currentView changes with comprehensive debug logging
 watch(currentView, (newView, oldView) => {
-  // 添加到历史栈（非历史导航时）
-  if (!isHistoryNavigation.value && newView !== oldView) {
+  // RESET FLAG FIRST (not last) - prevents race conditions
+  const wasHistoryNav = isHistoryNavigation.value
+  isHistoryNavigation.value = false
+  
+  // Add to history stack (only when NOT history navigation)
+  if (!wasHistoryNav && newView !== oldView) {
     viewHistory.value.push(newView)
     // 限制历史栈大小（最多 20 条）
     if (viewHistory.value.length > 20) {
@@ -443,8 +448,6 @@ watch(currentView, (newView, oldView) => {
       window.history.pushState({ view: newView }, '', `#view=${newView}`)
     }
   }
-  // 重置标记
-  isHistoryNavigation.value = false
 }, { immediate: false })
 
 function handleSidebarNavigate(viewId) {
@@ -794,6 +797,21 @@ onMounted(() => {
     // 监听浏览器历史变化（Android 返回键触发）
     window.addEventListener('popstate', handlePopState)
     
+    // 监听 hashchange 作为 fallback（URL hash 变化）
+    window.addEventListener('hashchange', (e) => {
+      if (!isHistoryNavigation.value && !isProcessingPopstate.value) {
+        const hash = window.location.hash
+        const viewMatch = hash.match(/#view=(\w+)/)
+        if (viewMatch) {
+          const view = viewMatch[1]
+          if (view !== currentView.value) {
+            isHistoryNavigation.value = true
+            currentView.value = view
+          }
+        }
+      }
+    })
+    
     // 监听页面卸载（退出确认）
     window.addEventListener('beforeunload', handleBeforeUnload)
   }
@@ -812,7 +830,12 @@ onUnmounted(() => {
 })
 
 // ── 历史导航处理函数 ─────────────────────────────────────────────────────
-function handlePopState(event) {
+const debouncedHandlePopState = useDebounceFn((event) => {
+  // Guard: prevent re-entrant calls
+  if (isProcessingPopstate.value) return
+  
+  isProcessingPopstate.value = true
+  
   // 检查是否有历史记录
   if (viewHistory.value.length > 1) {
     // 移除当前视图
@@ -829,6 +852,12 @@ function handlePopState(event) {
     // 历史栈为空，显示退出确认
     showExitConfirmation()
   }
+  
+  isProcessingPopstate.value = false
+}, 100)
+
+function handlePopState(event) {
+  debouncedHandlePopState(event)
 }
 
 function handleBeforeUnload(event) {

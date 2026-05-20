@@ -168,6 +168,67 @@ class DataCache:
             # Debug Cycle 4: Cache get (miss)
             return self._get_internal(key)
     
+    def get_with_stale(self, key: str, fresh_ttl: int = 60, stale_ttl: int = 600) -> tuple:
+        """
+        获取缓存值，支持 stale-while-revalidate 模式
+        
+        Args:
+            key: 缓存键
+            fresh_ttl: 数据新鲜阈值（秒），小于此值为新鲜数据
+            stale_ttl: 数据过期阈值（秒），小于此值为过期数据
+            
+        Returns:
+            tuple: (data, is_stale)
+            - (data, False): 数据新鲜（age < fresh_ttl）
+            - (data, True): 数据过期但可用（fresh_ttl <= age < stale_ttl）
+            - (None, False): 数据不存在或完全过期（age >= stale_ttl）
+        
+        Example:
+            >>> data, is_stale = cache.get_with_stale("forex:spot", fresh_ttl=60, stale_ttl=600)
+            >>> if data:
+            >>>     if is_stale:
+            >>>         # 数据过期但可用，触发后台刷新
+            >>>         asyncio.create_task(refresh_data())
+            >>>     return data
+            >>> # 无数据，需要等待首次获取
+        """
+        with self._lock:
+            self._stats["total_requests"] += 1
+            
+            entry = self._cache.get(key)
+            
+            if entry is None:
+                # 完全不存在
+                self._stats["misses"] += 1
+                self._debug_cycle_4_get_miss(key)
+                return None, False
+            
+            # 计算数据年龄
+            age = time.time() - entry.created_at
+            
+            # 完全过期（超过 stale_ttl）
+            if age >= stale_ttl:
+                del self._cache[key]
+                self._stats["misses"] += 1
+                self._stats["expired_removals"] += 1
+                logger.debug(f"[DataCache] 键完全过期删除: {key}, age={age:.0f}s")
+                return None, False
+            
+            # 数据可用（新鲜或过期）
+            # 移动到末尾（LRU）
+            self._cache.move_to_end(key)
+            entry.hit_count += 1
+            self._stats["hits"] += 1
+            
+            is_stale = age >= fresh_ttl
+            
+            if is_stale:
+                logger.debug(f"[DataCache] 返回过期数据: {key}, age={age:.0f}s, fresh_ttl={fresh_ttl}s")
+            else:
+                self._debug_cycle_3_get_hit(key, entry)
+            
+            return entry.value, is_stale
+    
     def _get_internal(self, key: str) -> Optional[Any]:
         """内部获取方法（不加锁）"""
         entry = self._cache.get(key)

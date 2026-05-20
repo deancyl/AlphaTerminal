@@ -176,40 +176,37 @@
             </button>
           </div>
           
-          <div class="p-4 overflow-y-auto" style="max-height: calc(80vh - 60px);">
+          <div class="p-4 overflow-hidden" style="height: calc(80vh - 60px);">
             <div v-if="drillDownLoading" class="flex items-center justify-center py-8">
               <Skeleton class="w-full h-32" />
             </div>
             <div v-else-if="drillDownStocks.length === 0" class="text-center text-secondary py-8">
               暂无股票数据
             </div>
-            <table v-else class="w-full text-sm">
-              <thead>
-                <tr class="text-left text-secondary border-b border-border-base">
-                  <th class="pb-2 font-medium">代码</th>
-                  <th class="pb-2 font-medium">名称</th>
-                  <th class="pb-2 font-medium text-right">市值(亿)</th>
-                  <th class="pb-2 font-medium text-right">涨跌幅</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr 
-                  v-for="stock in drillDownStocks" 
-                  :key="stock.symbol"
-                  class="border-b border-border-base/50 hover:bg-surface-hover cursor-pointer transition-colors"
-                  @click="onDrillDownStockClick(stock)"
-                  tabindex="0"
-                  @keydown.enter="onDrillDownStockClick(stock)"
-                >
-                  <td class="py-2 text-muted">{{ stock.symbol }}</td>
-                  <td class="py-2 text-primary">{{ stock.name }}</td>
-                  <td class="py-2 text-right tabular-nums">{{ stock.value?.toFixed(2) || '--' }}</td>
-                  <td class="py-2 text-right tabular-nums" :class="stock.change_pct >= 0 ? 'text-bull' : 'text-bear'">
-                    {{ stock.change_pct >= 0 ? '+' : '' }}{{ stock.change_pct?.toFixed(2) || '--' }}%
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <VirtualizedTable
+              v-else
+              :items="drillDownTableItems"
+              :columns="drillDownColumns"
+              :loading="drillDownLoading"
+              item-size="36"
+              empty-text="暂无股票数据"
+              @row-click="({ item }) => onDrillDownStockClick(item)"
+            >
+              <template #cell-symbol="{ item }">
+                <span class="text-muted">{{ item.symbol }}</span>
+              </template>
+              <template #cell-name="{ item }">
+                <span class="text-primary">{{ item.name }}</span>
+              </template>
+              <template #cell-value="{ item }">
+                <span class="tabular-nums">{{ item.value?.toFixed(2) || '--' }}</span>
+              </template>
+              <template #cell-change_pct="{ item }">
+                <span class="tabular-nums" :class="item.change_pct >= 0 ? 'text-bull' : 'text-bear'">
+                  {{ item.change_pct >= 0 ? '+' : '' }}{{ item.change_pct?.toFixed(2) || '--' }}%
+                </span>
+              </template>
+            </VirtualizedTable>
           </div>
         </div>
       </div>
@@ -218,7 +215,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, watch } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useECharts } from '@/composables/useECharts.js'
 import { useMarketRadar, REFRESH_INTERVAL_OPTIONS } from '@/composables/useMarketRadar.js'
@@ -227,6 +224,7 @@ import { onThemeChange } from '@/composables/useTheme.js'
 import AnomalyCard from './market/AnomalyCard.vue'
 import TemperatureGauge from './market/TemperatureGauge.vue'
 import Skeleton from './Skeleton.vue'
+import VirtualizedTable from './VirtualizedTable.vue'
 
 // Mobile detection
 const breakpoints = useBreakpoints(breakpointsTailwind)
@@ -285,6 +283,29 @@ function closeDrillDown() {
 function onDrillDownStockClick(stock) {
   emit('stock-click', stock)
   closeDrillDown()
+}
+
+// VirtualizedTable column config
+const drillDownColumns = [
+  { key: 'symbol', label: '代码', width: '100px' },
+  { key: 'name', label: '名称', width: '120px' },
+  { key: 'value', label: '市值(亿)', width: '100px', align: 'right', format: 'price' },
+  { key: 'change_pct', label: '涨跌幅', width: '100px', align: 'right' }
+]
+
+// Prepare items with id field for VirtualizedTable
+const drillDownTableItems = computed(() => 
+  drillDownStocks.value.map(stock => ({
+    id: stock.symbol,
+    ...stock
+  }))
+)
+
+// ESC key handler for drill-down modal
+function handleDrillDownKeydown(e) {
+  if (e.key === 'Escape' && showDrillDown.value) {
+    showDrillDown.value = false
+  }
 }
 
 let chartInstance = ref(null) // P0-3: Store chart instance for cleanup
@@ -446,6 +467,9 @@ onMounted(async () => {
   
   // P2-8: Start auto-refresh with persisted interval
   startAutoRefresh()
+  
+  // ESC key handler for drill-down modal
+  window.addEventListener('keydown', handleDrillDownKeydown)
 })
 
 onBeforeUnmount(() => {
@@ -457,6 +481,44 @@ onBeforeUnmount(() => {
     chartInstance.value.off('click')
   }
   
+  // Remove ESC key handler
+  window.removeEventListener('keydown', handleDrillDownKeydown)
+  
   dispose()
+})
+
+// KeepAlive lifecycle hooks
+onDeactivated(() => {
+  // 1. Stop auto-refresh timer (CRITICAL - prevents background API calls)
+  stopAutoRefresh()
+  
+  // 2. Remove ECharts click listener
+  if (chartInstance.value && !chartInstance.value.isDisposed?.()) {
+    chartInstance.value.off('click')
+  }
+})
+
+onActivated(() => {
+  // Resume auto-refresh when component becomes visible
+  startAutoRefresh()
+  
+  // Re-attach click listener if needed
+  if (chartInstance.value && !chartInstance.value.isDisposed?.()) {
+    chartInstance.value.on('click', (params) => {
+      if (params.data) {
+        // P2-9: If it's a sector (has children), open drill-down modal
+        if (params.data.children && params.data.children.length > 0) {
+          openDrillDown(params.data)
+        }
+        // If it's a stock (no children), emit stock-click event
+        else if (params.data.symbol) {
+          emit('stock-click', {
+            symbol: params.data.symbol,
+            name: params.data.name
+          })
+        }
+      }
+    })
+  }
 })
 </script>

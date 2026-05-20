@@ -62,6 +62,10 @@ class Settings(BaseSettings):
     COPILOT_STREAM_TIMEOUT_SECONDS: int = 180
     COPILOT_CONNECT_TIMEOUT_SECONDS: int = 10
     
+    # Forex Mock Data Control (Compliance)
+    # Default: False for production - prevents fake data display
+    FOREX_ALLOW_MOCK_DATA: bool = False
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -69,7 +73,7 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
     
-    @field_validator("DEBUG_MODE", "AGENT_DB_DEBUG", "AGENT_AUTH_DEBUG", mode="before")
+    @field_validator("DEBUG_MODE", "AGENT_DB_DEBUG", "AGENT_AUTH_DEBUG", "FOREX_ALLOW_MOCK_DATA", mode="before")
     @classmethod
     def validate_bool_from_str(cls, v):
         """Convert string 'true'/'false' to boolean."""

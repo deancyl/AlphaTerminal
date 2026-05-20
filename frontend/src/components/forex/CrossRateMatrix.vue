@@ -26,35 +26,35 @@
     </div>
     
     <div v-else-if="matrix.length > 0" class="overflow-x-auto" aria-live="polite" aria-atomic="true">
-      <table class="w-full border-collapse" role="grid" :aria-label="`${currencies.length}x${currencies.length} 交叉汇率矩阵`">
+      <table class="cross-rate-table w-full border-collapse" role="grid" :aria-label="`${currencies.length}x${currencies.length} 交叉汇率矩阵`">
         <thead>
           <tr>
             <th class="sticky left-0 bg-surface z-10 p-2 text-xs text-terminal-dim font-medium border border-theme-secondary"></th>
-            <th 
-              v-for="(currency, colIdx) in currencies" 
+            <th
+              v-for="(currency, colIdx) in currencies"
               :key="colIdx"
-              class="p-2 text-xs text-terminal-dim font-medium border border-theme-secondary min-w-[70px]"
-              :class="{ 'bg-terminal-accent/20': hoveredCol === colIdx }"
+              class="p-2 text-xs text-terminal-dim font-medium border border-theme-secondary min-w-[70px] cross-rate-header"
+              :data-col="colIdx"
             >
               {{ currency }}
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, rowIdx) in matrix" :key="rowIdx">
-            <td 
-              class="sticky left-0 bg-surface z-10 p-2 text-xs font-bold text-terminal-accent border border-theme-secondary"
-              :class="{ 'bg-terminal-accent/20': hoveredRow === rowIdx }"
+          <tr v-for="(row, rowIdx) in matrix" :key="rowIdx" class="cross-rate-row">
+            <td
+              class="sticky left-0 bg-surface z-10 p-2 text-xs font-bold text-terminal-accent border border-theme-secondary cross-rate-row-header"
+              :data-row="rowIdx"
             >
               {{ row.base_currency }}
             </td>
-            <td 
-              v-for="(cell, colIdx) in row.rates" 
+            <td
+              v-for="(cell, colIdx) in row.rates"
               :key="colIdx"
-              class="p-2 text-xs border border-theme-secondary text-center transition-colors duration-150"
+              class="p-2 text-xs border border-theme-secondary text-center transition-colors duration-150 cross-rate-cell"
               :class="getCellClass(cell, rowIdx, colIdx)"
-              @mouseenter="hoveredRow = rowIdx; hoveredCol = colIdx"
-              @mouseleave="hoveredRow = null; hoveredCol = null"
+              :data-row="rowIdx"
+              :data-col="colIdx"
               role="gridcell"
               :aria-label="getCellAriaLabel(row.base_currency, currencies[colIdx], cell)"
             >
@@ -86,8 +86,6 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-
 const props = defineProps({
   currencies: {
     type: Array,
@@ -113,24 +111,18 @@ const props = defineProps({
 
 defineEmits(['retry'])
 
-const hoveredRow = ref(null)
-const hoveredCol = ref(null)
+// CSS-only hover - no reactive refs needed for performance
+// Row/column highlighting handled by CSS :hover and :has() selectors
 
 function getCellClass(cell, rowIdx, colIdx) {
   const classes = []
-  
+
   if (cell.is_base) {
     classes.push('bg-terminal-bg/30')
-  } else if (cell.rate !== null) {
-    if (hoveredRow.value === rowIdx || hoveredCol.value === colIdx) {
-      classes.push('bg-terminal-accent/10')
-    }
   }
-  
-  if (hoveredRow.value === rowIdx && hoveredCol.value === colIdx && !cell.is_base) {
-    classes.push('ring-1', 'ring-terminal-accent/50')
-  }
-  
+
+  // No reactive hover checks - CSS handles highlighting
+
   return classes
 }
 
@@ -158,6 +150,7 @@ function formatRate(rate) {
 </script>
 
 <style scoped>
+/* Base theme colors */
 .bg-surface {
   background: var(--bg-surface, #1e1e1e);
 }
@@ -201,5 +194,48 @@ function formatRate(rate) {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* CSS-only hover highlighting - O(1) performance instead of O(N²) */
+/* Row hover - highlight entire row */
+.cross-rate-row:hover .cross-rate-cell {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+.cross-rate-row:hover .cross-rate-row-header {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+/* Column hover - use CSS :has() selector */
+.cross-rate-table:has(.cross-rate-cell[data-col="0"]:hover) .cross-rate-header[data-col="0"],
+.cross-rate-table:has(.cross-rate-cell[data-col="1"]:hover) .cross-rate-header[data-col="1"],
+.cross-rate-table:has(.cross-rate-cell[data-col="2"]:hover) .cross-rate-header[data-col="2"],
+.cross-rate-table:has(.cross-rate-cell[data-col="3"]:hover) .cross-rate-header[data-col="3"],
+.cross-rate-table:has(.cross-rate-cell[data-col="4"]:hover) .cross-rate-header[data-col="4"],
+.cross-rate-table:has(.cross-rate-cell[data-col="5"]:hover) .cross-rate-header[data-col="5"],
+.cross-rate-table:has(.cross-rate-cell[data-col="6"]:hover) .cross-rate-header[data-col="6"],
+.cross-rate-table:has(.cross-rate-cell[data-col="7"]:hover) .cross-rate-header[data-col="7"],
+.cross-rate-table:has(.cross-rate-cell[data-col="8"]:hover) .cross-rate-header[data-col="8"],
+.cross-rate-table:has(.cross-rate-cell[data-col="9"]:hover) .cross-rate-header[data-col="9"] {
+  background-color: rgba(59, 130, 246, 0.2);
+}
+
+.cross-rate-table:has(.cross-rate-cell[data-col="0"]:hover) td[data-col="0"],
+.cross-rate-table:has(.cross-rate-cell[data-col="1"]:hover) td[data-col="1"],
+.cross-rate-table:has(.cross-rate-cell[data-col="2"]:hover) td[data-col="2"],
+.cross-rate-table:has(.cross-rate-cell[data-col="3"]:hover) td[data-col="3"],
+.cross-rate-table:has(.cross-rate-cell[data-col="4"]:hover) td[data-col="4"],
+.cross-rate-table:has(.cross-rate-cell[data-col="5"]:hover) td[data-col="5"],
+.cross-rate-table:has(.cross-rate-cell[data-col="6"]:hover) td[data-col="6"],
+.cross-rate-table:has(.cross-rate-cell[data-col="7"]:hover) td[data-col="7"],
+.cross-rate-table:has(.cross-rate-cell[data-col="8"]:hover) td[data-col="8"],
+.cross-rate-table:has(.cross-rate-cell[data-col="9"]:hover) td[data-col="9"] {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Exact cell hover - ring effect */
+.cross-rate-cell:hover {
+  outline: 1px solid rgba(59, 130, 246, 0.5);
+  outline-offset: -1px;
 }
 </style>

@@ -772,7 +772,7 @@ export function useMarketStream(initialSymbol = '') {
           _retryDelay = TIMEOUTS.WS_RECONNECT_BASE
           _stopPolling()
         }
-      }, 200)
+      }, TIMEOUTS.WS_DISCONNECT_GRACE_MS)
     }
   }
 

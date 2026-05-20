@@ -1,6 +1,6 @@
 <template>
   <aside
-    class="flex-shrink-0 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out group"
+    class="flex-shrink-0 flex flex-col h-full overflow-hidden transition-all duration-300 ease-in-out group contain-layout"
     :class="isCollapsed ? 'w-16' : 'w-64'"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
@@ -30,7 +30,7 @@
           :key="item.id"
           :data-testid="`nav-${item.id}`"
           :data-route="item.id"
-          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
+          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm group"
           :class="[
             activeId === item.id
               ? 'text-white border-l-2 border-agent-blue bg-agent-blue/5'
@@ -39,12 +39,20 @@
           @click="handleClick(item)"
           :aria-current="activeId === item.id ? 'page' : undefined"
           :aria-label="item.label"
-          :title="isCollapsed ? item.label : undefined"
           type="button"
         >
           <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
           <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
-                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'"
+                :aria-hidden="isCollapsed">
+            {{ item.label }}
+          </span>
+          <!-- Tooltip (only when collapsed) -->
+          <span
+            v-if="isCollapsed"
+            class="absolute left-full ml-2 px-2 py-1 rounded bg-gray-800 text-white text-xs whitespace-nowrap
+                   opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50"
+          >
             {{ item.label }}
           </span>
         </button>
@@ -60,7 +68,7 @@
           :key="item.id"
           :data-testid="`nav-${item.id}`"
           :data-route="item.id"
-          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm"
+          class="w-full flex items-center gap-3 px-3 py-2.5 transition-all duration-200 relative mx-1 my-0.5 rounded-sm group"
           :class="[
             activeId === item.id
               ? 'text-white border-l-2 border-agent-blue bg-agent-blue/5'
@@ -69,12 +77,20 @@
           @click="handleClick(item)"
           :aria-current="activeId === item.id ? 'page' : undefined"
           :aria-label="item.label"
-          :title="isCollapsed ? item.label : undefined"
           type="button"
         >
           <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
           <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
-                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'"
+                :aria-hidden="isCollapsed">
+            {{ item.label }}
+          </span>
+          <!-- Tooltip (only when collapsed) -->
+          <span
+            v-if="isCollapsed"
+            class="absolute left-full ml-2 px-2 py-1 rounded bg-gray-800 text-white text-xs whitespace-nowrap
+                   opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50"
+          >
             {{ item.label }}
           </span>
         </button>
@@ -90,17 +106,23 @@
           <button
             v-for="t in themeList"
             :key="t.key"
-            class="flex items-center justify-center w-8 h-8 rounded-sm transition-all duration-200"
+            class="flex items-center justify-center w-8 h-8 rounded-sm transition-all duration-200 group relative"
             :class="currentTheme === t.key
               ? 'bg-agent-blue/20 text-agent-blue border border-agent-blue/50'
               : 'bg-transparent text-gray-500 border border-transparent hover:bg-white/5 hover:text-gray-300'"
             @click="setTheme(t.key)"
             :aria-label="t.name"
             :aria-pressed="currentTheme === t.key"
-            :title="t.name"
             type="button"
           >
             <span class="text-sm" aria-hidden="true">{{ t.icon }}</span>
+            <!-- Tooltip -->
+            <span
+              class="absolute bottom-full mb-2 px-2 py-1 rounded bg-gray-800 text-white text-xs whitespace-nowrap
+                     opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50"
+            >
+              {{ t.name }}
+            </span>
           </button>
         </div>
       </div>
@@ -112,7 +134,7 @@
           :key="item.id"
           :data-testid="`nav-${item.id}`"
           :data-route="item.id"
-          class="w-full flex items-center gap-3 px-2 py-2 transition-all duration-200 rounded-sm"
+          class="w-full flex items-center gap-3 px-2 py-2 transition-all duration-200 rounded-sm group relative"
           :class="[
             activeId === item.id
               ? 'text-red-400 border-l-2 border-red-400 bg-red-400/5'
@@ -121,12 +143,20 @@
           @click="handleClick(item)"
           :aria-current="activeId === item.id ? 'page' : undefined"
           :aria-label="item.label"
-          :title="isCollapsed ? item.label : undefined"
           type="button"
         >
           <span class="text-base shrink-0 w-5 text-center" aria-hidden="true">{{ item.icon }}</span>
           <span class="whitespace-nowrap text-xs overflow-hidden transition-all duration-200"
-                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'">
+                :class="isCollapsed ? 'opacity-0 w-0' : 'opacity-100'"
+                :aria-hidden="isCollapsed">
+            {{ item.label }}
+          </span>
+          <!-- Tooltip (only when collapsed) -->
+          <span
+            v-if="isCollapsed"
+            class="absolute left-full ml-2 px-2 py-1 rounded bg-gray-800 text-white text-xs whitespace-nowrap
+                   opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none z-50"
+          >
             {{ item.label }}
           </span>
         </button>

@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onBeforeUnmount, nextTick, markRaw, reactive } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, onDeactivated, onActivated, nextTick, markRaw, reactive } from 'vue'
 import { useDebounceFn, useThrottleFn } from '@vueuse/core'
 import html2canvas from 'html2canvas'
 import { UP, DOWN } from '../utils/indicators.js'
@@ -417,7 +417,7 @@ function applyTickFast(cData, tick) {
   last[2] = Math.min(l, tick.price)
   last[3] = Math.max(h, tick.price)
   chart.setOption(
-    { series: [{ name: 'K线', data: cData.klineData }] },
+    markRaw({ series: [{ name: 'K线', data: cData.klineData }] }),
     false  // notMerge=false: 只合并K线series，不影响其他
   )
 }
@@ -445,7 +445,7 @@ onMounted(async () => {
     _lastChartData = props.chartData
 
     if (props.chartData && !props.chartData.isEmpty) {
-      chart.setOption(buildOption(props.chartData))
+      chart.setOption(markRaw(buildOption(props.chartData)))
     }
 
     chart.on('datazoom', () => {
@@ -476,10 +476,46 @@ onBeforeUnmount(() => {
   }
 })
 
+onDeactivated(() => {
+  // 1. Remove ECharts event listeners
+  if (chart && !chart.isDisposed()) {
+    chart.off('datazoom')
+    chart.off('finished')
+  }
+  
+  // 2. Disconnect ResizeObserver
+  if (_ro) {
+    _ro.disconnect()
+  }
+  
+  // 3. Cancel theme subscription
+  if (_unsubscribeTheme) {
+    _unsubscribeTheme()
+  }
+  
+  // 4. Mark as deactivated (but don't dispose chart - it may be reactivated)
+  _isInitialized = false
+})
+
+onActivated(() => {
+  // Re-initialize ResizeObserver and theme subscription when reactivated
+  if (chartEl.value && chart && !chart.isDisposed()) {
+    // Reconnect ResizeObserver
+    if (_ro) {
+      _ro.observe(chartEl.value)
+    }
+    
+    // Resize chart to fit container
+    chart.resize()
+    
+    _isInitialized = true
+  }
+})
+
 function updateChartTheme() {
   if (!chart || !_lastChartData || _lastChartData.isEmpty) return
   const newOption = buildOption(_lastChartData)
-  chart.setOption(newOption, { notMerge: false })
+  chart.setOption(markRaw(newOption), { notMerge: false })
   logger.debug(`[BaseKLineChart] Theme updated to: ${activeTheme.value}`)
 }
 
@@ -492,7 +528,7 @@ const debouncedUpdateChart = useDebounceFn(() => {
   if (!chart || !props.chartData || props.chartData.isEmpty) return
   if (chart.isDisposed()) return
   _lastChartData = props.chartData
-  chart.setOption(buildOption(props.chartData), { notMerge: false })
+  chart.setOption(markRaw(buildOption(props.chartData)), { notMerge: false })
 }, 200)
 
 watch([() => props.chartData, () => props.subCharts], () => { debouncedUpdateChart() })

@@ -27,8 +27,8 @@ let _consecutiveFailures = 0
 let _firstFailureTime = null  // 首次失败时间戳
 let _lastToastTime = null     // 上次 toast 时间戳
 
-const _DEGRADE_THRESHOLD   = 5   // 提高到 5 次（原 3 次）
-const _CIRCUIT_THRESHOLD   = 5   // 降低到 5 次（原 10 次）
+const _DEGRADE_THRESHOLD   = 3   // 3次失败开始降级警告
+const _CIRCUIT_THRESHOLD   = 7   // 7次失败触发熔断
 const _FAILURE_WINDOW_MS   = 60000  // 失败计数窗口：60秒内的失败才累计
 const _TOAST_COOLDOWN_MS   = 30000  // Toast 冷却时间：30秒内不重复显示
 

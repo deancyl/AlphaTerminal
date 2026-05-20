@@ -924,6 +924,16 @@
   .price-up { color: var(--color-bull); }
   .price-down { color: var(--color-bear); }
   .price-flat { color: var(--text-muted); }
+
+  /* CSS Containment for layout isolation */
+  .contain-layout {
+    contain: layout;
+  }
+
+  .contain-layout-paint {
+    contain: layout paint;
+    will-change: width;
+  }
 }
 
 @media (max-width: 599px) {

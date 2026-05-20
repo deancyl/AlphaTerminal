@@ -62,7 +62,7 @@
       <div
         v-if="isLoading || isFetching"
         class="absolute inset-0 z-30 flex flex-col p-4 gap-2"
-        style="background: rgba(15,23,42,0.75); backdrop-filter: blur(2px);"
+        style="background: rgba(15,23,42,0.95);"
       >
         <div class="flex justify-between mb-2">
           <div class="skeleton h-3 w-32 rounded-sm"></div>

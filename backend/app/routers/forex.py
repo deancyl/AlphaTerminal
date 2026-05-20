@@ -28,6 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import AKSHARE_TIMEOUT
+from app.config.settings import get_settings
 from app.services.fetchers.forex_fetcher import ForexFetcher, clean_value, forex_fetcher, get_circuit_breaker_status
 from app.services.data_cache import get_cache
 from app.routers.forex_schemas import (
@@ -147,7 +148,12 @@ def _generate_bounded_random_walk(base_rate: float, days: int, volatility: float
 
 router = APIRouter(prefix="/forex", tags=["forex"])
 
-_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="forex_")
+# Separate thread pools for different operation types
+# Fast operations (spot quotes, matrix) - high priority, quick response
+_spot_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_spot_")
+
+# Slow operations (history, detailed quotes) - can block, longer running
+_history_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="forex_history_")
 
 _akshare_module = None
 
@@ -201,27 +207,49 @@ async def get_spot_quotes():
     1. AKShare forex_spot_em() - 东方财富实时报价 (190+ 货币对)
     2. CFETS fx_spot_quote() - 银行间人民币报价 (fallback)
     
-    缓存: 2分钟 (使用全局 DataCache)
-    超时: 30秒
+    缓存策略: Stale-While-Revalidate
+    - 新鲜数据: 60秒内，立即返回
+    - 过期数据: 60秒-10分钟，返回旧数据 + 后台刷新
+    - 完全过期: 10分钟后，等待新数据（最多5秒）
     
     Returns:
         List[ForexSpotQuote]: 所有货币对的实时报价
     """
     cache = get_cache()
     
-    # Try to get from cache first
-    cached = cache.get("forex:spot_quotes")
-    if cached:
-        return success_response(cached)
+    # Stale-While-Revalidate: fresh 60s, stale 600s (10min)
+    data, is_stale = cache.get_with_stale("forex:spot_quotes", fresh_ttl=60, stale_ttl=600)
     
-    # Cache miss - trigger background fetch and return error
-    asyncio.create_task(_fetch_forex_spot_background())
+    if data:
+        response = success_response(data)
+        
+        # If stale, trigger background refresh (non-blocking)
+        if is_stale:
+            asyncio.create_task(_fetch_forex_spot_background())
+            response['data']['is_stale'] = True
+            response['data']['stale_age_seconds'] = int(
+                (datetime.now() - datetime.fromisoformat(data.get('last_update_time', datetime.now().isoformat()))).total_seconds()
+            )
+        
+        return response
     
-    return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+    # No data at all - wait for first fetch (with timeout)
+    try:
+        data = await asyncio.wait_for(
+            _fetch_forex_spot_foreground(),
+            timeout=5.0
+        )
+        return success_response(data)
+    except asyncio.TimeoutError:
+        logger.warning("[Forex] 首次获取超时，返回服务不可用错误")
+        return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
+    except Exception as e:
+        logger.error(f"[Forex] 首次获取失败: {e}")
+        return error_response("外汇数据获取失败，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
 
 
 async def _fetch_forex_spot_background():
-    """Background fetch for forex spot quotes"""
+    """Background fetch for forex spot quotes (fire-and-forget)"""
     try:
         quotes = await forex_fetcher.get_spot_quotes()
         source = "akshare"
@@ -293,12 +321,92 @@ async def _fetch_forex_spot_background():
             "last_update_time": datetime.now().isoformat(),
             "update_time": datetime.now().isoformat(),
             "circuit_breaker": get_circuit_breaker_status()
-        }, ttl=120)  # 2 minutes
+        }, ttl=600)  # 10 minutes (stale_ttl)
         
         logger.info(f"[Forex] Background fetch completed: {len(quotes)} quotes")
         
     except Exception as e:
         logger.error(f"[Forex] Background fetch failed: {e}")
+
+
+async def _fetch_forex_spot_foreground():
+    """Foreground fetch for forex spot quotes (returns data directly)"""
+    quotes = await forex_fetcher.get_spot_quotes()
+    source = "akshare"
+    
+    # Fallback to CFETS if forex_spot_em returns empty
+    if not quotes:
+        logger.info("[Forex] forex_spot_em 返回空数据，使用 CFETS fallback")
+        cfets_quotes, cfets_crosses = await asyncio.gather(
+            forex_fetcher.get_cfets_spot(),
+            forex_fetcher.get_cfets_crosses()
+        )
+        
+        for q in cfets_quotes:
+            pair = q.get("pair", "")
+            if "/" in pair:
+                symbol = pair.replace("/", "")
+            else:
+                symbol = pair
+            quotes.append({
+                "symbol": symbol,
+                "name": pair,
+                "latest": q.get("mid"),
+                "bid": q.get("bid"),
+                "ask": q.get("ask"),
+                "spread": q.get("spread"),
+                "change": None,
+                "change_pct": None,
+                "open": None,
+                "high": None,
+                "low": None,
+                "prev_close": None,
+                "source": "cfets",
+                "timestamp": q.get("timestamp"),
+            })
+        
+        for q in cfets_crosses:
+            pair = q.get("pair", "")
+            if "/" in pair:
+                symbol = pair.replace("/", "")
+            else:
+                symbol = pair
+            quotes.append({
+                "symbol": symbol,
+                "name": pair,
+                "latest": q.get("mid"),
+                "bid": q.get("bid"),
+                "ask": q.get("ask"),
+                "spread": q.get("spread"),
+                "change": None,
+                "change_pct": None,
+                "open": None,
+                "high": None,
+                "low": None,
+                "prev_close": None,
+                "source": "cfets",
+                "timestamp": q.get("timestamp"),
+            })
+        
+        source = "cfets"
+    
+    # Cache the result
+    cache = get_cache()
+    result = {
+        "quotes": quotes,
+        "total": len(quotes),
+        "source": source,
+        "data_source": "live" if source == "akshare" else "fallback",
+        "status": "ready",
+        "last_update_time": datetime.now().isoformat(),
+        "update_time": datetime.now().isoformat(),
+        "circuit_breaker": get_circuit_breaker_status()
+    }
+    cache.set("forex:spot_quotes", result, ttl=600)  # 10 minutes (stale_ttl)
+    
+    logger.info(f"[Forex] Foreground fetch completed: {len(quotes)} quotes")
+    
+    return result
 
 
 @router.post("/circuit_breaker/reset")
@@ -459,7 +567,16 @@ async def get_forex_history_new(
     except Exception as e:
         logger.warning(f"[Forex] History fetch failed for {symbol}: {e}")
     
-    # Fallback: Generate mock data immediately
+    # Check if mock data is allowed
+    settings = get_settings()
+    if not settings.FOREX_ALLOW_MOCK_DATA:
+        logger.warning(f"[Forex] Mock data disabled, returning error for {symbol}")
+        return error_response(
+            "外汇历史数据暂不可用，请稍后重试",
+            code=ErrorCode.SERVICE_UNAVAILABLE
+        )
+    
+    # Fallback: Generate mock data (only when explicitly allowed)
     logger.info(f"[Forex] Using mock data fallback for {symbol}")
     
     # Try to get base rate from CFETS quotes
@@ -487,6 +604,7 @@ async def get_forex_history_new(
         "period": "daily",
         "data": mock_history,
         "total": len(mock_history),
+        "is_demo": True,
         "source": "mock",
         "status": "ready",
         "last_update_time": datetime.now().isoformat()
