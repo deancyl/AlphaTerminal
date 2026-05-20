@@ -4816,4 +4816,75 @@ grep "get_with_stale" backend/app/services/data_cache.py
 cd backend && pytest tests/unit/test_routers/test_forex.py -v
 ```
 
+---
+
+## Bond Module Data Source Fix (v0.6.60)
+
+### Overview
+
+Fixed critical issue where bond market data was showing stale data from 2021-01-22.
+
+### Problem
+
+The bond module was using `ak.bond_china_yield()` which stopped updating on 2021-01-22. The router's fallback logic was never triggered because the primary source "succeeded" (returned data, even though stale).
+
+### Solution
+
+1. **New Primary Data Source**: `bond_zh_us_rate`
+   - Daily updated Chinese government bond yields
+   - 4 tenors: 2年, 5年, 10年, 30年
+   - Current yields: ~1.2-2.2%
+
+2. **Router Refactor**: `_fetch_curve_data_for_cache()` now uses `bond_fetcher.fetch_yield_curve()` first
+
+3. **Removed Mock Cache Initialization**: `_init_mock_cache()` was pre-populating cache with mock data
+
+### Fallback Chain
+
+| Priority | Source | Description |
+|----------|--------|-------------|
+| 1 | `bond_zh_us_rate` | Daily updated yields (PRIMARY) |
+| 2 | `bond_spot_quote` | Real-time dealer quotes |
+| 3 | `bond_spot_deal` | Real-time deals |
+| 4 | `bond_china_yield` | Historical (may be stale) |
+| 5 | CFETS / Chinabond | Official sources |
+| 6 | Mock data | Last resort |
+
+### API Response Example
+
+```json
+{
+  "source": "bond_zh_us_rate",
+  "last_update": "2026-05-19",
+  "is_stale": false,
+  "yield_curve": {
+    "2年": 1.2617,
+    "5年": 1.4428,
+    "10年": 1.7345,
+    "30年": 2.221
+  },
+  "warning": null
+}
+```
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `backend/app/routers/bond.py` | Router uses bond_fetcher first, removed mock cache init |
+| `backend/app/services/fetchers/bond_fetcher.py` | Added `_fetch_from_bond_zh_us_rate()` method |
+
+### Verification Commands
+
+```bash
+# Test bond endpoint
+curl http://localhost:60100/api/v1/bond/curve | jq '.data.source, .data.last_update, .data.is_stale'
+
+# Check data source
+grep -c "bond_zh_us_rate" backend/app/services/fetchers/bond_fetcher.py  # Expected: 5+
+
+# Check router uses fetcher
+grep -c "bond_fetcher.fetch_yield_curve" backend/app/routers/bond.py  # Expected: 1
+```
+
 
