@@ -823,6 +823,48 @@ export function useMarketStream(initialSymbol = '') {
     disconnect()
   })
 
+  // ── 增量渲染辅助函数 ──────────────────────────────────────────────────
+  /**
+   * 使用 appendData 进行增量渲染（适用于新数据点追加场景）
+   * @param {Object} chartInstance - ECharts 实例
+   * @param {number} seriesIndex - 系列索引
+   * @param {Array} newData - 新数据点数组
+   * @returns {boolean} - 是否成功
+   */
+  function appendChartData(chartInstance, seriesIndex, newData) {
+    if (!chartInstance || chartInstance.isDisposed?.()) return false
+    if (!Array.isArray(newData) || newData.length === 0) return false
+
+    try {
+      chartInstance.appendData({
+        seriesIndex,
+        data: newData
+      })
+      return true
+    } catch (e) {
+      logger.warn('[MarketStream] appendData failed:', e)
+      return false
+    }
+  }
+
+  /**
+   * 使用 replaceMerge 进行增量更新（适用于现有数据点修改场景）
+   * @param {Object} chartInstance - ECharts 实例
+   * @param {Object} option - 新配置
+   * @returns {boolean} - 是否成功
+   */
+  function updateChartIncremental(chartInstance, option) {
+    if (!chartInstance || chartInstance.isDisposed?.()) return false
+
+    try {
+      chartInstance.setOption(option, { replaceMerge: ['series'] })
+      return true
+    } catch (e) {
+      logger.warn('[MarketStream] incremental update failed:', e)
+      return false
+    }
+  }
+
   return {
     tick: computed(() => localSymbol.value ? globalTicks.value[localSymbol.value] : null),
     ticks: globalTicks,
@@ -841,6 +883,9 @@ export function useMarketStream(initialSymbol = '') {
     lastSeq: globalLastSeq,
     isPolling: globalPollingStatus,
     connectionState: computed(() => _connectionState),
+    // 增量渲染辅助函数
+    appendChartData,
+    updateChartIncremental,
     getStats: () => ({
       subscribedCount: subscribedSymRefCount.size,
       historyCount: tickHistory[localSymbol.value]?.length || 0,

@@ -45,6 +45,11 @@ def _get_thread_conn():
             conn.execute("PRAGMA journal_mode=DELETE")
         
         conn.execute("PRAGMA busy_timeout=30000")
+        
+        # v0.6.62: SQLite 性能优化 PRAGMA
+        conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
+        conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
+        conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
         _thread_local.conn = conn
         logger.debug(f"[DB] Created new connection for thread {threading.current_thread().name}")
     
@@ -88,6 +93,12 @@ def _get_conn():
     else:
         conn.execute("PRAGMA journal_mode=DELETE")
     conn.execute("PRAGMA busy_timeout=30000")
+    
+    # v0.6.62: SQLite 性能优化 PRAGMA
+    conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
+    conn.execute("PRAGMA cache_size=-64000")     # 64MB 页缓存
+    conn.execute("PRAGMA temp_store=MEMORY")     # 临时表内存存储
+    
     return conn
 
 # 延迟导入，避免循环依赖

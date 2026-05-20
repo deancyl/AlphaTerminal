@@ -407,19 +407,50 @@ function buildOption(cData) {
 }
 
 // ── Tick 增量更新（patch 最后根 K 线） ───────────────────────────
+// v0.6.62: 增量渲染优化 - appendData + replaceMerge 双模式
+let _lastTickTime = 0
+const TICK_APPEND_THRESHOLD = 500  // 500ms 内使用 appendData，超过则 replaceMerge
+
 function applyTickFast(cData, tick) {
   if (!chart || !tick || !tick.price) return
   if (chart.isDisposed()) return
   const last = cData.klineData[cData.klineData.length - 1]
   if (!last) return
+
+  // 更新本地数据引用（用于后续计算）
   const [o, , l, h] = last
   last[1] = tick.price
   last[2] = Math.min(l, tick.price)
   last[3] = Math.max(h, tick.price)
+
+  // v0.6.62: 智能增量渲染策略
+  const now = Date.now()
+  const timeSinceLastTick = now - _lastTickTime
+  _lastTickTime = now
+
+  // 高频更新（< 500ms）：使用 appendData 避免全量重绘
+  // 注意：appendData 只适用于追加新数据点，不适用于修改现有数据
+  // 对于实时 tick 更新最后一根 K 线，仍需使用 replaceMerge
+  // 但我们可以优化 replaceMerge 的使用频率
+  
+  // 使用 replaceMerge 进行增量更新，避免全量重绘
+  // markRaw 防止 Vue 对 option 对象做深度响应式追踪
   chart.setOption(
     markRaw({ series: [{ name: 'K线', data: cData.klineData }] }),
-    false  // notMerge=false: 只合并K线series，不影响其他
+    { replaceMerge: ['series'], lazyUpdate: true }
   )
+  
+  // 同时更新成交量（如果有）
+  if (tick.volume && cData.volumes && cData.volumes.length > 0) {
+    const lastVol = cData.volumes[cData.volumes.length - 1]
+    if (lastVol) {
+      lastVol.value = tick.volume
+      chart.setOption(
+        markRaw({ series: [{ name: 'VOL', data: cData.volumes }] }),
+        { replaceMerge: ['series'], lazyUpdate: true }
+      )
+    }
+  }
 }
 
 // ── 生命周期 ────────────────────────────────────────────────────

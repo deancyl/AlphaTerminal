@@ -934,6 +934,42 @@
     contain: layout paint;
     will-change: width;
   }
+
+  /* ─────────────────────────────────────────
+     PC/Mobile 交互隔离
+     PC端：保留 Hover 效果（仅鼠标设备）
+     移动端：用长按替代 Hover，防止二次穿透
+     ───────────────────────────────────────── */
+
+  /* PC端 Hover 样式（仅鼠标设备） */
+  @media (hover: hover) and (pointer: fine) {
+    .hover-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .hover-trigger:hover {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
+
+  /* 移动端长按替代（仅触摸设备） */
+  @media (hover: none) and (pointer: coarse) {
+    .hover-card:active {
+      transform: scale(0.98);
+    }
+
+    .hover-trigger {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .hover-trigger:active {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
 }
 
 @media (max-width: 599px) {
