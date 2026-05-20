@@ -5,6 +5,77 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.62] - 2026-05-20
+
+### 最终收官（v0.6.x LTS 终局版本）
+
+本次更新是 v0.6.x 系列的最终 LTS 版本，解决剩余架构隐患，实现生产级稳定性。
+
+#### Wave 1: SQLite PRAGMA 优化（P0）
+
+- **添加 PRAGMA synchronous=NORMAL** — 平衡性能与安全，减少 fsync 调用
+- **添加 PRAGMA cache_size=-64000** — 64MB 页缓存，减少磁盘 I/O
+- **添加 PRAGMA temp_store=MEMORY** — 临时表内存存储
+- **解决问题**: 高并发异步写入时的 `database is locked` 错误
+- **文件**: `backend/app/db/database.py`
+
+#### Wave 2: ECharts 增量渲染（P1）
+
+- **replaceMerge 替代全量 setOption** — 避免全量重绘
+- **appendData 辅助函数** — 增量数据追加
+- **解决问题**: 多路 WebSocket Tick 导致主线程阻塞
+- **文件**: 
+  - `frontend/src/components/BaseKLineChart.vue`
+  - `frontend/src/composables/useMarketStream.js`
+
+#### Wave 3: 双端交互隔离（P1）
+
+- **PC端 @media (hover: hover)** — 仅鼠标设备保留 Hover 效果
+- **移动端 @media (hover: none)** — 触摸设备用长按替代 Hover
+- **新增 useLongPress.js** — 移动端长按手势 composable
+- **解决问题**: 移动端 Hover 状态二次穿透
+- **文件**: 
+  - `frontend/src/style.css`
+  - `frontend/src/composables/useLongPress.js` (NEW)
+
+#### Wave 4: API 响应契约验证（P2）
+
+- **验证 macro.py** — 确认所有响应使用 success_response()
+- **统一契约**: `{code, message, data, error, timestamp}`
+- **文件**: `backend/app/routers/macro.py`
+
+### 文件修改统计
+
+| 文件 | 变更 |
+|------|------|
+| `backend/app/db/database.py` | 添加 3 个 PRAGMA 优化参数 |
+| `frontend/src/components/BaseKLineChart.vue` | replaceMerge 增量渲染 |
+| `frontend/src/composables/useMarketStream.js` | appendData 辅助函数 |
+| `frontend/src/composables/useLongPress.js` | NEW - 长按手势 |
+| `frontend/src/style.css` | 双端交互 CSS |
+
+### 验证结果
+
+| 检查项 | 预期 | 实际 |
+|--------|------|------|
+| PRAGMA synchronous=NORMAL | 2 | 2 |
+| PRAGMA cache_size | 2 | 2 |
+| PRAGMA temp_store | 2 | 2 |
+| appendData | 3 | 3 |
+| replaceMerge | 7 | 7 |
+| @media (hover) | 2 | 2 |
+| 前端构建 | SUCCESS | SUCCESS |
+
+### LTS 状态
+
+**这是 v0.6.x 系列的最终 LTS 版本。**
+
+- 不再计划 v0.6.x 后续版本
+- 所有未来开发将聚焦于 v0.7.0 架构
+- v0.6.62 用于长期支持和维护
+
+---
+
 ## [0.6.61] - 2026-05-20
 
 ### 综合架构重构（8领域，33任务，5波次）
