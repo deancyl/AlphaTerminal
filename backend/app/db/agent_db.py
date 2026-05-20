@@ -209,7 +209,7 @@ def get_conn():
             conn.rollback()
             logger.debug("[AGENT_DB_CTX] Transaction rolled back")
         except Exception as e:
-            logger.warning(f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}")
+            logger.warning(f"[AGENT_DB_CTX] Rollback failed: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
@@ -843,7 +843,7 @@ class AgentDB:
                 details = json.loads(row["details"])
                 logger.debug(f"[AGENT_DB_PARSE] Parsed details: {details}")
             except (json.JSONDecodeError, TypeError) as e:
-                logger.warning(f"[AGENT_DB_PARSE] Failed to parse details JSON: {e}")
+                logger.warning(f"[AGENT_DB_PARSE] Failed to parse details JSON: {e}", exc_info=True)
                 details = {}
         
         return AuditLog(

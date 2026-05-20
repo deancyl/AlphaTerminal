@@ -188,7 +188,7 @@ class IndicatorStrategyParser:
             try:
                 exec(full_code, local_vars)
             except Exception as e:
-                logger.warning(f"[IndicatorStrategy] Execution error: {e}")
+                logger.warning(f"[IndicatorStrategy] Execution error: {e}", exc_info=True)
                 return {'indicators': {}, 'signals': {'buy': pd.Series(False, index=df.index), 'sell': pd.Series(False, index=df.index)}}
 
             return local_vars.get('output', {'indicators': {}, 'signals': {'buy': pd.Series(False, index=df.index), 'sell': pd.Series(False, index=df.index)}})

@@ -728,7 +728,7 @@ def get_admin_config(key: str, default=None):
                 import json as _json
                 return _json.loads(row['value'])
             except json.JSONDecodeError as e:
-                logger.warning(f"[DB] JSON decode error for key '{key}': {e}")
+                logger.warning(f"[DB] JSON decode error for key '{key}': {e}", exc_info=True)
                 return row['value']
             except Exception as e:
                 logger.error(f"[DB] Unexpected error parsing config for key '{key}': {type(e).__name__}: {e}", exc_info=True)
@@ -762,7 +762,7 @@ def get_all_admin_configs():
                 try:
                     result[r['key']] = _json.loads(r['value'])
                 except json.JSONDecodeError as e:
-                    logger.warning(f"[DB] JSON decode error for key '{r['key']}': {e}")
+                    logger.warning(f"[DB] JSON decode error for key '{r['key']}': {e}", exc_info=True)
                     result[r['key']] = r['value']
                 except Exception as e:
                     logger.error(f"[DB] Unexpected error parsing config for key '{r['key']}': {type(e).__name__}: {e}", exc_info=True)

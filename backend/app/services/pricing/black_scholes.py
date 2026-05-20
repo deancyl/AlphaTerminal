@@ -82,7 +82,7 @@ class OptionsPricingEngine:
                 import py_vollib_vectorized
                 self._vol_lib_vec = py_vollib_vectorized
             except ImportError:
-                logger.warning("[Pricing] py_vollib_vectorized not available, using scalar mode")
+                logger.warning("[Pricing] py_vollib_vectorized not available, using scalar mode", exc_info=True)
                 self._vol_lib_vec = None
         return self._vol_lib_vec
     
@@ -140,7 +140,7 @@ class OptionsPricingEngine:
             return date(year, month, third_friday)
             
         except (ValueError, IndexError) as e:
-            logger.warning(f"[Pricing] Failed to parse expiry from code: {code} - {e}")
+            logger.warning(f"[Pricing] Failed to parse expiry from code: {code} - {e}", exc_info=True)
             return None
     
     def bisection_iv(

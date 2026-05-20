@@ -1162,7 +1162,7 @@ class StrategyCompiler:
             try:
                 exec(full_code, local_vars)
             except Exception as e:
-                logger.warning(f"[IndicatorStrategy] Execution error: {e}")
+                logger.warning(f"[IndicatorStrategy] Execution error: {e}", exc_info=True)
                 return {
                     'indicators': {},
                     'signals': {

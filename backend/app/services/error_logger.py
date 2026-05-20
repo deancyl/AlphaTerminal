@@ -49,7 +49,7 @@ def push_log(level: str, message: str, context: Optional[Dict[str, Any]] = None)
         try:
             _log_queue.put_nowait(log_entry)
         except asyncio.QueueFull:
-            logger.warning("Log queue full, dropping log entry")
+            logger.warning("Log queue full, dropping log entry", exc_info=True)
 
     # 同时写入 Python logging
     log_func = getattr(logger, level.lower(), logger.info)

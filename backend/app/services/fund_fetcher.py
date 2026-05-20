@@ -217,9 +217,9 @@ class AkShareClient:
                         'premium_rate': clean_value(row.get('折价率')),
                     }
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)")
+            logger.warning(f"[AkShare ETF] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
         except Exception as e:
-            logger.warning(f"[AkShare ETF] {code} 获取失败：{e}")
+            logger.warning(f"[AkShare ETF] {code} 获取失败：{e}", exc_info=True)
         
         return None
     
@@ -261,7 +261,7 @@ class AkShareClient:
                     'accumulated_nav': clean_value(row.get('累计净值')) or clean_value(row.get('单位净值')),
                 }
         except asyncio.TimeoutError:
-            logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
+            logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
         except Exception as e:
             logger.error(f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}", exc_info=True)
             logger.exception("完整 traceback:")
@@ -357,9 +357,9 @@ class AkShareClient:
                     'assets': asset_alloc,
                 }
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)")
+            logger.warning(f"[AkShare Portfolio] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
         except Exception as e:
-            logger.warning(f"[AkShare Portfolio] {code} 获取失败：{e}")
+            logger.warning(f"[AkShare Portfolio] {code} 获取失败：{e}", exc_info=True)
         
         return None
     
@@ -384,9 +384,9 @@ class AkShareClient:
                     })
                 return result[-180:]
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)")
+            logger.warning(f"[AkShare NAV] {code} 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
         except Exception as e:
-            logger.warning(f"[AkShare NAV] {code} 获取失败：{e}")
+            logger.warning(f"[AkShare NAV] {code} 获取失败：{e}", exc_info=True)
         
         return None
     
@@ -416,9 +416,9 @@ class AkShareClient:
                     })
                 return result
         except asyncio.TimeoutError:
-            logger.warning(f"[AkShare Rank] 超时 ({TIMEOUT_TOTAL}s)")
+            logger.warning(f"[AkShare Rank] 超时 ({TIMEOUT_TOTAL}s)", exc_info=True)
         except Exception as e:
-            logger.warning(f"[AkShare Rank] 获取失败：{e}")
+            logger.warning(f"[AkShare Rank] 获取失败：{e}", exc_info=True)
         
         return None
 
@@ -523,7 +523,7 @@ class FundFetcher:
                 return []
             
         except Exception as e:
-            logger.warning(f"[FundFetcher] ETF {code} K线获取失败: {e}")
+            logger.warning(f"[FundFetcher] ETF {code} K线获取失败: {e}", exc_info=True)
             return []
     
     async def get_fund_info(self, code: str) -> Optional[Dict]:
@@ -662,10 +662,10 @@ class FundFetcher:
             return self._mock_fund_returns(code)
             
         except asyncio.TimeoutError:
-            logger.warning(f"[FundFetcher] {code} 阶段收益超时 (30s)")
+            logger.warning(f"[FundFetcher] {code} 阶段收益超时 (30s)", exc_info=True)
             return self._mock_fund_returns(code)
         except Exception as e:
-            logger.warning(f"[FundFetcher] {code} 阶段收益获取失败: {e}")
+            logger.warning(f"[FundFetcher] {code} 阶段收益获取失败: {e}", exc_info=True)
             return self._mock_fund_returns(code)
     
     @fund_cache.cached(CACHE_TTL['fund_info'], key_prefix='risk:')
@@ -694,7 +694,7 @@ class FundFetcher:
                 return self._mock_risk_metrics(code)
                 
         except Exception as e:
-            logger.warning(f"[FundFetcher] {code} 风险指标计算失败: {e}")
+            logger.warning(f"[FundFetcher] {code} 风险指标计算失败: {e}", exc_info=True)
             return self._mock_risk_metrics(code)
     
     def _calculate_risk_metrics(self, nav_data: List[Dict]) -> Dict:

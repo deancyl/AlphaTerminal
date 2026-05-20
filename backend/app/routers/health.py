@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import APIRouter
 from app.utils.response import success_response
 from app.db.database import _db_path
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -50,18 +51,21 @@ def _get_memory_status():
 
 
 @router.get("/ready")
+@handle_errors(module="health")
 async def health_ready():
     """Check if backend initialization is complete"""
     return success_response({"ready": _backend_ready})
 
 
 @router.get("/live")
+@handle_errors(module="health")
 async def health_live():
     """Liveness probe - basic check that the process is running"""
     return success_response({"status": "alive", "uptime_seconds": round(time.time() - _start_time, 2)})
 
 
 @router.get("/detailed")
+@handle_errors(module="health")
 async def health_detailed():
     """Detailed health check with system metrics"""
     return success_response({
@@ -74,6 +78,7 @@ async def health_detailed():
 
 
 @router.get("/cache")
+@handle_errors(module="health")
 async def health_cache():
     """Cache health check with DataCache statistics"""
     from app.services.data_cache import get_cache

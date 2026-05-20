@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 
 # Import schemas from .schemas
 from .schemas import PositionIn
+from app.utils.error_decorator import handle_errors
 
 # Timeout constant for all portfolio endpoints
 PORTFOLIO_TIMEOUT = 30  # seconds
@@ -74,6 +75,7 @@ router = APIRouter(tags=["portfolio"])
 # ── Position CRUD ─────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/positions")
+@handle_errors(module="portfolio_positions")
 async def list_positions(
     portfolio_id: int,
     include_children: bool = Query(False, description="是否包含子账户持仓"),
@@ -172,11 +174,12 @@ async def list_positions(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] list_positions timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] list_positions timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "List positions timeout")
 
 
 @router.post("/positions")
+@handle_errors(module="portfolio_positions")
 async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     """
     建仓或调仓：INSERT OR REPLACE
@@ -220,7 +223,7 @@ async def upsert_position(body: PositionIn, _: None = Depends(require_api_key)):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] upsert_position timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] upsert_position timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Upsert position timeout")
 
 
@@ -236,6 +239,7 @@ def require_auth_for_sensitive_ops(api_key: str = None):
 
 
 @router.delete("/{portfolio_id}/positions/{symbol}")
+@handle_errors(module="portfolio_positions")
 async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(require_api_key)):
     """清仓指定标的 - 需认证"""
     def _sync_work():
@@ -256,13 +260,14 @@ async def delete_position(portfolio_id: int, symbol: str, _: None = Depends(requ
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] delete_position timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] delete_position timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Delete position timeout")
 
 
 # ── Real-time PnL (depends on SpotCache) ─────────────────────────────
 
 @router.get("/{portfolio_id}/pnl")
+@handle_errors(module="portfolio_positions")
 async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False, description="是否包含子账户盈亏")):
     """
     实时浮动盈亏计算（专业增强版）
@@ -300,9 +305,9 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     stock_key = r[0].lower().replace("sh", "").replace("sz", "").replace("hk", "").replace("us", "")
                     stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取股票元数据: {e}")
+                logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取股票元数据: {e}", exc_info=True)
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                logger.warning(f"[HTTP] stock metadata: {e}")
+                logger.warning(f"[HTTP] stock metadata: {e}", exc_info=True)
 
             cash_balance = 0.0
             try:
@@ -312,9 +317,9 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 ).fetchone()
                 cash_balance = cb[0] or 0.0 if cb else 0.0
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取 cash_balance (portfolio_id={portfolio_id}): {e}")
+                logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取 cash_balance (portfolio_id={portfolio_id}): {e}", exc_info=True)
             except Exception as e:
-                logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}")
+                logger.warning(f"[Portfolio PnL] 获取 cash_balance 失败 (portfolio_id={portfolio_id}): {e}", exc_info=True)
         finally:
             conn.close()
 
@@ -358,11 +363,11 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                 db_price_loaded = True
                 logger.info(f"[Portfolio PnL] 从数据库加载 {len(db_rows)} 只股票价格")
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Portfolio PnL] 数据库操作错误，兜底获取价格失败: {e}")
+                logger.warning(f"[Portfolio PnL] 数据库操作错误，兜底获取价格失败: {e}", exc_info=True)
             except ValueError as e:
-                logger.warning(f"[Portfolio PnL] 价格数据格式错误: {e}")
+                logger.warning(f"[Portfolio PnL] 价格数据格式错误: {e}", exc_info=True)
             except Exception as e:
-                logger.warning(f"[Portfolio PnL] 数据库兜底失败: {e}")
+                logger.warning(f"[Portfolio PnL] 数据库兜底失败: {e}", exc_info=True)
         
         result = []
         total_cost = 0.0
@@ -462,17 +467,17 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
             ).fetchone()
             daily_pnl = txn_rows[0] or 0.0 if txn_rows else 0.0
         except sqlite3.OperationalError as e:
-            logger.warning(f"[Portfolio PnL] 数据库操作错误，无法读取盈亏数据 (portfolio_id={portfolio_id}): {e}")
+            logger.warning(f"[Portfolio PnL] 数据库操作错误，无法读取盈亏数据 (portfolio_id={portfolio_id}): {e}", exc_info=True)
             realized_pnl = 0.0
             unrealized_pnl = 0.0
             daily_pnl = 0.0
         except ValueError as e:
-            logger.warning(f"[Portfolio PnL] 盈亏数据格式错误 (portfolio_id={portfolio_id}): {e}")
+            logger.warning(f"[Portfolio PnL] 盈亏数据格式错误 (portfolio_id={portfolio_id}): {e}", exc_info=True)
             realized_pnl = 0.0
             unrealized_pnl = 0.0
             daily_pnl = 0.0
         except Exception as e:
-            logger.warning(f"[Portfolio PnL] 读取盈亏数据失败 (portfolio_id={portfolio_id}): {e}")
+            logger.warning(f"[Portfolio PnL] 读取盈亏数据失败 (portfolio_id={portfolio_id}): {e}", exc_info=True)
             realized_pnl = 0.0
             unrealized_pnl = 0.0
             daily_pnl = 0.0
@@ -516,13 +521,14 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] portfolio_pnl timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] portfolio_pnl timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Portfolio PnL calculation timeout")
 
 
 # ── Snapshots ─────────────────────────────────────────────────
 
 @router.get("/{portfolio_id}/snapshots")
+@handle_errors(module="portfolio_positions")
 async def get_snapshots(
     portfolio_id: int,
     start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
@@ -574,11 +580,12 @@ async def get_snapshots(
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] get_snapshots timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] get_snapshots timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Get snapshots timeout")
 
 
 @router.post("/{portfolio_id}/snapshots")
+@handle_errors(module="portfolio_positions")
 async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     """手动保存当日快照（供路由调用）"""
     def _sync_work():
@@ -591,7 +598,7 @@ async def save_snapshot(portfolio_id: int, _: None = Depends(require_api_key)):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] save_snapshot timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] save_snapshot timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Save snapshot timeout")
 
 
@@ -652,6 +659,7 @@ def _save_snapshot_impl(portfolio_id: int):
 # ── Today's PnL (lightweight endpoint) ─────────────────────────────────────────
 
 @router.get("/{portfolio_id}/pnl/today")
+@handle_errors(module="portfolio_positions")
 async def daily_pnl_only(portfolio_id: int):
     """
     仅返回当日三分数据（轻量端点，供 ECharts 看板高频轮询）。
@@ -682,9 +690,9 @@ async def daily_pnl_only(portfolio_id: int):
                 ).fetchone()
                 unrealized = ur[0] or 0.0 if ur else 0.0
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Portfolio daily_pnl] 数据库操作错误，无法读取 unrealized (portfolio_id={portfolio_id}): {e}")
+                logger.warning(f"[Portfolio daily_pnl] 数据库操作错误，无法读取 unrealized (portfolio_id={portfolio_id}): {e}", exc_info=True)
             except Exception as e:
-                logger.warning(f"[Portfolio daily_pnl] 读取 unrealized 失败 (portfolio_id={portfolio_id}): {e}")
+                logger.warning(f"[Portfolio daily_pnl] 读取 unrealized 失败 (portfolio_id={portfolio_id}): {e}", exc_info=True)
 
             return {
                 "date":           today,
@@ -704,5 +712,5 @@ async def daily_pnl_only(portfolio_id: int):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[positions] daily_pnl timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[positions] daily_pnl timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Daily PnL timeout")

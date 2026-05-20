@@ -31,6 +31,7 @@ from app.services.factor_sandbox.screener import (
     Universe,
     ScreeningFactor,
 )
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +236,7 @@ class BacktestPreviewRequest(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/health")
+@handle_errors(module="factor_sandbox")
 async def health_check():
     """Health check endpoint"""
     registry = get_factor_registry()
@@ -249,6 +251,7 @@ async def health_check():
 
 
 @router.get("/factors")
+@handle_errors(module="factor_sandbox")
 async def list_factors(
     category: Optional[str] = Query(None, description="Filter by category"),
     screening_only: bool = Query(False, description="Only show screening factors"),
@@ -291,6 +294,7 @@ async def list_factors(
 
 
 @router.get("/factors/screening")
+@handle_errors(module="factor_sandbox")
 async def list_screening_factors():
     """
     List screening-specific factors
@@ -329,6 +333,7 @@ async def list_screening_factors():
 
 
 @router.post("/screen")
+@handle_errors(module="factor_sandbox")
 async def screen_stocks(req: ScreenRequest):
     """
     Screen stocks with factor filters
@@ -370,7 +375,7 @@ async def screen_stocks(req: ScreenRequest):
         })
         
     except asyncio.TimeoutError:
-        logger.error(f"[FactorSandbox] Screening timeout after 30s")
+        logger.error(f"[FactorSandbox] Screening timeout after 30s", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "筛选超时，请尝试减少因子数量或缩小股票范围")
     except Exception as e:
         logger.error(f"[FactorSandbox] Screening error: {e}", exc_info=True)
@@ -380,6 +385,7 @@ async def screen_stocks(req: ScreenRequest):
 
 
 @router.post("/backtest_preview")
+@handle_errors(module="factor_sandbox")
 async def backtest_preview(req: BacktestPreviewRequest):
     """
     Quick backtest preview for screened stocks
@@ -467,7 +473,7 @@ async def backtest_preview(req: BacktestPreviewRequest):
         })
         
     except asyncio.TimeoutError:
-        logger.error(f"[FactorSandbox] Backtest preview timeout")
+        logger.error(f"[FactorSandbox] Backtest preview timeout", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "回测预览超时，请稍后重试")
     except Exception as e:
         logger.error(f"[FactorSandbox] Backtest preview error: {e}", exc_info=True)
@@ -477,12 +483,14 @@ async def backtest_preview(req: BacktestPreviewRequest):
 
 
 @router.get("/cache/stats")
+@handle_errors(module="factor_sandbox")
 async def cache_stats():
     """Get factor cache statistics"""
     return success_response(_factor_cache.stats())
 
 
 @router.post("/cache/clear")
+@handle_errors(module="factor_sandbox")
 async def clear_cache():
     """Clear factor cache"""
     _factor_cache.clear()
@@ -532,6 +540,7 @@ def _clear_progress(task_id: str):
 
 
 @router.post("/screen/stream/start")
+@handle_errors(module="factor_sandbox")
 async def start_streaming_screen(req: ScreenStreamRequest):
     """
     Start a streaming screening task and return task_id for SSE connection.
@@ -609,6 +618,7 @@ async def _run_screening_task(
 
 
 @router.get("/screen/{task_id}/stream")
+@handle_errors(module="factor_sandbox")
 async def stream_screening_progress(task_id: str):
     """
     SSE endpoint for real-time screening progress.
@@ -697,6 +707,7 @@ async def stream_screening_progress(task_id: str):
 
 
 @router.post("/screen/{task_id}/cancel")
+@handle_errors(module="factor_sandbox")
 async def cancel_screening_task(task_id: str):
     """Cancel a running screening task"""
     progress = _get_progress(task_id)

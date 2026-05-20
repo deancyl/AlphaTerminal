@@ -18,6 +18,7 @@ from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.services.fetchers.bond_fetcher import get_bond_fetcher, STALE_DATA_THRESHOLD_DAYS
+from app.utils.error_decorator import handle_errors
 
 _bond_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="bond_")
 
@@ -99,10 +100,10 @@ async def _fetch_curve_data_for_cache():
             
     except asyncio.TimeoutError:
         _bond_cb.record_failure()
-        logger.warning("[Bond] bond_fetcher timeout")
+        logger.warning("[Bond] bond_fetcher timeout", exc_info=True)
     except Exception as e:
         _bond_cb.record_failure()
-        logger.warning(f"[Bond] bond_fetcher failed: {type(e).__name__}: {e}")
+        logger.warning(f"[Bond] bond_fetcher failed: {type(e).__name__}: {e}", exc_info=True)
 
     # Last resort: mock data
     with _CACHE_LOCK:
@@ -124,11 +125,12 @@ async def _fetch_history_df_for_cache():
         )
         return df
     except asyncio.TimeoutError:
-        logger.warning("[Bond] _fetch_history_df_for_cache timeout after 30s")
+        logger.warning("[Bond] _fetch_history_df_for_cache timeout after 30s", exc_info=True)
         return None
 
 
 @router.get("/bond/curve")
+@handle_errors(module="bond")
 async def bond_curve():
     """
     完整债券曲线数据（含信用利差 + 历史曲线对比）
@@ -194,6 +196,7 @@ async def bond_curve():
 
 
 @router.get("/bond/yield_curve")
+@handle_errors(module="bond")
 async def bond_yield_curve():
     """
     国债收益率曲线（仅国债，回落兼容）
@@ -215,6 +218,7 @@ async def bond_yield_curve():
 
 
 @router.get("/bond/active")
+@handle_errors(module="bond")
 async def bond_active():
     """
     活跃债券列表（Mock 数据 + 真实来源开发中）
@@ -229,6 +233,7 @@ async def bond_active():
 
 
 @router.get("/bond/history")
+@handle_errors(module="bond")
 async def bond_history(
     tenor: str = Query("10年", description="期限（1年/3年/5年/10年/30年）"),
     period: str = Query("1Y", description="回溯窗口（1M/3M/6M/1Y/3Y）"),
@@ -314,7 +319,7 @@ async def bond_history(
             "source": "akshare",
         })
     except Exception as e:
-        logger.warning(f"[Bond] history endpoint error: {e}")
+        logger.warning(f"[Bond] history endpoint error: {e}", exc_info=True)
         cached = _cache.get(f"{NAMESPACE}main") or {}
         return success_response({
             "tenor": tenor,
@@ -341,7 +346,7 @@ def _init_cache_warmup():
             else:
                 logger.warning("[Bond] Cache warmup returned empty data")
         except Exception as e:
-            logger.warning(f"[Bond] Cache warmup failed: {e}")
+            logger.warning(f"[Bond] Cache warmup failed: {e}", exc_info=True)
     
     import asyncio
     try:
@@ -354,6 +359,7 @@ _init_cache_warmup()
 
 
 @router.get("/bond/health")
+@handle_errors(module="bond")
 async def bond_health():
     """Bond module health check endpoint."""
     return success_response({
@@ -370,6 +376,7 @@ async def bond_health():
 
 
 @router.get("/bond/risk_free_rate", summary="获取无风险利率")
+@handle_errors(module="bond")
 async def get_risk_free_rate():
     """
     获取当前无风险利率（10年期国债收益率）
@@ -407,7 +414,7 @@ async def get_risk_free_rate():
         })
 
     except Exception as e:
-        logger.warning(f"[Bond] Failed to get risk-free rate: {e}")
+        logger.warning(f"[Bond] Failed to get risk-free rate: {e}", exc_info=True)
         return success_response({
             "rate": 0.025,
             "source": "fallback",

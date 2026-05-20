@@ -12,6 +12,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.ws_manager import ws_manager, WSConnection, PING_INTERVAL, PONG_TIMEOUT
 from app.services.tick_buffer import tick_buffer
 from app.config.settings import get_settings
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,6 +40,7 @@ def validate_origin(origin: str) -> bool:
 
 
 @router.websocket("/ws/market")
+@handle_errors(module="websocket")
 async def ws_market(ws: WebSocket):
     """
     统一 WebSocket 端点。
@@ -90,7 +92,7 @@ async def ws_market(ws: WebSocket):
         try:
             await ws.send_text(json.dumps(data, ensure_ascii=False))
         except Exception as e:
-            logger.warning(f"[WS] Failed to send message: {type(e).__name__}: {e}")
+            logger.warning(f"[WS] Failed to send message: {type(e).__name__}: {e}", exc_info=True)
 
     async def handle_message(raw: str):
         nonlocal ping_time
@@ -179,6 +181,6 @@ async def ws_market(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.warning(f"WebSocket error: {type(e).__name__}: {e}")
+        logger.warning(f"WebSocket error: {type(e).__name__}: {e}", exc_info=True)
     finally:
         await ws_manager.disconnect(conn)

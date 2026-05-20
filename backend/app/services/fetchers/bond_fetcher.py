@@ -121,10 +121,10 @@ class BondDataFetcher:
             
             return self._parse_bond_zh_us_rate_df(df)
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_zh_us_rate timeout")
+            logger.warning("[BondFetcher] bond_zh_us_rate timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_zh_us_rate failed: {e}")
+            logger.warning(f"[BondFetcher] bond_zh_us_rate failed: {e}", exc_info=True)
             return None
     
     def _parse_bond_zh_us_rate_df(self, df) -> Dict[str, Any]:
@@ -188,10 +188,10 @@ class BondDataFetcher:
             
             return self._parse_bond_spot_df(df)
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_spot_quote timeout")
+            logger.warning("[BondFetcher] bond_spot_quote timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_spot_quote failed: {e}")
+            logger.warning(f"[BondFetcher] bond_spot_quote failed: {e}", exc_info=True)
             return None
     
     async def _fetch_from_bond_spot_deal(self) -> Optional[Dict[str, Any]]:
@@ -219,10 +219,10 @@ class BondDataFetcher:
             
             return self._parse_bond_spot_deal_df(df)
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] bond_spot_deal timeout")
+            logger.warning("[BondFetcher] bond_spot_deal timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] bond_spot_deal failed: {e}")
+            logger.warning(f"[BondFetcher] bond_spot_deal failed: {e}", exc_info=True)
             return None
     
     async def _fetch_from_akshare(self) -> Optional[Dict[str, Any]]:
@@ -246,10 +246,10 @@ class BondDataFetcher:
             
             return self._parse_akshare_df(df)
         except asyncio.TimeoutError:
-            logger.warning("[BondFetcher] akshare timeout")
+            logger.warning("[BondFetcher] akshare timeout", exc_info=True)
             return None
         except Exception as e:
-            logger.warning(f"[BondFetcher] akshare failed: {e}")
+            logger.warning(f"[BondFetcher] akshare failed: {e}", exc_info=True)
             return None
     
     def _parse_akshare_df(self, df) -> Dict[str, Any]:
@@ -495,7 +495,7 @@ class BondDataFetcher:
                 "is_stale": False,
             }
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
             return None
     
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
@@ -543,7 +543,7 @@ class BondDataFetcher:
                 "is_stale": False,
             }
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
             return None
     
     def _map_cfets_code_to_tenor(self, code: str, name: str) -> Optional[str]:

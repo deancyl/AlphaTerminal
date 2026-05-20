@@ -281,7 +281,7 @@ class MCPServer:
             ]
             return {"success": True, "data": data, "count": len(data)}
         except Exception as e:
-            logger.warning(f"[MCP] get_klines failed: {e}")
+            logger.warning(f"[MCP] get_klines failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": []}
 
     def _get_realtime_quote(
@@ -328,7 +328,7 @@ class MCPServer:
                 }
             return {"success": False, "error": "No data", "data": None}
         except Exception as e:
-            logger.warning(f"[MCP] get_realtime_quote failed: {e}")
+            logger.warning(f"[MCP] get_realtime_quote failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": None}
 
     def _search_symbols(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -385,7 +385,7 @@ class MCPServer:
 
             return {"success": True, "data": filtered, "count": len(filtered)}
         except Exception as e:
-            logger.warning(f"[MCP] search_symbols failed: {e}")
+            logger.warning(f"[MCP] search_symbols failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": []}
 
     def _get_portfolio(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -410,7 +410,7 @@ class MCPServer:
 
             return {"success": True, "data": result}
         except Exception as e:
-            logger.warning(f"[MCP] get_portfolio failed: {e}")
+            logger.warning(f"[MCP] get_portfolio failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": None}
 
     def _get_account_info(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -428,7 +428,7 @@ class MCPServer:
 
             return {"success": True, "data": result}
         except Exception as e:
-            logger.warning(f"[MCP] get_account_info failed: {e}")
+            logger.warning(f"[MCP] get_account_info failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": None}
 
     def _submit_order(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -460,7 +460,7 @@ class MCPServer:
                 },
             }
         except Exception as e:
-            logger.warning(f"[MCP] submit_order failed: {e}")
+            logger.warning(f"[MCP] submit_order failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     def _list_orders(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -494,7 +494,7 @@ class MCPServer:
                 "count": len(orders),
             }
         except Exception as e:
-            logger.warning(f"[MCP] list_orders failed: {e}")
+            logger.warning(f"[MCP] list_orders failed: {e}", exc_info=True)
             return {"success": False, "error": str(e), "data": []}
 
     def _cancel_order(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
@@ -510,7 +510,7 @@ class MCPServer:
             else:
                 return {"success": False, "error": "Order not found or cannot be cancelled"}
         except Exception as e:
-            logger.warning(f"[MCP] cancel_order failed: {e}")
+            logger.warning(f"[MCP] cancel_order failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     # ── Public API ────────────────────────────────────────────────────────────

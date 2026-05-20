@@ -12,6 +12,7 @@ import time
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ router = APIRouter()
 
 
 @router.get("/news/flash")
+@handle_errors(module="news")
 async def news_flash():
     """
     快讯瀑布流（只读缓存，后台刷新线程维护）
@@ -40,6 +42,7 @@ async def news_flash():
 
 
 @router.post("/news/force_refresh")
+@handle_errors(module="news")
 async def news_force_refresh():
     """
     穿透式强制刷新（Phase 3.6 UX 整改）：
@@ -87,6 +90,7 @@ async def news_force_refresh():
 
 
 @router.get("/news/detail")
+@handle_errors(module="news")
 async def news_detail(url: str = Query(..., description="新闻原文 URL")):
     """
     抓取新闻原文正文（纯文本，剥离图片/脚本/样式）
@@ -174,6 +178,7 @@ async def news_detail(url: str = Query(..., description="新闻原文 URL")):
 
 
 @router.get("/news/transcript/{video_id}")
+@handle_errors(module="news")
 async def video_transcript(video_id: str):
     """YouTube 字幕（走代理）"""
     from app.services.news_fetcher import fetch_youtube_transcript
@@ -181,6 +186,7 @@ async def video_transcript(video_id: str):
 
 
 @router.get("/news/events/{symbol}")
+@handle_errors(module="news")
 async def news_events_for_symbol(
     symbol: str,
     limit: int = Query(20, ge=1, le=100, description="Maximum number of events to return")

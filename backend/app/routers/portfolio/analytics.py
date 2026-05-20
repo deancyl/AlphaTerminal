@@ -21,6 +21,7 @@ from statistics import mean, stdev, NormalDist
 from app.db.database import _get_conn
 from app.utils.response import success_response
 from app.middleware import require_api_key
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +87,7 @@ def _classify_asset(symbol: str, name: str = "") -> dict:
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/attribution")
+@handle_errors(module="portfolio_analytics")
 async def get_attribution(portfolio_id: int, include_children: bool = Query(False)):
     """
     底层资产归因 + 组合风险（VaR / 波动率估算）。
@@ -279,13 +281,13 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
                             "days":              len(assets),
                         }
             except sqlite3.OperationalError as e:
-                logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}")
+                logger.warning(f"[Attribution] 数据库操作错误，无法读取快照数据: {e}", exc_info=True)
             except ValueError as e:
-                logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}")
+                logger.warning(f"[Attribution] 风险指标计算错误（数据格式问题）: {e}", exc_info=True)
             except ZeroDivisionError as e:
-                logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}")
+                logger.warning(f"[Attribution] 风险指标计算错误（除零）: {e}", exc_info=True)
             except Exception as e:
-                logger.warning(f"[Attribution] risk_metrics error: {e}")
+                logger.warning(f"[Attribution] risk_metrics error: {e}", exc_info=True)
 
             return {
                 "attribution":    attribution,
@@ -320,7 +322,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_attribution timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[analytics] get_attribution timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Attribution analysis timeout")
 
 
@@ -329,6 +331,7 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/performance")
+@handle_errors(module="portfolio_analytics")
 async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     """
     计算组合的业绩评价指标
@@ -477,7 +480,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_performance_metrics timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[analytics] get_performance_metrics timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Performance metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Performance] 数据库操作错误: {e}", exc_info=True)
@@ -498,6 +501,7 @@ async def get_performance_metrics(portfolio_id: int, benchmark: str = "000300"):
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/risk")
+@handle_errors(module="portfolio_analytics")
 async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon: int = 1):
     """
     计算组合的风险价值（VaR）和条件风险价值（CVaR）
@@ -613,7 +617,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_risk_metrics timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[analytics] get_risk_metrics timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Risk metrics timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Risk] 数据库操作错误: {e}", exc_info=True)
@@ -634,6 +638,7 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/benchmark")
+@handle_errors(module="portfolio_analytics")
 async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300"):
     """
     组合与基准指数的对比分析
@@ -778,7 +783,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[analytics] get_benchmark_comparison timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[analytics] get_benchmark_comparison timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Benchmark comparison timeout")
     except sqlite3.OperationalError as e:
         logger.error(f"[Benchmark] 数据库操作错误: {e}", exc_info=True)
@@ -799,6 +804,7 @@ async def get_benchmark_comparison(portfolio_id: int, benchmark: str = "000300")
 # ══════════════════════════════════════════════════════════════
 
 @router.get("/{portfolio_id}/brinson")
+@handle_errors(module="portfolio_analytics")
 async def get_brinson_attribution(
     portfolio_id: int,
     benchmark: str = Query(default="000300", description="基准指数代码（默认沪深300）"),

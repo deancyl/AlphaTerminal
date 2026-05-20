@@ -63,7 +63,7 @@ class CsvCacheManager:
             return df
             
         except Exception as e:
-            logger.warning(f"[CsvCache] Failed to read {path}: {e}")
+            logger.warning(f"[CsvCache] Failed to read {path}: {e}", exc_info=True)
             return None
     
     def set(self, symbol: str, period: str, df: pd.DataFrame):
@@ -89,7 +89,7 @@ class CsvCacheManager:
             logger.debug(f"[CsvCache] Saved {symbol} {period}: {len(df)} rows")
             
         except Exception as e:
-            logger.warning(f"[CsvCache] Failed to write {path}: {e}")
+            logger.warning(f"[CsvCache] Failed to write {path}: {e}", exc_info=True)
     
     def delete(self, symbol: str, period: str):
         """
@@ -106,7 +106,7 @@ class CsvCacheManager:
                 os.remove(path)
                 logger.debug(f"[CsvCache] Deleted {symbol} {period}")
             except Exception as e:
-                logger.warning(f"[CsvCache] Failed to delete {path}: {e}")
+                logger.warning(f"[CsvCache] Failed to delete {path}: {e}", exc_info=True)
     
     def clear_all(self):
         """清空所有缓存"""
@@ -117,7 +117,7 @@ class CsvCacheManager:
                     os.remove(filepath)
             logger.info(f"[CsvCache] Cleared all cache files")
         except Exception as e:
-            logger.warning(f"[CsvCache] Failed to clear cache: {e}")
+            logger.warning(f"[CsvCache] Failed to clear cache: {e}", exc_info=True)
     
     def get_cache_stats(self) -> Dict:
         """
@@ -206,7 +206,7 @@ class CsvCacheManager:
             return (now - last_date).days > 1
             
         except Exception as e:
-            logger.warning(f"[CsvCache] Failed to check staleness: {e}")
+            logger.warning(f"[CsvCache] Failed to check staleness: {e}", exc_info=True)
             return True
 
 

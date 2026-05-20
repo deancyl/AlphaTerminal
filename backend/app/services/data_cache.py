@@ -847,7 +847,7 @@ class DataCache:
             return {'value': value, 'expires_at': row['expires_at']}
             
         except Exception as e:
-            logger.warning(f"[DataCache] SQLite query failed: {key}, error={e}")
+            logger.warning(f"[DataCache] SQLite query failed: {key}, error={e}", exc_info=True)
             return None
 
     def restore_from_sqlite(self, limit: int = 100):
@@ -891,7 +891,7 @@ class DataCache:
             logger.info(f"[DataCache] Restored {restored} entries from SQLite")
             
         except Exception as e:
-            logger.warning(f"[DataCache] SQLite restore failed: {e}")
+            logger.warning(f"[DataCache] SQLite restore failed: {e}", exc_info=True)
 
     def cleanup_sqlite_expired(self) -> int:
         """
@@ -924,7 +924,7 @@ class DataCache:
             return deleted
             
         except Exception as e:
-            logger.warning(f"[DataCache] SQLite cleanup failed: {e}")
+            logger.warning(f"[DataCache] SQLite cleanup failed: {e}", exc_info=True)
             return 0
 
     def warmup_cache(self, keys: list, fetch_fns: dict) -> int:
@@ -973,7 +973,7 @@ class DataCache:
                     logger.debug(f"[DataCache] Warmup skipped: {key} (fetch returned None)")
                     
             except Exception as e:
-                logger.warning(f"[DataCache] Warmup failed for {key}: {e}")
+                logger.warning(f"[DataCache] Warmup failed for {key}: {e}", exc_info=True)
         
         logger.info(f"[DataCache] Warmup complete: {warmed}/{len(keys)} entries")
         return warmed
@@ -1015,7 +1015,7 @@ class DataCache:
                     logger.debug(f"[DataCache] Async warmup skipped: {key} (fetch returned None)")
                     
             except Exception as e:
-                logger.warning(f"[DataCache] Async warmup failed for {key}: {e}")
+                logger.warning(f"[DataCache] Async warmup failed for {key}: {e}", exc_info=True)
         
         logger.info(f"[DataCache] Async warmup complete: {warmed}/{len(keys)} entries")
         return warmed

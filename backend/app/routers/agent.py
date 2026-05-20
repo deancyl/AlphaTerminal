@@ -45,6 +45,7 @@ from ..services.agent.token_service import (
     Market,
 )
 from ..middleware.agent_auth import verify_agent_token, require_scope
+from app.utils.error_decorator import handle_errors
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -177,6 +178,7 @@ def _verify_admin(admin_auth: Optional[str], x_admin_auth: Optional[str] = None)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/health", response_model=HealthResponse)
+@handle_errors(module="agent")
 async def health(request: Request):
     """
     Public health check endpoint (no authentication required).
@@ -206,8 +208,8 @@ async def health(request: Request):
         
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_HEALTH] Health check failed | request_id={request_id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_HEALTH] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_HEALTH] Health check failed | request_id={request_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_HEALTH] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Health check failed")
 
 
@@ -216,6 +218,7 @@ async def health(request: Request):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/admin/tokens")
+@handle_errors(module="agent")
 async def create_token(
     request: CreateTokenRequest,
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
@@ -260,6 +263,7 @@ async def create_token(
 
 
 @router.get("/admin/tokens")
+@handle_errors(module="agent")
 async def list_tokens(
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
     x_admin_auth: Optional[str] = Header(None, alias="X-Admin-Auth", description="Admin UI Auth"),
@@ -279,6 +283,7 @@ async def list_tokens(
 
 
 @router.delete("/admin/tokens/{token_id}")
+@handle_errors(module="agent")
 async def revoke_token(
     token_id: str,
     admin_auth: Optional[str] = Header(None, description="Admin JWT Token"),
@@ -304,6 +309,7 @@ async def revoke_token(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/whoami", response_model=WhoamiResponse)
+@handle_errors(module="agent")
 async def whoami(
     request: Request,
     token: Any = Depends(verify_agent_token)
@@ -344,8 +350,8 @@ async def whoami(
         
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_WHOAMI] Whoami failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_WHOAMI] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_WHOAMI] Whoami failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_WHOAMI] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get token info")
 
 
@@ -354,6 +360,7 @@ async def whoami(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/markets", response_model=MarketsResponse)
+@handle_errors(module="agent")
 async def list_markets(
     request: Request,
     token: Any = Depends(require_scope(TokenScope.READ))
@@ -404,12 +411,13 @@ async def list_markets(
         
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_MARKETS] List markets failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_MARKETS] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_MARKETS] List markets failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_MARKETS] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list markets")
 
 
 @router.get("/markets/{market}/symbols", response_model=SymbolsResponse)
+@handle_errors(module="agent")
 async def search_symbols(
     request: Request,
     market: str,
@@ -498,12 +506,13 @@ async def search_symbols(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.warning(f"[AGENT_SYMBOLS] Search symbols fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s")
+        logger.warning(f"[AGENT_SYMBOLS] Search symbols fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
         logger.debug(f"[AGENT_SYMBOLS] Returning empty results due to error")
         return SymbolsResponse(symbols=[])
 
 
 @router.post("/klines", response_model=KlinesResponse)
+@handle_errors(module="agent")
 async def get_klines(
     request: Request,
     kline_request: KlinesRequest,
@@ -599,7 +608,7 @@ async def get_klines(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.warning(f"[AGENT_KLINES] Get klines fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s")
+        logger.warning(f"[AGENT_KLINES] Get klines fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
         logger.debug(f"[AGENT_KLINES] Returning empty data due to error")
         return KlinesResponse(
             market=kline_request.market,
@@ -610,6 +619,7 @@ async def get_klines(
 
 
 @router.get("/price")
+@handle_errors(module="agent")
 async def get_price(
     request: Request,
     market: str = Query(..., description="Market code"),
@@ -693,7 +703,7 @@ async def get_price(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.warning(f"[AGENT_PRICE] Get price fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s")
+        logger.warning(f"[AGENT_PRICE] Get price fallback | request_id={request_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
     
     fallback_data = {
         "market": market,
@@ -755,6 +765,7 @@ class StrategyUpdateRequest(BaseModel):
 
 
 @router.get("/strategies", response_model=StrategyListResponse)
+@handle_errors(module="agent")
 async def list_strategies(
     request: Request,
     limit: int = Query(20, description="Maximum results", ge=1, le=100),
@@ -876,12 +887,13 @@ async def list_strategies(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_STRATEGIES_LIST] List strategies failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_STRATEGIES_LIST] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_STRATEGIES_LIST] List strategies failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_STRATEGIES_LIST] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to list strategies")
 
 
 @router.get("/strategies/{strategy_id}", response_model=StrategyDetailResponse)
+@handle_errors(module="agent")
 async def get_strategy(
     request: Request,
     strategy_id: str,
@@ -965,12 +977,13 @@ async def get_strategy(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_STRATEGY_GET] Get strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_STRATEGY_GET] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_STRATEGY_GET] Get strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_STRATEGY_GET] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to get strategy")
 
 
 @router.post("/strategies")
+@handle_errors(module="agent")
 async def create_strategy(
     request: Request,
     strategy_request: StrategyCreateRequest,
@@ -1074,16 +1087,17 @@ async def create_strategy(
         raise
     except ValueError as e:
         duration = time.time() - start_time
-        logger.warning(f"[AGENT_STRATEGY_CREATE] Strategy creation failed (duplicate) | request_id={request_id} error={str(e)} duration={duration:.3f}s")
+        logger.warning(f"[AGENT_STRATEGY_CREATE] Strategy creation failed (duplicate) | request_id={request_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_STRATEGY_CREATE] Create strategy failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_STRATEGY_CREATE] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_STRATEGY_CREATE] Create strategy failed | request_id={request_id} token_id={token.id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_STRATEGY_CREATE] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to create strategy")
 
 
 @router.put("/strategies/{strategy_id}")
+@handle_errors(module="agent")
 async def update_strategy(
     request: Request,
     strategy_id: str,
@@ -1218,12 +1232,13 @@ async def update_strategy(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_STRATEGY_UPDATE] Update strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_STRATEGY_UPDATE] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_STRATEGY_UPDATE] Update strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_STRATEGY_UPDATE] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to update strategy")
 
 
 @router.delete("/strategies/{strategy_id}")
+@handle_errors(module="agent")
 async def delete_strategy(
     request: Request,
     strategy_id: str,
@@ -1317,8 +1332,8 @@ async def delete_strategy(
         raise
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"[AGENT_STRATEGY_DELETE] Delete strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s")
-        logger.error(f"[AGENT_STRATEGY_DELETE] Stack trace:\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_STRATEGY_DELETE] Delete strategy failed | request_id={request_id} token_id={token.id} strategy_id={strategy_id} error={str(e)} duration={duration:.3f}s", exc_info=True)
+        logger.error(f"[AGENT_STRATEGY_DELETE] Stack trace:\n{traceback.format_exc()}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to delete strategy")
 
 
@@ -1327,6 +1342,7 @@ async def delete_strategy(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.post("/backtests", response_model=BacktestResponse)
+@handle_errors(module="agent")
 async def submit_backtest(
     request: BacktestRequest,
     token: Any = Depends(require_scope(TokenScope.BACKTEST)),
@@ -1362,6 +1378,7 @@ async def submit_backtest(
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
+@handle_errors(module="agent")
 async def get_job_status(
     job_id: str,
     token: Any = Depends(require_scope(TokenScope.READ)),
@@ -1390,6 +1407,7 @@ async def get_job_status(
 # ─────────────────────────────────────────────────────────────────────────────
 
 @router.get("/admin/audit_logs")
+@handle_errors(module="agent")
 async def get_audit_logs(
     token_id: Optional[str] = None,
     action: Optional[str] = None,
@@ -1447,6 +1465,7 @@ class MCPCallResponse(BaseModel):
 
 
 @router.get("/mcp/tools", response_model=MCPToolsResponse)
+@handle_errors(module="agent")
 async def list_mcp_tools(
     token: Any = Depends(require_scope(TokenScope.READ)),
 ):
@@ -1463,6 +1482,7 @@ async def list_mcp_tools(
 
 
 @router.post("/mcp/call", response_model=MCPCallResponse)
+@handle_errors(module="agent")
 async def call_mcp_tool(
     request: MCPCallRequest,
     token: Any = Depends(verify_agent_token),

@@ -207,7 +207,7 @@ class SpotCache:
                             "market": code[:2] in ('60','68','90') and "SH" or "SZ",
                         })
             except Exception as e:
-                logger.warning(f"[SpotCache] DB fallback failed: {e}")
+                logger.warning(f"[SpotCache] DB fallback failed: {e}", exc_info=True)
 
         if not stocks:
             return {"buckets": [], "total": 0, "advance": 0, "decline": 0,
@@ -283,7 +283,7 @@ def _bg_sina_refresh():
             return
         logger.warning("[SpotCache] Sina HQ 返回不足，尝试从数据库兜底")
     except Exception as e:
-        logger.warning(f"[SpotCache] Sina HQ 失败，尝试从数据库兜底: {type(e).__name__}: {e}")
+        logger.warning(f"[SpotCache] Sina HQ 失败，尝试从数据库兜底: {type(e).__name__}: {e}", exc_info=True)
     
     # 兜底：从 market_all_stocks 读取全市场数据
     try:

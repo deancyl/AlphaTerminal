@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from app.middleware import require_api_key
 from pydantic import BaseModel, Field, field_validator
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -154,6 +155,7 @@ class CompileResponse(BaseModel):
 
 
 @router.post("/validate")
+@handle_errors(module="strategy")
 async def validate_strategy_code(request: CodeValidateRequest):
     """
     Validate strategy code without executing it.
@@ -344,6 +346,7 @@ def _generate_python_code(ast: StrategyAST) -> str:
 
 
 @router.post("/compile")
+@handle_errors(module="strategy")
 async def compile_strategy(request: CompileRequest):
     """
     Compile Strategy AST to Python DSL code.
@@ -441,7 +444,7 @@ def _get_history_data(symbol: str, start_date: str, end_date: str) -> Optional[D
             if conn:
                 conn.close()
     except Exception as e:
-        logger.warning(f"[Strategy] Failed to get history: {e}")
+        logger.warning(f"[Strategy] Failed to get history: {e}", exc_info=True)
         return None
 
 
@@ -491,6 +494,7 @@ def _simulate_trades(df, signals, initial_capital=100000.0, commission=0.001):
 
 
 @router.post("/backtest")
+@handle_errors(module="strategy")
 async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_key)):
     """运行策略回测"""
     try:
@@ -553,6 +557,7 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
 
 
 @router.post("/optimize")
+@handle_errors(module="strategy")
 async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_api_key)):
     """参数优化"""
     try:
@@ -610,6 +615,7 @@ async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_
 
 
 @router.get("/templates")
+@handle_errors(module="strategy")
 async def list_templates():
     """获取内置策略模板"""
     from app.services.strategy import EXAMPLE_STRATEGIES
@@ -624,6 +630,7 @@ async def list_templates():
 # ── Strategy CRUD Endpoints ───────────────────────────────────────────────────
 
 @router.get("/strategies")
+@handle_errors(module="strategy")
 async def list_strategies():
     """获取所有策略列表"""
     if USE_DB_PERSISTENCE:
@@ -656,6 +663,7 @@ async def list_strategies():
 
 
 @router.post("/strategies")
+@handle_errors(module="strategy")
 async def create_strategy(request: StrategyCreate, _: None = Depends(require_api_key)):
     """创建新策略"""
     from app.services.strategy import StrategyValidator
@@ -704,6 +712,7 @@ async def create_strategy(request: StrategyCreate, _: None = Depends(require_api
 
 
 @router.get("/strategies/{strategy_id}")
+@handle_errors(module="strategy")
 async def get_strategy(strategy_id: str):
     """获取策略详情"""
     if USE_DB_PERSISTENCE:
@@ -719,6 +728,7 @@ async def get_strategy(strategy_id: str):
 
 
 @router.put("/strategies/{strategy_id}")
+@handle_errors(module="strategy")
 async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = Depends(require_api_key)):
     """更新策略"""
     if USE_DB_PERSISTENCE:
@@ -784,6 +794,7 @@ async def update_strategy(strategy_id: str, request: StrategyUpdate, _: None = D
 
 
 @router.delete("/strategies/{strategy_id}")
+@handle_errors(module="strategy")
 async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
     """删除策略"""
     if USE_DB_PERSISTENCE:
@@ -803,6 +814,7 @@ async def delete_strategy(strategy_id: str, _: None = Depends(require_api_key)):
 
 
 @router.post("/strategies/{strategy_id}/backtest")
+@handle_errors(module="strategy")
 async def backtest_saved_strategy(strategy_id: str, request: BacktestRequest, _: None = Depends(require_api_key)):
     """运行已保存策略的回测"""
     if USE_DB_PERSISTENCE:

@@ -90,7 +90,7 @@ def _fetch_capital_flow_sync() -> List[Dict]:
                 continue
         return flows
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] capital flow: {e}")
+        logger.warning(f"[HTTP] capital flow: {e}", exc_info=True)
         return []
 
 
@@ -111,7 +111,7 @@ def _fetch_institution_research_sync() -> List[Dict]:
                 continue
         return research
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] institution research: {e}")
+        logger.warning(f"[HTTP] institution research: {e}", exc_info=True)
         return []
 
 
@@ -469,7 +469,7 @@ async def detect_anomalies(
             timeout=timeout
         )
     except asyncio.TimeoutError:
-        logger.error("[Anomaly] Timeout detecting anomalies")
+        logger.error("[Anomaly] Timeout detecting anomalies", exc_info=True)
         return {
             "anomalies": [],
             "last_update": datetime.now().isoformat(),
@@ -513,7 +513,7 @@ async def _detect_anomalies_internal(
                     else:
                         results.append(_detect_new_high_simple(stocks, top_n))
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                    logger.warning(f"[HTTP] failed, using fallback: {e}")
+                    logger.warning(f"[HTTP] failed, using fallback: {e}", exc_info=True)
                     results.append(_detect_new_high_simple(stocks, top_n))
             
             if anomaly_type in (None, AnomalyType.VOLUME_SURGE):

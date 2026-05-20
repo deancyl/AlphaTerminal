@@ -179,7 +179,7 @@ class ScriptStrategy:
         except SyntaxError as e:
             raise ValueError(f"Strategy syntax error at line {e.lineno}: {e.msg}")
         except Exception as e:
-            logger.warning(f"[ScriptStrategy] Compilation error: {e}")
+            logger.warning(f"[ScriptStrategy] Compilation error: {e}", exc_info=True)
             raise ValueError(f"Strategy compilation failed: {e}")
     
     def _create_context(self, df: pd.DataFrame) -> StrategyContext:
@@ -217,7 +217,7 @@ class ScriptStrategy:
             try:
                 self._namespace["on_init"](ctx)
             except Exception as e:
-                logger.warning(f"[ScriptStrategy] on_init error: {e}")
+                logger.warning(f"[ScriptStrategy] on_init error: {e}", exc_info=True)
             finally:
                 self._namespace["ctx"] = old_ctx
 
@@ -228,7 +228,7 @@ class ScriptStrategy:
             try:
                 self._namespace["on_bar"](ctx, bar)
             except Exception as e:
-                logger.warning(f"[ScriptStrategy] on_bar error at {ctx.current_index}: {e}")
+                logger.warning(f"[ScriptStrategy] on_bar error at {ctx.current_index}: {e}", exc_info=True)
             finally:
                 self._namespace["ctx"] = old_ctx
 
@@ -295,7 +295,7 @@ class ScriptStrategy:
                     error_message=error_message,
                 )
             except Exception as e:
-                logger.warning(f"[Audit] Failed to log execution: {e}")
+                logger.warning(f"[Audit] Failed to log execution: {e}", exc_info=True)
     
     def _execute_strategy(self, df: pd.DataFrame) -> Dict[str, Any]:
         ctx = self._create_context(df)

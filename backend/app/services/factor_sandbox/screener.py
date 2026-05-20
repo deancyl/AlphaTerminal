@@ -140,7 +140,7 @@ class StockScreener:
                 import akshare as ak
                 self._akshare = ak
             except ImportError:
-                logger.error("[Screener] akshare not installed")
+                logger.error("[Screener] akshare not installed", exc_info=True)
                 raise
         return self._akshare
     

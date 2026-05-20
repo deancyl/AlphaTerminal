@@ -116,14 +116,14 @@ def fetch_youtube_transcript(video_id: str, lang: str = "zh-CN") -> dict:
         }
 
     except (TranscriptsDisabled, NoTranscriptFound) as e:
-        logger.warning(f"[YouTube] 字幕不可用，触发优雅降级: {e}")
+        logger.warning(f"[YouTube] 字幕不可用，触发优雅降级: {e}", exc_info=True)
         return {**FALLBACK_TRANSCRIPT}
     except VideoUnavailable as e:
-        logger.warning(f"[YouTube] 视频不可用，触发优雅降级: {e}")
+        logger.warning(f"[YouTube] 视频不可用，触发优雅降级: {e}", exc_info=True)
         return {**FALLBACK_TRANSCRIPT}
     except RuntimeError as e:
         if "ProxyConfig" in str(e) or "RequestBlocked" in str(e) or "YouTube" in str(e):
-            logger.warning(f"[YouTube] 代理/封锁问题，触发优雅降级: {e}")
+            logger.warning(f"[YouTube] 代理/封锁问题，触发优雅降级: {e}", exc_info=True)
             return {**FALLBACK_TRANSCRIPT}
         raise
     except Exception as e:

@@ -201,7 +201,7 @@ async def fetch_with_fallback(
         except CircuitBreakerOpen:
             raise
         except Exception as e:
-            logger.warning(f"Fetcher {fetcher_name} failed: {e}")
+            logger.warning(f"Fetcher {fetcher_name} failed: {e}", exc_info=True)
             last_error = e
             continue
     

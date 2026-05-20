@@ -424,7 +424,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except HTTPException as e:
             # Log HTTP exceptions (authentication/authorization errors)
             duration = time.time() - request_start_time
-            logger.warning(f"[AUDIT_ERROR] HTTP exception: status={e.status_code}, detail={e.detail}, duration={duration:.3f}s")
+            logger.warning(f"[AUDIT_ERROR] HTTP exception: status={e.status_code}, detail={e.detail}, duration={duration:.3f}s", exc_info=True)
             
             # Get token if available
             token = get_current_token(request)

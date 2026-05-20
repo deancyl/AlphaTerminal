@@ -373,7 +373,7 @@ class ModelLoader:
                 json.dump(meta, f, indent=2)
                 
         except Exception as e:
-            logger.warning(f"[ModelLoader] Failed to save metadata: {e}")
+            logger.warning(f"[ModelLoader] Failed to save metadata: {e}", exc_info=True)
     
     def _load_model_metadata(self, model_id: str) -> Optional[ModelInfo]:
         """Load model metadata from JSON."""
@@ -398,7 +398,7 @@ class ModelLoader:
             )
             
         except Exception as e:
-            logger.warning(f"[ModelLoader] Failed to load metadata: {e}")
+            logger.warning(f"[ModelLoader] Failed to load metadata: {e}", exc_info=True)
             return None
 
 

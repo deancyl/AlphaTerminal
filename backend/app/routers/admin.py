@@ -27,6 +27,7 @@ from app.db.database import _get_conn, _db_path
 from app.config.settings import get_settings
 from app.utils.ip_validation import get_client_ip_safe
 from app.db import session_db
+from app.utils.error_decorator import handle_errors
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 _DEFAULT_LOG_DIR = BASE_DIR / "logs"
@@ -397,6 +398,7 @@ def _mask_key(key: str) -> str:
     return f"{key[:6]}...{key[-4:]}"
 
 @router.get("/settings/llm")
+@handle_errors(module="admin")
 def get_llm_settings():
     """获取 LLM 配置（API Key 已掩码）。优先级：数据库 > .env > 默认值"""
     from app.db.database import get_admin_config
@@ -424,6 +426,7 @@ def get_llm_settings():
     return {"code": 0, "data": result}
 
 @router.post("/settings/llm")
+@handle_errors(module="admin")
 def save_llm_settings(body: LLMSettingsRequest):
     """保存 LLM 配置到数据库（永久生效）"""
     from app.db.database import get_admin_config, set_admin_config
@@ -452,6 +455,7 @@ def save_llm_settings(body: LLMSettingsRequest):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/models/all")
+@handle_errors(module="admin")
 def get_all_models():
     """Get all configured models across all providers"""
     from app.services.model_config_service import get_model_config_service
@@ -483,6 +487,7 @@ def get_all_models():
     return {"code": 0, "data": result}
 
 @router.get("/models/{provider}")
+@handle_errors(module="admin")
 def get_provider_models(provider: str):
     """Get models for a specific provider"""
     from app.services.model_config_service import get_model_config_service
@@ -518,6 +523,7 @@ def get_provider_models(provider: str):
     }
 
 @router.post("/models/add")
+@handle_errors(module="admin")
 def add_model(body: ModelConfigRequest):
     """Add a new model configuration"""
     from app.services.model_config_service import get_model_config_service
@@ -539,6 +545,7 @@ def add_model(body: ModelConfigRequest):
         return {"code": 1, "error": f"Failed to add model '{body.model_id}'"}
 
 @router.patch("/models/update")
+@handle_errors(module="admin")
 def update_model(body: ModelUpdateRequest):
     """Update model configuration"""
     from app.services.model_config_service import get_model_config_service
@@ -564,6 +571,7 @@ def update_model(body: ModelUpdateRequest):
         return {"code": 1, "error": f"Failed to update model '{body.model_id}'"}
 
 @router.delete("/models/{provider}/{model_id}")
+@handle_errors(module="admin")
 def remove_model(provider: str, model_id: str):
     """Remove a model from a provider"""
     from app.services.model_config_service import get_model_config_service
@@ -577,6 +585,7 @@ def remove_model(provider: str, model_id: str):
         return {"code": 1, "error": f"Failed to remove model '{model_id}'"}
 
 @router.post("/models/set-default")
+@handle_errors(module="admin")
 def set_default_model(body: SetDefaultModelRequest):
     """Set the default model for a provider"""
     from app.services.model_config_service import get_model_config_service
@@ -590,6 +599,7 @@ def set_default_model(body: SetDefaultModelRequest):
         return {"code": 1, "error": f"Failed to set default model"}
 
 @router.post("/models/test")
+@handle_errors(module="admin")
 def test_model_connection(body: TestConnectionRequest):
     """Test connection to a model"""
     from app.services.model_config_service import get_model_config_service
@@ -603,6 +613,7 @@ def test_model_connection(body: TestConnectionRequest):
         return {"code": 1, "error": result.get("error", "Connection test failed"), "data": result}
 
 @router.get("/models/pricing/catalog")
+@handle_errors(module="admin")
 def get_pricing_catalog():
     """Get pricing catalog for all models"""
     from app.db.seed_pricing_catalog import get_all_pricing
@@ -611,6 +622,7 @@ def get_pricing_catalog():
     return {"code": 0, "data": pricing}
 
 @router.post("/models/pricing/add")
+@handle_errors(module="admin")
 def add_custom_pricing(body: CustomPricingRequest):
     """Add custom pricing for a model"""
     from app.db.seed_pricing_catalog import seed_pricing_catalog
@@ -634,6 +646,7 @@ def add_custom_pricing(body: CustomPricingRequest):
 
 
 @router.post("/settings/llm/test")
+@handle_errors(module="admin")
 def test_llm_connection(body: LLMTestRequest):
     """探测 LLM Provider 连接"""
     import httpx
@@ -685,6 +698,7 @@ class CircuitBreakerControl(BaseModel):
     action: str  # "open" | "close" | "half_open"
 
 @router.get("/sources/status")
+@handle_errors(module="admin")
 async def get_sources_status():
     """获取所有数据源实时状态（合并 SQLite 持久化的熔断状态）"""
     from app.services import quote_source
@@ -722,6 +736,7 @@ async def get_sources_status():
     return {"sources": merged, "timestamp": int(time.time())}
 
 @router.post("/sources/circuit_breaker")
+@handle_errors(module="admin")
 async def control_circuit_breaker(control: CircuitBreakerControl):
     """手动控制熔断器"""
     from app.services import quote_source
@@ -738,6 +753,7 @@ async def control_circuit_breaker(control: CircuitBreakerControl):
         raise HTTPException(status_code=400, detail=f"Unknown action: {control.action}")
 
 @router.post("/sources/probe")
+@handle_errors(module="admin")
 async def probe_all_sources():
     """主动探测所有数据源并返回实时延迟（包含熔断状态、主源标记和历史）"""
     import asyncio
@@ -765,6 +781,7 @@ async def probe_all_sources():
     return {"sources": results, "current_source": current_source, "timestamp": int(time.time())}
 
 @router.get("/sources/balance")
+@handle_errors(module="admin")
 async def get_balance_config():
     """获取负载均衡配置"""
     loop = asyncio.get_event_loop()
@@ -787,6 +804,7 @@ async def get_balance_config():
     return SourceBalanceConfig().dict()
 
 @router.post("/sources/balance")
+@handle_errors(module="admin")
 async def set_balance_config(config: SourceBalanceConfig):
     """设置负载均衡配置"""
     import json
@@ -814,6 +832,7 @@ async def set_balance_config(config: SourceBalanceConfig):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/scheduler/jobs")
+@handle_errors(module="admin")
 async def get_scheduler_jobs():
     """获取所有定时任务状态"""
     jobs = scheduler.get_jobs()
@@ -831,6 +850,7 @@ async def get_scheduler_jobs():
     }
 
 @router.post("/scheduler/jobs/{job_id}/control")
+@handle_errors(module="admin")
 async def control_scheduler_job(job_id: str, body: SchedulerControlRequest):
     """控制定时任务（pause/resume/run）"""
     action = body.action
@@ -855,6 +875,7 @@ async def control_scheduler_job(job_id: str, body: SchedulerControlRequest):
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/cache/invalidate")
+@handle_errors(module="admin")
 async def invalidate_cache(body: CacheInvalidateRequest):
     """清空指定缓存"""
     cache_type = body.cache_type
@@ -876,6 +897,7 @@ async def invalidate_cache(body: CacheInvalidateRequest):
         raise HTTPException(status_code=400, detail=f"Unknown cache type: {cache_type}")
 
 @router.post("/cache/warmup")
+@handle_errors(module="admin")
 async def warmup_cache(body: CacheWarmupRequest):
     """预热缓存"""
     data_type = body.data_type
@@ -896,6 +918,7 @@ async def warmup_cache(body: CacheWarmupRequest):
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/database/maintenance")
+@handle_errors(module="admin")
 async def database_maintenance(body: DatabaseMaintenanceRequest):
     """数据库维护操作"""
     action = body.action
@@ -974,6 +997,7 @@ async def database_maintenance(body: DatabaseMaintenanceRequest):
 
 
 @router.get("/database/maintenance/{task_id}")
+@handle_errors(module="admin")
 async def get_maintenance_task_status(task_id: str):
     """获取数据库维护任务状态"""
     from app.services.background_tasks import get_task_manager
@@ -987,6 +1011,7 @@ async def get_maintenance_task_status(task_id: str):
     return {"code": 0, "data": task.to_dict()}
 
 @router.get("/database/stats")
+@handle_errors(module="admin")
 async def get_database_stats():
     """获取数据库统计信息"""
     loop = asyncio.get_event_loop()
@@ -1035,6 +1060,7 @@ async def get_database_stats():
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/system/metrics")
+@handle_errors(module="admin")
 async def get_system_metrics():
     """获取系统资源使用情况"""
     cpu_percent = psutil.cpu_percent(interval=1)
@@ -1060,6 +1086,7 @@ async def get_system_metrics():
 
 @router.get("/system/logs")
 @router.get("/logs/recent")  # 兼容旧接口
+@handle_errors(module="admin")
 async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
     """获取最近日志"""
     log_file = _DEFAULT_LOG_DIR / "app.log"
@@ -1078,6 +1105,7 @@ async def get_recent_logs(lines: int = Query(default=100, ge=1, le=1000)):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/tokens/stats")
+@handle_errors(module="admin")
 def get_token_stats(
     start_time: Optional[str] = Query(default=None),
     end_time: Optional[str] = Query(default=None)
@@ -1091,6 +1119,7 @@ def get_token_stats(
     return {"code": 0, "data": stats}
 
 @router.get("/tokens/history")
+@handle_errors(module="admin")
 def get_token_history(
     model_id: Optional[str] = Query(default=None),
     session_id: Optional[str] = Query(default=None),
@@ -1115,6 +1144,7 @@ def get_token_history(
     return {"code": 0, "data": history, "count": len(history)}
 
 @router.get("/tokens/aggregated")
+@handle_errors(module="admin")
 def get_token_aggregated(
     aggregate_type: str = Query(default="daily", pattern="^(hourly|daily|weekly)$"),
     limit: int = Query(default=30, ge=1, le=365)
@@ -1128,6 +1158,7 @@ def get_token_aggregated(
     return {"code": 0, "data": aggregated, "count": len(aggregated)}
 
 @router.get("/tokens/breakdown/models")
+@handle_errors(module="admin")
 def get_token_breakdown_models(
     start_time: Optional[str] = Query(default=None),
     end_time: Optional[str] = Query(default=None)
@@ -1141,6 +1172,7 @@ def get_token_breakdown_models(
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
 
 @router.get("/tokens/breakdown/providers")
+@handle_errors(module="admin")
 def get_token_breakdown_providers(
     days: int = Query(default=30, ge=1, le=365)
 ):
@@ -1153,6 +1185,7 @@ def get_token_breakdown_providers(
     return {"code": 0, "data": breakdown, "count": len(breakdown)}
 
 @router.get("/tokens/session/{session_id}")
+@handle_errors(module="admin")
 def get_session_token_usage(session_id: str):
     """Get token usage for a specific session"""
     from app.services.token_tracking_service import get_token_tracking_service
@@ -1181,6 +1214,7 @@ def get_session_token_usage(session_id: str):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/sessions/active")
+@handle_errors(module="admin")
 def get_active_sessions(
     limit: int = Query(default=100, ge=1, le=1000)
 ):
@@ -1197,6 +1231,7 @@ def get_active_sessions(
     }
 
 @router.get("/sessions/stats")
+@handle_errors(module="admin")
 def get_sessions_stats():
     """Get global session statistics"""
     from app.services.session_manager import get_session_manager
@@ -1207,6 +1242,7 @@ def get_sessions_stats():
     return {"code": 0, "data": stats}
 
 @router.get("/sessions/{session_id}")
+@handle_errors(module="admin")
 def get_session_details(session_id: str):
     """Get session details by ID"""
     from app.services.session_manager import get_session_manager
@@ -1220,6 +1256,7 @@ def get_session_details(session_id: str):
     return {"code": 0, "data": session.to_dict()}
 
 @router.delete("/sessions/{session_id}")
+@handle_errors(module="admin")
 def terminate_session(session_id: str):
     """Terminate a session"""
     from app.services.session_manager import get_session_manager
@@ -1233,6 +1270,7 @@ def terminate_session(session_id: str):
         return {"code": 1, "error": f"Failed to terminate session '{session_id}'"}
 
 @router.post("/sessions/cleanup")
+@handle_errors(module="admin")
 def trigger_session_cleanup():
     """Manually trigger session cleanup"""
     from app.db import session_db
@@ -1242,6 +1280,7 @@ def trigger_session_cleanup():
     return {"code": 0, "message": f"Cleaned up {deleted} expired sessions", "data": {"deleted_count": deleted}}
 
 @router.get("/sessions/{session_id}/conversations")
+@handle_errors(module="admin")
 def get_session_conversations(session_id: str):
     """Get conversation history for a session"""
     from app.db import session_db
@@ -1267,6 +1306,7 @@ PONG_TIMEOUT = 10  # seconds
 MAX_MISSED_PONGS = 3
 
 @router.websocket("/tokens/stream")
+@handle_errors(module="admin")
 async def token_stream_ws(websocket: WebSocket):
     """WebSocket for real-time token usage updates with heartbeat"""
     await websocket.accept()
@@ -1308,9 +1348,9 @@ async def token_stream_ws(websocket: WebSocket):
                         pass
                 except asyncio.TimeoutError:
                     conn_state["missed_pongs"] += 1
-                    logger.warning(f"[TokenWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}")
+                    logger.warning(f"[TokenWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}", exc_info=True)
                     if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
-                        logger.warning(f"[TokenWS] Closing dead connection: {conn_id}")
+                        logger.warning(f"[TokenWS] Closing dead connection: {conn_id}", exc_info=True)
                         break
                 except Exception as e:
                     logger.debug(f"[TokenWS] Connection error: {e}")
@@ -1318,7 +1358,7 @@ async def token_stream_ws(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.warning(f"[TokenWS] Unexpected error: {e}")
+        logger.warning(f"[TokenWS] Unexpected error: {e}", exc_info=True)
     finally:
         _token_stream_connections.pop(conn_id, None)
         logger.info(f"[TokenWS] Connection closed: {conn_id}, remaining: {len(_token_stream_connections)}")
@@ -1331,6 +1371,7 @@ async def token_stream_ws(websocket: WebSocket):
 _log_stream_connections: dict = {}  # conn_id -> {"last_pong": float, "missed_pongs": int}
 
 @router.websocket("/logs/stream")
+@handle_errors(module="admin")
 async def log_stream_ws(websocket: WebSocket):
     """WebSocket实时日志流 with heartbeat"""
     await websocket.accept()
@@ -1377,9 +1418,9 @@ async def log_stream_ws(websocket: WebSocket):
                         pass
                 except asyncio.TimeoutError:
                     conn_state["missed_pongs"] += 1
-                    logger.warning(f"[LogWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}")
+                    logger.warning(f"[LogWS] Missed pong from {conn_id}: {conn_state['missed_pongs']}/{MAX_MISSED_PONGS}", exc_info=True)
                     if conn_state["missed_pongs"] >= MAX_MISSED_PONGS:
-                        logger.warning(f"[LogWS] Closing dead connection: {conn_id}")
+                        logger.warning(f"[LogWS] Closing dead connection: {conn_id}", exc_info=True)
                         break
                 except Exception as e:
                     logger.debug(f"[LogWS] Connection error: {e}")
@@ -1387,7 +1428,7 @@ async def log_stream_ws(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        logger.warning(f"[LogWS] Unexpected error: {e}")
+        logger.warning(f"[LogWS] Unexpected error: {e}", exc_info=True)
     finally:
         _log_stream_connections.pop(conn_id, None)
         logger.info(f"[LogWS] Connection closed: {conn_id}, remaining: {len(_log_stream_connections)}")
@@ -1401,7 +1442,7 @@ try:
     init_log_queue(_log_queue)
     logger.info("[Admin] error_logger 队列已初始化")
 except Exception as e:
-    logger.warning(f"[Admin] error_logger 初始化失败: {e}")
+    logger.warning(f"[Admin] error_logger 初始化失败: {e}", exc_info=True)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1409,6 +1450,7 @@ except Exception as e:
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/watchdog/status")
+@handle_errors(module="admin")
 async def get_watchdog_status():
     """获取进程保活监控状态"""
     from app.services.watchdog import get_watchdog_state
@@ -1420,6 +1462,7 @@ async def get_watchdog_status():
 
 
 @router.post("/watchdog/toggle")
+@handle_errors(module="admin")
 async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
     """切换进程保活开关
     
@@ -1439,6 +1482,7 @@ async def toggle_watchdog_endpoint(body: WatchdogToggleRequest):
 
 
 @router.post("/watchdog/restart")
+@handle_errors(module="admin")
 async def manual_restart_backend():
     """手动触发后端重启（用于紧急恢复）"""
     from app.services.watchdog import _restart_backend, _watchdog_state
@@ -1462,6 +1506,7 @@ async def manual_restart_backend():
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/ws/metrics")
+@handle_errors(module="admin")
 async def get_ws_metrics():
     """获取 WebSocket 连接指标"""
     from app.services.ws_manager import ws_manager
@@ -1483,6 +1528,7 @@ async def get_ws_metrics():
 
 
 @router.get("/websocket/stats")
+@handle_errors(module="admin")
 async def get_websocket_stats():
     """获取所有 WebSocket 连接统计（包括 token_stream 和 log_stream）"""
     from app.services.ws_manager import ws_manager
@@ -1530,6 +1576,7 @@ async def get_websocket_stats():
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/ratelimit/stats")
+@handle_errors(module="admin")
 async def get_rate_limit_stats():
     """获取速率限制统计信息"""
     from app.middleware.rate_limit import get_limiter
@@ -1568,6 +1615,7 @@ async def get_rate_limit_stats():
 
 
 @router.post("/ratelimit/reset")
+@handle_errors(module="admin")
 async def reset_rate_limit(ip: Optional[str] = None):
     """重置速率限制（可选指定IP）"""
     from app.middleware.rate_limit import get_limiter
@@ -1609,6 +1657,7 @@ class WebVitalsMetric(BaseModel):
     page: str
 
 @router.post("/web-vitals")
+@handle_errors(module="admin")
 async def collect_web_vitals(request: Request):
     """Collect web vitals metrics from frontend. Handles both JSON and text/plain (sendBeacon)."""
     try:
@@ -1634,6 +1683,7 @@ async def collect_web_vitals(request: Request):
         return {"code": 0, "message": "Metric ignored"}
 
 @router.get("/web-vitals")
+@handle_errors(module="admin")
 async def get_web_vitals_stats():
     if not _web_vitals_buffer:
         return {"code": 0, "data": {"metrics": [], "summary": "No metrics collected"}}
@@ -1667,6 +1717,7 @@ async def get_web_vitals_stats():
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/streaming/status")
+@handle_errors(module="admin")
 async def get_streaming_status():
     """获取 WebSocket 流式数据推送状态"""
     from app.services.streaming import get_streaming_manager
@@ -1681,6 +1732,7 @@ async def get_streaming_status():
 
 
 @router.post("/streaming/failover")
+@handle_errors(module="admin")
 async def trigger_streaming_failover():
     """手动触发流式数据切换到 HTTP 轮询模式"""
     from app.services.streaming import get_streaming_manager
@@ -1696,6 +1748,7 @@ async def trigger_streaming_failover():
 
 
 @router.post("/streaming/reset")
+@handle_errors(module="admin")
 async def reset_streaming_circuit_breaker():
     """重置流式数据熔断器并尝试恢复 WebSocket 连接"""
     from app.services.streaming import get_streaming_manager
@@ -1711,6 +1764,7 @@ async def reset_streaming_circuit_breaker():
 
 
 @router.get("/streaming/symbols")
+@handle_errors(module="admin")
 async def get_streaming_symbols():
     """获取当前订阅的流式数据 symbols"""
     from app.services.streaming import get_streaming_manager
@@ -1728,6 +1782,7 @@ async def get_streaming_symbols():
 
 
 @router.post("/streaming/symbols/add")
+@handle_errors(module="admin")
 async def add_streaming_symbols(symbols: List[str] = Body(...)):
     """添加流式数据订阅 symbols"""
     from app.services.streaming import get_streaming_manager
@@ -1743,6 +1798,7 @@ async def add_streaming_symbols(symbols: List[str] = Body(...)):
 
 
 @router.post("/streaming/symbols/remove")
+@handle_errors(module="admin")
 async def remove_streaming_symbols(symbols: List[str] = Body(...)):
     from app.services.streaming import get_streaming_manager
     
@@ -1772,7 +1828,7 @@ def _start_admin_session_cleanup_thread():
                 _time.sleep(60)
                 session_db.cleanup_expired_admin_sessions()
             except Exception as e:
-                logger.warning(f"[AdminSession] Cleanup thread error: {e}")
+                logger.warning(f"[AdminSession] Cleanup thread error: {e}", exc_info=True)
     
     import threading
     thread = threading.Thread(target=cleanup_loop, daemon=True, name="admin_session_cleanup")
@@ -1791,6 +1847,7 @@ class SourceSwitchRequest(BaseModel):
     fallback: str = Field(..., description="Fallback source to switch to")
 
 @router.get("/sources/topology")
+@handle_errors(module="admin")
 async def get_source_topology():
     """
     Get visual topology data for Source Switchboard.
@@ -1870,6 +1927,7 @@ async def get_source_topology():
 
 
 @router.post("/sources/switch")
+@handle_errors(module="admin")
 async def switch_data_source(body: SourceSwitchRequest):
     """
     Manually switch to a fallback data source.
@@ -1935,6 +1993,7 @@ async def switch_data_source(body: SourceSwitchRequest):
 
 
 @router.get("/sources/config")
+@handle_errors(module="admin")
 async def get_source_config():
     """
     Get current data source configuration (priority, weights, health check settings).
@@ -1974,6 +2033,7 @@ async def get_source_config():
 
 
 @router.post("/sources/config")
+@handle_errors(module="admin")
 async def update_source_config(config: SourceBalanceConfig):
     """
     Update data source configuration (hot-swap without restart).
@@ -2007,6 +2067,7 @@ async def update_source_config(config: SourceBalanceConfig):
 # ── Error History API ───────────────────────────────────────────────────────
 
 @router.get("/errors/history")
+@handle_errors(module="admin")
 async def get_error_history(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
@@ -2037,6 +2098,7 @@ async def get_error_history(
 
 
 @router.get("/errors/stats")
+@handle_errors(module="admin")
 async def get_error_stats(
     since_hours: int = Query(24, ge=1, le=168),
 ):
@@ -2052,6 +2114,7 @@ async def get_error_stats(
 
 
 @router.post("/errors/{error_id}/resolve")
+@handle_errors(module="admin")
 async def resolve_error(error_id: int):
     from app.db.error_history_db import mark_error_resolved
     
@@ -2072,6 +2135,7 @@ async def resolve_error(error_id: int):
 
 
 @router.post("/errors/cleanup")
+@handle_errors(module="admin")
 async def cleanup_errors(
     days: int = Query(7, ge=1, le=30),
 ):

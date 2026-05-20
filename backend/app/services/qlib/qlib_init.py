@@ -26,7 +26,7 @@ def is_qlib_available() -> bool:
             _QLIB_AVAILABLE = True
         except ImportError:
             _QLIB_AVAILABLE = False
-            logger.warning("[Qlib] pyqlib not installed. ML features will be disabled.")
+            logger.warning("[Qlib] pyqlib not installed. ML features will be disabled.", exc_info=True)
     return _QLIB_AVAILABLE
 
 

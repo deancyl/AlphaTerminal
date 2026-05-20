@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from app.services.performance_analyzer import PerformanceAnalyzer
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class TradesRequest(BaseModel):
 
 
 @router.post("/tearsheet")
+@handle_errors(module="performance")
 async def generate_tearsheet(req: TearsheetRequest):
     """Generate comprehensive performance tear sheet from returns"""
     if not req.returns:
@@ -54,6 +56,7 @@ async def generate_tearsheet(req: TearsheetRequest):
 
 
 @router.post("/tearsheet/equity")
+@handle_errors(module="performance")
 async def generate_tearsheet_from_equity(req: EquityCurveRequest):
     """Generate tear sheet from equity curve"""
     if not req.equity_curve:
@@ -76,6 +79,7 @@ async def generate_tearsheet_from_equity(req: EquityCurveRequest):
 
 
 @router.post("/tearsheet/trades")
+@handle_errors(module="performance")
 async def generate_tearsheet_from_trades(req: TradesRequest):
     """Generate tear sheet from trade list"""
     if not req.trades:
@@ -100,6 +104,7 @@ async def generate_tearsheet_from_trades(req: TradesRequest):
 
 
 @router.get("/health")
+@handle_errors(module="performance")
 async def health_check():
     """Health check endpoint"""
     return {"status": "ok", "service": "performance_analyzer"}

@@ -131,7 +131,7 @@ def load_watchdog_config() -> bool:
         # 默认关闭
         return False
     except Exception as e:
-        logger.warning(f"[Watchdog] 加载配置失败: {e}")
+        logger.warning(f"[Watchdog] 加载配置失败: {e}", exc_info=True)
         return False
 
 
@@ -216,7 +216,7 @@ def _restart_backend() -> bool:
             except ProcessLookupError:
                 logger.info(f"[Watchdog] 旧进程 {old_pid} 已退出")
             except Exception as e:
-                logger.warning(f"[Watchdog] 终止旧进程失败: {e}")
+                logger.warning(f"[Watchdog] 终止旧进程失败: {e}", exc_info=True)
         
         # 2. 启动新进程
         backend_dir = Path(__file__).resolve().parent.parent.parent  # app/services/ → app/ → backend/

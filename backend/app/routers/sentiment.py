@@ -20,6 +20,7 @@ from app.services.sentiment_engine import (
 )
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ def _append_intraday(advance: int, decline: int):
 
 
 @router.get("/market/sentiment")
+@handle_errors(module="sentiment")
 async def market_sentiment():
     """A股市场情绪摘要（简化版）"""
     try:
@@ -87,6 +89,7 @@ async def market_sentiment():
 
 
 @router.get("/market/sentiment/intraday")
+@handle_errors(module="sentiment")
 async def sentiment_intraday():
     """
     A股全天上涨家数折线图数据
@@ -107,6 +110,7 @@ async def sentiment_intraday():
 
 
 @router.get("/market/sentiment/histogram")
+@handle_errors(module="sentiment")
 async def sentiment_histogram():
     """
     涨跌分布直方图（11桶，基于 Sina HQ 50只重点股）
@@ -133,6 +137,7 @@ async def sentiment_histogram():
 
 
 @router.get("/market/sentiment/news")
+@handle_errors(module="sentiment")
 async def news_sentiment():
     """
     Phase 4: 快讯情感分析结果
@@ -146,6 +151,7 @@ async def news_sentiment():
 
 
 @router.get("/market/stocks")
+@handle_errors(module="sentiment")
 async def market_stocks(
     page:      int    = Query(1,      ge=1, description="页码"),
     page_size: int    = Query(20,     ge=1, le=100, description="每页条数"),
@@ -161,6 +167,7 @@ async def market_stocks(
 
 
 @router.get("/debug/scheduler")
+@handle_errors(module="sentiment")
 async def debug_scheduler():
     return success_response({
         "news_last_success":  get_last_news_time() or "从未成功",
@@ -169,12 +176,14 @@ async def debug_scheduler():
 
 
 @router.get("/debug/writer-status")
+@handle_errors(module="sentiment")
 async def debug_writer_status():
     from app.db.db_writer import is_writer_healthy
     return success_response(is_writer_healthy())
 
 
 @router.post("/debug/trigger")
+@handle_errors(module="sentiment")
 async def debug_trigger():
     trigger_spot_fetch()
     trigger_news_fetch()
@@ -185,6 +194,7 @@ async def debug_trigger():
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/market/fund_flow")
+@handle_errors(module="sentiment")
 async def market_fund_flow():
     """市场资金流向 - 超大单/大单/中单/小单"""
     cached = _get_cached("market_fund_flow")
@@ -203,7 +213,7 @@ async def market_fund_flow():
                     timeout=FETCH_TIMEOUT
                 )
             except asyncio.TimeoutError:
-                logger.warning(f"[FundFlow] fetch timeout after {FETCH_TIMEOUT}s")
+                logger.warning(f"[FundFlow] fetch timeout after {FETCH_TIMEOUT}s", exc_info=True)
                 return None
         
         df = await fetch_with_timeout()
@@ -242,6 +252,7 @@ async def market_fund_flow():
         return error_response(500, f"获取资金流数据失败: {str(e)}")
 
 @router.get("/market/fund_flow/industry")
+@handle_errors(module="sentiment")
 async def industry_fund_flow():
     """行业资金流向"""
     cached = _get_cached("market_fund_flow_industry")
@@ -260,7 +271,7 @@ async def industry_fund_flow():
                     timeout=FETCH_TIMEOUT
                 )
             except asyncio.TimeoutError:
-                logger.warning(f"[IndustryFundFlow] fetch timeout after {FETCH_TIMEOUT}s")
+                logger.warning(f"[IndustryFundFlow] fetch timeout after {FETCH_TIMEOUT}s", exc_info=True)
                 return None
         
         df = await fetch_with_timeout()

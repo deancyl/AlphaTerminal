@@ -89,12 +89,14 @@ def async_wrap(
             return await asyncio.wait_for(future, timeout=timeout)
         except asyncio.TimeoutError:
             logger.warning(
-                f"[AsyncDB] Timeout after {timeout}s in {sync_func.__name__}"
+                f"[AsyncDB] Timeout after {timeout}s in {sync_func.__name__}",
+                exc_info=True
             )
             raise
         except Exception as e:
             logger.error(
-                f"[AsyncDB] Error in {sync_func.__name__}: {type(e).__name__}: {e}"
+                f"[AsyncDB] Error in {sync_func.__name__}: {type(e).__name__}: {e}",
+                exc_info=True
             )
             raise
     

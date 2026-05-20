@@ -57,7 +57,7 @@ def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
             })
         return (sector_name, stocks)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] stocks for {sector_name}: {e}")
+        logger.warning(f"[HTTP] stocks for {sector_name}: {e}", exc_info=True)
         return (sector_name, [])
 
 
@@ -154,7 +154,7 @@ async def get_sector_stocks(sector_name: str, timeout: float = 15.0) -> List[Dic
         result = await _fetch_sector_stocks_batch([sector_name])
         return result.get(sector_name, [])
     except asyncio.TimeoutError:
-        logger.warning(f"[Treemap] Timeout fetching stocks for {sector_name}")
+        logger.warning(f"[Treemap] Timeout fetching stocks for {sector_name}", exc_info=True)
         return []
 
 
@@ -178,7 +178,7 @@ async def build_treemap_data(
         else:
             return await asyncio.wait_for(_build_stock_treemap(), timeout=timeout)
     except asyncio.TimeoutError:
-        logger.error("[Treemap] Timeout building treemap data")
+        logger.error("[Treemap] Timeout building treemap data", exc_info=True)
         return {
             "data": [],
             "last_update": datetime.now().isoformat(),

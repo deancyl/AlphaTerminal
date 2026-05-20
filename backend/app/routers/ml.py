@@ -10,8 +10,8 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-
 from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.error_decorator import handle_errors
 from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)
@@ -85,6 +85,7 @@ async def list_models():
 
 
 @router.post("/models")
+@handle_errors(module="ml")
 async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_key)):
     """Register a new ML model."""
     from app.services.qlib.model_loader import get_model_loader, ModelType, ModelProvider
@@ -112,6 +113,7 @@ async def create_model(req: ModelCreateRequest, _: None = Depends(require_api_ke
 
 
 @router.get("/models/{model_id}")
+@handle_errors(module="ml")
 async def get_model(model_id: str):
     """Get model details."""
     from app.services.qlib.model_loader import get_model_loader
@@ -137,6 +139,7 @@ async def get_model(model_id: str):
 
 
 @router.delete("/models/{model_id}")
+@handle_errors(module="ml")
 async def delete_model(model_id: str, _: None = Depends(require_api_key)):
     """Delete a model."""
     from app.services.qlib.model_loader import get_model_loader
@@ -150,6 +153,7 @@ async def delete_model(model_id: str, _: None = Depends(require_api_key)):
 
 
 @router.post("/train")
+@handle_errors(module="ml")
 async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)):
     """Train a model on historical data."""
     import pandas as pd
@@ -163,6 +167,7 @@ async def train_model(req: ModelTrainRequest, _: None = Depends(require_api_key)
     
     loop = asyncio.get_event_loop()
     
+    @handle_errors(module="ml")
     def _sync_fetch_data():
         conn = _get_conn()
         try:
@@ -270,6 +275,7 @@ async def predict_model(req: ModelPredictRequest, _: None = Depends(require_api_
     
     loop = asyncio.get_event_loop()
     
+    @handle_errors(module="ml")
     def _sync_fetch_data():
         conn = _get_conn()
         try:
@@ -350,6 +356,7 @@ async def ml_health_check():
 
 import asyncio
 import numpy as np
+from app.utils.error_decorator import handle_errors
 
 
 class PortfolioOptimizeRequest(BaseModel):
@@ -382,6 +389,8 @@ class RiskMetricsRequest(BaseModel):
 
 
 @router.post("/optimize")
+@handle_errors(module="ml")
+@handle_errors(module="ml")
 async def optimize_portfolio(req: PortfolioOptimizeRequest, _: None = Depends(require_api_key)):
     """
     Optimize portfolio weights using specified method.
@@ -574,6 +583,7 @@ def _optimize_inverse_vol(returns, max_weight: float) -> Dict[str, float]:
 
 
 @router.post("/factors")
+@handle_errors(module="ml")
 async def analyze_factors(req: FactorAnalysisRequest, _: None = Depends(require_api_key)):
     """
     Analyze factor exposures for a given symbol.
@@ -698,6 +708,7 @@ async def _run_factor_analysis(req: FactorAnalysisRequest) -> Dict:
 
 
 @router.post("/risk-metrics")
+@handle_errors(module="ml")
 async def calculate_risk_metrics(req: RiskMetricsRequest):
     """
     Calculate portfolio risk metrics.
@@ -748,6 +759,7 @@ async def calculate_risk_metrics(req: RiskMetricsRequest):
 
 
 @router.get("/methods")
+@handle_errors(module="ml")
 async def list_optimization_methods():
     """List available portfolio optimization methods."""
     return success_response({

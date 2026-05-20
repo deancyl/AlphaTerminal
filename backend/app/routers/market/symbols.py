@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Request, Query, HTTPException
 
 from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -103,7 +104,7 @@ def _load_all_stock_names() -> list[dict]:
             _STOCK_NAMES_LOADED = True
             logger.info(f"[SymbolRegistry] 全市场A股加载完成: {len(_ALL_STOCK_NAMES)} 只")
         except Exception as e:
-            logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}")
+            logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}", exc_info=True)
             _ALL_STOCK_NAMES = []
             _STOCK_NAMES_LOADED = True   # 标记"已尝试"，避免重复拉取
 
@@ -159,6 +160,7 @@ def _normalize_symbol(raw: str) -> str:
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/market/symbols")
+@handle_errors(module="market_symbols")
 async def market_symbols():
     """返回全量符号注册表（含全市场A股），供前端搜索索引构建"""
     # 懒加载全市场A股名称（首次调用时从 akshare 拉取，之后走缓存）
@@ -177,6 +179,7 @@ async def market_symbols():
 
 
 @router.get("/market/lookup/{symbol}")
+@handle_errors(module="market_symbols")
 async def market_lookup(symbol: str):
     """单个 symbol 的元信息查询（大小写折叠兜底）"""
     norm = _normalize_symbol(symbol)
@@ -193,6 +196,7 @@ async def market_lookup(symbol: str):
 
 
 @router.get("/market/all_stocks")
+@handle_errors(module="market_symbols")
 def market_all_stocks(request: Request):
     """
     全市场A股列表（来自 market_all_stocks 缓存表）
@@ -225,6 +229,7 @@ def market_all_stocks(request: Request):
 
 
 @router.get("/market/all_stocks_lite")
+@handle_errors(module="market_symbols")
 async def market_all_stocks_lite():
     """全市场A股轻量列表（一次性返回，无分页，StockScreener专用）"""
     try:
@@ -240,6 +245,7 @@ async def market_all_stocks_lite():
 
 
 @router.get("/market/stocks/search")
+@handle_errors(module="market_symbols")
 def search_stocks_api(
     keyword: str = None,
     min_pct_chg: float = None, max_pct_chg: float = None,

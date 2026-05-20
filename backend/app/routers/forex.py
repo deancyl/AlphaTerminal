@@ -31,6 +31,7 @@ from app.config.timeout import AKSHARE_TIMEOUT
 from app.config.settings import get_settings
 from app.services.fetchers.forex_fetcher import ForexFetcher, clean_value, forex_fetcher, get_circuit_breaker_status
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 from app.routers.forex_schemas import (
     ForexSpotQuote,
     ForexSpotQuoteList,
@@ -199,6 +200,7 @@ MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "CNY", "AUD", "CAD", "CHF"]
 # ==================== 新增端点 ====================
 
 @router.get("/spot")
+@handle_errors(module="forex")
 async def get_spot_quotes():
     """
     获取所有实时外汇报价 (EastMoney + CFETS fallback)
@@ -241,7 +243,7 @@ async def get_spot_quotes():
         )
         return success_response(data)
     except asyncio.TimeoutError:
-        logger.warning("[Forex] 首次获取超时，返回服务不可用错误")
+        logger.warning("[Forex] 首次获取超时，返回服务不可用错误", exc_info=True)
         return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
     except Exception as e:
         logger.error(f"[Forex] 首次获取失败: {e}", exc_info=True)
@@ -410,6 +412,7 @@ async def _fetch_forex_spot_foreground():
 
 
 @router.post("/circuit_breaker/reset")
+@handle_errors(module="forex")
 async def reset_circuit_breaker():
     """
     手动重置熔断器
@@ -428,6 +431,7 @@ async def reset_circuit_breaker():
 
 
 @router.get("/cfets")
+@handle_errors(module="forex")
 async def get_cfets_spot():
     """
     获取CFETS银行间人民币报价
@@ -455,6 +459,7 @@ async def get_cfets_spot():
 
 
 @router.get("/cfets/cross")
+@handle_errors(module="forex")
 async def get_cfets_crosses():
     """
     获取CFETS非人民币交叉汇率
@@ -481,6 +486,7 @@ async def get_cfets_crosses():
 
 
 @router.get("/official")
+@handle_errors(module="forex")
 async def get_official_rates(
     days: int = Query(30, ge=1, le=365, description="返回最近N天数据")
 ):
@@ -511,6 +517,7 @@ async def get_official_rates(
 
 
 @router.get("/history/{symbol}")
+@handle_errors(module="forex")
 async def get_forex_history_new(
     symbol: str,
     start_date: Optional[str] = Query(None, pattern=r"^\\d{4}-\\d{2}-\\d{2}$", description="开始日期 YYYY-MM-DD"),
@@ -563,9 +570,9 @@ async def get_forex_history_new(
             return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Forex] History fetch timeout for {symbol}")
+        logger.warning(f"[Forex] History fetch timeout for {symbol}", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed for {symbol}: {e}")
+        logger.warning(f"[HTTP] failed for {symbol}: {e}", exc_info=True)
     
     # Check if mock data is allowed
     settings = get_settings()
@@ -675,6 +682,7 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
 
 
 @router.get("/matrix")
+@handle_errors(module="forex")
 async def get_cross_rate_matrix(
     currencies: str = Query(
         "USD,EUR,GBP,JPY,CNY,AUD,CAD,CHF",
@@ -878,6 +886,7 @@ async def _fetch_forex_matrix_background(currencies: str):
 
 
 @router.post("/cross-rate")
+@handle_errors(module="forex")
 async def calculate_cross_rate_endpoint(request: CrossRateRequest):
     """
     计算交叉汇率
@@ -978,6 +987,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
 # ==================== 保留旧版端点 (兼容) ====================
 
 @router.get("/quotes")
+@handle_errors(module="forex")
 async def get_forex_quotes():
     """
     获取主要货币对报价 (兼容旧版)
@@ -1005,7 +1015,7 @@ async def get_forex_quotes():
                     cache.set(cache_key, {"quotes": df, "total": len(df), "is_fallback": False}, ttl=3600)
                     logger.info(f"[Forex] 后台获取成功，{len(df)} 条数据")
         except Exception as e:
-            logger.warning(f"[Forex] 后台获取失败: {e}")
+            logger.warning(f"[Forex] 后台获取失败: {e}", exc_info=True)
     
     asyncio.create_task(background_fetch())
     
@@ -1059,11 +1069,12 @@ def _fetch_forex_sync():
                     })
             return quotes
     except Exception as e:
-        logger.warning(f"[Forex] 同步获取失败: {e}")
+        logger.warning(f"[Forex] 同步获取失败: {e}", exc_info=True)
     return None
 
 
 @router.get("/history/{pair}/legacy")
+@handle_errors(module="forex")
 async def get_forex_history(
     pair: str,
     days: int = Query(30, ge=1, le=365, description="返回天数，支持 7/30/90/365")
@@ -1129,6 +1140,7 @@ async def get_forex_history(
 
 
 @router.get("/health")
+@handle_errors(module="forex")
 async def health_check():
     """健康检查"""
     cache = get_cache()
@@ -1150,6 +1162,7 @@ async def health_check():
 
 
 @router.get("/convert")
+@handle_errors(module="forex")
 async def convert_currency(
     amount: float = Query(..., gt=0, le=1000000000, description="转换金额"),
     from_currency: str = Query(..., description="源货币代码 (USD/EUR/GBP/JPY/HKD/AUD/CNY)"),

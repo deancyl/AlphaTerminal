@@ -775,7 +775,7 @@ class PerformanceAnalyzer:
         try:
             import pyfolio
         except ImportError:
-            logger.warning("pyfolio-reloaded not installed, using fallback calculations")
+            logger.warning("pyfolio-reloaded not installed, using fallback calculations", exc_info=True)
             return self._fallback_metrics(returns)
         
         try:
@@ -841,7 +841,7 @@ class PerformanceAnalyzer:
             return metrics
             
         except Exception as e:
-            logger.warning(f"pyfolio calculation failed: {e}, using fallback")
+            logger.warning(f"pyfolio calculation failed: {e}, using fallback", exc_info=True)
             return self._fallback_metrics(returns)
     
     def _fallback_metrics(self, returns: pd.Series) -> Dict[str, Any]:

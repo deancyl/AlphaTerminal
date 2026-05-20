@@ -37,7 +37,7 @@ try:
     from app.services.adaptive_circuit_breaker import get_adaptive_breaker_manager
     _optimization_services_available = True
 except ImportError as e:
-    logger.warning(f"[Main] Optimization services not available: {e}")
+    logger.warning(f"[Main] Optimization services not available: {e}", exc_info=True)
     _optimization_services_available = False
 
 
@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
             logger.info("[Lifespan] WarmupStrategy started in background")
             
         except Exception as e:
-            logger.warning(f"[Lifespan] Optimization services initialization failed: {e}")
+            logger.warning(f"[Lifespan] Optimization services initialization failed: {e}", exc_info=True)
 
     yield
     
@@ -282,7 +282,7 @@ try:
     from app.routers import backtest
     app.include_router(backtest.router, prefix="/api/v1/backtest", tags=["backtest"])
 except (ImportError, AttributeError, SyntaxError) as e:
-    logger.warning(f"Backtest module not loaded: {e}")
+    logger.warning(f"Backtest module not loaded: {e}", exc_info=True)
 except Exception as e:
     logger.error(f"Unexpected error loading backtest module: {e}", exc_info=True)
 
@@ -291,7 +291,7 @@ try:
     from app.routers import backtest_monitor
     app.include_router(backtest_monitor.router, prefix="/api/v1/backtest_monitor", tags=["backtest_monitor"])
 except (ImportError, AttributeError, SyntaxError) as e:
-    logger.warning(f"Backtest monitor module not loaded: {e}")
+    logger.warning(f"Backtest monitor module not loaded: {e}", exc_info=True)
 except Exception as e:
     logger.error(f"Unexpected error loading backtest monitor module: {e}", exc_info=True)
 
@@ -300,7 +300,7 @@ try:
     from app.routers import strategy
     app.include_router(strategy.router)
 except (ImportError, AttributeError, SyntaxError) as e:
-    logger.warning(f"Strategy module not loaded: {e}")
+    logger.warning(f"Strategy module not loaded: {e}", exc_info=True)
 except Exception as e:
     logger.error(f"Unexpected error loading strategy module: {e}", exc_info=True)
 

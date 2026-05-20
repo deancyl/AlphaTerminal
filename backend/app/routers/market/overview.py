@@ -16,6 +16,7 @@ from app.utils.market_status import is_market_open
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.fetchers.global_index_fetcher import get_global_index_fetcher, GLOBAL_INDEX_SYMBOLS, INDEX_METADATA
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["market"])
@@ -75,7 +76,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                 except (ValueError, IndexError, AttributeError):
                     continue
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
 
     # 3) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指 + 恒生指数HSI，不过代理）
     qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI", "hkHSI")]
@@ -101,7 +102,7 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                 except (ValueError, IndexError, AttributeError):
                     continue
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed: {e}")
+            logger.warning(f"[HTTP] failed: {e}", exc_info=True)
 
     return results
 
@@ -210,26 +211,26 @@ def _fetch_macro_data():
             try:
                 usdcny_price, usdcny_pct, _ = _parse_cnyusd(raw)
             except Exception as e:
-                logger.warning(f"[Macro] CNYUSD parse error: {e}")
+                logger.warning(f"[Macro] CNYUSD parse error: {e}", exc_info=True)
 
         if "hf_GC" in raw and raw["hf_GC"]:
             try:
                 gold_price, gold_pct, _ = _parse_hf_gold(raw)
             except Exception as e:
-                logger.warning(f"[Macro] GOLD parse error: {e}")
+                logger.warning(f"[Macro] GOLD parse error: {e}", exc_info=True)
 
         if "hf_CL" in raw and raw["hf_CL"]:
             try:
                 wti_price, wti_pct, _ = _parse_hf_cl(raw)
             except Exception as e:
-                logger.warning(f"[Macro] WTI parse error: {e}")
+                logger.warning(f"[Macro] WTI parse error: {e}", exc_info=True)
 
         if "hkVHSI" in raw and raw["hkVHSI"]:
             try:
                 vhsi_price, vhsi_pct, _ = _parse_hkvhsi(raw)
                 logger.info(f"[Macro] VHSI fetched: {vhsi_price} ({vhsi_pct}%)")
             except Exception as e:
-                logger.warning(f"[Macro] VHSI parse error: {e}")
+                logger.warning(f"[Macro] VHSI parse error: {e}", exc_info=True)
 
         results = {
             "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",    "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
@@ -244,7 +245,7 @@ def _fetch_macro_data():
         logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
 
     except Exception as e:
-        logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")
+        logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}", exc_info=True)
 
 
 def _get_macro_data() -> dict:
@@ -304,6 +305,7 @@ def _serialize_price_rows(rows: list, include_status: bool = False, status: str 
 # ═════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/macro")
+@handle_errors(module="market_overview")
 async def market_macro():
     """
     Phase 5: 宏观核心数据（USD/CNH · COMEX黄金 · WTI原油 · VIX恐慌指数）
@@ -319,6 +321,7 @@ async def market_macro():
 
 
 @router.get("/market/overview")
+@handle_errors(module="market_overview")
 def market_overview():
     """
     市场概览 - 风向标视图（实时调 Sina，10秒缓存）
@@ -377,6 +380,7 @@ def market_overview():
 
 
 @router.get("/market/china_all")
+@handle_errors(module="market_overview")
 def market_china_all():
     """国内10+核心指数（统一从 market_data_realtime 读取，不再直连Sina，保证报价一致）"""
     try:
@@ -404,6 +408,7 @@ def market_china_all():
 
 
 @router.get("/market/indices")
+@handle_errors(module="market_overview")
 def market_indices():
     """A股四大指数列表"""
     try:
@@ -417,6 +422,7 @@ def market_indices():
 
 
 @router.get("/market/global")
+@handle_errors(module="market_overview")
 async def market_global():
     """
     全球核心市场指数（扩展至17个指数）
@@ -468,6 +474,7 @@ async def market_global():
 
 
 @router.get("/market/global/kline")
+@handle_errors(module="market_overview")
 async def get_global_kline(
     symbol: str = Query(..., description="指数代码，如 HSI, SPX"),
     period: str = Query("daily", description="周期: daily 或 weekly"),
@@ -505,6 +512,7 @@ async def get_global_kline(
 
 
 @router.get("/market/global/sparkline")
+@handle_errors(module="market_overview")
 async def get_global_sparkline(
     symbol: str = Query(..., description="指数代码"),
     days: int = Query(20, ge=5, le=60, description="天数")
@@ -534,6 +542,7 @@ async def get_global_sparkline(
 
 
 @router.get("/market/global/regions")
+@handle_errors(module="market_overview")
 async def get_global_regions():
     """获取全球指数区域分类"""
     return success_response({
@@ -592,6 +601,7 @@ def _get_market_status(market: str) -> str:
 
 
 @router.get("/market/rates")
+@handle_errors(module="market_overview")
 async def market_rates():
     """利率数据"""
     try:
@@ -613,6 +623,7 @@ async def market_rates():
 
 
 @router.get("/market/fund_flow")
+@handle_errors(module="market_overview")
 async def get_fund_flow():
     """市场资金流向（超大单/大单/中单/小单主力净流入）- 5秒超时防前端断开"""
     import akshare as ak
@@ -653,11 +664,11 @@ async def get_fund_flow():
         })
 
     except asyncio.TimeoutError:
-        logger.warning(f"[FundFlow] akshare timed out after 5s, triggering fallback")
+        logger.warning(f"[FundFlow] akshare timed out after 5s, triggering fallback", exc_info=True)
     except ValueError:
-        logger.warning(f"[FundFlow] empty result, triggering fallback")
+        logger.warning(f"[FundFlow] empty result, triggering fallback", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] error, triggered fallback: {e}")
+        logger.warning(f"[HTTP] error, triggered fallback: {e}", exc_info=True)
 
     # Fallback（akshare 超时或空数据时）
     mock_result = []
@@ -674,6 +685,7 @@ async def get_fund_flow():
 
 
 @router.get("/market/derivatives")
+@handle_errors(module="market_overview")
 async def market_derivatives():
     """期货与大宗商品（IF期指主力、SGE黄金、WTI原油）"""
     try:
@@ -698,6 +710,7 @@ async def market_derivatives():
 
 
 @router.get("/north_flow_ranking")
+@handle_errors(module="market_overview")
 async def get_north_flow_ranking():
     """
     获取北向资金排名数据

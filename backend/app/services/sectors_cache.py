@@ -175,7 +175,7 @@ def _fetch_sina_boards(param: str) -> list[dict]:
             return rows
 
         except Exception as e:
-            logger.warning(f"[SectorsCache] Sina {param} 第{attempt+1}/3次失败: {e}")
+            logger.warning(f"[SectorsCache] Sina {param} 第{attempt+1}/3次失败: {e}", exc_info=True)
             if attempt == 2:
                 raise
 
@@ -201,7 +201,7 @@ def fetch_and_cache_sectors():
             r["_src"] = "industry"
         all_rows.extend(industry_rows)
     except Exception as e:
-        logger.warning(f"[SectorsCache] 行业板块抓取失败: {e}")
+        logger.warning(f"[SectorsCache] 行业板块抓取失败: {e}", exc_info=True)
 
     # ── 概念板块（约175个）────────────────────────────────────
     try:
@@ -213,7 +213,7 @@ def fetch_and_cache_sectors():
                 r["_src"] = "concept"
                 all_rows.append(r)
     except Exception as e:
-        logger.warning(f"[SectorsCache] 概念板块抓取失败: {e}")
+        logger.warning(f"[SectorsCache] 概念板块抓取失败: {e}", exc_info=True)
 
     # ── 关键词加权排序 ─────────────────────────────────────────
     def sort_key(x: dict) -> float:

@@ -15,6 +15,7 @@ from app.services.quote_source import get_quote_with_fallback_async
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_fetcher import akshare_breaker
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 
 logger = logging.getLogger(__name__)
@@ -219,6 +220,7 @@ def _unprefix(raw: str) -> str:
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/quote/{symbol}")
+@handle_errors(module="market_quotes")
 async def market_quote(symbol: str):
     """
     轻量实时行情（专用于高频轮询，不含历史数据）
@@ -268,6 +270,7 @@ async def market_quote(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/quote_detail/{symbol}")
+@handle_errors(module="market_quotes")
 async def market_quote_detail(symbol: str):
     """
     综合报价面板数据（模块一~四合一接口）。
@@ -468,6 +471,7 @@ async def market_quote_detail(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/quote_v2/{symbol}")
+@handle_errors(module="market_quotes")
 async def market_quote_v2(symbol: str):
     """
     V2 实时行情接口 - 使用 FetcherFactory 数据源抽象层。
@@ -510,6 +514,7 @@ async def market_quote_v2(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/order_book/{symbol}")
+@handle_errors(module="market_quotes")
 async def get_order_book(symbol: str):
     """Level 2 10档买卖盘口数据（实时）"""
     norm = _validate_symbol(symbol)
@@ -608,6 +613,7 @@ async def get_order_book(symbol: str):
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/cache/stats")
+@handle_errors(module="market_quotes")
 async def cache_stats():
     """Get cache statistics for quote endpoints."""
     cache = _get_cache()
@@ -620,6 +626,7 @@ async def cache_stats():
 # ═════════════════════════════════════════════════════════════════════════════
 
 @router.get("/market/fund_flow/{symbol}")
+@handle_errors(module="market_quotes")
 async def get_stock_fund_flow(symbol: str):
     """
     个股资金流向（近30日）
@@ -711,7 +718,7 @@ async def get_stock_fund_flow(symbol: str):
         })
         
     except asyncio.TimeoutError:
-        logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}")
+        logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}", exc_info=True)
         return error_response(504, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}", exc_info=True)

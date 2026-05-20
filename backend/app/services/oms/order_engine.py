@@ -500,7 +500,7 @@ class OrderExecutionEngine:
                 after_state=order.to_dict(),
             )
         except Exception as e:
-            logger.warning(f"[OMS] Audit log failed: {e}")
+            logger.warning(f"[OMS] Audit log failed: {e}", exc_info=True)
 
 
 class InvalidStateTransitionError(Exception):

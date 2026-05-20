@@ -109,7 +109,7 @@ class MacroFetcher:
                 return await self._fetch_individual(indicators, timeout)
                 
         except asyncio.TimeoutError:
-            logger.error(f"[MacroFetcher] 获取超时 ({timeout}s)")
+            logger.error(f"[MacroFetcher] 获取超时 ({timeout}s)", exc_info=True)
             return MacroDataResult(
                 indicators={},
                 error=f"数据获取超时 ({timeout}秒)"
@@ -255,10 +255,10 @@ class MacroFetcher:
                 logger.debug(f"[MacroFetcher] 获取成功: {indicator}")
                 
             except asyncio.TimeoutError:
-                logger.warning(f"[MacroFetcher] 超时: {indicator}")
+                logger.warning(f"[MacroFetcher] 超时: {indicator}", exc_info=True)
                 result_data[indicator] = {'error': 'timeout'}
             except Exception as e:
-                logger.warning(f"[MacroFetcher] 获取失败: {indicator}, {e}")
+                logger.warning(f"[MacroFetcher] 获取失败: {indicator}, {e}", exc_info=True)
                 result_data[indicator] = {'error': str(e)}
         
         return MacroDataResult(

@@ -124,7 +124,7 @@ class NewsFetcher:
             return result
             
         except asyncio.TimeoutError:
-            logger.error(f"[NewsFetcher] 获取超时 ({timeout}s)")
+            logger.error(f"[NewsFetcher] 获取超时 ({timeout}s)", exc_info=True)
             return NewsDataResult(
                 news_items=[],
                 error=f"新闻获取超时 ({timeout}秒)"

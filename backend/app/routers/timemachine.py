@@ -24,6 +24,7 @@ from app.services.timemachine.paper_trading import (
     PaperPortfolio,
     PaperTradingError
 )
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +262,7 @@ _session_manager = SessionManager()
 
 
 @router.get("/health")
+@handle_errors(module="timemachine")
 async def health_check():
     """Health check endpoint."""
     return success_response({
@@ -270,6 +272,7 @@ async def health_check():
 
 
 @router.get("/history/{symbol}")
+@handle_errors(module="timemachine")
 async def get_history(
     symbol: str,
     start_date: Optional[str] = None,
@@ -317,6 +320,7 @@ async def get_history(
 
 
 @router.post("/session/create")
+@handle_errors(module="timemachine")
 async def create_session(request: SessionCreateRequest):
     """Create a new time-machine replay session."""
     try:
@@ -361,6 +365,7 @@ async def create_session(request: SessionCreateRequest):
 
 
 @router.get("/session/{session_id}")
+@handle_errors(module="timemachine")
 async def get_session(session_id: str):
     """Get session state."""
     session = _session_manager.get_session(session_id)
@@ -372,6 +377,7 @@ async def get_session(session_id: str):
 
 
 @router.post("/session/{session_id}/play")
+@handle_errors(module="timemachine")
 async def play_pause(session_id: str, request: PlayRequest):
     """Start or pause playback."""
     session = _session_manager.get_session(session_id)
@@ -412,6 +418,7 @@ async def play_pause(session_id: str, request: PlayRequest):
 
 
 @router.post("/session/{session_id}/step")
+@handle_errors(module="timemachine")
 async def step_forward(session_id: str, request: StepRequest):
     """Step forward N bars."""
     session = _session_manager.get_session(session_id)
@@ -430,6 +437,7 @@ async def step_forward(session_id: str, request: StepRequest):
 
 
 @router.post("/session/{session_id}/seek")
+@handle_errors(module="timemachine")
 async def seek_to(session_id: str, request: SeekRequest):
     """Seek to a specific bar in the playback."""
     session = _session_manager.get_session(session_id)
@@ -452,6 +460,7 @@ async def seek_to(session_id: str, request: SeekRequest):
 
 
 @router.post("/session/{session_id}/speed")
+@handle_errors(module="timemachine")
 async def set_speed(session_id: str, request: SpeedRequest):
     """Set playback speed multiplier."""
     session = _session_manager.get_session(session_id)
@@ -468,6 +477,7 @@ async def set_speed(session_id: str, request: SpeedRequest):
 
 
 @router.post("/session/{session_id}/trade")
+@handle_errors(module="timemachine")
 async def execute_trade(session_id: str, request: TradeRequest):
     """Execute a paper trade."""
     session = _session_manager.get_session(session_id)
@@ -516,6 +526,7 @@ async def execute_trade(session_id: str, request: TradeRequest):
 
 
 @router.get("/session/{session_id}/portfolio")
+@handle_errors(module="timemachine")
 async def get_portfolio(session_id: str):
     """Get paper portfolio state."""
     session = _session_manager.get_session(session_id)
@@ -531,6 +542,7 @@ async def get_portfolio(session_id: str):
 
 
 @router.delete("/session/{session_id}")
+@handle_errors(module="timemachine")
 async def end_session(session_id: str):
     """End and delete a session."""
     session = _session_manager.get_session(session_id)

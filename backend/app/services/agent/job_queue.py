@@ -244,7 +244,7 @@ class JobQueue:
             df = pd.DataFrame(data, index=pd.to_datetime(dates))
             return df
         except Exception as e:
-            logger.warning(f"Failed to get history: {e}")
+            logger.warning(f"Failed to get history: {e}", exc_info=True)
             return None
 
     def _save_job(self, job: Job):

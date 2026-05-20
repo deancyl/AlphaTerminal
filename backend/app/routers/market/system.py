@@ -12,6 +12,7 @@ import psutil
 from fastapi import APIRouter
 
 from app.utils.response import success_response
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,12 @@ def _read_frontend_version():
             with open(pkg_path, "r", encoding="utf-8") as f:
                 return json.load(f).get("version", "unknown")
     except Exception as e:
-        logger.warning(f"[SYSTEM] Failed to read frontend version: {type(e).__name__}: {e}")
+        logger.warning(f"[SYSTEM] Failed to read frontend version: {type(e).__name__}: {e}", exc_info=True)
     return "unknown"
 
 
 @router.get("/version")
+@handle_errors(module="market_system")
 async def get_version():
     """获取前后端版本信息"""
     import sys
@@ -58,6 +60,7 @@ async def get_version():
 
 
 @router.get("/info")
+@handle_errors(module="market_system")
 async def get_system_info():
     """获取系统详细信息"""
     from app.services.sectors_cache import is_ready as sectors_ready

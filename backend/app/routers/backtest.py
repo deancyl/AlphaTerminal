@@ -13,6 +13,7 @@ from app.db.database import _get_conn, _db_path
 from app.utils.response import success_response, error_response, ErrorCode
 from app.middleware import require_api_key
 from app.services.backtest_worker_registry import get_backtest_registry
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +236,7 @@ def _generate_signals(strategy_type: str, closes: list, rows: list, raw_params: 
                 signals = result.signals
 
         except Exception as e:
-            logger.warning(f"[Backtest] ML strategy error: {e}")
+            logger.warning(f"[Backtest] ML strategy error: {e}", exc_info=True)
             # Return zeros if ML fails
     
     return signals
@@ -449,6 +450,7 @@ class StrategyCreateRequest(BaseModel):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/strategies")
+@handle_errors(module="backtest")
 async def get_strategies():
     """获取所有回测策略"""
     loop = asyncio.get_event_loop()
@@ -492,6 +494,7 @@ async def get_strategies():
 
 
 @router.post("/strategies")
+@handle_errors(module="backtest")
 async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_api_key)):
     """创建新策略"""
     params = _validate_params(req.params)
@@ -525,6 +528,7 @@ async def create_strategy(req: StrategyCreateRequest, _: None = Depends(require_
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/run")
+@handle_errors(module="backtest")
 async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key)):
     """执行回测"""
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")
@@ -620,7 +624,7 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
                 conn.close()
             except Exception as e:
                 conn.close()
-                logger.warning(f"[Backtest] 保存结果到数据库失败: {e}")
+                logger.warning(f"[Backtest] 保存结果到数据库失败: {e}", exc_info=True)
         
         await loop.run_in_executor(_executor, _sync_save_result)
         
@@ -667,6 +671,7 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
 
 
 @router.get("/results")
+@handle_errors(module="backtest")
 async def get_backtest_results(limit: int = 10):
     """获取回测结果"""
     loop = asyncio.get_event_loop()
@@ -724,6 +729,7 @@ class WalkForwardRequest(BaseModel):
 
 
 @router.post("/walkforward/analyze")
+@handle_errors(module="backtest")
 async def walkforward_analyze(req: WalkForwardRequest, _: None = Depends(require_api_key)):
     """Walk-Forward Analysis for out-of-sample validation"""
     from app.services.backtest.walk_forward import WalkForwardAnalyzer
@@ -860,6 +866,7 @@ class SmartParamsResponse(BaseModel):
 
 
 @router.post("/walkforward/smart-params")
+@handle_errors(module="backtest")
 async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_api_key)):
     """Smart parameter recommendation based on available data and strategy type."""
     db_symbol = req.symbol.replace("sh", "").replace("sz", "")

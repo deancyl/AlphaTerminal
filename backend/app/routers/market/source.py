@@ -17,6 +17,7 @@ from fastapi import APIRouter
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.quote_source import get_source_status
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +30,14 @@ _proxy_config = {"proxy_url": "", "enabled": False}
 
 # ── 数据源状态管理 ───────────────────────────────────────────────────────
 @router.get("/status")
+@handle_errors(module="market_source")
 async def source_status():
     """获取数据源状态"""
     return success_response(get_source_status())
 
 
 @router.get("/circuit-breaker")
+@handle_errors(module="market_source")
 async def circuit_breaker_status():
     """获取所有数据源的熔断器状态"""
     from app.services.quote_source import get_circuit_breaker_status
@@ -42,6 +45,7 @@ async def circuit_breaker_status():
 
 
 @router.post("/switch")
+@handle_errors(module="market_source")
 async def switch_source(source: str):
     """手动切换主源"""
     from app.services.quote_source import set_primary_source
@@ -52,6 +56,7 @@ async def switch_source(source: str):
 
 
 @router.get("/test")
+@handle_errors(module="market_source")
 async def test_all_sources_api(symbol: str = "sh000001"):
     """测试所有数据源连通性"""
     from app.services.quote_source import test_all_sources
@@ -60,6 +65,7 @@ async def test_all_sources_api(symbol: str = "sh000001"):
 
 
 @router.get("/config")
+@handle_errors(module="market_source")
 async def source_config():
     """获取数据源完整配置"""
     from app.services.quote_source import DATA_SOURCES
@@ -78,12 +84,14 @@ async def source_config():
 
 # ── 代理设置 ───────────────────────────────────────────────────────────
 @router.get("/proxy")
+@handle_errors(module="market_source")
 async def get_proxy():
     """获取当前代理设置"""
     return success_response(_proxy_config)
 
 
 @router.post("/proxy")
+@handle_errors(module="market_source")
 async def set_proxy(config: dict):
     """设置代理"""
     global _proxy_config
@@ -103,6 +111,7 @@ async def set_proxy(config: dict):
 
 # ── 探测所有源状态 ───────────────────────────────────────────────────
 @router.get("/ping")
+@handle_errors(module="market_source")
 async def ping_all_sources():
     """主动探测所有数据源状态（并发异步，不阻塞事件循环）"""
     from app.services import quote_source
@@ -137,6 +146,7 @@ async def ping_all_sources():
 
 # ── AlphaVantage API Key 设置 ─────────────────────────────────────────
 @router.get("/alpha_vantage_key")
+@handle_errors(module="market_source")
 async def get_alpha_vantage_key():
     """获取AlphaVantage API Key"""
     from app.services.quote_source import DATA_SOURCES
@@ -145,6 +155,7 @@ async def get_alpha_vantage_key():
 
 
 @router.post("/alpha_vantage_key")
+@handle_errors(module="market_source")
 async def set_alpha_vantage_key(config: dict):
     """设置AlphaVantage API Key"""
     from app.services.quote_source import DATA_SOURCES

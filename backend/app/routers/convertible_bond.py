@@ -19,6 +19,7 @@ from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import BOND_REFRESH_TIMEOUT
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -179,10 +180,10 @@ async def _fetch_cov_list_async():
             logger.info(f"[ConvertibleBond] list fetched, total: {len(bonds)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s")
+        logger.warning(f"[ConvertibleBond] bond_zh_cov timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}")
+        logger.warning(f"[ConvertibleBond] bond_zh_cov failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     
     cache_data = {
@@ -253,10 +254,10 @@ async def _fetch_cov_spot_async():
             logger.info(f"[ConvertibleBond] spot fetched, total: {len(spots)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s")
+        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}")
+        logger.warning(f"[ConvertibleBond] bond_zh_hs_cov_spot failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     
     cache_data = {
@@ -329,10 +330,10 @@ async def _fetch_cov_compare_async():
             logger.info(f"[ConvertibleBond] compare fetched, total: {len(compares)}")
             return
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s")
+        logger.warning(f"[ConvertibleBond] bond_cov_comparison timed out after {BOND_REFRESH_TIMEOUT}s", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}")
+        logger.warning(f"[ConvertibleBond] bond_cov_comparison failed: {type(e).__name__}: {e}", exc_info=True)
         _CB_CIRCUIT_BREAKER.record_failure()
     
     cache_data = {
@@ -408,6 +409,7 @@ def _get_cov_compare_cache() -> dict:
 
 
 @router.get("/bond/convertible/list")
+@handle_errors(module="convertible_bond")
 async def convertible_bond_list():
     """
     可转债列表
@@ -441,6 +443,7 @@ async def convertible_bond_list():
 
 
 @router.get("/bond/convertible/spot")
+@handle_errors(module="convertible_bond")
 async def convertible_bond_spot():
     """
     可转债实时行情
@@ -471,6 +474,7 @@ async def convertible_bond_spot():
 
 
 @router.get("/bond/convertible/comparison")
+@handle_errors(module="convertible_bond")
 async def convertible_bond_comparison():
     """
     可转债比价表
@@ -503,6 +507,7 @@ async def convertible_bond_comparison():
 
 
 @router.get("/bond/convertible/{symbol}/value")
+@handle_errors(module="convertible_bond")
 async def convertible_bond_value(symbol: str):
     try:
         import warnings
@@ -539,10 +544,10 @@ async def convertible_bond_value(symbol: str):
         else:
             raise ValueError("empty dataframe")
     except asyncio.TimeoutError:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis timed out for {symbol}")
+        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis timed out for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except Exception as e:
-        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis failed for {symbol}: {e}")
+        logger.warning(f"[ConvertibleBond] bond_zh_cov_value_analysis failed for {symbol}: {e}", exc_info=True)
         return success_response({
             "symbol": symbol,
             "values": [],

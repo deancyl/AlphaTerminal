@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 from .schemas import PortfolioIn
 from .dependencies import _row2dict, _get_all_descendants
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter(tags=["portfolio"])
 
@@ -30,6 +31,7 @@ _portfolio_executor = ThreadPoolExecutor(max_workers=20, thread_name_prefix="por
 # ── 账户 CRUD ─────────────────────────────────────────────────
 
 @router.get("/")
+@handle_errors(module="portfolio_accounts")
 async def list_portfolios():
     """所有账户列表（WAL 模式并发读，无需应用层锁）"""
     def _sync_work():
@@ -54,11 +56,12 @@ async def list_portfolios():
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[accounts] list_portfolios timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[accounts] list_portfolios timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "List portfolios timeout")
 
 
 @router.post("/")
+@handle_errors(module="portfolio_accounts")
 async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)):
     """新建账户"""
     def _sync_work():
@@ -86,13 +89,13 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
             except HTTPException:
                 raise
             except sqlite3.IntegrityError as e:
-                logger.warning("[accounts] create_portfolio integrity error: %s", e)
+                logger.warning("[accounts] create_portfolio integrity error: %s", e, exc_info=True)
                 raise HTTPException(400, f"数据完整性错误: {e}")
             except sqlite3.OperationalError as e:
                 logger.error("[accounts] create_portfolio operational error: %s", e, exc_info=True)
                 raise HTTPException(500, f"数据库操作错误: {e}")
             except ValueError as e:
-                logger.warning("[accounts] create_portfolio value error: %s", e)
+                logger.warning("[accounts] create_portfolio value error: %s", e, exc_info=True)
                 raise HTTPException(400, f"参数错误: {e}")
             except Exception as e:
                 logger.exception("Unexpected error in create_portfolio")
@@ -113,11 +116,12 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[accounts] create_portfolio timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[accounts] create_portfolio timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Create portfolio timeout")
 
 
 @router.delete("/{portfolio_id}")
+@handle_errors(module="portfolio_accounts")
 async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)):
     """删除账户（连带持仓和快照）- 需认证"""
     def _sync_work():
@@ -139,5 +143,5 @@ async def delete_portfolio(portfolio_id: int, _: None = Depends(require_api_key)
     try:
         return await asyncio.wait_for(_inner(), timeout=PORTFOLIO_TIMEOUT)
     except asyncio.TimeoutError:
-        logger.warning("[accounts] delete_portfolio timeout after %ds", PORTFOLIO_TIMEOUT)
+        logger.warning("[accounts] delete_portfolio timeout after %ds", PORTFOLIO_TIMEOUT, exc_info=True)
         raise HTTPException(504, "Delete portfolio timeout")

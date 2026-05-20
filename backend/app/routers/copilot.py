@@ -30,6 +30,7 @@ from app.services.copilot.context_assembler import get_context_assembler
 from app.utils.error_sanitizer import sanitize_error
 from app.utils.token_counter import count_tokens
 from app.config.settings import get_settings
+from app.utils.error_decorator import handle_errors
 
 OPENAI_API_KEY   = os.getenv("OPENAI_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
@@ -783,7 +784,7 @@ async def _fetch_price_context(symbol: Optional[str]) -> dict:
             if row:
                 return {"name": row[0] or "", "price": float(row[1] or 0), "change_pct": float(row[2] or 0)}
         except Exception as e:
-            logger.warning(f"[Copilot] price lookup error: {e}")
+            logger.warning(f"[Copilot] price lookup error: {e}", exc_info=True)
         return {}
     
     return await loop.run_in_executor(_executor, _sync_query)
@@ -804,7 +805,7 @@ async def _fetch_latest_news(limit: int = 5) -> list:
             conn.close()
             return [{"title": r[0], "tag": r[1]} for r in rows]
         except Exception as e:
-            logger.warning(f"[Copilot] news lookup error: {e}")
+            logger.warning(f"[Copilot] news lookup error: {e}", exc_info=True)
         return []
     
     return await loop.run_in_executor(_executor, _sync_query)
@@ -841,7 +842,7 @@ def _fetch_valuation_data(symbol: Optional[str]) -> dict:
             "returns_ytd":   None,   # YTD收益率需要历史数据计算
         }
     except Exception as e:
-        logger.warning(f"[Copilot] valuation lookup error: {e}")
+        logger.warning(f"[Copilot] valuation lookup error: {e}", exc_info=True)
     return {"pe_ttm": None, "pb": None, "pe_percentile": None, "pb_percentile": None, "returns_ytd": None}
 
 
@@ -923,7 +924,7 @@ async def _fetch_portfolio_data(portfolio_id: Optional[int]) -> dict:
                 "positions": positions_list
             }
         except Exception as e:
-            logger.warning(f"[Copilot] portfolio lookup error: {e}")
+            logger.warning(f"[Copilot] portfolio lookup error: {e}", exc_info=True)
         return {}
     
     return await loop.run_in_executor(_executor, _sync_query)
@@ -980,7 +981,7 @@ async def _fetch_historical_data(symbol: str, period: str = "daily", limit: int 
                 "count": len(data)
             }
         except Exception as e:
-            logger.warning(f"[Copilot] historical data lookup error: {e}")
+            logger.warning(f"[Copilot] historical data lookup error: {e}", exc_info=True)
         return {}
     
     return await loop.run_in_executor(_executor, _sync_query)
@@ -1009,7 +1010,7 @@ async def _init_conversations_table():
             conn.commit()
             conn.close()
         except Exception as e:
-            logger.warning(f"[Copilot] conversations table init error: {e}")
+            logger.warning(f"[Copilot] conversations table init error: {e}", exc_info=True)
     
     await loop.run_in_executor(_executor, _sync_init)
 
@@ -1030,7 +1031,7 @@ async def _save_message(session_id: str, role: str, content: str):
             conn.commit()
             conn.close()
         except Exception as e:
-            logger.warning(f"[Copilot] save message error: {e}")
+            logger.warning(f"[Copilot] save message error: {e}", exc_info=True)
     
     await loop.run_in_executor(_executor, _sync_save)
 
@@ -1074,7 +1075,7 @@ async def _load_conversation(session_id: str, limit: int = 20, context_length: i
             
             return messages
         except Exception as e:
-            logger.warning(f"[Copilot] load conversation error: {e}")
+            logger.warning(f"[Copilot] load conversation error: {e}", exc_info=True)
         return []
     
     return await loop.run_in_executor(_executor, _sync_load)
@@ -1083,6 +1084,7 @@ async def _load_conversation(session_id: str, limit: int = 20, context_length: i
 # ═══════════════════════════════════════════════════════════════
 
 @router.post("/chat")
+@handle_errors(module="copilot")
 async def copilot_chat(request: Request):
     """
     SSE 流式对话接口
@@ -1168,7 +1170,7 @@ async def copilot_chat(request: Request):
             f"symbols: {assembly_result.symbols}, tokens: {assembly_result.tokens_used})"
         )
     except Exception as e:
-        logger.warning(f"[Copilot] ContextAssembler failed, falling back to basic context: {e}")
+        logger.warning(f"[Copilot] ContextAssembler failed, falling back to basic context: {e}", exc_info=True)
         # Fallback to original context assembly
         price_info = _fetch_price_context(symbol)
         news_items = _fetch_latest_news(limit=5)
@@ -1286,6 +1288,7 @@ async def copilot_chat(request: Request):
 
 
 @router.post("/analyze-walkforward")
+@handle_errors(module="copilot")
 async def analyze_walkforward(request: Request):
     """
     AI-powered Walk-Forward Analysis interpretation.
@@ -1350,6 +1353,7 @@ async def analyze_walkforward(request: Request):
 
 
 @router.get("/status")
+@handle_errors(module="copilot")
 async def copilot_status():
     """Copilot LLM 配置状态"""
     provider = _detect_provider()
@@ -1367,6 +1371,7 @@ async def copilot_status():
 
 
 @router.get("/chart_data/{data_type}/{symbol}")
+@handle_errors(module="copilot")
 async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
     """
     Get chart data for inline rendering in Copilot markdown.
@@ -1423,7 +1428,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
     
     def _fetch_financial_data():
@@ -1455,7 +1460,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             
             return data
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
     
     try:

@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query, HTTPException
 from typing import Optional, List
 
 from app.services.fund_fetcher import get_fetcher
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fund", tags=["fund"])
@@ -25,6 +26,7 @@ fetcher = get_fetcher()
 # ══════════════════════════════════════════════════════════════════════
 
 @router.get("/etf/info")
+@handle_errors(module="fund")
 async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字）")):
     """
     获取 ETF 实时行情（含折溢价率）
@@ -53,6 +55,7 @@ async def etf_info(code: str = Query(..., description="ETF 代码（6 位数字�
 
 
 @router.get("/etf/history")
+@handle_errors(module="fund")
 async def etf_history(
     code: str = Query(..., description="ETF 代码"),
     period: str = Query("daily", description="周期：daily/weekly/monthly"),
@@ -81,6 +84,7 @@ async def etf_history(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.get("/open/info")
+@handle_errors(module="fund")
 async def open_fund_info(code: str = Query(..., description="基金代码（6 位数字）")):
     """获取场外公募基金详细信息"""
     logger.info(f"[Open Fund Info] 请求 {code}")
@@ -103,6 +107,7 @@ async def open_fund_info(code: str = Query(..., description="基金代码（6 �
 
 
 @router.get("/open/rank")
+@handle_errors(module="fund")
 async def open_fund_rank(
     type: str = Query("全部", description="基金类型：全部/股票型/混合型/债券型/指数型"),
     limit: int = Query(100, description="返回数量"),
@@ -127,6 +132,7 @@ async def open_fund_rank(
 
 
 @router.get("/portfolio/{code}")
+@handle_errors(module="fund")
 async def fund_portfolio(code: str):
     """获取基金投资组合（重仓股 + 资产配置）"""
     logger.info(f"[Fund Portfolio] 请求 {code}")
@@ -163,6 +169,7 @@ async def fund_portfolio(code: str):
 
 
 @router.get("/open/nav/{code}")
+@handle_errors(module="fund")
 async def fund_nav_history(
     code: str,
     period: str = Query("6m", description="周期：1m/3m/6m/1y/3y"),
@@ -186,6 +193,7 @@ async def fund_nav_history(
 
 
 @router.get("/open/returns/{code}")
+@handle_errors(module="fund")
 async def fund_returns(code: str):
     """
     获取基金阶段收益
@@ -210,6 +218,7 @@ async def fund_returns(code: str):
 
 
 @router.get("/open/risk/{code}")
+@handle_errors(module="fund")
 async def fund_risk_metrics(code: str):
     """
     获取基金风险指标
@@ -238,6 +247,7 @@ async def fund_risk_metrics(code: str):
 # ══════════════════════════════════════════════════════════════════════
 
 @router.get("/open/full/{code}")
+@handle_errors(module="fund")
 async def fund_full_data(
     code: str,
     period: str = Query("6m", description="净值历史周期"),
@@ -270,6 +280,7 @@ async def fund_full_data(
 # ══════════════════════════════════════════════════════════════════════
 
 @router.get("/money/rank")
+@handle_errors(module="fund")
 async def money_fund_rank(limit: int = Query(50, description="返回数量")):
     """货币基金行情排行"""
     logger.info(f"[Money Fund Rank] 请求 limit={limit}")

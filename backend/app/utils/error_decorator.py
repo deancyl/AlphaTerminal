@@ -88,7 +88,7 @@ def handle_errors(
                             request_method=request_method,
                         )
                     except Exception as db_error:
-                        logger.warning(f"Failed to log error to DB: {db_error}")
+                        logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
                 
                 if reraise:
                     raise
@@ -142,7 +142,7 @@ def handle_errors(
                             request_method=request_method,
                         )
                     except Exception as db_error:
-                        logger.warning(f"Failed to log error to DB: {db_error}")
+                        logger.warning(f"Failed to log error to DB: {db_error}", exc_info=True)
                 
                 if reraise:
                     raise

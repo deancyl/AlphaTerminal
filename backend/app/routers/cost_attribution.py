@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.routers.admin import verify_admin_key
 from app.db.database import _get_conn, _db_path
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -375,6 +376,7 @@ def _get_sessions_list_sync(start_date: str, end_date: str, limit: int) -> List[
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/sankey")
+@handle_errors(module="cost_attribution")
 async def get_sankey_data(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)")
@@ -400,6 +402,7 @@ async def get_sankey_data(
 
 
 @router.get("/prompt_tree")
+@handle_errors(module="cost_attribution")
 async def get_prompt_tree(
     session_id: str = Query(..., description="Session ID to get prompt tree for")
 ):
@@ -423,6 +426,7 @@ async def get_prompt_tree(
 
 
 @router.get("/breakdown")
+@handle_errors(module="cost_attribution")
 async def get_cost_breakdown(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
@@ -452,6 +456,7 @@ async def get_cost_breakdown(
 
 
 @router.get("/sessions")
+@handle_errors(module="cost_attribution")
 async def get_sessions_list(
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
     end_date: str = Query(..., description="End date (YYYY-MM-DD)"),
@@ -477,6 +482,7 @@ async def get_sessions_list(
 
 
 @router.get("/health")
+@handle_errors(module="cost_attribution")
 async def health_check():
     """Health check endpoint."""
     return {"code": 0, "message": "Cost Attribution API is healthy"}

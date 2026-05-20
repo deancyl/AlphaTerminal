@@ -113,7 +113,7 @@ def _fetch_news_for_symbol(symbol: str) -> list[dict]:
                 continue
         return rows
     except Exception as e:
-        logger.warning(f"[NewsEngine] stock_news_em({symbol}) 失败: {type(e).__name__}: {e}")
+        logger.warning(f"[NewsEngine] stock_news_em({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
         return []
 
 
@@ -146,7 +146,7 @@ def _fetch_7x24_news() -> list[dict]:
         logger.info(f"[NewsEngine] 7x24 快讯: {len(rows)} 条")
         return rows
     except Exception as e:
-        logger.warning(f"[NewsEngine] 7x24 拉取失败: {type(e).__name__}: {e}")
+        logger.warning(f"[NewsEngine] 7x24 拉取失败: {type(e).__name__}: {e}", exc_info=True)
         return []
 
 
@@ -179,7 +179,7 @@ async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
                     continue
             return rows
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}")
+            logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}", exc_info=True)
             return []
 
     results = await asyncio.gather(*[fetch_one(s) for s in symbols])

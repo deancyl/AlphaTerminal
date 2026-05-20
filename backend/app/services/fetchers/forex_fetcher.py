@@ -45,7 +45,7 @@ def _get_akshare():
             import akshare as ak
             _akshare = ak
         except ImportError:
-            logger.error("[Forex] akshare 未安装，请运行: pip install akshare")
+            logger.error("[Forex] akshare 未安装，请运行: pip install akshare", exc_info=True)
             raise
     return _akshare
 
@@ -179,7 +179,7 @@ class ForexFetcher(BaseMarketFetcher):
                     logger.info(f"[Forex] 使用CFETS报价作为回退数据: {len(quotes)} 条")
                     return quotes
         except Exception as e:
-            logger.warning(f"[Forex] CFETS银行间报价获取失败: {e}")
+            logger.warning(f"[Forex] CFETS银行间报价获取失败: {e}", exc_info=True)
         
         # 尝试CFETS交叉汇率
         try:
@@ -191,7 +191,7 @@ class ForexFetcher(BaseMarketFetcher):
                     logger.info(f"[Forex] 使用CFETS交叉汇率作为回退数据: {len(quotes)} 条")
                     return quotes
         except Exception as e:
-            logger.warning(f"[Forex] CFETS交叉汇率获取失败: {e}")
+            logger.warning(f"[Forex] CFETS交叉汇率获取失败: {e}", exc_info=True)
         
         # 尝试BOC官方中间价
         try:
@@ -203,7 +203,7 @@ class ForexFetcher(BaseMarketFetcher):
                     logger.info(f"[Forex] 使用BOC官方中间价作为回退数据: {len(quotes)} 条")
                     return quotes
         except Exception as e:
-            logger.warning(f"[Forex] BOC官方中间价获取失败: {e}")
+            logger.warning(f"[Forex] BOC官方中间价获取失败: {e}", exc_info=True)
         
         # 最后才使用最小静态数据
         logger.warning("[Forex] 所有数据源失败，使用最小静态回退数据")
@@ -415,7 +415,7 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning("[Forex] 获取实时报价超时，返回回退数据")
+            logger.warning("[Forex] 获取实时报价超时，返回回退数据", exc_info=True)
             return self._get_fallback_quotes()
         except Exception as e:
             self.cb.record_failure()
@@ -495,7 +495,7 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Forex] 获取历史K线超时: {symbol}")
+            logger.warning(f"[Forex] 获取历史K线超时: {symbol}", exc_info=True)
             return []
         except Exception as e:
             self.cb.record_failure()
@@ -555,7 +555,7 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning("[Forex] 获取CFETS报价超时")
+            logger.warning("[Forex] 获取CFETS报价超时", exc_info=True)
             return []
         except Exception as e:
             self.cb.record_failure()
@@ -610,7 +610,7 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning("[Forex] 获取CFETS交叉汇率超时")
+            logger.warning("[Forex] 获取CFETS交叉汇率超时", exc_info=True)
             return []
         except Exception as e:
             self.cb.record_failure()
@@ -668,7 +668,7 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning("[Forex] 获取官方中间价超时")
+            logger.warning("[Forex] 获取官方中间价超时", exc_info=True)
             return []
         except Exception as e:
             self.cb.record_failure()

@@ -371,7 +371,7 @@ def get_session_conversations(session_id: str, limit: int = 100) -> List[Dict[st
             })
         return result
     except Exception as e:
-        logger.warning(f"[SessionDB] get_session_conversations error: {e}")
+        logger.warning(f"[SessionDB] get_session_conversations error: {e}", exc_info=True)
         return []
     finally:
         conn.close()

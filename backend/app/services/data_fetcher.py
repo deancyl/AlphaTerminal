@@ -273,7 +273,7 @@ def fetch_shibor() -> list[dict]:
             traceback.print_exc()
 
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for shibor: {e}")
+        logger.warning(f"[AkShare] Circuit breaker OPEN for shibor: {e}", exc_info=True)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]_shibor 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
@@ -333,12 +333,12 @@ def fetch_global_indices() -> list[dict]:
                     rows.append(_row(sym, disp, mkt, price, chg_pct, volume, "global"))
                     logger.info(f"[Tencent] {disp}: {price} ({chg_pct:+.2f}%) vol={volume}")
             except (ValueError, IndexError) as e:
-                logger.warning(f"[Tencent] 解析 {disp} 失败: {e}")
+                logger.warning(f"[Tencent] 解析 {disp} 失败: {e}", exc_info=True)
         if rows:
             logger.info(f"[Tencent] 全球指数拉取成功 {len(rows)} 只")
             return rows
     except Exception as e:
-        logger.warning(f"[Tencent] 全球指数失败，退补Sina: {type(e).__name__}: {e}")
+        logger.warning(f"[Tencent] 全球指数失败，退补Sina: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
 
     # 策略B（退补）：Sina 国际行情
@@ -372,7 +372,7 @@ def fetch_global_indices() -> list[dict]:
                     except (ValueError, IndexError):
                         pass
     except Exception as e:
-        logger.warning(f"[Sina] 全局指数退补失败: {type(e).__name__}: {e}")
+        logger.warning(f"[Sina] 全局指数退补失败: {type(e).__name__}: {e}", exc_info=True)
 
     return rows
 
@@ -464,9 +464,9 @@ def fetch_derivatives() -> list[dict]:
                     })
                     logger.info(f"[SGE] 黄金基准价: {price}")
         except CircuitBreakerOpen as e:
-            logger.warning(f"[AkShare] Circuit breaker OPEN for gold: {e}")
+            logger.warning(f"[AkShare] Circuit breaker OPEN for gold: {e}", exc_info=True)
         except Exception as e:
-            logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}")
+            logger.warning(f"[SGE] 黄金拉取失败: {type(e).__name__}: {e}", exc_info=True)
     else:
         logger.warning("[AkShare] Circuit breaker OPEN, skipping gold fetch")
 
@@ -493,9 +493,9 @@ def fetch_derivatives() -> list[dict]:
                     })
                     logger.info(f"[能源指数] 最新值: {val} 涨跌幅: {chg}")
         except CircuitBreakerOpen as e:
-            logger.warning(f"[AkShare] Circuit breaker OPEN for energy: {e}")
+            logger.warning(f"[AkShare] Circuit breaker OPEN for energy: {e}", exc_info=True)
         except Exception as e:
-            logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}")
+            logger.warning(f"[能源指数] 拉取失败: {type(e).__name__}: {e}", exc_info=True)
     else:
         logger.warning("[AkShare] Circuit breaker OPEN, skipping energy fetch")
 
@@ -537,7 +537,7 @@ def fetch_derivatives() -> list[dict]:
                     except (ValueError, IndexError):
                         pass
     except Exception as e:
-        logger.warning(f"[Sina期货] 退补失败: {type(e).__name__}: {e}")
+        logger.warning(f"[Sina期货] 退补失败: {type(e).__name__}: {e}", exc_info=True)
 
     return rows
 
@@ -659,7 +659,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
                 })
                 prev_close = close
             except Exception as e:
-                logger.warning(f"[AkShare] 解析第{i}行失败: {e}")
+                logger.warning(f"[AkShare] 解析第{i}行失败: {e}", exc_info=True)
                 continue
 
         if rows:
@@ -730,7 +730,7 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
 
         return rows[-100:]
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}")
+        logger.warning(f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}", exc_info=True)
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]_china_index_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
@@ -867,7 +867,7 @@ def fetch_index_minute_history(
         logger.info(f"[Sina] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP]_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
+        logger.warning(f"[HTTP]_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
         return []
 
 
@@ -954,7 +954,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
                     "data_type":    "daily",
                 })
             except Exception as e:
-                logger.warning(f"[AkShare Stock] 解析第{i}行失败: {e}")
+                logger.warning(f"[AkShare Stock] 解析第{i}行失败: {e}", exc_info=True)
                 continue
 
         if rows:
@@ -1004,7 +1004,7 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
 
         return rows
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}")
+        logger.warning(f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}", exc_info=True)
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]_stock_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
@@ -1071,7 +1071,7 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
                     "data_type":  "daily",
                 })
             except Exception as e:
-                logger.warning(f"[AkShare Index] 解析第{i}行失败: {e}")
+                logger.warning(f"[AkShare Index] 解析第{i}行失败: {e}", exc_info=True)
                 continue
 
         if rows:
@@ -1121,7 +1121,7 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
 
         return rows
     except CircuitBreakerOpen as e:
-        logger.warning(f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}")
+        logger.warning(f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}", exc_info=True)
         return []
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP]_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
@@ -1221,14 +1221,14 @@ def _fetch_alpha_vantage_daily(symbol: str, limit: int = 5000) -> list[dict]:
                     })
                     prev_close = close
                 except Exception as e:
-                    logger.warning(f"[AlphaVantage] 解析 {date_str} 失败: {e}")
+                    logger.warning(f"[AlphaVantage] 解析 {date_str} 失败: {e}", exc_info=True)
                     continue
 
             logger.info(f"[AlphaVantage] {av_sym} 获取 {len(rows)} 条日K")
             return rows
 
         except Exception as e:
-            logger.warning(f"[AlphaVantage] attempt {attempt+1} 失败: {e}")
+            logger.warning(f"[AlphaVantage] attempt {attempt+1} 失败: {e}", exc_info=True)
             time.sleep(3)
 
     return []
@@ -1320,7 +1320,7 @@ def _fetch_tencent_today(symbol: str) -> list[dict]:
             "data_type":  "daily",
         }]
     except Exception as e:
-        logger.warning(f"[Tencent] 今日K线 {tc} 失败: {e}")
+        logger.warning(f"[Tencent] 今日K线 {tc} 失败: {e}", exc_info=True)
         return []
 
 
@@ -1347,7 +1347,7 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
             try:
                 return future.result(timeout=timeout)
             except FutureTimeoutError:
-                logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过")
+                logger.warning(f"[{target.__name__}] 调用超时（{timeout}秒），强制跳过", exc_info=True)
                 return None
 
     # 策略 1: AkShare 港股指数 (对标恒生指数 HSI)
@@ -1382,13 +1382,13 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
                     buffer_insert_daily(all_rows)
                     logger.info(f"[AkShare HK] 恒生指数入库成功: {len(all_rows)} 条")
                 except Exception as db_err:
-                    logger.warning(f"[AkShare HK] DB写入失败（不影响返回）: {db_err}")
+                    logger.warning(f"[AkShare HK] DB写入失败（不影响返回）: {db_err}", exc_info=True)
 
                 return all_rows
             else:
                 logger.warning("[AkShare HK] 无数据返回或超时")
         except Exception as e:
-            logger.warning(f"[AkShare HK] 恒生指数历史拉取失败: {e}")
+            logger.warning(f"[AkShare HK] 恒生指数历史拉取失败: {e}", exc_info=True)
 
     # 策略 2: AkShare 美股指数 (IXIC, SPX, DJI)
     # 注意: clean_sym 可能是 "usixic" 或 "ixic"，需要去掉 "us" 前缀后再查表
@@ -1427,14 +1427,14 @@ def fetch_us_stock_history(symbol: str, period: str = "daily", limit: int = 5000
                     buffer_insert_daily(all_rows)
                     logger.info(f"[AkShare US] {clean_sym} 入库成功: {len(all_rows)} 条")
                 except Exception as db_err:
-                    logger.warning(f"[AkShare US] DB写入失败（不影响返回）: {db_err}")
+                    logger.warning(f"[AkShare US] DB写入失败（不影响返回）: {db_err}", exc_info=True)
 
                 # 无论如何都返回数据（即使 DB 写入失败，用户仍能看到图表）
                 return all_rows
             else:
                 logger.warning("[AkShare US] 无数据返回或超时")
         except Exception as e:
-            logger.warning(f"[AkShare US] {clean_sym} 历史拉取失败: {e}")
+            logger.warning(f"[AkShare US] {clean_sym} 历史拉取失败: {e}", exc_info=True)
 
     # 策略 3: Alpha Vantage（作为美股备选）
     av_rows = _fetch_alpha_vantage_daily(clean_sym, limit=limit)
@@ -1542,7 +1542,7 @@ def fetch_all_china_stocks(max_pages=60):
             time.sleep(0.3)  # 避免请求过快
 
         except Exception as e:
-            logger.warning(f"[DataFetcher] 全量股票第{page}页失败: {e}")
+            logger.warning(f"[DataFetcher] 全量股票第{page}页失败: {e}", exc_info=True)
             time.sleep(1)
             continue
 

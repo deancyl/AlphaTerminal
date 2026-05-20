@@ -14,6 +14,7 @@ from functools import lru_cache
 import json
 from app.services.data_cache import get_cache
 from app.services.model_config_service import get_model_config_service
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -194,6 +195,7 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
 
 
 @router.get("/reports")
+@handle_errors(module="research")
 async def get_reports(
     symbol: str = Query(..., description="股票代码"),
     page: int = Query(1, ge=1, description="页码"),
@@ -243,6 +245,7 @@ async def get_reports(
 
 
 @router.get("/statistics")
+@handle_errors(module="research")
 async def get_statistics(symbol: str = Query(..., description="股票代码")):
     """获取研报统计信息"""
     # 获取所有研报
@@ -285,6 +288,7 @@ async def get_statistics(symbol: str = Query(..., description="股票代码")):
 
 
 @router.get("/status")
+@handle_errors(module="research")
 async def get_status():
     """获取研报缓存状态"""
     stats = _cache.get_stats()
@@ -299,6 +303,7 @@ async def get_status():
 
 
 @router.get("/pdf")
+@handle_errors(module="research")
 async def proxy_pdf(url: str = Query(..., description="PDF URL")):
     """代理 PDF 文件（绕过安全限制）"""
     try:
@@ -329,6 +334,7 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
 
 
 @router.get("/categories")
+@handle_errors(module="research")
 async def get_categories():
     """获取研报分类列表"""
     return {
@@ -347,6 +353,7 @@ async def get_categories():
 
 
 @router.post("/summarize")
+@handle_errors(module="research")
 async def summarize_report(request: SummarizeRequest):
     """使用LLM总结研报核心观点"""
     model_svc = get_model_config_service()
@@ -415,7 +422,7 @@ async def summarize_report(request: SummarizeRequest):
             }
             
     except httpx.TimeoutException:
-        logger.error("LLM API timeout")
+        logger.error("LLM API timeout", exc_info=True)
         return {
             "code": 1,
             "message": "LLM服务超时，请稍后重试",

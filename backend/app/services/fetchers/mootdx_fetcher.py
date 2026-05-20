@@ -61,9 +61,9 @@ def _get_mootdx_client():
             )
             logger.info("[Mootdx] Client initialized successfully")
         except ImportError:
-            logger.warning("[Mootdx] mootdx not installed, fetcher will return None")
+            logger.warning("[Mootdx] mootdx not installed, fetcher will return None", exc_info=True)
         except Exception as e:
-            logger.warning(f"[Mootdx] Failed to initialize client: {e}")
+            logger.warning(f"[Mootdx] Failed to initialize client: {e}", exc_info=True)
     return _mootdx_client
 
 

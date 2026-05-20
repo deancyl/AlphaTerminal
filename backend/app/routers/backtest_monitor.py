@@ -11,6 +11,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, De
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.middleware import require_api_key
 from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,7 @@ router = APIRouter()
 
 
 @router.get("/metrics")
+@handle_errors(module="backtest_monitor")
 async def get_backtest_metrics():
     """Get real-time metrics for all backtest workers."""
     registry = get_backtest_registry()
@@ -32,6 +34,7 @@ async def get_backtest_metrics():
 
 
 @router.get("/summary")
+@handle_errors(module="backtest_monitor")
 async def get_backtest_summary():
     """Get summary statistics for all workers."""
     registry = get_backtest_registry()
@@ -41,6 +44,7 @@ async def get_backtest_summary():
 
 
 @router.post("/kill/{worker_id}")
+@handle_errors(module="backtest_monitor")
 async def kill_backtest(worker_id: str, _: None = Depends(require_api_key)):
     """Kill a runaway backtest worker."""
     registry = get_backtest_registry()
@@ -65,6 +69,7 @@ async def kill_backtest(worker_id: str, _: None = Depends(require_api_key)):
 
 
 @router.post("/cleanup")
+@handle_errors(module="backtest_monitor")
 async def cleanup_completed_workers(_: None = Depends(require_api_key)):
     """Remove completed/failed workers from registry."""
     registry = get_backtest_registry()
@@ -77,6 +82,7 @@ async def cleanup_completed_workers(_: None = Depends(require_api_key)):
 
 
 @router.websocket("/stream")
+@handle_errors(module="backtest_monitor")
 async def backtest_stream(websocket: WebSocket):
     """WebSocket for real-time metrics updates (every 1 second)."""
     await websocket.accept()
@@ -107,6 +113,7 @@ async def backtest_stream(websocket: WebSocket):
 
 
 @router.get("/health")
+@handle_errors(module="backtest_monitor")
 async def health_check():
     """Health check for backtest monitor."""
     registry = get_backtest_registry()

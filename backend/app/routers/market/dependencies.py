@@ -245,26 +245,26 @@ def _fetch_macro_data():
             try:
                 usdcny_price, usdcny_pct, _ = _parse_cnyusd(raw)
             except Exception as e:
-                logger.warning(f"[Macro] CNYUSD parse error: {e}")
+                logger.warning(f"[Macro] CNYUSD parse error: {e}", exc_info=True)
 
         if "hf_GC" in raw and raw["hf_GC"]:
             try:
                 gold_price, gold_pct, _ = _parse_hf_gold(raw)
             except Exception as e:
-                logger.warning(f"[Macro] GOLD parse error: {e}")
+                logger.warning(f"[Macro] GOLD parse error: {e}", exc_info=True)
 
         if "hf_CL" in raw and raw["hf_CL"]:
             try:
                 wti_price, wti_pct, _ = _parse_hf_cl(raw)
             except Exception as e:
-                logger.warning(f"[Macro] WTI parse error: {e}")
+                logger.warning(f"[Macro] WTI parse error: {e}", exc_info=True)
 
         if "hkVHSI" in raw and raw["hkVHSI"]:
             try:
                 vhsi_price, vhsi_pct, _ = _parse_hkvhsi(raw)
                 logger.info(f"[Macro] VHSI fetched: {vhsi_price} ({vhsi_pct}%)")
             except Exception as e:
-                logger.warning(f"[Macro] VHSI parse error: {e}")
+                logger.warning(f"[Macro] VHSI parse error: {e}", exc_info=True)
 
         results = {
             "USD/CNY": {"name": "美元/离岸人民币", "price": round(usdcny_price, 4), "unit": "",    "change_pct": round(usdcny_pct, 4),  "timestamp": now_str},
@@ -279,7 +279,7 @@ def _fetch_macro_data():
         logger.info(f"[Macro] Fetched: USD={usdcny_price} GOLD={gold_price}¥ WTI={wti_price} VHSI={vhsi_price}({vhsi_pct}%)")
 
     except Exception as e:
-        logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}")
+        logger.warning(f"[Macro] Fetch failed, keeping old cache: {e}", exc_info=True)
 
 
 def _get_macro_data() -> dict:
@@ -455,7 +455,7 @@ def _get_cached_wind(force=False):
         _cache.set(_REALTIME_CACHE_KEY, wind_data, ttl=TTL)
         return wind_data
     except Exception as e:
-        logger.warning(f"[market_overview] 实时拉取失败，回退缓存: {e}")
+        logger.warning(f"[market_overview] 实时拉取失败，回退缓存: {e}", exc_info=True)
         cached = _cache.get(_REALTIME_CACHE_KEY)
         return cached if cached else {}
 
@@ -630,7 +630,7 @@ def _load_all_stock_names() -> list[dict]:
             _STOCK_NAMES_LOADED = True
             logger.info(f"[SymbolRegistry] 全市场A股加载完成: {len(_ALL_STOCK_NAMES)} 只")
         except Exception as e:
-            logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}")
+            logger.warning(f"[SymbolRegistry] 加载全市场A股失败，使用兜底数据: {e}", exc_info=True)
             _ALL_STOCK_NAMES = []
             _STOCK_NAMES_LOADED = True
 

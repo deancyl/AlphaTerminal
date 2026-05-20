@@ -124,7 +124,7 @@ class BaseStreamer(ABC):
                 
                 if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
                     self._state = StreamerState.FAILED
-                    logger.error(f"[{self.name}] Max failures reached, entering FAILED state")
+                    logger.error(f"[{self.name}] Max failures reached, entering FAILED state", exc_info=True)
                     break
                 
                 self._state = StreamerState.RECONNECTING

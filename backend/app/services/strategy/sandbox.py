@@ -271,7 +271,7 @@ class SecureExecutor:
         try:
             exec(compiled, namespace)
         except Exception as e:
-            logger.warning(f"[SecureExecutor] Execution error: {e}")
+            logger.warning(f"[SecureExecutor] Execution error: {e}", exc_info=True)
             raise
         
         return namespace

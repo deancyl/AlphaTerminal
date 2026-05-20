@@ -184,7 +184,7 @@ def execute_sell(
                     order_id=order_id,
                 )
             except Exception as audit_err:
-                logger.warning(f"[Trading] Audit log failed for sell: {audit_err}")
+                logger.warning(f"[Trading] Audit log failed for sell: {audit_err}", exc_info=True)
     finally:
         # 仅关闭本函数创建的连接
         if not external_conn:
@@ -263,7 +263,7 @@ def execute_buy(
                     order_id=order_id,
                 )
             except Exception as audit_err:
-                logger.warning(f"[Trading] Audit log failed for buy: {audit_err}")
+                logger.warning(f"[Trading] Audit log failed for buy: {audit_err}", exc_info=True)
     except Exception as e:
         if manage_transaction:
             conn.rollback()

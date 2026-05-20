@@ -182,7 +182,7 @@ class ContextAssembler:
                 timeout=timeout
             )
         except asyncio.TimeoutError:
-            logger.error(f"[ContextAssembler] 数据获取超时 ({timeout}s)")
+            logger.error(f"[ContextAssembler] 数据获取超时 ({timeout}s)", exc_info=True)
             return AssemblyResult(
                 query_type=query_type,
                 context_text="",
@@ -317,7 +317,7 @@ class ContextAssembler:
             return data if isinstance(data, dict) else None
             
         except Exception as e:
-            logger.warning(f"[ContextAssembler] 投资组合数据获取失败: {e}")
+            logger.warning(f"[ContextAssembler] 投资组合数据获取失败: {e}", exc_info=True)
             return None
     
     def _build_context_text(

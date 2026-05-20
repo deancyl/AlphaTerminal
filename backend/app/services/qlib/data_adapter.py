@@ -177,7 +177,7 @@ class DataAdapter:
             return DatasetH(handler=handler)
             
         except ImportError:
-            logger.warning("[DataAdapter] Qlib not available, returning None")
+            logger.warning("[DataAdapter] Qlib not available, returning None", exc_info=True)
             return None
     
     def extract_features(

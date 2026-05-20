@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from app.db.database import _get_conn, _db_path
 from app.utils.response import success_response
 from app.routers.admin import verify_admin_key
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -283,7 +284,7 @@ def _backfill_kline_sync(symbol: str, dates: List[str]) -> dict:
                         
                 except Exception as e:
                     current_date = date_str if 'date_str' in dir() else 'unknown'
-                    logger.warning(f"[DataGaps] Failed to insert {current_date}: {e}")
+                    logger.warning(f"[DataGaps] Failed to insert {current_date}: {e}", exc_info=True)
                     if 'date_str' in dir() and date_str in dates:
                         failed_dates.append(date_str)
             
@@ -384,6 +385,7 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/scan")
+@handle_errors(module="data_gaps")
 async def scan_data_gaps(
     symbol: str = Query(..., description="Stock symbol (e.g., sh600519)"),
     start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
@@ -435,6 +437,7 @@ async def scan_data_gaps(
 
 
 @router.post("/backfill")
+@handle_errors(module="data_gaps")
 async def backfill_data_gaps(
     request: BackfillRequest,
     _: bool = Depends(verify_admin_key)
@@ -478,6 +481,7 @@ async def backfill_data_gaps(
 
 
 @router.get("/calendar")
+@handle_errors(module="data_gaps")
 async def get_data_gaps_calendar(
     year: int = Query(..., ge=2020, le=2030, description="Year"),
     month: int = Query(..., ge=1, le=12, description="Month"),
@@ -506,6 +510,7 @@ async def get_data_gaps_calendar(
 
 
 @router.get("/health")
+@handle_errors(module="data_gaps")
 async def health_check():
     """Health check endpoint"""
     return success_response({

@@ -36,7 +36,7 @@ def _get_akshare():
             import akshare as ak
             _akshare = ak
         except ImportError:
-            logger.error("[Options] akshare 未安装，请运行: pip install akshare")
+            logger.error("[Options] akshare 未安装，请运行: pip install akshare", exc_info=True)
             raise
     return _akshare
 
@@ -159,7 +159,7 @@ class OptionsFetcher(BaseMarketFetcher):
             return None
             
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] underlying spot: {symbol} - {e}")
+            logger.warning(f"[HTTP] underlying spot: {symbol} - {e}", exc_info=True)
             return None
     
     @property
@@ -299,7 +299,7 @@ class OptionsFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Options] 获取CFFEX期权链超时: {symbol}")
+            logger.warning(f"[Options] 获取CFFEX期权链超时: {symbol}", exc_info=True)
             return self._get_empty_chain(symbol)
         except Exception as e:
             self.cb.record_failure()
@@ -372,7 +372,7 @@ class OptionsFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Options] 获取SSE Greeks超时: {contract_code}")
+            logger.warning(f"[Options] 获取SSE Greeks超时: {contract_code}", exc_info=True)
             return self._get_empty_greeks(contract_code)
         except Exception as e:
             self.cb.record_failure()

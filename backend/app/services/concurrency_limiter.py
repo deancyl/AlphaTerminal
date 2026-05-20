@@ -129,7 +129,7 @@ class ConcurrencyLimiter:
                 self._metrics[model_key].queued -= 1
                 self._metrics[model_key].rejected += 1
             
-            logger.warning(f"[ConcurrencyLimiter] Timeout for {model_key}")
+            logger.warning(f"[ConcurrencyLimiter] Timeout for {model_key}", exc_info=True)
             return False
     
     def release(self, provider: str, model_id: str):

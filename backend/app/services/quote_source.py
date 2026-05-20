@@ -160,7 +160,7 @@ def _parse_tencent_quote(symbol: str) -> dict | None:
         }
     except Exception as e:
         breaker.record_failure()
-        logger.warning(f"[Tencent] {symbol} fail: {e}")
+        logger.warning(f"[Tencent] {symbol} fail: {e}", exc_info=True)
         return None
 
 
@@ -198,7 +198,7 @@ def _parse_sina_quote(symbol: str) -> dict | None:
         }
     except Exception as e:
         breaker.record_failure()
-        logger.warning(f"[Sina] {symbol} fail: {e}")
+        logger.warning(f"[Sina] {symbol} fail: {e}", exc_info=True)
         return None
 
 
@@ -234,7 +234,7 @@ def _parse_sina_kline_60min(symbol: str) -> dict | None:
         }
     except Exception as e:
         breaker.record_failure()
-        logger.warning(f"[SinaKline] {symbol} fail: {e}")
+        logger.warning(f"[SinaKline] {symbol} fail: {e}", exc_info=True)
         return None
 
 
@@ -275,7 +275,7 @@ def _parse_eastmoney_quote(symbol: str) -> dict | None:
         }
     except Exception as e:
         breaker.record_failure()
-        logger.warning(f"[Eastmoney] {symbol} fail: {e}")
+        logger.warning(f"[Eastmoney] {symbol} fail: {e}", exc_info=True)
         return None
 
 
@@ -313,7 +313,7 @@ def _parse_tencent_hk_quote(symbol: str) -> dict | None:
         }
     except Exception as e:
         breaker.record_failure()
-        logger.warning(f"[Tencent HK] {symbol} fail: {e}")
+        logger.warning(f"[Tencent HK] {symbol} fail: {e}", exc_info=True)
         return None
 
 
@@ -351,7 +351,7 @@ def _parse_alpha_vantage_quote(symbol: str) -> dict | None:
         except Exception as e:
             if attempt == 1:
                 breaker.record_failure()
-                logger.warning(f"[AlphaVantage] {symbol} failed after 2 attempts: {e}")
+                logger.warning(f"[AlphaVantage] {symbol} failed after 2 attempts: {e}", exc_info=True)
                 return None
             time.sleep(0.5)
 
@@ -453,11 +453,11 @@ async def get_quote_with_fallback_async(symbol: str) -> dict:
                 timeout=15.0
             )
         except asyncio.TimeoutError:
-            logger.warning(f"[Quote/async] {source_name} 超时 15s")
+            logger.warning(f"[Quote/async] {source_name} 超时 15s", exc_info=True)
             _source_status[source_name] = {"status": "timeout", "latency": None, "fail_count": _source_status[source_name]["fail_count"] + 1}
             continue
         except Exception as e:
-            logger.warning(f"[Quote/async] {source_name} 异常: {e}")
+            logger.warning(f"[Quote/async] {source_name} 异常: {e}", exc_info=True)
             _source_status[source_name] = {"status": "error", "latency": None, "fail_count": _source_status[source_name]["fail_count"] + 1}
             continue
 
@@ -637,7 +637,7 @@ async def get_quote_by_priority_async(symbol: str) -> dict:
                 "pb": result.get("pb"),
             }
     except Exception as e:
-        logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback")
+        logger.warning(f"[priority] {symbol} 失败: {e}，回退到旧版 fallback", exc_info=True)
     
     return await get_quote_with_fallback_async(symbol)
 
@@ -660,7 +660,7 @@ async def get_kline_by_priority_async(symbol: str, period: str = "day") -> dict:
                 "count": len(result) if isinstance(result, list) else 0,
             }
     except Exception as e:
-        logger.warning(f"[priority] {symbol} K线失败: {e}")
+        logger.warning(f"[priority] {symbol} K线失败: {e}", exc_info=True)
     
     if period == "60min":
         return await asyncio.to_thread(_parse_sina_kline_60min, symbol)

@@ -28,6 +28,7 @@ from app.services.oms import (
 )
 from app.services.oms.order_status import get_allowed_transitions
 from app.services.oms.order_engine import InvalidStateTransitionError, OrderNotFoundError
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class OrderCancel(BaseModel):
 
 
 @router.post("/orders")
+@handle_errors(module="oms")
 async def create_order(
     order_data: OrderCreate,
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -85,6 +87,7 @@ async def create_order(
 
 
 @router.get("/orders/{order_id}")
+@handle_errors(module="oms")
 async def get_order(
     order_id: int,
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -99,6 +102,7 @@ async def get_order(
 
 
 @router.get("/orders/{order_id}/status")
+@handle_errors(module="oms")
 async def get_order_status(
     order_id: int,
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -122,6 +126,7 @@ async def get_order_status(
 
 
 @router.post("/orders/{order_id}/submit")
+@handle_errors(module="oms")
 async def submit_order(
     order_id: int,
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -148,6 +153,7 @@ async def submit_order(
 
 
 @router.post("/orders/{order_id}/cancel")
+@handle_errors(module="oms")
 async def cancel_order(
     order_id: int,
     cancel_data: OrderCancel = OrderCancel(),
@@ -166,6 +172,7 @@ async def cancel_order(
 
 
 @router.post("/orders/{order_id}/fill")
+@handle_errors(module="oms")
 async def process_fill(
     order_id: int,
     fill_data: OrderFill,
@@ -190,6 +197,7 @@ async def process_fill(
 
 
 @router.get("/portfolios/{portfolio_id}/orders")
+@handle_errors(module="oms")
 async def list_portfolio_orders(
     portfolio_id: int,
     status: Optional[str] = Query(None, pattern="^(staged|submitted|validated|pending|partial|filled|cancelled|rejected|expired)$"),
@@ -221,6 +229,7 @@ async def list_portfolio_orders(
 
 
 @router.get("/portfolios/{portfolio_id}/orders/open")
+@handle_errors(module="oms")
 async def list_open_orders(
     portfolio_id: int,
     oms: OrderExecutionEngine = Depends(get_oms_engine),
@@ -236,6 +245,7 @@ async def list_open_orders(
 
 
 @router.get("/orders/statuses")
+@handle_errors(module="oms")
 async def list_order_statuses():
     return success_response({
         "statuses": [

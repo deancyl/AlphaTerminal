@@ -40,7 +40,7 @@ def _get_akshare():
             import akshare as ak
             _akshare = ak
         except ImportError:
-            logger.error("[AkShare] akshare 未安装，请运行: pip install akshare")
+            logger.error("[AkShare] akshare 未安装，请运行: pip install akshare", exc_info=True)
             raise
     return _akshare
 
@@ -167,7 +167,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
         except Exception as e:
             self.cb.record_failure()
-            logger.warning(f"[AkShare] {symbol} 行情获取失败: {e}")
+            logger.warning(f"[AkShare] {symbol} 行情获取失败: {e}", exc_info=True)
             
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -175,7 +175,7 @@ class AkShareFetcher(BaseMarketFetcher):
                 stale_ttl=600
             )
             if stale_data:
-                logger.warning(f"[AkShare] Fetch failed, returning stale data for {symbol}")
+                logger.warning(f"[AkShare] Fetch failed, returning stale data for {symbol}", exc_info=True)
                 return stale_data
             
             return None
@@ -282,7 +282,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
         except Exception as e:
             self.cb.record_failure()
-            logger.warning(f"[AkShare] {symbol} K线获取失败: {e}")
+            logger.warning(f"[AkShare] {symbol} K线获取失败: {e}", exc_info=True)
             
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -290,7 +290,7 @@ class AkShareFetcher(BaseMarketFetcher):
                 stale_ttl=600
             )
             if stale_data:
-                logger.warning(f"[AkShare] K-line fetch failed, returning stale data for {symbol}")
+                logger.warning(f"[AkShare] K-line fetch failed, returning stale data for {symbol}", exc_info=True)
                 return stale_data
             
             return None
@@ -368,7 +368,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError as e:
             self.cb.record_failure()
-            logger.warning(f"[AkShare] 基金 {fund_code} 净值获取超时: {e}")
+            logger.warning(f"[AkShare] 基金 {fund_code} 净值获取超时: {e}", exc_info=True)
             
             stale_data, is_stale = cache.get_with_stale(
                 key=cache_key,
@@ -376,7 +376,7 @@ class AkShareFetcher(BaseMarketFetcher):
                 stale_ttl=600
             )
             if stale_data:
-                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}")
+                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}", exc_info=True)
                 return stale_data
             
             return None
@@ -390,7 +390,7 @@ class AkShareFetcher(BaseMarketFetcher):
                 stale_ttl=600
             )
             if stale_data:
-                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}")
+                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}", exc_info=True)
                 return stale_data
             
             return None

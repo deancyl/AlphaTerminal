@@ -9,11 +9,13 @@ This module contains sector-related endpoints:
 from fastapi import APIRouter
 from app.utils.response import success_response, error_response, ErrorCode
 from .dependencies import logger
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter()
 
 
 @router.get("/market/sectors")
+@handle_errors(module="market_sectors")
 async def market_sectors():
     """
     真实行业板块数据 - Task 1: 毫秒级响应
@@ -31,6 +33,7 @@ async def market_sectors():
 
 
 @router.post("/market/sectors/refresh")
+@handle_errors(module="market_sectors")
 async def market_sectors_refresh():
     """
     强制刷新行业板块缓存（手动刷新接口）

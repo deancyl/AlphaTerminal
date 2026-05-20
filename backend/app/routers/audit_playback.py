@@ -23,6 +23,7 @@ from app.services.audit_chain import verify_chain, get_chain_stats, GENESIS_HASH
 from app.db.database import _get_conn, _db_path
 from app.config.settings import get_settings
 from app.utils.ip_validation import get_client_ip_safe
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ def _extract_config_changes(records: List[Dict[str, Any]]) -> List[Dict[str, Any
 
 
 @router.get("/diff")
+@handle_errors(module="audit_playback")
 async def get_config_diff(
     from_timestamp: str = Query(..., description="Start timestamp (ISO format)"),
     to_timestamp: str = Query(..., description="End timestamp (ISO format)")
@@ -177,6 +179,7 @@ async def get_config_diff(
 
 
 @router.get("/timeline")
+@handle_errors(module="audit_playback")
 async def get_audit_timeline(
     limit: int = Query(default=100, ge=1, le=1000),
     action_filter: Optional[str] = Query(default=None, description="Filter by action type")
@@ -234,6 +237,7 @@ async def get_audit_timeline(
 
 
 @router.post("/rollback")
+@handle_errors(module="audit_playback")
 async def rollback_config(body: RollbackRequest):
     """
     Rollback config to selected timestamp.
@@ -318,6 +322,7 @@ async def rollback_config(body: RollbackRequest):
 
 
 @router.get("/verify_chain")
+@handle_errors(module="audit_playback")
 async def verify_hash_chain(
     from_id: Optional[int] = Query(default=None, description="Start ID for verification"),
     to_id: Optional[int] = Query(default=None, description="End ID for verification")
@@ -354,6 +359,7 @@ async def verify_hash_chain(
 
 
 @router.get("/record/{record_id}")
+@handle_errors(module="audit_playback")
 async def get_audit_record(record_id: int):
     """
     Get a single audit record by ID.
@@ -409,6 +415,7 @@ async def get_audit_record(record_id: int):
 
 
 @router.get("/stats")
+@handle_errors(module="audit_playback")
 async def get_audit_stats():
     """
     Get audit chain statistics.

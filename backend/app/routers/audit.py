@@ -16,11 +16,13 @@ from app.services.audit_chain import (
     log_audit_event,
 )
 from app.db.audit_db import get_audit_logs, get_audit_logs_keyset, count_audit_logs
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter(prefix="/api/v1/audit", tags=["audit"])
 
 
 @router.get("/verify")
+@handle_errors(module="audit")
 async def verify_audit_chain(
     from_id: Optional[int] = Query(None, ge=1, description="Start ID for verification"),
     to_id: Optional[int] = Query(None, ge=1, description="End ID for verification"),
@@ -44,6 +46,7 @@ async def verify_audit_chain(
 
 
 @router.get("/stats")
+@handle_errors(module="audit")
 async def get_audit_stats():
     """
     Get audit chain statistics.
@@ -62,6 +65,7 @@ async def get_audit_stats():
 
 
 @router.get("/logs")
+@handle_errors(module="audit")
 async def query_audit_logs(
     after_timestamp: Optional[str] = Query(None, description="Cursor: get logs before this timestamp (ISO format)"),
     after_id: Optional[int] = Query(None, ge=1, description="Cursor: get logs with id less than this (for same timestamp)"),
@@ -124,6 +128,7 @@ async def query_audit_logs(
 
 
 @router.get("/health")
+@handle_errors(module="audit")
 async def audit_health():
     """
     Health check for audit system.

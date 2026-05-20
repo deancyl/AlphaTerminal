@@ -347,6 +347,6 @@ def _row_to_dict(row: sqlite3.Row) -> Dict:
         try:
             result["details"] = json.loads(result["details"])
         except (json.JSONDecodeError, TypeError) as e:
-            logger.warning(f"[AUDIT_DB] Failed to parse details JSON: {type(e).__name__}: {e}")
+            logger.warning(f"[AUDIT_DB] Failed to parse details JSON: {type(e).__name__}: {e}", exc_info=True)
     
     return result

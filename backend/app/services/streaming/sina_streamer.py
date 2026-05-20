@@ -124,12 +124,12 @@ class SinaStreamer(BaseStreamer):
                 await self._handle_message(raw)
                 
             except asyncio.TimeoutError:
-                logger.warning(f"[{self.name}] Message timeout, sending ping")
+                logger.warning(f"[{self.name}] Message timeout, sending ping", exc_info=True)
                 await self._send_ping()
                 
             except Exception as e:
                 if websockets and isinstance(e, websockets.exceptions.ConnectionClosed):
-                    logger.warning(f"[{self.name}] Connection closed: {e}")
+                    logger.warning(f"[{self.name}] Connection closed: {e}", exc_info=True)
                     raise
                 logger.error(f"[{self.name}] Message loop error: {e}", exc_info=True)
                 raise
@@ -150,7 +150,7 @@ class SinaStreamer(BaseStreamer):
                     self._emit_tick(tick["symbol"], tick)
                     
         except json.JSONDecodeError:
-            logger.warning(f"[{self.name}] Invalid JSON: {raw[:100]}")
+            logger.warning(f"[{self.name}] Invalid JSON: {raw[:100]}", exc_info=True)
         except Exception as e:
             logger.error(f"[{self.name}] Handle message error: {e}", exc_info=True)
     
@@ -194,7 +194,7 @@ class SinaStreamer(BaseStreamer):
                 await self._ws.send(json.dumps({"action": "ping"}))
                 self._last_ping_time = time.time()
             except Exception as e:
-                logger.warning(f"[{self.name}] Ping failed: {e}")
+                logger.warning(f"[{self.name}] Ping failed: {e}", exc_info=True)
 
 
 class MockSinaStreamer(BaseStreamer):

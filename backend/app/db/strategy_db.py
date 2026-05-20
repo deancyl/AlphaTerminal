@@ -109,7 +109,7 @@ def create_strategy(
                 "updated_at": now,
             }
         except sqlite3.IntegrityError as e:
-            logger.error(f"[StrategyDB] Create failed - duplicate id: {strategy_id}")
+            logger.error(f"[StrategyDB] Create failed - duplicate id: {strategy_id}", exc_info=True)
             raise ValueError(f"Strategy with id {strategy_id} already exists")
         except Exception as e:
             logger.error(f"[StrategyDB] Create failed: {e}", exc_info=True)

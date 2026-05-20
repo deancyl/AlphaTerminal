@@ -17,6 +17,7 @@ from app.services.market_radar import (
     AnomalyType,
 )
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def sanitize_error_message(error: Exception) -> str:
 
 
 @router.get("/health")
+@handle_errors(module="market_radar")
 async def health_check():
     """Health check endpoint."""
     return {
@@ -66,6 +68,7 @@ async def health_check():
 
 
 @router.get("/treemap")
+@handle_errors(module="market_radar")
 async def get_treemap(
     level: Literal["sector", "stock"] = Query(
         default="sector",
@@ -114,6 +117,7 @@ async def get_treemap(
 
 
 @router.get("/anomalies")
+@handle_errors(module="market_radar")
 async def get_anomalies():
     """
     Get all detected market anomalies.
@@ -158,6 +162,7 @@ async def get_anomalies():
 
 
 @router.get("/anomalies/{anomaly_type}")
+@handle_errors(module="market_radar")
 async def get_anomaly_by_type(
     anomaly_type: str = Path(
         ...,
@@ -217,6 +222,7 @@ async def get_anomaly_by_type(
 
 
 @router.get("/temperature")
+@handle_errors(module="market_radar")
 async def get_market_temperature():
     """
     Get market temperature score (0-100).

@@ -106,7 +106,7 @@ class EastmoneyFundFetcher:
                     return fund_info
                 
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 信息获取失败: {e}")
+            logger.warning(f"[Eastmoney] 基金 {code} 信息获取失败: {e}", exc_info=True)
         
         return None
     
@@ -274,7 +274,7 @@ class EastmoneyFundFetcher:
             return result if result["name"] else None
             
         except Exception as e:
-            logger.warning(f"[Eastmoney] 解析基金数据失败: {e}")
+            logger.warning(f"[Eastmoney] 解析基金数据失败: {e}", exc_info=True)
             return None
     
     async def get_fund_nav_history(self, code: str, period: str = "6m") -> List[Dict]:
@@ -328,7 +328,7 @@ class EastmoneyFundFetcher:
                 return result
                 
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 净值历史获取失败: {e}")
+            logger.warning(f"[Eastmoney] 基金 {code} 净值历史获取失败: {e}", exc_info=True)
         
         return []
     
@@ -380,7 +380,7 @@ class EastmoneyFundFetcher:
                 return result
                 
         except Exception as e:
-            logger.warning(f"[Eastmoney] 获取股票名称失败: {e}")
+            logger.warning(f"[Eastmoney] 获取股票名称失败: {e}", exc_info=True)
             return {}
 
     async def get_fund_portfolio(self, code: str) -> Optional[Dict]:
@@ -440,9 +440,9 @@ class EastmoneyFundFetcher:
                 }
                 
         except asyncio.TimeoutError:
-            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 超时，降级到 pingzhongdata.js")
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 超时，降级到 pingzhongdata.js", exc_info=True)
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 失败: {e}，降级到 pingzhongdata.js")
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 akshare 失败: {e}，降级到 pingzhongdata.js", exc_info=True)
         
         # 降级方案：从 pingzhongdata.js 解析股票代码（无比例数据）
         return await self._get_portfolio_from_pingzhongdata(code)
@@ -537,7 +537,7 @@ class EastmoneyFundFetcher:
                     }
                     
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 持仓 pingzhongdata 失败: {e}")
+            logger.warning(f"[Eastmoney] 基金 {code} 持仓 pingzhongdata 失败: {e}", exc_info=True)
         
         return None
     
@@ -594,7 +594,7 @@ class EastmoneyFundFetcher:
                     return funds
                 
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金排行获取失败: {e}")
+            logger.warning(f"[Eastmoney] 基金排行获取失败: {e}", exc_info=True)
         
         return []
     
@@ -655,7 +655,7 @@ class EastmoneyFundFetcher:
                 return result
                 
         except Exception as e:
-            logger.warning(f"[Eastmoney] 基金 {code} 阶段收益获取失败: {e}")
+            logger.warning(f"[Eastmoney] 基金 {code} 阶段收益获取失败: {e}", exc_info=True)
         
         return None
     

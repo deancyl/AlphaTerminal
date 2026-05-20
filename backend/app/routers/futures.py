@@ -15,6 +15,7 @@ import httpx
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.utils.error_decorator import handle_errors
 
 # Dedicated thread pool for futures data fetching
 _futures_executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="futures_")
@@ -147,10 +148,10 @@ async def _fetch_index_futures_realtime():
                 logger.info(f"[Futures] Fetched real data for {symbol}: price={price}")
         except asyncio.TimeoutError:
             _futures_cb.record_failure()
-            logger.warning(f"[Futures] Timeout fetching {symbol}")
+            logger.warning(f"[Futures] Timeout fetching {symbol}", exc_info=True)
         except Exception as e:
             _futures_cb.record_failure()
-            logger.warning(f"[Futures] Failed to fetch {symbol}: {e}")
+            logger.warning(f"[Futures] Failed to fetch {symbol}: {e}", exc_info=True)
     
     # Fallback to mock if all failed
     if not index_futures:
@@ -202,7 +203,7 @@ def _fetch_commodities_sync():
         if len(spot_data) > 0:
             fetch_success = True
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+        logger.warning(f"[HTTP] failed: {e}", exc_info=True)
     
     if not fetch_success or len(spot_data) == 0:
         logger.warning("[Futures] Using mock commodity data as fallback")
@@ -252,7 +253,7 @@ async def _fetch_futures_data():
     try:
         index_futures, index_source = await _fetch_index_futures_realtime()
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}, using mock")
+        logger.warning(f"[HTTP] failed: {e}, using mock", exc_info=True)
         index_futures = _MOCK_INDEX_FUTURES
         index_source = "mock"
 
@@ -277,6 +278,7 @@ async def _get_futures_cache() -> dict:
 
 
 @router.get("/futures/index_history")
+@handle_errors(module="futures")
 async def futures_index_history(symbol: str = "IF", period: str = "daily", limit: int = 200):
     """
     股指期货历史K线数据
@@ -368,7 +370,7 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
         })
         
     except asyncio.TimeoutError:
-        logger.warning(f"[futures_index_history] Timeout for {symbol}")
+        logger.warning(f"[futures_index_history] Timeout for {symbol}", exc_info=True)
         return success_response({
             "symbol": symbol,
             "period": period,
@@ -376,7 +378,7 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
             "message": "数据获取超时，请稍后重试"
         })
     except Exception as e:
-        logger.warning(f"[futures_index_history] Failed for {symbol}: {type(e).__name__}: {e}")
+        logger.warning(f"[futures_index_history] Failed for {symbol}: {type(e).__name__}: {e}", exc_info=True)
         return success_response({
             "symbol": symbol,
             "period": period,
@@ -386,6 +388,7 @@ async def futures_index_history(symbol: str = "IF", period: str = "daily", limit
 
 
 @router.get("/futures/main_indexes")
+@handle_errors(module="futures")
 async def futures_main_indexes():
     """
     股指期货主力（IF · IC · IM）
@@ -403,6 +406,7 @@ async def futures_main_indexes():
 
 
 @router.get("/futures/commodities")
+@handle_errors(module="futures")
 async def futures_commodities():
     """
     国内大宗商品期货实时行情
@@ -419,6 +423,7 @@ async def futures_commodities():
 
 
 @router.get("/futures/term_structure")
+@handle_errors(module="futures")
 async def futures_term_structure(symbol: str = "RB"):
     """
     大宗商品期货期限结构（Forward Curve）
@@ -467,7 +472,7 @@ async def futures_term_structure(symbol: str = "RB"):
                 timeout=10.0
             )
         except asyncio.TimeoutError:
-            logger.warning(f"[Futures] term_structure timeout for {prefix}")
+            logger.warning(f"[Futures] term_structure timeout for {prefix}", exc_info=True)
             return error_response(ErrorCode.INTERNAL_ERROR, "数据源响应超时，请稍后重试", {
                 "symbol": prefix,
                 "name": zh_name,
@@ -525,7 +530,7 @@ async def futures_term_structure(symbol: str = "RB"):
         })
 
     except Exception as e:
-        logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}")
+        logger.warning(f"[Futures] term_structure failed for {prefix}: {type(e).__name__}: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期限结构失败: {type(e).__name__}: {str(e)}", {"symbol": prefix, "name": zh_name, "term_structure": []})
 
 

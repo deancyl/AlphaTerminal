@@ -370,7 +370,7 @@ class SinaFetcher(BaseMarketFetcher):
                         results.append(result)
 
             except Exception as e:
-                logger.warning(f"[Sina] 批量请求第 {i//batch_size + 1} 批失败: {e}")
+                logger.warning(f"[Sina] 批量请求第 {i//batch_size + 1} 批失败: {e}", exc_info=True)
                 continue
 
         return results

@@ -297,7 +297,8 @@ class ValidatedHTTPClient:
                         self._record_failure()
                         logger.warning(
                             f"[HTTPClient] {url} 网络错误: {type(e).__name__}，"
-                            f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})"
+                            f"{delay:.1f}s 后重试 (attempt {attempt + 1}/{retries + 1})",
+                            exc_info=True
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
@@ -312,7 +313,8 @@ class ValidatedHTTPClient:
                         self._record_failure()
                         logger.warning(
                             f"[HTTPClient] {url} 超时，{delay:.1f}s 后重试 "
-                            f"(attempt {attempt + 1}/{retries + 1})"
+                            f"(attempt {attempt + 1}/{retries + 1})",
+                            exc_info=True
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)
@@ -334,7 +336,8 @@ class ValidatedHTTPClient:
                         self._record_failure()
                         logger.warning(
                             f"[HTTPClient] {url} 未知错误: {type(e).__name__}: {e}，"
-                            f"{delay:.1f}s 后重试"
+                            f"{delay:.1f}s 后重试",
+                            exc_info=True
                         )
                         await asyncio.sleep(delay)
                         delay = min(delay * 2, self.max_delay)

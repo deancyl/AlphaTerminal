@@ -285,7 +285,7 @@ class ExecutorManager:
             error_msg = f"Shutdown timeout after {timeout}s"
             executor_info.status = ExecutorStatus.ERROR
             executor_info.error_message = error_msg
-            logger.error(f"[ExecutorManager] {error_msg} for executor '{name}'")
+            logger.error(f"[ExecutorManager] {error_msg} for executor '{name}'", exc_info=True)
             return False
             
         except Exception as e:

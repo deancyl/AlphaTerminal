@@ -64,7 +64,7 @@ def _load_trusted_proxies() -> Set[IPv4Network | IPv6Network]:
             network = ip_network(cidr, strict=False)
             networks.add(network)
         except ValueError as e:
-            logger.warning(f"[IPValidation] Invalid CIDR '{cidr}': {e}")
+            logger.warning(f"[IPValidation] Invalid CIDR '{cidr}': {e}", exc_info=True)
     
     _trusted_proxies = networks
     logger.info(f"[IPValidation] Loaded {len(networks)} trusted proxy ranges")

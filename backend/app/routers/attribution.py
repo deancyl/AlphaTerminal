@@ -26,6 +26,7 @@ from app.services.attribution import (
     get_attribution_engine,
     FactorCategory,
 )
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,7 @@ class RealtimeRequest(BaseModel):
 
 
 @router.get("/factors")
+@handle_errors(module="attribution")
 async def list_factors(
     category: Optional[str] = Query(None, description="Filter by category"),
 ):
@@ -88,6 +90,7 @@ async def list_factors(
 
 
 @router.get("/factors/categories")
+@handle_errors(module="attribution")
 async def list_categories():
     """列出因子类别"""
     registry = get_factor_registry()
@@ -100,6 +103,7 @@ async def list_categories():
 
 
 @router.post("/sandbox")
+@handle_errors(module="attribution")
 async def run_sandbox(req: SandboxRequest):
     """
     运行归因沙盒
@@ -177,6 +181,7 @@ async def run_sandbox(req: SandboxRequest):
 
 
 @router.post("/sandbox/realtime")
+@handle_errors(module="attribution")
 async def run_realtime(req: RealtimeRequest):
     """
     实时归因计算
@@ -245,6 +250,7 @@ async def run_realtime(req: RealtimeRequest):
 
 
 @router.get("/health")
+@handle_errors(module="attribution")
 async def health_check():
     """健康检查"""
     registry = get_factor_registry()

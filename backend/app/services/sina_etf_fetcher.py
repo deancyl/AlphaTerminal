@@ -135,7 +135,7 @@ class SinaETFFetcher:
                 return result
                 
         except Exception as e:
-            logger.warning(f"[Sina] ETF {code} 行情获取失败: {e}")
+            logger.warning(f"[Sina] ETF {code} 行情获取失败: {e}", exc_info=True)
         
         return None
     
@@ -192,7 +192,7 @@ class SinaETFFetcher:
                 return result
                 
         except Exception as e:
-            logger.warning(f"[Sina] 批量获取 ETF 行情失败: {e}")
+            logger.warning(f"[Sina] 批量获取 ETF 行情失败: {e}", exc_info=True)
         
         return {}
 

@@ -23,6 +23,7 @@ def _get_ak():
     return _akshare_module
 
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 # ESG data uses static cache (L1: 1h, L2: 7 days)
 ESG_CACHE_TTL = 3600  # 1小时缓存（ESG数据更新慢）
@@ -51,6 +52,7 @@ class ESGRatingResponse(BaseModel):
     ratings: List[ESGRating]
 
 @router.get("/rating/{symbol}")
+@handle_errors(module="esg")
 async def get_esg_rating(symbol: str):
     """
     获取股票ESG评级
@@ -85,7 +87,7 @@ async def get_esg_rating(symbol: str):
                         "governance_score": float(row.get("公司治理", 0)) if row.get("公司治理") else None,
                     })
         except Exception as e:
-            logger.warning(f"华证ESG数据获取失败: {e}")
+            logger.warning(f"华证ESG数据获取失败: {e}", exc_info=True)
         
         # MSCI ESG评级
         try:
@@ -101,7 +103,7 @@ async def get_esg_rating(symbol: str):
                         "source": "MSCI ESG"
                     })
         except Exception as e:
-            logger.warning(f"MSCI ESG数据获取失败: {e}")
+            logger.warning(f"MSCI ESG数据获取失败: {e}", exc_info=True)
         
         # 新浪ESG评级汇总
         try:
@@ -117,7 +119,7 @@ async def get_esg_rating(symbol: str):
                         "source": "新浪ESG"
                     })
         except Exception as e:
-            logger.warning(f"新浪ESG数据获取失败: {e}")
+            logger.warning(f"新浪ESG数据获取失败: {e}", exc_info=True)
         
         result = {"ratings": ratings, "total": len(ratings)}
         _set_cache(cache_key, result)
@@ -128,6 +130,7 @@ async def get_esg_rating(symbol: str):
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG评级失败: {str(e)}")
 
 @router.get("/carbon")
+@handle_errors(module="esg")
 async def get_carbon_data():
     """
     获取碳排放交易数据
@@ -155,7 +158,7 @@ async def get_carbon_data():
                     "date": str(latest.get("交易日期", "")),
                 })
         except Exception as e:
-            logger.warning(f"北京碳交易数据获取失败: {e}")
+            logger.warning(f"北京碳交易数据获取失败: {e}", exc_info=True)
         
         # 国内碳交易
         try:
@@ -169,7 +172,7 @@ async def get_carbon_data():
                         "date": str(row.get("日期", "")),
                     })
         except Exception as e:
-            logger.warning(f"国内碳交易数据获取失败: {e}")
+            logger.warning(f"国内碳交易数据获取失败: {e}", exc_info=True)
         
         result = {"carbon_data": carbon_data, "total": len(carbon_data)}
         _set_cache(cache_key, result)
@@ -180,6 +183,7 @@ async def get_carbon_data():
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取碳排放数据失败: {str(e)}")
 
 @router.get("/rank")
+@handle_errors(module="esg")
 async def get_esg_rank(
     limit: int = Query(20, ge=1, le=100, description="返回数量")
 ):
@@ -219,6 +223,7 @@ async def get_esg_rank(
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG排名失败: {str(e)}")
 
 @router.get("/health")
+@handle_errors(module="esg")
 async def health_check():
     """健康检查"""
     return success_response({

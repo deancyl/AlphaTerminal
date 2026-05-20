@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, HTTPException, Body
 from pydantic import BaseModel, Field, field_validator
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,7 @@ _env_vars = {
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/status")
+@handle_errors(module="mcp")
 def get_mcp_status():
     """Get MCP server status"""
     global _mcp_status, _start_time
@@ -230,6 +232,7 @@ def get_mcp_status():
 
 
 @router.get("/config")
+@handle_errors(module="mcp")
 def get_mcp_config():
     """Get MCP server configuration"""
     return {
@@ -240,6 +243,7 @@ def get_mcp_config():
 
 
 @router.post("/config")
+@handle_errors(module="mcp")
 def update_mcp_config(config: MCPConfig):
     """Update MCP server configuration"""
     global _mcp_config
@@ -280,6 +284,7 @@ def update_mcp_config(config: MCPConfig):
 
 
 @router.get("/tools")
+@handle_errors(module="mcp")
 def list_mcp_tools():
     """List all registered MCP tools"""
     tools_data = [tool.model_dump() for tool in _mcp_tools]
@@ -295,6 +300,7 @@ def list_mcp_tools():
 
 
 @router.post("/test")
+@handle_errors(module="mcp")
 async def test_mcp_connection():
     """Test MCP server connection with latency measurement"""
     global _mcp_config, _mcp_status
@@ -332,7 +338,7 @@ async def test_mcp_connection():
     
     except asyncio.CancelledError:
         latency_ms = int((time.time() - start_time) * 1000)
-        logger.warning(f"[MCP] Connection test cancelled")
+        logger.warning(f"[MCP] Connection test cancelled", exc_info=True)
         
         return {
             "code": 1,
@@ -360,6 +366,7 @@ async def test_mcp_connection():
 
 
 @router.post("/start")
+@handle_errors(module="mcp")
 def start_mcp_server():
     """Start MCP server (mock implementation)"""
     global _mcp_status, _start_time
@@ -388,6 +395,7 @@ def start_mcp_server():
 
 
 @router.post("/stop")
+@handle_errors(module="mcp")
 def stop_mcp_server():
     """Stop MCP server (mock implementation)"""
     global _mcp_status, _start_time
@@ -415,6 +423,7 @@ def stop_mcp_server():
 
 
 @router.get("/env")
+@handle_errors(module="mcp")
 def get_mcp_env():
     """Get MCP related environment variables (read-only)"""
     return {

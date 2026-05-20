@@ -90,7 +90,7 @@ def _insert_transaction(
         )
     except Exception as e:
         # Audit failure should not fail the transaction
-        logger.warning(f"[AuditChain] Failed to log cash operation: {e}")
+        logger.warning(f"[AuditChain] Failed to log cash operation: {e}", exc_info=True)
 
     return txn_id
 

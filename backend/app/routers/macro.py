@@ -106,12 +106,14 @@ def _month_to_date(month_str):
 
 # ── 全局缓存导入 ─────────────────────────────────────────────────────
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 _cache = get_cache()
 _cache_ttl = {}
 
 # ── GDP数据 ────────────────────────────────────────────────────────
 @router.get("/gdp")
+@handle_errors(module="macro")
 async def get_gdp_data(
     limit: int = Query(20, ge=1, le=100, description="返回最近N个季度，范围1-100"),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -176,7 +178,7 @@ async def get_gdp_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] GDP fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("GDP数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -184,6 +186,7 @@ async def get_gdp_data(
 
 # ── CPI数据 ────────────────────────────────────────────────────────
 @router.get("/cpi")
+@handle_errors(module="macro")
 async def get_cpi_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -245,7 +248,7 @@ async def get_cpi_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] CPI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("CPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -253,6 +256,7 @@ async def get_cpi_data(
 
 # ── PPI数据 ────────────────────────────────────────────────────────
 @router.get("/ppi")
+@handle_errors(module="macro")
 async def get_ppi_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -312,7 +316,7 @@ async def get_ppi_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] PPI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("PPI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -320,6 +324,7 @@ async def get_ppi_data(
 
 # ── PMI数据 ────────────────────────────────────────────────────────
 @router.get("/pmi")
+@handle_errors(module="macro")
 async def get_pmi_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -380,7 +385,7 @@ async def get_pmi_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] PMI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("PMI数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -388,6 +393,7 @@ async def get_pmi_data(
 
 # ── 综合宏观经济指标 ────────────────────────────────────────────────
 @router.get("/overview")
+@handle_errors(module="macro")
 async def get_macro_overview():
     """
     获取宏观经济综合概览（最新一期各指标）
@@ -407,7 +413,7 @@ async def get_macro_overview():
             try:
                 return await asyncio.wait_for(coro, timeout=FETCH_TIMEOUT)
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro] {name} fetch timeout after {FETCH_TIMEOUT}s")
+                logger.warning(f"[Macro] {name} fetch timeout after {FETCH_TIMEOUT}s", exc_info=True)
                 return None
         
         async def fetch_gdp():
@@ -588,6 +594,7 @@ def _generate_forecast(actual_value, indicator_type):
     return round(actual_value + deviation, 2)
 
 @router.get("/calendar")
+@handle_errors(module="macro")
 async def get_economic_calendar(
     country: Optional[str] = Query(None, description="国家/地区筛选: CN, US, EU, JP"),
     importance: Optional[str] = Query(None, description="重要性筛选: high, medium, low"),
@@ -634,7 +641,7 @@ async def get_economic_calendar(
                     )
                     return (indicator_config, df)
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                logger.warning(f"[HTTP] {indicator_config['indicator']}: {e}")
+                logger.warning(f"[HTTP] {indicator_config['indicator']}: {e}", exc_info=True)
                 return (indicator_config, None)
         
         cn_indicators = [ind for ind in ECONOMIC_CALENDAR_INDICATORS if ind["country"] == "CN"]
@@ -760,7 +767,7 @@ async def get_economic_calendar(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] Calendar fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("经济日历获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -768,6 +775,7 @@ async def get_economic_calendar(
 
 # ── M2货币供应量 ───────────────────────────────────────────────────
 @router.get("/m2")
+@handle_errors(module="macro")
 async def get_m2_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -827,7 +835,7 @@ async def get_m2_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] M2 fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("M2数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -835,6 +843,7 @@ async def get_m2_data(
 
 # ── 社会融资规模 ───────────────────────────────────────────────────
 @router.get("/social_financing")
+@handle_errors(module="macro")
 async def get_social_financing_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -894,7 +903,7 @@ async def get_social_financing_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] Social financing fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("社融数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -902,6 +911,7 @@ async def get_social_financing_data(
 
 # ── 工业增加值 ─────────────────────────────────────────────────────
 @router.get("/industrial_production")
+@handle_errors(module="macro")
 async def get_industrial_production_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -963,7 +973,7 @@ async def get_industrial_production_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] Industrial production fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("工业增加值数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -971,6 +981,7 @@ async def get_industrial_production_data(
 
 # ── 失业率 ─────────────────────────────────────────────────────────
 @router.get("/unemployment")
+@handle_errors(module="macro")
 async def get_unemployment_data(
     limit: int = Query(24, ge=1, le=100),
     start_date: Optional[str] = Query(None, description="开始日期 YYYY-MM-DD"),
@@ -1039,7 +1050,7 @@ async def get_unemployment_data(
         cache.set(cache_key, result, ttl=MACRO_CACHE_DURATION)
         return result
     except asyncio.TimeoutError:
-        logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
+        logger.warning(f"[Macro] Unemployment fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
         return error_response("失业率数据获取超时，请稍后重试", code=ErrorCode.TIMEOUT_ERROR)
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
         logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1049,6 +1060,7 @@ async def get_unemployment_data(
 VALID_INDICATORS = {"gdp", "cpi", "ppi", "pmi", "m2", "social_financing", "industrial_production", "unemployment"}
 
 @router.get("/batch")
+@handle_errors(module="macro")
 async def get_macro_batch(
     indicators: str = "gdp,cpi,ppi,pmi",
     limit: int = Query(12, ge=1, le=100, description="每个指标返回最近N期数据，范围1-100")
@@ -1094,7 +1106,7 @@ async def get_macro_batch(
                     "frequency": "季度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] GDP fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] GDP fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1116,7 +1128,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] CPI fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] CPI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1138,7 +1150,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] PPI fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] PPI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1160,7 +1172,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] PMI fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] PMI fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1182,7 +1194,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] M2 fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] M2 fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1204,7 +1216,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] Social financing fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] Social financing fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1226,7 +1238,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] Industrial production fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] Industrial production fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1248,7 +1260,7 @@ async def get_macro_batch(
                     "frequency": "月度"
                 }
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Batch] Unemployment fetch timeout after {MACRO_TIMEOUT}s")
+                logger.warning(f"[Macro Batch] Unemployment fetch timeout after {MACRO_TIMEOUT}s", exc_info=True)
                 return None
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1296,6 +1308,7 @@ async def get_macro_batch(
 
 
 @router.get("/dashboard")
+@handle_errors(module="macro")
 async def get_macro_dashboard():
     """
     BFF endpoint: Returns all macro data aggregated.
@@ -1349,7 +1362,7 @@ async def get_macro_dashboard():
                     logger.debug(f"[Macro Dashboard] Fetched fresh: {name}")
                 return data, False
             except asyncio.TimeoutError:
-                logger.warning(f"[Macro Dashboard] {name} fetch timeout")
+                logger.warning(f"[Macro Dashboard] {name} fetch timeout", exc_info=True)
                 return None, False
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
                 logger.error(f"[HTTP] error: {e}", exc_info=True)
@@ -1586,7 +1599,7 @@ async def warmup_macro_cache():
                 cache.set(cache_key, data, ttl=MACRO_CACHE_DURATION)
                 logger.info(f"[Macro] Warmed up: {name}")
         except Exception as e:
-            logger.warning(f"[Macro] Warmup failed for {name}: {e}")
+            logger.warning(f"[Macro] Warmup failed for {name}: {e}", exc_info=True)
     
     tasks = [
         warmup_indicator(name, INDICATOR_CACHE_KEYS[name], fetch_funcs[name])
@@ -1597,7 +1610,7 @@ async def warmup_macro_cache():
         await asyncio.gather(*tasks, return_exceptions=True)
         logger.info("[Macro] Cache warmup completed")
     except Exception as e:
-        logger.warning(f"[Macro] Cache warmup failed: {e}")
+        logger.warning(f"[Macro] Cache warmup failed: {e}", exc_info=True)
 
 
 

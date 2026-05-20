@@ -6,11 +6,13 @@ Exposes cache and data source metrics in Prometheus text format.
 
 from fastapi import APIRouter, Response
 from app.services.cache_metrics import get_cache_metrics
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter(prefix="/metrics", tags=["monitoring"])
 
 
 @router.get("")
+@handle_errors(module="metrics")
 async def get_metrics():
     """
     Get Prometheus-formatted metrics.

@@ -108,7 +108,7 @@ class BacktestOptimizer:
             from skopt import Optimizer
             from skopt.space import Real, Integer, Categorical
         except ImportError:
-            logger.warning("[Bayesian] scikit-optimize not installed, falling back to random search")
+            logger.warning("[Bayesian] scikit-optimize not installed, falling back to random search", exc_info=True)
             return self._generate_random_variants(max_variants)
 
         if not self.parameter_space:
@@ -240,7 +240,7 @@ class BacktestOptimizer:
 
                 logger.debug(f"[Optimizer] Variant {i+1}/{len(variants)}: score={score:.4f}")
             except Exception as e:
-                logger.warning(f"[Optimizer] Variant {i+1}/{len(variants)} failed: {e}")
+                logger.warning(f"[Optimizer] Variant {i+1}/{len(variants)} failed: {e}", exc_info=True)
                 failed += 1
 
         results.sort(key=lambda x: x.score, reverse=True)

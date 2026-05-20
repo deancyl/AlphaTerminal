@@ -122,7 +122,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "financial", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for financial:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for financial:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing financial for {symbol}: {e}", exc_info=True)
@@ -143,7 +143,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "institution", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for institution:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for institution:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing institution for {symbol}: {e}", exc_info=True)
@@ -164,7 +164,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "forecast", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for forecast:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for forecast:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
@@ -185,7 +185,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "shareholder", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for shareholder:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for shareholder:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing shareholder for {symbol}: {e}", exc_info=True)
@@ -206,7 +206,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "margin", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for margin:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for margin:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing margin for {symbol}: {e}", exc_info=True)
@@ -227,7 +227,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "peers", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for peers:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for peers:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing peers for {symbol}: {e}", exc_info=True)
@@ -248,7 +248,7 @@ class F9Fetcher:
                 self._set_to_cache(symbol, "announcements", data)
             return data
         except CircuitBreakerOpen:
-            logger.warning(f"[F9Fetcher] Circuit breaker open for announcements:{symbol}")
+            logger.warning(f"[F9Fetcher] Circuit breaker open for announcements:{symbol}", exc_info=True)
             return None
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
             logger.error(f"[HTTP]ing announcements for {symbol}: {e}", exc_info=True)
@@ -318,10 +318,10 @@ class F9Fetcher:
                     setattr(result, tab, data)
             except asyncio.TimeoutError:
                 errors.append(f"{tab}: timeout after {timeout}s")
-                logger.warning(f"[F9Fetcher] Timeout for {tab}:{normalized_symbol}")
+                logger.warning(f"[F9Fetcher] Timeout for {tab}:{normalized_symbol}", exc_info=True)
             except CircuitBreakerOpen:
                 errors.append(f"{tab}: circuit breaker open")
-                logger.warning(f"[F9Fetcher] Circuit breaker open for {tab}:{normalized_symbol}")
+                logger.warning(f"[F9Fetcher] Circuit breaker open for {tab}:{normalized_symbol}", exc_info=True)
             except Exception as e:
                 errors.append(f"{tab}: {str(e)}")
                 logger.error(f"[F9Fetcher] Error fetching {tab} for {normalized_symbol}: {e}", exc_info=True)

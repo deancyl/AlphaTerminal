@@ -13,12 +13,14 @@ from datetime import datetime
 from fastapi import APIRouter, Query
 from app.utils.response import success_response, error_response, ErrorCode
 from app.services.fetchers.options_fetcher import options_fetcher
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/options/cffex/chain")
+@handle_errors(module="options")
 async def get_cffex_chain(
     symbol: str = Query("io2506", description="期权品种代码，如 io2506")
 ):
@@ -52,7 +54,7 @@ async def get_cffex_chain(
         })
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Options] CFFEX chain timeout: {symbol}")
+        logger.warning(f"[Options] CFFEX chain timeout: {symbol}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Options] CFFEX chain error: {symbol} - {e}", exc_info=True)
@@ -60,6 +62,7 @@ async def get_cffex_chain(
 
 
 @router.get("/options/greeks")
+@handle_errors(module="options")
 async def get_greeks(
     code: str = Query(..., description="合约代码，如 10004023")
 ):
@@ -100,7 +103,7 @@ async def get_greeks(
         })
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Options] Greeks timeout: {code}")
+        logger.warning(f"[Options] Greeks timeout: {code}", exc_info=True)
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
         logger.error(f"[Options] Greeks error: {code} - {e}", exc_info=True)
@@ -108,6 +111,7 @@ async def get_greeks(
 
 
 @router.get("/options/contracts")
+@handle_errors(module="options")
 async def get_contracts(
     exchange: str = Query("CFFEX", description="交易所代码 (CFFEX/SSE)")
 ):
@@ -133,6 +137,7 @@ async def get_contracts(
 
 
 @router.get("/options/health")
+@handle_errors(module="options")
 async def options_health():
     """期权数据源健康检查"""
     try:

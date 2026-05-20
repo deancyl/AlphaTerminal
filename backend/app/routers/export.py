@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 
 from ..db.database import get_conn
 from ..middleware import require_api_key
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -77,6 +78,7 @@ def _generate_json(data: List[Dict[str, Any]], filename: str) -> StreamingRespon
 
 
 @router.get("/portfolio/{portfolio_id}")
+@handle_errors(module="export")
 async def export_portfolio(
     portfolio_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
@@ -179,6 +181,7 @@ async def export_portfolio(
 
 
 @router.post("/backtest/result")
+@handle_errors(module="export")
 async def export_backtest_result(
     request: Dict[str, Any],
     format: str = Query("excel", regex="^(csv|excel|json)$"),
@@ -252,6 +255,7 @@ async def export_backtest_result(
 
 
 @router.get("/backtest/{backtest_id}")
+@handle_errors(module="export")
 async def export_backtest(
     backtest_id: int,
     format: str = Query("csv", regex="^(csv|excel|json)$"),
@@ -345,6 +349,7 @@ async def export_backtest(
 
 
 @router.post("/screener")
+@handle_errors(module="export")
 async def export_screener(
     filters: Dict[str, Any],
     format: str = Query("csv", regex="^(csv|excel|json)$"),
@@ -378,6 +383,7 @@ async def export_screener(
 
 
 @router.get("/market/history/{symbol}")
+@handle_errors(module="export")
 async def export_market_history(
     symbol: str,
     period: str = Query("daily", regex="^(daily|weekly|monthly)$"),

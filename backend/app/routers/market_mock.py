@@ -3,11 +3,13 @@ Mock 市场数据接口 - Phase 2 前后端联调专用
 """
 from datetime import datetime
 from fastapi import APIRouter
+from app.utils.error_decorator import handle_errors
 
 router = APIRouter()
 
 
 @router.get("/market/overview")
+@handle_errors(module="market_mock")
 async def market_overview():
     """市场概览 Mock 接口"""
     return {
@@ -60,6 +62,7 @@ async def market_overview():
 
 
 @router.get("/market/watchlist")
+@handle_errors(module="market_mock")
 async def watchlist():
     """自选股 Mock 接口"""
     return {

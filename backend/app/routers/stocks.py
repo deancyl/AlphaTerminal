@@ -19,6 +19,7 @@ import pandas as pd
 from app.utils.response import success_response, error_response, ErrorCode
 from app.config.timeout import SEARCH_TIMEOUT, QUOTE_TIMEOUT
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,11 +45,12 @@ def _cache_or_fetch(key, fetch_fn, ttl=TTL):
             _cache.set(cache_key, data, ttl=ttl)
         return data
     except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-        logger.warning(f"[HTTP] failed: {e}")
+        logger.warning(f"[HTTP] failed: {e}", exc_info=True)
         return cached or []
 
 
 @router.get("/limit_up")
+@handle_errors(module="stocks")
 async def get_limit_up():
     def fetch():
         import akshare as ak
@@ -76,7 +78,7 @@ async def get_limit_up():
                            'float_market_cap', 'total_market_cap', 'turnover_rate', 'seal_fund',
                            'first_seal_time', 'last_seal_time', 'board_count', 'industry']].to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
 
     loop = asyncio.get_event_loop()
@@ -87,11 +89,12 @@ async def get_limit_up():
         )
         return success_response({'limit_up': data, 'count': len(data)})
     except asyncio.TimeoutError:
-        logger.warning("[Stocks] limit_up timeout")
+        logger.warning("[Stocks] limit_up timeout", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/limit_down")
+@handle_errors(module="stocks")
 async def get_limit_down():
     def fetch():
         import akshare as ak
@@ -117,7 +120,7 @@ async def get_limit_down():
                            'float_market_cap', 'total_market_cap', 'turnover_rate',
                            'continue_stop', 'open_count', 'industry']].to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
 
     loop = asyncio.get_event_loop()
@@ -128,11 +131,12 @@ async def get_limit_down():
         )
         return success_response({'limit_down': data, 'count': len(data)})
     except asyncio.TimeoutError:
-        logger.warning("[Stocks] limit_down timeout")
+        logger.warning("[Stocks] limit_down timeout", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/unusual")
+@handle_errors(module="stocks")
 async def get_unusual():
     def fetch():
         import akshare as ak
@@ -158,7 +162,7 @@ async def get_unusual():
             result_df = result_df.sort_values('turnover_rate', ascending=False).head(30)
             return result_df.to_dict('records')
         except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-            logger.warning(f"[HTTP] error: {e}")
+            logger.warning(f"[HTTP] error: {e}", exc_info=True)
             return []
 
     loop = asyncio.get_event_loop()
@@ -169,7 +173,7 @@ async def get_unusual():
         )
         return success_response({'unusual': data, 'count': len(data)})
     except asyncio.TimeoutError:
-        logger.warning("[Stocks] unusual timeout")
+        logger.warning("[Stocks] unusual timeout", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
 
 
@@ -197,7 +201,7 @@ def _load_stock_cache():
                     if r['code'] and r['name']:
                         _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SH'})
         except Exception as e:
-            logger.warning(f"[Stocks] SH load error: {e}")
+            logger.warning(f"[Stocks] SH load error: {e}", exc_info=True)
         
         try:
             df_sz = ak.stock_info_sz_name_code()
@@ -210,12 +214,12 @@ def _load_stock_cache():
                     if r['code'] and r['name']:
                         _STOCK_CACHE.append({'code': r['code'], 'name': r['name'], 'market': 'SZ'})
         except Exception as e:
-            logger.warning(f"[Stocks] SZ load error: {e}")
+            logger.warning(f"[Stocks] SZ load error: {e}", exc_info=True)
         
         _STOCK_CACHE_LOADED = True
         logger.info(f"[Stocks] Stock cache loaded: {len(_STOCK_CACHE)} stocks")
     except Exception as e:
-        logger.warning(f"[Stocks] Cache load error: {e}")
+        logger.warning(f"[Stocks] Cache load error: {e}", exc_info=True)
 
 
 # 预加载常用股票（后备）
@@ -283,6 +287,7 @@ def _search_stocks_local(q):
 
 
 @router.get("/search")
+@handle_errors(module="stocks")
 async def search_stocks(q: str = ""):
     logger.info(f"[Stocks] search called with q='{q}'")
     
@@ -297,16 +302,17 @@ async def search_stocks(q: str = ""):
         )
         logger.info(f"[Stocks] search returned {len(results)} results")
     except asyncio.TimeoutError:
-        logger.warning("[Stocks] search timeout")
+        logger.warning("[Stocks] search timeout", exc_info=True)
         return error_response("搜索超时，请稍后重试", code=504)
     except Exception as e:
-        logger.warning(f"[Stocks] search error: {e}")
+        logger.warning(f"[Stocks] search error: {e}", exc_info=True)
         results = []
     
     return success_response({'stocks': results, 'count': len(results)})
 
 
 @router.get("/quote")
+@handle_errors(module="stocks")
 async def get_quote(symbol: str):
     def fetch():
         try:
@@ -491,7 +497,7 @@ async def get_quote(symbol: str):
             
             return result
         except Exception as e:
-            logger.warning(f"[Stocks] quote error for {symbol}: {e}")
+            logger.warning(f"[Stocks] quote error for {symbol}: {e}", exc_info=True)
             return {}
 
     try:
@@ -501,11 +507,12 @@ async def get_quote(symbol: str):
         )
         return success_response(data)
     except asyncio.TimeoutError:
-        logger.warning(f"[Stocks] quote timeout for {symbol}")
+        logger.warning(f"[Stocks] quote timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
 
 
 @router.get("/limit_summary")
+@handle_errors(module="stocks")
 async def get_limit_summary():
     def fetch():
         import akshare as ak
@@ -551,7 +558,7 @@ async def get_limit_summary():
                 ],
             }
         except Exception as e:
-            logger.warning(f"[Stocks] limit_summary error: {e}")
+            logger.warning(f"[Stocks] limit_summary error: {e}", exc_info=True)
             return {'zt_count': 0, 'dt_count': 0, 'market_sentiment': '未知'}
 
     loop = asyncio.get_event_loop()
@@ -562,5 +569,5 @@ async def get_limit_summary():
         )
         return success_response(data)
     except asyncio.TimeoutError:
-        logger.warning("[Stocks] limit_summary timeout")
+        logger.warning("[Stocks] limit_summary timeout", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)

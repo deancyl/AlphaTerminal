@@ -135,7 +135,7 @@ async def fetch_with_fallback(
             continue
         except Exception as e:
             last_error = e
-            logger.warning(f"[fetch_with_fallback] {src} failed: {e}")
+            logger.warning(f"[fetch_with_fallback] {src} failed: {e}", exc_info=True)
             continue
 
     # All sources failed
@@ -193,7 +193,7 @@ async def fetch_by_priority(
             continue
         except Exception as e:
             last_error = e
-            logger.warning(f"[fetch_by_priority] {src} 失败: {e}，尝试下一个数据源")
+            logger.warning(f"[fetch_by_priority] {src} 失败: {e}，尝试下一个数据源", exc_info=True)
             continue
     
     if last_error:

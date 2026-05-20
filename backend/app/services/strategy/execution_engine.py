@@ -478,7 +478,7 @@ class StrategyExecutionEngine:
                                 
                 except Exception as e:
                     self._log_debug(f"ERROR in strategy execution at bar: {e}")
-                    logger.warning(f"Strategy execution error: {e}")
+                    logger.warning(f"Strategy execution error: {e}", exc_info=True)
             
             # Run backtest
             self._log_debug("Running Backtest...")

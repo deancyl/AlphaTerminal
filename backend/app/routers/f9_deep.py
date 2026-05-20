@@ -20,6 +20,7 @@ from app.services.circuit_breaker import CircuitBreakerOpen
 from app.services.data_fetcher import akshare_breaker
 from app.config.timeout import AKSHARE_TIMEOUT
 from app.services.data_cache import get_cache
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/f9", tags=["f9_deep_data"])
@@ -88,6 +89,7 @@ async def run_with_timeout(coro, timeout: float = AKSHARE_TIMEOUT):
 
 # ── 健康检查端点 ─────────────────────────────────────────────────
 @router.get("/health")
+@handle_errors(module="f9_deep")
 async def health_check():
     """
     F9 深度数据服务健康检查
@@ -97,6 +99,7 @@ async def health_check():
 
 # ── 股东研究端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/shareholder")
+@handle_errors(module="f9_deep")
 async def get_shareholder_data(symbol: str):
     """
     股东研究数据
@@ -138,13 +141,13 @@ async def get_shareholder_data(symbol: str):
                         'holders': latest_df[['股东名称', '持股数量', '占流通股比例', '股本性质']].to_dict('records')
                     }
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
                     return None
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in circulate holders: {e}")
+                    logger.warning(f"[shareholder] Data processing error in circulate holders: {e}", exc_info=True)
                     return None
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                    logger.warning(f"[HTTP] circulate holders: {e}")
+                    logger.warning(f"[HTTP] circulate holders: {e}", exc_info=True)
                     return None
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -170,13 +173,13 @@ async def get_shareholder_data(symbol: str):
                     
                     return changes
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
                     return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in share changes: {e}")
+                    logger.warning(f"[shareholder] Data processing error in share changes: {e}", exc_info=True)
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                    logger.warning(f"[HTTP] share changes: {e}")
+                    logger.warning(f"[HTTP] share changes: {e}", exc_info=True)
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -200,13 +203,13 @@ async def get_shareholder_data(symbol: str):
                         changes.append(change)
                     return changes[:20]  # 最近20条
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[shareholder] Circuit breaker OPEN: {e}", exc_info=True)
                     return []
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
-                    logger.warning(f"[shareholder] Data processing error in holder changes: {e}")
+                    logger.warning(f"[shareholder] Data processing error in holder changes: {e}", exc_info=True)
                     return []
                 except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                    logger.warning(f"[HTTP] holder changes: {e}")
+                    logger.warning(f"[HTTP] holder changes: {e}", exc_info=True)
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -232,7 +235,7 @@ async def get_shareholder_data(symbol: str):
         return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[shareholder] Timeout for {symbol}")
+        logger.warning(f"[shareholder] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[shareholder] Data processing error for {symbol}: {e}", exc_info=True)
@@ -244,6 +247,7 @@ async def get_shareholder_data(symbol: str):
 
 # ── 融资融券端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/margin")
+@handle_errors(module="f9_deep")
 async def get_margin_data(symbol: str):
     """
     获取个股融资融券数据（最近30天）
@@ -321,7 +325,7 @@ async def get_margin_data(symbol: str):
                             if len(all_data) >= 30:
                                 break
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Margin] Circuit breaker OPEN: {e}")
+                logger.warning(f"[Margin] Circuit breaker OPEN: {e}", exc_info=True)
                 break
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Margin] Data processing error for {symbol} on {date}: {e}")
@@ -356,7 +360,7 @@ async def get_margin_data(symbol: str):
         return success_response(result)
 
     except asyncio.TimeoutError:
-        logger.warning(f"[Margin] Timeout for {symbol}")
+        logger.warning(f"[Margin] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Margin] Data processing error for {symbol}: {e}", exc_info=True)
@@ -368,6 +372,7 @@ async def get_margin_data(symbol: str):
 
 # ── 财务摘要端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/financial")
+@handle_errors(module="f9_deep")
 async def get_financial_data(symbol: str):
     """
     获取股票财务指标数据
@@ -458,10 +463,10 @@ async def get_financial_data(symbol: str):
         return success_response(result)
 
     except asyncio.TimeoutError:
-        logger.warning(f"[F9] Timeout for financial {symbol}")
+        logger.warning(f"[F9] Timeout for financial {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[F9] Circuit breaker OPEN for financial {symbol}: {e}")
+        logger.warning(f"[F9] Circuit breaker OPEN for financial {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[F9] Data processing error for financial data {symbol}: {e}", exc_info=True)
@@ -481,6 +486,7 @@ async def get_financial_data(symbol: str):
 
 # ── 盈利预测端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/forecast")
+@handle_errors(module="f9_deep")
 async def get_profit_forecast(symbol: str):
     """
     盈利预测数据
@@ -542,10 +548,10 @@ async def get_profit_forecast(symbol: str):
         return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[F9] Timeout for forecast {symbol}")
+        logger.warning(f"[F9] Timeout for forecast {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}")
+        logger.warning(f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[F9] Data processing error for forecast {symbol}: {e}", exc_info=True)
@@ -557,6 +563,7 @@ async def get_profit_forecast(symbol: str):
 
 # ── 机构持股端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/institution")
+@handle_errors(module="f9_deep")
 async def get_institution_holdings(symbol: str):
     """
     获取机构持股数据
@@ -613,7 +620,7 @@ async def get_institution_holdings(symbol: str):
                         logger.info(f"[Institution] Found data for quarter {quarter_str}")
                         return df.to_dict('records'), quarter_str
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}", exc_info=True)
                     return [], current_quarter_str
                 except (KeyError, ValueError, TypeError) as e:
                     logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
@@ -659,7 +666,7 @@ async def get_institution_holdings(symbol: str):
                             "total_pct": round(total_pct, 2)
                         })
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[Institution] Circuit breaker OPEN: {e}", exc_info=True)
                     break
                 except (KeyError, ValueError, TypeError) as e:
                     logger.debug(f"[Institution] Data processing error for {quarter_str}: {e}")
@@ -693,10 +700,10 @@ async def get_institution_holdings(symbol: str):
         return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Institution] Timeout for {symbol}")
+        logger.warning(f"[Institution] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[Institution] Circuit breaker OPEN for {symbol}: {e}")
+        logger.warning(f"[Institution] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Institution] Data processing error for {symbol}: {e}", exc_info=True)
@@ -708,6 +715,7 @@ async def get_institution_holdings(symbol: str):
 
 # ── 同业比较端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/peers")
+@handle_errors(module="f9_deep")
 async def get_peer_comparison(symbol: str):
     """
     获取同业比较数据
@@ -765,7 +773,7 @@ async def get_peer_comparison(symbol: str):
                     info_dict['行业'] = row.get('所属行业', '')
                     info_dict['主营业务'] = row.get('主营业务', '')
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Peers] Circuit breaker OPEN: {e}")
+                logger.warning(f"[Peers] Circuit breaker OPEN: {e}", exc_info=True)
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Peers] Data processing error in stock_profile_cninfo: {e}")
             except Exception as e:
@@ -780,11 +788,11 @@ async def get_peer_comparison(symbol: str):
                             if row['item'] not in info_dict or not info_dict[row['item']]:
                                 info_dict[row['item']] = row['value']
                 except CircuitBreakerOpen as e:
-                    logger.warning(f"[Peers] Circuit breaker OPEN: {e}")
+                    logger.warning(f"[Peers] Circuit breaker OPEN: {e}", exc_info=True)
                 except (KeyError, ValueError, TypeError) as e:
-                    logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}")
+                    logger.warning(f"[Peers] Data processing error in stock_individual_info_em: {e}", exc_info=True)
                 except Exception as e:
-                    logger.warning(f"[Peers] stock_individual_info_em failed: {e}")
+                    logger.warning(f"[Peers] stock_individual_info_em failed: {e}", exc_info=True)
             
             return info_dict
         
@@ -833,10 +841,10 @@ async def get_peer_comparison(symbol: str):
                 return result
                 
             except (KeyError, ValueError, TypeError, AttributeError) as e:
-                logger.warning(f"[Peers] Data processing error in BaoStock: {e}")
+                logger.warning(f"[Peers] Data processing error in BaoStock: {e}", exc_info=True)
                 return []
             except Exception as e:
-                logger.warning(f"[Peers] BaoStock failed: {e}")
+                logger.warning(f"[Peers] BaoStock failed: {e}", exc_info=True)
                 return []
         
         def fetch_financial_indicator(stock_symbol):
@@ -853,7 +861,7 @@ async def get_peer_comparison(symbol: str):
                     }
                 return None
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Peers] Circuit breaker OPEN for {stock_symbol}: {e}")
+                logger.warning(f"[Peers] Circuit breaker OPEN for {stock_symbol}: {e}", exc_info=True)
                 return None
             except (KeyError, ValueError, TypeError) as e:
                 logger.debug(f"[Peers] Data processing error for financial {stock_symbol}: {e}")
@@ -973,10 +981,10 @@ async def get_peer_comparison(symbol: str):
         return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Peers] Timeout for {symbol}")
+        logger.warning(f"[Peers] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[Peers] Circuit breaker OPEN for {symbol}: {e}")
+        logger.warning(f"[Peers] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True)
@@ -988,6 +996,7 @@ async def get_peer_comparison(symbol: str):
 
 # ── 公司公告端点 ─────────────────────────────────────────────────
 @router.get("/{symbol}/announcements")
+@handle_errors(module="f9_deep")
 async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
     """
     获取公司公告数据
@@ -1038,13 +1047,13 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
                 
                 return all_announcements
             except CircuitBreakerOpen as e:
-                logger.warning(f"[Announcements] Circuit breaker OPEN: {e}")
+                logger.warning(f"[Announcements] Circuit breaker OPEN: {e}", exc_info=True)
                 return []
             except (KeyError, ValueError, TypeError) as e:
-                logger.warning(f"[Announcements] Data processing error for {symbol}: {e}")
+                logger.warning(f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True)
                 return []
             except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
-                logger.warning(f"[HTTP] for {symbol}: {e}")
+                logger.warning(f"[HTTP] for {symbol}: {e}", exc_info=True)
                 return []
         
         loop = asyncio.get_event_loop()
@@ -1071,10 +1080,10 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         return success_response(result)
         
     except asyncio.TimeoutError:
-        logger.warning(f"[Announcements] Timeout for {symbol}")
+        logger.warning(f"[Announcements] Timeout for {symbol}", exc_info=True)
         return error_response("请求超时，请稍后重试", code=504)
     except CircuitBreakerOpen as e:
-        logger.warning(f"[Announcements] Circuit breaker OPEN for {symbol}: {e}")
+        logger.warning(f"[Announcements] Circuit breaker OPEN for {symbol}: {e}", exc_info=True)
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True)
@@ -1089,6 +1098,7 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
 # ═══════════════════════════════════════════════════════════════
 
 @router.get("/circuit_breaker/status")
+@handle_errors(module="f9_deep")
 async def get_circuit_breaker_status():
     """获取 akshare 熔断器状态"""
     from app.services.circuit_breaker import CircuitState
@@ -1107,6 +1117,7 @@ async def get_circuit_breaker_status():
 
 
 @router.post("/circuit_breaker/reset")
+@handle_errors(module="f9_deep")
 async def reset_circuit_breaker():
     """重置 akshare 熔断器"""
     try:

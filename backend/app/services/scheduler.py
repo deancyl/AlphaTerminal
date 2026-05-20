@@ -160,7 +160,7 @@ def _broadcast_realtime_ticks():
         t = threading.Thread(target=_sync_broadcast, daemon=True)
         t.start()
     except Exception as e:
-        logger.warning(f"[Scheduler] WS 广播异常（不阻塞主循环）: {e}")
+        logger.warning(f"[Scheduler] WS 广播异常（不阻塞主循环）: {e}", exc_info=True)
 
 
 def flush_write_buffer_and_broadcast():
@@ -284,7 +284,7 @@ def start_scheduler():
                 rows = fetch_china_index_history(sym)
                 logger.debug(f"[Scheduler] 今日K线 {sym}: {len(rows)} rows, latest={rows[-1]['date'] if rows else 'N/A'}")
             except Exception as e:
-                logger.warning(f"[Scheduler] 今日K线 {sym} 刷新失败: {e}")
+                logger.warning(f"[Scheduler] 今日K线 {sym} 刷新失败: {e}", exc_info=True)
 
     scheduler.add_job(
         _refresh_today_daily,
@@ -303,7 +303,7 @@ def start_scheduler():
             refresh_today_from_minute()
             refresh_period_klines()  # 周线/月线同步刷新
         except Exception as e:
-            logger.warning(f"[Scheduler] 实时K线刷新失败: {e}")
+            logger.warning(f"[Scheduler] 实时K线刷新失败: {e}", exc_info=True)
 
     scheduler.add_job(
         _realtime_daily_job,
@@ -678,7 +678,7 @@ def _memory_monitor():
         else:
             logger.debug(f"[MemoryMonitor] 内存使用正常: {mem_mb:.1f}MB")
     except Exception as e:
-        logger.warning(f"[MemoryMonitor] 监控异常: {e}")
+        logger.warning(f"[MemoryMonitor] 监控异常: {e}", exc_info=True)
 
 
 def _bond_polling_job():

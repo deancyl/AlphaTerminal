@@ -21,7 +21,7 @@ try:
     HAS_PSUTIL = True
 except ImportError:
     HAS_PSUTIL = False
-    logger.warning("[BacktestWorkerRegistry] psutil not installed, CPU/memory metrics will be unavailable")
+    logger.warning("[BacktestWorkerRegistry] psutil not installed, CPU/memory metrics will be unavailable", exc_info=True)
 
 
 @dataclass
@@ -335,7 +335,7 @@ class BacktestWorkerRegistry:
             try:
                 await client.send_json(message)
             except Exception as e:
-                logger.warning(f"[BacktestWorkerRegistry] Failed to send to WS client: {e}")
+                logger.warning(f"[BacktestWorkerRegistry] Failed to send to WS client: {e}", exc_info=True)
                 self.remove_ws_client(client)
 
 

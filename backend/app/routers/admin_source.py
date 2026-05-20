@@ -8,6 +8,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional, List, Dict
 from app.services.fetcher_factory import FetcherFactory, get_market_fetcher
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -35,6 +36,7 @@ class HealthStatus(BaseModel):
 # ── 路由 ────────────────────────────────────────────────────────────────
 
 @router.get("/admin/data-sources")
+@handle_errors(module="admin_source")
 async def list_data_sources():
     """列出所有可用的数据源"""
     try:
@@ -63,6 +65,7 @@ async def list_data_sources():
 
 
 @router.post("/admin/data-sources/switch")
+@handle_errors(module="admin_source")
 async def switch_data_source(name: str):
     """切换当前数据源"""
     try:
@@ -84,6 +87,7 @@ async def switch_data_source(name: str):
 
 
 @router.post("/admin/data-sources/health-check")
+@handle_errors(module="admin_source")
 async def health_check_source(name: Optional[str] = None):
     """健康检查指定数据源或当前数据源"""
     try:
@@ -113,6 +117,7 @@ async def health_check_source(name: Optional[str] = None):
 
 
 @router.get("/admin/data-sources/status")
+@handle_errors(module="admin_source")
 async def get_source_status():
     """获取数据源整体状态"""
     try:
@@ -139,6 +144,7 @@ async def get_source_status():
 
 
 @router.post("/admin/data-sources/reset/{name}")
+@handle_errors(module="admin_source")
 async def reset_circuit_breaker(name: str):
     """重置指定数据源的熔断器"""
     try:

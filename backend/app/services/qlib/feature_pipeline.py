@@ -99,14 +99,14 @@ class FeaturePipeline:
                     col_name = f"{name}_{window}"
                     features[col_name] = feature_values
                 except Exception as e:
-                    logger.warning(f"[FeaturePipeline] Failed to calculate {name}_{window}: {e}")
+                    logger.warning(f"[FeaturePipeline] Failed to calculate {name}_{window}: {e}", exc_info=True)
         
         if custom_features:
             for name, func in custom_features.items():
                 try:
                     features[name] = func(df)
                 except Exception as e:
-                    logger.warning(f"[FeaturePipeline] Failed to calculate custom feature {name}: {e}")
+                    logger.warning(f"[FeaturePipeline] Failed to calculate custom feature {name}: {e}", exc_info=True)
         
         features["$close"] = df["close"]
         features["$volume"] = df["volume"] if "volume" in df.columns else 0

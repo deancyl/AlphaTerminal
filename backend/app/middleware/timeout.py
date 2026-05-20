@@ -67,7 +67,8 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
         except asyncio.TimeoutError:
             logger.warning(
                 f"[TimeoutMiddleware] Request {request.method} {request.url.path} "
-                f"exceeded {self.timeout}s timeout"
+                f"exceeded {self.timeout}s timeout",
+                exc_info=True
             )
             return JSONResponse(
                 status_code=504,

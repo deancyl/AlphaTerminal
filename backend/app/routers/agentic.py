@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from app.services.agentic.workflow_engine import get_workflow_engine, Workflow, WorkflowStatus
 from app.services.agentic.tool_registry import get_tool_registry
 from app.utils.response import success_response, error_response
+from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,6 +39,7 @@ class WorkflowResponse(BaseModel):
 
 
 @router.get("/tools")
+@handle_errors(module="agentic")
 async def list_tools():
     """
     List all available tools.
@@ -55,6 +57,7 @@ async def list_tools():
 
 
 @router.post("/workflow")
+@handle_errors(module="agentic")
 async def create_workflow(
     request: WorkflowRequest,
     background_tasks: BackgroundTasks
@@ -103,6 +106,7 @@ async def create_workflow(
 
 
 @router.get("/workflow/{workflow_id}")
+@handle_errors(module="agentic")
 async def get_workflow_status(workflow_id: str):
     """
     Get workflow status and results.
@@ -123,6 +127,7 @@ async def get_workflow_status(workflow_id: str):
 
 
 @router.post("/workflow/{workflow_id}/execute")
+@handle_errors(module="agentic")
 async def execute_workflow(
     workflow_id: str,
     background_tasks: BackgroundTasks
@@ -163,6 +168,7 @@ async def execute_workflow(
 
 
 @router.get("/workflows")
+@handle_errors(module="agentic")
 async def list_workflows(limit: int = 20):
     """
     List recent workflows.
@@ -183,6 +189,7 @@ async def list_workflows(limit: int = 20):
 
 
 @router.get("/health")
+@handle_errors(module="agentic")
 async def health_check():
     """Health check endpoint"""
     registry = get_tool_registry()
