@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useFocusTrap } from '../composables/useFocusTrap.js'
@@ -294,5 +294,11 @@ watch(() => props.visible, (v) => { if (v) fetchHistory() })
 watch(() => props.tenor,   ()  => { if (props.visible) debouncedFetchHistory() })
 watch(() => props.period,  ()  => { if (props.visible) debouncedFetchHistory() })
 
-onUnmounted(() => { safeDispose(chartInst.value); chartInst.value = null; abort() })
+onBeforeUnmount(() => {
+  if (chartInst.value && !chartInst.value.isDisposed()) {
+    chartInst.value.dispose()
+    chartInst.value = null
+  }
+  abort()
+})
 </script>

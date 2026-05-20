@@ -113,7 +113,7 @@ class FactorRegistry:
         try:
             return factor.calc_func(data, **factor.params)
         except Exception as e:
-            logger.error(f"[FactorRegistry] Error calculating factor {factor_id}: {e}")
+            logger.error(f"[FactorRegistry] Error calculating factor {factor_id}: {e}", exc_info=True)
             return None
     
     def _register_default_factors(self) -> None:

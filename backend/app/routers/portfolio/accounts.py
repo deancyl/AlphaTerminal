@@ -89,7 +89,7 @@ async def create_portfolio(body: PortfolioIn, _: None = Depends(require_api_key)
                 logger.warning("[accounts] create_portfolio integrity error: %s", e)
                 raise HTTPException(400, f"数据完整性错误: {e}")
             except sqlite3.OperationalError as e:
-                logger.error("[accounts] create_portfolio operational error: %s", e)
+                logger.error("[accounts] create_portfolio operational error: %s", e, exc_info=True)
                 raise HTTPException(500, f"数据库操作错误: {e}")
             except ValueError as e:
                 logger.warning("[accounts] create_portfolio value error: %s", e)

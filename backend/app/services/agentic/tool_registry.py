@@ -130,7 +130,7 @@ class ToolRegistry:
                 "tool": tool_name
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] Tool execution failed: {tool_name}, {e}")
+            logger.error(f"[ToolRegistry] Tool execution failed: {tool_name}, {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -249,7 +249,7 @@ class ToolRegistry:
                 "market_cap": quote.get("market_cap"),
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_quote error: {e}")
+            logger.error(f"[ToolRegistry] get_quote error: {e}", exc_info=True)
             return {"error": str(e)}
     
     def _get_news(self, symbol: Optional[str] = None, limit: int = 10) -> Dict[str, Any]:
@@ -294,7 +294,7 @@ class ToolRegistry:
                 "news": news_list
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_news error: {e}")
+            logger.error(f"[ToolRegistry] get_news error: {e}", exc_info=True)
             return {"error": str(e), "count": 0, "news": []}
     
     def _get_financial(self, symbol: str) -> Dict[str, Any]:
@@ -317,7 +317,7 @@ class ToolRegistry:
                         "data": latest,
                         "history": df.tail(8).to_dict(orient="records") if len(df) >= 8 else df.to_dict(orient="records")
                     }
-            except Exception:
+            except (ValueError, KeyError, AttributeError):
                 pass
             
             return {
@@ -326,7 +326,7 @@ class ToolRegistry:
                 "history": []
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_financial error: {e}")
+            logger.error(f"[ToolRegistry] get_financial error: {e}", exc_info=True)
             return {"error": str(e), "symbol": symbol, "data": {}, "history": []}
     
     def _get_kline(self, symbol: str, period: str = "daily", limit: int = 60) -> Dict[str, Any]:
@@ -364,7 +364,7 @@ class ToolRegistry:
                 "data": []
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_kline error: {e}")
+            logger.error(f"[ToolRegistry] get_kline error: {e}", exc_info=True)
             return {"error": str(e), "symbol": symbol, "count": 0, "data": []}
     
     def _search_stocks(self, keyword: str, limit: int = 10) -> Dict[str, Any]:
@@ -397,7 +397,7 @@ class ToolRegistry:
                 "stocks": stocks
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] search_stocks error: {e}")
+            logger.error(f"[ToolRegistry] search_stocks error: {e}", exc_info=True)
             return {"error": str(e), "keyword": keyword, "count": 0, "stocks": []}
     
     def _get_sector_stocks(self, sector: str) -> Dict[str, Any]:
@@ -423,7 +423,7 @@ class ToolRegistry:
                 "error": f"Sector not found: {sector}"
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_sector_stocks error: {e}")
+            logger.error(f"[ToolRegistry] get_sector_stocks error: {e}", exc_info=True)
             return {"error": str(e), "sector": sector, "count": 0, "stocks": []}
     
     def _get_macro_data(self, indicator: str) -> Dict[str, Any]:
@@ -455,7 +455,7 @@ class ToolRegistry:
                         "latest": df.iloc[-1].to_dict() if len(df) > 0 else {},
                         "history": df.tail(12).to_dict(orient="records")
                     }
-            except Exception:
+            except (ValueError, KeyError, AttributeError):
                 pass
             
             return {
@@ -465,7 +465,7 @@ class ToolRegistry:
                 "history": []
             }
         except Exception as e:
-            logger.error(f"[ToolRegistry] get_macro_data error: {e}")
+            logger.error(f"[ToolRegistry] get_macro_data error: {e}", exc_info=True)
             return {"error": str(e), "indicator": indicator}
 
 

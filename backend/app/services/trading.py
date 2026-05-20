@@ -165,7 +165,7 @@ def execute_sell(
     except Exception as e:
         if manage_transaction:
             conn.rollback()
-        logger.error(f"[Trading] execute_sell rollback due to error: {e}")
+        logger.error(f"[Trading] execute_sell rollback due to error: {e}", exc_info=True)
         raise
     else:
         if manage_transaction:
@@ -267,7 +267,7 @@ def execute_buy(
     except Exception as e:
         if manage_transaction:
             conn.rollback()
-        logger.error(f"[Trading] execute_buy rollback due to error: {e}")
+        logger.error(f"[Trading] execute_buy rollback due to error: {e}", exc_info=True)
         raise
     finally:
         # 仅关闭本函数创建的连接

@@ -112,7 +112,7 @@ def create_strategy(
             logger.error(f"[StrategyDB] Create failed - duplicate id: {strategy_id}")
             raise ValueError(f"Strategy with id {strategy_id} already exists")
         except Exception as e:
-            logger.error(f"[StrategyDB] Create failed: {e}")
+            logger.error(f"[StrategyDB] Create failed: {e}", exc_info=True)
             raise
         finally:
             conn.close()
@@ -140,7 +140,7 @@ def get_strategy(strategy_id: str) -> Optional[Dict[str, Any]]:
         
         return _row_to_dict(row)
     except Exception as e:
-        logger.error(f"[StrategyDB] Get failed: {e}")
+        logger.error(f"[StrategyDB] Get failed: {e}", exc_info=True)
         return None
     finally:
         conn.close()
@@ -189,7 +189,7 @@ def list_strategies(
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
-        logger.error(f"[StrategyDB] List failed: {e}")
+        logger.error(f"[StrategyDB] List failed: {e}", exc_info=True)
         return []
     finally:
         conn.close()
@@ -268,7 +268,7 @@ def update_strategy(
             
             return get_strategy(strategy_id)
         except Exception as e:
-            logger.error(f"[StrategyDB] Update failed: {e}")
+            logger.error(f"[StrategyDB] Update failed: {e}", exc_info=True)
             raise
         finally:
             conn.close()
@@ -304,7 +304,7 @@ def delete_strategy(strategy_id: str, soft_delete: bool = True) -> bool:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            logger.error(f"[StrategyDB] Delete failed: {e}")
+            logger.error(f"[StrategyDB] Delete failed: {e}", exc_info=True)
             return False
         finally:
             conn.close()
@@ -330,7 +330,7 @@ def restore_strategy(strategy_id: str) -> bool:
             conn.commit()
             return cursor.rowcount > 0
         except Exception as e:
-            logger.error(f"[StrategyDB] Restore failed: {e}")
+            logger.error(f"[StrategyDB] Restore failed: {e}", exc_info=True)
             return False
         finally:
             conn.close()
@@ -366,7 +366,7 @@ def count_strategies(market: Optional[str] = None, include_deleted: bool = False
         
         return row["cnt"] if row else 0
     except Exception as e:
-        logger.error(f"[StrategyDB] Count failed: {e}")
+        logger.error(f"[StrategyDB] Count failed: {e}", exc_info=True)
         return 0
     finally:
         conn.close()

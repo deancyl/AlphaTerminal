@@ -10,7 +10,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
@@ -114,9 +114,10 @@ let ro = null
 onMounted(() => {
   if (chartRef.value) { ro = createResizeObserver(chartInstance); ro.observe(chartRef.value) }
 })
-onUnmounted(() => {
+onBeforeUnmount(() => {
   ro && ro.disconnect()
-  if (chartInstance) {
+  ro = null
+  if (chartInstance && !chartInstance.isDisposed()) {
     chartInstance.dispose()
     chartInstance = null
   }

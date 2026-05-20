@@ -185,7 +185,7 @@ async def validate_strategy_code(request: CodeValidateRequest):
             security_score=security_score,
         )
     except Exception as e:
-        logger.error(f"[Strategy] Validation error: {e}")
+        logger.error(f"[Strategy] Validation error: {e}", exc_info=True)
         return CodeValidateResponse(
             is_valid=False,
             errors=[f"Validation failed: {str(e)}"],
@@ -398,7 +398,7 @@ async def compile_strategy(request: CompileRequest):
             }
         }
     except Exception as e:
-        logger.error(f"[Strategy] Compile error: {e}")
+        logger.error(f"[Strategy] Compile error: {e}", exc_info=True)
         return {
             "code": 0,
             "data": {
@@ -548,7 +548,7 @@ async def run_backtest(request: BacktestRequest, _: None = Depends(require_api_k
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[Strategy] Backtest error: {e}")
+        logger.error(f"[Strategy] Backtest error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -605,7 +605,7 @@ async def optimize_strategy(request: OptimizeRequest, _: None = Depends(require_
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[Strategy] Optimize error: {e}")
+        logger.error(f"[Strategy] Optimize error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

@@ -143,8 +143,8 @@ async def get_shareholder_data(symbol: str):
                 except (KeyError, ValueError, TypeError) as e:
                     logger.warning(f"[shareholder] Data processing error in circulate holders: {e}")
                     return None
-                except Exception as e:
-                    logger.warning(f"[shareholder] Failed to fetch circulate holders: {e}")
+                except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] circulate holders: {e}")
                     return None
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -175,8 +175,8 @@ async def get_shareholder_data(symbol: str):
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
                     logger.warning(f"[shareholder] Data processing error in share changes: {e}")
                     return []
-                except Exception as e:
-                    logger.warning(f"[shareholder] Failed to fetch share changes: {e}")
+                except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] share changes: {e}")
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -205,8 +205,8 @@ async def get_shareholder_data(symbol: str):
                 except (KeyError, ValueError, TypeError, AttributeError) as e:
                     logger.warning(f"[shareholder] Data processing error in holder changes: {e}")
                     return []
-                except Exception as e:
-                    logger.warning(f"[shareholder] Failed to fetch holder changes: {e}")
+                except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] holder changes: {e}")
                     return []
             return await loop.run_in_executor(_executor, _fetch)
         
@@ -235,10 +235,10 @@ async def get_shareholder_data(symbol: str):
         logger.warning(f"[shareholder] Timeout for {symbol}")
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[shareholder] Data processing error for {symbol}: {e}")
+        logger.error(f"[shareholder] Data processing error for {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"[shareholder] Error fetching data for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取股东数据失败: {str(e)}")
 
 
@@ -359,10 +359,10 @@ async def get_margin_data(symbol: str):
         logger.warning(f"[Margin] Timeout for {symbol}")
         return error_response("请求超时，请稍后重试", code=504)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Margin] Data processing error for {symbol}: {e}")
+        logger.error(f"[Margin] Data processing error for {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}", code=500)
-    except Exception as e:
-        logger.error(f"[Margin] Error fetching margin data for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing margin data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取融资融券数据失败: {str(e)}", code=500)
 
 
@@ -470,8 +470,8 @@ async def get_financial_data(symbol: str):
             "latest": {},
             "trend": []
         })
-    except Exception as e:
-        logger.error(f"[F9] Error fetching financial data for {symbol}: {e}", exc_info=True)
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing financial data for {symbol}: {e}", exc_info=True)
         return success_response({
             "indicators": [],
             "latest": {},
@@ -548,10 +548,10 @@ async def get_profit_forecast(symbol: str):
         logger.warning(f"[F9] Circuit breaker OPEN for forecast {symbol}: {e}")
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[F9] Data processing error for forecast {symbol}: {e}")
+        logger.error(f"[F9] Data processing error for forecast {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"[F9] Error fetching forecast for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
         return error_response(f"获取盈利预测数据失败: {str(e)}")
 
 
@@ -699,10 +699,10 @@ async def get_institution_holdings(symbol: str):
         logger.warning(f"[Institution] Circuit breaker OPEN for {symbol}: {e}")
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Institution] Data processing error for {symbol}: {e}")
+        logger.error(f"[Institution] Data processing error for {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"[Institution] Error fetching data for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取机构持股数据失败: {str(e)}")
 
 
@@ -981,8 +981,8 @@ async def get_peer_comparison(symbol: str):
     except (KeyError, ValueError, TypeError) as e:
         logger.error(f"[Peers] Data processing error for peer data {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"[Peers] Error fetching peer data for {symbol}: {e}", exc_info=True)
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing peer data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取同业比较数据失败: {str(e)}")
 
 
@@ -1043,8 +1043,8 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
             except (KeyError, ValueError, TypeError) as e:
                 logger.warning(f"[Announcements] Data processing error for {symbol}: {e}")
                 return []
-            except Exception as e:
-                logger.warning(f"[Announcements] Failed to fetch for {symbol}: {e}")
+            except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] for {symbol}: {e}")
                 return []
         
         loop = asyncio.get_event_loop()
@@ -1077,10 +1077,10 @@ async def get_announcements(symbol: str, page: int = 1, page_size: int = 20):
         logger.warning(f"[Announcements] Circuit breaker OPEN for {symbol}: {e}")
         return error_response("数据源暂时不可用，请稍后重试", code=503)
     except (KeyError, ValueError, TypeError) as e:
-        logger.error(f"[Announcements] Data processing error for {symbol}: {e}")
+        logger.error(f"[Announcements] Data processing error for {symbol}: {e}", exc_info=True)
         return error_response(f"数据处理失败: {str(e)}")
-    except Exception as e:
-        logger.error(f"[Announcements] Error fetching data for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing data for {symbol}: {e}", exc_info=True)
         return error_response(f"获取公司公告数据失败: {str(e)}")
 
 
@@ -1118,5 +1118,5 @@ async def reset_circuit_breaker():
             "message": "熔断器已重置"
         })
     except Exception as e:
-        logger.error(f"[F9] Failed to reset circuit breaker: {e}")
+        logger.error(f"[F9] Failed to reset circuit breaker: {e}", exc_info=True)
         return error_response(f"重置熔断器失败: {str(e)}")

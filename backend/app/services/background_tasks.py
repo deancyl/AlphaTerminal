@@ -211,7 +211,7 @@ class BackgroundTaskManager:
                     "data": task.to_dict()
                 })
             except Exception as e:
-                logger.error(f"[BackgroundTask] Broadcast failed: {e}")
+                logger.error(f"[BackgroundTask] Broadcast failed: {e}", exc_info=True)
     
     def cleanup_completed_tasks(self, max_age_hours: int = 24) -> int:
         """

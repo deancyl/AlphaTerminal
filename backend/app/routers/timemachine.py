@@ -312,7 +312,7 @@ async def get_history(
         })
         
     except Exception as e:
-        logger.error(f"[TimeMachine] Failed to get history for {symbol}: {e}")
+        logger.error(f"[TimeMachine] Failed to get history for {symbol}: {e}", exc_info=True)
         return error_response(f"Failed to get history: {str(e)}")
 
 
@@ -356,7 +356,7 @@ async def create_session(request: SessionCreateRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[TimeMachine] Failed to create session: {e}")
+        logger.error(f"[TimeMachine] Failed to create session: {e}", exc_info=True)
         return error_response(f"Failed to create session: {str(e)}")
 
 

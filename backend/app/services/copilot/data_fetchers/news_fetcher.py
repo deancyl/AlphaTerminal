@@ -130,7 +130,7 @@ class NewsFetcher:
                 error=f"新闻获取超时 ({timeout}秒)"
             )
         except Exception as e:
-            logger.error(f"[NewsFetcher] 获取失败: {e}")
+            logger.error(f"[NewsFetcher] 获取失败: {e}", exc_info=True)
             return NewsDataResult(
                 news_items=[],
                 error=f"新闻获取失败: {str(e)}"
@@ -188,7 +188,7 @@ class NewsFetcher:
         except asyncio.TimeoutError:
             raise
         except Exception as e:
-            logger.error(f"[NewsFetcher] 通用新闻获取失败: {e}")
+            logger.error(f"[NewsFetcher] 通用新闻获取失败: {e}", exc_info=True)
             raise
     
     async def _fetch_symbol_news(
@@ -263,7 +263,7 @@ class NewsFetcher:
         except asyncio.TimeoutError:
             raise
         except Exception as e:
-            logger.error(f"[NewsFetcher] {symbol} 新闻获取失败: {e}")
+            logger.error(f"[NewsFetcher] {symbol} 新闻获取失败: {e}", exc_info=True)
             # 降级到通用新闻
             logger.info(f"[NewsFetcher] 降级到通用新闻")
             return await self._fetch_general_news(limit, timeout)

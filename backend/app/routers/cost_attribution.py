@@ -395,7 +395,7 @@ async def get_sankey_data(
         )
         return {"code": 0, "data": result}
     except Exception as e:
-        logger.error(f"[CostAttribution] Error getting Sankey data: {e}")
+        logger.error(f"[CostAttribution] Error getting Sankey data: {e}", exc_info=True)
         return {"code": 1, "error": str(e)}
 
 
@@ -418,7 +418,7 @@ async def get_prompt_tree(
         )
         return {"code": 0, "data": result}
     except Exception as e:
-        logger.error(f"[CostAttribution] Error getting prompt tree: {e}")
+        logger.error(f"[CostAttribution] Error getting prompt tree: {e}", exc_info=True)
         return {"code": 1, "error": str(e)}
 
 
@@ -447,7 +447,7 @@ async def get_cost_breakdown(
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
-        logger.error(f"[CostAttribution] Error getting breakdown: {e}")
+        logger.error(f"[CostAttribution] Error getting breakdown: {e}", exc_info=True)
         return {"code": 1, "error": str(e)}
 
 
@@ -472,7 +472,7 @@ async def get_sessions_list(
         )
         return {"code": 0, "data": result, "count": len(result)}
     except Exception as e:
-        logger.error(f"[CostAttribution] Error getting sessions: {e}")
+        logger.error(f"[CostAttribution] Error getting sessions: {e}", exc_info=True)
         return {"code": 1, "error": str(e)}
 
 

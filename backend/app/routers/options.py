@@ -55,7 +55,7 @@ async def get_cffex_chain(
         logger.warning(f"[Options] CFFEX chain timeout: {symbol}")
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
-        logger.error(f"[Options] CFFEX chain error: {symbol} - {e}")
+        logger.error(f"[Options] CFFEX chain error: {symbol} - {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期权链失败: {str(e)}")
 
 
@@ -103,7 +103,7 @@ async def get_greeks(
         logger.warning(f"[Options] Greeks timeout: {code}")
         return error_response(ErrorCode.TIMEOUT_ERROR, "数据获取超时，请稍后重试")
     except Exception as e:
-        logger.error(f"[Options] Greeks error: {code} - {e}")
+        logger.error(f"[Options] Greeks error: {code} - {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取Greeks失败: {str(e)}")
 
 
@@ -128,7 +128,7 @@ async def get_contracts(
         })
         
     except Exception as e:
-        logger.error(f"[Options] Contracts error: {exchange} - {e}")
+        logger.error(f"[Options] Contracts error: {exchange} - {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取合约列表失败: {str(e)}")
 
 

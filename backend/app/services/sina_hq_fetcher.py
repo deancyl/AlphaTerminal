@@ -8,7 +8,18 @@ from datetime import datetime
 
 import httpx
 logger = logging.getLogger(__name__)
+from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 
+
+# Circuit breaker for Sina HQ API protection (P0 fix)
+_SINA_HQ_CB = CircuitBreaker(
+    "sina_hq",
+    CircuitBreakerConfig(
+        failure_threshold=5,
+        timeout=60.0,
+        success_threshold=2,
+    )
+)
 
 def _get_hs300_pool() -> list[str]:
     """
@@ -29,8 +40,8 @@ def _get_hs300_pool() -> list[str]:
                     if df is not None and not df.empty:
                         logger.info(f"[SinaHQ] HS300 via {fname}: {len(df)} rows")
                         break
-            except Exception as e:
-                logger.warning(f"[SinaHQ] HS300 fetch via {fname} failed: {type(e).__name__}: {e}")
+            except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] via {fname} failed: {type(e).__name__}: {e}")
                 continue
 
         if df is None or df.empty:
@@ -90,6 +101,11 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
     格式: v_sh600519="1~贵州茅台~600519~1450.00~..."
     parts[0]=未知, parts[1]=名称, parts[2]=6位代码, parts[3]=当前价, parts[4]=昨收, ...
     """
+    # P0: Circuit breaker protection
+    if not _SINA_HQ_CB.is_available():
+        logger.warning("[SinaHQ] Circuit breaker OPEN, skipping batch fetch")
+        return []
+    
     if not codes:
         return []
 
@@ -167,15 +183,21 @@ def fetch_hq_batch(codes: list[str]) -> list[dict]:
 
         except httpx.TimeoutException as e:
             logger.warning(f"[SinaHQ] Batch timeout: {e}")
+            _SINA_HQ_CB.record_failure()
             continue
         except httpx.HTTPStatusError as e:
             logger.warning(f"[SinaHQ] HTTP {e.response.status_code}: {e}")
+            _SINA_HQ_CB.record_failure()
             continue
         except Exception as e:
             logger.error(f"[SinaHQ] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+            _SINA_HQ_CB.record_failure()
             continue
 
     logger.info(f"[SinaHQ] fetched {len(all_rows)} stocks")
+    # P0: Record success for circuit breaker
+    if all_rows:
+        _SINA_HQ_CB.record_success()
     return all_rows
 
 
@@ -184,6 +206,11 @@ def fetch_sina_industry_board() -> list[dict]:
     """
     从新浪行业板块接口抓取真实行业数据
     """
+    # P0: Circuit breaker protection
+    if not _SINA_HQ_CB.is_available():
+        logger.warning("[SinaIndustry] Circuit breaker OPEN, skipping industry fetch")
+        return []
+    
     try:
         r = httpx.get(
             "https://vip.stock.finance.sina.com.cn/q/view/newFLJK.php?param=class2",
@@ -224,9 +251,13 @@ def fetch_sina_industry_board() -> list[dict]:
 
         sectors.sort(key=lambda x: x["change_pct"], reverse=True)
         logger.info(f"[SinaIndustry] 抓到 {len(sectors)} 个真实行业板块")
+        # P0: Record success for circuit breaker
+        if sectors:
+            _SINA_HQ_CB.record_success()
         return sectors[:15]
     except Exception as e:
         logger.warning(f"[SinaIndustry] 拉取失败: {type(e).__name__}: {e}")
+        _SINA_HQ_CB.record_failure()
         return []
 
 

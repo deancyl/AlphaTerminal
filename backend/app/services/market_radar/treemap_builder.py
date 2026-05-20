@@ -34,8 +34,8 @@ def _fetch_sectors_sync() -> List[Dict]:
                 "code": row["板块代码"],
             })
         return sectors
-    except Exception as e:
-        logger.error(f"[Treemap] Failed to fetch sectors: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] sectors: {e}", exc_info=True)
         return []
 
 
@@ -56,8 +56,8 @@ def _fetch_sector_stocks_sync(sector_name: str) -> tuple:
                 "market_cap": float(row.get("总市值", 0) or 0),
             })
         return (sector_name, stocks)
-    except Exception as e:
-        logger.warning(f"[Treemap] Failed to fetch stocks for {sector_name}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] stocks for {sector_name}: {e}")
         return (sector_name, [])
 
 
@@ -84,8 +84,8 @@ def _fetch_all_stocks_sync() -> List[Dict]:
             except (ValueError, TypeError):
                 continue
         return stocks
-    except Exception as e:
-        logger.error(f"[Treemap] Failed to fetch all stocks: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] all stocks: {e}", exc_info=True)
         return []
 
 

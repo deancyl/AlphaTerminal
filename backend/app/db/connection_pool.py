@@ -8,8 +8,11 @@ import sqlite3
 import threading
 import queue
 import os
+import logging
 from contextlib import contextmanager
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Default database path (same as database.py)
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "alphaterminal.db")
@@ -229,7 +232,12 @@ class SQLiteConnectionPool:
             conn.execute("BEGIN IMMEDIATE")
             yield conn
             conn.commit()
-        except Exception:
+        except sqlite3.Error as e:
+            logger.error(f"[Pool] Database error in transaction: {type(e).__name__}: {e}", exc_info=True)
+            conn.rollback()
+            raise
+        except Exception as e:
+            logger.error(f"[Pool] Unexpected error in transaction: {type(e).__name__}: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:

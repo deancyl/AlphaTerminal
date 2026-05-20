@@ -186,7 +186,7 @@ def _fetch_reports_sync(symbol: str, page: int = 1, page_size: int = 20, keyword
         }
         
     except Exception as e:
-        logger.error(f"Error fetching research data for {symbol}: {e}")
+        logger.error(f"Error fetching research data for {symbol}: {e}", exc_info=True)
         filtered_fallback = FALLBACK_RESEARCH_DATA
         if category:
             filtered_fallback = [r for r in filtered_fallback if r.get("category") == category]
@@ -324,7 +324,7 @@ async def proxy_pdf(url: str = Query(..., description="PDF URL")):
                 }
             )
     except Exception as e:
-        logger.error(f"Error proxying PDF: {e}")
+        logger.error(f"Error proxying PDF: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -422,7 +422,7 @@ async def summarize_report(request: SummarizeRequest):
             "data": {"summary": None}
         }
     except Exception as e:
-        logger.error(f"Error calling LLM: {e}")
+        logger.error(f"Error calling LLM: {e}", exc_info=True)
         return {
             "code": 1,
             "message": "总结服务暂时不可用",

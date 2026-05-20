@@ -119,7 +119,7 @@ class BaseStreamer(ABC):
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[{self.name}] Stream error: {e}")
+                logger.error(f"[{self.name}] Stream error: {e}", exc_info=True)
                 self._consecutive_failures += 1
                 
                 if self._consecutive_failures >= self.MAX_CONSECUTIVE_FAILURES:
@@ -181,7 +181,7 @@ class BaseStreamer(ABC):
             try:
                 self._on_tick(symbol, tick)
             except Exception as e:
-                logger.error(f"[{self.name}] Tick callback error: {e}")
+                logger.error(f"[{self.name}] Tick callback error: {e}", exc_info=True)
     
     async def add_symbols(self, symbols: List[str]):
         async with self._lock:

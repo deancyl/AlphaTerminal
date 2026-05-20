@@ -119,9 +119,9 @@ def _write_daily(conn, rows):
                  str(i.get('data_type','daily')))
             )
             ok += 1
-        except Exception as e:
+        except (sqlite3.Error, ValueError, TypeError) as e:
             fail += 1
-            logger.error(f"[DBWriter] daily insert failed: symbol={i.get('symbol')}, error={e}")
+            logger.error(f"[DBWriter] daily insert failed: symbol={i.get('symbol')}, error={type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, fail
 
@@ -141,8 +141,8 @@ def _write_periodic(conn, rows, period):
                  i.get('change_pct',0), i.get('timestamp',0))
             )
             ok += 1
-        except Exception as e:
-            logger.error(f"[DBWriter] periodic insert failed: {e}")
+        except (sqlite3.Error, ValueError, TypeError) as e:
+            logger.error(f"[DBWriter] periodic insert failed: {type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, 0
 
@@ -162,8 +162,12 @@ def _flush_realtime(conn):
                   d.get("volume",0), d.get("market",""), d.get("data_type",""),
                   d.get("timestamp",0)))
             processed_keys.append((r["symbol"], r["name"]))
-        except Exception:
+        except json.JSONDecodeError as e:
             error_count += 1
+            logger.error(f"[DBWriter] realtime JSON decode error: {e}", exc_info=True)
+        except sqlite3.Error as e:
+            error_count += 1
+            logger.error(f"[DBWriter] realtime insert error: {type(e).__name__}: {e}", exc_info=True)
     if processed_keys:
         placeholders = ",".join(["(?,?)"] * len(processed_keys))
         flat = [item for pair in processed_keys for item in pair]
@@ -198,8 +202,8 @@ def _write_all_stocks(conn, rows):
                 time.time()
             ))
             ok += 1
-        except Exception as e:
-            logger.error(f"[DBWriter] all_stocks upsert failed: {e}")
+        except (sqlite3.Error, ValueError, TypeError, KeyError) as e:
+            logger.error(f"[DBWriter] all_stocks upsert failed: {type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, 0
 
@@ -211,8 +215,8 @@ def _write_buffer(conn, rows):
             conn.execute("INSERT INTO write_buffer VALUES (?,?,?)",
                 (item.get('symbol',''), item.get('name',''), json.dumps(item)))
             ok += 1
-        except Exception as e:
-            logger.error(f"[DBWriter] buffer insert failed: {e}")
+        except (sqlite3.Error, ValueError, TypeError) as e:
+            logger.error(f"[DBWriter] buffer insert failed: {type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, 0
 
@@ -234,8 +238,8 @@ def _write_cache_persist(conn, rows):
                 item.get('source', '')
             ))
             ok += 1
-        except Exception as e:
-            logger.error(f"[DBWriter] cache_persist insert failed: key={item.get('key')}, error={e}")
+        except (sqlite3.Error, ValueError, TypeError) as e:
+            logger.error(f"[DBWriter] cache_persist insert failed: key={item.get('key')}, {type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, 0
 
@@ -257,8 +261,8 @@ def _write_fund_nav(conn, rows):
                 item.get('source', 'akshare')
             ))
             ok += 1
-        except Exception as e:
-            logger.error(f"[DBWriter] fund_nav insert failed: fund_code={item.get('fund_code')}, error={e}")
+        except (sqlite3.Error, ValueError, TypeError) as e:
+            logger.error(f"[DBWriter] fund_nav insert failed: fund_code={item.get('fund_code')}, {type(e).__name__}: {e}", exc_info=True)
     conn.commit()
     return ok, 0
 

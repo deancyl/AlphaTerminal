@@ -596,7 +596,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, onDeactivated, nextTick, computed, onWatcherCleanup } from 'vue'
+import { ref, shallowRef, onMounted, onBeforeUnmount, onDeactivated, nextTick, computed, onWatcherCleanup } from 'vue'
 import { apiFetchValidated } from '../utils/api.js'
 import { useGracefulDegradation } from '../composables/useGracefulDegradation.js'
 import { useApiError } from '../composables/useApiError.js'
@@ -1483,8 +1483,9 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   clearTimeout(resizeTimer)
+  resizeTimer = null
   stopPolling()
   window.removeEventListener('resize', handleResize)
 

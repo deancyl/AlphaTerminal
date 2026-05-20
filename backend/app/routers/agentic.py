@@ -80,7 +80,7 @@ async def create_workflow(
             try:
                 await engine.execute_workflow(workflow)
             except Exception as e:
-                logger.error(f"[Agentic] Workflow {workflow.id} failed: {e}")
+                logger.error(f"[Agentic] Workflow {workflow.id} failed: {e}", exc_info=True)
                 workflow.status = WorkflowStatus.FAILED
                 workflow.result = f"执行失败: {str(e)}"
         
@@ -149,7 +149,7 @@ async def execute_workflow(
         try:
             await engine.execute_workflow(workflow)
         except Exception as e:
-            logger.error(f"[Agentic] Workflow {workflow_id} failed: {e}")
+            logger.error(f"[Agentic] Workflow {workflow_id} failed: {e}", exc_info=True)
             workflow.status = WorkflowStatus.FAILED
             workflow.result = f"执行失败: {str(e)}"
     

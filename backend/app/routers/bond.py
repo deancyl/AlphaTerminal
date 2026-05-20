@@ -189,7 +189,7 @@ async def bond_curve():
             "warning_level":   warning_level,
         })
     except Exception as e:
-        logger.error(f"[bond_curve] 错误: {e}")
+        logger.error(f"[bond_curve] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取债券曲线失败: {str(e)}")
 
 
@@ -210,7 +210,7 @@ async def bond_yield_curve():
             "source": cache_data.get("source", "unknown"),
         })
     except Exception as e:
-        logger.error(f"[bond_yield_curve] 错误: {e}")
+        logger.error(f"[bond_yield_curve] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取国债收益率曲线失败: {str(e)}")
 
 

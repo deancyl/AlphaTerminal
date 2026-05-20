@@ -152,7 +152,7 @@ def _fetch_youtube_title(video_id: str) -> Optional[str]:
         )
         if r.status_code == 200:
             return r.json().get("title")
-    except Exception:
+    except (httpx.HTTPError, httpx.TimeoutException, ConnectionError, ValueError):
         pass
     return None
 

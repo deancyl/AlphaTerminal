@@ -115,7 +115,7 @@ class MacroFetcher:
                 error=f"数据获取超时 ({timeout}秒)"
             )
         except Exception as e:
-            logger.error(f"[MacroFetcher] 获取失败: {e}")
+            logger.error(f"[MacroFetcher] 获取失败: {e}", exc_info=True)
             return MacroDataResult(
                 indicators={},
                 error=f"数据获取失败: {str(e)}"
@@ -192,7 +192,7 @@ class MacroFetcher:
         except asyncio.TimeoutError:
             raise
         except Exception as e:
-            logger.error(f"[MacroFetcher] BFF 调用失败: {e}")
+            logger.error(f"[MacroFetcher] BFF 调用失败: {e}", exc_info=True)
             raise
     
     async def _fetch_individual(

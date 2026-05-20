@@ -72,7 +72,7 @@ def _is_domestic(url: str) -> bool:
             if host == domestic or host.endswith("." + domestic):
                 return True
         return False
-    except Exception:
+    except (ValueError, AttributeError):
         return False
 
 
@@ -85,7 +85,7 @@ def _is_overseas(url: str) -> bool:
             if host == overseas or host.endswith("." + overseas):
                 return True
         return False
-    except Exception:
+    except (ValueError, AttributeError):
         return False
 
 

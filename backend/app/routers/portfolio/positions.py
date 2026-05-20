@@ -301,8 +301,8 @@ async def portfolio_pnl(portfolio_id: int, include_children: bool = Query(False,
                     stock_meta[stock_key] = {"name": r[1], "per": r[2], "pb": r[3], "mktcap": r[4], "turnover": r[5]}
             except sqlite3.OperationalError as e:
                 logger.warning(f"[Portfolio PnL] 数据库操作错误，无法获取股票元数据: {e}")
-            except Exception as e:
-                logger.warning(f"[Portfolio PnL] Failed to fetch stock metadata: {e}")
+            except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] stock metadata: {e}")
 
             cash_balance = 0.0
             try:

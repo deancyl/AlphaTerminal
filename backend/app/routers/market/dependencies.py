@@ -80,10 +80,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                         sym = m.group(1)
                         fields = [f.strip() for f in m.group(2).split(",")]
                         results[sym] = fields
-                except Exception:
+                except (ValueError, IndexError, AttributeError):
                     continue
-        except Exception as e:
-            logger.warning(f"[Macro] Sina fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
 
     # 3) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指 + 恒生指数HSI，不过代理）
     qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI", "hkHSI")]
@@ -106,10 +106,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                     raw_val = line.split("=", 1)[1].strip('";\r\n ')
                     fields = raw_val.split("~")
                     results[sym] = [f.strip() for f in fields]
-                except Exception:
+                except (ValueError, IndexError, AttributeError):
                     continue
-        except Exception as e:
-            logger.warning(f"[Macro] Tencent qt fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
 
     return results
 
@@ -594,7 +594,7 @@ def _pinyin_fallback(name: str) -> str:
         from pypinyin import lazy_pinyin
         py = lazy_pinyin(name)
         return ''.join(py) if py else name[:4]
-    except Exception:
+    except (ImportError, ValueError, TypeError):
         return name[:4]  # 无 pypinyin 时用名称前4字做近似
 
 
@@ -641,5 +641,5 @@ def _parse_timestamp(dt_str: str) -> int:
         from datetime import datetime
         dt_obj = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
         return int(dt_obj.timestamp() * 1000)
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return 0

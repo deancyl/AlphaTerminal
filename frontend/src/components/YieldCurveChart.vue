@@ -19,7 +19,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useLazyLoad } from '../composables/useLazyLoad.js'
 import { safeDispose } from '../utils/chartManager.js'
 
@@ -171,13 +171,13 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
   }
-  if (chartInstance) {
-    safeDispose(chartInstance)
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.dispose()
     chartInstance = null
   }
 })

@@ -134,7 +134,7 @@ def _hash_token(token: str) -> str:
         logger.info(f"[TOKEN_HASH] Token hashed successfully")
         return hash_result
     except Exception as e:
-        logger.error(f"[TOKEN_HASH] Failed to hash token: {e}\n{traceback.format_exc()}")
+        logger.error(f"[TOKEN_HASH] Failed to hash token: {e}\n{traceback.format_exc()}", exc_info=True)
         raise
 
 
@@ -224,7 +224,7 @@ class AgentTokenService:
             self._conn.commit()
             logger.info("[TOKEN_DB_INIT] Database initialized successfully")
         except Exception as e:
-            logger.error(f"[TOKEN_DB_INIT] Failed to initialize DB: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_DB_INIT] Failed to initialize DB: {e}\n{traceback.format_exc()}", exc_info=True)
             raise
 
     def _load_tokens_from_db(self):
@@ -263,10 +263,10 @@ class AgentTokenService:
                         logger.debug(f"[TOKEN_LOAD] Loaded token: id={token.id}, name={token.name}, prefix={token.token_prefix}")
                     except Exception as e:
                         error_count += 1
-                        logger.error(f"[TOKEN_LOAD] Failed to parse token record: {e}\n{traceback.format_exc()}")
+                        logger.error(f"[TOKEN_LOAD] Failed to parse token record: {e}\n{traceback.format_exc()}", exc_info=True)
                 logger.info(f"[TOKEN_LOAD] Loaded {loaded_count} tokens from persistent DB, errors={error_count}")
             except Exception as e:
-                logger.error(f"[TOKEN_LOAD] Failed to load tokens from DB: {e}\n{traceback.format_exc()}")
+                logger.error(f"[TOKEN_LOAD] Failed to load tokens from DB: {e}\n{traceback.format_exc()}", exc_info=True)
         else:
             logger.debug("[TOKEN_LOAD] Using local SQLite mode")
             try:
@@ -296,10 +296,10 @@ class AgentTokenService:
                         logger.debug(f"[TOKEN_LOAD] Loaded token: id={token.id}, name={token.name}")
                     except Exception as e:
                         error_count += 1
-                        logger.error(f"[TOKEN_LOAD] Failed to parse token row: {e}\n{traceback.format_exc()}")
+                        logger.error(f"[TOKEN_LOAD] Failed to parse token row: {e}\n{traceback.format_exc()}", exc_info=True)
                 logger.info(f"[TOKEN_LOAD] Loaded {loaded_count} tokens from SQLite, errors={error_count}")
             except Exception as e:
-                logger.error(f"[TOKEN_LOAD] Failed to load tokens from SQLite: {e}\n{traceback.format_exc()}")
+                logger.error(f"[TOKEN_LOAD] Failed to load tokens from SQLite: {e}\n{traceback.format_exc()}", exc_info=True)
 
     def _save_token(self, token: AgentToken):
         logger.info(f"[TOKEN_SAVE] Saving token: id={token.id}, name={token.name}")
@@ -325,7 +325,7 @@ class AgentTokenService:
             except ValueError as e:
                 logger.debug(f"[TOKEN_SAVE] Token already exists (expected): {e}")
             except Exception as e:
-                logger.error(f"[TOKEN_SAVE] Failed to save token to persistent DB: {e}\n{traceback.format_exc()}")
+                logger.error(f"[TOKEN_SAVE] Failed to save token to persistent DB: {e}\n{traceback.format_exc()}", exc_info=True)
         else:
             logger.debug("[TOKEN_SAVE] Using SQLite save")
             try:
@@ -352,7 +352,7 @@ class AgentTokenService:
                 self._conn.commit()
                 logger.info(f"[TOKEN_SAVE] Token saved to SQLite: id={token.id}")
             except Exception as e:
-                logger.error(f"[TOKEN_SAVE] Failed to save token to SQLite: {e}\n{traceback.format_exc()}")
+                logger.error(f"[TOKEN_SAVE] Failed to save token to SQLite: {e}\n{traceback.format_exc()}", exc_info=True)
 
     def _start_cleanup_thread(self):
         logger.info("[TOKEN_CLEANUP] Starting cleanup thread")
@@ -389,7 +389,7 @@ class AgentTokenService:
                         self._conn.execute("DELETE FROM tokens WHERE token_hash = ?", (tid,))
                         self._conn.commit()
                     except Exception as e:
-                        logger.error(f"[TOKEN_CLEANUP] Failed to delete expired token: {e}\n{traceback.format_exc()}")
+                        logger.error(f"[TOKEN_CLEANUP] Failed to delete expired token: {e}\n{traceback.format_exc()}", exc_info=True)
             
             logger.info(f"[TOKEN_CLEANUP] Cleanup complete, removed {len(expired_ids)} tokens")
 
@@ -439,7 +439,7 @@ class AgentTokenService:
             logger.info(f"[TOKEN_CREATE] Token created successfully: id={token.id}, name={name}")
             return raw_token, token
         except Exception as e:
-            logger.error(f"[TOKEN_CREATE] Failed to create token: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_CREATE] Failed to create token: {e}\n{traceback.format_exc()}", exc_info=True)
             raise
 
     def verify_token(self, raw_token: str) -> Optional[AgentToken]:
@@ -505,7 +505,7 @@ class AgentTokenService:
                 logger.info(f"[TOKEN_VERIFY] Token verified successfully: id={token.id}, name={token.name}")
                 return token
         except Exception as e:
-            logger.error(f"[TOKEN_VERIFY] Token verification failed: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_VERIFY] Token verification failed: {e}\n{traceback.format_exc()}", exc_info=True)
             return None
 
     def log_audit(self, token_id: str, action: str, endpoint: str = "", details: dict = None):
@@ -534,7 +534,7 @@ class AgentTokenService:
                     self._conn.commit()
                 logger.info(f"[TOKEN_AUDIT] Audit logged to SQLite: token_id={token_id}")
         except Exception as e:
-            logger.error(f"[TOKEN_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}", exc_info=True)
 
     def revoke_token(self, token_id: str) -> bool:
         logger.info(f"[TOKEN_REVOKE] Attempting to revoke token: id={token_id}")
@@ -562,7 +562,7 @@ class AgentTokenService:
                 logger.warning(f"[TOKEN_REVOKE] Token not found: id={token_id}")
                 return False
         except Exception as e:
-            logger.error(f"[TOKEN_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}", exc_info=True)
             return False
 
     def list_tokens(self, include_inactive: bool = False) -> List[AgentToken]:
@@ -679,7 +679,7 @@ class AgentTokenService:
                 logger.info(f"[TOKEN_AUDIT_GET] Retrieved {len(result)} audit logs from SQLite")
                 return result
         except Exception as e:
-            logger.error(f"[TOKEN_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}", exc_info=True)
             return []
 
     def check_scope(self, token: AgentToken, required_scope: TokenScope) -> bool:
@@ -696,7 +696,7 @@ class AgentTokenService:
             
             return has_scope
         except Exception as e:
-            logger.error(f"[TOKEN_SCOPE] Scope check error: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_SCOPE] Scope check error: {e}\n{traceback.format_exc()}", exc_info=True)
             return False
 
     def is_expired(self, token: AgentToken) -> bool:
@@ -719,7 +719,7 @@ class AgentTokenService:
             
             return is_expired
         except Exception as e:
-            logger.error(f"[TOKEN_EXPIRED] Expiration check error: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_EXPIRED] Expiration check error: {e}\n{traceback.format_exc()}", exc_info=True)
             return True
 
     def check_rate_limit(self, token: AgentToken) -> bool:
@@ -748,7 +748,7 @@ class AgentTokenService:
             
             return allowed
         except Exception as e:
-            logger.error(f"[TOKEN_RATE] Rate limit check error: {e}\n{traceback.format_exc()}")
+            logger.error(f"[TOKEN_RATE] Rate limit check error: {e}\n{traceback.format_exc()}", exc_info=True)
             return False
 
 

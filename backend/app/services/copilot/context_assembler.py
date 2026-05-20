@@ -192,7 +192,7 @@ class ContextAssembler:
                 error=f"数据获取超时 ({timeout}秒)"
             )
         except Exception as e:
-            logger.error(f"[ContextAssembler] 数据获取失败: {e}")
+            logger.error(f"[ContextAssembler] 数据获取失败: {e}", exc_info=True)
             return AssemblyResult(
                 query_type=query_type,
                 context_text="",

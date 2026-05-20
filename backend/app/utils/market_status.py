@@ -105,7 +105,7 @@ def is_market_open(market_type: str = "A_SHARE") -> tuple[bool, str]:
             if time(9, 30) <= t <= time(16, 0):
                 return True, "交易中"
             return False, "已休市"
-        except Exception:
+        except (ValueError, TypeError, OSError):
             # 其他未知错误，保底逻辑
             if weekday >= 5:
                 return False, "已休市"
@@ -132,7 +132,7 @@ def is_market_open(market_type: str = "A_SHARE") -> tuple[bool, str]:
         except KeyError:
             # 时区名称无效
             return False, "已休市"
-        except Exception:
+        except (ValueError, TypeError, OSError):
             # 其他未知错误
             return False, "已休市"
 

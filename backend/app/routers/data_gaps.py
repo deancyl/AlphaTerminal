@@ -227,7 +227,7 @@ def _scan_kline_gaps_sync(symbol: str, start_date: str, end_date: str) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"[DataGaps] Scan failed for {symbol}: {e}")
+        logger.error(f"[DataGaps] Scan failed for {symbol}: {e}", exc_info=True)
         raise
 
 
@@ -290,7 +290,7 @@ def _backfill_kline_sync(symbol: str, dates: List[str]) -> dict:
             conn.commit()
             
     except Exception as e:
-        logger.error(f"[DataGaps] Backfill failed for {symbol}: {e}")
+        logger.error(f"[DataGaps] Backfill failed for {symbol}: {e}", exc_info=True)
         # Mark all as failed
         failed_dates = dates
     
@@ -370,7 +370,7 @@ def _get_calendar_data_sync(year: int, month: int) -> dict:
         }
         
     except Exception as e:
-        logger.error(f"[DataGaps] Calendar query failed: {e}")
+        logger.error(f"[DataGaps] Calendar query failed: {e}", exc_info=True)
         return {
             "year": year,
             "month": month,
@@ -430,7 +430,7 @@ async def scan_data_gaps(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=f"Invalid date format: {e}")
     except Exception as e:
-        logger.error(f"[DataGaps] Scan error: {e}")
+        logger.error(f"[DataGaps] Scan error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -473,7 +473,7 @@ async def backfill_data_gaps(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[DataGaps] Backfill error: {e}")
+        logger.error(f"[DataGaps] Backfill error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -501,7 +501,7 @@ async def get_data_gaps_calendar(
         return success_response(result)
         
     except Exception as e:
-        logger.error(f"[DataGaps] Calendar error: {e}")
+        logger.error(f"[DataGaps] Calendar error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

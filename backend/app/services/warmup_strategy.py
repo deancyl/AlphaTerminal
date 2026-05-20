@@ -135,7 +135,7 @@ class WarmupStrategy:
             return self._warmup_stats
             
         except Exception as e:
-            logger.error(f"[WarmupStrategy] 预热失败: {e}")
+            logger.error(f"[WarmupStrategy] 预热失败: {e}", exc_info=True)
             return {}
     
     async def _warmup_stocks(self) -> int:
@@ -148,7 +148,7 @@ class WarmupStrategy:
                 cache = get_cache()
                 # 这里只是标记需要预热，实际获取由后续请求触发
                 warmed += 1
-            except Exception:
+            except (ImportError, ValueError, AttributeError):
                 continue
         return warmed
     

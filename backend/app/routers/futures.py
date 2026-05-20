@@ -196,13 +196,13 @@ def _fetch_commodities_sync():
                         "change_pct": round(change, 2),
                         "tick": f[30] if len(f) > 30 else "",
                     }
-            except Exception:
+            except (ValueError, IndexError):
                 continue
         logger.info(f"[Futures] Tencent qt data: {len(spot_data)} items")
         if len(spot_data) > 0:
             fetch_success = True
-    except Exception as e:
-        logger.warning(f"[Futures] Tencent fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
     
     if not fetch_success or len(spot_data) == 0:
         logger.warning("[Futures] Using mock commodity data as fallback")
@@ -251,8 +251,8 @@ async def _fetch_futures_data():
     
     try:
         index_futures, index_source = await _fetch_index_futures_realtime()
-    except Exception as e:
-        logger.warning(f"[Futures] Index futures fetch failed: {e}, using mock")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}, using mock")
         index_futures = _MOCK_INDEX_FUTURES
         index_source = "mock"
 
@@ -398,7 +398,7 @@ async def futures_main_indexes():
             "source":       cache.get("index_source", "mock"),
         })
     except Exception as e:
-        logger.error(f"[futures_main_indexes] 错误: {e}")
+        logger.error(f"[futures_main_indexes] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取股指期货失败: {str(e)}")
 
 
@@ -414,7 +414,7 @@ async def futures_commodities():
             "update_time": cache.get("update_time", ""),
         })
     except Exception as e:
-        logger.error(f"[futures_commodities] 错误: {e}")
+        logger.error(f"[futures_commodities] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取大宗商品失败: {str(e)}")
 
 
@@ -500,7 +500,7 @@ async def futures_term_structure(symbol: str = "RB"):
                 if not month_match:
                     continue
                 month_code = month_match.group()
-            except Exception:
+            except (ValueError, TypeError, AttributeError):
                 # AkShare 上游接口字段规则变动时，fail-safe 跳过该行
                 continue
 

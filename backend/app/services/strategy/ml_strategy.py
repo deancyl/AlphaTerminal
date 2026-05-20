@@ -200,7 +200,7 @@ class LightGBMStrategy(BaseMLStrategy):
             return predictions
             
         except Exception as e:
-            logger.error(f"[LightGBMStrategy] Prediction error: {e}")
+            logger.error(f"[LightGBMStrategy] Prediction error: {e}", exc_info=True)
             return np.zeros(len(features))
     
     def generate_signals(self, predictions: np.ndarray) -> List[int]:
@@ -282,7 +282,7 @@ class QlibMLStrategy(BaseMLStrategy):
             return predictions
             
         except Exception as e:
-            logger.error(f"[QlibMLStrategy] Prediction error: {e}")
+            logger.error(f"[QlibMLStrategy] Prediction error: {e}", exc_info=True)
             return np.zeros(len(features))
     
     def generate_signals(self, predictions: np.ndarray) -> List[int]:

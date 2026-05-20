@@ -197,8 +197,8 @@ def fetch_china_indices() -> list[dict]:
                             f"({parsed['change_pct']:+.2f}%)")
             else:
                 logger.warning(f"[Sina] 解析失败: {line[:80]}")
-    except Exception as e:
-        logger.error(f"[Sina] fetch_china_indices 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_china_indices 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
 
     return rows
@@ -269,13 +269,13 @@ def fetch_shibor() -> list[dict]:
                 })
                 logger.info(f"[AkShare] LPR 1年: {lpr1y}%")
         except Exception as e:
-            logger.error(f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}")
+            logger.error(f"[AkShare] LPR 获取失败: {type(e).__name__}: {e}", exc_info=True)
             traceback.print_exc()
 
     except CircuitBreakerOpen as e:
         logger.warning(f"[AkShare] Circuit breaker OPEN for shibor: {e}")
-    except Exception as e:
-        logger.error(f"[AkShare] fetch_shibor 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_shibor 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
 
     return rows
@@ -428,8 +428,8 @@ def fetch_industry_sectors() -> list[dict]:
             "timestamp": int(time.time()),
             "data_type": "board_top5",
         }]
-    except Exception as e:
-        logger.error(f"[Sina] fetch_industry_sectors 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_industry_sectors 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
     return []
 
@@ -584,8 +584,8 @@ def fetch_china_all_indices() -> list[dict]:
                                   parsed["price"], parsed["change_pct"], parsed["volume"],
                                   amount=parsed.get("amount"), turnover=parsed.get("turnover")))
                 logger.info(f"[Sina] {disp}: {parsed['price']} ({parsed['change_pct']:+.2f}%)")
-    except Exception as e:
-        logger.error(f"[Sina] fetch_china_all_indices 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_china_all_indices 失败: {type(e).__name__}: {e}", exc_info=True)
     return rows
 
 
@@ -732,8 +732,8 @@ def fetch_china_index_history(symbol: str, fill_periodic: bool = True) -> list[d
     except CircuitBreakerOpen as e:
         logger.warning(f"[AkShare] Circuit breaker OPEN for index history {symbol}: {e}")
         return []
-    except Exception as e:
-        logger.error(f"[AkShare] fetch_china_index_history({symbol}) 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_china_index_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
         return []
 
@@ -866,8 +866,8 @@ def fetch_index_minute_history(
             rows = rows[-limit:]   # 保留最后 limit 条（最新数据）
         logger.info(f"[Sina] {symbol} {frequency}minK线: {len(rows)} 条 (offset={offset}, total={total})")
         return rows
-    except Exception as e:
-        logger.warning(f"[Sina] fetch_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP]_index_minute_history({symbol}) 失败: {type(e).__name__}: {e}")
         return []
 
 
@@ -1006,8 +1006,8 @@ def fetch_stock_history(symbol: str, start_date: str = "19900101", end_date: str
     except CircuitBreakerOpen as e:
         logger.warning(f"[AkShare] Circuit breaker OPEN for stock history {symbol}: {e}")
         return []
-    except Exception as e:
-        logger.error(f"[AkShare Stock] fetch_stock_history({symbol}) 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_stock_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
         return []
 
@@ -1123,8 +1123,8 @@ def fetch_index_daily_history(symbol: str) -> list[dict]:
     except CircuitBreakerOpen as e:
         logger.warning(f"[AkShare] Circuit breaker OPEN for index daily history {symbol}: {e}")
         return []
-    except Exception as e:
-        logger.error(f"[AkShare Index] fetch_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]_index_daily_history({symbol}) 失败: {type(e).__name__}: {e}", exc_info=True)
         traceback.print_exc()
         return []
 
@@ -1479,7 +1479,7 @@ def fetch_all_and_buffer():
                         f"利率 {len(shibor_rows)}, 全球 {len(global_rows)}, "
                         f"板块 {len(board_rows)}, 商品 {len(deriv_rows)})")
         except Exception as e:
-            logger.error(f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}")
+            logger.error(f"[DataFetcher] buffer_insert 失败: {type(e).__name__}: {e}", exc_info=True)
             traceback.print_exc()
     else:
         logger.warning("[DataFetcher] 本次未拉到任何数据（所有接口均失败）")
@@ -1668,7 +1668,7 @@ def _fetch_sina_realtime(symbol: str) -> dict:
             "price": float(parts[1]),
             "change_pct": float(parts[3]) if parts[3] else 0,
         }
-    except Exception:
+    except (ValueError, IndexError, TypeError):
         return None
 
 def refresh_today_from_minute():

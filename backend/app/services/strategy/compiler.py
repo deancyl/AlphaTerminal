@@ -306,7 +306,7 @@ class StrategyCompiler:
         except Exception as e:
             result.errors.append(f"Compilation failed: {str(e)}")
             result.errors.append(traceback.format_exc())
-            logger.error(f"[ERROR] Compilation exception: {e}")
+            logger.error(f"[ERROR] Compilation exception: {e}", exc_info=True)
             logger.debug(traceback.format_exc())
         
         result.debug_cycles = self._debug_cycles

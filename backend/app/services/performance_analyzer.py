@@ -757,7 +757,7 @@ class PerformanceAnalyzer:
             }
             
         except Exception as e:
-            logger.error(f"[PerformanceAnalyzer] Error calculating metrics: {e}")
+            logger.error(f"[PerformanceAnalyzer] Error calculating metrics: {e}", exc_info=True)
             return {
                 "code": 1,
                 "message": f"Failed to calculate metrics: {str(e)}",
@@ -966,7 +966,7 @@ class PerformanceAnalyzer:
             )
             
         except Exception as e:
-            logger.error(f"[PerformanceAnalyzer] Error processing equity curve: {e}")
+            logger.error(f"[PerformanceAnalyzer] Error processing equity curve: {e}", exc_info=True)
             return {
                 "code": 1,
                 "message": f"Failed to process equity curve: {str(e)}",
@@ -1015,7 +1015,7 @@ class PerformanceAnalyzer:
             return self.calculate_from_equity_curve(equity_curve, initial_capital)
             
         except Exception as e:
-            logger.error(f"[PerformanceAnalyzer] Error processing trades: {e}")
+            logger.error(f"[PerformanceAnalyzer] Error processing trades: {e}", exc_info=True)
             return {
                 "code": 1,
                 "message": f"Failed to process trades: {str(e)}",

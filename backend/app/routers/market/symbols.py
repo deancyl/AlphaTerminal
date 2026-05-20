@@ -68,7 +68,7 @@ def _pinyin_fallback(name: str) -> str:
         from pypinyin import lazy_pinyin
         py = lazy_pinyin(name)
         return ''.join(py) if py else name[:4]
-    except Exception:
+    except (ImportError, ValueError, TypeError):
         return name[:4]  # 无 pypinyin 时用名称前4字做近似
 
 
@@ -235,7 +235,7 @@ async def market_all_stocks_lite():
             "total": len(rows),
         })
     except Exception as e:
-        logger.error(f"[market_all_stocks_lite] 错误: {e}")
+        logger.error(f"[market_all_stocks_lite] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全市场个股失败: {str(e)}")
 
 

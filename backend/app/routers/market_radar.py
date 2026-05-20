@@ -105,7 +105,7 @@ async def get_treemap(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[MarketRadar] Failed to get treemap: {e}")
+        logger.error(f"[MarketRadar] Failed to get treemap: {e}", exc_info=True)
         # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
@@ -149,7 +149,7 @@ async def get_anomalies():
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[MarketRadar] Failed to get anomalies: {e}")
+        logger.error(f"[MarketRadar] Failed to get anomalies: {e}", exc_info=True)
         # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
@@ -208,7 +208,7 @@ async def get_anomaly_by_type(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[MarketRadar] Failed to get anomaly {anomaly_type}: {e}")
+        logger.error(f"[MarketRadar] Failed to get anomaly {anomaly_type}: {e}", exc_info=True)
         # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,
@@ -286,7 +286,7 @@ async def get_market_temperature():
         }
         
     except Exception as e:
-        logger.error(f"[MarketRadar] Failed to get temperature: {e}")
+        logger.error(f"[MarketRadar] Failed to get temperature: {e}", exc_info=True)
         # P2-10: Sanitize error message
         raise HTTPException(
             status_code=500,

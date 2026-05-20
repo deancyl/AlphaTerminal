@@ -256,8 +256,8 @@ async def get_attribution(portfolio_id: int, include_children: bool = Query(Fals
 
                         try:
                             z_95 = NormalDist().inv_cdf(0.95)
-                        except Exception:
-                            logger.debug("[Portfolio Attribution] NormalDist 不可用，使用默认 z_95=1.645")
+                        except (ValueError, AttributeError) as e:
+                            logger.debug(f"[Portfolio Attribution] NormalDist error: {e}, using default z_95=1.645")
                             z_95 = 1.645
 
                         latest_asset = assets[-1]
@@ -548,7 +548,8 @@ async def get_risk_metrics(portfolio_id: int, confidence: float = 0.95, horizon:
             
             try:
                 z_score = NormalDist().inv_cdf(confidence)
-            except Exception:
+            except (ValueError, AttributeError) as e:
+                logger.debug(f"[Portfolio VaR] NormalDist error for confidence={confidence}: {e}")
                 z_map = {0.90: 1.282, 0.95: 1.645, 0.99: 2.326}
                 z_score = z_map.get(confidence, 1.645)
             

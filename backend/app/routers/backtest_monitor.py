@@ -101,7 +101,7 @@ async def backtest_stream(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("[BacktestMonitor] WebSocket client disconnected")
     except Exception as e:
-        logger.error(f"[BacktestMonitor] WebSocket error: {e}")
+        logger.error(f"[BacktestMonitor] WebSocket error: {e}", exc_info=True)
     finally:
         registry.remove_ws_client(websocket)
 

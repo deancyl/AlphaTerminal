@@ -108,7 +108,7 @@ class SinaStreamer(BaseStreamer):
         if ws is not None:
             try:
                 await ws.close()
-            except Exception:
+            except (RuntimeError, ValueError, AttributeError):
                 pass
         
         logger.info(f"[{self.name}] Disconnected")
@@ -131,7 +131,7 @@ class SinaStreamer(BaseStreamer):
                 if websockets and isinstance(e, websockets.exceptions.ConnectionClosed):
                     logger.warning(f"[{self.name}] Connection closed: {e}")
                     raise
-                logger.error(f"[{self.name}] Message loop error: {e}")
+                logger.error(f"[{self.name}] Message loop error: {e}", exc_info=True)
                 raise
     
     async def _handle_message(self, raw: Union[str, bytes]):
@@ -152,7 +152,7 @@ class SinaStreamer(BaseStreamer):
         except json.JSONDecodeError:
             logger.warning(f"[{self.name}] Invalid JSON: {raw[:100]}")
         except Exception as e:
-            logger.error(f"[{self.name}] Handle message error: {e}")
+            logger.error(f"[{self.name}] Handle message error: {e}", exc_info=True)
     
     def _parse_tick(self, data: Dict) -> Optional[Dict[str, Any]]:
         symbol = data.get("symbol", "")

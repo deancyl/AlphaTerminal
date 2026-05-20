@@ -1,7 +1,9 @@
 """
 统一 API 响应格式工具模块
 
-所有 API 端点应使用此模块的 success_response 和 error_response，
+[DEPRECATED] This module is deprecated. Use app.utils.errors instead.
+
+所有 API 端点应使用 app.utils.errors 模块的 success_response 和 error_response，
 确保响应格式一致，便于前端统一处理。
 
 响应格式:
@@ -13,13 +15,22 @@
         "details": {},    # 附加错误详情
         "trace_id": "abc123",  # 请求追踪ID
         "timestamp": "2024-01-01T00:00:00"  # ISO格式时间戳
-    }
+    },
+    "timestamp": "2024-01-01T00:00:00"  # 顶级时间戳（v0.6.61新增）
 }
+
+Migration Guide:
+    # Before (deprecated)
+    from app.utils.response import success_response, error_response
+    
+    # After (recommended)
+    from app.utils.errors import success_response, error_response
 """
 
 import uuid
 from datetime import datetime
 from typing import Any, Optional, Dict
+import warnings
 
 
 class ErrorCode:
@@ -49,6 +60,8 @@ def success_response(
     """
     Standardized success response format.
     
+    [DEPRECATED] Use app.utils.errors.success_response instead.
+    
     Args:
         data: Response data
         message: Response message, defaults to "success"
@@ -56,11 +69,19 @@ def success_response(
     Returns:
         JSON response with consistent structure
     """
+    warnings.warn(
+        "app.utils.response.success_response is deprecated. "
+        "Use app.utils.errors.success_response instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
     return {
         "code": ErrorCode.SUCCESS,
         "message": message,
         "data": data,
         "error": None,
+        "timestamp": datetime.now().isoformat(),  # v0.6.61: Added top-level timestamp
     }
 
 
@@ -72,6 +93,8 @@ def error_response(
 ) -> dict:
     """
     Standardized error response format.
+    
+    [DEPRECATED] Use app.utils.errors.error_response instead.
     
     Supports two calling conventions:
     1. error_response(code, message, details) - standard form
@@ -86,6 +109,13 @@ def error_response(
     Returns:
         JSON response with consistent structure including trace_id
     """
+    warnings.warn(
+        "app.utils.response.error_response is deprecated. "
+        "Use app.utils.errors.error_response instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    
     # Detect calling convention
     if isinstance(code_or_message, int):
         # Standard form: error_response(code, message, details)
@@ -104,8 +134,6 @@ def error_response(
             "details": details or {},
             "trace_id": generate_trace_id(),
             "timestamp": datetime.now().isoformat(),
-        }
+        },
+        "timestamp": datetime.now().isoformat(),  # v0.6.61: Added top-level timestamp
     }
-
-
-

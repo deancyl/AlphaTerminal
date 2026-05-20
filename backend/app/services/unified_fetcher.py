@@ -172,7 +172,7 @@ class UnifiedFetcher:
         except CircuitBreakerOpen as e:
             logger.warning(f"[UnifiedFetcher] 熔断器打开: {source.value}, {e}")
         except Exception as e:
-            logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}")
+            logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}", exc_info=True)
             self.metrics.record_error(source.value)
         
         # 3. 尝试降级数据源
@@ -202,7 +202,7 @@ class UnifiedFetcher:
             except CircuitBreakerOpen as e:
                 logger.warning(f"[UnifiedFetcher] 降级熔断器打开: {fallback_source.value}, {e}")
             except Exception as e:
-                logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}")
+                logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}", exc_info=True)
                 self.metrics.record_error(fallback_source.value)
         
         # 4. 所有数据源都失败
@@ -314,7 +314,7 @@ class UnifiedFetcher:
         except CircuitBreakerOpen as e:
             logger.warning(f"[UnifiedFetcher] 熔断器打开: {source.value}, {e}")
         except Exception as e:
-            logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}")
+            logger.error(f"[UnifiedFetcher] 主数据源失败: {source.value}, {e}", exc_info=True)
             self.metrics.record_error(source.value)
         
         # 3. 尝试降级数据源
@@ -344,7 +344,7 @@ class UnifiedFetcher:
             except CircuitBreakerOpen as e:
                 logger.warning(f"[UnifiedFetcher] 降级熔断器打开: {fallback_source.value}, {e}")
             except Exception as e:
-                logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}")
+                logger.error(f"[UnifiedFetcher] 降级数据源失败: {fallback_source.value}, {e}", exc_info=True)
                 self.metrics.record_error(fallback_source.value)
         
         # 4. 所有数据源都失败

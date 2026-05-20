@@ -415,8 +415,8 @@ class GlobalIndexFetcher:
             self._cache_sparkline(symbol, sparkline)
             
             return sparkline
-        except Exception as e:
-            logger.warning(f"[GlobalIndex] Failed to fetch sparkline for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] sparkline for {symbol}: {e}")
             return []
     
     def _cache_quote(self, quote: IndexQuote):

@@ -190,7 +190,7 @@ def _close_thread_conn():
             _thread_local.conn.close()
             logger.info(f"[AGENT_DB_CONN_CLOSE] Connection closed for thread: {threading.current_thread().name}")
         except Exception as e:
-            logger.error(f"[AGENT_DB_CONN_CLOSE] Failed to close connection: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_CONN_CLOSE] Failed to close connection: {e}\n{traceback.format_exc()}", exc_info=True)
         finally:
             _thread_local.conn = None
 
@@ -204,7 +204,7 @@ def get_conn():
         yield conn
         logger.debug("[AGENT_DB_CTX] Connection context completed successfully")
     except Exception as e:
-        logger.error(f"[AGENT_DB_CTX] Exception in connection context: {e}\n{traceback.format_exc()}")
+        logger.error(f"[AGENT_DB_CTX] Exception in connection context: {e}\n{traceback.format_exc()}", exc_info=True)
         try:
             conn.rollback()
             logger.debug("[AGENT_DB_CTX] Transaction rolled back")
@@ -341,7 +341,7 @@ class AgentDB:
                 return True
                 
             except Exception as e:
-                logger.error(f"[AGENT_DB_INIT_DB] Database initialization failed: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_INIT_DB] Database initialization failed: {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
     
     def save_token(self, token: AgentToken) -> bool:
@@ -405,10 +405,10 @@ class AgentDB:
                 return True
                 
             except sqlite3.IntegrityError as e:
-                logger.error(f"[AGENT_DB_SAVE] Integrity error (duplicate token): {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_SAVE] Integrity error (duplicate token): {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
             except Exception as e:
-                logger.error(f"[AGENT_DB_SAVE] Failed to save token: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_SAVE] Failed to save token: {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
     
     def get_token_by_hash(self, token_hash: str) -> Optional[AgentToken]:
@@ -443,7 +443,7 @@ class AgentDB:
             return token
             
         except Exception as e:
-            logger.error(f"[AGENT_DB_GET_HASH] Failed to get token: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_GET_HASH] Failed to get token: {e}\n{traceback.format_exc()}", exc_info=True)
             return None
     
     def get_token_by_id(self, token_id: str) -> Optional[AgentToken]:
@@ -477,7 +477,7 @@ class AgentDB:
             return token
             
         except Exception as e:
-            logger.error(f"[AGENT_DB_GET_ID] Failed to get token: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_GET_ID] Failed to get token: {e}\n{traceback.format_exc()}", exc_info=True)
             return None
     
     def list_tokens(self, active_only: bool = True) -> List[AgentToken]:
@@ -512,13 +512,13 @@ class AgentDB:
                     tokens.append(token)
                     logger.debug(f"[AGENT_DB_LIST] Parsed token: id={token.id}, name={token.name}")
                 except Exception as e:
-                    logger.error(f"[AGENT_DB_LIST] Failed to parse token row: {e}\n{traceback.format_exc()}")
+                    logger.error(f"[AGENT_DB_LIST] Failed to parse token row: {e}\n{traceback.format_exc()}", exc_info=True)
             
             logger.info(f"[AGENT_DB_LIST] Listed {len(tokens)} tokens successfully")
             return tokens
             
         except Exception as e:
-            logger.error(f"[AGENT_DB_LIST] Failed to list tokens: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_LIST] Failed to list tokens: {e}\n{traceback.format_exc()}", exc_info=True)
             return []
     
     def update_token(self, token: AgentToken) -> bool:
@@ -580,7 +580,7 @@ class AgentDB:
                 return updated
                 
             except Exception as e:
-                logger.error(f"[AGENT_DB_UPDATE] Failed to update token: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_UPDATE] Failed to update token: {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
     
     def revoke_token(self, token_id: str) -> bool:
@@ -617,7 +617,7 @@ class AgentDB:
                 return revoked
                 
             except Exception as e:
-                logger.error(f"[AGENT_DB_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_REVOKE] Failed to revoke token: {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
     
     def log_audit(
@@ -671,7 +671,7 @@ class AgentDB:
                 return True
                 
             except Exception as e:
-                logger.error(f"[AGENT_DB_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_AUDIT] Failed to log audit: {e}\n{traceback.format_exc()}", exc_info=True)
                 return False
     
     def get_audit_logs(
@@ -734,13 +734,13 @@ class AgentDB:
                     logs.append(log)
                     logger.debug(f"[AGENT_DB_AUDIT_GET] Parsed audit log: id={log.id}, action={log.action}")
                 except Exception as e:
-                    logger.error(f"[AGENT_DB_AUDIT_GET] Failed to parse audit log row: {e}\n{traceback.format_exc()}")
+                    logger.error(f"[AGENT_DB_AUDIT_GET] Failed to parse audit log row: {e}\n{traceback.format_exc()}", exc_info=True)
             
             logger.info(f"[AGENT_DB_AUDIT_GET] Retrieved {len(logs)} audit logs successfully")
             return logs
             
         except Exception as e:
-            logger.error(f"[AGENT_DB_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_AUDIT_GET] Failed to get audit logs: {e}\n{traceback.format_exc()}", exc_info=True)
             return []
     
     def delete_expired_tokens(self) -> int:
@@ -770,7 +770,7 @@ class AgentDB:
                 return deleted
                 
             except Exception as e:
-                logger.error(f"[AGENT_DB_CLEANUP] Failed to delete expired tokens: {e}\n{traceback.format_exc()}")
+                logger.error(f"[AGENT_DB_CLEANUP] Failed to delete expired tokens: {e}\n{traceback.format_exc()}", exc_info=True)
                 return 0
     
     def get_token_count(self, active_only: bool = True) -> int:
@@ -800,7 +800,7 @@ class AgentDB:
             return count
             
         except Exception as e:
-            logger.error(f"[AGENT_DB_COUNT] Failed to get token count: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AGENT_DB_COUNT] Failed to get token count: {e}\n{traceback.format_exc()}", exc_info=True)
             return 0
     
     def _row_to_token(self, row: sqlite3.Row) -> AgentToken:

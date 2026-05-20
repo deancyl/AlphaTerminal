@@ -3,6 +3,8 @@ Qlib Initialization Module
 
 Handles Qlib initialization with AlphaTerminal's local data infrastructure.
 Provides lazy initialization and graceful fallback when Qlib is not available.
+
+v0.6.61: Redis removed - using SQLite only for caching.
 """
 import logging
 import os
@@ -38,8 +40,7 @@ class QlibInitializer:
         
         # Or with custom config
         initializer = QlibInitializer(
-            provider_uri="~/.qlib/qlib_data/cn_data",
-            redis_host="localhost"
+            provider_uri="~/.qlib/qlib_data/cn_data"
         )
         initializer.init()
     """
@@ -51,15 +52,11 @@ class QlibInitializer:
         self,
         provider_uri: Optional[str] = None,
         region: str = DEFAULT_REGION,
-        redis_host: Optional[str] = None,
-        redis_port: int = 6379,
         expression_cache: Optional[str] = None,
         dataset_cache: Optional[str] = None,
     ):
         self.provider_uri = provider_uri or self.DEFAULT_PROVIDER_URI
         self.region = region
-        self.redis_host = redis_host
-        self.redis_port = redis_port
         self.expression_cache = expression_cache
         self.dataset_cache = dataset_cache
         self._initialized = False
@@ -92,12 +89,6 @@ class QlibInitializer:
                 "region": self.region,
             }
             
-            if self.redis_host:
-                config["redis"] = {
-                    "host": self.redis_host,
-                    "port": self.redis_port,
-                }
-            
             if self.expression_cache:
                 config["expression_cache"] = self.expression_cache
             
@@ -112,7 +103,7 @@ class QlibInitializer:
             return True
             
         except Exception as e:
-            logger.error(f"[Qlib] Initialization failed: {e}")
+            logger.error(f"[Qlib] Initialization failed: {e}", exc_info=True)
             return False
     
     def download_data(self, target_dir: Optional[str] = None) -> bool:
@@ -151,7 +142,7 @@ class QlibInitializer:
             return True
             
         except Exception as e:
-            logger.error(f"[Qlib] Data download failed: {e}")
+            logger.error(f"[Qlib] Data download failed: {e}", exc_info=True)
             return False
     
     @property

@@ -82,10 +82,10 @@ async def buy_lot(portfolio_id: int, body: BuyIn, _: None = Depends(require_api_
         logger.warning("[lots] buy_lot value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
-        logger.error("[lots] buy_lot integrity error: %s", e)
+        logger.error("[lots] buy_lot integrity error: %s", e, exc_info=True)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
-        logger.error("[lots] buy_lot operational error: %s", e)
+        logger.error("[lots] buy_lot operational error: %s", e, exc_info=True)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Buy] error: {e}", exc_info=True)
@@ -140,7 +140,8 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
                 upsert_position_summary(portfolio_id, body.symbol, conn=conn)
 
                 conn.commit()
-            except Exception:
+            except sqlite3.Error as e:
+                logger.error(f"[lots] Database error during sell_lot: {type(e).__name__}: {e}", exc_info=True)
                 conn.rollback()
                 raise
 
@@ -176,10 +177,10 @@ async def sell_lot(portfolio_id: int, body: SellIn, _: None = Depends(require_ap
         logger.warning("[lots] sell_lot value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
-        logger.error("[lots] sell_lot integrity error: %s", e)
+        logger.error("[lots] sell_lot integrity error: %s", e, exc_info=True)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
-        logger.error("[lots] sell_lot operational error: %s", e)
+        logger.error("[lots] sell_lot operational error: %s", e, exc_info=True)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.error(f"[Sell] error: {e}", exc_info=True)

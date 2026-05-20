@@ -78,5 +78,5 @@ class TimeoutMiddleware(BaseHTTPMiddleware):
                 }
             )
         except Exception as e:
-            logger.error(f"[TimeoutMiddleware] Unexpected error: {e}")
+            logger.error(f"[TimeoutMiddleware] Unexpected error: {e}", exc_info=True)
             raise

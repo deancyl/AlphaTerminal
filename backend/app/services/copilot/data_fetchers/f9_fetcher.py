@@ -124,8 +124,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for financial:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching financial for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing financial for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_institution(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -145,8 +145,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for institution:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching institution for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing institution for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_forecast(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -166,8 +166,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for forecast:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching forecast for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing forecast for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_shareholder(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -187,8 +187,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for shareholder:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching shareholder for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing shareholder for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_margin(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -208,8 +208,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for margin:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching margin for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing margin for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_peers(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -229,8 +229,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for peers:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching peers for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing peers for {symbol}: {e}", exc_info=True)
             return None
 
     async def _fetch_announcements(self, symbol: str, use_cache: bool = True) -> Optional[Dict[str, Any]]:
@@ -250,8 +250,8 @@ class F9Fetcher:
         except CircuitBreakerOpen:
             logger.warning(f"[F9Fetcher] Circuit breaker open for announcements:{symbol}")
             return None
-        except Exception as e:
-            logger.error(f"[F9Fetcher] Error fetching announcements for {symbol}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP]ing announcements for {symbol}: {e}", exc_info=True)
             return None
 
     async def fetch(
@@ -324,7 +324,7 @@ class F9Fetcher:
                 logger.warning(f"[F9Fetcher] Circuit breaker open for {tab}:{normalized_symbol}")
             except Exception as e:
                 errors.append(f"{tab}: {str(e)}")
-                logger.error(f"[F9Fetcher] Error fetching {tab} for {normalized_symbol}: {e}")
+                logger.error(f"[F9Fetcher] Error fetching {tab} for {normalized_symbol}: {e}", exc_info=True)
 
         # 取消未完成的任务
         for task in pending:

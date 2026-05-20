@@ -45,12 +45,19 @@ def get_schema_conn():
     conn = _get_conn()
     try:
         yield conn
-    except Exception as e:
-        logger.error(f"[Schema] Error during schema operation: {e}")
+    except sqlite3.Error as e:
+        logger.error(f"[Schema] Database error during schema operation: {type(e).__name__}: {e}", exc_info=True)
         try:
             conn.rollback()
-        except Exception:
-            pass
+        except sqlite3.Error as rollback_err:
+            logger.error(f"[Schema] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
+        raise
+    except Exception as e:
+        logger.error(f"[Schema] Unexpected error during schema operation: {type(e).__name__}: {e}", exc_info=True)
+        try:
+            conn.rollback()
+        except sqlite3.Error as rollback_err:
+            logger.error(f"[Schema] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
         raise
     finally:
         conn.close()
@@ -236,7 +243,7 @@ def init_multi_model_schema():
             logger.info(f"[Schema] Multi-model schema initialized successfully")
             
         except Exception as e:
-            logger.error(f"[Schema] Failed to initialize schema: {e}")
+            logger.error(f"[Schema] Failed to initialize schema: {e}", exc_info=True)
             conn.rollback()
             raise
         finally:

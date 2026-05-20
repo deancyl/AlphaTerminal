@@ -49,7 +49,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { apiFetch } from '../utils/api.js';
 import { safeDispose } from '../utils/chartManager.js';
 
@@ -154,10 +154,12 @@ export default {
       window.addEventListener('resize', handleResize);
     });
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
       window.removeEventListener('resize', handleResize);
-      safeDispose(chartInstance);
-      chartInstance = null;
+      if (chartInstance && !chartInstance.isDisposed()) {
+        chartInstance.dispose();
+        chartInstance = null;
+      }
     });
 
     return { chartEl, loading, positions, totalMv, totalPnl, load, getPnlClass };

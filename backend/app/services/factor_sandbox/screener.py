@@ -396,7 +396,7 @@ class StockScreener:
             return stocks
             
         except Exception as e:
-            logger.error(f"[Screener] Failed to get universe {universe}: {e}")
+            logger.error(f"[Screener] Failed to get universe {universe}: {e}", exc_info=True)
             return []
     
     def _calculate_factor_value(

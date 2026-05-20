@@ -184,7 +184,7 @@ class StreamingManager:
                 raise Exception("Streamer failed to connect")
                 
         except Exception as e:
-            logger.error(f"[StreamingManager] Streaming failed: {e}")
+            logger.error(f"[StreamingManager] Streaming failed: {e}", exc_info=True)
             self._record_failure()
             await self._start_http_fallback()
     
@@ -215,7 +215,7 @@ class StreamingManager:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"[StreamingManager] HTTP poll error: {e}")
+                logger.error(f"[StreamingManager] HTTP poll error: {e}", exc_info=True)
             
             await asyncio.sleep(self.HTTP_POLL_INTERVAL)
     
@@ -250,7 +250,7 @@ class StreamingManager:
             logger.debug(f"[StreamingManager] HTTP polled {len(quotes)} quotes")
             
         except Exception as e:
-            logger.error(f"[StreamingManager] HTTP poll failed: {e}")
+            logger.error(f"[StreamingManager] HTTP poll failed: {e}", exc_info=True)
     
     async def _health_check_loop(self):
         while self._running:
@@ -300,7 +300,7 @@ class StreamingManager:
                 asyncio.create_task(self._ws_manager.broadcast_tick(symbol, tick))
                 self._stats.ticks_broadcast += 1
             except Exception as e:
-                logger.error(f"[StreamingManager] Broadcast error: {e}")
+                logger.error(f"[StreamingManager] Broadcast error: {e}", exc_info=True)
     
     async def add_symbols(self, symbols: List[str]):
         async with self._lock:

@@ -22,21 +22,22 @@ def _get_ak():
         _akshare_module = ak
     return _akshare_module
 
-_cache = {}
-_cache_ttl = {}
-CACHE_DURATION = 3600  # 1小时缓存（ESG数据更新慢）
+from app.services.data_cache import get_cache
+
+# ESG data uses static cache (L1: 1h, L2: 7 days)
+ESG_CACHE_TTL = 3600  # 1小时缓存（ESG数据更新慢）
 _ESG_ALL_DATA = None  # 全量ESG数据缓存
 _ESG_DATA_TIME = None
 
 def _get_cache(key):
-    if key in _cache and key in _cache_ttl:
-        if datetime.now() < _cache_ttl[key]:
-            return _cache[key]
-    return None
+    """Get from unified cache"""
+    cache = get_cache()
+    return cache.get(key)
 
 def _set_cache(key, value):
-    _cache[key] = value
-    _cache_ttl[key] = datetime.now() + timedelta(seconds=CACHE_DURATION)
+    """Set in unified cache"""
+    cache = get_cache()
+    cache.set(key, value, ttl=ESG_CACHE_TTL)
 
 class ESGRating(BaseModel):
     symbol: str
@@ -123,7 +124,7 @@ async def get_esg_rating(symbol: str):
         return success_response(result)
         
     except Exception as e:
-        logger.error(f"获取ESG评级失败: {e}")
+        logger.error(f"获取ESG评级失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG评级失败: {str(e)}")
 
 @router.get("/carbon")
@@ -175,7 +176,7 @@ async def get_carbon_data():
         return success_response(result)
         
     except Exception as e:
-        logger.error(f"获取碳排放数据失败: {e}")
+        logger.error(f"获取碳排放数据失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取碳排放数据失败: {str(e)}")
 
 @router.get("/rank")
@@ -214,7 +215,7 @@ async def get_esg_rank(
         return success_response(result)
         
     except Exception as e:
-        logger.error(f"获取ESG排名失败: {e}")
+        logger.error(f"获取ESG排名失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取ESG排名失败: {str(e)}")
 
 @router.get("/health")

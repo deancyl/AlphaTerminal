@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +132,8 @@ class ForexFetcher(BaseMarketFetcher):
         )
         self._ak = None
         
-        self._cache = {}
-        self._cache_ttl = {}
+        # Use unified DataCache instead of inline dict
+        self._data_cache = get_cache()
         self._cache_lock = asyncio.Lock()
         
     @property
@@ -142,11 +143,11 @@ class ForexFetcher(BaseMarketFetcher):
         return self._ak
     
     def _get_cached(self, key: str) -> Optional[Any]:
-        if key in self._cache and key in self._cache_ttl:
-            if datetime.now() < self._cache_ttl[key]:
-                logger.debug(f"[Forex] Cache HIT: {key}")
-                return self._cache[key]
-        return None
+        """Get from unified DataCache"""
+        result = self._data_cache.get(key)
+        if result is not None:
+            logger.debug(f"[Forex] Cache HIT: {key}")
+        return result
     
     def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300):
         MAX_CACHE_SIZE = 50
@@ -418,7 +419,7 @@ class ForexFetcher(BaseMarketFetcher):
             return self._get_fallback_quotes()
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取实时报价失败: {e}，返回回退数据")
+            logger.error(f"[Forex] 获取实时报价失败: {e}，返回回退数据", exc_info=True)
             return self._get_fallback_quotes()
     
     async def get_history(
@@ -498,7 +499,7 @@ class ForexFetcher(BaseMarketFetcher):
             return []
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取历史K线失败: {symbol} - {e}")
+            logger.error(f"[Forex] 获取历史K线失败: {symbol} - {e}", exc_info=True)
             return []
     
     async def get_cfets_spot(self) -> List[Dict[str, Any]]:
@@ -558,7 +559,7 @@ class ForexFetcher(BaseMarketFetcher):
             return []
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取CFETS报价失败: {e}")
+            logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
             return []
     
     async def get_cfets_crosses(self) -> List[Dict[str, Any]]:
@@ -613,7 +614,7 @@ class ForexFetcher(BaseMarketFetcher):
             return []
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}")
+            logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
             return []
     
     async def get_official_rates(self, days: int = 30) -> List[Dict[str, Any]]:
@@ -671,7 +672,7 @@ class ForexFetcher(BaseMarketFetcher):
             return []
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取官方中间价失败: {e}")
+            logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
             return []
     
     def calculate_cross_rate(
@@ -883,7 +884,8 @@ class ForexFetcher(BaseMarketFetcher):
         try:
             quotes = await self.get_spot_quotes()
             return len(quotes) > 0
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError) as e:
+            logger.debug(f"[Forex] ping error: {type(e).__name__}: {e}")
             return False
 
 

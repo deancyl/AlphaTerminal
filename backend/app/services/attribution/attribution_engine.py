@@ -130,7 +130,7 @@ class AttributionEngine:
             result.period_end = period_end
             return result
         except Exception as e:
-            logger.error(f"[Attribution] Regression failed: {e}")
+            logger.error(f"[Attribution] Regression failed: {e}", exc_info=True)
             return self._empty_result(returns, period_start, period_end)
     
     def calculate_rolling_attribution(

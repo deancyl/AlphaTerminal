@@ -303,7 +303,7 @@ class ValidatedHTTPClient:
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}")
+                        logger.error(f"[HTTPClient] {url} 网络错误，全部尝试失败: {e}", exc_info=True)
 
                 except httpx.TimeoutException as e:
                     last_error = e
@@ -318,13 +318,13 @@ class ValidatedHTTPClient:
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 超时，全部尝试失败: {e}")
+                        logger.error(f"[HTTPClient] {url} 超时，全部尝试失败: {e}", exc_info=True)
 
                 except httpx.HTTPStatusError as e:
                     # 4xx 错误（不含429）— 不重试，直接失败
                     last_error = e
                     self._record_failure()
-                    logger.error(f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}")
+                    logger.error(f"[HTTPClient] {url} HTTP {e.response.status_code}: {e}", exc_info=True)
                     break
 
                 except Exception as e:
@@ -340,7 +340,7 @@ class ValidatedHTTPClient:
                         delay = min(delay * 2, self.max_delay)
                     else:
                         self._record_failure()
-                        logger.error(f"[HTTPClient] {url} 未知错误，最终失败: {e}")
+                        logger.error(f"[HTTPClient] {url} 未知错误，最终失败: {e}", exc_info=True)
 
         raise last_error or RetryableError(f"HTTP GET failed after {retries + 1} attempts", url)
 

@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { logger } from '../utils/logger.js'
 import { on as busOn } from '../composables/useEventBus.js'
@@ -458,7 +458,7 @@ onMounted(async () => {
   })
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   _fetchController?.abort()
   _fetchController = null
   if (unregisterIntraday) {
@@ -470,8 +470,16 @@ onUnmounted(() => {
     unregisterHistogram = null
   }
   resizeObserver?.disconnect()
+  resizeObserver = null
   unsubNewsRefresh?.()
-  safeDispose(chartInst)
-  safeDispose(intradayInst)
+  unsubNewsRefresh = null
+  if (chartInst && !chartInst.isDisposed()) {
+    chartInst.dispose()
+    chartInst = null
+  }
+  if (intradayInst && !intradayInst.isDisposed()) {
+    intradayInst.dispose()
+    intradayInst = null
+  }
 })
 </script>

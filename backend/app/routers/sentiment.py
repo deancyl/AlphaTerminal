@@ -82,7 +82,7 @@ async def market_sentiment():
             "timestamp":  h.get("timestamp", ""),
         })
     except Exception as e:
-        logger.error(f"[market_sentiment] 错误: {e}")
+        logger.error(f"[market_sentiment] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取市场情绪失败: {str(e)}")
 
 
@@ -102,7 +102,7 @@ async def sentiment_intraday():
             "decline": h.get("decline", 0),
         })
     except Exception as e:
-        logger.error(f"[sentiment_intraday] 错误: {e}")
+        logger.error(f"[sentiment_intraday] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取日内数据失败: {str(e)}")
 
 
@@ -128,7 +128,7 @@ async def sentiment_histogram():
             }
         })
     except Exception as e:
-        logger.error(f"[sentiment_histogram] 错误: {e}")
+        logger.error(f"[sentiment_histogram] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取直方图数据失败: {str(e)}")
 
 
@@ -141,7 +141,7 @@ async def news_sentiment():
     try:
         return success_response(get_news_sentiment())
     except Exception as e:
-        logger.error(f"[news_sentiment] 错误: {e}")
+        logger.error(f"[news_sentiment] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取快讯情感失败: {str(e)}")
 
 
@@ -156,7 +156,7 @@ async def market_stocks(
     try:
         return success_response(query_stocks(page=page, page_size=page_size, sort_by=sort_by, asc=asc))
     except Exception as e:
-        logger.error(f"[market_stocks] 错误: {e}")
+        logger.error(f"[market_stocks] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取个股列表失败: {str(e)}")
 
 
@@ -238,7 +238,7 @@ async def market_fund_flow():
         _set_cached("market_fund_flow", res)
         return res
     except Exception as e:
-        logger.error(f"market_fund_flow error: {e}")
+        logger.error(f"market_fund_flow error: {e}", exc_info=True)
         return error_response(500, f"获取资金流数据失败: {str(e)}")
 
 @router.get("/market/fund_flow/industry")
@@ -287,5 +287,5 @@ async def industry_fund_flow():
         _set_cached("market_fund_flow_industry", res)
         return res
     except Exception as e:
-        logger.error(f"industry_fund_flow error: {e}")
+        logger.error(f"industry_fund_flow error: {e}", exc_info=True)
         return error_response(500, f"获取行业资金流失败: {str(e)}")

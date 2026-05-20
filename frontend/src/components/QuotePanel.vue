@@ -256,7 +256,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import FreshnessIndicator from './FreshnessIndicator.vue'
 import { safeNumber, safePct } from '../utils/typeCoercion.js'
@@ -579,12 +579,13 @@ onMounted(() => {
     _donutRO.observe(fundDonutRef.value)
   }
 })
-onUnmounted(() => {
+onBeforeUnmount(() => {
   if (_debouncedResize) {
     _debouncedResize.cancel()
   }
   _donutRO?.disconnect()
-  if (donutInstance) {
+  _donutRO = null
+  if (donutInstance && !donutInstance.isDisposed()) {
     donutInstance.dispose()
     donutInstance = null
   }

@@ -135,7 +135,7 @@ class CsvCacheManager:
                     filepath = os.path.join(self.cache_dir, filename)
                     total_files += 1
                     total_size += os.path.getsize(filepath)
-        except Exception:
+        except (OSError, IOError, PermissionError):
             pass
         
         return {

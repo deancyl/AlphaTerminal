@@ -79,7 +79,7 @@ async def warmup_market_radar_cache(
                 }
     
     except Exception as e:
-        logger.error(f"[MarketRadar] Cache warmup failed: {e}")
+        logger.error(f"[MarketRadar] Cache warmup failed: {e}", exc_info=True)
         results["success"] = False
         results["error"] = str(e)
     
@@ -113,7 +113,7 @@ def start_background_warmup():
         try:
             await warmup_market_radar_cache(timeout=30.0, background=True)
         except Exception as e:
-            logger.error(f"[MarketRadar] Background warmup failed: {e}")
+            logger.error(f"[MarketRadar] Background warmup failed: {e}", exc_info=True)
     
     # Create background task
     try:

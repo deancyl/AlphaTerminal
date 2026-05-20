@@ -95,7 +95,7 @@ class SessionManager:
                 if deleted > 0:
                     logger.debug(f"[SessionManager] Cleaned up {deleted} expired sessions")
             except Exception as e:
-                logger.error(f"[SessionManager] Cleanup error: {e}")
+                logger.error(f"[SessionManager] Cleanup error: {e}", exc_info=True)
     
     def create_or_get_session(
         self,

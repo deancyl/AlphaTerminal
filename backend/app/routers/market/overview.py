@@ -72,10 +72,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                         sym = m.group(1)
                         fields = [f.strip() for f in m.group(2).split(",")]
                         results[sym] = fields
-                except Exception:
+                except (ValueError, IndexError, AttributeError):
                     continue
-        except Exception as e:
-            logger.warning(f"[Macro] Sina fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
 
     # 3) 腾讯 qt（CNH/USD 汇率 + VHSI 恒指波指 + 恒生指数HSI，不过代理）
     qt_syms = [s for s in symbols if s in ("CNHUSD", "hkVHSI", "hkHSI")]
@@ -98,10 +98,10 @@ def _fetch_from_sina(symbols: list[str]) -> dict[str, list]:
                     raw_val = line.split("=", 1)[1].strip('";\r\n ')
                     fields = raw_val.split("~")
                     results[sym] = [f.strip() for f in fields]
-                except Exception:
+                except (ValueError, IndexError, AttributeError):
                     continue
-        except Exception as e:
-            logger.warning(f"[Macro] Tencent qt fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
 
     return results
 
@@ -314,7 +314,7 @@ async def market_macro():
             "macro": list(_get_macro_data().values()),
         })
     except Exception as e:
-        logger.error(f"[market_macro] 错误: {e}")
+        logger.error(f"[market_macro] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取宏观数据失败: {str(e)}")
 
 
@@ -399,7 +399,7 @@ def market_china_all():
             "meta": {"market_open": is_open, "status": status}
         })
     except Exception as e:
-        logger.error(f"[market_china_all] 错误: {e}")
+        logger.error(f"[market_china_all] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取国内指数失败: {str(e)}")
 
 
@@ -412,7 +412,7 @@ def market_indices():
             "indices": _serialize_price_rows(rows)
         })
     except Exception as e:
-        logger.error(f"[market_indices] 错误: {e}")
+        logger.error(f"[market_indices] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取指数列表失败: {str(e)}")
 
 
@@ -463,7 +463,7 @@ async def market_global():
             }
         })
     except Exception as e:
-        logger.error(f"[market_global] 错误: {e}")
+        logger.error(f"[market_global] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取全球指数失败: {str(e)}")
 
 
@@ -500,7 +500,7 @@ async def get_global_kline(
     except ValueError as e:
         return error_response(ErrorCode.BAD_REQUEST, str(e))
     except Exception as e:
-        logger.error(f"[get_global_kline] 错误: {e}")
+        logger.error(f"[get_global_kline] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取K线数据失败: {str(e)}")
 
 
@@ -529,7 +529,7 @@ async def get_global_sparkline(
             "days": len(sparkline),
         })
     except Exception as e:
-        logger.error(f"[get_global_sparkline] 错误: {e}")
+        logger.error(f"[get_global_sparkline] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取走势数据失败: {str(e)}")
 
 
@@ -608,7 +608,7 @@ async def market_rates():
             ],
         })
     except Exception as e:
-        logger.error(f"[market_rates] 错误: {e}")
+        logger.error(f"[market_rates] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取利率数据失败: {str(e)}")
 
 
@@ -656,8 +656,8 @@ async def get_fund_flow():
         logger.warning(f"[FundFlow] akshare timed out after 5s, triggering fallback")
     except ValueError:
         logger.warning(f"[FundFlow] empty result, triggering fallback")
-    except Exception as e:
-        logger.warning(f"[FundFlow] fetch error, triggered fallback: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error, triggered fallback: {e}")
 
     # Fallback（akshare 超时或空数据时）
     mock_result = []
@@ -693,7 +693,7 @@ async def market_derivatives():
             ],
         })
     except Exception as e:
-        logger.error(f"[market_derivatives] 错误: {e}")
+        logger.error(f"[market_derivatives] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取期货数据失败: {str(e)}")
 
 
@@ -729,7 +729,7 @@ async def get_north_flow_ranking():
                     "sz_hist": sz_hist
                 }
             except Exception as e:
-                logger.error(f"[north_flow] akshare获取失败: {e}")
+                logger.error(f"[north_flow] akshare获取失败: {e}", exc_info=True)
                 return None
 
         # 异步执行
@@ -819,5 +819,5 @@ async def get_north_flow_ranking():
         })
 
     except Exception as e:
-        logger.error(f"[north_flow_ranking] 错误: {e}")
+        logger.error(f"[north_flow_ranking] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取北向资金数据失败: {str(e)}")

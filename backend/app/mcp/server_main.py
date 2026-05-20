@@ -217,7 +217,7 @@ def run_stdio():
             response = handle_request(request)
             print(json.dumps(response), flush=True)
         except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON: {e}")
+            logger.error(f"Invalid JSON: {e}", exc_info=True)
             print(json.dumps({"error": f"Invalid JSON: {e}"}), flush=True)
 
 
@@ -242,7 +242,7 @@ def run_http():
                 self.end_headers()
                 self.wfile.write(json.dumps(response).encode())
             except Exception as e:
-                logger.error(f"Error: {e}")
+                logger.error(f"Error: {e}", exc_info=True)
                 self.send_response(500)
                 self.end_headers()
                 self.wfile.write(json.dumps({"error": str(e)}).encode())

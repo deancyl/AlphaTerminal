@@ -306,7 +306,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, computed, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
 import { safeDispose } from '../utils/chartManager.js'
@@ -628,10 +628,17 @@ onMounted(() => {
   window.addEventListener('keydown', handleKeydown)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   clearTimeout(resizeTimer)
-  safeDispose(institutionChartInstance)
-  safeDispose(ratingChartInstance)
+  resizeTimer = null
+  if (institutionChartInstance && !institutionChartInstance.isDisposed()) {
+    institutionChartInstance.dispose()
+    institutionChartInstance = null
+  }
+  if (ratingChartInstance && !ratingChartInstance.isDisposed()) {
+    ratingChartInstance.dispose()
+    ratingChartInstance = null
+  }
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleKeydown)
 })

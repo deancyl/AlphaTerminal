@@ -96,7 +96,7 @@ def log_audit(
             conn.commit()
             return cursor.lastrowid
         except Exception as e:
-            logger.error(f"[AuditDB] Log failed: {e}")
+            logger.error(f"[AuditDB] Log failed: {e}", exc_info=True)
             return -1
         finally:
             conn.close()
@@ -171,7 +171,7 @@ def get_audit_logs_keyset(
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
-        logger.error(f"[AuditDB] Keyset query failed: {e}")
+        logger.error(f"[AuditDB] Keyset query failed: {e}", exc_info=True)
         return []
     finally:
         conn.close()
@@ -235,7 +235,7 @@ def get_audit_logs(
         rows = conn.execute(query, params).fetchall()
         return [_row_to_dict(row) for row in rows]
     except Exception as e:
-        logger.error(f"[AuditDB] Query failed: {e}")
+        logger.error(f"[AuditDB] Query failed: {e}", exc_info=True)
         return []
     finally:
         conn.close()
@@ -273,7 +273,7 @@ def count_audit_logs(
         
         return row["cnt"] if row else 0
     except Exception as e:
-        logger.error(f"[AuditDB] Count failed: {e}")
+        logger.error(f"[AuditDB] Count failed: {e}", exc_info=True)
         return 0
     finally:
         conn.close()
@@ -298,7 +298,7 @@ def delete_old_logs(days: int = 2555) -> int:
                 logger.info(f"[AuditDB] Deleted {deleted} old audit logs (older than {days} days)")
             return deleted
         except Exception as e:
-            logger.error(f"[AuditDB] Delete old logs failed: {e}")
+            logger.error(f"[AuditDB] Delete old logs failed: {e}", exc_info=True)
             return 0
         finally:
             conn.close()
@@ -333,7 +333,7 @@ def get_agent_activity_summary(agent_id: str, days: int = 7) -> Dict:
             "actions_by_type": {row["action"]: row["cnt"] for row in rows},
         }
     except Exception as e:
-        logger.error(f"[AuditDB] Get summary failed: {e}")
+        logger.error(f"[AuditDB] Get summary failed: {e}", exc_info=True)
         return {"agent_id": agent_id, "period_days": days, "total_actions": 0, "actions_by_type": {}}
     finally:
         conn.close()

@@ -43,8 +43,8 @@ def _cache_or_fetch(key, fetch_fn, ttl=TTL):
         if data:
             _cache.set(cache_key, data, ttl=ttl)
         return data
-    except Exception as e:
-        logger.warning(f"[Stocks API] {key} fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
         return cached or []
 
 
@@ -75,8 +75,8 @@ async def get_limit_up():
             return df_work[['symbol', 'code', 'name', 'price', 'change_pct', 'turnover',
                            'float_market_cap', 'total_market_cap', 'turnover_rate', 'seal_fund',
                            'first_seal_time', 'last_seal_time', 'board_count', 'industry']].to_dict('records')
-        except Exception as e:
-            logger.warning(f"[Stocks] limit_up fetch error: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()
@@ -116,8 +116,8 @@ async def get_limit_down():
             return df_work[['symbol', 'code', 'name', 'price', 'change_pct', 'turnover',
                            'float_market_cap', 'total_market_cap', 'turnover_rate',
                            'continue_stop', 'open_count', 'industry']].to_dict('records')
-        except Exception as e:
-            logger.warning(f"[Stocks] limit_down fetch error: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()
@@ -157,8 +157,8 @@ async def get_unusual():
                                      'turnover', 'volume_ratio', 'industry', 'board_count']]
             result_df = result_df.sort_values('turnover_rate', ascending=False).head(30)
             return result_df.to_dict('records')
-        except Exception as e:
-            logger.warning(f"[Stocks] unusual fetch error: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error: {e}")
             return []
 
     loop = asyncio.get_event_loop()
@@ -470,7 +470,7 @@ async def get_quote(symbol: str):
                                         return float(value.replace('万', '').strip()) * 10000
                                     else:
                                         return float(value)
-                                except Exception:
+                                except (ValueError, TypeError):
                                     return None
                             
                             if not result.get('totalShares'):

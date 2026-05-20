@@ -310,7 +310,7 @@ def _bg_sina_refresh():
             SpotCache.update(rows, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
             logger.info(f"[HEARTBEAT] Spot cache (DB fallback): {len(rows)} stocks")
     except Exception as e:
-        logger.error(f"[SpotCache] 数据库兜底也失败: {e}")
+        logger.error(f"[SpotCache] 数据库兜底也失败: {e}", exc_info=True)
 
 
 def trigger_spot_fetch():

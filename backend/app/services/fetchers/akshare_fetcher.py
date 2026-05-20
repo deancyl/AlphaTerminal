@@ -10,6 +10,7 @@ AkShare Fetcher — 基于 AkShare 的数据获取器
 - 继承 BaseMarketFetcher 接口
 - 集成熔断器保护
 - 支持 SQLite 缓存持久化
+- 支持 Stale-While-Revalidate 降级
 """
 import asyncio
 import logging
@@ -19,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +83,7 @@ class AkShareFetcher(BaseMarketFetcher):
             "akshare",
             CircuitBreakerConfig(
                 failure_threshold=5,
-                timeout=60.0,  # AkShare 可能较慢，延长超时
+                timeout=600.0,  # P1: 10 minutes for external API resilience
             )
         )
         self._ak = None
@@ -103,15 +105,30 @@ class AkShareFetcher(BaseMarketFetcher):
         Returns:
             行情字典或 None
         """
+        cache_key = f"akshare:quote:{symbol}"
+        cache = get_cache()
+        
         if not self.cb.is_available():
-            logger.debug(f"[AkShare] 熔断器打开，跳过 {symbol}")
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale data for {symbol}")
+                return stale_data
+            
+            sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
+            if sqlite_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback for {symbol}")
+                return sqlite_data
+            
+            logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for {symbol}")
             return None
         
         try:
-            # 转换代码格式：sh600519 -> 600519
             code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
             
-            # 在线程池中执行同步调用，添加超时保护
             def _fetch():
                 df = self.ak.stock_zh_a_spot_em()
                 row = df[df['代码'] == code]
@@ -133,7 +150,6 @@ class AkShareFetcher(BaseMarketFetcher):
                     "prev_close": float(r.get('昨收', 0) or 0),
                 }
             
-            # 使用 asyncio.wait_for 添加超时保护
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
@@ -141,6 +157,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
             if result:
                 self.cb.record_success()
+                cache.set(cache_key, result, ttl=300)
                 logger.debug(f"[AkShare] {symbol} 行情获取成功")
             else:
                 self.cb.record_failure()
@@ -151,6 +168,16 @@ class AkShareFetcher(BaseMarketFetcher):
         except Exception as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] {symbol} 行情获取失败: {e}")
+            
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Fetch failed, returning stale data for {symbol}")
+                return stale_data
+            
             return None
     
     async def get_kline(
@@ -174,17 +201,30 @@ class AkShareFetcher(BaseMarketFetcher):
         Returns:
             K线数据列表或 None
         """
+        adjust = adjust or self.DEFAULT_ADJUST
+        cache_key = f"akshare:kline:{symbol}:{period}:{adjust}"
+        cache = get_cache()
+        
         if not self.cb.is_available():
-            logger.debug(f"[AkShare] 熔断器打开，跳过 {symbol}")
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale K-line for {symbol}")
+                return stale_data
+            
+            sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
+            if sqlite_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback K-line for {symbol}")
+                return sqlite_data
+            
+            logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for {symbol} K-line")
             return None
         
-        # 默认使用前复权
-        adjust = adjust or self.DEFAULT_ADJUST
-        
-        # 转换代码格式
         code = symbol[2:] if symbol.startswith(('sh', 'sz')) else symbol
         
-        # AkShare 使用不同的周期参数名
         period_map = {
             "day": "daily",
             "daily": "daily",
@@ -197,7 +237,6 @@ class AkShareFetcher(BaseMarketFetcher):
         
         try:
             def _fetch():
-                # 使用 stock_zh_a_hist 接口
                 df = self.ak.stock_zh_a_hist(
                     symbol=code,
                     period=ak_period,
@@ -209,7 +248,6 @@ class AkShareFetcher(BaseMarketFetcher):
                 if df is None or df.empty:
                     return None
                 
-                # 标准化输出格式
                 result = []
                 for _, row in df.iterrows():
                     result.append({
@@ -227,7 +265,6 @@ class AkShareFetcher(BaseMarketFetcher):
                     })
                 return result
             
-            # 添加超时保护
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
@@ -235,6 +272,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
             if result:
                 self.cb.record_success()
+                cache.set(cache_key, result, ttl=300)
                 logger.info(f"[AkShare] {symbol} K线获取成功: {len(result)} 条 ({period}, {adjust})")
             else:
                 self.cb.record_failure()
@@ -245,6 +283,16 @@ class AkShareFetcher(BaseMarketFetcher):
         except Exception as e:
             self.cb.record_failure()
             logger.warning(f"[AkShare] {symbol} K线获取失败: {e}")
+            
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] K-line fetch failed, returning stale data for {symbol}")
+                return stale_data
+            
             return None
     
     async def get_fund_nav(
@@ -262,13 +310,29 @@ class AkShareFetcher(BaseMarketFetcher):
         Returns:
             净值数据列表或 None
         """
+        cache_key = f"akshare:fund:{fund_code}:{period}"
+        cache = get_cache()
+        
         if not self.cb.is_available():
-            logger.debug(f"[AkShare] 熔断器打开，跳过基金 {fund_code}")
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning stale fund nav for {fund_code}")
+                return stale_data
+            
+            sqlite_data = cache.get_with_sqlite_fallback(cache_key, source="akshare")
+            if sqlite_data:
+                logger.warning(f"[AkShare] Circuit breaker OPEN, returning SQLite fallback fund nav for {fund_code}")
+                return sqlite_data
+            
+            logger.error(f"[AkShare] Circuit breaker OPEN, no fallback available for fund {fund_code}")
             return None
         
         try:
             def _fetch():
-                # 使用 fund_open_fund_info_em 接口
                 df = self.ak.fund_open_fund_info_em(
                     fund=fund_code,
                     indicator=period,
@@ -277,7 +341,6 @@ class AkShareFetcher(BaseMarketFetcher):
                 if df is None or df.empty:
                     return None
                 
-                # 标准化输出
                 result = []
                 for _, row in df.iterrows():
                     result.append({
@@ -288,7 +351,6 @@ class AkShareFetcher(BaseMarketFetcher):
                     })
                 return result
             
-            # 添加超时保护
             result = await asyncio.wait_for(
                 asyncio.get_event_loop().run_in_executor(_executor, _fetch),
                 timeout=AKSHARE_TIMEOUT
@@ -296,6 +358,7 @@ class AkShareFetcher(BaseMarketFetcher):
             
             if result:
                 self.cb.record_success()
+                cache.set(cache_key, result, ttl=300)
                 logger.info(f"[AkShare] 基金 {fund_code} 净值获取成功: {len(result)} 条")
             else:
                 self.cb.record_failure()
@@ -303,9 +366,33 @@ class AkShareFetcher(BaseMarketFetcher):
             
             return result
             
-        except Exception as e:
+        except asyncio.TimeoutError as e:
             self.cb.record_failure()
-            logger.warning(f"[AkShare] 基金 {fund_code} 净值获取失败: {e}")
+            logger.warning(f"[AkShare] 基金 {fund_code} 净值获取超时: {e}")
+            
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}")
+                return stale_data
+            
+            return None
+        except (ConnectionError, ValueError, KeyError) as e:
+            self.cb.record_failure()
+            logger.warning(f"[AkShare] 基金 {fund_code} 净值获取失败: {type(e).__name__}: {e}", exc_info=True)
+            
+            stale_data, is_stale = cache.get_with_stale(
+                key=cache_key,
+                fresh_ttl=300,
+                stale_ttl=600
+            )
+            if stale_data:
+                logger.warning(f"[AkShare] Fund nav fetch failed, returning stale data for {fund_code}")
+                return stale_data
+            
             return None
     
     async def get_order_book(self, symbol: str) -> Optional[Dict]:
@@ -325,5 +412,6 @@ class AkShareFetcher(BaseMarketFetcher):
         try:
             result = await self.get_quote("sh000001")
             return result is not None
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError) as e:
+            logger.debug(f"[AkShare] ping error: {type(e).__name__}: {e}")
             return False

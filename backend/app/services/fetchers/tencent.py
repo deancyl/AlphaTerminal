@@ -93,7 +93,8 @@ class TencentFetcher(BaseMarketFetcher):
                 "source": "tencent"
             }
             
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError) as e:
+            logger.debug(f"[Tencent] get_quote error for {symbol}: {type(e).__name__}: {e}")
             return None
     
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
@@ -146,5 +147,6 @@ class TencentFetcher(BaseMarketFetcher):
             
             return klines
             
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError, json.JSONDecodeError) as e:
+            logger.debug(f"[Tencent] get_kline error for {symbol}: {type(e).__name__}: {e}")
             return None

@@ -83,10 +83,10 @@ async def transfer_direct(body: TransferIn, _: None = Depends(require_api_key)):
         logger.warning("[cash] transfer_direct value error: %s", e)
         raise HTTPException(400, str(e))
     except sqlite3.IntegrityError as e:
-        logger.error("[cash] transfer_direct integrity error: %s", e)
+        logger.error("[cash] transfer_direct integrity error: %s", e, exc_info=True)
         raise HTTPException(400, f"数据完整性错误: {e}")
     except sqlite3.OperationalError as e:
-        logger.error("[cash] transfer_direct operational error: %s", e)
+        logger.error("[cash] transfer_direct operational error: %s", e, exc_info=True)
         raise HTTPException(500, f"数据库操作错误: {e}")
     except Exception as e:
         logger.exception("Unexpected error in transfer_direct")

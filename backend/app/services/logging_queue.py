@@ -58,11 +58,11 @@ class WebSocketLogHandler(logging.Handler):
                 # 队列满时丢弃最旧的
                 try:
                     queue.get_nowait()
-                except Exception:
+                except (asyncio.QueueEmpty, ValueError):
                     pass
                 queue.put_nowait(msg)
                 
-        except Exception:
+        except (asyncio.QueueFull, ValueError, TypeError):
             self.handleError(record)
 
 

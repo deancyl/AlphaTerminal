@@ -309,7 +309,7 @@ async def money_fund_rank(limit: int = Query(50, description="返回数量")):
         }
     
     except Exception as e:
-        logger.error(f"[Money Fund Rank] 获取失败：{e}")
+        logger.error(f"[Money Fund Rank] 获取失败：{e}", exc_info=True)
         return {
             "code": 0,
             "message": "success",

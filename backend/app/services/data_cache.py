@@ -592,7 +592,7 @@ class DataCache:
         """估算对象大小（字节）"""
         try:
             return sys.getsizeof(value)
-        except Exception:
+        except (TypeError, ValueError):
             # 保守估计
             return 1024
     
@@ -884,7 +884,7 @@ class DataCache:
                         with self._lock:
                             self.set(row['key'], value, ttl=ttl_remaining)
                         restored += 1
-                except Exception:
+                except (json.JSONDecodeError, ValueError, TypeError, KeyError):
                     continue
             
             conn.close()
@@ -1034,3 +1034,428 @@ def get_cache() -> DataCache:
             if _global_cache is None:
                 _global_cache = DataCache()
     return _global_cache
+
+
+# ═══════════════════════════════════════════════════════════════
+# @smart_cache Decorator - Unified Multi-Level Caching
+# ═══════════════════════════════════════════════════════════════
+
+import functools
+import inspect
+from typing import Callable, Optional, Union, Any, Dict
+
+# TTL Configuration by data type (from audit requirements)
+TTL_CONFIG = {
+    # L1 (Memory) TTL - Fast tier for hot data
+    "quotes_l1": 10,        # Real-time quotes: 10s
+    "macro_l1": 300,        # Macro data: 5min
+    "kline_l1": 300,        # K-line data: 5min
+    "f9_l1": 300,           # F9 deep data: 5min
+    "static_l1": 3600,      # Static data: 1h
+    
+    # L2 (SQLite) TTL - Persistent tier for warm data
+    "quotes_l2": 3600,      # Quotes: 1h
+    "macro_l2": 86400,      # Macro: 24h
+    "kline_l2": 86400,      # K-line: 24h
+    "f9_l2": 86400,         # F9: 24h
+    "static_l2": 604800,    # Static: 7 days
+}
+
+# Decorator-level metrics tracking
+_decorator_metrics: Dict[str, Dict[str, int]] = {}
+_metrics_lock = threading.Lock()
+
+
+def _get_decorator_metrics() -> Dict[str, Dict[str, int]]:
+    """Get decorator-level cache metrics"""
+    with _metrics_lock:
+        return dict(_decorator_metrics)
+
+
+def _record_metric(namespace: str, metric: str, value: int = 1):
+    """Record a metric for a namespace"""
+    with _metrics_lock:
+        if namespace not in _decorator_metrics:
+            _decorator_metrics[namespace] = {
+                "hits": 0,
+                "misses": 0,
+                "l1_hits": 0,
+                "l2_hits": 0,
+                "evictions": 0,
+                "stale_returns": 0,
+                "circuit_breaker_fallbacks": 0,
+            }
+        _decorator_metrics[namespace][metric] += value
+
+
+def smart_cache(
+    key_template: str,
+    level: int = 1,
+    ttl: Optional[int] = None,
+    ttl_type: Optional[str] = None,
+    namespace: str = "",
+    source: str = "",
+    circuit_breaker: Optional[Any] = None,
+    stale_ttl_multiplier: float = 10.0,
+):
+    """
+    Unified multi-level caching decorator with circuit breaker integration.
+    
+    Features:
+    - L1 (Memory): OrderedDict-based LRU with TTL, thread-safe, request coalescing
+    - L2 (SQLite): Persistent cache with WAL mode, auto-promotion on hit
+    - Key generation: Template-based with namespace prefix for isolation
+    - Circuit breaker: Returns stale data when circuit is OPEN
+    - Metrics tracking: Per-namespace hit/miss/eviction statistics
+    
+    Args:
+        key_template: Cache key template with placeholders, e.g., "kline:{symbol}:{period}"
+        level: Cache level (1=memory only, 2=memory+SQLite)
+        ttl: Time-to-live in seconds (overrides ttl_type)
+        ttl_type: TTL type from TTL_CONFIG (e.g., "quotes_l1", "macro_l2")
+        namespace: Namespace prefix for key isolation (e.g., "macro", "forex")
+        source: Data source identifier for debugging
+        circuit_breaker: Optional CircuitBreaker instance for stale-while-revalidate
+        stale_ttl_multiplier: Multiplier for stale TTL (default 10x of fresh TTL)
+    
+    Usage:
+        # Basic usage
+        @smart_cache("kline:{symbol}:{period}", level=2, ttl_type="kline_l1")
+        def get_kline(symbol: str, period: str):
+            return fetch_kline_data(symbol, period)
+        
+        # With namespace and circuit breaker
+        @smart_cache(
+            key_template="spot:{symbol}",
+            level=2,
+            ttl_type="quotes_l1",
+            namespace="forex",
+            circuit_breaker=forex_cb
+        )
+        async def get_forex_quote(symbol: str):
+            return await fetch_forex_quote(symbol)
+        
+        # L1 only (memory cache)
+        @smart_cache("quote:{symbol}", level=1, ttl=10, namespace="realtime")
+        async def get_quote(symbol: str):
+            return await fetch_quote(symbol)
+    
+    Flow:
+        1. Check L1 cache (memory) - fast path
+        2. If miss and level=2, check L2 cache (SQLite)
+        3. If miss, call the function
+        4. Store result in L1 (and L2 if level=2)
+        5. If circuit breaker is OPEN, return stale data if available
+    """
+    def decorator(func: Callable) -> Callable:
+        # Determine TTL
+        actual_ttl = ttl
+        if actual_ttl is None and ttl_type:
+            actual_ttl = TTL_CONFIG.get(ttl_type, 300)
+        if actual_ttl is None:
+            actual_ttl = 300  # Default 5 minutes
+        
+        # Determine namespace
+        actual_namespace = namespace or func.__module__.split(".")[-1]
+        
+        @functools.wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            cache = get_cache()
+            
+            # Build cache key from template
+            cache_key = _build_cache_key(key_template, func, args, kwargs, actual_namespace)
+            
+            # Check circuit breaker state
+            cb_is_open = False
+            if circuit_breaker is not None:
+                try:
+                    cb_is_open = not circuit_breaker.is_available()
+                except (AttributeError, RuntimeError):
+                    cb_is_open = False
+            
+            # L1 check
+            if level >= 1:
+                result = cache.get(cache_key)
+                if result is not None:
+                    _record_metric(actual_namespace, "hits")
+                    _record_metric(actual_namespace, "l1_hits")
+                    logger.debug(f"[smart_cache] L1 hit: {cache_key}")
+                    return result
+            
+            # L2 check (if level=2)
+            if level >= 2:
+                result = cache.get_with_sqlite_fallback(cache_key, source)
+                if result is not None:
+                    _record_metric(actual_namespace, "hits")
+                    _record_metric(actual_namespace, "l2_hits")
+                    logger.debug(f"[smart_cache] L2 hit: {cache_key}")
+                    return result
+            
+            # If circuit breaker is open, try to return stale data
+            if cb_is_open:
+                stale_result = _get_stale_data(cache, cache_key, actual_ttl * stale_ttl_multiplier)
+                if stale_result is not None:
+                    _record_metric(actual_namespace, "stale_returns")
+                    _record_metric(actual_namespace, "circuit_breaker_fallbacks")
+                    logger.warning(f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}")
+                    return stale_result
+            
+            # Cache miss - call function
+            _record_metric(actual_namespace, "misses")
+            logger.debug(f"[smart_cache] Miss: {cache_key}, calling {func.__name__}")
+            result = func(*args, **kwargs)
+            
+            # Store in cache
+            if result is not None:
+                cache.set(cache_key, result, ttl=actual_ttl)
+                
+                if level >= 2:
+                    cache.set_with_sqlite_persist(cache_key, result, ttl=actual_ttl, source=source)
+            
+            return result
+        
+        @functools.wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            cache = get_cache()
+            
+            # Build cache key from template
+            cache_key = _build_cache_key(key_template, func, args, kwargs, actual_namespace)
+            
+            # Check circuit breaker state
+            cb_is_open = False
+            if circuit_breaker is not None:
+                try:
+                    cb_is_open = not circuit_breaker.is_available()
+                except (AttributeError, RuntimeError):
+                    cb_is_open = False
+            
+            # L1 check
+            if level >= 1:
+                result = cache.get(cache_key)
+                if result is not None:
+                    _record_metric(actual_namespace, "hits")
+                    _record_metric(actual_namespace, "l1_hits")
+                    logger.debug(f"[smart_cache] L1 hit: {cache_key}")
+                    return result
+            
+            # L2 check (if level=2)
+            if level >= 2:
+                result = cache.get_with_sqlite_fallback(cache_key, source)
+                if result is not None:
+                    _record_metric(actual_namespace, "hits")
+                    _record_metric(actual_namespace, "l2_hits")
+                    logger.debug(f"[smart_cache] L2 hit: {cache_key}")
+                    return result
+            
+            # If circuit breaker is open, try to return stale data
+            if cb_is_open:
+                stale_result = _get_stale_data(cache, cache_key, actual_ttl * stale_ttl_multiplier)
+                if stale_result is not None:
+                    _record_metric(actual_namespace, "stale_returns")
+                    _record_metric(actual_namespace, "circuit_breaker_fallbacks")
+                    logger.warning(f"[smart_cache] Circuit breaker OPEN, returning stale: {cache_key}")
+                    return stale_result
+                # CB is open and no stale data - raise error
+                from app.services.circuit_breaker import CircuitBreakerOpen
+                cb_name = circuit_breaker.name if circuit_breaker else "unknown"
+                cb_timeout = circuit_breaker.config.timeout if circuit_breaker else 30
+                raise CircuitBreakerOpen(cb_name, cb_timeout)
+            
+            # Cache miss - use request coalescing for async
+            _record_metric(actual_namespace, "misses")
+            logger.debug(f"[smart_cache] Miss: {cache_key}, calling {func.__name__}")
+            
+            async def fetch_fn():
+                return await func(*args, **kwargs)
+            
+            result = await cache.get_or_set_async(cache_key, fetch_fn, ttl=actual_ttl)
+            
+            # Store in L2 if level=2
+            if result is not None and level >= 2:
+                cache.set_with_sqlite_persist(cache_key, result, ttl=actual_ttl, source=source)
+            
+            return result
+        
+        # Return appropriate wrapper based on function type
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+    
+    return decorator
+
+
+def _build_cache_key(
+    template: str,
+    func: Callable,
+    args: tuple,
+    kwargs: dict,
+    namespace: str = ""
+) -> str:
+    """
+    Build cache key from template and function arguments.
+    
+    Template format: "prefix:{arg1}:{arg2}"
+    Named placeholders are replaced with argument values.
+    
+    Args:
+        template: Key template with placeholders
+        func: The decorated function
+        args: Positional arguments
+        kwargs: Keyword arguments
+        namespace: Optional namespace prefix
+    
+    Returns:
+        Fully resolved cache key
+    """
+    # Get function signature
+    sig = inspect.signature(func)
+    params = list(sig.parameters.keys())
+    
+    # Build argument dictionary
+    arg_dict = {}
+    for i, param in enumerate(params):
+        if i < len(args):
+            arg_dict[param] = args[i]
+    
+    # Add keyword arguments
+    arg_dict.update(kwargs)
+    
+    # Replace placeholders in template
+    key = template
+    for param, value in arg_dict.items():
+        placeholder = "{" + param + "}"
+        if placeholder in key:
+            key = key.replace(placeholder, str(value))
+    
+    # Add namespace prefix
+    if namespace:
+        key = f"{namespace}:{key}"
+    
+    return key
+
+
+def _get_stale_data(cache: DataCache, key: str, stale_ttl: float) -> Optional[Any]:
+    """
+    Get stale data from cache when circuit breaker is open.
+    
+    Uses get_with_stale() to allow returning expired but usable data.
+    
+    Args:
+        cache: DataCache instance
+        key: Cache key
+        stale_ttl: Maximum age for stale data (seconds)
+    
+    Returns:
+        Stale data or None
+    """
+    try:
+        data, is_stale = cache.get_with_stale(key, fresh_ttl=0, stale_ttl=int(stale_ttl))
+        return data
+    except Exception as e:
+        logger.debug(f"[smart_cache] Failed to get stale data for {key}: {e}")
+        return None
+
+
+# Convenience decorators for common use cases
+def cache_quotes(func: Callable) -> Callable:
+    """Cache real-time quotes (L1: 10s, L2: 1h)"""
+    return smart_cache(
+        key_template="quote:{symbol}",
+        level=2,
+        ttl_type="quotes_l1",
+        namespace="quotes",
+        source="quotes"
+    )(func)
+
+
+def cache_macro(func: Callable) -> Callable:
+    """Cache macro data (L1: 5min, L2: 24h)"""
+    return smart_cache(
+        key_template="macro:{indicator}",
+        level=2,
+        ttl_type="macro_l1",
+        namespace="macro",
+        source="macro"
+    )(func)
+
+
+def cache_kline(func: Callable) -> Callable:
+    """Cache K-line data (L1: 5min, L2: 24h)"""
+    return smart_cache(
+        key_template="kline:{symbol}:{period}",
+        level=2,
+        ttl_type="kline_l1",
+        namespace="kline",
+        source="kline"
+    )(func)
+
+
+def cache_f9(func: Callable) -> Callable:
+    """Cache F9 deep data (L1: 5min, L2: 24h)"""
+    return smart_cache(
+        key_template="f9:{symbol}:{tab}",
+        level=2,
+        ttl_type="f9_l1",
+        namespace="f9",
+        source="f9"
+    )(func)
+
+
+def cache_static(func: Callable) -> Callable:
+    """Cache static data (L1: 1h, L2: 7 days)"""
+    return smart_cache(
+        key_template="static:{type}:{id}",
+        level=2,
+        ttl_type="static_l1",
+        namespace="static",
+        source="static"
+    )(func)
+
+
+# Factory function for creating circuit-breaker-aware decorators
+def create_cached_fetcher(
+    namespace: str,
+    ttl_type: str,
+    circuit_breaker: Optional[Any] = None,
+    level: int = 2
+):
+    """
+    Factory function to create a cached fetcher with circuit breaker.
+    
+    Usage:
+        forex_cb = CircuitBreaker("forex", failure_threshold=5, timeout=60)
+        
+        @create_cached_fetcher("forex", "quotes_l1", forex_cb)
+        async def fetch_forex_quote(symbol: str):
+            return await fetch_from_api(symbol)
+    
+    Args:
+        namespace: Cache namespace
+        ttl_type: TTL type from TTL_CONFIG
+        circuit_breaker: Optional CircuitBreaker instance
+        level: Cache level (1 or 2)
+    
+    Returns:
+        Decorator function
+    """
+    def decorator(func: Callable) -> Callable:
+        # Infer key template from function signature
+        sig = inspect.signature(func)
+        params = list(sig.parameters.keys())
+        
+        # Build key template from first parameter (usually the identifier)
+        if params:
+            key_template = f"{{{params[0]}}}"
+        else:
+            key_template = "data"
+        
+        return smart_cache(
+            key_template=key_template,
+            level=level,
+            ttl_type=ttl_type,
+            namespace=namespace,
+            circuit_breaker=circuit_breaker
+        )(func)
+    
+    return decorator

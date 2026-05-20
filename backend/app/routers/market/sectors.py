@@ -26,7 +26,7 @@ async def market_sectors():
         cache_age = int(time.time() - _SECTORS_CACHE_TS) if _SECTORS_CACHE_TS else 0
         return success_response({"sectors": sectors, "cache_age_seconds": cache_age})
     except Exception as e:
-        logger.error(f"[market_sectors] 错误: {e}")
+        logger.error(f"[market_sectors] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取行业板块失败: {str(e)}")
 
 
@@ -43,5 +43,5 @@ async def market_sectors_refresh():
         cache_age = int(time.time() - _SECTORS_CACHE_TS) if _SECTORS_CACHE_TS else 0
         return success_response({"sectors": sectors, "cache_age_seconds": cache_age, "refreshed": True})
     except Exception as e:
-        logger.error(f"[market_sectors_refresh] 错误: {e}")
+        logger.error(f"[market_sectors_refresh] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"刷新行业板块失败: {str(e)}")

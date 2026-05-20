@@ -83,7 +83,8 @@ class EastmoneyFetcher(BaseMarketFetcher):
                 "source": "eastmoney"
             }
             
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError) as e:
+            logger.debug(f"[Eastmoney] get_quote error for {symbol}: {type(e).__name__}: {e}")
             return None
     
     async def get_kline(self, symbol: str, period: str = "day") -> Optional[List[Dict]]:
@@ -137,7 +138,8 @@ class EastmoneyFetcher(BaseMarketFetcher):
             
             return klines
             
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError, KeyError, IndexError) as e:
+            logger.debug(f"[Eastmoney] get_kline error for {symbol}: {type(e).__name__}: {e}")
             return None
     
     def _to_em_secid(self, symbol: str) -> str:

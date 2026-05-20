@@ -70,7 +70,7 @@ class OptionsPricingEngine:
                     'rho': calc_rho,
                 }
             except ImportError as e:
-                logger.error(f"[Pricing] vollib not installed: {e}")
+                logger.error(f"[Pricing] vollib not installed: {e}", exc_info=True)
                 raise ImportError("vollib required. Install: pip install py_vollib")
         return self._vol_lib
     
@@ -185,7 +185,7 @@ class OptionsPricingEngine:
             
             try:
                 price_mid = self.vol_lib['bsm'](flag, S, K, T, r, sigma_mid, q)
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError):
                 price_mid = None
             
             if price_mid is None:
@@ -323,7 +323,7 @@ class OptionsPricingEngine:
                     sigma_low = sigma_mid
                 else:
                     sigma_high = sigma_mid
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError):
                 # If BSM fails, narrow the range
                 sigma_high = sigma_mid
         

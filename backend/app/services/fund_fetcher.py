@@ -263,7 +263,7 @@ class AkShareClient:
         except asyncio.TimeoutError:
             logger.error(f"[AkShare Fund] {code} 超时 ({TIMEOUT_TOTAL}s)")
         except Exception as e:
-            logger.error(f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}")
+            logger.error(f"[AkShare Fund] {code} 获取失败：{type(e).__name__}: {e}", exc_info=True)
             logger.exception("完整 traceback:")
         
         logger.warning(f"[AkShare Fund] {code} 返回 None，降级到 Mock")

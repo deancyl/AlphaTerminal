@@ -533,7 +533,7 @@ class MCPServer:
             result = tool.handler(arguments)
             return result
         except Exception as e:
-            logger.error(f"[MCP] call_tool {name} failed: {e}")
+            logger.error(f"[MCP] call_tool {name} failed: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     def get_tool(self, name: str) -> Optional[Tool]:

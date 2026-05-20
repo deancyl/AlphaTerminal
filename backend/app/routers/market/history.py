@@ -86,7 +86,7 @@ async def market_history(
                     fetch_us_stock_history(clean_sym, period=period, limit=5000)
                     logger.info(f"[Market History] 后台补全 {clean_sym} 完成")
                 except Exception as e:
-                    logger.error(f"[Market History] 后台补全失败: {e}")
+                    logger.error(f"[Market History] 后台补全失败: {e}", exc_info=True)
             fetching = True
             threading.Thread(target=_bg_fetch, daemon=True).start()
 
@@ -152,7 +152,7 @@ async def market_history(
                     raw_rows = rows
                     total    = len(raw_rows)
             except Exception as e:
-                logger.error(f"[Market History] AkShare 穿透失败: {e}")
+                logger.error(f"[Market History] AkShare 穿透失败: {e}", exc_info=True)
             finally:
                 fetching = False
 
@@ -178,7 +178,7 @@ async def market_history(
                 raw_rows = get_periodic_history(clean_sym, period=period, limit=limit, offset=offset)
                 total    = get_periodic_count(clean_sym, period)
             except Exception as e:
-                logger.error(f"[Market History] 穿透失败: {e}")
+                logger.error(f"[Market History] 穿透失败: {e}", exc_info=True)
 
         history  = _inject_change_pct(_apply_adjustment(list(reversed(raw_rows)), adjustment))
         has_more = (offset + len(raw_rows)) < total
@@ -259,7 +259,7 @@ async def futures_history(
             logger.error(f"[Futures] daily timeout {clean_sym}")
             return success_response({"symbol": clean_sym, "period": period, "history": []}, "获取超时")
         except Exception as e:
-            logger.error(f"[Futures] daily failed {clean_sym}: {e}")
+            logger.error(f"[Futures] daily failed {clean_sym}: {e}", exc_info=True)
             return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")
 
     elif period in FUTURES_FREQ_MAP:
@@ -287,7 +287,7 @@ async def futures_history(
             logger.error(f"[Futures] minute timeout {clean_sym}")
             return success_response({"symbol": clean_sym, "period": period, "history": []}, "获取超时")
         except Exception as e:
-            logger.error(f"[Futures] minute failed {clean_sym}: {e}")
+            logger.error(f"[Futures] minute failed {clean_sym}: {e}", exc_info=True)
             return success_response({"symbol": clean_sym, "period": period, "history": []}, f"获取失败: {e}")
 
     else:

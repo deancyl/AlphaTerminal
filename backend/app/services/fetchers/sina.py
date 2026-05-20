@@ -155,7 +155,7 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
                 "source": "sina",
             }
         except (ValueError, IndexError) as e:
-            logger.error(f"[Sina] 指数解析失败 {symbol}: {e}, parts={parts[:10]}")
+            logger.error(f"[Sina] 指数解析失败 {symbol}: {e}, parts={parts[:10]}", exc_info=True)
             return None
 
     else:
@@ -205,7 +205,7 @@ def parse_sina_response(raw_text: str, symbol: str) -> Optional[dict]:
                 "source": "sina",
             }
         except (ValueError, IndexError) as e:
-            logger.error(f"[Sina] 个股解析失败 {symbol}: {e}")
+            logger.error(f"[Sina] 个股解析失败 {symbol}: {e}", exc_info=True)
             return None
 
 
@@ -331,7 +331,7 @@ class SinaFetcher(BaseMarketFetcher):
             return result
 
         except Exception as e:
-            logger.error(f"[Sina] get_quote({symbol}) 异常: {e}")
+            logger.error(f"[Sina] get_quote({symbol}) 异常: {e}", exc_info=True)
             if self.cb:
                 self.cb.record_failure()
             return None
@@ -435,7 +435,7 @@ class SinaFetcher(BaseMarketFetcher):
             return klines
 
         except Exception as e:
-            logger.error(f"[Sina] get_kline({symbol}) 异常: {e}")
+            logger.error(f"[Sina] get_kline({symbol}) 异常: {e}", exc_info=True)
             return None
 
     async def ping(self) -> bool:
@@ -443,7 +443,7 @@ class SinaFetcher(BaseMarketFetcher):
         try:
             result = await self.get_quote("sh000001")
             return result is not None and result.price > 0
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError):
             return False
 
     async def close(self):

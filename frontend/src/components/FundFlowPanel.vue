@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, shallowRef, nextTick } from 'vue'
 // ECharts 通过 CDN 加载，使用全局变量（延迟取值，避免模块加载时 CDN 尚未就绪）
 const getEcharts = () => window.echarts
 import { useResizeObserver } from '@vueuse/core'
@@ -127,10 +127,11 @@ onThemeChange(() => {
   }
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   if (timer) clearInterval(timer)
+  timer = null
   abortRequests('Component unmounted')
-  if (chartInstance.value) {
+  if (chartInstance.value && !chartInstance.value.isDisposed()) {
     chartInstance.value.dispose()
     chartInstance.value = null
   }

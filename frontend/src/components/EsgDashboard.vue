@@ -533,7 +533,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { useApiError } from '../composables/useApiError.js'
 import { safeDispose } from '../utils/chartManager.js'
@@ -968,11 +968,17 @@ onMounted(async () => {
   window.addEventListener('resize', handleResize)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   _fetchController?.abort()
   _fetchController = null
-  safeDispose(radarChartInstance)
-  safeDispose(historyChartInstance)
+  if (radarChartInstance && !radarChartInstance.isDisposed()) {
+    radarChartInstance.dispose()
+    radarChartInstance = null
+  }
+  if (historyChartInstance && !historyChartInstance.isDisposed()) {
+    historyChartInstance.dispose()
+    historyChartInstance = null
+  }
   window.removeEventListener('resize', handleResize)
 })
 </script>

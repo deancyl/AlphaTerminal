@@ -1630,7 +1630,7 @@ async def collect_web_vitals(request: Request):
         
         return {"code": 0, "message": "Metric recorded"}
     except Exception as e:
-        logger.error(f"[WebVitals] Failed to parse metric: {e}")
+        logger.error(f"[WebVitals] Failed to parse metric: {e}", exc_info=True)
         return {"code": 0, "message": "Metric ignored"}
 
 @router.get("/web-vitals")
@@ -1930,7 +1930,7 @@ async def switch_data_source(body: SourceSwitchRequest):
             }
         }
     except Exception as e:
-        logger.error(f"[Admin] Failed to switch data source: {e}")
+        logger.error(f"[Admin] Failed to switch data source: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"切换失败: {str(e)}")
 
 

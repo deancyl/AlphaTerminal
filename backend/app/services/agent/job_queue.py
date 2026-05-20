@@ -113,7 +113,7 @@ class JobQueue:
             except queue.Empty:
                 time.sleep(0.1)
             except Exception as e:
-                logger.error(f"Worker error: {e}")
+                logger.error(f"Worker error: {e}", exc_info=True)
 
     def _execute_job(self, job_id: str):
         job = self._jobs.get(job_id)
@@ -146,7 +146,7 @@ class JobQueue:
             job.status = JobStatus.FAILED
             job.completed_at = datetime.now()
             job.error = str(e)
-            logger.error(f"Job {job_id} failed: {e}")
+            logger.error(f"Job {job_id} failed: {e}", exc_info=True)
             self._update_job(job_id, status=JobStatus.FAILED.value, completed_at=job.completed_at.isoformat(), error=str(e))
 
     def _run_backtest_job(self, job: Job) -> Dict:

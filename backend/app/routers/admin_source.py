@@ -58,7 +58,7 @@ async def list_data_sources():
             }
         }
     except Exception as e:
-        logger.error(f"list_data_sources error: {e}")
+        logger.error(f"list_data_sources error: {e}", exc_info=True)
         return {"code": 500, "message": str(e)}
 
 
@@ -79,7 +79,7 @@ async def switch_data_source(name: str):
                 "message": f"数据源 {name} 不存在",
             }
     except Exception as e:
-        logger.error(f"switch_data_source error: {e}")
+        logger.error(f"switch_data_source error: {e}", exc_info=True)
         return {"code": 500, "message": str(e)}
 
 
@@ -108,7 +108,7 @@ async def health_check_source(name: Optional[str] = None):
             }
         }
     except Exception as e:
-        logger.error(f"health_check_source error: {e}")
+        logger.error(f"health_check_source error: {e}", exc_info=True)
         return {"code": 500, "message": str(e)}
 
 
@@ -134,7 +134,7 @@ async def get_source_status():
             }
         }
     except Exception as e:
-        logger.error(f"get_source_status error: {e}")
+        logger.error(f"get_source_status error: {e}", exc_info=True)
         return {"code": 500, "message": str(e)}
 
 
@@ -148,5 +148,5 @@ async def reset_circuit_breaker(name: str):
             "message": f"熔断器 {name} 已重置",
         }
     except Exception as e:
-        logger.error(f"reset_circuit_breaker error: {e}")
+        logger.error(f"reset_circuit_breaker error: {e}", exc_info=True)
         return {"code": 500, "message": str(e)}

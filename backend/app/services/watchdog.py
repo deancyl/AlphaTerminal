@@ -151,7 +151,7 @@ def save_watchdog_config(enabled: bool) -> bool:
         logger.info(f"[Watchdog] 配置已保存: enabled={enabled}")
         return True
     except Exception as e:
-        logger.error(f"[Watchdog] 保存配置失败: {e}")
+        logger.error(f"[Watchdog] 保存配置失败: {e}", exc_info=True)
         return False
 
 
@@ -236,7 +236,7 @@ def _restart_backend() -> bool:
         return True
         
     except Exception as e:
-        logger.error(f"[Watchdog] 重启后端失败: {e}")
+        logger.error(f"[Watchdog] 重启后端失败: {e}", exc_info=True)
         _watchdog_state.record_error(f"重启失败: {e}")
         return False
 
@@ -293,7 +293,7 @@ def _watchdog_loop():
             time.sleep(HEALTH_CHECK_INTERVAL)
             
         except Exception as e:
-            logger.error(f"[Watchdog] 监控循环异常: {e}")
+            logger.error(f"[Watchdog] 监控循环异常: {e}", exc_info=True)
             _watchdog_state.record_error(f"监控循环异常: {e}")
             time.sleep(HEALTH_CHECK_INTERVAL)
     

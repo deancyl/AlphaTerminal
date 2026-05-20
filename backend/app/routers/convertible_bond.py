@@ -436,7 +436,7 @@ async def convertible_bond_list():
             "source": cache.get("source", "unknown"),
         })
     except Exception as e:
-        logger.error(f"[convertible_bond_list] 错误: {e}")
+        logger.error(f"[convertible_bond_list] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债列表失败: {str(e)}")
 
 
@@ -466,7 +466,7 @@ async def convertible_bond_spot():
             "source": cache.get("source", "unknown"),
         })
     except Exception as e:
-        logger.error(f"[convertible_bond_spot] 错误: {e}")
+        logger.error(f"[convertible_bond_spot] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债实时行情失败: {str(e)}")
 
 
@@ -498,7 +498,7 @@ async def convertible_bond_comparison():
             "source": cache.get("source", "unknown"),
         })
     except Exception as e:
-        logger.error(f"[convertible_bond_comparison] 错误: {e}")
+        logger.error(f"[convertible_bond_comparison] 错误: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取可转债比价表失败: {str(e)}")
 
 

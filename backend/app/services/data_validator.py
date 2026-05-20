@@ -179,7 +179,7 @@ class QuoteData(BaseModel):
         if isinstance(v, str):
             try:
                 return int(datetime.fromisoformat(v).timestamp())
-            except Exception:
+            except (ValueError, TypeError):
                 return int(time.time()) if "time" in dir() else 0
         return int(datetime.now().timestamp())
 
@@ -294,7 +294,7 @@ def validate_quote(raw: dict, source: str) -> Optional[QuoteData]:
 
         return data
     except Exception as e:
-        logger.error(f"[Validator] QuoteData 校验失败 (source={source}): {e}")
+        logger.error(f"[Validator] QuoteData 校验失败 (source={source}): {e}", exc_info=True)
         return None
 
 
@@ -304,5 +304,5 @@ def validate_kline(raw: dict, source: str) -> Optional[KlineData]:
         raw["source"] = source
         return KlineData(**raw)
     except Exception as e:
-        logger.error(f"[Validator] KlineData 校验失败 (source={source}): {e}")
+        logger.error(f"[Validator] KlineData 校验失败 (source={source}): {e}", exc_info=True)
         return None

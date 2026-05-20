@@ -38,9 +38,10 @@ def release_scheduler_lock():
             fcntl.flock(_lock_file.fileno(), fcntl.LOCK_UN)
             _lock_file.close()
             os.remove(LOCK_FILE_PATH)
-        except:
-            pass
-        _lock_file = None
+        except (IOError, OSError, PermissionError, FileNotFoundError) as e:
+            logger.debug(f"[Scheduler] Lock release failed (non-critical): {e}")
+        finally:
+            _lock_file = None
 
 scheduler = BackgroundScheduler()
 
@@ -545,7 +546,7 @@ def start_scheduler():
                 result = _save_one(pid)
                 logger.info(f"[PortfolioSnap] pid={pid} date={today} asset={result.get('total_asset',0)}")
         except Exception as e:
-            logger.error(f"[PortfolioSnap] 快照失败: {e}")
+            logger.error(f"[PortfolioSnap] 快照失败: {e}", exc_info=True)
 
     scheduler.add_job(
         _record_portfolio_snapshots,
@@ -609,7 +610,7 @@ def _cache_cleanup_job():
         if removed > 0:
             logger.info(f"[Scheduler] Cache cleanup: removed {removed} expired entries")
     except Exception as e:
-        logger.error(f"[Scheduler] Cache cleanup failed: {e}")
+        logger.error(f"[Scheduler] Cache cleanup failed: {e}", exc_info=True)
 
 
 async def run_initial_data_fetch():
@@ -623,14 +624,14 @@ async def run_initial_data_fetch():
     try:
         await loop.run_in_executor(None, _forex_polling_job)
         logger.info("[Startup] Forex data fetched")
-    except Exception as e:
-        logger.error(f"[Startup] Forex fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {e}", exc_info=True)
     
     try:
         await loop.run_in_executor(None, _macro_polling_job)
         logger.info("[Startup] Macro data fetched")
-    except Exception as e:
-        logger.error(f"[Startup] Macro fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {e}", exc_info=True)
     
     logger.info("[Startup] Blocking data fetch complete")
 
@@ -708,7 +709,7 @@ def _macro_polling_job():
                     'calendar': None  # No calendar data available
                 }
             except Exception as e:
-                logger.error(f"[MacroPolling] Fetch error: {e}")
+                logger.error(f"[MacroPolling] Fetch error: {e}", exc_info=True)
                 return None
         
         data = loop.run_in_executor(_macro_executor, fetch_sync)

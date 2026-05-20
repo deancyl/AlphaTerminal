@@ -109,7 +109,7 @@ def _fetch_news_for_symbol(symbol: str) -> list[dict]:
                     "source": str(row.get("文章来源", "")) or "未知",
                     "url":    raw_url,   # ← 绝对路径，例: http://finance.eastmoney.com/a/202603313690418549.html
                 })
-            except Exception:
+            except (ValueError, TypeError, KeyError, AttributeError):
                 continue
         return rows
     except Exception as e:
@@ -141,7 +141,7 @@ def _fetch_7x24_news() -> list[dict]:
                     "source": source,
                     "url":    raw_url,
                 })
-            except Exception:
+            except (ValueError, TypeError, KeyError, AttributeError):
                 continue
         logger.info(f"[NewsEngine] 7x24 快讯: {len(rows)} 条")
         return rows
@@ -175,11 +175,11 @@ async def fetch_news_parallel(symbols: list[str]) -> list[dict]:
                         "source": str(row.get("文章来源", "")) or "未知",
                         "url":    raw_url,
                     })
-                except Exception:
+                except (ValueError, TypeError, KeyError, AttributeError):
                     continue
             return rows
-        except Exception as e:
-            logger.warning(f"[NewsEngine] parallel fetch failed for {sym}: {type(e).__name__}: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed for {sym}: {type(e).__name__}: {e}")
             return []
 
     results = await asyncio.gather(*[fetch_one(s) for s in symbols])
@@ -244,8 +244,8 @@ def refresh_news_cache(background: bool = True):
             logger.error(f"[SCHEDULER] News fetch timeout: {e}", exc_info=True)
             logger.info(f"[HEARTBEAT] News fetch timeout at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             return
-        except Exception as e:
-            logger.error(f"[SCHEDULER] Overall news fetch failed: {e}", exc_info=True)
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {e}", exc_info=True)
             logger.info(f"[HEARTBEAT] News fetch failed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}: {e}")
             return
 

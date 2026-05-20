@@ -67,8 +67,8 @@ def _fetch_all_stocks_sync() -> List[Dict]:
             except (ValueError, TypeError):
                 continue
         return stocks
-    except Exception as e:
-        logger.error(f"[Anomaly] Failed to fetch all stocks: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] all stocks: {e}", exc_info=True)
         return []
 
 
@@ -89,8 +89,8 @@ def _fetch_capital_flow_sync() -> List[Dict]:
             except (ValueError, TypeError):
                 continue
         return flows
-    except Exception as e:
-        logger.warning(f"[Anomaly] Failed to fetch capital flow: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] capital flow: {e}")
         return []
 
 
@@ -110,8 +110,8 @@ def _fetch_institution_research_sync() -> List[Dict]:
             except (ValueError, TypeError):
                 continue
         return research
-    except Exception as e:
-        logger.warning(f"[Anomaly] Failed to fetch institution research: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] institution research: {e}")
         return []
 
 
@@ -512,8 +512,8 @@ async def _detect_anomalies_internal(
                             results.append(_detect_new_high_simple(stocks, top_n))
                     else:
                         results.append(_detect_new_high_simple(stocks, top_n))
-                except Exception as e:
-                    logger.warning(f"[Anomaly] K-line fetch failed, using fallback: {e}")
+                except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed, using fallback: {e}")
                     results.append(_detect_new_high_simple(stocks, top_n))
             
             if anomaly_type in (None, AnomalyType.VOLUME_SURGE):

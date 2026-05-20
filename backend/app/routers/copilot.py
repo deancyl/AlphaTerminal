@@ -1422,8 +1422,8 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                 })
             
             return data
-        except Exception as e:
-            logger.warning(f"[Copilot] kline data fetch error: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error: {e}")
             return []
     
     def _fetch_financial_data():
@@ -1454,8 +1454,8 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
                     })
             
             return data
-        except Exception as e:
-            logger.warning(f"[Copilot] financial data fetch error: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] error: {e}")
             return []
     
     try:
@@ -1477,7 +1477,7 @@ async def get_chart_data(data_type: str, symbol: str, period: str = "30d"):
             "count": len(data)
         }
     except Exception as e:
-        logger.error(f"[Copilot] chart_data error: {e}")
+        logger.error(f"[Copilot] chart_data error: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e),

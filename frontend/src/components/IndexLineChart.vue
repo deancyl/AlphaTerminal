@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -873,17 +873,20 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   clearTimeout(_leaveTimer)
   _leaveTimer = null
   _fetchController?.abort()
   _fetchController = null
   resizeObserver?.disconnect()
+  resizeObserver = null
   if (chartInstance) {
     chartInstance.off('mousemove')
     chartInstance.getZr()?.off('mouseleave')
     chartInstance.getZr()?.off('mouseenter')
-    chartInstance.dispose()
+    if (!chartInstance.isDisposed()) {
+      chartInstance.dispose()
+    }
     chartInstance = null
   }
 })

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import compression from 'vite-plugin-compression'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
@@ -67,7 +68,22 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
     },
   },
-  plugins: [vue(), versionJsonPlugin()],
+  plugins: [
+    vue(),
+    versionJsonPlugin(),
+    // v0.6.61: Compression plugin for gzip
+    compression({
+      algorithm: 'gzip',
+      threshold: 10240,  // Only compress files > 10KB
+      deleteOriginFile: false,  // Keep original files
+    }),
+    // v0.6.61: Brotli compression for better compression ratio
+    compression({
+      algorithm: 'brotliCompress',
+      threshold: 10240,
+      deleteOriginFile: false,
+    })
+  ],
   server: {
     host: '0.0.0.0',
     port: 60100,
@@ -122,20 +138,41 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // v0.6.61: Refactored manualChunks to 4 vendor groups
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('@mlc-ai/web-llm')) return 'vendor-webllm'
-            if (id.includes('vue'))             return 'vendor-vue'
-            if (id.includes('gridstack'))        return 'vendor-gridstack'
-            if (id.includes('echarts'))          return 'vendor-echarts'
-            if (id.includes('lightweight-charts')) return 'vendor-lwcharts'
-            if (id.includes('html2canvas'))      return 'vendor-html2canvas'
-            if (id.includes('@vueuse'))           return 'vendor-vueuse'
-            if (id.includes('pinia'))             return 'vendor-pinia'
-            if (id.includes('axios'))            return 'vendor-axios'
-            if (id.includes('dayjs'))             return 'vendor-dayjs'
-            if (id.includes('lodash'))            return 'vendor-lodash'
-            return 'vendor'
+            // Group 1: vendor-core - Core Vue ecosystem
+            if (id.includes('vue') || id.includes('pinia') || id.includes('@vueuse')) {
+              return 'vendor-core'
+            }
+            
+            // Group 2: vendor-charts - Charting libraries
+            if (id.includes('echarts') || id.includes('lightweight-charts')) {
+              return 'vendor-charts'
+            }
+            
+            // Group 3: vendor-utils - Utility libraries
+            if (id.includes('axios') || id.includes('dayjs') || id.includes('lodash') || id.includes('gridstack')) {
+              return 'vendor-utils'
+            }
+            
+            // Group 4: vendor-webllm - Heavy WebLLM library (separate for lazy loading)
+            if (id.includes('@mlc-ai/web-llm')) {
+              return 'vendor-webllm'
+            }
+            
+            // Group 5: vendor-misc - Other libraries
+            if (id.includes('html2canvas')) {
+              return 'vendor-misc'
+            }
+            
+            // Default: vendor-misc
+            return 'vendor-misc'
+          }
+          
+          // Admin panel - separate chunk for admin routes
+          if (id.includes('/components/admin/')) {
+            return 'admin-panel'
           }
         },
       },

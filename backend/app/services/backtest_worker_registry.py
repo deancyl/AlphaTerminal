@@ -282,7 +282,7 @@ class BacktestWorkerRegistry:
                 logger.info(f"[BacktestWorkerRegistry] Killed worker {worker_id}")
                 return True
             except Exception as e:
-                logger.error(f"[BacktestWorkerRegistry] Failed to kill worker {worker_id}: {e}")
+                logger.error(f"[BacktestWorkerRegistry] Failed to kill worker {worker_id}: {e}", exc_info=True)
                 return False
     
     def cleanup_completed(self, max_age_seconds: int = 300):

@@ -284,7 +284,7 @@ try:
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest module not loaded: {e}")
 except Exception as e:
-    logger.error(f"Unexpected error loading backtest module: {e}")
+    logger.error(f"Unexpected error loading backtest module: {e}", exc_info=True)
 
 # 回测监控模块
 try:
@@ -293,7 +293,7 @@ try:
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Backtest monitor module not loaded: {e}")
 except Exception as e:
-    logger.error(f"Unexpected error loading backtest monitor module: {e}")
+    logger.error(f"Unexpected error loading backtest monitor module: {e}", exc_info=True)
 
 # 策略模块
 try:
@@ -302,7 +302,7 @@ try:
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning(f"Strategy module not loaded: {e}")
 except Exception as e:
-    logger.error(f"Unexpected error loading strategy module: {e}")
+    logger.error(f"Unexpected error loading strategy module: {e}", exc_info=True)
 
 
 @app.get("/health")

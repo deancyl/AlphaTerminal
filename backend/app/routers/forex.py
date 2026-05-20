@@ -244,7 +244,7 @@ async def get_spot_quotes():
         logger.warning("[Forex] 首次获取超时，返回服务不可用错误")
         return error_response("外汇数据暂不可用，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
     except Exception as e:
-        logger.error(f"[Forex] 首次获取失败: {e}")
+        logger.error(f"[Forex] 首次获取失败: {e}", exc_info=True)
         return error_response("外汇数据获取失败，请稍后重试", code=ErrorCode.SERVICE_UNAVAILABLE)
 
 
@@ -325,8 +325,8 @@ async def _fetch_forex_spot_background():
         
         logger.info(f"[Forex] Background fetch completed: {len(quotes)} quotes")
         
-    except Exception as e:
-        logger.error(f"[Forex] Background fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {e}", exc_info=True)
 
 
 async def _fetch_forex_spot_foreground():
@@ -423,7 +423,7 @@ async def reset_circuit_breaker():
         result = await forex_fetcher.reset_circuit_breaker()
         return success_response(result)
     except Exception as e:
-        logger.error(f"[Forex] 重置熔断器失败: {e}")
+        logger.error(f"[Forex] 重置熔断器失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"重置熔断器失败: {str(e)}")
 
 
@@ -450,7 +450,7 @@ async def get_cfets_spot():
         })
         
     except Exception as e:
-        logger.error(f"[Forex] 获取CFETS报价失败: {e}")
+        logger.error(f"[Forex] 获取CFETS报价失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS报价失败: {str(e)}")
 
 
@@ -476,7 +476,7 @@ async def get_cfets_crosses():
         })
         
     except Exception as e:
-        logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}")
+        logger.error(f"[Forex] 获取CFETS交叉汇率失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取CFETS交叉汇率失败: {str(e)}")
 
 
@@ -506,7 +506,7 @@ async def get_official_rates(
         })
         
     except Exception as e:
-        logger.error(f"[Forex] 获取官方中间价失败: {e}")
+        logger.error(f"[Forex] 获取官方中间价失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取官方中间价失败: {str(e)}")
 
 
@@ -564,8 +564,8 @@ async def get_forex_history_new(
         
     except asyncio.TimeoutError:
         logger.warning(f"[Forex] History fetch timeout for {symbol}")
-    except Exception as e:
-        logger.warning(f"[Forex] History fetch failed for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed for {symbol}: {e}")
     
     # Check if mock data is allowed
     settings = get_settings()
@@ -670,8 +670,8 @@ async def _fetch_forex_history_background(symbol: str, start_date: Optional[str]
         
         logger.info(f"[Forex] History background fetch completed (mock): {symbol}, {len(mock_history)} bars")
         
-    except Exception as e:
-        logger.error(f"[Forex] History background fetch failed: {symbol} - {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {symbol} - {e}", exc_info=True)
 
 
 @router.get("/matrix")
@@ -873,8 +873,8 @@ async def _fetch_forex_matrix_background(currencies: str):
         
         logger.info(f"[Forex] Matrix background fetch completed: {len(currency_list)} currencies")
         
-    except Exception as e:
-        logger.error(f"[Forex] Matrix background fetch failed: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] failed: {e}", exc_info=True)
 
 
 @router.post("/cross-rate")
@@ -971,7 +971,7 @@ async def calculate_cross_rate_endpoint(request: CrossRateRequest):
         })
         
     except Exception as e:
-        logger.error(f"[Forex] 计算交叉汇率失败: {e}")
+        logger.error(f"[Forex] 计算交叉汇率失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"计算交叉汇率失败: {str(e)}")
 
 
@@ -1124,7 +1124,7 @@ async def get_forex_history(
         return success_response(result)
         
     except Exception as e:
-        logger.error(f"获取外汇历史数据失败: {e}")
+        logger.error(f"获取外汇历史数据失败: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"获取外汇历史数据失败: {str(e)}")
 
 

@@ -126,7 +126,7 @@ class ModelLoader:
             return model
             
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to load model {model_id}: {e}")
+            logger.error(f"[ModelLoader] Failed to load model {model_id}: {e}", exc_info=True)
             return None
     
     def save_model(
@@ -182,7 +182,7 @@ class ModelLoader:
             return True
             
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to save model {model_id}: {e}")
+            logger.error(f"[ModelLoader] Failed to save model {model_id}: {e}", exc_info=True)
             return False
     
     def predict(
@@ -222,7 +222,7 @@ class ModelLoader:
             return predictions
             
         except Exception as e:
-            logger.error(f"[ModelLoader] Prediction failed for {model_id}: {e}")
+            logger.error(f"[ModelLoader] Prediction failed for {model_id}: {e}", exc_info=True)
             return None
     
     def train_model(
@@ -312,7 +312,7 @@ class ModelLoader:
             return model
             
         except Exception as e:
-            logger.error(f"[ModelLoader] Training failed: {e}")
+            logger.error(f"[ModelLoader] Training failed: {e}", exc_info=True)
             return None
     
     def list_models(self) -> List[ModelInfo]:
@@ -350,7 +350,7 @@ class ModelLoader:
             return True
             
         except Exception as e:
-            logger.error(f"[ModelLoader] Failed to delete model {model_id}: {e}")
+            logger.error(f"[ModelLoader] Failed to delete model {model_id}: {e}", exc_info=True)
             return False
     
     def _save_model_metadata(self, model_id: str, info: ModelInfo):

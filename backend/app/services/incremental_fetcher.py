@@ -84,7 +84,7 @@ class IncrementalKlineFetcher:
             return result
             
         except Exception as e:
-            logger.error(f"[IncrementalFetcher] {symbol} 增量获取失败: {e}")
+            logger.error(f"[IncrementalFetcher] {symbol} 增量获取失败: {e}", exc_info=True)
             return []
     
     def merge_data(

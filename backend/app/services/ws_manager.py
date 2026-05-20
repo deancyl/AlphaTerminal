@@ -187,7 +187,7 @@ class ConnectionManager:
             for conn in conns_copy:
                 try:
                     await conn.ws.send_text(json.dumps({"type": "ping"}))
-                except Exception:
+                except (RuntimeError, ValueError, AttributeError):
                     pass
 
     async def _cleanup_loop(self):
@@ -242,7 +242,7 @@ class ConnectionManager:
                     continue
                 try:
                     await conn.ws.send_text(data)
-                except Exception:
+                except (RuntimeError, ValueError, AttributeError):
                     dead.append(conn)
 
             if dead:

@@ -449,15 +449,15 @@ class NotificationService:
             return result
             
         except ValueError as e:
-            logger.error(f"  [ERROR] Template validation error: {e}")
+            logger.error(f"  [ERROR] Template validation error: {e}", exc_info=True)
             logger.debug("=" * 60)
             raise
         except KeyError as e:
-            logger.error(f"  [ERROR] Missing template variable: {e}")
+            logger.error(f"  [ERROR] Missing template variable: {e}", exc_info=True)
             logger.debug("=" * 60)
             raise ValueError(f"Missing required template variable: {e}")
         except Exception as e:
-            logger.error(f"  [ERROR] Template rendering failed: {e}")
+            logger.error(f"  [ERROR] Template rendering failed: {e}", exc_info=True)
             logger.debug("=" * 60)
             raise
     
@@ -623,15 +623,15 @@ class NotificationService:
             return success
             
         except ValueError as e:
-            logger.error(f"  [ERROR] Validation error: {e}")
+            logger.error(f"  [ERROR] Validation error: {e}", exc_info=True)
             logger.debug("=" * 60)
             return False
         except KeyError as e:
-            logger.error(f"  [ERROR] Missing required field: {e}")
+            logger.error(f"  [ERROR] Missing required field: {e}", exc_info=True)
             logger.debug("=" * 60)
             return False
         except Exception as e:
-            logger.error(f"  [ERROR] Send operation failed: {e}")
+            logger.error(f"  [ERROR] Send operation failed: {e}", exc_info=True)
             logger.debug("=" * 60)
             return False
     

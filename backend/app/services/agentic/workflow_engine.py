@@ -251,7 +251,7 @@ class WorkflowEngine:
             try:
                 await self.execute_step(step)
             except Exception as e:
-                logger.error(f"[WorkflowEngine] Step {step.id} failed: {e}")
+                logger.error(f"[WorkflowEngine] Step {step.id} failed: {e}", exc_info=True)
                 step.status = "failed"
                 step.error = str(e)
         

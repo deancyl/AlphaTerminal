@@ -481,7 +481,7 @@ class OrderExecutionEngine:
             
             logger.info(f"[OMS] Trade executed: {order.side} {order.filled_quantity} {order.symbol}@{order.avg_fill_price}")
         except Exception as e:
-            logger.error(f"[OMS] Trade execution failed: {e}")
+            logger.error(f"[OMS] Trade execution failed: {e}", exc_info=True)
             raise
     
     def _log_audit(self, action: str, order: Order, details: Dict[str, Any]) -> None:

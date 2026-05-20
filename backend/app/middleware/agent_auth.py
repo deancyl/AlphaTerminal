@@ -452,7 +452,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except AttributeError as e:
             # Log attribute errors (e.g., missing request state attributes)
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_ATTR_ERROR] Attribute error: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AUDIT_ATTR_ERROR] Attribute error: {e}\n{traceback.format_exc()}", exc_info=True)
             
             # Get token if available
             token = get_current_token(request)
@@ -483,7 +483,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except (KeyError, ValueError, TypeError) as e:
             # Log data processing errors
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_DATA_ERROR] Data processing error: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AUDIT_DATA_ERROR] Data processing error: {type(e).__name__}: {e}\n{traceback.format_exc()}", exc_info=True)
             
             # Get token if available
             token = get_current_token(request)
@@ -514,7 +514,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log unexpected exceptions (fallback)
             duration = time.time() - request_start_time
-            logger.error(f"[AUDIT_EXCEPTION] Unexpected exception: {e}\n{traceback.format_exc()}")
+            logger.error(f"[AUDIT_EXCEPTION] Unexpected exception: {e}\n{traceback.format_exc()}", exc_info=True)
             
             # Get token if available
             token = get_current_token(request)

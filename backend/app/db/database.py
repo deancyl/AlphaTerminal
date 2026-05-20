@@ -62,12 +62,21 @@ def get_conn():
     conn = _get_thread_conn()
     try:
         yield conn
-    except Exception:
-        # 发生异常时回滚事务
+    except sqlite3.Error as e:
+        # 发生数据库异常时回滚事务
+        logger.error(f"[DB_CTX] Database error: {type(e).__name__}: {e}", exc_info=True)
         try:
             conn.rollback()
-        except Exception as e:
-            logger.warning(f"[DB_CTX] Rollback failed: {type(e).__name__}: {e}")
+        except sqlite3.Error as rollback_err:
+            logger.error(f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
+        raise
+    except Exception as e:
+        # 其他异常也尝试回滚
+        logger.error(f"[DB_CTX] Unexpected error: {type(e).__name__}: {e}", exc_info=True)
+        try:
+            conn.rollback()
+        except sqlite3.Error as rollback_err:
+            logger.error(f"[DB_CTX] Rollback failed: {type(rollback_err).__name__}: {rollback_err}", exc_info=True)
         raise
 
 def _get_conn():
@@ -179,8 +188,10 @@ def init_tables():
         ]:
             try:
                 conn.execute(f"ALTER TABLE portfolios ADD COLUMN {col} {dtype} {default}")
-            except Exception:
+            except sqlite3.OperationalError:
                 pass  # 列已存在时静默忽略
+            except sqlite3.Error as e:
+                logger.error(f"[DB] Failed to add column {col}: {type(e).__name__}: {e}", exc_info=True)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_portfolios_parent ON portfolios(parent_id)")
 
         # transactions 资金流水表（审计基石）
@@ -705,7 +716,11 @@ def get_admin_config(key: str, default=None):
             try:
                 import json as _json
                 return _json.loads(row['value'])
-            except Exception:
+            except json.JSONDecodeError as e:
+                logger.warning(f"[DB] JSON decode error for key '{key}': {e}")
+                return row['value']
+            except Exception as e:
+                logger.error(f"[DB] Unexpected error parsing config for key '{key}': {type(e).__name__}: {e}", exc_info=True)
                 return row['value']
         finally:
             conn.close()
@@ -735,7 +750,11 @@ def get_all_admin_configs():
             for r in rows:
                 try:
                     result[r['key']] = _json.loads(r['value'])
-                except Exception:
+                except json.JSONDecodeError as e:
+                    logger.warning(f"[DB] JSON decode error for key '{r['key']}': {e}")
+                    result[r['key']] = r['value']
+                except Exception as e:
+                    logger.error(f"[DB] Unexpected error parsing config for key '{r['key']}': {type(e).__name__}: {e}", exc_info=True)
                     result[r['key']] = r['value']
             return result
         finally:

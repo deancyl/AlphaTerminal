@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.services.pricing.black_scholes import pricing_engine
+from app.services.data_cache import get_cache
 
 logger = logging.getLogger(__name__)
 
@@ -117,9 +118,8 @@ class OptionsFetcher(BaseMarketFetcher):
         )
         self._ak = None
         
-        self._cache = {}
-        self._cache_ttl = {}
-        self._cache_lock = asyncio.Lock()
+        self._data_cache = get_cache()  # Use unified DataCache
+                self._cache_lock = asyncio.Lock()
     
     def _get_underlying_symbol(self, option_symbol: str) -> str:
         """
@@ -158,8 +158,8 @@ class OptionsFetcher(BaseMarketFetcher):
             
             return None
             
-        except Exception as e:
-            logger.warning(f"[Options] Failed to fetch underlying spot: {symbol} - {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] underlying spot: {symbol} - {e}")
             return None
     
     @property
@@ -303,7 +303,7 @@ class OptionsFetcher(BaseMarketFetcher):
             return self._get_empty_chain(symbol)
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Options] 获取CFFEX期权链失败: {symbol} - {e}")
+            logger.error(f"[Options] 获取CFFEX期权链失败: {symbol} - {e}", exc_info=True)
             return self._get_empty_chain(symbol)
 
     async def get_sse_greeks(self, contract_code: str) -> Dict[str, Any]:
@@ -376,7 +376,7 @@ class OptionsFetcher(BaseMarketFetcher):
             return self._get_empty_greeks(contract_code)
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Options] 获取SSE Greeks失败: {contract_code} - {e}")
+            logger.error(f"[Options] 获取SSE Greeks失败: {contract_code} - {e}", exc_info=True)
             return self._get_empty_greeks(contract_code)
 
     async def get_contract_list(self, exchange: str = "CFFEX") -> Dict[str, Any]:
@@ -507,7 +507,7 @@ class OptionsFetcher(BaseMarketFetcher):
         try:
             chain = await self.get_cffex_chain("io2506")
             return chain.get("source") == "akshare"
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError):
             return False
 
 

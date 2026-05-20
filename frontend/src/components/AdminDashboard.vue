@@ -20,22 +20,36 @@
       </div>
       <div class="px-4 py-2 text-xs text-[var(--color-warning)] bg-[var(--color-warning-bg)]/30">⚠️ 以下功能会影响系统运行，请谨慎操作</div>
       <nav class="py-2">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          class="w-full flex items-center gap-3 px-4 py-3 text-sm transition-all text-left"
-          :class="activeTab === item.id
-            ? 'bg-terminal-accent/15 text-terminal-accent border-r-2 border-terminal-accent'
-            : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
-          @click="activeTab = item.id; mobileNavOpen = false"
-        >
-          <span class="text-base">{{ item.icon }}</span>
-          <div class="flex-1">
-            <div class="font-medium">{{ item.label }}</div>
-            <div class="text-xs text-theme-muted leading-tight">{{ item.desc }}</div>
-          </div>
-          <span v-if="item.status" class="w-2 h-2 rounded-full flex-shrink-0" :class="item.statusClass"></span>
-        </button>
+        <div v-for="group in navGroups" :key="group.id" class="nav-group">
+          <!-- Group Header -->
+          <button
+            class="w-full flex items-center gap-3 px-4 py-3 text-sm transition-all text-left group-header"
+            :class="group.expanded ? 'bg-theme-hover/30 text-theme-primary' : 'text-theme-secondary hover:bg-theme-hover'"
+            @click="group.expanded = !group.expanded"
+          >
+            <span class="text-base">{{ group.icon }}</span>
+            <span class="font-medium flex-1">{{ group.label }}</span>
+            <span class="chevron text-xs transition-transform duration-300" :class="{ 'rotate-180': group.expanded }">▼</span>
+          </button>
+          
+          <!-- Group Items -->
+          <transition name="expand">
+            <div v-show="group.expanded" class="group-items overflow-hidden">
+              <button
+                v-for="item in group.items"
+                :key="item.id"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all text-left pl-10"
+                :class="activeTab === item.id
+                  ? 'bg-terminal-accent/15 text-terminal-accent border-r-2 border-terminal-accent'
+                  : 'text-theme-secondary hover:bg-theme-hover hover:text-theme-primary'"
+                @click="activeTab = item.id; mobileNavOpen = false"
+              >
+                <span class="text-base">{{ item.icon }}</span>
+                <span class="font-medium">{{ item.label }}</span>
+              </button>
+            </div>
+          </transition>
+        </div>
       </nav>
     </aside>
 
@@ -158,6 +172,11 @@
         v-show="activeTab === 'cost-attribution'"
       />
 
+      <!-- 审计回放 -->
+      <AuditPlaybackPanel
+        v-show="activeTab === 'audit-playback'"
+      />
+
       <!-- API密钥管理 -->
       <AgentTokensPanel
         v-show="activeTab === 'agent_tokens'"
@@ -233,6 +252,8 @@ import RateLimitPanel from './admin/RateLimitPanel.vue'
 import TokenMonitoringPanel from './admin/TokenMonitoringPanel.vue'
 import BacktestMonitorPanel from './admin/BacktestMonitorPanel.vue'
 import DataGapsPanel from './admin/DataGapsPanel.vue'
+import CostAttributionPanel from './admin/CostAttributionPanel.vue'
+import AuditPlaybackPanel from './admin/AuditPlaybackPanel.vue'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 
@@ -256,23 +277,57 @@ function refreshMcpConfig() {
   toast.info('提示', '请切换到主界面的AI工具配置模块')
 }
 
-const navItems = [
-  { id: 'sources', label: '数据源', desc: '控制行情数据来源的熔断和恢复', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'scheduler', label: '定时任务', desc: '管理自动数据更新任务的启停', icon: '⏱️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'watchdog', label: '进程保活', desc: '监控后端进程状态，自动重启', icon: '🛡️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'ratelimit', label: '速率限制', desc: 'API请求频率控制和DoS防护', icon: '🚦', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'cache', label: '缓存管理', desc: '清理和预热系统数据缓存', icon: '💾', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'database', label: '数据库', desc: 'SQLite数据库维护和优化', icon: '🗄️', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'data_gaps', label: '数据缺口', desc: '监控缺失数据并一键回填', icon: '📡', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'monitor', label: '系统监控', desc: '查看服务器CPU内存等资源使用', icon: '📊', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'backtest', label: '回测监控', desc: '监控运行中的回测任务和资源', icon: '🔬', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'llm', label: '模型配置', desc: '多模型矩阵配置和并发控制', icon: '🤖', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'tokens', label: 'Token监控', desc: 'LLM API调用量和成本监控', icon: '📈', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'agent_tokens', label: 'API密钥', desc: '管理Agent和第三方API密钥', icon: '🔑', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'mcp', label: 'AI工具配置', desc: '配置MCP工具和外部服务', icon: '🔌', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'layout', label: '布局设置', desc: '管理仪表盘布局和组件位置', icon: '📐', status: true, statusClass: 'bg-[var(--color-success-light)]' },
-  { id: 'logs', label: '日志查看', desc: '查看系统运行日志和错误信息', icon: '📝', status: false, statusClass: 'bg-gray-400' },
-]
+const navGroups = ref([
+  {
+    id: 'system',
+    label: '系统与基础设施',
+    icon: '⚙️',
+    expanded: true,
+    items: [
+      { id: 'monitor', label: '系统监控', icon: '📊' },
+      { id: 'watchdog', label: '进程保活', icon: '🛡️' },
+      { id: 'logs', label: '日志查看', icon: '📝' },
+      { id: 'database', label: '数据库', icon: '🗄️' },
+      { id: 'layout', label: '布局设置', icon: '📐' },
+    ]
+  },
+  {
+    id: 'data',
+    label: '数据引擎',
+    icon: '📡',
+    expanded: false,
+    items: [
+      { id: 'sources', label: '数据源', icon: '📡' },
+      { id: 'scheduler', label: '定时任务', icon: '⏱️' },
+      { id: 'cache', label: '缓存管理', icon: '💾' },
+      { id: 'ratelimit', label: '速率限制', icon: '🚦' },
+      { id: 'data_gaps', label: '数据缺口', icon: '📡' },
+    ]
+  },
+  {
+    id: 'intelligence',
+    label: '智能引擎',
+    icon: '🤖',
+    expanded: false,
+    items: [
+      { id: 'llm', label: '模型配置', icon: '🤖' },
+      { id: 'tokens', label: 'Token监控', icon: '📈' },
+      { id: 'cost-attribution', label: '成本归因', icon: '💰' },
+      { id: 'audit-playback', label: '审计回放', icon: '📜' },
+      { id: 'agent_tokens', label: 'API密钥', icon: '🔑' },
+      { id: 'mcp', label: 'AI工具配置', icon: '🔌' },
+    ]
+  },
+  {
+    id: 'business',
+    label: '业务控制',
+    icon: '📊',
+    expanded: false,
+    items: [
+      { id: 'backtest', label: '回测监控', icon: '🔬' },
+    ]
+  }
+])
 
 // ── 确认对话框 ──────────────────────────────────────────────────────────
 const showConfirm = ref(false)
@@ -935,3 +990,47 @@ onMounted(() => {
   })
 })
 </script>
+
+<style scoped>
+/* Accordion expand/collapse transitions */
+.expand-enter-active,
+.expand-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.expand-enter-from,
+.expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+}
+
+.expand-enter-to,
+.expand-leave-from {
+  opacity: 1;
+  max-height: 500px;
+}
+
+/* Chevron rotation */
+.chevron {
+  display: inline-block;
+}
+
+.chevron.rotate-180 {
+  transform: rotate(180deg);
+}
+
+/* Group header styling */
+.group-header {
+  border-bottom: 1px solid transparent;
+}
+
+.group-header:hover {
+  border-bottom-color: var(--border-light, rgba(255, 255, 255, 0.1));
+}
+
+/* Group items container */
+.group-items {
+  background: rgba(0, 0, 0, 0.1);
+}
+</style>

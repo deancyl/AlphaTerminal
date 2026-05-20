@@ -224,13 +224,21 @@ def log_audit_event(
         
         return record_id
         
+    except sqlite3.Error as e:
+        if manage_transaction:
+            try:
+                conn.rollback()
+            except sqlite3.Error:
+                pass
+        logger.error(f"[AuditChain] Database error logging audit event: {type(e).__name__}: {e}", exc_info=True)
+        raise
     except Exception as e:
         if manage_transaction:
             try:
                 conn.rollback()
-            except Exception:
+            except sqlite3.Error:
                 pass
-        logger.error(f"[AuditChain] Failed to log audit event: {e}")
+        logger.error(f"[AuditChain] Failed to log audit event: {e}", exc_info=True)
         raise
     finally:
         if not external_conn:
@@ -420,7 +428,7 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
         }
         
     except Exception as e:
-        logger.error(f"[AuditChain] Verification failed: {e}")
+        logger.error(f"[AuditChain] Verification failed: {e}", exc_info=True)
         return {
             "valid": False,
             "checked_records": 0,

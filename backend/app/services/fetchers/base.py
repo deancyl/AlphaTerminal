@@ -112,5 +112,5 @@ class BaseMarketFetcher(ABC):
             # Try to fetch a well-known symbol
             result = await self.get_quote("sh000001")
             return result is not None
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError):
             return False

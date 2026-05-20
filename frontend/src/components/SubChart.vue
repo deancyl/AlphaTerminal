@@ -175,7 +175,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useDebounceFn, onClickOutside, useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 
 import { calcMA, calcBOLL, calcMACD, calcKDJ, calcRSI } from '../utils/indicators.js'
@@ -375,9 +375,13 @@ watch(showParams, (visible) => {
   }
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   resizeObserver?.disconnect()
-  safeDispose(chartInstance)
+  resizeObserver = null
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.dispose()
+    chartInstance = null
+  }
 })
 
 const debouncedRender = useDebounceFn(() => nextTick(render), 150)

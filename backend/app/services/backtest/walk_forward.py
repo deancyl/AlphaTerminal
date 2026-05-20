@@ -166,7 +166,7 @@ class WalkForwardAnalyzer:
                             message=f"数据存在缺口，覆盖率{100-gap_ratio*100:.1f}%",
                             suggestion="建议检查数据源或使用更长时间范围"
                         ))
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError):
                 pass
         
         # 2. Volatility Regime Check
@@ -194,7 +194,7 @@ class WalkForwardAnalyzer:
                         message=f"近期波动率({recent_vol:.1f}%)显著高于历史({historical_vol:.1f}%)",
                         suggestion="高波动环境下需注意风险控制"
                     ))
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError, statistics.StatisticsError):
                 pass
         
         # 3. Strategy-Symbol Compatibility
@@ -213,7 +213,7 @@ class WalkForwardAnalyzer:
                         message="当前处于下跌趋势，双均线策略可能频繁止损",
                         suggestion="考虑等待趋势明朗或使用做空策略"
                     ))
-            except Exception:
+            except (ValueError, TypeError, ZeroDivisionError):
                 pass
         
         return warnings

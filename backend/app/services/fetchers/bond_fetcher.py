@@ -494,8 +494,8 @@ class BondDataFetcher:
                 "last_update": datetime.now().strftime("%Y-%m-%d"),
                 "is_stale": False,
             }
-        except Exception as e:
-            logger.warning(f"[BondFetcher] CFETS fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
             return None
     
     async def _fetch_from_chinabond(self) -> Optional[Dict[str, Any]]:
@@ -542,8 +542,8 @@ class BondDataFetcher:
                 "last_update": datetime.now().strftime("%Y-%m-%d"),
                 "is_stale": False,
             }
-        except Exception as e:
-            logger.warning(f"[BondFetcher] Chinabond fetch failed: {e}")
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.warning(f"[HTTP] failed: {e}")
             return None
     
     def _map_cfets_code_to_tenor(self, code: str, name: str) -> Optional[str]:

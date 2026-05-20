@@ -406,7 +406,7 @@ async def optimize_portfolio(req: PortfolioOptimizeRequest, _: None = Depends(re
     except asyncio.TimeoutError:
         return error_response(ErrorCode.TIMEOUT, f"Portfolio optimization timed out after {PORTFOLIO_OPT_TIMEOUT}s")
     except Exception as e:
-        logger.error(f"[ML] Portfolio optimization error: {e}")
+        logger.error(f"[ML] Portfolio optimization error: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, str(e))
 
 
@@ -597,7 +597,7 @@ async def analyze_factors(req: FactorAnalysisRequest, _: None = Depends(require_
     except asyncio.TimeoutError:
         return error_response(ErrorCode.TIMEOUT, f"Factor analysis timed out after {FACTOR_ANALYSIS_TIMEOUT}s")
     except Exception as e:
-        logger.error(f"[ML] Factor analysis error: {e}")
+        logger.error(f"[ML] Factor analysis error: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, str(e))
 
 

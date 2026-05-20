@@ -125,7 +125,7 @@ class AlphavantageFetcher(BaseMarketFetcher):
             else:
                 return await self._get_stock_quote(symbol)
         except Exception as e:
-            logger.error(f"[Alphavantage] get_quote({symbol}) failed: {e}")
+            logger.error(f"[Alphavantage] get_quote({symbol}) failed: {e}", exc_info=True)
             if self.cb:
                 self.cb.record_failure()
             return None
@@ -185,7 +185,7 @@ class AlphavantageFetcher(BaseMarketFetcher):
                 source="alphavantage",
             )
         except (ValueError, KeyError) as e:
-            logger.error(f"[Alphavantage] 解析失败 {symbol}: {e}, quote={quote}")
+            logger.error(f"[Alphavantage] 解析失败 {symbol}: {e}, quote={quote}", exc_info=True)
             return None
 
     async def _get_forex_quote(self, symbol: str) -> Optional[QuoteData]:
@@ -242,7 +242,7 @@ class AlphavantageFetcher(BaseMarketFetcher):
                 source="alphavantage",
             )
         except (ValueError, KeyError) as e:
-            logger.error(f"[Alphavantage] FX 解析失败 {symbol}: {e}")
+            logger.error(f"[Alphavantage] FX 解析失败 {symbol}: {e}", exc_info=True)
             return None
 
     # ── K-line ────────────────────────────────────────────────────────────
@@ -383,7 +383,7 @@ class AlphavantageFetcher(BaseMarketFetcher):
         try:
             result = await self._get_stock_quote("IBM")
             return result is not None
-        except Exception:
+        except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError, ValueError):
             return False
 
     async def close(self):

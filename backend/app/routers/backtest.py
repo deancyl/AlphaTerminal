@@ -484,7 +484,7 @@ async def get_strategies():
             return strategies
         except Exception as e:
             conn.close()
-            logger.error(f"[Backtest] 获取策略列表失败: {e}")
+            logger.error(f"[Backtest] 获取策略列表失败: {e}", exc_info=True)
             return []
     
     strategies = await loop.run_in_executor(_executor, _sync_query)
@@ -662,7 +662,7 @@ async def run_backtest(req: BacktestRequest, _: None = Depends(require_api_key))
     except ValueError as e:
         return error_response(ErrorCode.BAD_REQUEST, str(e))
     except Exception as e:
-        logger.error(f"[Backtest] Execution failed: {e}")
+        logger.error(f"[Backtest] Execution failed: {e}", exc_info=True)
         return error_response(ErrorCode.INTERNAL_ERROR, f"Backtest failed: {str(e)}")
 
 
@@ -876,7 +876,8 @@ async def get_smart_params(req: SmartParamsRequest, _: None = Depends(require_ap
             row = cursor.fetchone()
             conn.close()
             return row[0] if row else 0
-        except Exception:
+        except sqlite3.Error as e:
+            logger.error(f"[Backtest] Database error counting days for {db_symbol}: {type(e).__name__}: {e}", exc_info=True)
             conn.close()
             return 0
     

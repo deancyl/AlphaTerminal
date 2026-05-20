@@ -101,7 +101,7 @@ def _calculate_freshness_seconds(timestamp_str: str) -> int:
             except ValueError:
                 continue
         return -1
-    except Exception:
+    except (TypeError, AttributeError):
         return -1
 
 
@@ -153,12 +153,12 @@ async def _fetch_history_fallback(symbol: str, limit: int = 400) -> list[dict]:
                     'close': float(df.iloc[i]['close']),
                     'volume': int(df.iloc[i]['volume']) if 'volume' in df.columns else 0,
                 })
-            except Exception:
+            except (ValueError, TypeError, KeyError, IndexError):
                 continue
         logger.info(f"[AkShare] Fetched {len(rows)} historical bars for {symbol}")
         return rows
-    except Exception as e:
-        logger.error(f"[AkShare] Failed to fetch history for {symbol}: {e}")
+    except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] history for {symbol}: {e}", exc_info=True)
         return []
 
 def _normalize_symbol(raw: str) -> str:
@@ -501,7 +501,7 @@ async def market_quote_v2(symbol: str):
             "timestamp": int(time.time() * 1000),
         })
     except Exception as e:
-        logger.error(f"quote_v2 error: {e}")
+        logger.error(f"quote_v2 error: {e}", exc_info=True)
         return error_response(500, str(e))
 
 
@@ -599,7 +599,7 @@ async def get_order_book(symbol: str):
                 "source": "Sina HQ Level2"
             })
     except Exception as e:
-        logger.error(f"order_book error: {e}")
+        logger.error(f"order_book error: {e}", exc_info=True)
         return error_response(500, str(e))
 
 
@@ -714,5 +714,5 @@ async def get_stock_fund_flow(symbol: str):
         logger.error(f"[StockFundFlow] Timeout after 10s for {ak_symbol}")
         return error_response(504, "数据获取超时，请稍后重试")
     except Exception as e:
-        logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}")
+        logger.error(f"[StockFundFlow] Error for {ak_symbol}: {e}", exc_info=True)
         return error_response(500, f"数据获取失败: {str(e)}")

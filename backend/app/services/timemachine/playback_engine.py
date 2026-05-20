@@ -145,8 +145,8 @@ class DailyPlaybackEngine(PlaybackEngine):
                     ))
                 return bars
                 
-            except Exception as e:
-                logger.error(f"[DailyPlaybackEngine] Failed to fetch bars for {symbol}: {e}")
+            except (httpx.HTTPError, asyncio.TimeoutError, ConnectionError) as e:
+        logger.error(f"[HTTP] bars for {symbol}: {e}", exc_info=True)
                 return []
         
         loop = asyncio.get_running_loop()

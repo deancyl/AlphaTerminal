@@ -44,7 +44,8 @@ def _get_memory_status():
             "vms_mb": round(mem_info.vms / 1024 / 1024, 2),
             "percent": round(process.memory_percent(), 2)
         }
-    except Exception:
+    except (psutil.NoSuchProcess, psutil.AccessDenied, OSError) as e:
+        logger.debug(f"[Health] Memory info unavailable: {type(e).__name__}: {e}")
         return {"status": "unavailable"}
 
 
