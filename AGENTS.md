@@ -5345,3 +5345,182 @@ curl http://localhost:60100/api/v1/news/flash
 curl http://localhost:60100/api/v1/forex/spot
 ```
 
+
+---
+
+## v0.6.64 异常处理基础设施 (2026-05-20)
+
+### Overview
+
+全域后端静默失败肃清战役 Wave 1-3, 6-7 完成，建立完整的异常处理基础设施。
+
+### 新增功能
+
+#### 1. 异常历史审计表 (error_history)
+
+**表结构**:
+```sql
+CREATE TABLE error_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,           -- ISO格式时间戳
+    module TEXT NOT NULL,              -- 模块名称
+    error_type TEXT NOT NULL,          -- 异常类型
+    error_code TEXT,                   -- 错误代码
+    message TEXT NOT NULL,             -- 清洗后的错误消息
+    details TEXT,                      -- JSON格式的详细信息
+    resolved INTEGER DEFAULT 0,        -- 是否已解决
+    resolved_at TEXT,                  -- 解决时间
+    resolved_by TEXT                   -- 解决者
+)
+```
+
+**文件**: `backend/app/db/error_history_db.py`
+
+#### 2. 统一异常处理装饰器 (@handle_errors)
+
+**用法**:
+```python
+from app.utils.error_decorator import handle_errors
+
+@router.get("/example")
+@handle_errors(module="example")
+async def example_endpoint():
+    ...
+```
+
+**功能**:
+- 自动异常捕获
+- 日志记录（带 exc_info=True）
+- 错误消息清洗（sanitize_error）
+- 数据库持久化到 error_history 表
+- 标准错误响应返回
+
+**文件**: `backend/app/utils/error_decorator.py`
+
+#### 3. 异常历史查询 API
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/v1/admin/errors/history` | GET | 查询异常历史 |
+| `/api/v1/admin/errors/stats` | GET | 异常统计 |
+| `/api/v1/admin/errors/{id}/resolve` | POST | 标记已解决 |
+| `/api/v1/admin/errors/cleanup` | POST | 清理过期记录 |
+
+**文件**: `backend/app/routers/admin.py`
+
+### 修复内容
+
+| 文件 | 修改 |
+|------|------|
+| `utils/__init__.py` | 从 errors.py 导入 sanitize_error |
+| `exception_handlers.py` | 集成 sanitize_error 清洗异常消息 |
+| `error_logger.py` | QueueFull pass → logger.warning |
+
+### 验证命令
+
+```bash
+# 测试异常历史 API
+curl http://localhost:60100/api/v1/admin/errors/stats?since_hours=24 | jq '.'
+
+# 检查 error_history 表
+sqlite3 backend/database.db "SELECT * FROM error_history LIMIT 5"
+
+# 检查装饰器导入
+grep -c "from app.utils.error_decorator import handle_errors" backend/app/routers/*.py
+```
+
+---
+
+## v0.6.65 Wave 4-5 完成 (2026-05-20)
+
+### Overview
+
+全域后端静默失败肃清战役 Wave 4-5 完成，实现完整的异常处理覆盖。
+
+### Wave 4: 路由层改造
+
+**统计数据**:
+| 指标 | 数值 |
+|------|------|
+| 路由文件 | 50 个 |
+| 路由函数 | 378 个 |
+| @handle_errors 装饰器 | 378 个 |
+| 覆盖率 | 100% |
+
+**module 参数命名规则**:
+- 主目录文件: 使用文件名（如 `admin`, `stocks`, `macro`）
+- 子目录文件: 使用 `子目录名_文件名`（如 `market_overview`, `portfolio_positions`）
+
+**示例**:
+```python
+# backend/app/routers/admin.py
+@router.get("/errors/history")
+@handle_errors(module="admin")
+async def get_error_history(...):
+    ...
+
+# backend/app/routers/market/overview.py
+@router.get("/overview")
+@handle_errors(module="market_overview")
+async def get_overview(...):
+    ...
+```
+
+### Wave 5: exc_info 补全
+
+**统计数据**:
+| 指标 | 数值 |
+|------|------|
+| 修改文件 | 100 个 |
+| exc_info=True 总数 | 872 处 |
+
+**改造规则**:
+```python
+# 在 except 块内的日志调用
+except Exception as e:
+    logger.error(f"Error: {e}")  # Before
+    logger.error(f"Error: {e}", exc_info=True)  # After
+```
+
+**覆盖目录**:
+- routers/: 40 个文件
+- services/: 45 个文件
+- db/: 8 个文件
+- utils/: 3 个文件
+- middleware/: 3 个文件
+- mcp/: 1 个文件
+
+### 验证命令
+
+```bash
+# 检查装饰器覆盖率
+grep -c "@handle_errors" backend/app/routers/*.py backend/app/routers/*/*.py | awk -F: '{sum+=$2} END {print sum}'
+# Expected: 378
+
+# 检查 exc_info=True 总数
+grep -rn "exc_info=True" backend/app/ | wc -l
+# Expected: 872+
+
+# 后端编译检查
+cd backend && python3 -m py_compile app/main.py
+# Expected: Success
+
+# 服务启动检查
+./start-services.sh status
+# Expected: Both services running
+```
+
+### 审计任务完成状态
+
+| Wave | 任务 | 版本 | 状态 |
+|------|------|------|------|
+| Wave 1 | 异常清洗链集成 | v0.6.64 | ✅ |
+| Wave 2 | 异常历史审计表 | v0.6.64 | ✅ |
+| Wave 3 | @handle_errors 装饰器创建 | v0.6.64 | ✅ |
+| Wave 4 | 路由层改造 | v0.6.65 | ✅ |
+| Wave 5 | exc_info 补全 | v0.6.65 | ✅ |
+| Wave 6 | 异常历史查询 API | v0.6.64 | ✅ |
+| Wave 7 | 静默失败修复 | v0.6.64 | ✅ |
+
+**全域后端静默失败肃清战役已全部完成！**
+
