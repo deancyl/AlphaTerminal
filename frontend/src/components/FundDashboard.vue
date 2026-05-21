@@ -516,7 +516,7 @@
                 </button>
               </div>
             </div>
-            <div v-else ref="navChartRef" class="w-full h-64 sm:h-72"></div>
+            <div ref="navChartRef" class="w-full h-64 sm:h-72"></div>
           </div>
 
           <!-- 资产配置饼图 -->
@@ -541,8 +541,7 @@
                 </button>
               </div>
             </div>
-            <template v-else>
-              <div ref="assetChartRef" class="w-full h-48 sm:h-56"></div>
+            <div ref="assetChartRef" class="w-full h-48 sm:h-56"></div>
               <div class="mt-3 space-y-1">
                 <div v-for="(item, i) in assetAllocation" :key="i" 
                      class="flex items-center justify-between text-xs">
@@ -553,7 +552,6 @@
                   <span class="text-theme-primary font-bold">{{ item.value }}%</span>
                 </div>
               </div>
-            </template>
           </div>
         </div>
 
@@ -697,7 +695,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, shallowRef, reactive, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { apiFetch, extractData } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -1650,6 +1648,33 @@ onBeforeUnmount(() => {
   if (freshnessInterval) {
     clearInterval(freshnessInterval)
     freshnessInterval = null
+  }
+})
+
+// v0.6.70: KeepAlive lifecycle - prevent white screen on tab switch
+onDeactivated(() => {
+  window.removeEventListener('resize', handleResize)
+  chartManager.disposeAll()
+  klineChart.value = null
+  navChart.value = null
+  assetChart.value = null
+  compareChart.value = null
+  abortAllPendingRequests()
+  if (freshnessInterval) {
+    clearInterval(freshnessInterval)
+    freshnessInterval = null
+  }
+})
+
+onActivated(() => {
+  window.addEventListener('resize', handleResize)
+  window.dispatchEvent(new Event('resize'))
+  if (selectedFundCode.value) {
+    nextTick(() => {
+      renderKlineChart()
+      renderNavChart()
+      renderAssetChart()
+    })
   }
 })
 

@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
@@ -889,6 +889,34 @@ onBeforeUnmount(() => {
       chartInstance.dispose()
     }
     chartInstance = null
+  }
+})
+
+// v0.6.70: KeepAlive lifecycle - prevent white screen on tab switch
+onDeactivated(() => {
+  // Pause but don't dispose - KeepAlive will cache the component
+  clearTimeout(_leaveTimer)
+  _leaveTimer = null
+  _fetchController?.abort()
+  _fetchController = null
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (chartInstance && !chartInstance.isDisposed()) {
+    chartInstance.clear()
+  }
+})
+
+onActivated(() => {
+  // Rebuild ResizeObserver and trigger resize on tab switch back
+  if (chartRef.value && chartInstance && !chartInstance.isDisposed()) {
+    resizeObserver = new ResizeObserver(() => chartInstance?.resize())
+    resizeObserver.observe(chartRef.value)
+    // Trigger immediate resize to fix layout
+    window.dispatchEvent(new Event('resize'))
+    // Re-fetch data if needed
+    if (!chartError.value) {
+      fetchAndRender()
+    }
   }
 })
 </script>

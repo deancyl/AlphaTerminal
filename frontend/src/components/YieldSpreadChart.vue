@@ -36,7 +36,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick } from 'vue'
 import { createResizeObserver } from '../utils/lazyEcharts.js'
 import { safeDispose } from '../utils/chartManager.js'
 
@@ -51,7 +51,7 @@ const props = defineProps({
 
 const chartRef  = ref(null)
 const chartInst = ref(null)
-let ro = null
+let resizeObserver = null  // v0.6.70: Fix - store ResizeObserver directly
 
 // 计算 10Y-3Y 差值序列
 const spreadData = computed(() => {
@@ -165,20 +165,41 @@ async function initChart() {
   }
 }
 
-onMounted(() => {
-  initChart()
-  if (chartRef.value) {
-    ro = createResizeObserver(chartInst.value)
-    ro.observe(chartRef.value)
+onMounted(async () => {
+  await initChart()
+  // v0.6.70: Fix - Only create ResizeObserver after chart is initialized
+  if (chartRef.value && chartInst.value && !chartInst.value.isDisposed()) {
+    const { observer } = createResizeObserver(chartInst.value)
+    resizeObserver = observer
+    resizeObserver.observe(chartRef.value)
   }
 })
 
 onBeforeUnmount(() => {
-  ro?.disconnect()
-  ro = null
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (chartInst.value && !chartInst.value.isDisposed()) {
     chartInst.value.dispose()
     chartInst.value = null
+  }
+})
+
+// v0.6.70: KeepAlive lifecycle - prevent white screen on tab switch
+onDeactivated(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  if (chartInst.value && !chartInst.value.isDisposed()) {
+    chartInst.value.clear()
+  }
+})
+
+onActivated(async () => {
+  await nextTick()
+  if (chartRef.value && chartInst.value && !chartInst.value.isDisposed()) {
+    const { observer } = createResizeObserver(chartInst.value)
+    resizeObserver = observer
+    resizeObserver.observe(chartRef.value)
+    window.dispatchEvent(new Event('resize'))
   }
 })
 

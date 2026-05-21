@@ -213,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onDeactivated, onActivated, watch, nextTick } from 'vue'
 import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
 import { useECharts } from '@/composables/useECharts.js'
 import { useMarketRadar, REFRESH_INTERVAL_OPTIONS } from '@/composables/useMarketRadar.js'
@@ -440,19 +440,19 @@ onThemeChange(() => {
 })
 
 onMounted(async () => {
+  // v0.6.70: Wait for DOM to be ready before initializing chart
+  await nextTick()
+  
   const chart = await initChart()
-  chartInstance.value = chart // P0-3: Store reference
+  chartInstance.value = chart
   await refresh()
   
-  // Handle treemap click for drill-down and stock selection
   if (chart) {
     chart.on('click', (params) => {
       if (params.data) {
-        // P2-9: If it's a sector (has children), open drill-down modal
         if (params.data.children && params.data.children.length > 0) {
           openDrillDown(params.data)
         }
-        // If it's a stock (no children), emit stock-click event
         else if (params.data.symbol) {
           emit('stock-click', {
             symbol: params.data.symbol,
@@ -463,10 +463,8 @@ onMounted(async () => {
     })
   }
   
-  // P2-8: Start auto-refresh with persisted interval
   startAutoRefresh()
   
-  // ESC key handler for drill-down modal
   window.addEventListener('keydown', handleDrillDownKeydown)
 })
 

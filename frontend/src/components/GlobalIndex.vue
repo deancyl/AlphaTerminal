@@ -135,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, onActivated, onDeactivated, nextTick, watch } from 'vue'
 import { apiFetch } from '../utils/api.js'
 import { logger } from '../utils/logger.js'
 import LoadingSpinner from './f9/LoadingSpinner.vue'
@@ -397,6 +397,27 @@ onBeforeUnmount(() => {
   if (chart) {
     chart.dispose()
     chart = null
+  }
+})
+
+// v0.6.70: KeepAlive lifecycle - prevent white screen on tab switch
+onDeactivated(() => {
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
+  window.removeEventListener('resize', handleResize)
+  if (chart) {
+    chart.dispose()
+    chart = null
+  }
+})
+
+onActivated(() => {
+  window.addEventListener('resize', handleResize)
+  window.dispatchEvent(new Event('resize'))
+  if (!loadFromCache()) {
+    refreshAll()
   }
 })
 

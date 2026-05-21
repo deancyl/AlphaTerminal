@@ -184,7 +184,12 @@ export const useFundStore = defineStore('fund', () => {
     navHistory.value = []
     topHoldings.value = []
     assetAllocation.value = []
-    trailingReturns.value = { fund: {}, category: {}, benchmark: {} }
+    trailingReturns.value = {
+      periods: ['1w', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y'],
+      fund: {},
+      category: {},
+      benchmark: {},
+    }
     riskMetrics.value = { sharpe: null, max_drawdown: null, alpha: null, beta: null }
     selectedFundCode.value = ''
     error.value = null

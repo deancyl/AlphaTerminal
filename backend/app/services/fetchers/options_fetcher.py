@@ -120,6 +120,10 @@ class OptionsFetcher(BaseMarketFetcher):
         
         self._data_cache = get_cache()  # Use unified DataCache
         self._cache_lock = asyncio.Lock()
+        
+        # v0.6.70: Fix - Initialize cache dictionaries for _get_cached/_set_cached
+        self._cache: Dict[str, Any] = {}
+        self._cache_ttl: Dict[str, datetime] = {}
     
     def _get_underlying_symbol(self, option_symbol: str) -> str:
         """

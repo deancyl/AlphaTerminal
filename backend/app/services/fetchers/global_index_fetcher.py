@@ -150,7 +150,7 @@ class GlobalIndexFetcher:
     
     async def fetch_all_quotes(self) -> List[IndexQuote]:
         """Fetch quotes for all configured indices"""
-        if not _GLOBAL_INDEX_CB.can_execute():
+        if not _GLOBAL_INDEX_CB.is_available():
             logger.warning("[GlobalIndex] Circuit breaker OPEN, using mock fallback")
             all_symbols = []
             for region_symbols in GLOBAL_INDEX_SYMBOLS.values():
