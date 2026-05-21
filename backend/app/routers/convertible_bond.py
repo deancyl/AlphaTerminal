@@ -15,7 +15,7 @@ import time
 from datetime import datetime
 from fastapi import APIRouter
 import akshare as ak
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.timeout import BOND_REFRESH_TIMEOUT
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
@@ -124,7 +124,7 @@ async def _fetch_cov_list_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    if not _CB_CIRCUIT_BREAKER.can_execute():
+    if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN, using mock fallback")
         cache_data = {
             "bonds": _MOCK_COV_LIST,
@@ -201,7 +201,7 @@ async def _fetch_cov_spot_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    if not _CB_CIRCUIT_BREAKER.can_execute():
+    if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN for spot, using mock fallback")
         cache_data = {
             "spots": _MOCK_COV_SPOT,
@@ -275,7 +275,7 @@ async def _fetch_cov_compare_async():
     """Async version with cross-platform timeout using asyncio.wait_for"""
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
     
-    if not _CB_CIRCUIT_BREAKER.can_execute():
+    if not _CB_CIRCUIT_BREAKER.is_available():
         logger.warning("[ConvertibleBond] Circuit breaker OPEN for compare, using mock fallback")
         cache_data = {
             "compares": _MOCK_COV_COMPARE,
