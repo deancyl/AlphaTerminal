@@ -52,24 +52,9 @@
     
     <!-- Desktop: Side-by-side layout -->
     <div v-if="!isMobile" class="flex-1 flex gap-4 min-h-0">
-      <div class="flex-1 bg-surface rounded-lg overflow-hidden border border-border-base">
-        <!-- Skeleton loading -->
-        <div v-if="loading && treemapData.length === 0" class="w-full h-full flex items-center justify-center" style="min-height: 400px;">
-          <Skeleton class="w-full h-full" />
-        </div>
-        <!-- Empty state -->
-        <div v-else-if="!loading && treemapData.length === 0" class="w-full h-full flex flex-col items-center justify-center gap-3" style="min-height: 400px;">
-          <p class="text-secondary">暂无市场数据</p>
-          <button 
-            @click="refresh" 
-            class="theme-btn px-4 py-2 text-sm"
-          >
-            重新加载
-          </button>
-        </div>
-        <!-- Treemap chart -->
+      <div class="flex-1 bg-surface rounded-lg overflow-hidden border border-border-base relative">
+        <!-- Treemap chart - always in DOM for ref availability -->
         <div 
-          v-else
           ref="treemapContainer" 
           class="w-full h-full"
           style="min-height: 400px;"
@@ -79,6 +64,20 @@
           @keydown.enter="handleTreemapKeyboard"
           @keydown.space.prevent="handleTreemapKeyboard"
         />
+        <!-- Skeleton loading overlay -->
+        <div v-if="loading && treemapData.length === 0" class="absolute inset-0 z-10 flex items-center justify-center bg-surface">
+          <Skeleton class="w-full h-full" />
+        </div>
+        <!-- Empty state overlay -->
+        <div v-else-if="!loading && treemapData.length === 0" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface">
+          <p class="text-secondary">暂无市场数据</p>
+          <button 
+            @click="refresh" 
+            class="theme-btn px-4 py-2 text-sm"
+          >
+            重新加载
+          </button>
+        </div>
       </div>
       
       <div class="w-80 flex-shrink-0 flex flex-col gap-3 overflow-y-auto pr-1">
@@ -104,13 +103,21 @@
       <TemperatureGauge :temperature="temperature" />
       
       <!-- Mobile: Treemap (P1-6: Increased height from 250px to 350px) -->
-      <div class="bg-surface rounded-lg overflow-hidden border border-border-base" style="min-height: 350px; max-height: 45%;">
-        <!-- Skeleton loading -->
-        <div v-if="loading && treemapData.length === 0" class="w-full h-full flex items-center justify-center">
+      <div class="bg-surface rounded-lg overflow-hidden border border-border-base relative" style="min-height: 350px; max-height: 45%;">
+        <!-- Treemap chart - always in DOM for ref availability -->
+        <div 
+          ref="treemapContainer" 
+          class="w-full h-full"
+          tabindex="0"
+          role="img"
+          aria-label="市场温度图，显示各板块市值和涨跌幅分布"
+        />
+        <!-- Skeleton loading overlay -->
+        <div v-if="loading && treemapData.length === 0" class="absolute inset-0 z-10 flex items-center justify-center bg-surface">
           <Skeleton class="w-full h-full" />
         </div>
-        <!-- Empty state -->
-        <div v-else-if="!loading && treemapData.length === 0" class="w-full h-full flex flex-col items-center justify-center gap-3">
+        <!-- Empty state overlay -->
+        <div v-else-if="!loading && treemapData.length === 0" class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface">
           <p class="text-secondary">暂无市场数据</p>
           <button 
             @click="refresh" 
@@ -119,15 +126,6 @@
             重新加载
           </button>
         </div>
-        <!-- Treemap chart -->
-        <div 
-          v-else
-          ref="treemapContainer" 
-          class="w-full h-full"
-          tabindex="0"
-          role="img"
-          aria-label="市场温度图，显示各板块市值和涨跌幅分布"
-        />
       </div>
       
       <!-- Mobile: Anomaly cards (scrollable) -->

@@ -658,7 +658,15 @@ async def get_economic_calendar(
             if df is None or len(df) == 0:
                 continue
             
-            latest = df.iloc[0] if len(df) > 0 else None
+            # Determine correct iloc index based on indicator type
+            # GDP/CPI/PPI/PMI/M2: newest first (iloc[0])
+            # SocialFinancing/IndustrialProduction/Unemployment: oldest first (iloc[-1])
+            newest_first_indicators = ["GDP", "CPI", "PPI", "PMI", "M2"]
+            if indicator_config["indicator"] in newest_first_indicators:
+                latest = df.iloc[0] if len(df) > 0 else None
+            else:
+                latest = df.iloc[-1] if len(df) > 0 else None
+            
             if latest is None:
                 continue
             

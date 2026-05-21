@@ -147,6 +147,22 @@ class BondDataFetcher:
                 except (ValueError, TypeError):
                     pass
         
+        # Linear interpolation for missing tenors (1Y, 3Y, 7Y)
+        import numpy as np
+        known_years = []
+        known_rates = []
+        for tenor, rate in yield_curve.items():
+            year = int(tenor.replace('年', ''))
+            known_years.append(year)
+            known_rates.append(rate)
+        
+        if len(known_years) >= 2:
+            for missing_year in [1, 3, 7]:
+                missing_tenor = f'{missing_year}年'
+                if missing_tenor not in yield_curve:
+                    interpolated = float(np.interp(missing_year, known_years, known_rates))
+                    yield_curve[missing_tenor] = round(interpolated, 4)
+        
         last_update = str(latest_row['日期'])
         if hasattr(latest_row['日期'], 'strftime'):
             last_update = latest_row['日期'].strftime("%Y-%m-%d")

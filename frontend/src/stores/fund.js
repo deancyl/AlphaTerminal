@@ -87,6 +87,8 @@ export const useFundStore = defineStore('fund', () => {
 
       if (returnsData && returnsData.returns) {
         trailingReturns.value = {
+          // ✅ Preserve periods array to prevent template v-for from failing
+          periods: ['1w', '1m', '3m', '6m', 'ytd', '1y', '3y', '5y'],
           fund: {
             '1w': returnsData.returns['1w'] ?? null,
             '1m': returnsData.returns['1m'] ?? null,

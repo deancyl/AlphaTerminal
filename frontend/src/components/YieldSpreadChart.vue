@@ -151,16 +151,18 @@ function buildOption() {
 async function initChart() {
   await nextTick()
   if (!chartRef.value || !window.echarts) return
-  if (chartInst.value) {
-    chartInst.value.clear()
-    chartInst.value.dispose()
-    chartInst.value = null
-  }
+  
   const option = buildOption()
   if (!option) return // Don't render if no data
-  chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  // v0.6.66: 使用增量更新避免全量重绘
-  chartInst.value.setOption(option, { replaceMerge: ['series'], lazyUpdate: true })
+  
+  // Only init if no existing instance or disposed
+  if (!chartInst.value || chartInst.value.isDisposed()) {
+    chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
+    chartInst.value.setOption(option)
+  } else {
+    // Update existing instance with notMerge for clean replacement
+    chartInst.value.setOption(option, true)
+  }
 }
 
 onMounted(() => {

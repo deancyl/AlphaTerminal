@@ -152,7 +152,7 @@ export function useTimeMachine() {
         toast.error(error.value)
       }
       logger.error('[TimeMachine] Create session failed:', e)
-      throw e
+      // Don't re-throw - toast.error() already shows user feedback
     } finally {
       loading.value = false
     }
@@ -185,7 +185,6 @@ export function useTimeMachine() {
     } catch (e) {
       toast.error('前进失败，请重试')
       logger.error('[TimeMachine] Step failed:', e)
-      throw e
     }
   }
   
@@ -217,7 +216,6 @@ export function useTimeMachine() {
     } catch (e) {
       toast.error('播放控制失败，请重试')
       logger.error('[TimeMachine] Toggle play failed:', e)
-      throw e
     }
   }
   
@@ -246,7 +244,7 @@ export function useTimeMachine() {
       return response.data
     } catch (e) {
       logger.error('[TimeMachine] Set speed failed:', e)
-      throw e
+      toast.error('设置速度失败')
     }
   }
   
@@ -276,7 +274,6 @@ if (response?.data?.success) {
     } catch (e) {
       toast.error('交易执行失败，请检查资金或持仓')
       logger.error('[TimeMachine] Trade failed:', e)
-      throw e
     }
   }
   
@@ -301,7 +298,6 @@ if (response?.data?.success) {
     } catch (e) {
       toast.error('跳转失败，请重试')
       logger.error('[TimeMachine] Seek failed:', e)
-      throw e
     }
   }
   

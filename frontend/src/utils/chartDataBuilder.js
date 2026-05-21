@@ -217,8 +217,11 @@ function buildChartResult(
     if (validCloses[i] < yMin) yMin = validCloses[i]
     if (validCloses[i] > yMax) yMax = validCloses[i]
   }
-  yMin = +(yMin * 0.997).toFixed(2)
-  yMax = +(yMax * 1.003).toFixed(2)
+  
+  // Dynamic precision: forex rates (< 2) need 4 decimals, stocks need 2
+  const decimals = yMax > 100 ? 2 : (yMax > 2 ? 2 : 4)
+  yMin = +(yMin * 0.997).toFixed(decimals)
+  yMax = +(yMax * 1.003).toFixed(decimals)
 
   // 6. 叠加标的 Y 轴自适应（双 Y 轴核心）
   let overlayYAxis = null

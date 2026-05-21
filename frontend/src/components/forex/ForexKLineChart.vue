@@ -118,7 +118,7 @@ const chartData = computed(() => {
   
   // Build chart data using existing builder (without volume subchart)
   const result = buildChartData(ohlcvData, 'daily', {}, [], { 
-    useWorker: true,
+    useWorker: false,
     timeout: 10000,
     ma: true, 
     boll: false, 

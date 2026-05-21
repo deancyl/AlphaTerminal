@@ -423,7 +423,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, nextTick, watch, onErrorCaptured } from 'vue'
+import { ref, shallowRef, computed, onMounted, onUnmounted, onDeactivated, onActivated, nextTick, watch, onErrorCaptured } from 'vue'
 import { useBreakpoints, breakpointsTailwind, useDebounceFn } from '@vueuse/core'
 import { apiFetch } from '../utils/api.js'
 import { useMarketStore } from '../stores/market.js'
@@ -1076,6 +1076,51 @@ onDeactivated(() => {
   if (grid) {
     grid.destroy(false)
     grid = null
+  }
+})
+
+// KeepAlive activated: re-initialize GridStack and trigger ECharts resize
+onActivated(async () => {
+  // Restart polling
+  startLowPolling()
+  
+  // Re-initialize GridStack if on desktop
+  await nextTick()
+  if (!isMobile.value && typeof window !== 'undefined' && window.GridStack && document.querySelector('.grid-stack')) {
+    // Only re-init if grid was destroyed
+    if (!grid) {
+      grid = GridStack.init({
+        column: 12,
+        cellHeight: 80,
+        float: true,
+        margin: 8,
+        disableDrag: isMobile.value,
+        disableResize: isMobile.value,
+      })
+      grid.setStatic(props.isLocked)
+      
+      // Restore saved layout
+      const savedLayout = loadLayout()
+      if (savedLayout) {
+        applyLayout(savedLayout)
+      }
+      
+      // Re-attach event listeners
+      grid.on('change', (event, items) => {
+        debouncedSaveLayout()
+      })
+      grid.on('resizestop', (event, el) => {
+        saveLayout()
+      })
+      grid.on('dragstop', (event, el) => {
+        saveLayout()
+      })
+    }
+  }
+  
+  // Trigger ECharts resize via window resize event (child components listen to this)
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('resize'))
   }
 })
 

@@ -296,7 +296,7 @@
         </div>
 
         <!-- K 线走势图 -->
-        <div class="bg-terminal-panel border border-theme rounded-sm p-4">
+        <div class="bg-terminal-panel border border-theme rounded-sm p-4 relative">
           <div class="flex items-center justify-between mb-3">
             <span class="text-terminal-accent font-bold text-sm" aria-hidden="true">📈 K 线走势</span>
             <div class="flex gap-1" role="group" aria-label="K线周期选择">
@@ -313,13 +313,13 @@
               >{{ p.label }}</button>
             </div>
           </div>
-          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72" role="status" aria-live="polite">
+          <div v-if="loadingETFHistory" class="w-full flex items-center justify-center h-64 sm:h-72 absolute inset-0 z-10 bg-terminal-panel" role="status" aria-live="polite">
             <div class="text-center">
               <div class="inline-block animate-spin text-2xl mb-2" aria-hidden="true">⏳</div>
               <div class="text-xs text-theme-tertiary">加载 K 线数据...</div>
             </div>
           </div>
-          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72" role="alert" aria-live="assertive">
+          <div v-else-if="klineError" class="w-full flex items-center justify-center h-64 sm:h-72 absolute inset-0 z-10 bg-terminal-panel" role="alert" aria-live="assertive">
             <div class="text-center">
               <div class="text-2xl mb-2" aria-hidden="true">⚠️</div>
               <div class="text-sm text-theme-muted mb-2">{{ klineError }}</div>
@@ -329,7 +329,7 @@
               </button>
             </div>
           </div>
-          <div v-else ref="klineChartRef" class="w-full h-64 sm:h-72"></div>
+          <div ref="klineChartRef" class="w-full h-64 sm:h-72 relative"></div>
         </div>
       </div>
 
@@ -1416,7 +1416,7 @@ function renderKlineChart() {
     const data = klineHistory.value.map(d => ({
       date: d.date || d.trade_date,
       value: d.close || d.nav
-    })).reverse()
+    }))
     
     if (!data || data.length === 0) {
       klineError.value = '暂无 K 线数据'
