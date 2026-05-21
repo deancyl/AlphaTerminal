@@ -86,8 +86,11 @@ def get_conn():
         raise
 
 def _get_conn():
-    """兼容旧代码：返回新连接（用于需要独立连接的场景）"""
-    conn = sqlite3.connect(_db_path, timeout=45.0)
+    """兼容旧代码：返回新连接（用于需要独立连接的场景）
+    
+    v0.6.69: 添加 check_same_thread=False 以适应 FastAPI 多线程事件循环
+    """
+    conn = sqlite3.connect(_db_path, timeout=45.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     if _USE_WAL:
         conn.execute("PRAGMA journal_mode=WAL")

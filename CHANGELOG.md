@@ -5,6 +5,27 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.69] - 2026-05-21
+
+### 架构审计终极重构 - 任务 1 完整修复
+
+响应架构审计报告任务 1 的遗漏修复，确保 `_get_conn()` 也添加 `check_same_thread=False`。
+
+#### 修改内容
+
+**任务 1: 数据库线程安全重铸**
+- 修改 `backend/app/db/database.py`:
+  - `_get_conn()` 函数添加 `check_same_thread=False`
+  - 与 `_get_thread_conn()` 保持一致的线程安全配置
+  - 防止 FastAPI 多线程事件循环中的 `sqlite3.ProgrammingError`
+
+#### 验证命令
+
+```bash
+# 任务 1: check_same_thread
+grep -c "check_same_thread=False" backend/app/db/database.py  # Expected: 2
+```
+
 ## [0.6.68] - 2026-05-21
 
 ### 架构审计终极重构 - 5 个任务完成
