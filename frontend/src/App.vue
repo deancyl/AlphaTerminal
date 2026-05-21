@@ -203,7 +203,7 @@
           <!-- 宏观经济 -->
           <MacroDashboard v-else-if="currentView === 'macro'" />
           <!-- 期权分析 -->
-          <OptionsAnalysis v-else-if="currentView === 'options'" />
+          <OptionsDashboard v-else-if="currentView === 'options'" />
           <!-- 全球指数 -->
           <GlobalIndex v-else-if="currentView === 'global-index'" />
           <!-- 研报平台 -->
@@ -350,7 +350,7 @@ const CopilotSidebar  = defineAsyncComponent(() => import('./components/CopilotS
 const AdminDashboard  = defineAsyncComponent(() => import('./components/AdminDashboard.vue'))
 const FullscreenKline = defineAsyncComponent(() => import('./components/FullscreenKline.vue'))
 const MacroDashboard  = defineAsyncComponent(() => import('./components/MacroDashboard.vue'))
-const OptionsAnalysis = defineAsyncComponent(() => import('./components/OptionsAnalysis.vue'))
+const OptionsDashboard = defineAsyncComponent(() => import('./components/options/OptionsDashboard.vue'))
 const GlobalIndex     = defineAsyncComponent(() => import('./components/GlobalIndex.vue'))
 const StockDetail     = defineAsyncComponent(() => import('./components/StockDetail.vue'))
 const WalkForwardPanel = defineAsyncComponent(() => import('./components/WalkForwardPanel.vue'))
