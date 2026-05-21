@@ -18,7 +18,7 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field, field_validator
 
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.middleware import require_api_key
 from app.db.database import _get_conn
 from app.services.attribution import (

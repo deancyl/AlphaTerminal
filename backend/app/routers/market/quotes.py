@@ -12,7 +12,7 @@ from app.db import get_latest_prices, get_price_history, get_daily_history
 from app.services.fetchers import FetcherFactory
 from app.services.sentiment_engine import SpotCache
 from app.services.quote_source import get_quote_with_fallback_async
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_fetcher import akshare_breaker
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors

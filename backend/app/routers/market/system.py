@@ -11,7 +11,7 @@ from pathlib import Path
 import psutil
 from fastapi import APIRouter
 
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)

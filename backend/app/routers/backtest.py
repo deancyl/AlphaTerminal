@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional, Dict, Any
 from app.db.database import _get_conn, _db_path
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.middleware import require_api_key
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.utils.error_decorator import handle_errors

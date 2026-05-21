@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.config.timeout import AKSHARE_TIMEOUT
 from app.utils.error_decorator import handle_errors
 from app.services.kline_gap_detector import gap_detector

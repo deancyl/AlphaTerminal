@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from typing import Any, Dict, Optional
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.input_validation import validate_stock_symbol, validate_pagination
 from app.services.circuit_breaker import CircuitBreakerOpen
 from app.services.data_fetcher import akshare_breaker

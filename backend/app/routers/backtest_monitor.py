@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends
 from app.services.backtest_worker_registry import get_backtest_registry
 from app.middleware import require_api_key
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)

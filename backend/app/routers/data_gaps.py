@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 
 from app.db.database import _get_conn, _db_path
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.routers.admin import verify_admin_key
 from app.utils.error_decorator import handle_errors
 

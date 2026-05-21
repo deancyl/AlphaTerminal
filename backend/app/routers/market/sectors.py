@@ -7,7 +7,7 @@ This module contains sector-related endpoints:
 """
 
 from fastapi import APIRouter
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from .dependencies import logger
 from app.utils.error_decorator import handle_errors
 

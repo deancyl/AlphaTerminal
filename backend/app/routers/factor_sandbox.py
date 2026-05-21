@@ -24,7 +24,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator, model_validator
 from sse_starlette.sse import EventSourceResponse
 
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.attribution import get_factor_registry, FactorCategory
 from app.services.factor_sandbox.screener import (
     get_stock_screener,

@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Query
 from typing import Optional, List
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.timeout import MACRO_TIMEOUT
 from app.config.macro_config import (
     MACRO_THREAD_POOL_SIZE,
@@ -629,10 +629,14 @@ async def get_economic_calendar(
                     "CPI": lambda: _get_ak().macro_china_cpi(),
                     "PPI": lambda: _get_ak().macro_china_ppi(),
                     "PMI": lambda: _get_ak().macro_china_pmi(),
+                    "PMI_NonManufacturing": lambda: _get_ak().macro_china_non_manufacturing_pmi(),
                     "M2": lambda: _get_ak().macro_china_supply_of_money(),
                     "SocialFinancing": lambda: _get_ak().macro_china_shrzgm(),
                     "IndustrialProduction": lambda: _get_ak().macro_china_industrial_production_yoy(),
                     "Unemployment": lambda: _get_ak().macro_china_urban_unemployment(),
+                    "RetailSales": lambda: _get_ak().macro_china_consumer_goods_retail(),
+                    "FixedAssetInvestment": lambda: _get_ak().macro_china_fixed_asset_investment(),
+                    "TradeBalance": lambda: _get_ak().macro_china_trade_balance(),
                 }.get(indicator_config["indicator"])
                 
                 if fetch_func:
@@ -651,7 +655,12 @@ async def get_economic_calendar(
         
         pd = _get_pd()
         for result in results:
-            if isinstance(result, Exception) or result[1] is None:
+            # Skip if result is None (indicator has no fetch function) or an exception
+            if result is None or isinstance(result, Exception):
+                continue
+            
+            # Skip if result is not a tuple or result[1] is None
+            if not isinstance(result, tuple) or len(result) < 2 or result[1] is None:
                 continue
             
             indicator_config, df = result
@@ -713,6 +722,21 @@ async def get_economic_calendar(
                             actual_value = _safe_float(latest.get(value_col))
                         if date_col:
                             date_str = str(latest.get(date_col, ""))
+            elif indicator_config["indicator"] == "PMI_NonManufacturing":
+                if '非制造业-指数' in df.columns:
+                    actual_value = _safe_float(latest.get('非制造业-指数'))
+                    date_str = str(latest.get('月份', ""))
+                    unit = ""
+            elif indicator_config["indicator"] == "RetailSales":
+                actual_value = _safe_float(latest.get('社会消费品零售总额-同比增长'))
+                date_str = str(latest.get('月份', ""))
+            elif indicator_config["indicator"] == "FixedAssetInvestment":
+                actual_value = _safe_float(latest.get('固定资产投资-同比增长'))
+                date_str = str(latest.get('月份', ""))
+            elif indicator_config["indicator"] == "TradeBalance":
+                actual_value = _safe_float(latest.get('贸易差额'))
+                date_str = str(latest.get('月份', ""))
+                unit = "亿美元"
             
             forecast = _generate_forecast(actual_value, indicator_config["indicator"])
             deviation = None

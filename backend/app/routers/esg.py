@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Query
 from typing import Optional, List
 from pydantic import BaseModel
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/esg", tags=["esg"])

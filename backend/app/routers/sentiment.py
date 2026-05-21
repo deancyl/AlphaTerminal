@@ -18,7 +18,7 @@ from app.services.sentiment_engine import (
     get_last_news_time, trigger_spot_fetch, trigger_news_fetch,
     get_news_sentiment,
 )
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.utils.error_decorator import handle_errors
 
