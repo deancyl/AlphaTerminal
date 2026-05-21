@@ -5,6 +5,61 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.72] - 2026-05-22
+
+### 代理兼容性增强 - 数据源回退机制
+
+解决代理服务器阻止特定金融数据 API 导致的功能失效问题，实现多数据源回退机制。
+
+#### 新增功能
+
+**TencentFinanceFetcher 数据获取器**
+- 新增 `backend/app/services/fetchers/tencent_fetcher.py`
+- 支持 A 股实时行情（Tencent Finance API）
+- 支持 K 线数据（Sina Finance API）
+- 集成 CircuitBreaker 熔断保护
+- 集成 DataCache 缓存（10 秒 TTL）
+- 支持港股行情（hk 前缀）
+
+**Market Radar Treemap Sina 回退**
+- 新增 `_fetch_all_stocks_sina_sync()` 函数
+- 从 Sina Finance API 获取全 A 股行情数据
+- 自动分页获取所有股票（每页 500 条）
+- 当 Eastmoney API 失败时自动切换到 Sina
+
+**Forex K-line History Frankfurter 回退**
+- 新增 `_fetch_frankfurter_history_sync()` 函数
+- 从 Frankfurter API 获取外汇历史数据
+- 免费 API，无需 API Key
+- 支持主要货币对（USD, EUR, GBP, JPY, CNY 等）
+- 当 Eastmoney API 失败时自动切换到 Frankfurter
+
+#### 数据源回退链
+
+| 模块 | 主数据源 | 回退数据源 |
+|------|---------|-----------|
+| Market Radar Treemap | Eastmoney (akshare) | Sina Finance |
+| Forex K-line History | Eastmoney (akshare) | Frankfurter API |
+| Forex Spot Quotes | Eastmoney (akshare) | CFETS |
+| Tencent Quotes | Tencent Finance | - |
+
+#### 修复问题
+
+- 修复代理阻止 Eastmoney API 导致 Market Radar 返回 500 错误
+- 修复代理阻止 Eastmoney API 导致 Forex History 返回 503 错误
+- 修复 `_set_cached()` 方法使用未初始化的 `_cache` 属性
+
+#### 技术细节
+
+- 使用 `curl_cffi` + `impersonate="chrome120"` 绕过 TLS 指纹检测
+- Market Radar 超时从 15 秒增加到 60 秒
+- 所有回退数据源标记 `source` 字段以便追踪
+
+#### 验证结果
+
+- Market Radar API: 返回 96 只股票，`data_source: sina`
+- Forex History API: 返回 21 天历史数据，`source: frankfurter`
+
 ## [0.6.71] - 2026-05-21
 
 ### P2 缺陷修复完成 - 11/11 缺陷全部解决

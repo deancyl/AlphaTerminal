@@ -5598,3 +5598,154 @@ grep -c "MAX_CHUNK_SIZE" backend/app/routers/research.py  # Expected: 3+
 ls backend/app/services/factor_sandbox/task_queue.py  # Should exist
 ```
 
+
+---
+
+## 代理兼容性增强 (v0.6.72)
+
+### 概述
+
+解决代理服务器阻止特定金融数据 API 导致的功能失效问题，实现多数据源回退机制。
+
+### 问题背景
+
+代理服务器（192.168.1.50:7897）阻止了部分 Eastmoney API 端点：
+- `17.push2.eastmoney.com` - 板块列表
+- `82.push2.eastmoney.com` - 全市场股票列表
+- `push2his.eastmoney.com` - 历史 K 线
+
+导致以下功能失效：
+- Market Radar Treemap 返回 500 错误
+- Forex K-line History 返回 503 错误
+
+### 解决方案
+
+#### 1. TencentFinanceFetcher 数据获取器
+
+**文件**: `backend/app/services/fetchers/tencent_fetcher.py`
+
+**功能**:
+- A 股实时行情（Tencent Finance API: `qt.gtimg.cn`）
+- K 线数据（Sina Finance API: `quotes.sina.cn`）
+- 港股行情支持（hk 前缀）
+
+**特性**:
+- 继承 `BaseMarketFetcher` 接口
+- 集成 `CircuitBreaker` 熔断保护
+- 集成 `DataCache` 缓存（10 秒 TTL）
+- 使用 `curl_cffi` + `impersonate="chrome120"` 绕过 TLS 指纹检测
+
+**使用方法**:
+```python
+from app.services.fetchers.tencent_fetcher import tencent_fetcher
+
+# 获取实时行情
+quote = await tencent_fetcher.get_quote("sh600519")
+
+# 获取 K 线数据
+kline = await tencent_fetcher.get_kline("sh600519", "day")
+
+# 获取多只股票行情
+quotes = await tencent_fetcher.get_quotes(["sh600519", "sz000001"])
+```
+
+#### 2. Market Radar Sina 回退
+
+**文件**: `backend/app/services/market_radar/treemap_builder.py`
+
+**新增函数**: `_fetch_all_stocks_sina_sync()`
+
+**数据源**: Sina Finance API (`vip.stock.finance.sina.com.cn`)
+
+**功能**:
+- 获取全 A 股行情数据（分页获取）
+- 每页 500 条记录
+- 自动过滤北交所股票（bj 前缀）
+- 返回标准格式：symbol, name, price, change_pct, volume, amount, market_cap
+
+**回退逻辑**:
+```python
+all_stocks = await _fetch_all_stocks()  # 尝试 Eastmoney
+if not all_stocks:
+    all_stocks = await _fetch_all_stocks_sina()  # 回退到 Sina
+    data_source = DATA_SOURCE_SINA
+```
+
+#### 3. Forex K-line Frankfurter 回退
+
+**文件**: `backend/app/services/fetchers/forex_fetcher.py`
+
+**新增函数**: `_fetch_frankfurter_history_sync()`
+
+**数据源**: Frankfurter API (`api.frankfurter.app`)
+
+**特性**:
+- 免费 API，无需 API Key
+- 支持主要货币对（USD, EUR, GBP, JPY, CNY, AUD, CAD, CHF）
+- 每日汇率数据
+- 历史数据查询
+
+**回退逻辑**:
+```python
+try:
+    df = await self.ak.forex_hist_em(symbol=symbol)  # 尝试 Eastmoney
+except Exception:
+    history = await _fetch_frankfurter_history_sync(from_currency, to_currency, start_date, end_date)
+```
+
+**注意**: Frankfurter 使用 CNY 而非 CNH，自动转换。
+
+### 数据源回退链
+
+| 模块 | 主数据源 | 回退数据源 | API |
+|------|---------|-----------|-----|
+| Market Radar Treemap | Eastmoney (akshare) | Sina Finance | `vip.stock.finance.sina.com.cn` |
+| Forex K-line History | Eastmoney (akshare) | Frankfurter API | `api.frankfurter.app` |
+| Forex Spot Quotes | Eastmoney (akshare) | CFETS | `chinamoney.com.cn` |
+| Tencent Quotes | Tencent Finance | - | `qt.gtimg.cn` |
+
+### API 验证
+
+```bash
+# Market Radar Treemap
+curl http://localhost:60100/api/v1/market_radar/treemap?level=stock | jq '.data_source'
+# Expected: "sina" (when Eastmoney blocked)
+
+# Forex K-line History
+curl http://localhost:60100/api/v1/forex/history/USDCNH?limit=30 | jq '.data.data[0].source'
+# Expected: "frankfurter" (when Eastmoney blocked)
+
+# Tencent Fetcher
+curl http://localhost:60100/api/v1/market/quote/sh600519
+# Returns real-time quote from Tencent
+```
+
+### 文件修改清单
+
+| 文件 | 修改类型 | 描述 |
+|------|---------|------|
+| `backend/app/services/fetchers/tencent_fetcher.py` | 新增 | Tencent/Sina 数据获取器 |
+| `backend/app/services/market_radar/treemap_builder.py` | 修改 | 添加 Sina 回退 |
+| `backend/app/services/fetchers/forex_fetcher.py` | 修改 | 添加 Frankfurter 回退 |
+| `backend/app/routers/market_radar.py` | 修改 | 超时从 15s 增加到 60s |
+
+### 技术要点
+
+1. **curl_cffi + impersonate**: 绕过 TLS 指纹检测，模拟 Chrome 120 浏览器
+2. **数据源标记**: 所有回退数据包含 `source` 字段，便于追踪
+3. **熔断保护**: 所有数据获取器集成 CircuitBreaker，防止级联失败
+4. **缓存机制**: 使用统一 DataCache，避免重复请求
+
+### 已知限制
+
+1. **Frankfurter API**: 仅提供每日汇率，无 OHLC 数据（open/high/low 相同）
+2. **Sina Finance**: 无板块分类数据，仅提供股票列表
+3. **Tencent Finance**: K 线 API 需要进一步研究
+
+### 后续优化
+
+1. 在管理面板添加代理设置功能
+2. 支持每个数据源独立配置代理
+3. 添加数据源健康检查和自动切换
+4. 实现数据源优先级配置
+
