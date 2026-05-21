@@ -15,7 +15,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.middleware import require_api_key
 from app.db.database import _get_conn, _lock, get_conn
 from app.services.trading import (

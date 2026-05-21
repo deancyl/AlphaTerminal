@@ -26,7 +26,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Depends
 
 from app.db.database import _get_conn, _lock
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.middleware import require_api_key
 
 logger = logging.getLogger(__name__)

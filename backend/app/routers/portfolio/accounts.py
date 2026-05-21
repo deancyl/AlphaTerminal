@@ -9,7 +9,7 @@ import sqlite3
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.db.database import _get_conn, _lock
 from app.middleware import require_api_key
 

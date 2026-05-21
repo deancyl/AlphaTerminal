@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from statistics import mean, stdev, NormalDist
 
 from app.db.database import _get_conn
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.middleware import require_api_key
 from app.utils.error_decorator import handle_errors
 

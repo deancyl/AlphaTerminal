@@ -228,7 +228,7 @@ def _save_snapshot_impl(portfolio_id: int):
     计算: total_asset = Σ(shares * latest_close)，total_cost = Σ(shares * avg_cost)
     Phase 4 Fix: 优先从 position_summary 读取（lot-based 系统），fallback 到 positions
     """
-    from app.utils.response import success_response
+    from app.utils.errors import success_response
     
     today = date.today().isoformat()
     with _lock:

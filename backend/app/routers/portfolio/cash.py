@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Depends
 
-from app.utils.response import success_response
+from app.utils.errors import success_response
 from app.middleware import require_api_key
 from app.utils.error_decorator import handle_errors
 from .schemas import TransactionIn, TransferIn, CashOpIn
