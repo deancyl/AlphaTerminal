@@ -11,7 +11,7 @@ import logging
 import time
 import httpx
 from fastapi import APIRouter, HTTPException, Query
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
 
 logger = logging.getLogger(__name__)
