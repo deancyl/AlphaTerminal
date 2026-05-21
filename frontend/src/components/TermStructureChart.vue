@@ -175,7 +175,8 @@ async function initChart() {
   if (!chartRef.value || !window.echarts) return
   if (chartInst.value) { chartInst.value.dispose(); chartInst.value = null }
   chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  chartInst.value.setOption(buildOption())
+  // v0.6.66: 使用增量更新避免全量重绘
+  chartInst.value.setOption(buildOption(), { replaceMerge: ['series'], lazyUpdate: true })
 }
 
 onMounted(() => {

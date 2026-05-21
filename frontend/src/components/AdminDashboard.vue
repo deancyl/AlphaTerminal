@@ -236,24 +236,26 @@ import { logger } from '../utils/logger.js'
 import { apiFetch } from '../utils/api.js'
 import { toast } from '../composables/useToast.js'
 
-// Import sub-components
-import DataSourcePanel from './admin/DataSourcePanel.vue'
-import SchedulerPanel from './admin/SchedulerPanel.vue'
-import WatchdogPanel from './admin/WatchdogPanel.vue'
-import CachePanel from './admin/CachePanel.vue'
-import DatabasePanel from './admin/DatabasePanel.vue'
-import MonitorPanel from './admin/MonitorPanel.vue'
-import LLMConfigPanel from './admin/LLMConfigPanel.vue'
-import LogsPanel from './admin/LogsPanel.vue'
-import AgentTokensPanel from './admin/AgentTokensPanel.vue'
-import McpPanel from './admin/McpPanel.vue'
-import LayoutPanel from './admin/LayoutPanel.vue'
-import RateLimitPanel from './admin/RateLimitPanel.vue'
-import TokenMonitoringPanel from './admin/TokenMonitoringPanel.vue'
-import BacktestMonitorPanel from './admin/BacktestMonitorPanel.vue'
-import DataGapsPanel from './admin/DataGapsPanel.vue'
-import CostAttributionPanel from './admin/CostAttributionPanel.vue'
-import AuditPlaybackPanel from './admin/AuditPlaybackPanel.vue'
+// v0.6.66: 异步加载子组件，优化首屏性能
+import { defineAsyncComponent } from 'vue'
+
+const DataSourcePanel = defineAsyncComponent(() => import('./admin/DataSourcePanel.vue'))
+const SchedulerPanel = defineAsyncComponent(() => import('./admin/SchedulerPanel.vue'))
+const WatchdogPanel = defineAsyncComponent(() => import('./admin/WatchdogPanel.vue'))
+const CachePanel = defineAsyncComponent(() => import('./admin/CachePanel.vue'))
+const DatabasePanel = defineAsyncComponent(() => import('./admin/DatabasePanel.vue'))
+const MonitorPanel = defineAsyncComponent(() => import('./admin/MonitorPanel.vue'))
+const LLMConfigPanel = defineAsyncComponent(() => import('./admin/LLMConfigPanel.vue'))
+const LogsPanel = defineAsyncComponent(() => import('./admin/LogsPanel.vue'))
+const AgentTokensPanel = defineAsyncComponent(() => import('./admin/AgentTokensPanel.vue'))
+const McpPanel = defineAsyncComponent(() => import('./admin/McpPanel.vue'))
+const LayoutPanel = defineAsyncComponent(() => import('./admin/LayoutPanel.vue'))
+const RateLimitPanel = defineAsyncComponent(() => import('./admin/RateLimitPanel.vue'))
+const TokenMonitoringPanel = defineAsyncComponent(() => import('./admin/TokenMonitoringPanel.vue'))
+const BacktestMonitorPanel = defineAsyncComponent(() => import('./admin/BacktestMonitorPanel.vue'))
+const DataGapsPanel = defineAsyncComponent(() => import('./admin/DataGapsPanel.vue'))
+const CostAttributionPanel = defineAsyncComponent(() => import('./admin/CostAttributionPanel.vue'))
+const AuditPlaybackPanel = defineAsyncComponent(() => import('./admin/AuditPlaybackPanel.vue'))
 import LoadingSpinner from './f9/LoadingSpinner.vue'
 import ErrorDisplay from './f9/ErrorDisplay.vue'
 

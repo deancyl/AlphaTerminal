@@ -587,7 +587,8 @@ async function renderChart() {
     ],
   }
 
-  chart.setOption(option, true)
+  // v0.6.66: 使用增量更新避免全量重绘
+  chart.setOption(option, { replaceMerge: ['series'], lazyUpdate: true })
 }
 
 // 计算副图指标数据

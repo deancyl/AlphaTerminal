@@ -159,7 +159,8 @@ async function initChart() {
   const option = buildOption()
   if (!option) return // Don't render if no data
   chartInst.value = window.echarts.init(chartRef.value, null, { renderer: 'canvas' })
-  chartInst.value.setOption(option)
+  // v0.6.66: 使用增量更新避免全量重绘
+  chartInst.value.setOption(option, { replaceMerge: ['series'], lazyUpdate: true })
 }
 
 onMounted(() => {

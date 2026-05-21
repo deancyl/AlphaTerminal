@@ -162,8 +162,11 @@ def log_audit_event(
     external_conn = conn is not None
     
     if conn is None:
-        conn = sqlite3.connect(str(AUDIT_DB_PATH))
+        conn = sqlite3.connect(str(AUDIT_DB_PATH), timeout=45.0)
         conn.row_factory = sqlite3.Row
+        # v0.6.66: 添加 WAL 模式和 busy_timeout
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=45000")
     
     manage_transaction = not external_conn
     
@@ -267,8 +270,10 @@ def verify_chain(from_id: Optional[int] = None, to_id: Optional[int] = None) -> 
         - first_invalid_id: Optional[int] - ID of first invalid record (if any)
         - error_type: Optional[str] - Type of error (if any)
     """
-    conn = sqlite3.connect(str(AUDIT_DB_PATH))
+    conn = sqlite3.connect(str(AUDIT_DB_PATH), timeout=45.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=45000")
     
     try:
         # Build query
@@ -447,8 +452,10 @@ def get_chain_stats() -> Dict[str, Any]:
     Returns:
         Dictionary with chain statistics
     """
-    conn = sqlite3.connect(str(AUDIT_DB_PATH))
+    conn = sqlite3.connect(str(AUDIT_DB_PATH), timeout=45.0)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=45000")
     
     try:
         # Total records

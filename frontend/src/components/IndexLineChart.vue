@@ -830,7 +830,8 @@ async function fetchAndRender() {
     bindHoverEvents()
 
     chartInstance.clear()
-    chartInstance.setOption(opt, { notMerge: true })
+    // v0.6.66: 使用增量更新避免全量重绘
+    chartInstance.setOption(opt, { replaceMerge: ['series'], lazyUpdate: true })
 
     // 回填最新一根数据到 hover bar（保证刷新后默认显示）
     lastHistRaw = d?.data?.history || d?.history || d || []

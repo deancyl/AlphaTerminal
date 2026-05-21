@@ -351,7 +351,8 @@ function buildOption() {
 function render() {
   if (!chartInstance) return
   chartInstance.clear()
-  chartInstance.setOption(buildOption(), true)
+  // v0.6.66: 使用增量更新避免全量重绘
+  chartInstance.setOption(buildOption(), { replaceMerge: ['series'], lazyUpdate: true })
 }
 
 onMounted(() => {

@@ -94,11 +94,11 @@ def handle_errors(
                     raise
                 
                 return error_response(
-                    code=ErrorCode.INTERNAL_ERROR,
-                    message=sanitized_message,
-                    details={"trace_id": trace_id} if trace_id else None
+                    ErrorCode.INTERNAL_ERROR,
+                    sanitized_message,
+                    {"trace_id": trace_id} if trace_id else None
                 )
-        
+    
         @functools.wraps(func)
         def sync_wrapper(*args, **kwargs) -> Any:
             func_name = function or func.__name__
