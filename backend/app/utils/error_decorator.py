@@ -12,7 +12,7 @@ import functools
 import traceback
 import logging
 from typing import Optional, Callable, Any
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from app.utils.errors import error_response, ErrorCode
 from app.utils.error_sanitizer import sanitize_error
@@ -60,6 +60,9 @@ def handle_errors(
             
             try:
                 return await func(*args, **kwargs)
+            except HTTPException:
+                # Let FastAPI HTTPException pass through (for validation errors)
+                raise
             except Exception as e:
                 error_type = type(e).__name__
                 error_message = str(e)
@@ -114,6 +117,9 @@ def handle_errors(
             
             try:
                 return func(*args, **kwargs)
+            except HTTPException:
+                # Let FastAPI HTTPException pass through (for validation errors)
+                raise
             except Exception as e:
                 error_type = type(e).__name__
                 error_message = str(e)

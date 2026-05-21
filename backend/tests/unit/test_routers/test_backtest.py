@@ -520,7 +520,9 @@ class TestBacktestDataRequirements:
         data = response.json()
         
         assert response.status_code == 200
-        assert data.get("code") == 104
+        # ValueError is caught by @handle_errors and converted to BAD_REQUEST (100)
+        # The error message contains "无" or "数据" indicating insufficient data
+        assert data.get("code") == 100  # ErrorCode.BAD_REQUEST
         assert "无" in data.get("message", "") or "数据" in data.get("message", "")
 
     @patch('app.routers.backtest._get_conn')
