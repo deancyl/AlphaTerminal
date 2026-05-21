@@ -5,6 +5,156 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.71] - 2026-05-21
+
+### P2 缺陷修复完成 - 11/11 缺陷全部解决
+
+基于深度诊断报告修复剩余 4 个 P2 优先级缺陷，完成所有 11 个核心缺陷修复。
+
+#### 修复内容
+
+**Defect 6: Options 错误消息优化**
+- 添加 `parseOptionChainData()` 类型强制转换函数
+- 处理 `strike_price`, `price` 等字段的 string/number 类型不匹配
+- 提供用户友好的错误消息（超时/网络/通用）
+- 文件: `frontend/src/components/OptionsAnalysis.vue`
+
+**Defect 7: GlobalIndex AbortController + localStorage 缓存**
+- 添加 AbortController 支持 8 秒超时取消
+- 实现 localStorage 缓存（5 分钟 TTL）
+- 网络失败时自动降级到缓存数据
+- 组件卸载时取消 pending 请求
+- 文件: `frontend/src/components/GlobalIndex.vue`
+
+**Defect 8: Research LLM 文本分块**
+- 实现 MapReduce 风格的文本分块处理
+- 分块大小: 3000 字符/块（约 1000 tokens）
+- 最大内容: 50000 字符
+- Map 阶段: 每个分块独立总结
+- Reduce 阶段: 合并所有分块总结
+- 文件: `backend/app/routers/research.py`
+
+**Defect 9: FactorSandbox 异步任务队列**
+- 创建 `FactorSandboxTaskQueue` 异步任务队列
+- 任务提交后立即返回 job_id
+- 任务状态持久化到 SQLite
+- 支持前端 SSE 或轮询获取进度
+- 解决全 A 股筛选阻塞事件循环问题
+- 文件: `backend/app/services/factor_sandbox/task_queue.py`
+
+#### 技术要点
+
+- 类型强制转换解决 API 响应格式不一致问题
+- AbortController 防止网络超时导致的 Message Channel Closed
+- localStorage 缓存实现离线降级
+- MapReduce 文本分块解决 LLM 上下文溢出
+- 异步任务队列解决 CPU 密集型计算阻塞问题
+
+#### 验证命令
+
+```bash
+# Defect 6: Options 类型转换
+grep -c "parseOptionValue" frontend/src/components/OptionsAnalysis.vue  # Expected: 2+
+
+# Defect 7: GlobalIndex AbortController
+grep -c "AbortController" frontend/src/components/GlobalIndex.vue  # Expected: 4+
+
+# Defect 8: Research 文本分块
+grep -c "MAX_CHUNK_SIZE" backend/app/routers/research.py  # Expected: 3+
+
+# Defect 9: FactorSandbox 任务队列
+ls backend/app/services/factor_sandbox/task_queue.py  # Should exist
+```
+
+## [0.6.70] - 2026-05-21
+
+### 前端核心缺陷修复 - P0 Critical + P1 High (9个缺陷)
+
+基于深度诊断报告修复 9 个核心缺陷，解决 Vue 3 KeepAlive 生命周期、ECharts 实例管理、数据获取等问题。
+
+#### P0 Critical 修复 (5个)
+
+**Defect 1: DashboardGrid KeepAlive 白屏**
+- 添加 `onActivated` hook 重新初始化 GridStack
+- 触发 `window resize` 事件确保布局正确
+- 文件: `frontend/src/components/DashboardGrid.vue`
+
+**Defect 2: FundDashboard 数据丢失**
+- `fund.js` 保留 `periods` 数组避免 Pinia 状态丢失
+- `v-if` 改为覆盖层确保图表容器始终在 DOM
+- 移除 `.reverse()` 保持数据顺序一致
+- 文件: `frontend/src/stores/fund.js`, `frontend/src/components/FundDashboard.vue`
+
+**Defect 4: ForexKLineChart 死锁**
+- 设置 `useWorker: false` 避免 Vue computed 解包 Promise
+- `chartDataBuilder.js` 添加动态精度（外汇 4 位小数）
+- 文件: `frontend/src/components/forex/ForexKLineChart.vue`, `frontend/src/utils/chartDataBuilder.js`
+
+**Defect 3A: YieldSpreadChart ECharts 报错**
+- 移除 `replaceMerge` 参数避免与 dispose 冲突
+- 使用 `setOption(option, true)` 全量覆写
+- 文件: `frontend/src/components/YieldSpreadChart.vue`
+
+**Defect 10: MarketRadar 容器未就绪**
+- `treemapContainer` 始终存在于 DOM
+- 加载/错误状态改为绝对定位覆盖层
+- 文件: `frontend/src/components/MarketRadar.vue`
+
+#### P1 High 修复 (3个)
+
+**Defect 3B: BondDashboard 缺少期限**
+- `BondFetcher` 添加线性插值计算 1Y, 3Y, 7Y
+- 使用 `numpy.interp` 实现
+- 文件: `backend/app/services/fetchers/bond_fetcher.py`
+
+**Defect 5: MacroDashboard 加载缓慢**
+- 修复 `iloc` 索引一致性
+- GDP/CPI/PPI/PMI/M2 使用 `iloc[0]`
+- SocialFinancing/IndustrialProduction/Unemployment 使用 `iloc[-1]`
+- 文件: `backend/app/routers/macro.py`
+
+**Defect 11: TimeMachine 无响应**
+- 移除所有 `throw e` 保留 toast 通知
+- 让用户看到错误信息而非静默失败
+- 文件: `frontend/src/composables/useTimeMachine.js`
+
+#### 技术要点
+
+- **Vue 3 KeepAlive 生命周期守恒定律**：`onDeactivated` 销毁必须配对 `onActivated` 重建
+- **ECharts 实例管理**：避免 `dispose + replaceMerge` 组合，使用 `setOption(option, true)` 进行全量覆写
+- **Vue computed 不能解包 Promise**：异步数据必须使用同步模式或 ref + watch
+- **v-if 条件渲染会移除 DOM 节点导致 ref 失效**：图表容器应始终存在于 DOM
+- **动态精度**：外汇汇率（< 2）需要 4 位小数，股票需要 2 位
+- **akshare API 数据顺序不一致**：GDP/CPI/PPI/PMI/M2 使用 `iloc[0]`，其他使用 `iloc[-1]`
+
+#### 验证命令
+
+```bash
+# Defect 1: DashboardGrid onActivated
+grep -c "onActivated" frontend/src/components/DashboardGrid.vue  # Expected: 2+
+
+# Defect 2: FundDashboard periods
+grep -c "periods:" frontend/src/stores/fund.js  # Expected: 1
+
+# Defect 4: ForexKLineChart useWorker
+grep -c "useWorker: false" frontend/src/components/forex/ForexKLineChart.vue  # Expected: 1
+
+# Defect 3A: YieldSpreadChart replaceMerge
+grep -c "replaceMerge" frontend/src/components/YieldSpreadChart.vue  # Expected: 0
+
+# Defect 10: MarketRadar treemapContainer
+grep -c "treemapContainer" frontend/src/components/MarketRadar.vue  # Expected: 4+
+
+# Defect 3B: BondFetcher interpolation
+grep -c "np.interp" backend/app/services/fetchers/bond_fetcher.py  # Expected: 3+
+
+# Defect 5: Macro iloc
+grep -c "iloc\[-1\]" backend/app/routers/macro.py  # Expected: 3+
+
+# Defect 11: TimeMachine error handling
+grep -c "throw e" frontend/src/composables/useTimeMachine.js  # Expected: 0
+```
+
 ## [0.6.69] - 2026-05-21
 
 ### 架构审计终极重构 - 任务 1 完整修复

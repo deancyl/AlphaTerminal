@@ -5524,3 +5524,77 @@ cd backend && python3 -m py_compile app/main.py
 
 **全域后端静默失败肃清战役已全部完成！**
 
+---
+
+## 前端核心缺陷修复 (v0.6.70-v0.6.71)
+
+### 概述
+
+基于深度诊断报告修复 11 个前端核心缺陷，解决 Vue 3 KeepAlive 生命周期、ECharts 实例管理、数据获取等问题。
+
+### 修复统计
+
+| 版本 | 优先级 | 缺陷数 | 提交 ID |
+|------|--------|--------|---------|
+| v0.6.70 | P0 Critical + P1 High | 9 | `5ad3fc95` |
+| v0.6.71 | P2 | 4 | `ab48867b` |
+| **总计** | **All** | **13** | **100% 完成** |
+
+### P0 Critical 修复 (5个)
+
+| 缺陷 | 问题 | 解决方案 |
+|------|------|----------|
+| Defect 1 | DashboardGrid KeepAlive 白屏 | onActivated hook 重建 GridStack + window resize |
+| Defect 2 | FundDashboard 数据丢失 | periods 数组保留 + v-if 改覆盖层 |
+| Defect 4 | ForexKLineChart 死锁 | useWorker: false + 动态精度 |
+| Defect 3A | YieldSpreadChart ECharts 报错 | 移除 replaceMerge，使用 setOption(opt, true) |
+| Defect 10 | MarketRadar 容器未就绪 | treemapContainer 始终在 DOM |
+
+### P1 High 修复 (3个)
+
+| 缺陷 | 问题 | 解决方案 |
+|------|------|----------|
+| Defect 3B | BondDashboard 缺少期限 | numpy.interp 线性插值 1Y/3Y/7Y |
+| Defect 5 | MacroDashboard 加载缓慢 | iloc 索引一致性修复 |
+| Defect 11 | TimeMachine 无响应 | 移除 throw e，保留 toast 通知 |
+
+### P2 修复 (4个)
+
+| 缺陷 | 问题 | 解决方案 |
+|------|------|----------|
+| Defect 6 | Options 错误消息 | 类型强制转换 + 用户友好错误消息 |
+| Defect 7 | GlobalIndex 超时 | AbortController (8s) + localStorage 缓存 (5min) |
+| Defect 8 | Research AI 失败 | MapReduce 文本分块 (3000字符/块) |
+| Defect 9 | FactorSandbox 阻塞 | 异步任务队列 + SQLite 持久化 |
+
+### 技术要点
+
+1. **Vue 3 KeepAlive 生命周期守恒定律**：`onDeactivated` 销毁必须配对 `onActivated` 重建
+2. **ECharts 实例管理**：避免 `dispose + replaceMerge` 组合，使用 `setOption(option, true)` 进行全量覆写
+3. **Vue computed 不能解包 Promise**：异步数据必须使用同步模式或 ref + watch
+4. **v-if 条件渲染会移除 DOM 节点导致 ref 失效**：图表容器应始终存在于 DOM
+5. **动态精度**：外汇汇率（< 2）需要 4 位小数，股票需要 2 位
+6. **akshare API 数据顺序不一致**：GDP/CPI/PPI/PMI/M2 使用 `iloc[0]`，其他使用 `iloc[-1]`
+
+### 验证命令
+
+```bash
+# P0 Critical
+grep -c "onActivated" frontend/src/components/DashboardGrid.vue  # Expected: 2+
+grep -c "periods:" frontend/src/stores/fund.js  # Expected: 1
+grep -c "useWorker: false" frontend/src/components/forex/ForexKLineChart.vue  # Expected: 1
+grep -c "replaceMerge" frontend/src/components/YieldSpreadChart.vue  # Expected: 0
+grep -c "treemapContainer" frontend/src/components/MarketRadar.vue  # Expected: 4+
+
+# P1 High
+grep -c "np.interp" backend/app/services/fetchers/bond_fetcher.py  # Expected: 3+
+grep -c "iloc\[-1\]" backend/app/routers/macro.py  # Expected: 3+
+grep -c "throw e" frontend/src/composables/useTimeMachine.js  # Expected: 0
+
+# P2
+grep -c "parseOptionValue" frontend/src/components/OptionsAnalysis.vue  # Expected: 2+
+grep -c "AbortController" frontend/src/components/GlobalIndex.vue  # Expected: 4+
+grep -c "MAX_CHUNK_SIZE" backend/app/routers/research.py  # Expected: 3+
+ls backend/app/services/factor_sandbox/task_queue.py  # Should exist
+```
+
