@@ -12,11 +12,17 @@
     
     # 抛出异常
     raise APIException(ErrorCode.NOT_FOUND, "资源不存在")
+
+v0.6.68: 审计报告任务 4 - error_response 自动调用 error_history_db.py 入库
 """
 import uuid
+import traceback
 from datetime import datetime
 from typing import Optional, Dict, Any
 from fastapi import HTTPException
+
+# v0.6.68: 自动入库依赖
+from app.db.error_history_db import log_error_to_db
 
 
 class ErrorCode:
@@ -159,32 +165,37 @@ def error_response(
     code_or_message,
     message: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
-    code: Optional[int] = None
+    code: Optional[int] = None,
+    module: Optional[str] = None,
+    function: Optional[str] = None,
+    request_path: Optional[str] = None,
+    request_method: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """创建标准错误响应
-    
-    支持两种调用方式:
-    1. error_response(code, message, details) - 标准形式
-    2. error_response(message, code=X) - 简写形式
-    
-    Args:
-        code_or_message: 错误码(int)或消息(str)
-        message: 错误消息（当第一个参数是错误码时）
-        details: 附加错误详情
-        code: 错误码（使用简写形式时）
-        
-    Returns:
-        标准响应格式字典
-    """
     # 检测调用方式
     if isinstance(code_or_message, int):
-        # 标准形式: error_response(code, message, details)
         actual_code = code_or_message
         actual_message = message or ErrorCodeMessage.get_message(actual_code)
     else:
-        # 简写形式: error_response(message, code=X)
         actual_code = code if code is not None else ErrorCode.INTERNAL_ERROR
         actual_message = str(code_or_message)
+    
+    trace_id = str(uuid.uuid4())[:8]
+    
+    # v0.6.68: 审计报告任务 4 - 自动入库到 error_history
+    try:
+        log_error_to_db(
+            module=module or "unknown",
+            function=function or "error_response",
+            error_type="APIError",
+            error_message=actual_message,
+            sanitized_message=actual_message,
+            context=details,
+            trace_id=trace_id,
+            request_path=request_path,
+            request_method=request_method,
+        )
+    except Exception:
+        pass
     
     return {
         "code": actual_code,
@@ -192,7 +203,7 @@ def error_response(
         "data": None,
         "error": {
             "details": details or {},
-            "trace_id": str(uuid.uuid4())[:8],
+            "trace_id": trace_id,
             "timestamp": datetime.now().isoformat(),
         }
     }

@@ -136,6 +136,8 @@ export default defineConfig({
     exclude: ['echarts'],
   },
   build: {
+    // v0.6.68: 审计报告任务 5 - 异步样式防闪烁
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
         // v0.6.61: Refactored manualChunks to 4 vendor groups

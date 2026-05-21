@@ -5,6 +5,66 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.68] - 2026-05-21
+
+### 架构审计终极重构 - 5 个任务完成
+
+响应架构审计报告的 5 个终极重构任务，完成 v0.6.x LTS 终局交付。
+
+#### 任务完成状态
+
+| 任务 | 描述 | 状态 |
+|------|------|------|
+| 任务 1 | SQLite 并发优化 (timeout=45s) | ✅ v0.6.67 |
+| 任务 2 | Vue 响应式深度剥离 (shallowRef + markRaw) | ✅ 已验证 |
+| 任务 3 | 移动端图表触摸物理独占 (touch-action: none) | ✅ 已实现 |
+| 任务 4 | error_response 自动入库 error_history_db | ✅ 已实现 |
+| 任务 5 | Vite 异步样式防闪烁 (cssCodeSplit: true) | ✅ 已实现 |
+
+#### 修改内容
+
+**任务 2: Vue 响应式深度剥离**
+- BaseKLineChart.vue: 已使用 `markRaw()` 包装所有 ECharts option 对象
+- useKlineCache.js: 已使用 `shallowRef` 存储海量 K 线数据
+- 防止 Vue 对海量金融行情数据做深度响应式追踪
+
+**任务 3: 移动端图表触摸物理独占**
+- 新增 CSS 样式到 `style.css`:
+  ```css
+  .chart-container, [class*="KLineChart"], [class*="Chart"] {
+    touch-action: none;
+  }
+  ```
+- 防止移动端手势穿透到父容器
+
+**任务 4: error_response 自动入库**
+- 修改 `backend/app/utils/errors.py`:
+  - 新增参数: `module`, `function`, `request_path`, `request_method`
+  - 自动调用 `log_error_to_db()` 写入 `error_history` 表
+  - 使用 try/except 确保入库失败不影响响应返回
+
+**任务 5: Vite 异步样式防闪烁**
+- 修改 `frontend/vite.config.js`:
+  - 添加 `cssCodeSplit: true`
+  - 异步加载样式，防止首屏闪烁
+
+#### 验证命令
+
+```bash
+# 任务 2
+grep -c "markRaw" frontend/src/components/BaseKLineChart.vue  # Expected: 8
+grep -c "shallowRef" frontend/src/composables/useKlineCache.js  # Expected: 1
+
+# 任务 3
+grep -c "touch-action: none" frontend/src/style.css  # Expected: 3
+
+# 任务 4
+grep -c "log_error_to_db" backend/app/utils/errors.py  # Expected: 2
+
+# 任务 5
+grep -c "cssCodeSplit: true" frontend/vite.config.js  # Expected: 1
+```
+
 ## [0.6.67] - 2026-05-21
 
 ### SQLite 并发优化 - 锁等待超时增加

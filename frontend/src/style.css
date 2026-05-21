@@ -1030,3 +1030,26 @@ button:focus-visible,
     --text-muted: #B0B0B0;
   }
 }
+
+/* v0.6.68: 图表触摸物理独占 - 防止移动端手势穿透 */
+/* 审计报告任务 3: 在包裹 ECharts 实例的最外层容器中强制添加 touch-action: none */
+.chart-container,
+.echarts-container,
+[class*="KLineChart"],
+[class*="kline"],
+[class*="Chart"] {
+  touch-action: none;
+}
+
+/* 移动端图表容器强制触摸独占 */
+@media (hover: none) and (pointer: coarse) {
+  .chart-container,
+  .echarts-container,
+  [class*="KLineChart"],
+  [class*="kline"],
+  [class*="Chart"] {
+    touch-action: none !important;
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
