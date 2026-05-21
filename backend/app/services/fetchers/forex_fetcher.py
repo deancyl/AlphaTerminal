@@ -18,6 +18,7 @@ Forex Data Fetcher - AKShare外汇数据获取服务
 import asyncio
 import logging
 import pandas as pd
+import json
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
@@ -26,8 +27,17 @@ from concurrent.futures import ThreadPoolExecutor
 from .base import BaseMarketFetcher
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.services.data_cache import get_cache
+from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
+
+try:
+    from curl_cffi import requests as curl_requests
+    HAS_CURL_CFFI = True
+except ImportError:
+    import requests as curl_requests
+    HAS_CURL_CFFI = False
+    logger.warning("[Forex] curl_cffi not installed, using standard requests")
 
 # Separate thread pools for different operation types
 # Fast operations (spot quotes, matrix) - high priority, quick response
@@ -51,15 +61,6 @@ def _get_akshare():
 
 
 def clean_value(val) -> Optional[float]:
-    """
-    安全地将值转为float，处理NaN和无效值
-    
-    Args:
-        val: 任意值
-        
-    Returns:
-        float 或 None
-    """
     if val is None:
         return None
     try:
@@ -70,6 +71,65 @@ def clean_value(val) -> Optional[float]:
         return f
     except (TypeError, ValueError):
         return None
+
+
+def _get_proxies() -> Optional[Dict]:
+    settings = get_settings()
+    proxy = settings.get_proxy_url()
+    if proxy:
+        return {"http": proxy, "https": proxy}
+    return None
+
+
+_PROXIES = _get_proxies()
+
+
+def _fetch_frankfurter_history_sync(
+    from_currency: str,
+    to_currency: str,
+    start_date: str,
+    end_date: str
+) -> List[Dict[str, Any]]:
+    try:
+        url = f"https://api.frankfurter.app/{start_date}..{end_date}?from={from_currency}&to={to_currency}"
+        
+        if HAS_CURL_CFFI:
+            response = curl_requests.get(
+                url,
+                impersonate="chrome120",
+                timeout=15,
+                proxies=_PROXIES
+            )
+        else:
+            response = curl_requests.get(url, timeout=15, proxies=_PROXIES)
+        
+        if response.status_code != 200:
+            logger.warning(f"[Frankfurter] API returned {response.status_code}")
+            return []
+        
+        data = json.loads(response.text)
+        rates = data.get("rates", {})
+        
+        history = []
+        for date in sorted(rates.keys()):
+            rate = rates[date].get(to_currency)
+            if rate:
+                history.append({
+                    "date": date,
+                    "open": rate,
+                    "close": rate,
+                    "high": rate,
+                    "low": rate,
+                    "amplitude": 0,
+                    "source": "frankfurter"
+                })
+        
+        logger.info(f"[Frankfurter] Fetched {len(history)} days for {from_currency}/{to_currency}")
+        return history
+        
+    except Exception as e:
+        logger.error(f"[Frankfurter] Error: {e}", exc_info=True)
+        return []
 
 
 class ForexFetcher(BaseMarketFetcher):
@@ -150,15 +210,7 @@ class ForexFetcher(BaseMarketFetcher):
         return result
     
     def _set_cached(self, key: str, value: Any, ttl_seconds: int = 300):
-        MAX_CACHE_SIZE = 50
-        if len(self._cache) >= MAX_CACHE_SIZE and key not in self._cache:
-            oldest_key = min(self._cache_ttl.keys(), key=lambda k: self._cache_ttl.get(k, datetime.max))
-            self._cache.pop(oldest_key, None)
-            self._cache_ttl.pop(oldest_key, None)
-            logger.debug(f"[Forex] Cache EVICT: {oldest_key}")
-        
-        self._cache[key] = value
-        self._cache_ttl[key] = datetime.now() + timedelta(seconds=ttl_seconds)
+        self._data_cache.set(key, value, ttl=ttl_seconds)
         logger.debug(f"[Forex] Cache SET: {key} (TTL={ttl_seconds}s)")
 
     def _get_fallback_quotes(self) -> List[Dict[str, Any]]:
@@ -429,32 +481,17 @@ class ForexFetcher(BaseMarketFetcher):
         end_date: Optional[str] = None,
         limit: int = 100,
     ) -> List[Dict[str, Any]]:
-        """
-        获取历史K线数据 (EastMoney forex_hist_em)
-        
-        字段映射 (中文 -> 英文):
-        - 日期 -> date
-        - 今开 -> open
-        - 最新价 -> close
-        - 最高 -> high
-        - 最低 -> low
-        - 振幅 -> amplitude
-        
-        Args:
-            symbol: 货币对代码，如 USDCNH
-            start_date: 开始日期 YYYY-MM-DD
-            end_date: 结束日期 YYYY-MM-DD
-            limit: 返回条数限制
-            
-        Returns:
-            K线数据列表
-        """
         cache_key = f"history_{symbol}_{start_date}_{end_date}"
         cached = self._get_cached(cache_key)
         if cached:
             return cached[-limit:] if limit else cached
         
         if not self.cb.is_available():
+            cache = get_cache()
+            stale_data, is_stale = cache.get_with_stale(cache_key, fresh_ttl=0, stale_ttl=86400)
+            if stale_data:
+                logger.warning(f"[Forex] Circuit breaker open, returning stale history: {symbol}")
+                return stale_data[-limit:] if limit else stale_data
             return []
         
         try:
@@ -465,8 +502,7 @@ class ForexFetcher(BaseMarketFetcher):
             )
             
             if df is None or df.empty:
-                self.cb.record_failure()
-                return []
+                raise ValueError("Empty response from akshare")
             
             result_df = df.copy()
             if start_date:
@@ -495,12 +531,39 @@ class ForexFetcher(BaseMarketFetcher):
             
         except asyncio.TimeoutError:
             self.cb.record_failure()
-            logger.warning(f"[Forex] 获取历史K线超时: {symbol}", exc_info=True)
-            return []
+            logger.warning(f"[Forex] 获取历史K线超时: {symbol}, 尝试Frankfurter回退", exc_info=True)
         except Exception as e:
             self.cb.record_failure()
-            logger.error(f"[Forex] 获取历史K线失败: {symbol} - {e}", exc_info=True)
-            return []
+            logger.warning(f"[Forex] 获取历史K线失败: {symbol} - {e}, 尝试Frankfurter回退", exc_info=True)
+        
+        logger.info(f"[Forex] Using Frankfurter fallback for {symbol}")
+        
+        try:
+            from_currency = symbol[:3]
+            to_currency = symbol[3:6]
+            
+            if to_currency == "CNH":
+                to_currency = "CNY"
+            
+            if not end_date:
+                end_date = datetime.now().strftime("%Y-%m-%d")
+            if not start_date:
+                start_date = (datetime.now() - timedelta(days=limit)).strftime("%Y-%m-%d")
+            
+            loop = asyncio.get_running_loop()
+            history = await loop.run_in_executor(
+                _history_executor,
+                lambda: _fetch_frankfurter_history_sync(from_currency, to_currency, start_date, end_date)
+            )
+            
+            if history:
+                self._set_cached(cache_key, history, ttl_seconds=1800)
+                return history[-limit:] if limit else history
+            
+        except Exception as e:
+            logger.error(f"[Forex] Frankfurter fallback failed: {e}", exc_info=True)
+        
+        return []
     
     async def get_cfets_spot(self) -> List[Dict[str, Any]]:
         """

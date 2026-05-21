@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/v1/market_radar", tags=["market_radar"])
 
 TREEMAP_CACHE_TTL = 60
 ANOMALY_CACHE_TTL = 30
+TREEMAP_TIMEOUT = 60.0
 
 # P2-10: User-friendly error messages
 ERROR_MESSAGES = {
@@ -92,10 +93,9 @@ async def get_treemap(
         return cached
     
     try:
-        data = await build_treemap_data(level=level, timeout=15.0)
+        data = await build_treemap_data(level=level, timeout=TREEMAP_TIMEOUT)
         
         if "error" in data:
-            # P2-10: Return user-friendly timeout message
             raise HTTPException(
                 status_code=504,
                 detail=ERROR_MESSAGES.get(data["error"], ERROR_MESSAGES["timeout"])
