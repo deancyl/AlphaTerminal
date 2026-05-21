@@ -24,7 +24,7 @@ def _get_thread_conn():
     global _WAL_MODE_CHECKED, _USE_WAL
     
     if not hasattr(_thread_local, 'conn') or _thread_local.conn is None:
-        conn = sqlite3.connect(_db_path, timeout=30, check_same_thread=False)
+        conn = sqlite3.connect(_db_path, timeout=45.0, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         
         # WAL模式检测（仅首次）
@@ -44,7 +44,8 @@ def _get_thread_conn():
         else:
             conn.execute("PRAGMA journal_mode=DELETE")
         
-        conn.execute("PRAGMA busy_timeout=30000")
+        # v0.6.67: 增加锁等待超时至 45 秒（审计报告要求）
+        conn.execute("PRAGMA busy_timeout=45000")
         
         # v0.6.62: SQLite 性能优化 PRAGMA
         conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
@@ -86,13 +87,13 @@ def get_conn():
 
 def _get_conn():
     """兼容旧代码：返回新连接（用于需要独立连接的场景）"""
-    conn = sqlite3.connect(_db_path, timeout=30)
+    conn = sqlite3.connect(_db_path, timeout=45.0)
     conn.row_factory = sqlite3.Row
     if _USE_WAL:
         conn.execute("PRAGMA journal_mode=WAL")
     else:
         conn.execute("PRAGMA journal_mode=DELETE")
-    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA busy_timeout=45000")
     
     # v0.6.62: SQLite 性能优化 PRAGMA
     conn.execute("PRAGMA synchronous=NORMAL")    # 平衡性能与安全（减少 fsync）
