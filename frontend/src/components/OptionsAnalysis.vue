@@ -326,6 +326,43 @@ async function fetchContracts() {
   }
 }
 
+// Type coercion for option chain data (handle string/number mismatches)
+function parseOptionValue(val) {
+  if (val === null || val === undefined) return null
+  const num = parseFloat(val)
+  return isNaN(num) ? null : num
+}
+
+// Parse and validate option chain data with type coercion
+function parseOptionChainData(data) {
+  if (!data) return null
+  
+  const parseContract = (contract) => {
+    if (!contract) return null
+    return {
+      ...contract,
+      strike: parseOptionValue(contract.strike),
+      latest: parseOptionValue(contract.latest || contract.price),
+      change: parseOptionValue(contract.change),
+      change_pct: parseOptionValue(contract.change_pct),
+      volume: parseOptionValue(contract.volume),
+      open_interest: parseOptionValue(contract.open_interest),
+      delta: parseOptionValue(contract.delta),
+      gamma: parseOptionValue(contract.gamma),
+      theta: parseOptionValue(contract.theta),
+      vega: parseOptionValue(contract.vega),
+      iv: parseOptionValue(contract.iv),
+    }
+  }
+  
+  return {
+    ...data,
+    calls: (data.calls || []).map(parseContract),
+    puts: (data.puts || []).map(parseContract),
+    underlying_spot: parseOptionValue(data.underlying_spot),
+  }
+}
+
 async function fetchChainData() {
   loading.value = true
   error.value = null
@@ -338,15 +375,24 @@ async function fetchChainData() {
       signal 
     })
     // apiFetch already extracts data, so res IS the data object
-    if (res && (res.calls || res.puts)) {
-      chainData.value = res
+    // Apply type coercion to handle string/number mismatches
+    const parsedData = parseOptionChainData(res)
+    if (parsedData && (parsedData.calls?.length > 0 || parsedData.puts?.length > 0)) {
+      chainData.value = parsedData
     } else {
-      error.value = '数据格式错误'
+      error.value = '暂无期权链数据'
     }
     complete()
   } catch (e) {
     if (e.name === 'AbortError') return // Ignore abort errors
-    error.value = e.message || '获取期权链失败'
+    // Provide user-friendly error message
+    if (e.message?.includes('timeout') || e.message?.includes('Timeout')) {
+      error.value = '数据获取超时，请稍后重试'
+    } else if (e.message?.includes('network') || e.message?.includes('Network')) {
+      error.value = '网络连接失败，请检查网络设置'
+    } else {
+      error.value = '获取期权链失败，请稍后重试'
+    }
     chainData.value = null
   } finally {
     loading.value = false

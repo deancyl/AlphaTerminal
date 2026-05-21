@@ -355,7 +355,7 @@ async def get_categories():
 @router.post("/summarize")
 @handle_errors(module="research")
 async def summarize_report(request: SummarizeRequest):
-    """使用LLM总结研报核心观点"""
+    """使用LLM总结研报核心观点 - 支持大文本分块处理"""
     model_svc = get_model_config_service()
     model = model_svc.get_model("openai") or model_svc.get_model("deepseek")
     
@@ -369,19 +369,36 @@ async def summarize_report(request: SummarizeRequest):
     base_url = (model.base_url or "https://api.openai.com/v1").rstrip("/")
     url = f"{base_url}/chat/completions"
     
-    prompt = f"""请用中文总结以下研报的核心观点，要求：
-1. 提炼3-5个关键要点
-2. 每个要点用一句话概括
-3. 突出投资逻辑和风险提示
-
-研报标题：{request.title}
-发布机构：{request.institution}
-"""
+    # Text chunking for large documents (MapReduce style)
+    MAX_CHUNK_SIZE = 3000  # Characters per chunk (approx 1000 tokens)
+    MAX_TOTAL_SIZE = 50000  # Maximum total content size
     
-    if request.content:
-        prompt += f"\n研报内容摘要：\n{request.content[:2000]}"
+    content = request.content or ""
+    if len(content) > MAX_TOTAL_SIZE:
+        content = content[:MAX_TOTAL_SIZE]
+        logger.info(f"[Research] Content truncated to {MAX_TOTAL_SIZE} chars")
     
-    try:
+    # Split content into chunks if too large
+    chunks = []
+    if len(content) > MAX_CHUNK_SIZE:
+        # Split by paragraphs/sections for better context preservation
+        paragraphs = content.split('\n\n')
+        current_chunk = ""
+        for para in paragraphs:
+            if len(current_chunk) + len(para) + 2 <= MAX_CHUNK_SIZE:
+                current_chunk += para + "\n\n"
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = para + "\n\n"
+        if current_chunk:
+            chunks.append(current_chunk.strip())
+        logger.info(f"[Research] Split content into {len(chunks)} chunks")
+    else:
+        chunks = [content] if content else []
+    
+    async def call_llm(prompt_text: str, max_tokens: int = 500) -> str:
+        """Helper function to call LLM API"""
         async with httpx.AsyncClient(timeout=30.0) as client:
             response = await client.post(
                 url,
@@ -393,34 +410,82 @@ async def summarize_report(request: SummarizeRequest):
                     "model": model.model_id,
                     "messages": [
                         {"role": "system", "content": "你是一位专业的金融分析师，擅长提炼研报核心观点。"},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt_text}
                     ],
-                    "max_tokens": 500,
+                    "max_tokens": max_tokens,
                     "temperature": 0.7,
                 }
             )
             
             if response.status_code != 200:
                 logger.error(f"LLM API error: {response.status_code} - {response.text}")
-                return {
-                    "code": 1,
-                    "message": "LLM服务调用失败",
-                    "data": {"summary": None}
-                }
+                raise Exception(f"LLM API error: {response.status_code}")
             
             result = response.json()
-            summary = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            return result.get("choices", [{}])[0].get("message", {}).get("content", "")
+    
+    try:
+        # Map phase: Summarize each chunk
+        chunk_summaries = []
+        for i, chunk in enumerate(chunks):
+            chunk_prompt = f"""请用中文总结以下研报片段的核心要点（片段{i+1}/{len(chunks)}）：
+研报标题：{request.title}
+发布机构：{request.institution}
+
+内容片段：
+{chunk}
+
+请提炼2-3个关键要点，每个要点用一句话概括。"""
             
-            return {
-                "code": 0,
-                "message": "success",
-                "data": {
-                    "summary": summary,
-                    "model": model.model_id,
-                    "provider": model.provider,
-                }
+            try:
+                chunk_summary = await call_llm(chunk_prompt, max_tokens=300)
+                chunk_summaries.append(chunk_summary)
+            except Exception as e:
+                logger.warning(f"[Research] Chunk {i+1} summary failed: {e}")
+                # Continue with other chunks
+        
+        # Reduce phase: Combine chunk summaries
+        if len(chunk_summaries) > 1:
+            combined_prompt = f"""请整合以下研报片段的总结，生成最终的核心观点总结：
+
+研报标题：{request.title}
+发布机构：{request.institution}
+
+各片段总结：
+{chr(10).join([f'片段{i+1}: {s}' for i, s in enumerate(chunk_summaries)])}
+
+要求：
+1. 整合所有片段的关键要点
+2. 去除重复内容
+3. 突出投资逻辑和风险提示
+4. 最终输出3-5个核心要点"""
+            
+            final_summary = await call_llm(combined_prompt, max_tokens=500)
+        elif len(chunk_summaries) == 1:
+            final_summary = chunk_summaries[0]
+        else:
+            # No content, use title-only summary
+            title_prompt = f"""请用中文总结以下研报的核心观点，要求：
+1. 提炼3-5个关键要点
+2. 每个要点用一句话概括
+3. 突出投资逻辑和风险提示
+
+研报标题：{request.title}
+发布机构：{request.institution}"""
+            
+            final_summary = await call_llm(title_prompt, max_tokens=500)
+        
+        return {
+            "code": 0,
+            "message": "success",
+            "data": {
+                "summary": final_summary,
+                "model": model.model_id,
+                "provider": model.provider,
+                "chunks_processed": len(chunk_summaries),
             }
-            
+        }
+        
     except httpx.TimeoutException:
         logger.error("LLM API timeout", exc_info=True)
         return {

@@ -150,6 +150,11 @@ const detailChart = ref(null)
 const indexGrid = ref(null)
 const focusedIndex = ref(0)
 let chart = null
+let abortController = null // AbortController for request cancellation
+
+// localStorage cache key and TTL (5 minutes)
+const CACHE_KEY = 'alphaterminal_global_indexes'
+const CACHE_TTL = 5 * 60 * 1000
 
 const regions = [
   { id: 'all', name: '全部' },
@@ -265,22 +270,71 @@ async function renderDetailChart() {
   }
 }
 
+// Load from localStorage cache
+function loadFromCache() {
+  try {
+    const cached = localStorage.getItem(CACHE_KEY)
+    if (cached) {
+      const { data, timestamp, regions: cachedRegions } = JSON.parse(cached)
+      if (Date.now() - timestamp < CACHE_TTL && data && data.length > 0) {
+        allIndexes.value = data
+        regionData.value = cachedRegions || {}
+        logger.info('[GlobalIndex] Loaded from cache:', data.length, 'indexes')
+        return true
+      }
+    }
+  } catch (e) {
+    logger.warn('[GlobalIndex] Cache load error:', e.message)
+  }
+  return false
+}
+
+// Save to localStorage cache
+function saveToCache(data, regions) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      data,
+      regions,
+      timestamp: Date.now()
+    }))
+  } catch (e) {
+    logger.warn('[GlobalIndex] Cache save error:', e.message)
+  }
+}
+
 async function refreshAll() {
+  // Cancel previous request
+  if (abortController) {
+    abortController.abort()
+  }
+  abortController = new AbortController()
+  
   loading.value = true
   error.value = ''
   try {
-    const data = await apiFetch('/api/v1/market/global')
+    const data = await apiFetch('/api/v1/market/global', { 
+      timeoutMs: 8000, // 8 second timeout
+      signal: abortController.signal 
+    })
     if (data?.global) {
       allIndexes.value = data.global
       regionData.value = data.regions || {}
       
+      // Save to cache for offline fallback
+      saveToCache(data.global, data.regions || {})
+      
       const sparklinePromises = allIndexes.value.map(async (idx) => {
         if (!idx.is_mock) {
           try {
-            const sparkResp = await apiFetch(`/api/v1/market/global/sparkline?symbol=${idx.symbol}&days=20`)
+            const sparkResp = await apiFetch(`/api/v1/market/global/sparkline?symbol=${idx.symbol}&days=20`, {
+              timeoutMs: 5000,
+              signal: abortController.signal
+            })
             idx.sparkline = sparkResp?.data || []
           } catch (e) {
-            idx.sparkline = []
+            if (e.name !== 'AbortError') {
+              idx.sparkline = []
+            }
           }
         } else {
           idx.sparkline = generateMockSparkline(idx.price, idx.change_pct)
@@ -290,10 +344,19 @@ async function refreshAll() {
       await Promise.all(sparklinePromises)
     }
   } catch (e) {
+    if (e.name === 'AbortError') {
+      logger.info('[GlobalIndex] Request aborted')
+      return
+    }
     logger.warn('[GlobalIndex] API fetch failed:', e.message)
-    error.value = '获取全球指数数据失败'
+    
+    // Try to load from cache on error
+    if (!loadFromCache()) {
+      error.value = '获取全球指数数据失败，请检查网络连接'
+    }
   } finally {
     loading.value = false
+    abortController = null
   }
 }
 
@@ -313,12 +376,23 @@ function generateMockSparkline(basePrice, changePct) {
 }
 
 onMounted(() => {
-  refreshAll()
+  // Try to load from cache first for instant display
+  if (!loadFromCache()) {
+    refreshAll()
+  } else {
+    // Refresh in background after showing cached data
+    setTimeout(() => refreshAll(), 1000)
+  }
   window.addEventListener('resize', handleResize)
   nextTick(() => indexGrid.value?.focus())
 })
 
 onBeforeUnmount(() => {
+  // Cancel pending requests
+  if (abortController) {
+    abortController.abort()
+    abortController = null
+  }
   window.removeEventListener('resize', handleResize)
   if (chart) {
     chart.dispose()
