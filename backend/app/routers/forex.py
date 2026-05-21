@@ -26,7 +26,7 @@ from typing import Optional, List, Dict
 from pydantic import BaseModel, Field
 from concurrent.futures import ThreadPoolExecutor
 
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.config.timeout import AKSHARE_TIMEOUT
 from app.config.settings import get_settings
 from app.services.fetchers.forex_fetcher import ForexFetcher, clean_value, forex_fetcher, get_circuit_breaker_status
@@ -708,8 +708,11 @@ async def get_cross_rate_matrix(
     cache = get_cache()
     cache_key = f"forex:matrix:{currencies}"
     
-    cached = cache.get(cache_key)
+    # v0.6.70: Use Stale-While-Revalidate - return stale data if available
+    cached, is_stale = cache.get_with_stale(cache_key, fresh_ttl=300, stale_ttl=86400)
     if cached:
+        if is_stale:
+            asyncio.create_task(_fetch_forex_matrix_background(currencies))
         return success_response(cached)
     
     asyncio.create_task(_fetch_forex_matrix_background(currencies))
