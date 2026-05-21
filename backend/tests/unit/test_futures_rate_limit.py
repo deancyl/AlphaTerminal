@@ -196,11 +196,12 @@ class TestFuturesWebSocketFallback:
             assert "name" in item
             assert "price" in item
     
-    def test_futures_fallback_on_fetch_failure(self):
+    @pytest.mark.asyncio
+    async def test_futures_fallback_on_fetch_failure(self):
         """Test that futures returns fallback data on fetch failure"""
         from app.routers.futures import _get_futures_cache
         
-        cache = _get_futures_cache()
+        cache = await _get_futures_cache()
         
         # Should always return valid data (mock or real)
         assert "index_futures" in cache
