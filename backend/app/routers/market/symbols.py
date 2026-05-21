@@ -8,6 +8,7 @@ from fastapi import APIRouter, Request, Query, HTTPException
 
 from app.utils.response import success_response, error_response, ErrorCode
 from app.utils.error_decorator import handle_errors
+from app.routers.market.dependencies import _normalize_symbol
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -109,50 +110,6 @@ def _load_all_stock_names() -> list[dict]:
             _STOCK_NAMES_LOADED = True   # 标记"已尝试"，避免重复拉取
 
     return _ALL_STOCK_NAMES
-
-
-def _normalize_symbol(raw: str) -> str:
-    """
-    将各种前端传入格式统一为带市场前缀的规范 symbol。
-    例如: '000001' → 'sh000001', 'sh000001' → 'sh000001', 'NDX' → 'usNDX'
-    """
-    s = raw.strip()
-    # 已知美股（无前缀形式，如 'ndx'）
-    if s.upper() in ('NDX', 'SPX', 'DJI'):
-        return 'us' + s.upper()
-    # 已知日经
-    if s.upper() in ('N225', 'NI225', 'NIKKEI'):
-        return 'jpN225'
-    # 已知港股
-    if s.upper() in ('HSI',):
-        return 'hkHSI'
-    # 已知宏观（无前缀）
-    if s.upper() in ('GOLD', 'WTI', 'VIX'):
-        return s.upper()
-    # CNH/USD 特殊处理：保留 removeprefix 风格，s.upper() 用于比较
-    upper_s = s.upper()
-    if upper_s == 'CNHUSD':
-        return 'CNHUSD'
-    if upper_s.startswith('CNH'):
-        suffix = upper_s[len('CNH'):]
-        if suffix.isdigit() or suffix.startswith('USD'):
-            return 'CNHUSD'
-    # 去掉 sh/sz/hk/us/jp 前缀（仅去掉头部前缀，用 removeprefix 更安全）
-    clean = s.lower()
-    for pfx in ('sh', 'sz', 'hk', 'us', 'jp'):
-        if clean.startswith(pfx):
-            clean = clean[len(pfx):]
-            break
-    # A股数字段判断：6开头→上海；其余（0/3开头）→深圳
-    # 特殊：A股指数000001/000300/000688 → 上海；399001/399006 → 深圳
-    if clean.isdigit():
-        if clean.startswith('6') or clean in ('000001', '000300', '000688'):
-            return 'sh' + clean
-        if clean.startswith(('0', '2', '3')):
-            return 'sz' + clean
-        # 8xx → 北交所，本项目暂不处理
-        return 'sz' + clean
-    return s
 
 
 # ═══════════════════════════════════════════════════════════════

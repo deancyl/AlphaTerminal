@@ -5,6 +5,44 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.73] - 2026-05-22
+
+### Market Module 优化 - 代码整合与测试修复
+
+解决 Market 模块代码重复和测试覆盖问题。
+
+#### 修复问题
+
+**P0-1: _normalize_symbol 函数重复定义**
+- 整合 `_normalize_symbol` 和 `_unprefix` 函数到 `dependencies.py`
+- `symbols.py` 和 `quotes.py` 现在从 `dependencies.py` 导入这些函数
+- 减少代码重复，提高可维护性
+
+**P0-2: Skipped Tests 修复**
+- 修复 `TestMarketQuote` 类的 skipped tests
+- 添加 `@patch` 装饰器 mock `get_price_history` 函数
+- 修复 `TestMarketHistory` 类的 skipped tests
+- 添加 `@patch` 装饰器 mock `get_daily_history` 函数
+
+#### 文件修改
+
+| 文件 | 修改 |
+|------|------|
+| `backend/app/routers/market/dependencies.py` | 保持 `_normalize_symbol` 和 `_unprefix` 函数定义 |
+| `backend/app/routers/market/symbols.py` | 删除重复函数，改为导入 |
+| `backend/app/routers/market/quotes.py` | 删除重复函数，改为导入 |
+| `backend/tests/unit/test_routers/test_market.py` | 修复 skipped tests |
+
+#### 验证命令
+
+```bash
+# 验证导入成功
+cd backend && python3 -c "from app.routers.market.dependencies import _normalize_symbol; print('OK')"
+
+# 运行测试
+cd backend && pytest tests/unit/test_routers/test_market.py -v
+```
+
 ## [0.6.72] - 2026-05-22
 
 ### 代理兼容性增强 - 数据源回退机制
