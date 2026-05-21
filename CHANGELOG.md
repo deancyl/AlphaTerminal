@@ -5,6 +5,80 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.66] - 2026-05-21
+
+### 架构优化 - 图表增量渲染 + 异步加载 + SQLite并发
+
+本次更新针对架构审查报告中的三个核心问题进行了优化。
+
+#### Wave 1: 图表更新优化
+
+- **增量渲染改造** — 5 个图表组件
+  - IndexLineChart.vue: `notMerge: true` → `replaceMerge: ['series'], lazyUpdate: true`
+  - FullscreenKline.vue: 全量刷新 → 增量更新
+  - SubChart.vue: 全量刷新 → 增量更新
+  - TermStructureChart.vue: 无优化 → 增量更新
+  - YieldSpreadChart.vue: 无优化 → 增量更新
+
+- **性能影响**:
+  - 高频 Tick 更新时避免全量重绘
+  - 维持 60 FPS 稳定行情高刷
+  - 减少主线程阻塞
+
+#### Wave 2: 编译资产瘦身
+
+- **AdminDashboard 异步加载** — 17 个组件
+  - 同步导入 → `defineAsyncComponent(() => import(...))`
+  - 减少首屏 bundle 体积
+  - 按需加载管理面板
+
+- **分包策略**:
+  - gridstack 已在 vendor-utils 中单独分包
+  - ECharts 懒加载已实现
+  - Gzip/Brotli 双压缩已配置
+
+#### Wave 3: DB 并发重构
+
+- **审计链 SQLite 优化** — audit_chain.py
+  - 3 个连接添加 WAL 模式
+  - 添加 `PRAGMA busy_timeout=45000`
+  - 超时从默认 ~5s 提升到 45s
+
+#### 修复
+
+| 文件 | 问题 | 解决方案 |
+|------|------|----------|
+| `error_decorator.py` | error_response 参数顺序错误 | 改用位置参数 |
+| `macro.py` | 缺少 httpx 导入 | 添加 `import httpx` |
+
+#### 文件变更
+
+| 文件 | 类型 | 描述 |
+|------|------|------|
+| `IndexLineChart.vue` | 修改 | 增量渲染 |
+| `FullscreenKline.vue` | 修改 | 增量渲染 |
+| `SubChart.vue` | 修改 | 增量渲染 |
+| `TermStructureChart.vue` | 修改 | 增量渲染 |
+| `YieldSpreadChart.vue` | 修改 | 增量渲染 |
+| `AdminDashboard.vue` | 修改 | 异步加载 |
+| `audit_chain.py` | 修改 | WAL + busy_timeout |
+| `error_decorator.py` | 修复 | 参数顺序 |
+| `macro.py` | 修复 | httpx 导入 |
+
+#### 验证命令
+
+```bash
+# 图表增量渲染
+grep -c "replaceMerge" frontend/src/components/IndexLineChart.vue  # Expected: 1
+grep -c "lazyUpdate" frontend/src/components/FullscreenKline.vue   # Expected: 1
+
+# 异步加载
+grep -c "defineAsyncComponent" frontend/src/components/AdminDashboard.vue  # Expected: 18
+
+# SQLite 并发
+grep -c "busy_timeout=45000" backend/app/services/audit_chain.py  # Expected: 3
+```
+
 ## [0.6.65] - 2026-05-20
 
 ### 全域后端静默失败肃清战役 - Wave 4-5 完成
