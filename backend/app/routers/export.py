@@ -81,7 +81,7 @@ def _generate_json(data: List[Dict[str, Any]], filename: str) -> StreamingRespon
 @handle_errors(module="export")
 async def export_portfolio(
     portfolio_id: int,
-    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    format: str = Query("csv", pattern="^(csv|excel|json)$"),
     include_history: bool = Query(False, description="包含历史快照数据"),
     _: None = Depends(require_api_key)
 ):
@@ -184,7 +184,7 @@ async def export_portfolio(
 @handle_errors(module="export")
 async def export_backtest_result(
     request: Dict[str, Any],
-    format: str = Query("excel", regex="^(csv|excel|json)$"),
+    format: str = Query("excel", pattern="^(csv|excel|json)$"),
     _: None = Depends(require_api_key)
 ):
     """
@@ -258,7 +258,7 @@ async def export_backtest_result(
 @handle_errors(module="export")
 async def export_backtest(
     backtest_id: int,
-    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    format: str = Query("csv", pattern="^(csv|excel|json)$"),
     include_trades: bool = Query(True, description="包含交易记录"),
     _: None = Depends(require_api_key)
 ):
@@ -352,7 +352,7 @@ async def export_backtest(
 @handle_errors(module="export")
 async def export_screener(
     filters: Dict[str, Any],
-    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    format: str = Query("csv", pattern="^(csv|excel|json)$"),
     _: None = Depends(require_api_key)
 ):
     """
@@ -386,8 +386,8 @@ async def export_screener(
 @handle_errors(module="export")
 async def export_market_history(
     symbol: str,
-    period: str = Query("daily", regex="^(daily|weekly|monthly)$"),
-    format: str = Query("csv", regex="^(csv|excel|json)$"),
+    period: str = Query("daily", pattern="^(daily|weekly|monthly)$"),
+    format: str = Query("csv", pattern="^(csv|excel|json)$"),
     start_date: Optional[str] = Query(None, description="开始日期 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="结束日期 (YYYY-MM-DD)"),
     _: None = Depends(require_api_key)

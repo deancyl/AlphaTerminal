@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from fastapi import APIRouter
 import httpx
-from app.utils.response import success_response, error_response, ErrorCode
+from app.utils.errors import success_response, error_response, ErrorCode
 from app.services.data_cache import get_cache
 from app.services.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
 from app.utils.error_decorator import handle_errors

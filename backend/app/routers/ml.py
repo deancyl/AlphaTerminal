@@ -361,7 +361,7 @@ from app.utils.error_decorator import handle_errors
 
 class PortfolioOptimizeRequest(BaseModel):
     """Portfolio optimization request."""
-    symbols: List[str] = Field(..., min_items=1, max_items=50, description="List of stock symbols")
+    symbols: List[str] = Field(..., min_length=1, max_length=50, description="List of stock symbols")
     start_date: str = Field(..., description="Start date YYYY-MM-DD")
     end_date: str = Field(..., description="End date YYYY-MM-DD")
     method: str = Field(default="mvo", pattern="^(gmv|mvo|rp|inv)$", 
@@ -383,7 +383,7 @@ class FactorAnalysisRequest(BaseModel):
 
 class RiskMetricsRequest(BaseModel):
     """Risk metrics calculation request."""
-    daily_returns: List[float] = Field(..., min_items=10, description="Daily returns series")
+    daily_returns: List[float] = Field(..., min_length=10, description="Daily returns series")
     freq: str = Field(default="day", pattern="^(day|week|month)$")
     annual_periods: int = Field(default=252, description="Periods per year for annualization")
 
