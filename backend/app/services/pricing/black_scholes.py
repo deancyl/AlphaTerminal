@@ -244,7 +244,7 @@ class OptionsPricingEngine:
             logger.debug(f"[Pricing] IV rational_approximation failed: S={spot}, K={strike}, T={time_to_expiry:.4f}, P={price} - {e}")
         
         # Fallback to bisection method
-        iv = self.bisection_iv(price, spot, strike, time_to_expiry, self.r, self.q, option_type)
+        iv = self.bisection_iv(price, spot, strike, time_to_expiry, is_call)
         if iv is not None and math.isfinite(iv) and iv > 0:
             return iv, 'bisection'
         
