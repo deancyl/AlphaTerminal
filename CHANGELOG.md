@@ -5,6 +5,31 @@ All notable changes to AlphaTerminal are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.67] - 2026-05-21
+
+### SQLite 并发优化 - 锁等待超时增加
+
+响应架构审计报告任务 1 的要求，增加 SQLite 锁等待超时。
+
+#### 修改内容
+
+| 参数 | 修改前 | 修改后 |
+|------|--------|--------|
+| `timeout` | 30s | 45s |
+| `busy_timeout` | 30000ms | 45000ms |
+
+#### 影响
+
+- 后台调度任务批量回填历史 K 线时，前台读取有更长的等待时间
+- 减少 `sqlite3.OperationalError: database is locked` 错误
+
+#### 验证命令
+
+```bash
+grep -c "timeout=45.0" backend/app/db/database.py  # Expected: 4
+grep -c "busy_timeout=45000" backend/app/db/database.py  # Expected: 2
+```
+
 ## [0.6.66] - 2026-05-21
 
 ### 架构优化 - 图表增量渲染 + 异步加载 + SQLite并发
