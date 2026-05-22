@@ -15,7 +15,7 @@ Components:
 """
 
 from .order_status import OrderStatus, VALID_TRANSITIONS, is_valid_transition
-from .order_engine import OrderExecutionEngine, Order, ExecutionReport
+from .order_engine import OrderExecutionEngine, Order
 from .broker_adapter import BrokerAdapter, MockBrokerAdapter
 from .pre_trade_validation import PreTradeValidator, ValidationResult
 
@@ -27,7 +27,6 @@ __all__ = [
     # Order Engine
     "OrderExecutionEngine",
     "Order",
-    "ExecutionReport",
     # Broker Adapter
     "BrokerAdapter",
     "MockBrokerAdapter",
